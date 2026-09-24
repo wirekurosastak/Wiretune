@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Wiretone.Core/Wiretone.Core.csproj" />
+  <Project Path="Wiretone.Audio/Wiretone.Audio.csproj" />
+  <Project Path="Wiretone.Data/Wiretone.Data.csproj" />
+  <Project Path="Wiretone.UI/Wiretone.UI.csproj" />
+  <Project Path="Wiretone.Desktop/Wiretone.Desktop.csproj" DefaultStartup="true" />
+  <Project Path="Wiretone.Server/Wiretone.Server.csproj" />
+  <Project Path="Wiretone.Tests/Wiretone.Tests.csproj" />
+</Solution>
