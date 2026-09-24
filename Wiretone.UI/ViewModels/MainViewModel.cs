@@ -87,7 +87,8 @@ public partial class MainViewModel : ObservableObject
 
         Library.LibraryChanged += (_, _) => DispatchToUI(UpdateStatusText);
 
-        Theme.UpdateDynamicBackground(0);
+        Theme.UpdateDynamicBackground(SelectedNavigationIndex);
+        LogoTransform = $"rotate({SelectedNavigationIndex * 90}deg)";
     }
 
     private static void DispatchToUI(Action action)

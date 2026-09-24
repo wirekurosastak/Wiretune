@@ -420,7 +420,7 @@
               <Grid RowDefinitions="Auto, *" IsVisible="{Binding !Albums.IsAlbumDetailOpen}">
                 <TextBlock Grid.Row="0" Text="Albumok" FontSize="26" FontWeight="Black" Margin="0,0,0,20" Foreground="{DynamicResource TextMain}" />
                 
-                <ScrollViewer Grid.Row="1">
+                <ScrollViewer Grid.Row="1" Padding="0,6,0,0" ClipToBounds="False">
                   <ItemsControl ItemsSource="{Binding Albums.DisplayedAlbums}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -432,7 +432,7 @@
                         <Button Classes="unstyled-card"
                                 Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Albums.OpenAlbumCommand}"
                                 CommandParameter="{Binding}"
-                                Margin="0,0,18,18">
+                                Margin="0,6,18,12">
                           <Border Classes="metric-card purple" Width="210" Height="270">
                             <Grid RowDefinitions="150, *, Auto">
                               <!-- Cover placeholder / art -->
@@ -618,7 +618,7 @@
               <Grid RowDefinitions="Auto, *" IsVisible="{Binding !Artists.IsArtistDetailOpen}">
                 <TextBlock Grid.Row="0" Text="Előadók" FontSize="26" FontWeight="Black" Margin="0,0,0,20" Foreground="{DynamicResource TextMain}" />
                 
-                <ScrollViewer Grid.Row="1">
+                <ScrollViewer Grid.Row="1" Padding="0,6,0,0" ClipToBounds="False">
                   <ItemsControl ItemsSource="{Binding Artists.DisplayedArtists}">
                     <ItemsControl.ItemsPanel>
                       <ItemsPanelTemplate>
@@ -630,7 +630,7 @@
                         <Button Classes="unstyled-card"
                                 Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.OpenArtistCommand}"
                                 CommandParameter="{Binding}"
-                                Margin="0,0,18,18">
+                                Margin="0,6,18,12">
                           <Border Classes="metric-card coral" Width="200" Height="220">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
                               <Border Width="72" Height="72" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
@@ -697,7 +697,7 @@
                 </Border>
 
                 <!-- Artist Albums & Tracks Scrollable Content -->
-                <ScrollViewer Grid.Row="2">
+                <ScrollViewer Grid.Row="2" Padding="0,6,0,0" ClipToBounds="False">
                   <StackPanel Spacing="24">
                     
                     <!-- Section: Albums by this Artist -->
@@ -714,7 +714,7 @@
                             <Button Classes="unstyled-card"
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
                                     CommandParameter="{Binding}"
-                                    Margin="0,0,16,16">
+                                    Margin="0,6,16,10">
                               <Border Classes="metric-card purple" Width="180" Height="230">
                                 <Grid RowDefinitions="120, *, Auto">
                                   <Border Grid.Row="0" CornerRadius="6" Background="{DynamicResource Surface2}" ClipToBounds="True">
@@ -1153,7 +1153,7 @@
               </Grid>
 
               <!-- Search Results Content (Scrollable) -->
-              <ScrollViewer Grid.Row="1">
+              <ScrollViewer Grid.Row="1" Padding="0,6,0,0" ClipToBounds="False">
                 <StackPanel Spacing="28">
 
                   <!-- Empty State when no results found -->
@@ -1283,7 +1283,7 @@
                           <Button Classes="unstyled-card"
                                   Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.OpenArtistCommand}"
                                   CommandParameter="{Binding}"
-                                  Margin="0,0,18,18">
+                                  Margin="0,6,18,12">
                             <Border Classes="metric-card coral" Width="180" Height="200">
                               <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
                                 <Border Width="64" Height="64" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
@@ -1326,7 +1326,7 @@
                           <Button Classes="unstyled-card"
                                   Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.OpenAlbumCommand}"
                                   CommandParameter="{Binding}"
-                                  Margin="0,0,18,18">
+                                  Margin="0,6,18,12">
                             <Border Classes="metric-card purple" Width="180" Height="240">
                               <Grid RowDefinitions="130, *, Auto">
                                 <Border Grid.Row="0" CornerRadius="6" Background="{DynamicResource Surface2}" ClipToBounds="True">
@@ -1402,7 +1402,7 @@
           </StackPanel>
 
           <!-- Center: Controls & Seek Slider -->
-          <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520" Spacing="4" Margin="16,0">
+          <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Width="680" MaxWidth="860" Spacing="10" Margin="16,0">
             <!-- Buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="14">
               <!-- Shuffle -->
@@ -1441,7 +1441,7 @@
             </StackPanel>
 
             <!-- Seek Slider with Time (Unclipped, Centered) -->
-            <Grid ColumnDefinitions="45, *, 45" Height="28" VerticalAlignment="Center" ClipToBounds="False">
+            <Grid ColumnDefinitions="45, *, 45" Height="28" VerticalAlignment="Center" Margin="0,5,0,0" ClipToBounds="False">
               <TextBlock Grid.Column="0" Text="{Binding Player.FormattedPosition}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
               <Slider Grid.Column="1"
                       Classes="seek-slider"
@@ -1476,8 +1476,8 @@
             </Border>
 
             <!-- Volume Mute Button -->
-            <Button Classes="icon" Command="{Binding Player.ToggleMuteCommand}" Width="28" Height="28">
-              <material:MaterialIcon Kind="VolumeHigh" Width="18" Height="18" />
+            <Button Classes="icon" Command="{Binding Player.ToggleMuteCommand}" Width="28" Height="28" VerticalAlignment="Center">
+              <material:MaterialIcon Kind="VolumeHigh" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Button>
 
             <!-- Volume Slider (Unclipped, Centered, Inside window bounds) -->
