@@ -18,13 +18,17 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var mainVm = new MainViewModel();
-            desktop.MainWindow = new MainWindow
+            var mainWindow = new MainWindow
             {
                 DataContext = mainVm
             };
+            desktop.MainWindow = mainWindow;
 
-            desktop.ShutdownRequested += (_, _) => mainVm.Dispose();
-            desktop.Exit += (_, _) => mainVm.Dispose();
+            var automationServer = new Services.UiAutomationServer(mainWindow, mainVm);
+            automationServer.Start();
+
+            desktop.ShutdownRequested += (_, _) => { automationServer.Dispose(); mainVm.Dispose(); };
+            desktop.Exit += (_, _) => { automationServer.Dispose(); mainVm.Dispose(); };
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleView)
         {

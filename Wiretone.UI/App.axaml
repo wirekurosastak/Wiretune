@@ -17,6 +17,15 @@
       <conv:NavActiveBackgroundConverter x:Key="NavActiveBackgroundConverter" />
       <conv:SpectrumBarHeightConverter x:Key="SpectrumBarHeightConverter" />
 
+      <!-- Slider Dimensions & Spacing to Prevent Horizontal Clipping -->
+      <GridLength x:Key="SliderPreContentMargin">0</GridLength>
+      <GridLength x:Key="SliderPostContentMargin">0</GridLength>
+      <x:Double x:Key="SliderHorizontalHeight">24</x:Double>
+      <x:Double x:Key="SliderTrackThemeHeight">4</x:Double>
+      <CornerRadius x:Key="SliderThumbCornerRadius">7</CornerRadius>
+      <x:Double x:Key="SliderHorizontalThumbWidth">14</x:Double>
+      <x:Double x:Key="SliderHorizontalThumbHeight">14</x:Double>
+
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
           <Color x:Key="AppBackgroundColor">#000000</Color>
@@ -138,13 +147,23 @@
       <Setter Property="RenderTransform" Value="scale(1)" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Transitions">
         <Transitions>
-          <BrushTransition Property="Background" Duration="0:0:0.3" Easing="QuarticEaseOut" />
-          <BrushTransition Property="BorderBrush" Duration="0:0:0.3" Easing="QuarticEaseOut" />
-          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.3" Easing="CubicEaseOut" />
+          <BrushTransition Property="Background" Duration="0:0:0.25" Easing="QuarticEaseOut" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.25" Easing="QuarticEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut" />
         </Transitions>
       </Setter>
+    </Style>
+    <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+    </Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
     </Style>
     <Style Selector="Button:pressed">
       <Setter Property="RenderTransform" Value="scale(0.96)" />
@@ -154,12 +173,16 @@
     <Style Selector="Button.primary">
       <Setter Property="Height" Value="38" />
       <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
-      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Foreground" Value="#000000" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="20,8" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
     </Style>
 
     <Style Selector="Button.secondary">
@@ -168,23 +191,34 @@
       <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
       <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="16,8" />
       <Setter Property="FontSize" Value="13" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <Style Selector="Button.secondary:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource GlassHighlight}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CyanAccent}" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+    </Style>
 
     <Style Selector="Button.icon">
-      <Setter Property="Height" Value="NaN" />
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
       <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="CornerRadius" Value="18" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
       <Setter Property="BorderThickness" Value="0" />
-      <Setter Property="Padding" Value="8" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
-    <Style Selector="Button.icon:pointerover">
+    <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
       <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
       <Setter Property="Background" Value="{DynamicResource GlassHighlight}" />
+      <Setter Property="CornerRadius" Value="18" />
     </Style>
 
     <Style Selector="Button.unstyled-card">
@@ -195,72 +229,93 @@
       <Setter Property="Padding" Value="0" />
       <Setter Property="Margin" Value="0" />
       <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="CornerRadius" Value="12" />
+    </Style>
+    <Style Selector="Button.unstyled-card /template/ ContentPresenter">
+      <Setter Property="CornerRadius" Value="12" />
     </Style>
     <Style Selector="Button.unstyled-card:pointerover /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
+      <Setter Property="CornerRadius" Value="12" />
     </Style>
 
     <Style Selector="Button.coral">
       <Setter Property="Background" Value="{DynamicResource CoralAccent}" />
       <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.coral:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#FF8585" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
     </Style>
     <Style Selector="Button.purple">
       <Setter Property="Background" Value="{DynamicResource PurpleAccent}" />
       <Setter Property="Foreground" Value="White" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.purple:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#DF7DF0" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
     </Style>
     <Style Selector="Button.cyan">
       <Setter Property="Background" Value="{DynamicResource CyanAccent}" />
       <Setter Property="Foreground" Value="Black" />
+      <Setter Property="CornerRadius" Value="8" />
     </Style>
     <Style Selector="Button.lime">
       <Setter Property="Background" Value="{DynamicResource LimeAccent}" />
       <Setter Property="Foreground" Value="Black" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.lime:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="#C2FF1A" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
     </Style>
 
-    <!-- Glass Cards -->
+    <!-- Glass Cards: subtle border brighten on hover matching theme accent -->
     <Style Selector="Border.glass">
       <Setter Property="Background" Value="{DynamicResource Surface1}" />
       <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Padding" Value="24" />
-      <Setter Property="RenderTransformOrigin" Value="50%,50%" />
-      <Setter Property="RenderTransform" Value="scale(1)" />
       <Setter Property="Transitions">
         <Transitions>
-          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="CubicEaseOut" />
-          <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25" Easing="CubicEaseOut" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.25" Easing="QuarticEaseOut" />
+          <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25" Easing="QuarticEaseOut" />
         </Transitions>
       </Setter>
     </Style>
     <Style Selector="Border.glass:pointerover">
-      <Setter Property="RenderTransform" Value="scale(1.015) translateY(-3px)" />
-      <Setter Property="BoxShadow" Value="{DynamicResource GlassHoverShadow}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CyanAccent}" />
+      <Setter Property="BoxShadow" Value="0 8 32 -6 #40000000" />
     </Style>
 
     <Style Selector="Border.metric-card">
-      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="CornerRadius" Value="12" />
       <Setter Property="Padding" Value="20,24" />
       <Setter Property="Background" Value="{DynamicResource Surface1}" />
       <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="RenderTransformOrigin" Value="50%,50%" />
-      <Setter Property="RenderTransform" Value="scale(1)" />
+      <Setter Property="RenderTransform" Value="translateY(0px)" />
       <Setter Property="Transitions">
         <Transitions>
-          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="CubicEaseOut" />
-          <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut" />
+          <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2" Easing="CubicEaseOut" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.2" Easing="QuarticEaseOut" />
         </Transitions>
       </Setter>
     </Style>
     <Style Selector="Border.metric-card:pointerover">
-      <Setter Property="RenderTransform" Value="scale(1.02) translateY(-4px)" />
-      <Setter Property="BoxShadow" Value="{DynamicResource MetricHoverShadow}" />
+      <Setter Property="RenderTransform" Value="translateY(-3px)" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CyanAccent}" />
+      <Setter Property="BoxShadow" Value="0 12 36 -8 #60000000" />
     </Style>
 
     <!-- Text Styles -->
     <Style Selector="TextBlock.group-title">
-      <Setter Property="FontSize" Value="13" />
+      <Setter Property="FontSize" Value="12" />
       <Setter Property="FontWeight" Value="Black" />
       <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
       <Setter Property="Margin" Value="0,0,0,16" />
@@ -269,7 +324,7 @@
 
     <!-- TextBox & ComboBox -->
     <Style Selector="TextBox, ComboBox">
-      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
       <Setter Property="Background" Value="{DynamicResource Surface2}" />
@@ -281,18 +336,26 @@
       <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
     </Style>
 
-    <!-- DataGrid Modern Styles -->
+    <!-- DataGrid Modern Styles with Rounded Row Hover -->
     <Style Selector="DataGrid">
       <Setter Property="RowHeight" Value="46" />
       <Setter Property="Background" Value="Transparent" />
     </Style>
+    <Style Selector="DataGridRow /template/ Rectangle#BackgroundRectangle">
+      <Setter Property="RadiusX" Value="6" />
+      <Setter Property="RadiusY" Value="6" />
+    </Style>
     <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
       <Setter Property="Fill" Value="{DynamicResource GlassHighlight}" />
       <Setter Property="Opacity" Value="0.6" />
+      <Setter Property="RadiusX" Value="6" />
+      <Setter Property="RadiusY" Value="6" />
     </Style>
     <Style Selector="DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
       <Setter Property="Fill" Value="{DynamicResource PrimaryAction}" />
       <Setter Property="Opacity" Value="0.25" />
+      <Setter Property="RadiusX" Value="6" />
+      <Setter Property="RadiusY" Value="6" />
     </Style>
     <Style Selector="DataGridColumnHeader">
       <Setter Property="Background" Value="Transparent" />
@@ -321,30 +384,52 @@
       </Style.Animations>
     </Style>
 
-    <!-- Smooth Slider Styling -->
+    <!-- Smooth Audiophile Slider Styling (Fixes horizontal clipping & thumb cuts) -->
     <Style Selector="Slider">
       <Setter Property="Cursor" Value="Hand" />
       <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="Foreground" Value="{DynamicResource CyanAccent}" />
+      <Setter Property="Background" Value="{DynamicResource Surface2}" />
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Slider:horizontal">
+      <Setter Property="MinHeight" Value="24" />
+      <Setter Property="Height" Value="24" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Slider:horizontal /template/ Grid#HorizontalTemplate">
       <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="MinHeight" Value="24" />
       <Setter Property="Height" Value="24" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Slider /template/ Track#PART_Track">
       <Setter Property="ClipToBounds" Value="False" />
+      <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Slider /template/ Thumb">
       <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="Width" Value="14" />
       <Setter Property="Height" Value="14" />
+      <Setter Property="Background" Value="{DynamicResource CyanAccent}" />
+      <Setter Property="CornerRadius" Value="7" />
     </Style>
     <Style Selector="Slider /template/ Thumb /template/ Border">
       <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="CornerRadius" Value="7" />
       <Setter Property="Width" Value="14" />
       <Setter Property="Height" Value="14" />
+      <Setter Property="Background" Value="{DynamicResource CyanAccent}" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="BoxShadow" Value="0 0 10 1 #9967C8E0" />
+    </Style>
+    <Style Selector="Slider /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Background" Value="{DynamicResource CyanAccent}" />
+    </Style>
+    <Style Selector="Slider /template/ RepeatButton#PART_IncreaseButton">
+      <Setter Property="Background" Value="#22FFFFFF" />
     </Style>
     <Style Selector="Slider.seek-slider">
       <Setter Property="MinHeight" Value="24" />
@@ -352,6 +437,12 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="Foreground" Value="{DynamicResource CyanAccent}" />
+    </Style>
+    <Style Selector="Slider:disabled">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+    <Style Selector="Slider:disabled /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource PurpleAccent}" />
     </Style>
 
     <!-- Search Pill Styling -->
@@ -397,9 +488,9 @@
       <Setter Property="Background" Value="{DynamicResource Surface2}" />
       <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
       <Setter Property="BorderThickness" Value="1" />
-      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Height" Value="32" />
-      <Setter Property="Padding" Value="14,0" />
+      <Setter Property="Padding" Value="12,0" />
     </Style>
     <Style Selector="Button.audiophile-pill.active-bp">
       <Setter Property="BorderBrush" Value="{DynamicResource PurpleAccent}" />

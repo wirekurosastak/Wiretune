@@ -431,11 +431,11 @@
 
                               <!-- Badge & Play Button -->
                               <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,8,0,0">
-                                <TextBlock Grid.Column="0" Text="{Binding FormatBadge}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PurpleAccent}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="0" Text="{Binding FormatBadge}" FontSize="10" FontWeight="Bold" Foreground="{Binding FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                 <Button Grid.Column="1" Classes="icon"
                                         Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Albums.PlayAlbumCommand}"
                                         CommandParameter="{Binding Album}">
-                                  <material:MaterialIcon Kind="PlayCircle" Foreground="{DynamicResource LimeAccent}" Width="28" Height="28" />
+                                  <material:MaterialIcon Kind="PlayCircle" Foreground="{DynamicResource CyanAccent}" Width="28" Height="28" />
                                 </Button>
                               </Grid>
                             </Grid>
@@ -465,17 +465,17 @@
                     <Border Grid.Column="0" Width="120" Height="120" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left" ClipToBounds="True">
                       <Panel>
                         <Image Source="{Binding Albums.SelectedAlbumCover}" Stretch="UniformToFill" IsVisible="{Binding Albums.SelectedAlbumCover, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <material:MaterialIcon Kind="Album" Foreground="{DynamicResource PurpleAccent}" Width="70" Height="70" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Albums.SelectedAlbumCover, Converter={x:Static ObjectConverters.IsNull}}" />
+                        <material:MaterialIcon Kind="Album" Foreground="{DynamicResource CyanAccent}" Width="70" Height="70" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Albums.SelectedAlbumCover, Converter={x:Static ObjectConverters.IsNull}}" />
                       </Panel>
                     </Border>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8" Margin="8,0,0,0">
                       <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Border Background="{DynamicResource PurpleAccent}" CornerRadius="4" Padding="6,2">
-                          <TextBlock Text="ALBUM" FontSize="10" FontWeight="Black" Foreground="#FFFFFF" />
+                        <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,2">
+                          <TextBlock Text="ALBUM" FontSize="10" FontWeight="Black" Foreground="{DynamicResource CyanAccent}" />
                         </Border>
                         <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,2">
-                          <TextBlock Text="{Binding Albums.SelectedAlbum.FormatBadge}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource PurpleAccent}" />
+                          <TextBlock Text="{Binding Albums.SelectedAlbum.FormatBadge}" FontSize="10" FontWeight="Bold" Foreground="{Binding Albums.SelectedAlbum.FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
                         </Border>
                       </StackPanel>
 
@@ -602,14 +602,21 @@
                           <Border Classes="metric-card" Width="200" Height="220">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
                               <Border Width="90" Height="90" CornerRadius="45" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
-                                <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CyanAccent}" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
                               </Border>
                               <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
                               <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} zeneszám'}" FontSize="12" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />
                               <Button Classes="icon"
+                                      HorizontalAlignment="Center"
+                                      Width="36" Height="36"
+                                      CornerRadius="18"
+                                      Padding="0"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"
                                       Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.PlayArtistCommand}"
-                                      CommandParameter="{Binding}">
-                                <material:MaterialIcon Kind="PlayCircle" Foreground="{DynamicResource CyanAccent}" Width="26" Height="26" />
+                                      CommandParameter="{Binding}"
+                                      ToolTip.Tip="Előadó összes számának lejátszása">
+                                <material:MaterialIcon Kind="PlayCircle" Foreground="{DynamicResource CyanAccent}" Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center" />
                               </Button>
                             </StackPanel>
                           </Border>
@@ -636,12 +643,12 @@
                 <Border Grid.Row="1" Classes="glass" Margin="0,0,0,20">
                   <Grid ColumnDefinitions="110, *">
                     <Border Grid.Column="0" Width="90" Height="90" CornerRadius="45" Background="{DynamicResource Surface2}" HorizontalAlignment="Left">
-                      <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CyanAccent}" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6" Margin="8,0,0,0">
-                      <Border Background="{DynamicResource CoralAccent}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
-                        <TextBlock Text="ELŐADÓ" FontSize="10" FontWeight="Black" Foreground="#FFFFFF" />
+                      <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
+                        <TextBlock Text="ELŐADÓ" FontSize="10" FontWeight="Black" Foreground="{DynamicResource CyanAccent}" />
                       </Border>
                       <TextBlock Text="{Binding Artists.SelectedArtist.Name}" FontSize="28" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
                       <TextBlock Text="{Binding Artists.SelectedArtist.TrackCount, StringFormat='{}{0} zeneszám az adatbázisban'}" FontSize="13" Foreground="{DynamicResource TextMuted}" />
@@ -886,50 +893,50 @@
             <!-- TAB 5: UNIFIED SETTINGS (AUDIOPHILE & SERVER)   -->
             <!-- ============================================== -->
             <ScrollViewer IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=5, Converter={StaticResource IntEqualConverter}}">
-              <StackPanel Spacing="28">
+              <StackPanel Spacing="28" Margin="0,0,16,24">
                 <!-- Title Header -->
                 <StackPanel Spacing="4">
                   <TextBlock Text="Beállítások" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
                   <TextBlock Text="Szerver kapcsolat, hálózati streamelés és hardveres audiophile konfiguráció egy helyen." FontSize="13" Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
 
-                <!-- SECTION 1: WIRETONE STREAMING SERVER -->
+                <!-- SECTION 1: SERVER -->
                 <StackPanel Spacing="16">
-                  <TextBlock Text="WIRETONELIBRARY &amp; HÁLÓZATI SZERVER" Classes="group-title" />
+                  <TextBlock Text="SZERVER" Classes="group-title" />
 
                   <!-- Server Info & Connection Card -->
                   <Border Classes="glass">
                     <StackPanel Spacing="16">
                       <Grid ColumnDefinitions="*, Auto">
                         <StackPanel Grid.Column="0" Spacing="4">
-                          <TextBlock Text="Wiretone Streaming Szerver Kapcsolat" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
-                          <TextBlock Text="Csatlakozás a szervergéphez veszteségmentes HTTP streaminghez. A szerver olvassa a metaadatokat és szolgálja ki a zenéket." FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                          <TextBlock Text="Kapcsolat" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                          <TextBlock Text="Hálózati zenei kiszolgáló és metaadat szinkronizáció." FontSize="12" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
-                        <Border Grid.Column="1" Background="{DynamicResource Surface2}" CornerRadius="12" Padding="14,6" VerticalAlignment="Center">
+                        <Border Grid.Column="1" Background="{DynamicResource Surface2}" CornerRadius="8" Padding="12,5" VerticalAlignment="Center">
                           <TextBlock Text="{Binding ServerSettings.ServerStatusBadge}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource CyanAccent}" />
                         </Border>
                       </Grid>
 
                       <Grid ColumnDefinitions="*, Auto, Auto" Margin="0,8,0,0">
-                        <TextBox Grid.Column="0" Text="{Binding ServerSettings.ServerUrl, Mode=TwoWay}" Watermark="http://szerver-ip-cime:5200 (pl. http://192.168.1.50:5200)" Margin="0,0,12,0" />
-                        <Button Grid.Column="1" Classes="primary" Command="{Binding ServerSettings.ConnectServerCommand}" Margin="0,0,8,0">
+                        <TextBox Grid.Column="0" Text="{Binding ServerSettings.ServerUrl, Mode=TwoWay}" Watermark="http://szerver-ip-cime:5200" Margin="0,0,12,0" />
+                        <Button Grid.Column="1" Classes="primary" Command="{Binding ServerSettings.ConnectServerCommand}" Height="38" Padding="18,0" Margin="0,0,8,0">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Server" Width="18" Height="18" />
-                            <TextBlock Text="Kapcsolódás &amp; Szinkronizálás" FontWeight="Bold" />
+                            <TextBlock Text="Kapcsolódás" FontWeight="Bold" />
                           </StackPanel>
                         </Button>
-                        <Button Grid.Column="2" Classes="lime" Command="{Binding ServerSettings.RescanServerCommand}" IsEnabled="{Binding ServerSettings.IsServerConnected}">
+                        <Button Grid.Column="2" Classes="secondary" Command="{Binding ServerSettings.RescanServerCommand}" IsEnabled="{Binding ServerSettings.IsServerConnected}" Height="38" Padding="18,0">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Refresh" Width="18" Height="18" />
-                            <TextBlock Text="Szerver Újraszkennelése" FontWeight="Bold" />
+                            <TextBlock Text="Újraszkennelés" FontWeight="SemiBold" />
                           </StackPanel>
                         </Button>
                       </Grid>
 
                       <!-- Scan / Sync Status -->
                       <StackPanel Spacing="8" IsVisible="{Binding ServerSettings.IsScanning}">
-                        <ProgressBar IsIndeterminate="True" Height="4" CornerRadius="2" Foreground="{DynamicResource LimeAccent}" />
-                        <TextBlock Text="{Binding ServerSettings.ScanStatusText}" FontSize="12" Foreground="{DynamicResource LimeAccent}" />
+                        <ProgressBar IsIndeterminate="True" Height="4" CornerRadius="2" Foreground="{DynamicResource CyanAccent}" />
+                        <TextBlock Text="{Binding ServerSettings.ScanStatusText}" FontSize="12" Foreground="{DynamicResource CyanAccent}" />
                       </StackPanel>
 
                       <TextBlock Text="{Binding ServerSettings.ScanStatusText}" FontSize="12" Foreground="{DynamicResource CyanAccent}" IsVisible="{Binding !ServerSettings.IsScanning}" />
@@ -940,28 +947,28 @@
                   <Grid ColumnDefinitions="*, *, *">
                     <Border Grid.Column="0" Classes="metric-card" Margin="0,0,8,0">
                       <StackPanel Spacing="4">
-                        <TextBlock Text="SZERVERNÉL ELÉRHETŐ SZÁMOK" Classes="group-title" />
-                        <TextBlock Text="{Binding ServerSettings.TotalTracksCount}" FontSize="32" FontWeight="Light" Foreground="{DynamicResource CyanAccent}" />
+                        <TextBlock Text="SZÁMOK" Classes="group-title" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding ServerSettings.TotalTracksCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource CyanAccent}" />
                       </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="1" Classes="metric-card" Margin="8,0,8,0">
+                    <Border Grid.Column="1" Classes="metric-card" Margin="4,0,4,0">
                       <StackPanel Spacing="4">
-                        <TextBlock Text="ALBUMOK" Classes="group-title" />
-                        <TextBlock Text="{Binding ServerSettings.TotalAlbumsCount}" FontSize="32" FontWeight="Light" Foreground="{DynamicResource PurpleAccent}" />
+                        <TextBlock Text="ALBUMOK" Classes="group-title" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding ServerSettings.TotalAlbumsCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource CyanAccent}" />
                       </StackPanel>
                     </Border>
 
                     <Border Grid.Column="2" Classes="metric-card" Margin="8,0,0,0">
                       <StackPanel Spacing="4">
-                        <TextBlock Text="ELŐADÓK" Classes="group-title" />
-                        <TextBlock Text="{Binding ServerSettings.TotalArtistsCount}" FontSize="32" FontWeight="Light" Foreground="{DynamicResource LimeAccent}" />
+                        <TextBlock Text="ELŐADÓK" Classes="group-title" Margin="0,0,0,8" />
+                        <TextBlock Text="{Binding ServerSettings.TotalArtistsCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource CyanAccent}" />
                       </StackPanel>
                     </Border>
                   </Grid>
 
                   <!-- Optional Local Offline Mode Expander -->
-                  <Expander Header="Helyi mappa használata (Csak szerver nélküli, offline módhoz)" IsExpanded="False" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource GlassBorder}" CornerRadius="8">
+                  <Expander Header="Helyi zenemappa (offline)" IsExpanded="False" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource GlassBorder}" CornerRadius="12">
                     <StackPanel Spacing="12" Margin="0,8,0,0">
                       <TextBlock Text="Ha nem szeretnél streaming szervert használni, itt beolvashatod a helyi gépen lévő zenei mappádat." FontSize="12" Foreground="{DynamicResource TextMuted}" />
                       <Grid ColumnDefinitions="*, Auto">
@@ -977,17 +984,17 @@
                   </Expander>
                 </StackPanel>
 
-                <!-- SECTION 2: AUDIOPHILE & BIT-PERFECT -->
+                <!-- SECTION 2: AUDIO OUTPUT -->
                 <StackPanel Spacing="16">
-                  <TextBlock Text="AUDIOPHILE MÓD &amp; BIT-PERFECT MOTOR" Classes="group-title" />
+                  <TextBlock Text="HANGKIMENET" Classes="group-title" />
 
                   <!-- Overview Banner -->
-                  <Border Classes="glass" BorderBrush="{DynamicResource PurpleAccent}">
+                  <Border Classes="glass">
                     <Grid ColumnDefinitions="Auto, *">
-                      <material:MaterialIcon Grid.Column="0" Kind="Speakers" Foreground="{DynamicResource PurpleAccent}" Width="48" Height="48" VerticalAlignment="Center" Margin="0,0,24,0" />
+                      <material:MaterialIcon Grid.Column="0" Kind="Speakers" Foreground="{DynamicResource CyanAccent}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,20,0" />
                       <StackPanel Grid.Column="1" Spacing="4">
-                        <TextBlock Text="Hi-Fi Veszteségmentes Motor &amp; DAC Illesztés" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
-                        <TextBlock Text="A Bit-perfect és Exclusive módok biztosítják, hogy a zenei adatok digitális újramintavételezés (resampling), dither vagy szoftveres hangerő-csökkentés nélkül, 1:1 arányban jussanak el a digitális-analóg átalakítóhoz (DAC)."
+                        <TextBlock Text="DAC &amp; Bit-Perfect kimenet" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                        <TextBlock Text="Közvetlen hardveres jelátvitel digitális módosítás és újramintavételezés nélkül."
                                    FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                       </StackPanel>
                     </Grid>
@@ -996,32 +1003,32 @@
                   <!-- Toggles & Configuration Cards -->
                   <Grid ColumnDefinitions="*, *" Margin="0,4">
                     <!-- Exclusive Mode Card -->
-                    <Border Grid.Column="0" Classes="metric-card" Margin="0,0,12,0">
+                    <Border Grid.Column="0" Classes="metric-card" Margin="0,0,8,0">
                       <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*, Auto">
                           <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Kizárólagos Mód (Exclusive Mode)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource LimeAccent}" />
-                            <TextBlock Text="Közvetlen hardveres ALSA / WASAPI hozzáférés a DAC-hoz." FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                            <TextBlock Text="Kizárólagos hozzáférés (Exclusive)" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource CyanAccent}" />
+                            <TextBlock Text="Közvetlen hardveres hozzáférés a kimeneti eszközhöz." FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                           </StackPanel>
                           <ToggleSwitch Grid.Column="1" IsChecked="{Binding AudiophileSettings.IsExclusiveMode, Mode=TwoWay}" />
                         </Grid>
-                        <TextBlock Text="Állapot: Bármilyen más alkalmazás hangjai némítva lesznek az audio eszközön az alacsony jitter érdekében."
-                                   FontSize="11" Foreground="{DynamicResource CyanAccent}" TextWrapping="Wrap" />
+                        <TextBlock Text="Minden más rendszerhang némítva lesz a jitter minimalizálásához."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                       </StackPanel>
                     </Border>
 
                     <!-- Bit-perfect Mode Card -->
-                    <Border Grid.Column="1" Classes="metric-card" Margin="12,0,0,0">
+                    <Border Grid.Column="1" Classes="metric-card" Margin="8,0,0,0">
                       <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*, Auto">
                           <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Bit-Perfect Mód" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource PurpleAccent}" />
-                            <TextBlock Text="Kikapcsolja a szoftveres keverést és az OS újramintavételezést. (Kizárólagos módot igényel)" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                            <TextBlock Text="Bit-Perfect lejátszás" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource CyanAccent}" />
+                            <TextBlock Text="1:1 bitpontos lejátszás keverés nélkül (Exclusive módot igényel)." FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                           </StackPanel>
                           <ToggleSwitch Grid.Column="1" IsChecked="{Binding AudiophileSettings.IsBitperfect, Mode=TwoWay}" IsEnabled="{Binding AudiophileSettings.IsExclusiveMode}" />
                         </Grid>
-                        <TextBlock Text="Állapot: A hangerőszabályzó rögzítve van 100%-on (0 dB Unity Gain) a teljes dinamikatartomány és a felbontás megőrzéséért."
-                                   FontSize="11" Foreground="{DynamicResource LimeAccent}" TextWrapping="Wrap" />
+                        <TextBlock Text="A digitális hangerő rögzítve van 100%-on (0 dB Unity Gain)."
+                                   FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                       </StackPanel>
                     </Border>
                   </Grid>
@@ -1030,7 +1037,7 @@
                   <Border Classes="glass">
                     <StackPanel Spacing="16">
                       <Grid ColumnDefinitions="*, Auto">
-                        <TextBlock Grid.Column="0" Text="Kimeneti Audio Eszköz (DAC)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                        <TextBlock Grid.Column="0" Text="Kimeneti DAC eszköz" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
                         <Button Grid.Column="1" Classes="secondary" Command="{Binding AudiophileSettings.RefreshDevicesCommand}">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <material:MaterialIcon Kind="Refresh" Width="16" Height="16" />
@@ -1060,7 +1067,7 @@
                   <!-- Signal Path Visualizer -->
                   <Border Classes="glass">
                     <StackPanel Spacing="12">
-                      <TextBlock Text="Jelút (Signal Path Diagnostics)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                      <TextBlock Text="Jelút (Signal Path)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
                       <Border Background="{DynamicResource Surface2}" CornerRadius="6" Padding="16">
                         <TextBlock Text="{Binding AudiophileSettings.SignalPath}"
                                    FontFamily="Consolas, JetBrains Mono, Courier New, monospace"
@@ -1087,7 +1094,7 @@
               BorderBrush="{DynamicResource GlassBorder}"
               BorderThickness="0,1,0,0"
               Padding="24,0">
-        <Grid ColumnDefinitions="280, *, 320">
+        <Grid ColumnDefinitions="300, *, Auto">
 
           <!-- Left: Track Details & Album Art -->
           <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="16">
@@ -1098,7 +1105,7 @@
               </Panel>
             </Border>
 
-            <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="160">
+            <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="180">
               <TextBlock Text="{Binding Player.CurrentTrack.Title, FallbackValue='Nincs lejátszás'}" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
               <TextBlock Text="{Binding Player.CurrentTrack.Artist, FallbackValue='Válassz zeneszámot'}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
@@ -1111,7 +1118,7 @@
           </StackPanel>
 
           <!-- Center: Controls & Seek Slider -->
-          <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480" Spacing="2">
+          <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Width="500" Spacing="4">
             <!-- Buttons -->
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
               <!-- Shuffle -->
@@ -1130,13 +1137,10 @@
                       Width="44" Height="44"
                       CornerRadius="22"
                       Padding="0"
+                      HorizontalContentAlignment="Center"
+                      VerticalContentAlignment="Center"
                       ToolTip.Tip="Lejátszás / Szünet">
-                <Panel>
-                  <material:MaterialIcon Kind="Play" Width="24" Height="24"
-                                         IsVisible="{Binding Player.PlaybackState, ConverterParameter=Playing, Converter={x:Static ObjectConverters.NotEqual}}" />
-                  <material:MaterialIcon Kind="Pause" Width="24" Height="24"
-                                         IsVisible="{Binding Player.PlaybackState, ConverterParameter=Playing, Converter={x:Static ObjectConverters.Equal}}" />
-                </Panel>
+                <material:MaterialIcon Kind="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToIconConverter}}" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Button>
 
               <!-- Next -->
@@ -1151,42 +1155,49 @@
               </Button>
             </StackPanel>
 
-            <!-- Seek Slider with Time -->
-            <Grid ColumnDefinitions="Auto, *, Auto" Height="24">
-              <TextBlock Grid.Column="0" Text="{Binding Player.FormattedPosition}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <!-- Seek Slider with Time (Unclipped, Centered) -->
+            <Grid ColumnDefinitions="45, *, 45" Height="26" VerticalAlignment="Center" ClipToBounds="False">
+              <TextBlock Grid.Column="0" Text="{Binding Player.FormattedPosition}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
               <Slider Grid.Column="1"
                       Classes="seek-slider"
                       Minimum="0"
                       Maximum="{Binding Player.DurationSeconds}"
                       Value="{Binding Player.PositionSeconds, Mode=TwoWay}"
-                      Margin="8,0"
-                      VerticalAlignment="Center" />
-              <TextBlock Grid.Column="2" Text="{Binding Player.FormattedDuration}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="10,0,0,0" />
+                      Margin="4,0"
+                      VerticalAlignment="Center"
+                      ClipToBounds="False" />
+              <TextBlock Grid.Column="2" Text="{Binding Player.FormattedDuration}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="8,0,0,0" />
             </Grid>
           </StackPanel>
 
-          <!-- Right: Audiophile Indicator, Visualizer, Volume -->
-          <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="12">
+          <!-- Right: Audiophile Indicator, Visualizer, Volume (Fully bounded inside window, no overflow) -->
+          <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="10" Margin="10,0,0,0">
             
-            <!-- Real-time 16-band Spectrum Visualizer -->
-            <ItemsControl ItemsSource="{Binding Player.SpectrumBars}" Height="28" Width="64" VerticalAlignment="Center">
+            <!-- FxSound-style Smooth Rounded Spectrum Visualizer -->
+            <ItemsControl ItemsSource="{Binding Player.SpectrumBars}" Height="24" VerticalAlignment="Center" Margin="0,0,4,0">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                  <StackPanel Orientation="Horizontal" Spacing="2" />
+                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Bottom" />
                 </ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vm:SpectrumBarViewModel">
-                  <Border Width="2" VerticalAlignment="Bottom"
+                  <Border Width="3" VerticalAlignment="Bottom"
                           Height="{Binding Value, Converter={StaticResource SpectrumBarHeightConverter}}"
-                          Background="{DynamicResource LimeAccent}"
-                          CornerRadius="1" />
+                          Background="{DynamicResource CyanAccent}"
+                          CornerRadius="1.5">
+                    <Border.Transitions>
+                      <Transitions>
+                        <DoubleTransition Property="Height" Duration="0:0:0.07" Easing="SineEaseOut" />
+                      </Transitions>
+                    </Border.Transitions>
+                  </Border>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Hi-Res Badge -->
-            <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="8,4" VerticalAlignment="Center">
+            <!-- Quality Badge -->
+            <Border Background="{DynamicResource Surface2}" CornerRadius="6" Padding="8,4" VerticalAlignment="Center">
               <TextBlock Text="{Binding Player.QualityBadge}" FontSize="10" FontWeight="Bold"
                          Foreground="{Binding Player.IsHiRes, Converter={StaticResource QualityBadgeColorConverter}}" />
             </Border>
@@ -1196,19 +1207,21 @@
               <material:MaterialIcon Kind="VolumeHigh" Width="20" Height="20" />
             </Button>
 
-            <!-- Volume Slider (Locked in Bitperfect mode for Unity Gain) -->
-            <Grid Width="95" VerticalAlignment="Center">
+            <!-- Volume Slider (Unclipped, Centered, Inside window bounds) -->
+            <Grid Width="95" Height="26" VerticalAlignment="Center" ClipToBounds="False">
               <Slider Classes="seek-slider"
                       Minimum="0" Maximum="100"
                       Value="{Binding Player.Volume, Mode=TwoWay}"
                       IsEnabled="{Binding !Player.IsVolumeLocked}"
-                      VerticalAlignment="Center" />
+                      VerticalAlignment="Center"
+                      ClipToBounds="False" />
               <!-- Lock icon overlay when Bitperfect is active -->
               <material:MaterialIcon Kind="LockOutline"
                                      Width="14" Height="14"
                                      Foreground="{DynamicResource PurpleAccent}"
                                      HorizontalAlignment="Right"
-                                     Margin="0,0,-2,0"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,-4,0"
                                      IsVisible="{Binding Player.IsVolumeLocked}"
                                      ToolTip.Tip="Bit-perfect aktív: A digitális hangerő rögzítve van 100%-on (0 dB Unity Gain)." />
             </Grid>

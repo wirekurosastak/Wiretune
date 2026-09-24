@@ -77,6 +77,12 @@ public class QualityBadgeColorConverter : IValueConverter
             if (format.IsHiRes) return new SolidColorBrush(Color.Parse("#D05CE3")); // PurpleAccent
             if (format.IsLossless) return new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
         }
+        if (value is string s)
+        {
+            if (s.Contains("HI-RES", StringComparison.OrdinalIgnoreCase) || s.Contains("24bit", StringComparison.OrdinalIgnoreCase))
+                return new SolidColorBrush(Color.Parse("#D05CE3")); // PurpleAccent
+            return new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
+        }
         return new SolidColorBrush(Color.Parse("#737373")); // TextMuted
     }
 

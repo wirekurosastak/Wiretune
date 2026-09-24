@@ -384,6 +384,9 @@ public class LibraryService : ILibraryService
             _artists.Add(artist);
         }
 
+        _albums.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase));
+        _artists.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
+
         // Build Genres
         var genres = _tracks.Where(t => !string.IsNullOrWhiteSpace(t.Genre))
                             .Select(t => t.Genre!)
