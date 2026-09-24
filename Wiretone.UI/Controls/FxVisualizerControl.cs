@@ -7,18 +7,18 @@ using System;
 namespace Wiretone.UI.Controls;
 
 /// <summary>
-/// Authentic port of FxSound's FxVisualizer (from fxsound2/fxsound-app).
+/// Authentic port of FxSound's FxVisualizer architecture supporting 32 ISO 1/3-octave frequency bands.
 /// Replicates FxSound's exact visualizer architecture:
-/// 1. 10 ISO frequency bands mapped to multi-bar ripple sub-graphs.
-/// 2. Outward traveling wave ripple propagation from band centers to adjacent bars.
+/// 1. High-density frequency bands (up to 32 bands covering 25 Hz - 20 kHz).
+/// 2. Outward traveling wave ripple propagation when sub-bars are configured.
 /// 3. Vertically centered symmetrical expansion (expanding symmetrically up and down from the midline).
 /// 4. Vertical symmetry gradient (bright accent color at top and bottom tips, deeper tone at horizontal center line).
-/// 5. Sleek dark rounded glass pill container.
+/// 5. Seamless floating display directly over the player surface with zero framing.
 /// </summary>
 public class FxVisualizerControl : Control
 {
-    public const int NumSpectrumBands = 10;
-    public const int DefaultBarsPerBand = 3;
+    public const int DefaultNumBands = 32;
+    public const int DefaultBarsPerBand = 1;
 
     public static readonly StyledProperty<float[]?> BandsProperty =
         AvaloniaProperty.Register<FxVisualizerControl, float[]?>(nameof(Bands));
@@ -63,7 +63,7 @@ public class FxVisualizerControl : Control
 
     public FxVisualizerControl()
     {
-        _allocatedBars = NumSpectrumBands * DefaultBarsPerBand;
+        _allocatedBars = DefaultNumBands * DefaultBarsPerBand;
         _bandGraph = new float[_allocatedBars];
 
         _renderTimer = new DispatcherTimer
@@ -104,9 +104,10 @@ public class FxVisualizerControl : Control
                 _decayFramesRemaining = 25;
             }
         }
-        else if (change.Property == BarsPerBandProperty)
+        else if (change.Property == BarsPerBandProperty || change.Property == BandsProperty)
         {
-            int total = NumSpectrumBands * Math.Max(1, BarsPerBand);
+            int numBands = Bands != null && Bands.Length > 0 ? Bands.Length : DefaultNumBands;
+            int total = numBands * Math.Max(1, BarsPerBand);
             if (total != _allocatedBars)
             {
                 _allocatedBars = total;
@@ -146,23 +147,25 @@ public class FxVisualizerControl : Control
     }
 
     /// <summary>
-    /// Exact implementation of FxSound's FxVisualizer::update() ripple algorithm.
-    /// Values enter at the center of each frequency band and ripple outward to neighboring bars.
+    /// Implementation of FxSound's FxVisualizer::update() ripple algorithm.
+    /// Supports high-density 32 frequency bands with smooth multi-bar ripple propagation.
     /// </summary>
     private void UpdateGraph()
     {
+        var sourceBands = Bands;
+        int numBands = sourceBands != null && sourceBands.Length > 0 ? sourceBands.Length : DefaultNumBands;
         int barsPerBand = Math.Max(1, BarsPerBand);
-        int totalBars = NumSpectrumBands * barsPerBand;
+        int totalBars = numBands * barsPerBand;
+
         if (_bandGraph.Length != totalBars)
         {
             _allocatedBars = totalBars;
             _bandGraph = new float[_allocatedBars];
         }
 
-        var sourceBands = Bands;
         int half = barsPerBand / 2;
 
-        for (int i = 0; i < NumSpectrumBands; i++)
+        for (int i = 0; i < numBands; i++)
         {
             float incoming = 0f;
             if (IsPlaying && sourceBands != null && i < sourceBands.Length)
@@ -175,11 +178,14 @@ public class FxVisualizerControl : Control
                 incoming = Math.Max(0f, _bandGraph[i * barsPerBand + half] * 0.72f);
             }
 
-            // FxSound ripple propagation: Shift outward from center
-            for (int j = 0; j < half; j++)
+            if (barsPerBand > 1)
             {
-                _bandGraph[i * barsPerBand + j] = _bandGraph[i * barsPerBand + j + 1];
-                _bandGraph[i * barsPerBand + (barsPerBand - 1) - j] = _bandGraph[i * barsPerBand + (barsPerBand - 1) - j - 1];
+                // FxSound ripple propagation: Shift outward from center
+                for (int j = 0; j < half; j++)
+                {
+                    _bandGraph[i * barsPerBand + j] = _bandGraph[i * barsPerBand + j + 1];
+                    _bandGraph[i * barsPerBand + (barsPerBand - 1) - j] = _bandGraph[i * barsPerBand + (barsPerBand - 1) - j - 1];
+                }
             }
 
             // Set new energy at band center
@@ -219,13 +225,13 @@ public class FxVisualizerControl : Control
         };
 
         // 2. FxSound paint(): Render vertically centered symmetrical audio bars directly without background frame
-        int totalBars = NumSpectrumBands * Math.Max(1, BarsPerBand);
+        int totalBars = _bandGraph.Length > 0 ? _bandGraph.Length : DefaultNumBands;
         double paddingH = 2.0;
         double paddingV = 2.0;
         double availableW = bounds.Width - paddingH * 2;
         double availableH = bounds.Height - paddingV * 2;
         double slotW = availableW / totalBars;
-        double barW = Math.Clamp(slotW * 0.68, 2.0, 5.0);
+        double barW = Math.Clamp(slotW * 0.70, 2.0, 5.0);
         double cornerRadius = Math.Min(1.5, barW / 2.0);
 
         double centerY = bounds.Height / 2.0;

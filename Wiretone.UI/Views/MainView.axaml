@@ -1458,15 +1458,15 @@
           <!-- Right: Audiophile Indicator, Visualizer, Volume (Fully bounded inside window, no overflow) -->
           <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8" Margin="0,0,12,0">
             
-            <!-- Authentic FxSound Visualizer: Symmetrical center-line ripple soundwave -->
-            <controls:FxVisualizerControl Width="148" Height="36"
+            <!-- Studio-Grade 32-Band ISO RTA Visualizer -->
+            <controls:FxVisualizerControl Width="160" Height="36"
                                           VerticalAlignment="Center"
                                           Margin="0,0,6,0"
                                           Bands="{Binding Player.SpectrumBands}"
                                           AccentBrush="{DynamicResource PrimaryAction}"
                                           IsPlaying="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToBoolConverter}}"
-                                          BarsPerBand="3"
-                                          ToolTip.Tip="FxSound Realtime Spectrum Wave Visualizer" />
+                                          BarsPerBand="1"
+                                          ToolTip.Tip="Studio-Grade 32-Band ISO 1/3-Octave Realtime Spectrum Visualizer" />
 
             <!-- Compact Quality Badge with Full Technical Spec in Tooltip -->
             <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,3" VerticalAlignment="Center"
