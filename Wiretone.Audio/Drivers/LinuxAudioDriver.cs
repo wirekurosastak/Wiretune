@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Wiretone.Audio.Dsp;
 using Wiretone.Core.Models;
 using Wiretone.Core.Services;
 
@@ -20,6 +21,7 @@ public class LinuxAudioDriver : IAudioDriver
     private System.Threading.Timer? _spectrumTimer;
     private readonly Random _rng = new();
     private readonly Dsp.FxSoundSpectrumEngine _spectrumEngine = new();
+    private readonly Dsp.AudioPcmCache _pcmCache = new();
     private string? _currentSource;
     private AudioFormat? _currentFormat;
     private volatile bool _isIntentionalStop = false;
@@ -57,6 +59,7 @@ public class LinuxAudioDriver : IAudioDriver
         StartPlaybackProcess(audioSource, format, startPosition, gen);
 
         _playStartTime = DateTime.UtcNow;
+        _pcmCache.LoadTrack(audioSource);
         SetState(PlaybackState.Playing);
         StartTimers();
     }
@@ -301,6 +304,7 @@ public class LinuxAudioDriver : IAudioDriver
         _isIntentionalStop = true;
         KillProcess();
         StopTimers();
+        _pcmCache.CancelAndReset();
         _currentPosition = TimeSpan.Zero;
         _seekOffset = TimeSpan.Zero;
         SetState(PlaybackState.Stopped);
@@ -316,6 +320,7 @@ public class LinuxAudioDriver : IAudioDriver
         _isIntentionalStop = true;
         KillProcess();
         StopTimers();
+        _pcmCache.CancelAndReset();
         _currentPosition = TimeSpan.Zero;
         _seekOffset = TimeSpan.Zero;
         _isIntentionalStop = false;
@@ -371,13 +376,24 @@ public class LinuxAudioDriver : IAudioDriver
             PositionChanged?.Invoke(this, _currentPosition);
         }, null, 0, 200);
 
-        // Timer for generating live frequency spectrum analyzer visualizer data via FxSound DSP engine (16 bands)
+        // Timer for generating live frequency spectrum analyzer visualizer data via FxSound DSP engine
         _spectrumTimer = new System.Threading.Timer(_ =>
         {
             if (_state != PlaybackState.Playing) return;
 
             var liveElapsed = _seekOffset + (DateTime.UtcNow - _playStartTime);
-            var bands = _spectrumEngine.ProcessFrame(liveElapsed, true);
+            float[] bands;
+
+            Span<float> pcmWindow = stackalloc float[FxSoundSpectrumEngine.FftSize];
+            if (_pcmCache.TryGetWindow(liveElapsed, pcmWindow))
+            {
+                bands = _spectrumEngine.ProcessPcm(pcmWindow, true);
+            }
+            else
+            {
+                bands = _spectrumEngine.ProcessFrame(liveElapsed, true);
+            }
+
             SpectrumDataAvailable?.Invoke(this, bands);
         }, null, 0, 33);
     }
@@ -390,8 +406,8 @@ public class LinuxAudioDriver : IAudioDriver
         _spectrumTimer = null;
 
         _spectrumEngine.Reset();
-        var zeros = new float[16];
-        for (int i = 0; i < 16; i++) zeros[i] = 0.05f;
+        var zeros = new float[FxSoundSpectrumEngine.NumBands];
+        for (int i = 0; i < zeros.Length; i++) zeros[i] = 0.04f;
         SpectrumDataAvailable?.Invoke(this, zeros);
     }
 
@@ -442,6 +458,7 @@ public class LinuxAudioDriver : IAudioDriver
     {
         KillProcess();
         StopTimers();
+        _pcmCache.Dispose();
         ResetAudioHardwareSettings();
     }
 }

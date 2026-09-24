@@ -1,32 +1,74 @@
 namespace Wiretone.Audio.Dsp;
 
 /// <summary>
-/// Authentic 16-band frequency spectrum analyzer engine inspired by FxSound.
-/// Features ISO standard frequency centers, perceptual EQ tilt compensation (so treble
-/// and mids dance with equal visual punch as bass), rhythmic transients (kick, snare, hi-hat),
-/// harmonic melodic sweeps, and FxSound 2-pole ballistics (instant attack, smooth release decay).
+/// Authentic 10-band frequency spectrum engine implementing FxSound's ISO bands
+/// (56.23Hz, 100Hz, 177.83Hz, 316.23Hz, 562.34Hz, 1000Hz, 1778.28Hz, 3162.28Hz, 5623.4Hz, 10000Hz).
+/// 
+/// Performs REAL Fast Fourier Transform (FFT) analysis on live audio PCM buffers,
+/// mapping audio energy into ISO standard frequency bands with perceptual loudness weighting,
+/// instant transient attack (0.88), and smooth exponential release decay (0.76).
 /// </summary>
 public sealed class FxSoundSpectrumEngine
 {
-    public const int NumBands = 16;
+    public const int NumBands = 10;
+    public const int FftSize = 2048;
 
-    // ISO acoustic frequency band center frequencies (Hz)
+    // FxSound 10 ISO frequency band centers (Hz) from spectrumReset.cpp
     public static readonly float[] BandCenterFrequencies =
     {
-        32f, 64f, 125f, 200f, 315f, 500f, 800f, 1250f,
-        2000f, 3150f, 5000f, 8000f, 10000f, 12500f, 16000f, 18500f
+        56.23f, 100.0f, 177.83f, 316.23f, 562.34f,
+        1000.0f, 1778.28f, 3162.28f, 5623.4f, 10000.0f
+    };
+
+    // Frequency ranges for 44.1 kHz sampling rate (bin resolution = 21.533 Hz)
+    private static readonly (int StartBin, int EndBin)[] BandBinRanges =
+    {
+        (2, 4),      // Band 0: ~43 - 86 Hz    (Center 56.23 Hz)
+        (4, 6),      // Band 1: ~86 - 129 Hz   (Center 100 Hz)
+        (7, 11),     // Band 2: ~150 - 236 Hz  (Center 177.83 Hz)
+        (12, 20),    // Band 3: ~258 - 430 Hz  (Center 316.23 Hz)
+        (21, 35),    // Band 4: ~452 - 753 Hz  (Center 562.34 Hz)
+        (36, 62),    // Band 5: ~775 - 1335 Hz (Center 1000 Hz)
+        (63, 110),   // Band 6: ~1356 - 2368 Hz(Center 1778.28 Hz)
+        (111, 196),  // Band 7: ~2390 - 4220 Hz(Center 3162.28 Hz)
+        (197, 348),  // Band 8: ~4242 - 7493 Hz(Center 5623.4 Hz)
+        (349, 650)   // Band 9: ~7515 - 14000 Hz(Center 10000 Hz)
+    };
+
+    // Perceptual ISO loudness weighting (compensates for natural pink-noise rolloff)
+    private static readonly float[] IsoBandWeights =
+    {
+        1.45f, // 56 Hz (Sub-bass)
+        1.25f, // 100 Hz (Bass punch)
+        1.10f, // 178 Hz (Warmth)
+        1.00f, // 316 Hz (Low-mids)
+        1.20f, // 562 Hz (Vocal body)
+        1.45f, // 1 kHz (Mid clarity)
+        1.80f, // 1.78 kHz (Presence)
+        2.30f, // 3.16 kHz (Crispness)
+        2.90f, // 5.62 kHz (Treble)
+        3.80f  // 10 kHz (Brilliance / air)
     };
 
     private readonly float[] _currentLevels = new float[NumBands];
-    private readonly Random _rng = new(42);
+    private readonly float[] _hannWindow = new float[FftSize];
+    private readonly float[] _fftReal = new float[FftSize];
+    private readonly float[] _fftImag = new float[FftSize];
+    private readonly float[] _magnitude = new float[FftSize / 2];
 
-    // FxSound ballistics: instant attack on rising signals, smooth exponential decay on release
-    private const float AttackRate = 0.85f;
+    // FxSound ballistics: instant attack on rising transients, smooth exponential decay on falling energy
+    private const float AttackRate = 0.88f;
     private const float DecayRate = 0.76f;
-    private const float MinFloor = 0.08f;
+    private const float MinFloor = 0.04f;
 
     public FxSoundSpectrumEngine()
     {
+        // Pre-compute Hann window for 2048 samples
+        for (int i = 0; i < FftSize; i++)
+        {
+            _hannWindow[i] = 0.5f * (1.0f - MathF.Cos(2.0f * MathF.PI * i / (FftSize - 1)));
+        }
+
         Reset();
     }
 
@@ -39,7 +81,75 @@ public sealed class FxSoundSpectrumEngine
     }
 
     /// <summary>
-    /// Computes the next 16-band frequency spectrum frame given the current playback position.
+    /// Computes the 10 ISO frequency bands by running a real FFT on the actual PCM audio samples.
+    /// </summary>
+    public float[] ProcessPcm(ReadOnlySpan<float> pcmWindow, bool isPlaying)
+    {
+        var result = new float[NumBands];
+        if (!isPlaying || pcmWindow.Length < FftSize)
+        {
+            for (int i = 0; i < NumBands; i++)
+            {
+                _currentLevels[i] = Math.Max(MinFloor, _currentLevels[i] * 0.70f);
+                result[i] = _currentLevels[i];
+            }
+            return result;
+        }
+
+        // 1. Apply Hann window and copy to FFT buffers
+        for (int i = 0; i < FftSize; i++)
+        {
+            _fftReal[i] = pcmWindow[i] * _hannWindow[i];
+            _fftImag[i] = 0f;
+        }
+
+        // 2. Perform Radix-2 FFT
+        ComputeFft(_fftReal, _fftImag, FftSize);
+
+        // 3. Compute normalized frequency magnitudes
+        float norm = 2.0f / FftSize;
+        for (int i = 0; i < FftSize / 2; i++)
+        {
+            _magnitude[i] = MathF.Sqrt(_fftReal[i] * _fftReal[i] + _fftImag[i] * _fftImag[i]) * norm;
+        }
+
+        // 4. Compute RMS energy across each of the 10 ISO bands
+        for (int band = 0; band < NumBands; band++)
+        {
+            var (startBin, endBin) = BandBinRanges[band];
+            float sumSq = 0f;
+            int count = endBin - startBin + 1;
+
+            for (int k = startBin; k <= endBin; k++)
+            {
+                sumSq += _magnitude[k] * _magnitude[k];
+            }
+
+            float rms = MathF.Sqrt(sumSq / count) * IsoBandWeights[band];
+
+            // Convert to dBFS scale (-54 dBFS floor to -6 dBFS ceiling)
+            float db = 20.0f * MathF.Log10(rms + 1e-5f);
+            float target = (db + 54.0f) / 48.0f;
+            target = Math.Clamp(target, MinFloor, 1.0f);
+
+            // 5. Apply FxSound ballistics
+            if (target > _currentLevels[band])
+            {
+                _currentLevels[band] += (target - _currentLevels[band]) * AttackRate;
+            }
+            else
+            {
+                _currentLevels[band] = _currentLevels[band] * DecayRate + target * (1.0f - DecayRate);
+            }
+
+            result[band] = _currentLevels[band];
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Fallback spectrum processing when raw PCM is unavailable.
     /// </summary>
     public float[] ProcessFrame(TimeSpan playbackPosition, bool isPlaying)
     {
@@ -56,73 +166,62 @@ public sealed class FxSoundSpectrumEngine
 
         double t = playbackPosition.TotalSeconds;
 
-        // 1. Kick drum pulse (~124 BPM = ~2.066 Hz)
         double beatPhase = (t * 2.066) % 1.0;
-        float kickTransient = (float)Math.Max(0.0, Math.Pow(1.0 - beatPhase, 3.0));
+        float kickTransient = (float)Math.Max(0.0, Math.Pow(1.0 - beatPhase, 3.2));
 
-        // 2. Secondary sub-bass bounce on the off-pulse
         double subPhase = (t * 4.133) % 1.0;
-        float subBounce = (float)Math.Max(0.0, Math.Pow(1.0 - subPhase, 4.0)) * 0.4f;
+        float subBounce = (float)Math.Max(0.0, Math.Pow(1.0 - subPhase, 4.0)) * 0.45f;
 
-        // 3. Snare & clap on beats 2 and 4 (1.033 Hz)
         double snarePhase = (t * 1.033 + 0.5) % 1.0;
-        float snareTransient = (float)Math.Max(0.0, Math.Pow(1.0 - snarePhase, 3.5));
+        float snareTransient = (float)Math.Max(0.0, Math.Pow(1.0 - snarePhase, 3.6));
 
-        // 4. Hi-hat and cymbal 16th-note rhythm (~8.26 Hz)
         double hihatPhase = (t * 8.266) % 1.0;
         float hihatTransient = (float)Math.Max(0.0, Math.Pow(1.0 - hihatPhase, 2.2));
 
-        // 5. Sweeping harmonic pad and melodic undulating contours
-        float wave1 = (float)(Math.Sin(t * 1.8 + 0.2) * 0.35 + 0.45);
-        float wave2 = (float)(Math.Cos(t * 2.7 + 1.1) * 0.30 + 0.45);
-        float wave3 = (float)(Math.Sin(t * 3.4 + 2.3) * 0.25 + 0.45);
+        float wave1 = (float)(Math.Sin(t * 1.9 + 0.3) * 0.35 + 0.45);
+        float wave2 = (float)(Math.Cos(t * 2.8 + 1.2) * 0.30 + 0.45);
+        float wave3 = (float)(Math.Sin(t * 3.6 + 2.1) * 0.25 + 0.45);
 
         for (int i = 0; i < NumBands; i++)
         {
-            float target = 0.12f; // Minimum baseline presence
+            float target = 0.08f;
 
-            if (i <= 2)
+            switch (i)
             {
-                // Sub-bass & Bass (32Hz, 64Hz, 125Hz): massive kicks and bassline
-                float kickWeight = 1.0f - (i * 0.12f);
-                target += kickTransient * 0.75f * kickWeight;
-                target += subBounce * 0.50f;
-                target += (float)(Math.Sin(t * 3.1 + i * 0.7) * 0.15 + 0.15);
-            }
-            else if (i <= 5)
-            {
-                // Low Mids (200Hz, 315Hz, 500Hz): rhythm guitar, warmth, bass harmonics
-                target += kickTransient * 0.35f;
-                target += snareTransient * 0.30f;
-                target += wave1 * 0.45f;
-            }
-            else if (i <= 9)
-            {
-                // Midrange (800Hz, 1.25kHz, 2kHz, 3.15kHz): vocals, lead synth, snare body
-                target += snareTransient * 0.60f;
-                target += wave2 * 0.40f;
-                target += (float)(Math.Sin(t * 5.2 + i * 0.5) * 0.18 + 0.18);
-            }
-            else if (i <= 12)
-            {
-                // Presence & Treble (5kHz, 8kHz, 10kHz): vocal presence, snare sizzle, open hihats
-                target += hihatTransient * 0.55f;
-                target += snareTransient * 0.35f;
-                target += wave3 * 0.35f;
-            }
-            else
-            {
-                // Air & Brilliance (12.5kHz, 16kHz, 18.5kHz): cymbal sheen, sparkle
-                target += hihatTransient * 0.65f;
-                target += (float)(Math.Sin(t * 7.1 + i) * 0.15 + 0.15);
-                target += (float)(_rng.NextDouble() * 0.12);
+                case 0:
+                    target += kickTransient * 0.88f + subBounce * 0.60f;
+                    break;
+                case 1:
+                    target += kickTransient * 0.78f + (float)(Math.Sin(t * 4.2) * 0.20 + 0.20);
+                    break;
+                case 2:
+                    target += kickTransient * 0.45f + wave1 * 0.40f;
+                    break;
+                case 3:
+                    target += snareTransient * 0.35f + wave1 * 0.45f;
+                    break;
+                case 4:
+                    target += snareTransient * 0.65f + wave2 * 0.35f;
+                    break;
+                case 5:
+                    target += snareTransient * 0.50f + wave2 * 0.45f;
+                    break;
+                case 6:
+                    target += snareTransient * 0.40f + wave3 * 0.45f;
+                    break;
+                case 7:
+                    target += hihatTransient * 0.55f + snareTransient * 0.35f + wave3 * 0.30f;
+                    break;
+                case 8:
+                    target += hihatTransient * 0.75f + (float)(Math.Sin(t * 7.4) * 0.15 + 0.15);
+                    break;
+                case 9:
+                    target += hihatTransient * 0.82f;
+                    break;
             }
 
-            // Organic subtle acoustic fluctuations
-            target += (float)((_rng.NextDouble() - 0.5) * 0.08);
-            target = Math.Clamp(target, MinFloor, 0.96f);
+            target = Math.Clamp(target, MinFloor, 0.98f);
 
-            // FxSound ballistics: rapid attack, smooth exponential decay
             if (target > _currentLevels[i])
             {
                 _currentLevels[i] += (target - _currentLevels[i]) * AttackRate;
@@ -132,10 +231,61 @@ public sealed class FxSoundSpectrumEngine
                 _currentLevels[i] = _currentLevels[i] * DecayRate + target * (1.0f - DecayRate);
             }
 
-            _currentLevels[i] = Math.Clamp(_currentLevels[i], MinFloor, 0.98f);
             result[i] = _currentLevels[i];
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// In-place Cooley-Tukey Radix-2 FFT.
+    /// </summary>
+    private static void ComputeFft(float[] real, float[] imag, int n)
+    {
+        // 1. Bit-reversal permutation
+        for (int i = 1, j = 0; i < n; i++)
+        {
+            int bit = n >> 1;
+            for (; (j & bit) != 0; bit >>= 1)
+                j ^= bit;
+            j ^= bit;
+            if (i < j)
+            {
+                (real[i], real[j]) = (real[j], real[i]);
+                (imag[i], imag[j]) = (imag[j], imag[i]);
+            }
+        }
+
+        // 2. Cooley-Tukey butterfly computation
+        for (int len = 2; len <= n; len <<= 1)
+        {
+            float ang = -2.0f * MathF.PI / len;
+            float wlenR = MathF.Cos(ang);
+            float wlenI = MathF.Sin(ang);
+
+            for (int i = 0; i < n; i += len)
+            {
+                float wR = 1.0f;
+                float wI = 0.0f;
+                int half = len >> 1;
+
+                for (int j = 0; j < half; j++)
+                {
+                    float uR = real[i + j];
+                    float uI = imag[i + j];
+                    float vR = real[i + j + half] * wR - imag[i + j + half] * wI;
+                    float vI = real[i + j + half] * wI + imag[i + j + half] * wR;
+
+                    real[i + j] = uR + vR;
+                    imag[i + j] = uI + vI;
+                    real[i + j + half] = uR - vR;
+                    imag[i + j + half] = uI - vI;
+
+                    float nextWR = wR * wlenR - wI * wlenI;
+                    wI = wR * wlenI + wI * wlenR;
+                    wR = nextWR;
+                }
+            }
+        }
     }
 }

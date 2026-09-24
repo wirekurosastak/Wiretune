@@ -8,6 +8,7 @@
     <ResourceDictionary>
       <conv:DurationConverter x:Key="DurationConverter" />
       <conv:PlayStateToIconConverter x:Key="PlayStateToIconConverter" />
+      <conv:PlayStateToBoolConverter x:Key="PlayStateToBoolConverter" />
       <conv:FavoriteIconConverter x:Key="FavoriteIconConverter" />
       <conv:FavoriteColorConverter x:Key="FavoriteColorConverter" />
       <conv:QualityBadgeColorConverter x:Key="QualityBadgeColorConverter" />

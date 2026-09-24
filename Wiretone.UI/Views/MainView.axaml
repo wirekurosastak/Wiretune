@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Wiretone.UI.ViewModels"
              xmlns:models="using:Wiretone.Core.Models"
+             xmlns:controls="using:Wiretone.UI.Controls"
              xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="Wiretone.UI.Views.MainView"
              x:DataType="vm:MainViewModel">
@@ -1457,28 +1458,15 @@
           <!-- Right: Audiophile Indicator, Visualizer, Volume (Fully bounded inside window, no overflow) -->
           <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8" Margin="0,0,12,0">
             
-            <!-- FxSound-style Smooth Rounded Spectrum Visualizer (16 bands, 4px wide, 32px height) -->
-            <ItemsControl ItemsSource="{Binding Player.SpectrumBars}" Height="32" VerticalAlignment="Center" Margin="0,0,6,0">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Bottom" Height="32" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="vm:SpectrumBarViewModel">
-                  <Border Width="4" VerticalAlignment="Bottom"
-                          Height="{Binding Value, Converter={StaticResource SpectrumBarHeightConverter}}"
-                          Background="{DynamicResource PrimaryAction}"
-                          CornerRadius="2">
-                    <Border.Transitions>
-                      <Transitions>
-                        <DoubleTransition Property="Height" Duration="0:0:0.04" Easing="CubicEaseOut" />
-                      </Transitions>
-                    </Border.Transitions>
-                  </Border>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <!-- Authentic FxSound Visualizer: Symmetrical center-line ripple soundwave -->
+            <controls:FxVisualizerControl Width="148" Height="36"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,6,0"
+                                          Bands="{Binding Player.SpectrumBands}"
+                                          AccentBrush="{DynamicResource PrimaryAction}"
+                                          IsPlaying="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToBoolConverter}}"
+                                          BarsPerBand="3"
+                                          ToolTip.Tip="FxSound Realtime Spectrum Wave Visualizer" />
 
             <!-- Compact Quality Badge with Full Technical Spec in Tooltip -->
             <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,3" VerticalAlignment="Center"

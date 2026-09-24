@@ -41,6 +41,7 @@ public partial class PlayerViewModel : ObservableObject
     [ObservableProperty] private bool _isDrawerOpen;
 
     public ObservableCollection<SpectrumBarViewModel> SpectrumBars { get; } = new();
+    [ObservableProperty] private float[] _spectrumBands = new float[10];
 
     public PlayerViewModel(IAudioEngine engine, ILibraryService library)
     {
@@ -51,15 +52,16 @@ public partial class PlayerViewModel : ObservableObject
         IsBitperfect = _engine.IsBitperfect;
         IsVolumeLocked = _engine.IsBitperfect;
 
-        // Initialize 16 spectrum visualizer bars
-        for (int i = 0; i < 16; i++) SpectrumBars.Add(new SpectrumBarViewModel());
+        // Initialize 10 spectrum visualizer bars for legacy compatibility
+        for (int i = 0; i < 10; i++) SpectrumBars.Add(new SpectrumBarViewModel());
 
         _engine.StateChanged += (_, state) => Dispatcher.UIThread.Post(() =>
         {
             PlaybackState = state;
             if (state == PlaybackState.Stopped)
             {
-                for (int i = 0; i < SpectrumBars.Count; i++) SpectrumBars[i].Value = 0.05;
+                for (int i = 0; i < SpectrumBars.Count; i++) SpectrumBars[i].Value = 0.04;
+                SpectrumBands = new float[10];
             }
         });
 
@@ -160,6 +162,7 @@ public partial class PlayerViewModel : ObservableObject
         _engine.SpectrumDataAvailable += (_, bands) => Dispatcher.UIThread.Post(() =>
         {
             if (PlaybackState != PlaybackState.Playing) return;
+            SpectrumBands = bands;
             for (int i = 0; i < Math.Min(bands.Length, SpectrumBars.Count); i++)
             {
                 SpectrumBars[i].Value = bands[i];
