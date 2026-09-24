@@ -33,12 +33,26 @@ public partial class ThemeService : ObservableObject
         if (Application.Current is not { } app) return;
         bool isDark = app.ActualThemeVariant == ThemeVariant.Dark;
 
-        string[] darkAccents  = { "#67C8E0", "#D05CE3", "#FF6B6B", "#AEEA00", "#FF6B6B", "#67C8E0" };
-        string[] lightAccents = { "#3A9FB8", "#A03BB5", "#D94A4A", "#7FB800", "#D94A4A", "#3A9FB8" };
-        string activeAccent = isDark ? darkAccents[tabIndex % darkAccents.Length] : lightAccents[tabIndex % lightAccents.Length];
+        string[] darkAccents        = { "#67C8E0", "#D05CE3", "#FF6B6B", "#AEEA00", "#FF6B6B", "#67C8E0" };
+        string[] lightAccents       = { "#3A9FB8", "#A03BB5", "#D94A4A", "#7FB800", "#D94A4A", "#3A9FB8" };
+        string[] darkHoverAccents   = { "#8BE0F5", "#DF7DF0", "#FF8585", "#C2FF1A", "#FF8585", "#8BE0F5" };
+        string[] lightHoverAccents  = { "#52B3CC", "#B848CF", "#E85D5D", "#91CF05", "#E85D5D", "#52B3CC" };
+        string[] darkPressedAccents = { "#4FB0C8", "#B835CD", "#E05555", "#95CA00", "#E05555", "#4FB0C8" };
+        string[] lightPressedAccents= { "#2A8F98", "#88289E", "#B83535", "#6B9900", "#B83535", "#2A8F98" };
+        string[] fgColors           = { "#000000", "#FFFFFF", "#FFFFFF", "#000000", "#FFFFFF", "#000000" };
 
-        var accentColor = Color.Parse(activeAccent);
-        var accentBrush = new SolidColorBrush(accentColor);
+        string activeAccent  = isDark ? darkAccents[tabIndex % darkAccents.Length] : lightAccents[tabIndex % lightAccents.Length];
+        string activeHover   = isDark ? darkHoverAccents[tabIndex % darkHoverAccents.Length] : lightHoverAccents[tabIndex % lightHoverAccents.Length];
+        string activePressed = isDark ? darkPressedAccents[tabIndex % darkPressedAccents.Length] : lightPressedAccents[tabIndex % lightPressedAccents.Length];
+        string activeFg      = fgColors[tabIndex % fgColors.Length];
+
+        var accentColor  = Color.Parse(activeAccent);
+        var accentBrush  = new SolidColorBrush(accentColor);
+        var hoverColor   = Color.Parse(activeHover);
+        var hoverBrush   = new SolidColorBrush(hoverColor);
+        var pressedColor = Color.Parse(activePressed);
+        var pressedBrush = new SolidColorBrush(pressedColor);
+        var fgBrush      = new SolidColorBrush(Color.Parse(activeFg));
         CurrentAccentBrush = accentBrush;
 
         (string start, string mid) = (tabIndex, isDark) switch
@@ -59,28 +73,44 @@ public partial class ThemeService : ObservableObject
             (_, false) => ("#F5F7FA", "#EEF1F5")  // Light fallback
         };
 
+        var startColor = Color.Parse(start);
+        var midColor   = Color.Parse(mid);
+
+        var windowGradient = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint   = new RelativePoint(1, 1, RelativeUnit.Relative),
+            GradientStops = new GradientStops
+            {
+                new GradientStop(startColor, 0.0),
+                new GradientStop(midColor, 0.5),
+                new GradientStop(startColor, 1.0)
+            }
+        };
+
         if (app.Resources is Avalonia.Controls.ResourceDictionary res)
         {
-            res["PrimaryActionColor"] = accentColor;
-            res["PrimaryAction"]      = accentBrush;
-            res["SystemAccentColor"] = accentColor;
-            res["SystemAccentColorBrush"] = accentBrush;
-            res["HighlightBrush"] = accentBrush;
-
-            var startColor = Color.Parse(start);
-            var midColor   = Color.Parse(mid);
-
-            res["WindowGradient"] = new LinearGradientBrush
+            void ApplyToDictionary(Avalonia.Controls.IResourceDictionary dict)
             {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint   = new RelativePoint(1, 1, RelativeUnit.Relative),
-                GradientStops = new GradientStops
+                dict["PrimaryActionColor"]      = accentColor;
+                dict["PrimaryAction"]           = accentBrush;
+                dict["PrimaryActionHover"]      = hoverBrush;
+                dict["PrimaryActionPressed"]    = pressedBrush;
+                dict["PrimaryActionForeground"] = fgBrush;
+                dict["SystemAccentColor"]       = accentColor;
+                dict["SystemAccentColorBrush"]  = accentBrush;
+                dict["HighlightBrush"]          = accentBrush;
+                dict["WindowGradient"]          = windowGradient;
+            }
+
+            ApplyToDictionary(res);
+            foreach (var kvp in res.ThemeDictionaries)
+            {
+                if (kvp.Value is Avalonia.Controls.IResourceDictionary subDict)
                 {
-                    new GradientStop(startColor, 0.0),
-                    new GradientStop(midColor, 0.5),
-                    new GradientStop(startColor, 1.0)
+                    ApplyToDictionary(subDict);
                 }
-            };
+            }
         }
     }
 }

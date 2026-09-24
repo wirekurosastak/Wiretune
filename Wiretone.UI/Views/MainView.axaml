@@ -31,7 +31,7 @@
             </Panel>
             <StackPanel VerticalAlignment="Center" Spacing="0">
               <TextBlock Text="WIRETONE" FontSize="18" FontWeight="Black" LetterSpacing="2.0" Foreground="{DynamicResource TextMain}" />
-              <TextBlock Text="AUDIOPHILE STREAMER &amp; PLAYER" FontSize="9" FontWeight="Bold" LetterSpacing="1.2" Foreground="{DynamicResource CyanAccent}" />
+              <TextBlock Text="STREAMER &amp; PLAYER" FontSize="9" FontWeight="Bold" LetterSpacing="1.2" Foreground="{DynamicResource CyanAccent}" />
             </StackPanel>
           </StackPanel>
 
@@ -52,6 +52,16 @@
                                      Margin="14,0,8,0"
                                      VerticalAlignment="Center" />
             </TextBox.InnerLeftContent>
+            <TextBox.InnerRightContent>
+              <Button Classes="icon"
+                      Command="{Binding ClearSearchCommand}"
+                      IsVisible="{Binding IsSearchActive}"
+                      Width="28" Height="28"
+                      Margin="0,0,8,0"
+                      ToolTip.Tip="Keresés törlése">
+                <material:MaterialIcon Kind="CloseCircle" Width="16" Height="16" Foreground="{DynamicResource TextMuted}" />
+              </Button>
+            </TextBox.InnerRightContent>
           </TextBox>
 
           <!-- Top Right Audiophile Badges & Controls -->
@@ -243,16 +253,19 @@
         <Border Grid.Column="1" Padding="28,24">
           <Panel>
 
-            <!-- ============================================== -->
-            <!-- TAB 0: TRACKS BROWSER (SZÁMOK)                 -->
-            <!-- ============================================== -->
+            <!-- Standard Library Tabs (Visible when not actively searching) -->
+            <Panel IsVisible="{Binding !IsSearchActive}">
+
+              <!-- ============================================== -->
+              <!-- TAB 0: TRACKS BROWSER (SZÁMOK)                 -->
+              <!-- ============================================== -->
             <Grid IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=0, Converter={StaticResource IntEqualConverter}}"
                   RowDefinitions="Auto, *">
               
               <!-- Tab Header / Actions -->
               <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
                 <StackPanel Grid.Column="0" Spacing="4">
-                  <TextBlock Text="Összes szám" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
+                  <TextBlock Text="Számok" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="{Binding Tracks.TotalTracksCount, StringFormat='{}{0} szám'}" FontSize="13" Foreground="{DynamicResource TextMuted}" />
                     <TextBlock Text="•" FontSize="13" Foreground="{DynamicResource TextMuted}" />
@@ -277,7 +290,7 @@
               </Grid>
 
               <!-- Tracks Content -->
-              <Border Grid.Row="1" Classes="glass" Padding="0" ClipToBounds="True">
+              <Border Grid.Row="1" Classes="glass cyan" Padding="0" ClipToBounds="True">
                 <Panel>
                   <!-- Empty Library Placeholder -->
                   <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
@@ -310,11 +323,17 @@
                       <DataGridTemplateColumn Width="50" Header="">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
-                            <Button Classes="icon"
+                            <Button Classes="cyan"
+                                    Width="26" Height="26"
+                                    CornerRadius="4"
+                                    Padding="0"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Tracks.PlayTrackCommand}"
                                     CommandParameter="{Binding}"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                              <material:MaterialIcon Kind="PlayCircleOutline" Foreground="{DynamicResource CyanAccent}" Width="22" Height="22" />
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    ToolTip.Tip="Szám lejátszása">
+                              <material:MaterialIcon Kind="Play" Foreground="Black" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                           </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
@@ -413,7 +432,7 @@
                                 Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Albums.OpenAlbumCommand}"
                                 CommandParameter="{Binding}"
                                 Margin="0,0,18,18">
-                          <Border Classes="metric-card" Width="210" Height="270">
+                          <Border Classes="metric-card purple" Width="210" Height="270">
                             <Grid RowDefinitions="150, *, Auto">
                               <!-- Cover placeholder / art -->
                               <Border Grid.Row="0" CornerRadius="6" Background="{DynamicResource Surface2}" ClipToBounds="True">
@@ -429,13 +448,19 @@
                                 <TextBlock Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
                               </StackPanel>
 
-                              <!-- Badge & Play Button -->
+                              <!-- Badge & Play Button (Sleek non-circular rounded button) -->
                               <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,8,0,0">
                                 <TextBlock Grid.Column="0" Text="{Binding FormatBadge}" FontSize="10" FontWeight="Bold" Foreground="{Binding FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                <Button Grid.Column="1" Classes="icon"
+                                <Button Grid.Column="1" Classes="purple"
+                                        Width="32" Height="32"
+                                        CornerRadius="4"
+                                        Padding="0"
+                                        HorizontalContentAlignment="Center"
+                                        VerticalContentAlignment="Center"
                                         Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Albums.PlayAlbumCommand}"
-                                        CommandParameter="{Binding Album}">
-                                  <material:MaterialIcon Kind="PlayCircle" Foreground="{DynamicResource CyanAccent}" Width="28" Height="28" />
+                                        CommandParameter="{Binding Album}"
+                                        ToolTip.Tip="Album lejátszása">
+                                  <material:MaterialIcon Kind="Play" Foreground="White" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Button>
                               </Grid>
                             </Grid>
@@ -454,25 +479,25 @@
                         HorizontalAlignment="Left"
                         Command="{Binding Albums.CloseAlbumDetailCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="8">
-                    <material:MaterialIcon Kind="ArrowLeft" Width="18" Height="18" Foreground="{DynamicResource CyanAccent}" />
+                    <material:MaterialIcon Kind="ArrowLeft" Width="18" Height="18" Foreground="{DynamicResource PurpleAccent}" />
                     <TextBlock Text="Vissza az összes albumhoz" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
 
                 <!-- Album Hero Banner -->
-                <Border Grid.Row="1" Classes="glass" Margin="0,0,0,20">
+                <Border Grid.Row="1" Classes="glass purple" Margin="0,0,0,20">
                   <Grid ColumnDefinitions="140, *">
                     <Border Grid.Column="0" Width="120" Height="120" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left" ClipToBounds="True">
                       <Panel>
                         <Image Source="{Binding Albums.SelectedAlbumCover}" Stretch="UniformToFill" IsVisible="{Binding Albums.SelectedAlbumCover, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <material:MaterialIcon Kind="Album" Foreground="{DynamicResource CyanAccent}" Width="70" Height="70" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Albums.SelectedAlbumCover, Converter={x:Static ObjectConverters.IsNull}}" />
+                        <material:MaterialIcon Kind="Album" Foreground="{DynamicResource PurpleAccent}" Width="70" Height="70" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Albums.SelectedAlbumCover, Converter={x:Static ObjectConverters.IsNull}}" />
                       </Panel>
                     </Border>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="8" Margin="8,0,0,0">
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,2">
-                          <TextBlock Text="ALBUM" FontSize="10" FontWeight="Black" Foreground="{DynamicResource CyanAccent}" />
+                          <TextBlock Text="ALBUM" FontSize="10" FontWeight="Black" Foreground="{DynamicResource PurpleAccent}" />
                         </Border>
                         <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,2">
                           <TextBlock Text="{Binding Albums.SelectedAlbum.FormatBadge}" FontSize="10" FontWeight="Bold" Foreground="{Binding Albums.SelectedAlbum.FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
@@ -485,7 +510,7 @@
                         <Button Classes="table-link"
                                 Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenArtistByNameCommand}"
                                 CommandParameter="{Binding Albums.SelectedAlbum.Artist}">
-                          <TextBlock Text="{Binding Albums.SelectedAlbum.Artist}" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource CyanAccent}" />
+                          <TextBlock Text="{Binding Albums.SelectedAlbum.Artist}" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource PurpleAccent}" />
                         </Button>
                         <TextBlock Text="•" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Albums.SelectedAlbum.Year}" FontSize="13" Foreground="{DynamicResource TextMuted}" IsVisible="{Binding Albums.SelectedAlbum.Year, Converter={x:Static ObjectConverters.IsNotNull}}" VerticalAlignment="Center" />
@@ -497,13 +522,13 @@
 
                       <!-- Action Buttons -->
                       <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,6,0,0">
-                        <Button Classes="primary" Command="{Binding Albums.PlayAlbumCommand}" CommandParameter="{Binding Albums.SelectedAlbum}">
+                        <Button Classes="purple" Height="38" CornerRadius="6" Command="{Binding Albums.PlayAlbumCommand}" CommandParameter="{Binding Albums.SelectedAlbum}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Play" Width="18" Height="18" />
                             <TextBlock Text="Album lejátszása" FontWeight="Bold" />
                           </StackPanel>
                         </Button>
-                        <Button Classes="secondary" Command="{Binding Albums.ShuffleAlbumCommand}" CommandParameter="{Binding Albums.SelectedAlbum}">
+                        <Button Classes="secondary" Height="38" CornerRadius="6" Command="{Binding Albums.ShuffleAlbumCommand}" CommandParameter="{Binding Albums.SelectedAlbum}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Shuffle" Width="18" Height="18" />
                             <TextBlock Text="Véletlenszerű" FontWeight="Bold" />
@@ -515,7 +540,7 @@
                 </Border>
 
                 <!-- Tracklist DataGrid -->
-                <Border Grid.Row="2" Classes="glass" Padding="0" ClipToBounds="True">
+                <Border Grid.Row="2" Classes="glass purple" Padding="0" ClipToBounds="True">
                   <DataGrid ItemsSource="{Binding Albums.SelectedAlbum.Tracks}"
                             AutoGenerateColumns="False"
                             IsReadOnly="True"
@@ -526,11 +551,17 @@
                       <DataGridTemplateColumn Width="50" Header="">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
-                            <Button Classes="icon"
+                            <Button Classes="purple"
+                                    Width="26" Height="26"
+                                    CornerRadius="4"
+                                    Padding="0"
+                                    HorizontalContentAlignment="Center"
+                                    VerticalContentAlignment="Center"
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Albums.PlayAlbumTrackCommand}"
                                     CommandParameter="{Binding}"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                              <material:MaterialIcon Kind="PlayCircleOutline" Foreground="{DynamicResource CyanAccent}" Width="22" Height="22" />
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    ToolTip.Tip="Szám lejátszása">
+                              <material:MaterialIcon Kind="Play" Foreground="White" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Button>
                           </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
@@ -599,24 +630,24 @@
                                 Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.OpenArtistCommand}"
                                 CommandParameter="{Binding}"
                                 Margin="0,0,18,18">
-                          <Border Classes="metric-card" Width="200" Height="220">
+                          <Border Classes="metric-card coral" Width="200" Height="220">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
-                              <Border Width="90" Height="90" CornerRadius="45" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
-                                <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CyanAccent}" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              <Border Width="72" Height="72" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
+                                <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="44" Height="44" HorizontalAlignment="Center" VerticalAlignment="Center" />
                               </Border>
                               <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
                               <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} zeneszám'}" FontSize="12" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />
-                              <Button Classes="icon"
+                              <Button Classes="coral"
                                       HorizontalAlignment="Center"
-                                      Width="36" Height="36"
-                                      CornerRadius="18"
+                                      Width="32" Height="32"
+                                      CornerRadius="4"
                                       Padding="0"
                                       HorizontalContentAlignment="Center"
                                       VerticalContentAlignment="Center"
                                       Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.PlayArtistCommand}"
                                       CommandParameter="{Binding}"
                                       ToolTip.Tip="Előadó összes számának lejátszása">
-                                <material:MaterialIcon Kind="PlayCircle" Foreground="{DynamicResource CyanAccent}" Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <material:MaterialIcon Kind="Play" Foreground="White" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
                               </Button>
                             </StackPanel>
                           </Border>
@@ -634,26 +665,26 @@
                         HorizontalAlignment="Left"
                         Command="{Binding Artists.CloseArtistDetailCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="8">
-                    <material:MaterialIcon Kind="ArrowLeft" Width="18" Height="18" Foreground="{DynamicResource CyanAccent}" />
+                    <material:MaterialIcon Kind="ArrowLeft" Width="18" Height="18" Foreground="{DynamicResource CoralAccent}" />
                     <TextBlock Text="Vissza az összes előadóhoz" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
 
                 <!-- Artist Hero Card -->
-                <Border Grid.Row="1" Classes="glass" Margin="0,0,0,20">
-                  <Grid ColumnDefinitions="110, *">
-                    <Border Grid.Column="0" Width="90" Height="90" CornerRadius="45" Background="{DynamicResource Surface2}" HorizontalAlignment="Left">
-                      <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CyanAccent}" Width="50" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Border Grid.Row="1" Classes="glass coral" Margin="0,0,0,20">
+                  <Grid ColumnDefinitions="95, *">
+                    <Border Grid.Column="0" Width="80" Height="80" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left">
+                      <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
                     </Border>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6" Margin="8,0,0,0">
-                      <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
-                        <TextBlock Text="ELŐADÓ" FontSize="10" FontWeight="Black" Foreground="{DynamicResource CyanAccent}" />
+                      <Border Background="{DynamicResource CoralAccent}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
+                        <TextBlock Text="ELŐADÓ" FontSize="10" FontWeight="Black" Foreground="White" />
                       </Border>
                       <TextBlock Text="{Binding Artists.SelectedArtist.Name}" FontSize="28" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
                       <TextBlock Text="{Binding Artists.SelectedArtist.TrackCount, StringFormat='{}{0} zeneszám az adatbázisban'}" FontSize="13" Foreground="{DynamicResource TextMuted}" />
 
-                      <Button Classes="primary" HorizontalAlignment="Left" Margin="0,4,0,0"
+                      <Button Classes="coral" CornerRadius="6" Height="38" HorizontalAlignment="Left" Margin="0,4,0,0"
                               Command="{Binding Artists.PlayArtistCommand}" CommandParameter="{Binding Artists.SelectedArtist}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <material:MaterialIcon Kind="Play" Width="18" Height="18" />
@@ -683,7 +714,7 @@
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
                                     CommandParameter="{Binding}"
                                     Margin="0,0,16,16">
-                              <Border Classes="metric-card" Width="180" Height="230">
+                              <Border Classes="metric-card purple" Width="180" Height="230">
                                 <Grid RowDefinitions="120, *, Auto">
                                   <Border Grid.Row="0" CornerRadius="6" Background="{DynamicResource Surface2}" ClipToBounds="True">
                                     <Panel>
@@ -697,7 +728,7 @@
                                   </StackPanel>
                                   <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,4,0,0">
                                     <TextBlock Grid.Column="0" Text="{Binding TrackCount, StringFormat='{}{0} szám'}" FontSize="10" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
-                                    <material:MaterialIcon Grid.Column="1" Kind="ChevronRight" Foreground="{DynamicResource CyanAccent}" Width="18" Height="18" />
+                                    <material:MaterialIcon Grid.Column="1" Kind="ChevronRight" Foreground="{DynamicResource CoralAccent}" Width="18" Height="18" />
                                   </Grid>
                                 </Grid>
                               </Border>
@@ -710,7 +741,7 @@
                     <!-- Section: All Tracks by this Artist -->
                     <StackPanel Spacing="12">
                       <TextBlock Text="ÖSSZES ZENESZÁM" Classes="group-title" Margin="4,0,0,0" />
-                      <Border Classes="glass" Padding="0" ClipToBounds="True">
+                      <Border Classes="glass coral" Padding="0" ClipToBounds="True">
                         <DataGrid ItemsSource="{Binding Artists.SelectedArtistTracks}"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
@@ -721,11 +752,17 @@
                             <DataGridTemplateColumn Width="50" Header="">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
-                                  <Button Classes="icon"
+                                  <Button Classes="coral"
+                                          Width="26" Height="26"
+                                          CornerRadius="4"
+                                          Padding="0"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"
                                           Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.PlayArtistTrackCommand}"
                                           CommandParameter="{Binding}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <material:MaterialIcon Kind="PlayCircleOutline" Foreground="{DynamicResource CyanAccent}" Width="22" Height="22" />
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          ToolTip.Tip="Szám lejátszása">
+                                    <material:MaterialIcon Kind="Play" Foreground="White" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                   </Button>
                                 </DataTemplate>
                               </DataGridTemplateColumn.CellTemplate>
@@ -774,7 +811,7 @@
                   RowDefinitions="Auto, *">
               <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
                 <TextBlock Grid.Column="0" Text="Lejátszási listák" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
-                <Button Grid.Column="1" Classes="primary" Command="{Binding Playlists.OpenCreateDialogCommand}">
+                <Button Grid.Column="1" Classes="lime" Height="38" CornerRadius="6" Command="{Binding Playlists.OpenCreateDialogCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <material:MaterialIcon Kind="Plus" Width="18" Height="18" />
                     <TextBlock Text="Új lejátszási lista" FontWeight="Bold" />
@@ -784,7 +821,7 @@
 
               <Grid Grid.Row="1" ColumnDefinitions="300, *">
                 <!-- Playlist selection list -->
-                <Border Grid.Column="0" Classes="glass" Margin="0,0,16,0" Padding="8">
+                <Border Grid.Column="0" Classes="glass lime" Margin="0,0,16,0" Padding="8">
                   <ListBox ItemsSource="{Binding Playlists.Playlists}"
                            SelectedItem="{Binding Playlists.SelectedPlaylist}"
                            Background="Transparent">
@@ -808,17 +845,17 @@
                 </Border>
 
                 <!-- Selected playlist contents -->
-                <Border Grid.Column="1" Classes="glass">
+                <Border Grid.Column="1" Classes="glass lime">
                   <Grid RowDefinitions="Auto, *">
                     <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,16">
                       <TextBlock Text="{Binding Playlists.SelectedPlaylist.Name, FallbackValue='Válassz egy listát'}"
                                  FontSize="18" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
-                      <Button Grid.Column="1" Classes="primary"
+                      <Button Grid.Column="1" Classes="lime" Height="38" CornerRadius="6"
                               Command="{Binding Playlists.PlayPlaylistCommand}"
                               CommandParameter="{Binding Playlists.SelectedPlaylist}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <material:MaterialIcon Kind="Play" Width="18" Height="18" />
-                          <TextBlock Text="Lista lejátszása" />
+                          <TextBlock Text="Lista lejátszása" FontWeight="Bold" />
                         </StackPanel>
                       </Button>
                     </Grid>
@@ -847,7 +884,7 @@
                   <TextBlock Text="Kedvencek" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
                   <TextBlock Text="{Binding Favorites.FavoriteTracks.Count, StringFormat='{}{0} megjelölt kedvenc szám'}" FontSize="13" Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
-                <Button Grid.Column="1" Classes="coral" Command="{Binding Favorites.PlayAllCommand}">
+                <Button Grid.Column="1" Classes="coral" Height="38" CornerRadius="6" Command="{Binding Favorites.PlayAllCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <material:MaterialIcon Kind="Play" Width="18" Height="18" />
                     <TextBlock Text="Kedvencek lejátszása" FontWeight="Bold" />
@@ -855,16 +892,22 @@
                 </Button>
               </Grid>
 
-              <Border Grid.Row="1" Classes="glass" Padding="0" ClipToBounds="True">
+              <Border Grid.Row="1" Classes="glass coral" Padding="0" ClipToBounds="True">
                 <DataGrid ItemsSource="{Binding Favorites.FavoriteTracks}" AutoGenerateColumns="False" IsReadOnly="True">
                   <DataGrid.Columns>
                     <DataGridTemplateColumn Width="50">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="models:Track">
-                          <Button Classes="icon"
+                          <Button Classes="coral"
+                                  Width="26" Height="26"
+                                  CornerRadius="4"
+                                  Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
                                   Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Favorites.PlayTrackCommand}"
-                                  CommandParameter="{Binding}">
-                            <material:MaterialIcon Kind="PlayCircleOutline" Foreground="{DynamicResource CoralAccent}" Width="22" Height="22" />
+                                  CommandParameter="{Binding}"
+                                  ToolTip.Tip="Szám lejátszása">
+                            <material:MaterialIcon Kind="Play" Foreground="White" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
                           </Button>
                         </DataTemplate>
                       </DataGridTemplateColumn.CellTemplate>
@@ -892,12 +935,13 @@
             <!-- ============================================== -->
             <!-- TAB 5: UNIFIED SETTINGS (AUDIOPHILE & SERVER)   -->
             <!-- ============================================== -->
-            <ScrollViewer IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=5, Converter={StaticResource IntEqualConverter}}">
-              <StackPanel Spacing="28" Margin="0,0,16,24">
+            <ScrollViewer IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=5, Converter={StaticResource IntEqualConverter}}"
+                          ClipToBounds="False">
+              <StackPanel Spacing="24" Margin="4,0,12,24">
                 <!-- Title Header -->
                 <StackPanel Spacing="4">
                   <TextBlock Text="Beállítások" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
-                  <TextBlock Text="Szerver kapcsolat, hálózati streamelés és hardveres audiophile konfiguráció egy helyen." FontSize="13" Foreground="{DynamicResource TextMuted}" />
+                  <TextBlock Text="Szerver kapcsolat és hardveres audiophile kimenet konfiguráció." FontSize="13" Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
 
                 <!-- SECTION 1: SERVER -->
@@ -905,27 +949,27 @@
                   <TextBlock Text="SZERVER" Classes="group-title" />
 
                   <!-- Server Info & Connection Card -->
-                  <Border Classes="glass">
+                  <Border Classes="glass cyan">
                     <StackPanel Spacing="16">
                       <Grid ColumnDefinitions="*, Auto">
                         <StackPanel Grid.Column="0" Spacing="4">
                           <TextBlock Text="Kapcsolat" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
                           <TextBlock Text="Hálózati zenei kiszolgáló és metaadat szinkronizáció." FontSize="12" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
-                        <Border Grid.Column="1" Background="{DynamicResource Surface2}" CornerRadius="8" Padding="12,5" VerticalAlignment="Center">
+                        <Border Grid.Column="1" Background="{DynamicResource Surface2}" CornerRadius="4" Padding="12,4" VerticalAlignment="Center">
                           <TextBlock Text="{Binding ServerSettings.ServerStatusBadge}" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource CyanAccent}" />
                         </Border>
                       </Grid>
 
                       <Grid ColumnDefinitions="*, Auto, Auto" Margin="0,8,0,0">
                         <TextBox Grid.Column="0" Text="{Binding ServerSettings.ServerUrl, Mode=TwoWay}" Watermark="http://szerver-ip-cime:5200" Margin="0,0,12,0" />
-                        <Button Grid.Column="1" Classes="primary" Command="{Binding ServerSettings.ConnectServerCommand}" Height="38" Padding="18,0" Margin="0,0,8,0">
+                        <Button Grid.Column="1" Classes="primary" Command="{Binding ServerSettings.ConnectServerCommand}" Height="38" MinWidth="145" HorizontalContentAlignment="Center" Margin="0,0,8,0">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Server" Width="18" Height="18" />
                             <TextBlock Text="Kapcsolódás" FontWeight="Bold" />
                           </StackPanel>
                         </Button>
-                        <Button Grid.Column="2" Classes="secondary" Command="{Binding ServerSettings.RescanServerCommand}" IsEnabled="{Binding ServerSettings.IsServerConnected}" Height="38" Padding="18,0">
+                        <Button Grid.Column="2" Classes="secondary" Command="{Binding ServerSettings.RescanServerCommand}" IsEnabled="{Binding ServerSettings.IsServerConnected}" Height="38" MinWidth="145" HorizontalContentAlignment="Center">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Refresh" Width="18" Height="18" />
                             <TextBlock Text="Újraszkennelés" FontWeight="SemiBold" />
@@ -945,38 +989,38 @@
 
                   <!-- Statistics Grid -->
                   <Grid ColumnDefinitions="*, *, *">
-                    <Border Grid.Column="0" Classes="metric-card" Margin="0,0,8,0">
+                    <Border Grid.Column="0" Classes="metric-card cyan" Margin="0,0,8,0">
                       <StackPanel Spacing="4">
                         <TextBlock Text="SZÁMOK" Classes="group-title" Margin="0,0,0,8" />
                         <TextBlock Text="{Binding ServerSettings.TotalTracksCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource CyanAccent}" />
                       </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="1" Classes="metric-card" Margin="4,0,4,0">
+                    <Border Grid.Column="1" Classes="metric-card purple" Margin="4,0,4,0">
                       <StackPanel Spacing="4">
                         <TextBlock Text="ALBUMOK" Classes="group-title" Margin="0,0,0,8" />
-                        <TextBlock Text="{Binding ServerSettings.TotalAlbumsCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource CyanAccent}" />
+                        <TextBlock Text="{Binding ServerSettings.TotalAlbumsCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource PurpleAccent}" />
                       </StackPanel>
                     </Border>
 
-                    <Border Grid.Column="2" Classes="metric-card" Margin="8,0,0,0">
+                    <Border Grid.Column="2" Classes="metric-card coral" Margin="8,0,0,0">
                       <StackPanel Spacing="4">
                         <TextBlock Text="ELŐADÓK" Classes="group-title" Margin="0,0,0,8" />
-                        <TextBlock Text="{Binding ServerSettings.TotalArtistsCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource CyanAccent}" />
+                        <TextBlock Text="{Binding ServerSettings.TotalArtistsCount}" FontSize="28" FontWeight="SemiBold" Foreground="{DynamicResource CoralAccent}" />
                       </StackPanel>
                     </Border>
                   </Grid>
 
                   <!-- Optional Local Offline Mode Expander -->
-                  <Expander Header="Helyi zenemappa (offline)" IsExpanded="False" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource GlassBorder}" CornerRadius="12">
+                  <Expander Header="Helyi mappa" IsExpanded="False" Background="{DynamicResource Surface1}" BorderBrush="{DynamicResource GlassBorder}" CornerRadius="8">
                     <StackPanel Spacing="12" Margin="0,8,0,0">
-                      <TextBlock Text="Ha nem szeretnél streaming szervert használni, itt beolvashatod a helyi gépen lévő zenei mappádat." FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                      <TextBlock Text="Helyi gépen tárolt zenei mappa beolvasása offline használathoz." FontSize="12" Foreground="{DynamicResource TextMuted}" />
                       <Grid ColumnDefinitions="*, Auto">
                         <TextBox Grid.Column="0" Text="{Binding ServerSettings.LocalLibraryPath, Mode=TwoWay}" Watermark="/eleresi/ut/zenek" Margin="0,0,12,0" />
-                        <Button Grid.Column="1" Classes="secondary" Command="{Binding ServerSettings.StartScanFolderCommand}" IsEnabled="{Binding !ServerSettings.IsScanning}">
+                        <Button Grid.Column="1" Classes="secondary" Command="{Binding ServerSettings.StartScanFolderCommand}" IsEnabled="{Binding !ServerSettings.IsScanning}" Height="38" Padding="16,0">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="FolderSearchOutline" Width="18" Height="18" />
-                            <TextBlock Text="Helyi szkennelés" />
+                            <TextBlock Text="Szkennelés" />
                           </StackPanel>
                         </Button>
                       </Grid>
@@ -989,12 +1033,12 @@
                   <TextBlock Text="HANGKIMENET" Classes="group-title" />
 
                   <!-- Overview Banner -->
-                  <Border Classes="glass">
+                  <Border Classes="glass cyan">
                     <Grid ColumnDefinitions="Auto, *">
-                      <material:MaterialIcon Grid.Column="0" Kind="Speakers" Foreground="{DynamicResource CyanAccent}" Width="40" Height="40" VerticalAlignment="Center" Margin="0,0,20,0" />
+                      <material:MaterialIcon Grid.Column="0" Kind="Speakers" Foreground="{DynamicResource CyanAccent}" Width="36" Height="36" VerticalAlignment="Center" Margin="0,0,16,0" />
                       <StackPanel Grid.Column="1" Spacing="4">
-                        <TextBlock Text="DAC &amp; Bit-Perfect kimenet" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
-                        <TextBlock Text="Közvetlen hardveres jelátvitel digitális módosítás és újramintavételezés nélkül."
+                        <TextBlock Text="Kimenet" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                        <TextBlock Text="Közvetlen hardveres jelátvitel újramintavételezés nélkül."
                                    FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                       </StackPanel>
                     </Grid>
@@ -1003,42 +1047,42 @@
                   <!-- Toggles & Configuration Cards -->
                   <Grid ColumnDefinitions="*, *" Margin="0,4">
                     <!-- Exclusive Mode Card -->
-                    <Border Grid.Column="0" Classes="metric-card" Margin="0,0,8,0">
+                    <Border Grid.Column="0" Classes="metric-card cyan" Margin="0,0,8,0">
                       <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*, Auto">
                           <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Kizárólagos hozzáférés (Exclusive)" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource CyanAccent}" />
+                            <TextBlock Text="Kizárólagos (Exclusive)" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource LimeAccent}" />
                             <TextBlock Text="Közvetlen hardveres hozzáférés a kimeneti eszközhöz." FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                           </StackPanel>
                           <ToggleSwitch Grid.Column="1" IsChecked="{Binding AudiophileSettings.IsExclusiveMode, Mode=TwoWay}" />
                         </Grid>
-                        <TextBlock Text="Minden más rendszerhang némítva lesz a jitter minimalizálásához."
+                        <TextBlock Text="Minden más rendszerhang némítva a jitter minimalizálásához."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                       </StackPanel>
                     </Border>
 
                     <!-- Bit-perfect Mode Card -->
-                    <Border Grid.Column="1" Classes="metric-card" Margin="8,0,0,0">
+                    <Border Grid.Column="1" Classes="metric-card purple" Margin="8,0,0,0">
                       <StackPanel Spacing="12">
                         <Grid ColumnDefinitions="*, Auto">
                           <StackPanel Grid.Column="0" Spacing="2">
-                            <TextBlock Text="Bit-Perfect lejátszás" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource CyanAccent}" />
-                            <TextBlock Text="1:1 bitpontos lejátszás keverés nélkül (Exclusive módot igényel)." FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                            <TextBlock Text="Bit-Perfect" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource PurpleAccent}" />
+                            <TextBlock Text="1:1 bitpontos átvitel keverés nélkül (0 dB Unity Gain)." FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                           </StackPanel>
                           <ToggleSwitch Grid.Column="1" IsChecked="{Binding AudiophileSettings.IsBitperfect, Mode=TwoWay}" IsEnabled="{Binding AudiophileSettings.IsExclusiveMode}" />
                         </Grid>
-                        <TextBlock Text="A digitális hangerő rögzítve van 100%-on (0 dB Unity Gain)."
+                        <TextBlock Text="A digitális hangerő rögzítve van 100%-on (Exclusive módot igényel)."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                       </StackPanel>
                     </Border>
                   </Grid>
 
                   <!-- Audio Output Device Selector -->
-                  <Border Classes="glass">
+                  <Border Classes="glass cyan">
                     <StackPanel Spacing="16">
                       <Grid ColumnDefinitions="*, Auto">
-                        <TextBlock Grid.Column="0" Text="Kimeneti DAC eszköz" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
-                        <Button Grid.Column="1" Classes="secondary" Command="{Binding AudiophileSettings.RefreshDevicesCommand}">
+                        <TextBlock Grid.Column="0" Text="DAC eszköz" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                        <Button Grid.Column="1" Classes="secondary" Command="{Binding AudiophileSettings.RefreshDevicesCommand}" Height="34" Padding="14,0">
                           <StackPanel Orientation="Horizontal" Spacing="6">
                             <material:MaterialIcon Kind="Refresh" Width="16" Height="16" />
                             <TextBlock Text="Frissítés" />
@@ -1065,15 +1109,15 @@
                   </Border>
 
                   <!-- Signal Path Visualizer -->
-                  <Border Classes="glass">
+                  <Border Classes="glass lime">
                     <StackPanel Spacing="12">
-                      <TextBlock Text="Jelút (Signal Path)" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
-                      <Border Background="{DynamicResource Surface2}" CornerRadius="6" Padding="16">
+                      <TextBlock Text="Jelút" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                      <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="16">
                         <TextBlock Text="{Binding AudiophileSettings.SignalPath}"
                                    FontFamily="Consolas, JetBrains Mono, Courier New, monospace"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource LimeAccent}"
-                                   LineHeight="20" />
+                                    FontSize="12"
+                                    Foreground="{DynamicResource LimeAccent}"
+                                    LineHeight="20" />
                       </Border>
                     </StackPanel>
                   </Border>
@@ -1081,6 +1125,245 @@
 
               </StackPanel>
             </ScrollViewer>
+
+            </Panel>
+
+            <!-- ============================================== -->
+            <!-- TIDAL-STYLE UNIFIED SEARCH RESULTS VIEW        -->
+            <!-- ============================================== -->
+            <Grid IsVisible="{Binding IsSearchActive}" RowDefinitions="Auto, *">
+              
+              <!-- Search Results Header -->
+              <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
+                <StackPanel Grid.Column="0" Spacing="4">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="Keresési találatok:" FontSize="24" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
+                    <TextBlock Text="{Binding Search.Query, StringFormat='„{0}”'}" FontSize="24" FontWeight="Black" Foreground="{DynamicResource CyanAccent}" />
+                  </StackPanel>
+                  <TextBlock Text="Számok, albumok és előadók egy helyen" FontSize="13" Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+
+                <Button Grid.Column="1" Classes="secondary" Height="36" Padding="14,0" Command="{Binding ClearSearchCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <material:MaterialIcon Kind="Close" Width="16" Height="16" />
+                    <TextBlock Text="Bezárás" FontWeight="SemiBold" />
+                  </StackPanel>
+                </Button>
+              </Grid>
+
+              <!-- Search Results Content (Scrollable) -->
+              <ScrollViewer Grid.Row="1">
+                <StackPanel Spacing="28">
+
+                  <!-- Empty State when no results found -->
+                  <Border Classes="glass" Padding="40" HorizontalAlignment="Center" Margin="0,40,0,0" IsVisible="{Binding !Search.HasResults}">
+                    <StackPanel HorizontalAlignment="Center" Spacing="14">
+                      <material:MaterialIcon Kind="MagnifyClose" Width="56" Height="56" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />
+                      <TextBlock Text="Nincs találat a keresésre" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" />
+                      <TextBlock Text="Próbálj meg más előadóra, számcímre vagy albumra keresni." FontSize="13" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                  </Border>
+
+                  <!-- SECTION: BEST MATCH (LEGJOBB TALÁLAT) + TOP TRACKS (TIDAL LAYOUT) -->
+                  <Grid ColumnDefinitions="340, *" Margin="0,0,0,8" IsVisible="{Binding Search.BestMatch, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    
+                    <!-- Left: Hero Best Match Card -->
+                    <StackPanel Grid.Column="0" Spacing="10" Margin="0,0,24,0">
+                      <TextBlock Text="LEGJOBB TALÁLAT" Classes="group-title" Margin="0,0,0,4" />
+                      <Border Classes="glass" Padding="20" CornerRadius="8">
+                        <StackPanel Spacing="14">
+                          <Border Width="110" Height="110" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left" ClipToBounds="True">
+                            <Panel>
+                              <Image Source="{Binding Search.BestMatch.CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding Search.BestMatch.HasCover}" />
+                              <material:MaterialIcon Kind="{Binding Search.BestMatch.IconKind}" Foreground="{DynamicResource CyanAccent}" Width="54" Height="54" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Search.BestMatch.HasCover}" />
+                            </Panel>
+                          </Border>
+
+                          <StackPanel Spacing="4">
+                            <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
+                              <TextBlock Text="{Binding Search.BestMatch.TypeLabel}" FontSize="10" FontWeight="Black" Foreground="{DynamicResource CyanAccent}" />
+                            </Border>
+                            <TextBlock Text="{Binding Search.BestMatch.Title}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Search.BestMatch.Subtitle}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Search.BestMatch.Meta}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
+                            <!-- Square Play Button: 36x36 -->
+                            <Button Classes="primary" Width="36" Height="36" CornerRadius="4" Padding="0"
+                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                    Command="{Binding Search.BestMatch.PlayCommand}" ToolTip.Tip="Lejátszás">
+                              <material:MaterialIcon Kind="Play" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Button>
+                            <Button Classes="secondary" Height="36" Padding="14,0"
+                                    Command="{Binding Search.BestMatch.OpenCommand}" ToolTip.Tip="Megnyitás">
+                              <TextBlock Text="Megnyitás" FontWeight="SemiBold" />
+                            </Button>
+                          </StackPanel>
+                        </StackPanel>
+                      </Border>
+                    </StackPanel>
+
+                    <!-- Right: Matching Tracks (Top Tracks) -->
+                    <StackPanel Grid.Column="1" Spacing="10" IsVisible="{Binding Search.HasTracks}">
+                      <TextBlock Text="SZÁMOK" Classes="group-title" Margin="0,0,0,4" />
+                      <Border Classes="glass cyan" Padding="0" ClipToBounds="True">
+                        <DataGrid ItemsSource="{Binding Search.MatchingTracks}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  MaxHeight="360"
+                                  GridLinesVisibility="Horizontal"
+                                  HorizontalScrollBarVisibility="Disabled">
+                          <DataGrid.Columns>
+                            <!-- Play Button: Square 26x26 -->
+                            <DataGridTemplateColumn Width="50" Header="">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="cyan"
+                                          Width="26" Height="26"
+                                          CornerRadius="4"
+                                          Padding="0"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.PlayTrackCommand}"
+                                          CommandParameter="{Binding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          ToolTip.Tip="Szám lejátszása">
+                                    <material:MaterialIcon Kind="Play" Foreground="Black" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTextColumn Header="CÍM" Binding="{Binding Title}" Width="2.5*" />
+
+                            <DataGridTemplateColumn Header="ELŐADÓ" Width="2*">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="table-link"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenArtistByNameCommand}"
+                                          CommandParameter="{Binding Artist}">
+                                    <TextBlock Text="{Binding Artist}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="ALBUM" Width="2*">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="table-link"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumByTitleCommand}"
+                                          CommandParameter="{Binding Album}">
+                                    <TextBlock Text="{Binding Album}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="70" />
+                          </DataGrid.Columns>
+                        </DataGrid>
+                      </Border>
+                    </StackPanel>
+                  </Grid>
+
+                  <!-- SECTION: MATCHING ARTISTS -->
+                  <StackPanel Spacing="12" IsVisible="{Binding Search.HasArtists}">
+                    <TextBlock Text="ELŐADÓK" Classes="group-title" Margin="4,0,0,0" />
+                    <ItemsControl ItemsSource="{Binding Search.MatchingArtists}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="models:Artist">
+                          <Button Classes="unstyled-card"
+                                  Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.OpenArtistCommand}"
+                                  CommandParameter="{Binding}"
+                                  Margin="0,0,18,18">
+                            <Border Classes="metric-card coral" Width="180" Height="200">
+                              <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
+                                <Border Width="64" Height="64" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
+                                  <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="40" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
+                                <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} zeneszám'}" FontSize="11" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />
+                                <!-- Square Play Button: 32x32 -->
+                                <Button Classes="coral"
+                                        HorizontalAlignment="Center"
+                                        Width="32" Height="32"
+                                        CornerRadius="4"
+                                        Padding="0"
+                                        HorizontalContentAlignment="Center"
+                                        VerticalContentAlignment="Center"
+                                        Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.PlayArtistCommand}"
+                                        CommandParameter="{Binding}"
+                                        ToolTip.Tip="Előadó összes számának lejátszása">
+                                  <material:MaterialIcon Kind="Play" Foreground="White" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Button>
+                              </StackPanel>
+                            </Border>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                  <!-- SECTION: MATCHING ALBUMS -->
+                  <StackPanel Spacing="12" IsVisible="{Binding Search.HasAlbums}">
+                    <TextBlock Text="ALBUMOK" Classes="group-title" Margin="4,0,0,0" />
+                    <ItemsControl ItemsSource="{Binding Search.MatchingAlbums}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="vm:AlbumCardViewModel">
+                          <Button Classes="unstyled-card"
+                                  Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.OpenAlbumCommand}"
+                                  CommandParameter="{Binding}"
+                                  Margin="0,0,18,18">
+                            <Border Classes="metric-card purple" Width="180" Height="240">
+                              <Grid RowDefinitions="130, *, Auto">
+                                <Border Grid.Row="0" CornerRadius="6" Background="{DynamicResource Surface2}" ClipToBounds="True">
+                                  <Panel>
+                                    <Image Source="{Binding CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                    <material:MaterialIcon Kind="Album" Foreground="{DynamicResource PurpleAccent}" Width="56" Height="56" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                                  </Panel>
+                                </Border>
+                                <StackPanel Grid.Row="1" Margin="0,8,0,0" Spacing="2">
+                                  <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
+                                  <TextBlock Text="{Binding Artist}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                                <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,4,0,0">
+                                  <TextBlock Grid.Column="0" Text="{Binding Year, StringFormat='{}{0}'}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                  <!-- Square Play Button: 32x32 -->
+                                  <Button Grid.Column="1" Classes="purple"
+                                          Width="32" Height="32"
+                                          CornerRadius="4"
+                                          Padding="0"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Albums.PlayAlbumCommand}"
+                                          CommandParameter="{Binding Album}"
+                                          ToolTip.Tip="Album lejátszása">
+                                    <material:MaterialIcon Kind="Play" Foreground="White" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                  </Button>
+                                </Grid>
+                              </Grid>
+                            </Border>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                </StackPanel>
+              </ScrollViewer>
+            </Grid>
 
           </Panel>
         </Border>
@@ -1093,34 +1376,34 @@
               Background="{DynamicResource Surface1}"
               BorderBrush="{DynamicResource GlassBorder}"
               BorderThickness="0,1,0,0"
-              Padding="24,0">
-        <Grid ColumnDefinitions="300, *, Auto">
+              Padding="16,0">
+        <Grid ColumnDefinitions="Auto, *, Auto">
 
           <!-- Left: Track Details & Album Art -->
-          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="16">
-            <Border Width="56" Height="56" CornerRadius="8" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" ClipToBounds="True">
+          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="14" MaxWidth="280">
+            <Border Width="52" Height="52" CornerRadius="8" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" ClipToBounds="True">
               <Panel>
                 <Image Source="{Binding Player.CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding Player.CoverBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <material:MaterialIcon Kind="MusicNote" Foreground="{DynamicResource CyanAccent}" Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Player.CoverBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                <material:MaterialIcon Kind="MusicNote" Foreground="{DynamicResource CyanAccent}" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Player.CoverBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
               </Panel>
             </Border>
 
-            <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="180">
-              <TextBlock Text="{Binding Player.CurrentTrack.Title, FallbackValue='Nincs lejátszás'}" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
-              <TextBlock Text="{Binding Player.CurrentTrack.Artist, FallbackValue='Válassz zeneszámot'}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+            <StackPanel VerticalAlignment="Center" Spacing="2" MaxWidth="150">
+              <TextBlock Text="{Binding Player.CurrentTrack.Title, FallbackValue='Nincs lejátszás'}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
+              <TextBlock Text="{Binding Player.CurrentTrack.Artist, FallbackValue='Válassz zeneszámot'}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
             </StackPanel>
 
             <Button Classes="icon" Command="{Binding Player.ToggleFavoriteCurrentCommand}" VerticalAlignment="Center">
               <material:MaterialIcon Kind="{Binding Player.CurrentTrack.IsFavorite, FallbackValue=False, Converter={StaticResource FavoriteIconConverter}}"
                                      Foreground="{Binding Player.CurrentTrack.IsFavorite, FallbackValue=False, Converter={StaticResource FavoriteColorConverter}}"
-                                     Width="20" Height="20" />
+                                     Width="18" Height="18" />
             </Button>
           </StackPanel>
 
           <!-- Center: Controls & Seek Slider -->
-          <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" Width="500" Spacing="4">
+          <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="520" Spacing="4" Margin="16,0">
             <!-- Buttons -->
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="16">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="14">
               <!-- Shuffle -->
               <Button Classes="icon" Command="{Binding Player.ToggleShuffleCommand}" ToolTip.Tip="Véletlenszerű lejátszás">
                 <material:MaterialIcon Kind="Shuffle" Width="18" Height="18" Foreground="{Binding Player.IsShuffle, Converter={StaticResource ActiveControlBrushConverter}}" />
@@ -1128,24 +1411,25 @@
 
               <!-- Previous -->
               <Button Classes="icon" Command="{Binding Player.PreviousTrackCommand}" ToolTip.Tip="Előző szám">
-                <material:MaterialIcon Kind="SkipPrevious" Width="24" Height="24" />
+                <material:MaterialIcon Kind="SkipPrevious" Width="22" Height="22" />
               </Button>
 
-              <!-- Play/Pause Glow Button -->
+              <!-- Play/Pause Button: Square 38x38 with CornerRadius 6 -->
               <Button Command="{Binding Player.TogglePlayPauseCommand}"
                       Classes="primary"
-                      Width="44" Height="44"
-                      CornerRadius="22"
+                      Width="38" Height="38"
+                      MinWidth="38" MinHeight="38"
+                      CornerRadius="6"
                       Padding="0"
                       HorizontalContentAlignment="Center"
                       VerticalContentAlignment="Center"
                       ToolTip.Tip="Lejátszás / Szünet">
-                <material:MaterialIcon Kind="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToIconConverter}}" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <material:MaterialIcon Kind="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToIconConverter}}" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center" />
               </Button>
 
               <!-- Next -->
               <Button Classes="icon" Command="{Binding Player.NextTrackCommand}" ToolTip.Tip="Következő szám">
-                <material:MaterialIcon Kind="SkipNext" Width="24" Height="24" />
+                <material:MaterialIcon Kind="SkipNext" Width="22" Height="22" />
               </Button>
 
               <!-- Repeat -->
@@ -1156,7 +1440,7 @@
             </StackPanel>
 
             <!-- Seek Slider with Time (Unclipped, Centered) -->
-            <Grid ColumnDefinitions="45, *, 45" Height="26" VerticalAlignment="Center" ClipToBounds="False">
+            <Grid ColumnDefinitions="45, *, 45" Height="28" VerticalAlignment="Center" ClipToBounds="False">
               <TextBlock Grid.Column="0" Text="{Binding Player.FormattedPosition}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,8,0" />
               <Slider Grid.Column="1"
                       Classes="seek-slider"
@@ -1171,24 +1455,24 @@
           </StackPanel>
 
           <!-- Right: Audiophile Indicator, Visualizer, Volume (Fully bounded inside window, no overflow) -->
-          <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="10" Margin="10,0,0,0">
+          <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8" Margin="0,0,12,0">
             
-            <!-- FxSound-style Smooth Rounded Spectrum Visualizer -->
-            <ItemsControl ItemsSource="{Binding Player.SpectrumBars}" Height="24" VerticalAlignment="Center" Margin="0,0,4,0">
+            <!-- FxSound-style Smooth Rounded Spectrum Visualizer (16 bands, 4px wide, 32px height) -->
+            <ItemsControl ItemsSource="{Binding Player.SpectrumBars}" Height="32" VerticalAlignment="Center" Margin="0,0,6,0">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Bottom" />
+                  <StackPanel Orientation="Horizontal" Spacing="2" VerticalAlignment="Bottom" Height="32" />
                 </ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate DataType="vm:SpectrumBarViewModel">
-                  <Border Width="3" VerticalAlignment="Bottom"
+                  <Border Width="4" VerticalAlignment="Bottom"
                           Height="{Binding Value, Converter={StaticResource SpectrumBarHeightConverter}}"
-                          Background="{DynamicResource CyanAccent}"
-                          CornerRadius="1.5">
+                          Background="{DynamicResource PrimaryAction}"
+                          CornerRadius="2">
                     <Border.Transitions>
                       <Transitions>
-                        <DoubleTransition Property="Height" Duration="0:0:0.07" Easing="SineEaseOut" />
+                        <DoubleTransition Property="Height" Duration="0:0:0.04" Easing="CubicEaseOut" />
                       </Transitions>
                     </Border.Transitions>
                   </Border>
@@ -1196,19 +1480,20 @@
               </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Quality Badge -->
-            <Border Background="{DynamicResource Surface2}" CornerRadius="6" Padding="8,4" VerticalAlignment="Center">
-              <TextBlock Text="{Binding Player.QualityBadge}" FontSize="10" FontWeight="Bold"
+            <!-- Compact Quality Badge with Full Technical Spec in Tooltip -->
+            <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="6,3" VerticalAlignment="Center"
+                    ToolTip.Tip="{Binding Player.QualityBadge}">
+              <TextBlock Text="{Binding Player.QualityShortBadge}" FontSize="10" FontWeight="Bold"
                          Foreground="{Binding Player.IsHiRes, Converter={StaticResource QualityBadgeColorConverter}}" />
             </Border>
 
             <!-- Volume Mute Button -->
-            <Button Classes="icon" Command="{Binding Player.ToggleMuteCommand}">
-              <material:MaterialIcon Kind="VolumeHigh" Width="20" Height="20" />
+            <Button Classes="icon" Command="{Binding Player.ToggleMuteCommand}" Width="28" Height="28">
+              <material:MaterialIcon Kind="VolumeHigh" Width="18" Height="18" />
             </Button>
 
             <!-- Volume Slider (Unclipped, Centered, Inside window bounds) -->
-            <Grid Width="95" Height="26" VerticalAlignment="Center" ClipToBounds="False">
+            <Grid Width="75" Height="28" VerticalAlignment="Center" ClipToBounds="False">
               <Slider Classes="seek-slider"
                       Minimum="0" Maximum="100"
                       Value="{Binding Player.Volume, Mode=TwoWay}"

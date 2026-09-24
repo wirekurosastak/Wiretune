@@ -37,6 +37,7 @@ public partial class PlayerViewModel : ObservableObject
     [ObservableProperty] private string _signalPath = string.Empty;
     [ObservableProperty] private bool _isHiRes;
     [ObservableProperty] private string _qualityBadge = "FLAC";
+    [ObservableProperty] private string _qualityShortBadge = "FLAC";
     [ObservableProperty] private bool _isDrawerOpen;
 
     public ObservableCollection<SpectrumBarViewModel> SpectrumBars { get; } = new();
@@ -120,6 +121,7 @@ public partial class PlayerViewModel : ObservableObject
                 }
                 IsHiRes = track.Format.IsHiRes;
                 QualityBadge = track.Format.DisplayBadge;
+                QualityShortBadge = track.Format.IsHiRes ? "HI-RES" : (track.Format.IsLossless ? "LOSSLESS" : track.Format.Codec);
                 SignalPath = _engine.SignalPathDescription;
                 LoadCoverArt(track);
                 _ = _library.RecordPlayAsync(track.Id);
@@ -160,11 +162,7 @@ public partial class PlayerViewModel : ObservableObject
             if (PlaybackState != PlaybackState.Playing) return;
             for (int i = 0; i < Math.Min(bands.Length, SpectrumBars.Count); i++)
             {
-                var target = bands[i];
-                var cur = SpectrumBars[i].Value;
-                // FxSound-style smooth attack and natural exponential decay
-                var smoothed = target > cur ? cur + (target - cur) * 0.65 : cur * 0.82;
-                SpectrumBars[i].Value = Math.Max(0.04, smoothed);
+                SpectrumBars[i].Value = bands[i];
             }
         });
     }

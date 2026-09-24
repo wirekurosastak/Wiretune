@@ -19,6 +19,7 @@ public class LinuxAudioDriver : IAudioDriver
     private System.Threading.Timer? _positionTimer;
     private System.Threading.Timer? _spectrumTimer;
     private readonly Random _rng = new();
+    private readonly Dsp.FxSoundSpectrumEngine _spectrumEngine = new();
     private string? _currentSource;
     private AudioFormat? _currentFormat;
     private volatile bool _isIntentionalStop = false;
@@ -370,21 +371,15 @@ public class LinuxAudioDriver : IAudioDriver
             PositionChanged?.Invoke(this, _currentPosition);
         }, null, 0, 200);
 
-        // Timer for generating live spectrum analyzer visualizer data (16 bands)
+        // Timer for generating live frequency spectrum analyzer visualizer data via FxSound DSP engine (16 bands)
         _spectrumTimer = new System.Threading.Timer(_ =>
         {
             if (_state != PlaybackState.Playing) return;
 
-            var bands = new float[16];
-            for (int i = 0; i < bands.Length; i++)
-            {
-                // Dynamic musical spectrum simulation
-                var baseVal = (float)(_rng.NextDouble() * 0.7 + 0.15);
-                var curve = 1.0f - (i / 20.0f);
-                bands[i] = Math.Clamp(baseVal * curve, 0.05f, 0.95f);
-            }
+            var liveElapsed = _seekOffset + (DateTime.UtcNow - _playStartTime);
+            var bands = _spectrumEngine.ProcessFrame(liveElapsed, true);
             SpectrumDataAvailable?.Invoke(this, bands);
-        }, null, 0, 80);
+        }, null, 0, 33);
     }
 
     private void StopTimers()
@@ -394,7 +389,9 @@ public class LinuxAudioDriver : IAudioDriver
         _spectrumTimer?.Dispose();
         _spectrumTimer = null;
 
+        _spectrumEngine.Reset();
         var zeros = new float[16];
+        for (int i = 0; i < 16; i++) zeros[i] = 0.05f;
         SpectrumDataAvailable?.Invoke(this, zeros);
     }
 

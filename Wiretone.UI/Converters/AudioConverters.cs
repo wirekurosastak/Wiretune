@@ -171,13 +171,13 @@ public class SpectrumBarHeightConverter : IValueConverter
     {
         if (value is double d)
         {
-            return Math.Clamp(d * 22.0 + 2.0, 2.0, 24.0);
+            return Math.Clamp(d * 29.0 + 3.0, 3.0, 32.0);
         }
         if (value is float f)
         {
-            return Math.Clamp((double)f * 22.0 + 2.0, 2.0, 24.0);
+            return Math.Clamp((double)f * 29.0 + 3.0, 3.0, 32.0);
         }
-        return 2.0;
+        return 3.0;
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();

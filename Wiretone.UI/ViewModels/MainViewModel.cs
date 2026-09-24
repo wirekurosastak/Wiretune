@@ -24,9 +24,11 @@ public partial class MainViewModel : ObservableObject
     public FavoritesViewModel Favorites { get; }
     public AudiophileSettingsViewModel AudiophileSettings { get; }
     public ServerSettingsViewModel ServerSettings { get; }
+    public SearchResultsViewModel Search { get; }
 
     [ObservableProperty] private int _selectedNavigationIndex = 2;
     [ObservableProperty] private string _searchQuery = string.Empty;
+    [ObservableProperty] private bool _isSearchActive;
     [ObservableProperty] private string _statusText = "Készenlétben";
     [ObservableProperty] private string _rightFooterStatusText = "Wiretone v1.0 • Hi-Fi Audio Engine Kész";
     [ObservableProperty] private string _logoTransform = "rotate(0deg)";
@@ -52,6 +54,14 @@ public partial class MainViewModel : ObservableObject
         Favorites = new FavoritesViewModel(Library, Player);
         AudiophileSettings = new AudiophileSettingsViewModel(AudioEngine);
         ServerSettings = new ServerSettingsViewModel(Library);
+
+        Search = new SearchResultsViewModel(
+            Library,
+            AudioEngine,
+            Player,
+            q => SearchQuery = q,
+            album => OpenAlbum(album),
+            artist => OpenArtist(artist));
 
         _ = Library.InitializeAsync();
 
@@ -131,6 +141,14 @@ public partial class MainViewModel : ObservableObject
         Tracks.SearchFilter = value;
         Albums.SearchFilter = value;
         Artists.SearchFilter = value;
+        Search.UpdateQuery(value);
+        IsSearchActive = !string.IsNullOrWhiteSpace(value);
+    }
+
+    [RelayCommand]
+    public void ClearSearch()
+    {
+        SearchQuery = string.Empty;
     }
 
     [RelayCommand]
@@ -156,6 +174,7 @@ public partial class MainViewModel : ObservableObject
             {
                 Artists.CloseArtistDetail();
             }
+            SearchQuery = string.Empty;
             SelectedNavigationIndex = targetIndex;
         }
     }
@@ -170,6 +189,7 @@ public partial class MainViewModel : ObservableObject
             _ => null
         };
         if (album == null) return;
+        SearchQuery = string.Empty;
         Albums.OpenAlbum(album);
         SelectedNavigationIndex = 1;
     }
@@ -189,6 +209,7 @@ public partial class MainViewModel : ObservableObject
     public void OpenArtist(Artist? artist)
     {
         if (artist == null) return;
+        SearchQuery = string.Empty;
         Artists.OpenArtist(artist);
         SelectedNavigationIndex = 2;
     }
