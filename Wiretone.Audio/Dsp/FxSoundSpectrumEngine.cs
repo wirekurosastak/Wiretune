@@ -1,8 +1,10 @@
 namespace Wiretone.Audio.Dsp;
 
 /// <summary>
-/// Studio-grade 32-band Real-Time Analyzer (RTA) frequency spectrum engine implementing
-/// standard ISO 1/3-octave frequency bands (25 Hz to 20,000 Hz).
+/// Studio-grade 32-band Real-Time Analyzer (RTA) frequency spectrum engine focused
+/// strictly on the musically meaningful, audible spectrum (35 Hz to 16,000 Hz).
+/// Eliminates the inaudible/inactive >16k - 20k region to provide maximum visual resolution
+/// in the active bass, midrange, presence, and musical treble zones.
 /// 
 /// Performs REAL Fast Fourier Transform (FFT) analysis on live audio PCM buffers,
 /// mapping audio energy into 32 high-precision frequency bands with perceptual ISO loudness weighting,
@@ -13,59 +15,64 @@ public sealed class FxSoundSpectrumEngine
     public const int NumBands = 32;
     public const int FftSize = 2048;
 
-    // Standard ISO 1/3-octave center frequencies (Hz)
+    // Musically meaningful frequency centers (35 Hz to 16,000 Hz)
     public static readonly float[] BandCenterFrequencies =
     {
-        25.0f,    31.5f,    40.0f,    50.0f,    63.0f,    80.0f,    100.0f,   125.0f,
-        160.0f,   200.0f,   250.0f,   315.0f,   400.0f,   500.0f,   630.0f,   800.0f,
-        1000.0f,  1250.0f,  1600.0f,  2000.0f,  2500.0f,  3150.0f,  4000.0f,  5000.0f,
-        6300.0f,  8000.0f,  10000.0f, 12500.0f, 14000.0f, 16000.0f, 18000.0f, 20000.0f
+        35.0f,    43.0f,    52.0f,    64.0f,    78.0f,    95.0f,    115.0f,   140.0f,
+        170.0f,   210.0f,   255.0f,   310.0f,   380.0f,   460.0f,   560.0f,   680.0f,
+        830.0f,   1010.0f,  1230.0f,  1500.0f,  1830.0f,  2230.0f,  2720.0f,  3310.0f,
+        4030.0f,  4900.0f,  6000.0f,  7300.0f,  8900.0f,  10800.0f, 13200.0f, 16000.0f
     };
 
     // Frequency ranges for 44.1 kHz sampling rate (bin resolution = 21.533 Hz per bin)
+    // Focused strictly on the audible, expressive musical spectrum (35 Hz - 16 kHz)
     private static readonly (int StartBin, int EndBin)[] BandBinRanges =
     {
-        (1, 1),       // Band 0:  25 Hz (Sub-bass rumble)
-        (1, 2),       // Band 1:  31.5 Hz (Sub-bass floor)
-        (2, 2),       // Band 2:  40 Hz (Deep 808 fundamental)
-        (2, 3),       // Band 3:  50 Hz (808 sub)
-        (3, 3),       // Band 4:  63 Hz (Kick punch)
-        (3, 4),       // Band 5:  80 Hz (Chest thump)
-        (4, 5),       // Band 6:  100 Hz (Bass fundamental)
-        (5, 6),       // Band 7:  125 Hz (Bass guitar meat)
-        (7, 8),       // Band 8:  160 Hz (Bass warmth)
-        (9, 10),      // Band 9:  200 Hz (Vocal warmth)
-        (11, 13),     // Band 10: 250 Hz (Vocal body / rhythm guitar)
-        (14, 17),     // Band 11: 315 Hz (Low midrange)
-        (18, 21),     // Band 12: 400 Hz (Mid body)
-        (22, 26),     // Band 13: 500 Hz (Midrange fundamental)
-        (27, 33),     // Band 14: 630 Hz (Vocal resonance)
-        (34, 42),     // Band 15: 800 Hz (Instrument clarity)
-        (43, 53),     // Band 16: 1000 Hz (1 kHz reference mid tone)
-        (54, 67),     // Band 17: 1250 Hz (Vocal projection)
-        (68, 85),     // Band 18: 1600 Hz (Horn / vocal bite)
-        (86, 107),    // Band 19: 2000 Hz (Guitar crunch / intelligibility)
-        (108, 134),   // Band 20: 2500 Hz (Snare crack / attack)
-        (135, 169),   // Band 21: 3150 Hz (High presence)
-        (170, 213),   // Band 22: 4000 Hz (Ear sensitivity peak)
-        (214, 268),   // Band 23: 5000 Hz (Vocal breath / snare snap)
-        (269, 338),   // Band 24: 6300 Hz (Treble definition)
-        (339, 426),   // Band 25: 8000 Hz (Cymbal ping / hi-hat open)
-        (427, 536),   // Band 26: 10000 Hz (Hi-hat sparkle)
-        (537, 674),   // Band 27: 12500 Hz (Acoustic guitar air)
-        (675, 755),   // Band 28: 14000 Hz (High shimmer)
-        (756, 840),   // Band 29: 16000 Hz (High air)
-        (841, 925),   // Band 30: 18000 Hz (Top-end air sheen)
-        (926, 1000)   // Band 31: 20000 Hz (Ultra-high acoustic sheen)
+        (1, 2),       // Band 0:  ~35 Hz (Sub-bass rumble)
+        (2, 2),       // Band 1:  ~43 Hz (Sub-bass kick floor)
+        (2, 3),       // Band 2:  ~52 Hz (808 fundamental)
+        (3, 3),       // Band 3:  ~64 Hz (808 punch)
+        (3, 4),       // Band 4:  ~78 Hz (Kick body)
+        (4, 5),       // Band 5:  ~95 Hz (Kick punch & bass fundamental)
+        (5, 6),       // Band 6:  ~115 Hz (Bass guitar fundamental)
+        (6, 7),       // Band 7:  ~140 Hz (Bass guitar warmth)
+        (7, 9),       // Band 8:  ~170 Hz (Lower snare body)
+        (9, 11),      // Band 9:  ~210 Hz (Vocal warmth)
+        (11, 13),     // Band 10: ~255 Hz (Vocal body / rhythm guitar)
+        (13, 16),     // Band 11: ~310 Hz (Low midrange body)
+        (16, 20),     // Band 12: ~380 Hz (Mid body / snare fundamental)
+        (20, 24),     // Band 13: ~460 Hz (Mid clarity)
+        (24, 29),     // Band 14: ~560 Hz (Vocal vowel resonance)
+        (29, 35),     // Band 15: ~680 Hz (Instrument meat)
+        (35, 43),     // Band 16: ~830 Hz (Vocal projection)
+        (43, 52),     // Band 17: ~1010 Hz (1 kHz reference clarity)
+        (52, 63),     // Band 18: ~1230 Hz (Vocal presence)
+        (63, 77),     // Band 19: ~1500 Hz (Guitar crunch / vocal bite)
+        (77, 94),     // Band 20: ~1830 Hz (Speech intelligibility)
+        (94, 114),    // Band 21: ~2230 Hz (Brass bite / attack)
+        (114, 139),   // Band 22: ~2720 Hz (Snare crack / snap)
+        (139, 170),   // Band 23: ~3310 Hz (High presence edge)
+        (170, 207),   // Band 24: ~4030 Hz (Ear sensitivity peak)
+        (207, 253),   // Band 25: ~4900 Hz (Vocal breath / snare snap)
+        (253, 308),   // Band 26: ~6000 Hz (Treble definition)
+        (308, 375),   // Band 27: ~7300 Hz (Hi-hat strike / open cymbal)
+        (375, 457),   // Band 28: ~8900 Hz (Cymbal ping / sizzle)
+        (457, 557),   // Band 29: ~10800 Hz (Hi-hat sparkle)
+        (557, 678),   // Band 30: ~13200 Hz (Acoustic air sheen)
+        (678, 790)    // Band 31: ~16000 Hz (Top brilliance / sparkle)
     };
 
     // Perceptual ISO loudness weighting (compensates for natural pink-noise rolloff)
     private static readonly float[] IsoBandWeights =
     {
-        1.70f, 1.60f, 1.50f, 1.40f, 1.30f, 1.25f, 1.20f, 1.15f,
-        1.10f, 1.05f, 1.00f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f,
-        1.30f, 1.35f, 1.45f, 1.60f, 1.80f, 2.00f, 2.20f, 2.50f,
-        2.80f, 3.20f, 3.60f, 4.00f, 4.40f, 4.80f, 5.20f, 5.60f
+        // Sub-bass & Bass (35 - 140 Hz)
+        1.55f, 1.45f, 1.35f, 1.25f, 1.20f, 1.15f, 1.10f, 1.05f,
+        // Low Mids & Center Mids (170 - 1230 Hz)
+        1.00f, 1.00f, 1.05f, 1.10f, 1.15f, 1.20f, 1.25f, 1.30f,
+        // High Mids & Presence (1500 - 4900 Hz)
+        1.35f, 1.45f, 1.55f, 1.70f, 1.85f, 2.05f, 2.25f, 2.50f,
+        // Treble & Brilliance (6000 - 16000 Hz)
+        2.80f, 3.10f, 3.45f, 3.85f, 4.25f, 4.65f, 5.05f, 5.45f
     };
 
     private readonly float[] _currentLevels = new float[NumBands];
@@ -99,7 +106,7 @@ public sealed class FxSoundSpectrumEngine
     }
 
     /// <summary>
-    /// Computes the 32 ISO 1/3-octave frequency bands by running a real FFT on the actual PCM audio samples.
+    /// Computes the 32 musically focused frequency bands by running a real FFT on the actual PCM audio samples.
     /// </summary>
     public float[] ProcessPcm(ReadOnlySpan<float> pcmWindow, bool isPlaying)
     {
@@ -131,7 +138,7 @@ public sealed class FxSoundSpectrumEngine
             _magnitude[i] = MathF.Sqrt(_fftReal[i] * _fftReal[i] + _fftImag[i] * _fftImag[i]) * norm;
         }
 
-        // 4. Compute RMS energy across each of the 32 ISO bands
+        // 4. Compute RMS energy across each of the 32 bands
         for (int band = 0; band < NumBands; band++)
         {
             var (startBin, endBin) = BandBinRanges[band];
@@ -204,27 +211,27 @@ public sealed class FxSoundSpectrumEngine
         {
             float target = 0.08f;
 
-            if (i <= 5) // Sub-bass to kick
+            if (i <= 5) // Sub-bass to kick (35 - 95 Hz)
             {
                 target += kickTransient * 0.88f + subBounce * 0.60f;
             }
-            else if (i <= 8) // Bass guitar
+            else if (i <= 8) // Bass fundamental & warmth (115 - 170 Hz)
             {
                 target += kickTransient * 0.60f + (float)(Math.Sin(t * 4.2 + i * 0.3) * 0.20 + 0.20);
             }
-            else if (i <= 14) // Low-mids to mid fundamental
+            else if (i <= 14) // Low-mids to mid fundamental (210 - 560 Hz)
             {
                 target += snareTransient * 0.40f + wave1 * 0.40f;
             }
-            else if (i <= 20) // Vocal clarity, guitar crunch
+            else if (i <= 21) // Vocal clarity, guitar crunch (680 - 2230 Hz)
             {
                 target += snareTransient * 0.55f + wave2 * 0.40f;
             }
-            else if (i <= 25) // Presence, crispness, snap
+            else if (i <= 26) // Presence, crispness, snap (2720 - 6000 Hz)
             {
                 target += hihatTransient * 0.50f + snareTransient * 0.35f + wave3 * 0.30f;
             }
-            else // Treble and extreme brilliance
+            else // Treble and top brilliance (7300 - 16000 Hz)
             {
                 target += hihatTransient * 0.80f + (float)(Math.Sin(t * 7.4 + i * 0.2) * 0.15 + 0.15);
             }

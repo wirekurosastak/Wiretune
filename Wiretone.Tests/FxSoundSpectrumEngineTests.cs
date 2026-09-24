@@ -34,9 +34,9 @@ public class FxSoundSpectrumEngineTests
         for (int frame = 0; frame < 30; frame++)
         {
             var bands = engine.ProcessFrame(TimeSpan.FromMilliseconds(frame * 33), true);
-            maxBass = Math.Max(maxBass, bands[2]);    // 40Hz Deep Sub-bass
-            maxMid = Math.Max(maxMid, bands[16]);     // 1000Hz Midrange
-            maxTreble = Math.Max(maxTreble, bands[26]); // 10kHz Brilliance
+            maxBass = Math.Max(maxBass, bands[2]);    // 52Hz Sub-bass
+            maxMid = Math.Max(maxMid, bands[17]);    // 1010Hz Midrange
+            maxTreble = Math.Max(maxTreble, bands[29]); // 10.8kHz Brilliance
         }
 
         Assert.True(maxBass > 0.35f, $"Max bass {maxBass} should show energetic response");
@@ -72,7 +72,7 @@ public class FxSoundSpectrumEngineTests
         var engine = new FxSoundSpectrumEngine();
         float[] pcm = new float[FxSoundSpectrumEngine.FftSize];
 
-        // Synthesize pure 100 Hz tone (Band 6 center = 100 Hz)
+        // Synthesize pure 100 Hz tone (Bands 5 and 6 center = 95 Hz and 115 Hz)
         for (int i = 0; i < pcm.Length; i++)
         {
             pcm[i] = 0.8f * MathF.Sin(2.0f * MathF.PI * 100.0f * i / 44100.0f);
@@ -83,12 +83,13 @@ public class FxSoundSpectrumEngineTests
         Assert.NotNull(bands);
         Assert.Equal(32, bands.Length);
 
-        // Band 6 (100 Hz) should have very high response
-        Assert.True(bands[6] > 0.40f, $"Band 6 (100Hz) should be strongly activated by 100Hz tone, was {bands[6]}");
+        // Band 5 (95 Hz) or Band 6 (115 Hz) should have very high response
+        float bassPeak = Math.Max(bands[5], bands[6]);
+        Assert.True(bassPeak > 0.40f, $"Bass bands around 100Hz should be strongly activated, was {bassPeak}");
 
-        // High frequency bands (Band 26: 10kHz, Band 31: 20kHz) should remain at baseline floor
-        Assert.True(bands[26] < 0.15f, $"Band 26 (10kHz) should not respond to 100Hz bass, was {bands[26]}");
-        Assert.True(bands[31] < 0.15f, $"Band 31 (20kHz) should not respond to 100Hz bass, was {bands[31]}");
+        // High frequency bands (Band 29: 10.8kHz, Band 31: 16kHz) should remain at baseline floor
+        Assert.True(bands[29] < 0.15f, $"Band 29 (10.8kHz) should not respond to 100Hz bass, was {bands[29]}");
+        Assert.True(bands[31] < 0.15f, $"Band 31 (16kHz) should not respond to 100Hz bass, was {bands[31]}");
     }
 
     [Fact]
@@ -97,7 +98,7 @@ public class FxSoundSpectrumEngineTests
         var engine = new FxSoundSpectrumEngine();
         float[] pcm = new float[FxSoundSpectrumEngine.FftSize];
 
-        // Synthesize pure 1000 Hz tone (Band 16 center = 1000 Hz)
+        // Synthesize pure 1000 Hz tone (Band 17 center = 1010 Hz)
         for (int i = 0; i < pcm.Length; i++)
         {
             pcm[i] = 0.8f * MathF.Sin(2.0f * MathF.PI * 1000.0f * i / 44100.0f);
@@ -108,11 +109,11 @@ public class FxSoundSpectrumEngineTests
         Assert.NotNull(bands);
         Assert.Equal(32, bands.Length);
 
-        // Band 16 (1000 Hz) should be strongly activated
-        Assert.True(bands[16] > 0.40f, $"Band 16 (1kHz) should be strongly activated by 1000Hz tone, was {bands[16]}");
+        // Band 17 (1010 Hz) should be strongly activated
+        Assert.True(bands[17] > 0.40f, $"Band 17 (1010Hz) should be strongly activated by 1000Hz tone, was {bands[17]}");
 
-        // Low sub-bass (Band 0: 25Hz) should remain low
-        Assert.True(bands[0] < 0.15f, $"Band 0 (25Hz) should not respond to 1kHz tone, was {bands[0]}");
+        // Low sub-bass (Band 0: 35Hz) should remain low
+        Assert.True(bands[0] < 0.15f, $"Band 0 (35Hz) should not respond to 1kHz tone, was {bands[0]}");
     }
 
     [Fact]
