@@ -113,7 +113,7 @@ public class LinuxAudioDriver : IAudioDriver
         try
         {
             var ssArg = startPosition > TimeSpan.Zero
-                ? $"-ss {startPosition.TotalSeconds:F2}"
+                ? $"-ss {startPosition.TotalSeconds.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)}"
                 : "";
 
             // In Bitperfect mode, volume must be unity gain (1.0 = 100% / 0 dB)
@@ -203,11 +203,23 @@ public class LinuxAudioDriver : IAudioDriver
                         _activeProcesses.Remove(proc);
                     }
 
+                    bool cleanExit = false;
+                    try
+                    {
+                        cleanExit = proc.ExitCode == 0;
+                    }
+                    catch { }
+
                     if (_state == PlaybackState.Playing)
                     {
                         SetState(PlaybackState.Stopped);
                         StopTimers();
-                        TrackEnded?.Invoke(this, EventArgs.Empty);
+
+                        // Only advance track if ffplay finished naturally without error or SIGKILL
+                        if (cleanExit)
+                        {
+                            TrackEnded?.Invoke(this, EventArgs.Empty);
+                        }
                     }
                 };
             }
