@@ -53,7 +53,7 @@ public class MetadataScanner : IMetadataScanner
                 if (bitsPerSample == 0)
                 {
                     // Fallback for formats where TagLib reports 0 bits (like some FLAC or lossy)
-                    bitsPerSample = ext.Equals(".flac", StringComparison.OrdinalIgnoreCase) ? 16 : 16;
+                    bitsPerSample = 16; // TagLib reports 0 for some formats; default to CD quality
                 }
 
                 var codec = !string.IsNullOrWhiteSpace(props?.Description)
@@ -68,7 +68,7 @@ public class MetadataScanner : IMetadataScanner
 
                 var format = new AudioFormat
                 {
-                    Codec = ext.TrimStart('.').ToUpperInvariant(),
+                    Codec = codec,
                     SampleRate = sampleRate,
                     BitsPerSample = bitsPerSample,
                     Channels = props?.AudioChannels ?? 2,
@@ -137,7 +137,8 @@ public class MetadataScanner : IMetadataScanner
 
                 return new Track
                 {
-                    Id = Guid.NewGuid().ToString("N"),
+                    Id = Convert.ToHexString(SHA256.HashData(
+                        Encoding.UTF8.GetBytes(Path.GetFullPath(filePath).ToLowerInvariant())))[..32],
                     Title = title,
                     Artist = artist,
                     Album = album,
@@ -174,7 +175,12 @@ public class MetadataScanner : IMetadataScanner
             var tracks = new List<Track>();
             if (!Directory.Exists(rootPath)) return tracks;
 
-            var allFiles = Directory.EnumerateFiles(rootPath, "*.*", SearchOption.AllDirectories)
+            var allFiles = Directory.EnumerateFiles(rootPath, "*.*", new EnumerationOptions
+                {
+                    IgnoreInaccessible = true,
+                    RecurseSubdirectories = true,
+                    AttributesToSkip = FileAttributes.System
+                })
                 .Where(f => SupportedExtensions.Contains(Path.GetExtension(f)))
                 .ToList();
 

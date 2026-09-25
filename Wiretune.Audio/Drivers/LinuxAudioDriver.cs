@@ -19,7 +19,6 @@ public class LinuxAudioDriver : IAudioDriver
     private TimeSpan _seekOffset = TimeSpan.Zero;
     private System.Threading.Timer? _positionTimer;
     private System.Threading.Timer? _spectrumTimer;
-    private readonly Random _rng = new();
     private readonly Dsp.FxSoundSpectrumEngine _spectrumEngine = new();
     private readonly Dsp.AudioPcmCache _pcmCache = new();
     private string? _currentSource;
@@ -28,6 +27,7 @@ public class LinuxAudioDriver : IAudioDriver
     private long _playbackGeneration = 0;
     private bool _pipewireForceRateActive = false;
     private bool _alsaDirectClaimActive = false;
+    private string? _claimedPipeWireDeviceId = null;
 
     public string DriverName => "Linux ALSA / PipeWire Engine";
     public PlaybackState State => _state;
@@ -137,30 +137,36 @@ public class LinuxAudioDriver : IAudioDriver
             };
 
             // Configure Audiophile hardware routing (ALSA Direct vs PipeWire Exclusive)
-            if (_currentDevice != null)
+            if (_currentDevice is { } currentDev)
             {
-                var isAlsaDirect = _currentDevice.DriverType.Contains("ALSA") || _currentDevice.Id.StartsWith("hw:");
+                var isAlsaDirect = currentDev.DriverType.Contains("ALSA") || currentDev.Id.StartsWith("hw:");
                 if (isAlsaDirect)
                 {
                     // Exclusive ALSA mode: release PipeWire device claim so ALSA direct can open the hardware DAC
                     try
                     {
-                        Process.Start(new ProcessStartInfo("wpctl", "set-profile 67 0") { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(200);
-                        _alsaDirectClaimActive = true;
+                        var cardNum = currentDev.Id.Replace("hw:", "").Split(',')[0];
+                        var pwDeviceId = FindPipeWireDeviceIdForCard(cardNum, currentDev.Name);
+                        if (!string.IsNullOrEmpty(pwDeviceId))
+                        {
+                            Process.Start(new ProcessStartInfo("wpctl", $"set-profile {pwDeviceId} 0") { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(300);
+                            _claimedPipeWireDeviceId = pwDeviceId;
+                            _alsaDirectClaimActive = true;
+                        }
                     }
                     catch { }
 
                     psi.EnvironmentVariables["SDL_AUDIODRIVER"] = "alsa";
-                    var alsaDev = _currentDevice.Id.StartsWith("hw:")
-                        ? _currentDevice.Id.Replace("hw:", "plughw:")
-                        : _currentDevice.Id;
+                    var alsaDev = _isBitperfect
+                        ? currentDev.Id // In bit-perfect mode, use direct unresampled hw:X,Y
+                        : (currentDev.Id.StartsWith("hw:") ? currentDev.Id.Replace("hw:", "plughw:") : currentDev.Id);
                     psi.EnvironmentVariables["AUDIODEV"] = alsaDev;
                 }
                 else
                 {
                     // PipeWire direct sink node routing
                     psi.EnvironmentVariables["SDL_AUDIODRIVER"] = "pipewire";
-                    var targetId = _currentDevice.Id.Replace("pw_", "");
+                    var targetId = currentDev.Id.Replace("pw_", "");
                     psi.EnvironmentVariables["PIPEWIRE_NODE"] = targetId;
 
                     if (_isBitperfect && format.SampleRate > 0)
@@ -356,7 +362,11 @@ public class LinuxAudioDriver : IAudioDriver
             _alsaDirectClaimActive = false;
             try
             {
-                Process.Start(new ProcessStartInfo("wpctl", "set-profile 67 1") { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(200);
+                if (!string.IsNullOrEmpty(_claimedPipeWireDeviceId))
+                {
+                    Process.Start(new ProcessStartInfo("wpctl", $"set-profile {_claimedPipeWireDeviceId} 1") { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(300);
+                    _claimedPipeWireDeviceId = null;
+                }
             }
             catch { }
         }
@@ -372,6 +382,70 @@ public class LinuxAudioDriver : IAudioDriver
         }
 
         _volume = Math.Clamp(volume, 0.0, 1.0);
+
+        // Real-time hardware / mixer volume adjustment during active playback
+        if (_currentDevice is { } dev)
+        {
+            try
+            {
+                if (dev.DriverType.Contains("PipeWire") || dev.Id.StartsWith("pw_"))
+                {
+                    var targetId = dev.Id.Replace("pw_", "");
+                    var volStr = _volume.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+                    Process.Start(new ProcessStartInfo("wpctl", $"set-volume {targetId} {volStr}") { CreateNoWindow = true, UseShellExecute = false });
+                }
+                else if (dev.Id.StartsWith("hw:"))
+                {
+                    var cardNum = dev.Id.Replace("hw:", "").Split(',')[0];
+                    var pct = (int)(_volume * 100);
+                    Process.Start(new ProcessStartInfo("amixer", $"-q -c {cardNum} sset PCM {pct}%") { CreateNoWindow = true, UseShellExecute = false });
+                }
+            }
+            catch { }
+        }
+    }
+
+    private static string? FindPipeWireDeviceIdForCard(string cardNum, string? cardName = null)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("wpctl", "status")
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            psi.EnvironmentVariables["LC_ALL"] = "C";
+            using var proc = Process.Start(psi);
+            if (proc == null) return null;
+            var text = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(500);
+
+            var lines = text.Split('\n');
+            bool inDevices = false;
+            foreach (var line in lines)
+            {
+                if (line.Contains("Devices:")) { inDevices = true; continue; }
+                if (inDevices && (line.Contains("Sinks:") || line.Contains("Sources:"))) break;
+                if (inDevices && line.Contains('.'))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(line, @"(?<id>\d+)\.\s+(?<name>[^\[]+)");
+                    if (match.Success)
+                    {
+                        var id = match.Groups["id"].Value.Trim();
+                        var name = match.Groups["name"].Value.Trim();
+                        if (!string.IsNullOrEmpty(cardName) &&
+                            (cardName.Contains(name, StringComparison.OrdinalIgnoreCase) ||
+                             name.Contains(cardName, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            return id;
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+        return null;
     }
 
     private void StartTimers()

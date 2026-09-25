@@ -21,6 +21,19 @@ public partial class ServerSettingsViewModel : ObservableObject
     [ObservableProperty] private int _totalArtistsCount;
     [ObservableProperty] private string _serverStatusBadge = "Offline";
 
+    // Authentication properties
+    [ObservableProperty] private string _username = string.Empty;
+    [ObservableProperty] private string _password = string.Empty;
+    [ObservableProperty] private string _displayName = string.Empty;
+    [ObservableProperty] private bool _stayLoggedIn = true;
+    [ObservableProperty] private bool _isLoggedIn;
+    [ObservableProperty] private bool _isSetupRequired;
+    [ObservableProperty] private string _currentUserName = string.Empty;
+    [ObservableProperty] private string _currentUserRole = string.Empty;
+    [ObservableProperty] private string _authErrorMessage = string.Empty;
+    [ObservableProperty] private bool _hasAuthError;
+    [ObservableProperty] private bool _isAuthenticating;
+
     public ServerSettingsViewModel(ILibraryService library)
     {
         _library = library;
@@ -32,9 +45,15 @@ public partial class ServerSettingsViewModel : ObservableObject
                 ? "/home/wirekurosastak/Music"
                 : Environment.GetFolderPath(Environment.SpecialFolder.MyMusic));
         IsServerConnected = _library.IsServerConnected;
+        UpdateAuthStatus();
         UpdateStats();
 
         _library.LibraryChanged += (_, _) => Dispatcher.UIThread.Post(UpdateStats);
+        _library.AuthStateChanged += (_, _) => Dispatcher.UIThread.Post(() =>
+        {
+            UpdateAuthStatus();
+            UpdateStats();
+        });
         _library.ScanningStateChanged += (_, scanning) => Dispatcher.UIThread.Post(() =>
         {
             IsScanning = scanning;
@@ -46,13 +65,23 @@ public partial class ServerSettingsViewModel : ObservableObject
         });
     }
 
+    private void UpdateAuthStatus()
+    {
+        IsLoggedIn = _library.IsLoggedIn;
+        IsSetupRequired = _library.IsSetupRequired;
+        CurrentUserName = _library.CurrentUser?.DisplayName ?? _library.CurrentUser?.Username ?? string.Empty;
+        CurrentUserRole = _library.CurrentUser?.IsAdmin == true ? "Adminisztrátor" : "Felhasználó";
+    }
+
     private void UpdateStats()
     {
         TotalTracksCount = _library.Tracks.Count;
         TotalAlbumsCount = _library.Albums.Count;
         TotalArtistsCount = _library.Artists.Count;
         IsServerConnected = _library.IsServerConnected;
-        ServerStatusBadge = IsServerConnected ? "Online (Streamelhető)" : "Helyi mód";
+        ServerStatusBadge = IsServerConnected
+            ? (IsLoggedIn ? $"Online • {CurrentUserName}" : "Online (Bejelentkezés szükséges)")
+            : "Helyi mód";
     }
 
     [RelayCommand]
@@ -60,17 +89,131 @@ public partial class ServerSettingsViewModel : ObservableObject
     {
         ScanStatusText = $"Csatlakozás a szerverhez ({ServerUrl})...";
         await _library.ConnectServerAsync(ServerUrl);
+        UpdateAuthStatus();
         UpdateStats();
         if (IsServerConnected)
         {
-            ScanStatusText = TotalTracksCount > 0
-                ? $"Sikeres kapcsolódás! {TotalTracksCount} zeneszám betöltve a szerverről ({ServerUrl})."
-                : $"Kapcsolódva a szerverhez ({ServerUrl}), de a szerver még üres. A szerveroldali szkennelés elindult a háttérben...";
+            if (IsSetupRequired)
+            {
+                ScanStatusText = "A szerver még nincs inicializálva! Hozz létre egy adminisztrátori fiókot.";
+            }
+            else if (!IsLoggedIn)
+            {
+                ScanStatusText = "Csatlakozva a szerverhez. A folytatáshoz kérlek jelentkezz be!";
+            }
+            else
+            {
+                ScanStatusText = TotalTracksCount > 0
+                    ? $"Sikeres kapcsolódás! {TotalTracksCount} zeneszám betöltve a szerverről ({ServerUrl})."
+                    : $"Kapcsolódva a szerverhez ({ServerUrl}), de a szerver még üres. A szerveroldali szkennelés elindult a háttérben...";
+            }
         }
         else
         {
             ScanStatusText = $"Nem sikerült kapcsolódni a szerverhez ({ServerUrl}). Ellenőrizd a címet (pl. http://<szerver-ip>:5200) és a hálózatot!";
         }
+    }
+
+    [RelayCommand]
+    public async Task LoginAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
+        {
+            AuthErrorMessage = "Kérlek add meg a felhasználónevet és a jelszót!";
+            HasAuthError = true;
+            return;
+        }
+
+        IsAuthenticating = true;
+        HasAuthError = false;
+        AuthErrorMessage = string.Empty;
+
+        try
+        {
+            var success = await _library.LoginServerAsync(Username, Password, StayLoggedIn);
+            if (success)
+            {
+                Password = string.Empty;
+                UpdateAuthStatus();
+                UpdateStats();
+                ScanStatusText = $"Sikeres bejelentkezés ({CurrentUserName})!";
+            }
+            else
+            {
+                HasAuthError = true;
+                AuthErrorMessage = "Hibás felhasználónév vagy jelszó!";
+            }
+        }
+        catch (Exception ex)
+        {
+            HasAuthError = true;
+            AuthErrorMessage = $"Hiba a bejelentkezés során: {ex.Message}";
+        }
+        finally
+        {
+            IsAuthenticating = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task SetupAdminAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrWhiteSpace(Password))
+        {
+            AuthErrorMessage = "Kérlek add meg az admin felhasználónevet és jelszót!";
+            HasAuthError = true;
+            return;
+        }
+
+        if (Password.Length < 6)
+        {
+            AuthErrorMessage = "A jelszónak legalább 6 karakter hosszúnak kell lennie!";
+            HasAuthError = true;
+            return;
+        }
+
+        IsAuthenticating = true;
+        HasAuthError = false;
+        AuthErrorMessage = string.Empty;
+
+        try
+        {
+            var success = await _library.SetupServerAdminAsync(
+                Username,
+                Password,
+                string.IsNullOrWhiteSpace(DisplayName) ? Username : DisplayName);
+
+            if (success)
+            {
+                Password = string.Empty;
+                UpdateAuthStatus();
+                UpdateStats();
+                ScanStatusText = "Admin fiók sikeresen létrehozva és bejelentkezve!";
+            }
+            else
+            {
+                HasAuthError = true;
+                AuthErrorMessage = "Nem sikerült létrehozni az admin fiókot.";
+            }
+        }
+        catch (Exception ex)
+        {
+            HasAuthError = true;
+            AuthErrorMessage = $"Hiba a fiók létrehozásakor: {ex.Message}";
+        }
+        finally
+        {
+            IsAuthenticating = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task LogoutAsync()
+    {
+        await _library.LogoutServerAsync();
+        UpdateAuthStatus();
+        UpdateStats();
+        ScanStatusText = "Kijelentkezve a szerverről.";
     }
 
     [RelayCommand]

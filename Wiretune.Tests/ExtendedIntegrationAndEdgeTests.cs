@@ -87,11 +87,12 @@ public class ExtendedIntegrationAndEdgeTests
             WiretuneLog.Warn("TestCategory", "This warning should be captured");
             WiretuneLog.Error("TestCategory", "This error should be captured");
 
-            Assert.Equal(2, entries.Count);
-            Assert.Contains(entries, e => e.Level == LogLevel.Warn);
-            Assert.Contains(entries, e => e.Level == LogLevel.Error);
-            Assert.DoesNotContain(entries, e => e.Level == LogLevel.Debug);
-            Assert.DoesNotContain(entries, e => e.Level == LogLevel.Info);
+            var testEntries = entries.Where(e => e.Category == "TestCategory").ToList();
+            Assert.Equal(2, testEntries.Count);
+            Assert.Contains(testEntries, e => e.Level == LogLevel.Warn);
+            Assert.Contains(testEntries, e => e.Level == LogLevel.Error);
+            Assert.DoesNotContain(testEntries, e => e.Level == LogLevel.Debug);
+            Assert.DoesNotContain(testEntries, e => e.Level == LogLevel.Info);
         }
         finally
         {

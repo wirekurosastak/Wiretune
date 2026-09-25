@@ -63,13 +63,16 @@ public static class WiretuneLog
         set => _minLevel = value;
     }
 
-    public static void Initialize(string? customLogPath = null, LogLevel minLevel = LogLevel.Debug)
+    public static void Initialize(string? customLogPath = null, LogLevel? minLevel = null)
     {
         lock (_lock)
         {
             if (_initialized && _logWriter != null) return;
 
-            _minLevel = minLevel;
+            if (minLevel.HasValue)
+            {
+                _minLevel = minLevel.Value;
+            }
             if (!string.IsNullOrEmpty(customLogPath))
             {
                 _logFilePath = customLogPath;
@@ -99,7 +102,10 @@ public static class WiretuneLog
             }
         }
 
-        Info("WiretuneLog", $"=== Wiretune Logging Initialized (Log: {LogFilePath}, Level: {_minLevel}) ===");
+        if (_minLevel <= LogLevel.Info)
+        {
+            Info("WiretuneLog", $"=== Wiretune Logging Initialized (Log: {LogFilePath}, Level: {_minLevel}) ===");
+        }
     }
 
     public static void Log(LogLevel level, string category, string message, Exception? ex = null)

@@ -116,6 +116,7 @@ public static class AudioDeviceManager
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            psi.EnvironmentVariables["LC_ALL"] = "C"; // Force English output for regex parsing
             using var proc = Process.Start(psi);
             if (proc != null)
             {
@@ -150,12 +151,10 @@ public static class AudioDeviceManager
             // aplay not available
         }
 
-        // Set SMSL as preferred default if present
-        var smslDevice = list.FirstOrDefault(d => d.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase));
-        if (smslDevice != null && !list.Any(d => d.IsDefault))
+        // If no default was detected from PipeWire, mark the first device as default
+        if (list.Count > 0 && !list.Any(d => d.IsDefault))
         {
-            var idx = list.IndexOf(smslDevice);
-            list[idx] = smslDevice with { IsDefault = true };
+            list[0] = list[0] with { IsDefault = true };
         }
 
         return list;

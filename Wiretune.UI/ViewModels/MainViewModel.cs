@@ -34,6 +34,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _logoTransform = "rotate(0deg)";
     [ObservableProperty] private bool _isServerOfflineBannerVisible = false;
     [ObservableProperty] private string _serverBannerMessage = string.Empty;
+    [ObservableProperty] private bool _isLoginViewActive = false;
+    [ObservableProperty] private bool _isUserLoggedIn = false;
+    [ObservableProperty] private string _currentUserBadge = "Bejelentkezés";
 
     public MainViewModel()
         : this(new WiretuneAudioEngine(), new LibraryService(new LibraryRepository(), new MetadataScanner()))
@@ -63,7 +66,19 @@ public partial class MainViewModel : ObservableObject
             album => OpenAlbum(album),
             artist => OpenArtist(artist));
 
-        _ = Library.InitializeAsync();
+        _ = Task.Run(async () =>
+        {
+            await Library.InitializeAsync();
+            DispatchToUI(() =>
+            {
+                // If user has a valid saved session from "Stay Logged In", skip login view!
+                if (Library.IsLoggedIn)
+                {
+                    IsLoginViewActive = false;
+                }
+                UpdateAuthDisplay();
+            });
+        });
 
         UpdateStatusText();
         AudioEngine.TrackChanged += (_, _) => DispatchToUI(UpdateStatusText);
@@ -86,6 +101,15 @@ public partial class MainViewModel : ObservableObject
         });
 
         Library.LibraryChanged += (_, _) => DispatchToUI(UpdateStatusText);
+        Library.AuthStateChanged += (_, user) => DispatchToUI(() =>
+        {
+            UpdateAuthDisplay();
+            if (user != null)
+            {
+                IsLoginViewActive = false;
+            }
+        });
+        UpdateAuthDisplay();
 
         Theme.UpdateDynamicBackground(SelectedNavigationIndex);
         LogoTransform = $"rotate({SelectedNavigationIndex * 90}deg)";
@@ -245,6 +269,34 @@ public partial class MainViewModel : ObservableObject
     public void ToggleTheme()
     {
         Theme.ToggleTheme();
+    }
+
+    [RelayCommand]
+    public void ContinueOffline()
+    {
+        IsLoginViewActive = false;
+    }
+
+    [RelayCommand]
+    public void ShowLoginScreen()
+    {
+        IsLoginViewActive = true;
+    }
+
+    [RelayCommand]
+    public async Task LogoutAsync()
+    {
+        await ServerSettings.LogoutAsync();
+        UpdateAuthDisplay();
+        IsLoginViewActive = true;
+    }
+
+    private void UpdateAuthDisplay()
+    {
+        IsUserLoggedIn = Library.IsLoggedIn;
+        CurrentUserBadge = Library.CurrentUser != null
+            ? (Library.CurrentUser.DisplayName ?? Library.CurrentUser.Username)
+            : "Bejelentkezés";
     }
 
     public void Dispose()

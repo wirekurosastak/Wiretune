@@ -15,22 +15,26 @@ public class LibraryService : ILibraryService
     private readonly List<string> _genres = new();
     private readonly object _syncLock = new();
 
-    public IReadOnlyList<Track> Tracks => _tracks;
-    public IReadOnlyList<Album> Albums => _albums;
-    public IReadOnlyList<Artist> Artists => _artists;
-    public IReadOnlyList<Playlist> Playlists => _playlists;
-    public IReadOnlyList<Track> Favorites => _tracks.Where(t => t.IsFavorite).ToList();
-    public IReadOnlyList<string> Genres => _genres;
+    public IReadOnlyList<Track> Tracks { get { lock (_syncLock) return _tracks.ToList(); } }
+    public IReadOnlyList<Album> Albums { get { lock (_syncLock) return _albums.ToList(); } }
+    public IReadOnlyList<Artist> Artists { get { lock (_syncLock) return _artists.ToList(); } }
+    public IReadOnlyList<Playlist> Playlists { get { lock (_syncLock) return _playlists.ToList(); } }
+    public IReadOnlyList<Track> Favorites { get { lock (_syncLock) return _tracks.Where(t => t.IsFavorite).ToList(); } }
+    public IReadOnlyList<string> Genres { get { lock (_syncLock) return _genres.ToList(); } }
 
     public bool IsScanning { get; private set; }
     public string LibraryPath { get; set; } = string.Empty;
     public string ServerUrl { get; set; } = "http://localhost:5200";
     public bool IsServerConnected { get; private set; }
     public string? ServerStatusMessage { get; private set; }
+    public UserInfo? CurrentUser => _streamingClient.CurrentUser;
+    public bool IsLoggedIn => _streamingClient.CurrentUser != null && !string.IsNullOrEmpty(_streamingClient.AuthToken);
+    public bool IsSetupRequired { get; private set; }
 
     public event EventHandler? LibraryChanged;
     public event EventHandler<bool>? ScanningStateChanged;
     public event EventHandler<string?>? ServerStatusChanged;
+    public event EventHandler<UserInfo?>? AuthStateChanged;
 
     public LibraryService(ILibraryRepository repository, IMetadataScanner scanner)
     {
@@ -46,6 +50,22 @@ public class LibraryService : ILibraryService
 
         var storedTracks = await _repository.GetAllTracksAsync();
         var storedPlaylists = await _repository.GetAllPlaylistsAsync();
+
+        var savedToken = await _repository.GetSettingAsync("AuthToken");
+        var stayLoggedIn = await _repository.GetSettingAsync("StayLoggedIn");
+        if (stayLoggedIn == "true" && !string.IsNullOrEmpty(savedToken))
+        {
+            _streamingClient.AuthToken = savedToken;
+            try
+            {
+                var user = await _streamingClient.GetCurrentUserAsync(ServerUrl, ct);
+                if (user != null)
+                {
+                    AuthStateChanged?.Invoke(this, user);
+                }
+            }
+            catch { }
+        }
 
         lock (_syncLock)
         {
@@ -153,9 +173,35 @@ public class LibraryService : ILibraryService
 
             if (isOnline)
             {
-                ServerStatusMessage = $"Csatlakozva a WiretuneLibrary szerverhez ({ServerUrl})";
+                IsSetupRequired = await _streamingClient.CheckSetupRequiredAsync(ServerUrl, ct);
+                if (IsSetupRequired)
+                {
+                    ServerStatusMessage = "A szerver még nincs beállítva. Hozz létre admin fiókot!";
+                    ServerStatusChanged?.Invoke(this, ServerStatusMessage);
+                    LibraryChanged?.Invoke(this, EventArgs.Empty);
+                    return;
+                }
+
+                if (!IsLoggedIn && !string.IsNullOrEmpty(_streamingClient.AuthToken))
+                {
+                    await _streamingClient.GetCurrentUserAsync(ServerUrl, ct);
+                    if (CurrentUser != null)
+                    {
+                        AuthStateChanged?.Invoke(this, CurrentUser);
+                    }
+                }
+
+                if (!IsLoggedIn)
+                {
+                    ServerStatusMessage = $"A szerver ({ServerUrl}) elérhető, de bejelentkezés szükséges.";
+                    ServerStatusChanged?.Invoke(this, ServerStatusMessage);
+                    LibraryChanged?.Invoke(this, EventArgs.Empty);
+                    return;
+                }
+
+                ServerStatusMessage = $"Csatlakozva: {CurrentUser?.DisplayName ?? CurrentUser?.Username} ({ServerUrl})";
                 ServerStatusChanged?.Invoke(this, ServerStatusMessage);
-                WiretuneLog.Info("LibraryService", $"Server '{ServerUrl}' is ONLINE. Fetching tracks...");
+                WiretuneLog.Info("LibraryService", $"Server '{ServerUrl}' is ONLINE and authenticated. Fetching tracks...");
 
                 var serverTracks = await _streamingClient.FetchTracksAsync(ServerUrl, ct);
                 WiretuneLog.Info("LibraryService", $"Fetched {serverTracks.Count} tracks from server.");
@@ -201,6 +247,62 @@ public class LibraryService : ILibraryService
             WiretuneLog.Error("LibraryService", $"Failed to connect to server '{ServerUrl}': {ex.Message}", ex);
         }
 
+        LibraryChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public async Task<bool> CheckServerSetupRequiredAsync(CancellationToken ct = default)
+    {
+        IsSetupRequired = await _streamingClient.CheckSetupRequiredAsync(ServerUrl, ct);
+        return IsSetupRequired;
+    }
+
+    public async Task<bool> SetupServerAdminAsync(string username, string password, string? displayName = null, CancellationToken ct = default)
+    {
+        var auth = await _streamingClient.SetupAdminAsync(ServerUrl, username, password, displayName, ct);
+        if (auth != null)
+        {
+            await _repository.SetSettingAsync("AuthToken", auth.Token);
+            await _repository.SetSettingAsync("StayLoggedIn", "true");
+            IsSetupRequired = false;
+            AuthStateChanged?.Invoke(this, auth.User);
+            await ConnectServerAsync(ServerUrl, ct);
+            return true;
+        }
+        return false;
+    }
+
+    public async Task<bool> LoginServerAsync(string username, string password, bool rememberMe = false, CancellationToken ct = default)
+    {
+        var auth = await _streamingClient.LoginAsync(ServerUrl, username, password, rememberMe, ct);
+        if (auth != null)
+        {
+            if (rememberMe)
+            {
+                await _repository.SetSettingAsync("AuthToken", auth.Token);
+                await _repository.SetSettingAsync("StayLoggedIn", "true");
+            }
+            else
+            {
+                await _repository.SetSettingAsync("AuthToken", string.Empty);
+                await _repository.SetSettingAsync("StayLoggedIn", "false");
+            }
+
+            AuthStateChanged?.Invoke(this, auth.User);
+            await ConnectServerAsync(ServerUrl, ct);
+            return true;
+        }
+        return false;
+    }
+
+    public async Task LogoutServerAsync()
+    {
+        _streamingClient.AuthToken = null;
+        _streamingClient.CurrentUser = null;
+        await _repository.SetSettingAsync("AuthToken", string.Empty);
+        await _repository.SetSettingAsync("StayLoggedIn", "false");
+        AuthStateChanged?.Invoke(this, null);
+        ServerStatusMessage = "Kijelentkezve a szerverről.";
+        ServerStatusChanged?.Invoke(this, ServerStatusMessage);
         LibraryChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -316,19 +418,25 @@ public class LibraryService : ILibraryService
 
     public IEnumerable<Track> Search(string query)
     {
-        if (string.IsNullOrWhiteSpace(query)) return _tracks;
+        List<Track> snapshot;
+        lock (_syncLock)
+        {
+            snapshot = _tracks.ToList();
+        }
+
+        if (string.IsNullOrWhiteSpace(query)) return snapshot;
 
         var q = query.Trim();
-        return _tracks.Where(t =>
+        return snapshot.Where(t =>
             t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
             t.Artist.Contains(q, StringComparison.OrdinalIgnoreCase) ||
             t.Album.Contains(q, StringComparison.OrdinalIgnoreCase) ||
             (t.Genre != null && t.Genre.Contains(q, StringComparison.OrdinalIgnoreCase)));
     }
 
-    public Album? GetAlbum(string albumId) => _albums.FirstOrDefault(a => a.Id == albumId);
-    public Artist? GetArtist(string artistId) => _artists.FirstOrDefault(a => a.Id == artistId);
-    public Playlist? GetPlaylist(string playlistId) => _playlists.FirstOrDefault(p => p.Id == playlistId);
+    public Album? GetAlbum(string albumId) { lock (_syncLock) return _albums.FirstOrDefault(a => a.Id == albumId); }
+    public Artist? GetArtist(string artistId) { lock (_syncLock) return _artists.FirstOrDefault(a => a.Id == artistId); }
+    public Playlist? GetPlaylist(string playlistId) { lock (_syncLock) return _playlists.FirstOrDefault(p => p.Id == playlistId); }
 
     private void RebuildIndexes()
     {
@@ -337,7 +445,7 @@ public class LibraryService : ILibraryService
         _genres.Clear();
 
         // Build Albums
-        var albumGroups = _tracks.GroupBy(t => (t.Album, t.Artist));
+        var albumGroups = _tracks.GroupBy(t => (t.Album, AlbumArtist: !string.IsNullOrWhiteSpace(t.AlbumArtist) ? t.AlbumArtist : t.Artist));
         foreach (var grp in albumGroups)
         {
             var orderedTracks = grp.OrderBy(t => t.DiscNumber ?? 1)

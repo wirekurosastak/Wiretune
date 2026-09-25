@@ -27,7 +27,7 @@ public class DatabaseManager
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
+        cmd.CommandText = "PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;";
         cmd.ExecuteNonQuery();
         return connection;
     }
@@ -82,6 +82,16 @@ public class DatabaseManager
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                password_hash TEXT NOT NULL,
+                display_name TEXT,
+                is_admin INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                last_login TEXT
             );
         """;
         cmd.ExecuteNonQuery();

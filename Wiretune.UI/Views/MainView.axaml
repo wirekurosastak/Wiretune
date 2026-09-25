@@ -8,7 +8,8 @@
              x:DataType="vm:MainViewModel">
 
   <Panel Background="{DynamicResource WindowGradient}">
-    <Grid RowDefinitions="70, Auto, *, 96, 30">
+    <Grid RowDefinitions="70, Auto, *, 96, 30"
+          IsVisible="{Binding !IsLoginViewActive}">
 
       <!-- ========================================== -->
       <!-- TOP HEADER BAR                             -->
@@ -18,10 +19,10 @@
               BorderBrush="{DynamicResource GlassBorder}"
               BorderThickness="0,0,0,1"
               Padding="24,0">
-        <Grid ColumnDefinitions="Auto, *, Auto">
+        <Grid ColumnDefinitions="1*, Auto, 1*">
 
           <!-- Brand Logo and App Title -->
-          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="16">
+          <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Spacing="16">
             <Panel Width="36" Height="36" ClipToBounds="False" RenderTransformOrigin="50%,50%" RenderTransform="{Binding LogoTransform}">
               <Panel.Transitions>
                 <Transitions>
@@ -36,7 +37,7 @@
             </StackPanel>
           </StackPanel>
 
-          <!-- Search Bar in Center -->
+          <!-- Search Bar in Exact Mathematical Center -->
           <TextBox Grid.Column="1"
                    Classes="search-pill"
                    HorizontalAlignment="Center"
@@ -66,7 +67,7 @@
           </TextBox>
 
           <!-- Top Right Audiophile Badges & Controls -->
-          <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
+          <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="10">
             <!-- Bitperfect Active Pill -->
             <Button Command="{Binding Player.ToggleBitperfectCommand}"
                     Classes="secondary audiophile-pill"
@@ -103,6 +104,23 @@
                 <TextBlock Text="EXCLUSIVE" FontSize="11" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextMuted}"
                            IsVisible="{Binding !Player.IsExclusiveMode}"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+
+            <!-- User / Login Pill -->
+            <Button Command="{Binding ShowLoginScreenCommand}"
+                    Classes="secondary audiophile-pill"
+                    ToolTip.Tip="Wiretune Szerver Fiók és Bejelentkezés">
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <material:MaterialIcon Kind="AccountCircleOutline" Width="16" Height="16"
+                                       Foreground="{DynamicResource CyanAccent}"
+                                       IsVisible="{Binding IsUserLoggedIn}" />
+                <material:MaterialIcon Kind="KeyOutline" Width="16" Height="16"
+                                       Foreground="{DynamicResource TextMuted}"
+                                       IsVisible="{Binding !IsUserLoggedIn}" />
+                <TextBlock Text="{Binding CurrentUserBadge}" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextMain}"
                            VerticalAlignment="Center" />
               </StackPanel>
             </Button>
@@ -949,6 +967,50 @@
                 <StackPanel Spacing="16">
                   <TextBlock Text="SZERVER" Classes="group-title" />
 
+                  <!-- Account Status Card -->
+                  <Border Classes="glass purple">
+                    <Grid ColumnDefinitions="Auto, *, Auto">
+                      <material:MaterialIcon Grid.Column="0" Kind="AccountCircle" Width="36" Height="36"
+                                             Foreground="{DynamicResource PurpleAccent}"
+                                             VerticalAlignment="Center" Margin="0,0,16,0" />
+                      
+                      <!-- Logged In State -->
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"
+                                  IsVisible="{Binding ServerSettings.IsLoggedIn}">
+                        <TextBlock Text="{Binding ServerSettings.CurrentUserName}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                        <TextBlock Text="{Binding ServerSettings.CurrentUserRole, StringFormat='Jogosultság: {0} • Szerverkapcsolat aktív'}"
+                                   FontSize="12" Foreground="{DynamicResource LimeAccent}" />
+                      </StackPanel>
+
+                      <Button Grid.Column="2" Classes="secondary" Command="{Binding LogoutCommand}"
+                              Height="36" Padding="14,0"
+                              IsVisible="{Binding ServerSettings.IsLoggedIn}"
+                              ToolTip.Tip="Kijelentkezés a szerver fiókból">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <material:MaterialIcon Kind="Logout" Width="16" Height="16" Foreground="{DynamicResource DangerColor}" />
+                          <TextBlock Text="Kijelentkezés" FontSize="12" FontWeight="SemiBold" />
+                        </StackPanel>
+                      </Button>
+
+                      <!-- Logged Out State -->
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"
+                                  IsVisible="{Binding !ServerSettings.IsLoggedIn}">
+                        <TextBlock Text="Helyi offline mód" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                        <TextBlock Text="Nincs aktív szerver bejelentkezés. Csak helyi zenei fájlok érhetők el."
+                                   FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                      </StackPanel>
+
+                      <Button Grid.Column="2" Classes="primary" Command="{Binding ShowLoginScreenCommand}"
+                              Height="36" Padding="16,0"
+                              IsVisible="{Binding !ServerSettings.IsLoggedIn}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <material:MaterialIcon Kind="Login" Width="16" Height="16" />
+                          <TextBlock Text="Bejelentkezés" FontSize="12" FontWeight="Bold" />
+                        </StackPanel>
+                      </Button>
+                    </Grid>
+                  </Border>
+
                   <!-- Server Info & Connection Card -->
                   <Border Classes="glass cyan">
                     <StackPanel Spacing="16">
@@ -1378,10 +1440,10 @@
               BorderBrush="{DynamicResource GlassBorder}"
               BorderThickness="0,1,0,0"
               Padding="16,0">
-        <Grid ColumnDefinitions="Auto, *, Auto">
+        <Grid ColumnDefinitions="1*, Auto, 1*">
 
           <!-- Left: Track Details & Album Art -->
-          <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Spacing="14" MaxWidth="280">
+          <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Spacing="14" MaxWidth="320">
             <Border Width="52" Height="52" CornerRadius="8" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" ClipToBounds="True">
               <Panel>
                 <Image Source="{Binding Player.CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding Player.CoverBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
@@ -1522,6 +1584,202 @@
         </Grid>
       </Border>
 
+    </Grid>
+
+    <!-- ============================================== -->
+    <!-- DEDICATED STARTUP / FULLSCREEN LOGIN VIEW      -->
+    <!-- ============================================== -->
+    <Grid IsVisible="{Binding IsLoginViewActive}"
+          Background="{DynamicResource WindowGradient}">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+        <Grid MinHeight="700" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24">
+          <!-- Main Login Box Card -->
+          <Border Classes="glass purple"
+                  Width="500"
+                  CornerRadius="16"
+                  Padding="36,32"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center">
+            <StackPanel Spacing="22">
+
+              <!-- App Branding & Studio Badge with Close Button -->
+              <Grid ColumnDefinitions="*, Auto">
+                <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="8" Margin="24,0,0,0">
+                  <Panel Width="56" Height="56" HorizontalAlignment="Center">
+                    <material:MaterialIcon Kind="Waveform" Foreground="{DynamicResource LimeAccent}" Width="52" Height="52" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Panel>
+                  <TextBlock Text="WIRETUNE" FontSize="26" FontWeight="Black" LetterSpacing="3.0" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" />
+                  <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="10,4" HorizontalAlignment="Center">
+                    <TextBlock Text="STUDIO LOSSLESS STREAMER &amp; PLAYER" FontSize="10" FontWeight="Bold" LetterSpacing="1.2" Foreground="{DynamicResource CyanAccent}" />
+                  </Border>
+                </StackPanel>
+                <Button Grid.Column="1" Classes="icon" Command="{Binding ContinueOfflineCommand}" VerticalAlignment="Top" ToolTip.Tip="Bezárás / Vissza a lejátszóhoz">
+                  <material:MaterialIcon Kind="Close" Width="20" Height="20" />
+                </Button>
+              </Grid>
+
+              <!-- State A: Already Logged In (e.g. opened via account button) -->
+              <StackPanel Spacing="16" IsVisible="{Binding ServerSettings.IsLoggedIn}">
+                <Border Background="{DynamicResource Surface2}" CornerRadius="10" Padding="18">
+                  <StackPanel Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                      <material:MaterialIcon Kind="AccountCheck" Width="40" Height="40" Foreground="{DynamicResource LimeAccent}" VerticalAlignment="Center" />
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ServerSettings.CurrentUserName}" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                        <TextBlock Text="{Binding ServerSettings.CurrentUserRole, StringFormat='Jogosultság: {0}'}" FontSize="12" Foreground="{DynamicResource LimeAccent}" FontWeight="SemiBold" />
+                      </StackPanel>
+                    </StackPanel>
+                    <TextBlock Text="Bejelentkezve a Wiretune szerverhez. A veszteségmentes streamelés aktív." FontSize="12" Foreground="{DynamicResource TextMuted}" Margin="0,4,0,0" />
+                  </StackPanel>
+                </Border>
+
+                <Grid ColumnDefinitions="*, *">
+                  <Button Grid.Column="0" Classes="secondary" Command="{Binding LogoutCommand}" Height="42" Margin="0,0,6,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                      <material:MaterialIcon Kind="Logout" Width="18" Height="18" Foreground="{DynamicResource DangerColor}" />
+                      <TextBlock Text="Kijelentkezés" FontWeight="SemiBold" />
+                    </StackPanel>
+                  </Button>
+                  <Button Grid.Column="1" Classes="primary" Command="{Binding ContinueOfflineCommand}" Height="42" Margin="6,0,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                      <material:MaterialIcon Kind="MusicBox" Width="18" Height="18" />
+                      <TextBlock Text="Vissza a zenékhez" FontWeight="Bold" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+              </StackPanel>
+
+              <!-- State B & C: Not Logged In -->
+              <StackPanel Spacing="18" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
+
+                <!-- Server URL & Connection row -->
+                <StackPanel Spacing="6">
+                  <TextBlock Text="SZERVER CÍME" Classes="group-title" Margin="2,0,0,0" />
+                  <Grid ColumnDefinitions="*, Auto">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding ServerSettings.ServerUrl, Mode=TwoWay}"
+                             Watermark="http://localhost:5200"
+                             Height="40"
+                             Margin="0,0,8,0" />
+                    <Button Grid.Column="1"
+                            Classes="secondary"
+                            Command="{Binding ServerSettings.ConnectServerCommand}"
+                            Height="40"
+                            Padding="14,0"
+                            ToolTip.Tip="Kapcsolat tesztelése">
+                      <StackPanel Orientation="Horizontal" Spacing="6">
+                        <material:MaterialIcon Kind="ServerNetwork" Width="16" Height="16" Foreground="{DynamicResource CyanAccent}" />
+                        <TextBlock Text="Csatlakozás" FontWeight="SemiBold" FontSize="12" />
+                      </StackPanel>
+                    </Button>
+                  </Grid>
+                </StackPanel>
+
+                <!-- Offline Warning Note when server is not running -->
+                <Border Background="#20FFB703" BorderBrush="#FFB703" BorderThickness="1" CornerRadius="8" Padding="12,10"
+                        IsVisible="{Binding !ServerSettings.IsServerConnected}">
+                  <StackPanel Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <material:MaterialIcon Kind="ServerOff" Width="18" Height="18" Foreground="#FFB703" VerticalAlignment="Center" />
+                      <TextBlock Text="A szerver jelenleg nem fut (Offline)" FontWeight="Bold" FontSize="12" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="A helyi zenelejátszáshoz nem szükséges szerver kapcsolat vagy bejelentkezés! Kattints az alábbi gombra:" FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                    <Button Classes="secondary" Command="{Binding ContinueOfflineCommand}" Height="34" Margin="0,4,0,0">
+                      <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                        <material:MaterialIcon Kind="MusicBox" Width="16" Height="16" Foreground="{DynamicResource LimeAccent}" />
+                        <TextBlock Text="Zenelejátszó megnyitása (Helyi könyvtár)" FontWeight="SemiBold" FontSize="12" />
+                      </StackPanel>
+                    </Button>
+                  </StackPanel>
+                </Border>
+
+                <!-- Initial Setup State (First run admin creation) -->
+                <StackPanel Spacing="12" IsVisible="{Binding ServerSettings.IsSetupRequired}">
+                  <Border Background="#28FFB703" BorderBrush="#FFB703" BorderThickness="1" CornerRadius="8" Padding="14,10">
+                    <StackPanel Spacing="4">
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <material:MaterialIcon Kind="ShieldAlertOutline" Width="18" Height="18" Foreground="#FFB703" VerticalAlignment="Center" />
+                        <TextBlock Text="Első indítás észlelve!" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
+                      </StackPanel>
+                      <TextBlock Text="Hozz létre egy adminisztrátori fiókot a szerver használatához." FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                  </Border>
+
+                  <StackPanel Spacing="10">
+                    <TextBox Text="{Binding ServerSettings.Username, Mode=TwoWay}" Watermark="Admin felhasználónév" Height="40" />
+                    <TextBox Text="{Binding ServerSettings.Password, Mode=TwoWay}" Watermark="Jelszó (legalább 6 karakter)" PasswordChar="•" Height="40" />
+                    <TextBox Text="{Binding ServerSettings.DisplayName, Mode=TwoWay}" Watermark="Megjelenített név" Height="40" />
+                  </StackPanel>
+
+                  <Button Classes="primary" Command="{Binding ServerSettings.SetupAdminCommand}" Height="44" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <material:MaterialIcon Kind="ShieldAccount" Width="18" Height="18" />
+                      <TextBlock Text="Admin fiók létrehozása és Belépés" FontWeight="Bold" />
+                    </StackPanel>
+                  </Button>
+                </StackPanel>
+
+                <!-- Standard Login State -->
+                <StackPanel Spacing="14" IsVisible="{Binding !ServerSettings.IsSetupRequired}">
+                  <StackPanel Spacing="10">
+                    <TextBox Text="{Binding ServerSettings.Username, Mode=TwoWay}" Watermark="Felhasználónév" Height="40" />
+                    <TextBox Text="{Binding ServerSettings.Password, Mode=TwoWay}" Watermark="Jelszó" PasswordChar="•" Height="40" />
+                    <CheckBox IsChecked="{Binding ServerSettings.StayLoggedIn, Mode=TwoWay}"
+                              Content="Maradjak bejelentkezve ezen az eszközön"
+                              FontSize="12"
+                              Foreground="{DynamicResource TextMain}" />
+                  </StackPanel>
+
+                  <Button Classes="primary" Command="{Binding ServerSettings.LoginCommand}" Height="44" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <material:MaterialIcon Kind="Login" Width="18" Height="18" />
+                      <TextBlock Text="Bejelentkezés a Szerverre" FontWeight="Bold" />
+                    </StackPanel>
+                  </Button>
+
+                  <Border Background="{DynamicResource Surface2}" CornerRadius="6" Padding="10,6" Margin="0,2,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                      <material:MaterialIcon Kind="InformationOutline" Width="14" Height="14" Foreground="{DynamicResource CyanAccent}" VerticalAlignment="Center" />
+                      <TextBlock Text="Alapértelmezett belépés: admin / admin" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+
+                <!-- Auth Error Message -->
+                <Border Background="#28FF003C" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1" CornerRadius="6" Padding="12,8"
+                        IsVisible="{Binding ServerSettings.HasAuthError}">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <material:MaterialIcon Kind="AlertCircleOutline" Foreground="{DynamicResource DangerColor}" Width="16" Height="16" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ServerSettings.AuthErrorMessage}" Foreground="{DynamicResource DangerColor}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+
+                <!-- Divider / Offline Option -->
+                <Grid ColumnDefinitions="*, Auto, *" Margin="0,4">
+                  <Rectangle Grid.Column="0" Height="1" Fill="{DynamicResource GlassBorder}" VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="VAGY" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="12,0" VerticalAlignment="Center" />
+                  <Rectangle Grid.Column="2" Height="1" Fill="{DynamicResource GlassBorder}" VerticalAlignment="Center" />
+                </Grid>
+
+                <!-- Continue Offline -->
+                <Button Classes="secondary" Command="{Binding ContinueOfflineCommand}" Height="40" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <material:MaterialIcon Kind="FolderMusicOutline" Width="18" Height="18" Foreground="{DynamicResource LimeAccent}" />
+                    <TextBlock Text="Folytatás helyi könyvtárral (Offline mód)" FontWeight="SemiBold" FontSize="13" />
+                  </StackPanel>
+                </Button>
+
+              </StackPanel>
+
+              <!-- Footer Audio Engine Info -->
+              <StackPanel HorizontalAlignment="Center" Spacing="4" Margin="0,8,0,0">
+                <TextBlock Text="Bit-Perfect és Exclusive DAC jelút támogatás (ALSA / WASAPI)" FontSize="10" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />
+              </StackPanel>
+
+            </StackPanel>
+          </Border>
+        </Grid>
+      </ScrollViewer>
     </Grid>
   </Panel>
 </UserControl>
