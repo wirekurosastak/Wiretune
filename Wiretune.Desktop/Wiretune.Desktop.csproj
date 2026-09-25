@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>Wiretune.Desktop</RootNamespace>
+    <ApplicationIcon>Assets\wiretune.ico</ApplicationIcon>
+
+    <Version>1.0.0</Version>
+    <Product>Wiretune</Product>
+    <AssemblyTitle>Wiretune - Audiophile Streamer &amp; Player</AssemblyTitle>
+    <Authors>Wiretune</Authors>
+    <Description>Natív, bit-perfect és exkluzív módú veszteségmentes zenelejátszó és streamelő kliens.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.7" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.92.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Wiretune.UI\Wiretune.UI.csproj" />
+  </ItemGroup>
+
+</Project>

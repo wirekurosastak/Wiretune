@@ -1,4 +1,4 @@
-# 🎵 Wiretone — Audiophile Lossless Streamer & Player
+# 🎵 Wiretune — Audiophile Lossless Streamer & Player
 
 > **Natív, bit-perfect és exkluzív módú veszteségmentes zenelejátszó és otthoni streaming rendszer (C# • Avalonia FluentUI).**
 > Tervezve a Spotify és Tidal előfizetések kiváltására, a **spotiFLAC** által letöltött FLAC albumok és zeneszámok professzionális lejátszására és hálózati streamelésére.
@@ -24,8 +24,8 @@
   - Egyedi lejátszási listák (Playlists) létrehozása, szerkesztése.
   - Valós idejű, azonnali keresőmező.
 - **🌐 Otthoni Streaming Szerver Architektúra**:
-  - `Wiretone.Server`: Pehelykönnyű ASP.NET Core szerver az otthoni szervergépre.
-  - A szerveren lévő `WiretoneLibrary` főkönyvtár automatikus figyelése és indexelése.
+  - `Wiretune.Server`: Pehelykönnyű ASP.NET Core szerver az otthoni szervergépre.
+  - A szerveren lévő `WiretuneLibrary` főkönyvtár automatikus figyelése és indexelése.
   - **HTTP 206 Partial Content (Range Request)** támogatás: Azonnali tekerés és streamelés veszteségmentes FLAC bitfolyammal, újrakódolás nélkül!
 - **💎 Prémium Neon & Glassmorphism Felület**:
   - Az `EnergyStorageModel` modern, cyber-neon és üveghatású stílusvilágára épül.
@@ -38,42 +38,42 @@
 ## 🏗️ Architektúra & Projektstruktúra
 
 ```
-Wiretone/
-├── Wiretone.slnx                  # Solution fájl (Modern .NET 10 formátum)
+Wiretune/
+├── Wiretune.slnx                  # Solution fájl (Modern .NET 10 formátum)
 │
-├── Wiretone.Core/                 # Platformfüggetlen üzleti logika és modellek
+├── Wiretune.Core/                 # Platformfüggetlen üzleti logika és modellek
 │   ├── Models/                    # Track, Album, Artist, Playlist, AudioFormat, AudioOutputDevice
 │   ├── Audio/                     # IAudioEngine, PlaybackState
 │   ├── Services/                  # MetadataScanner (TagLibSharp), LibraryService, ServerStreamingClient
 │   └── Repositories/              # ILibraryRepository adatbázis interfész
 │
-├── Wiretone.Audio/                # Audiophile lejátszó motor
+├── Wiretune.Audio/                # Audiophile lejátszó motor
 │   ├── Devices/                   # AudioDeviceManager (ALSA, PipeWire, WASAPI hardvereszköz-detektálás)
 │   ├── Drivers/                   # LinuxAudioDriver (bitperfect unity gain, PipeWire/ALSA közvetlen vezérlés)
-│   └── WiretoneAudioEngine.cs     # IAudioEngine megvalósítás, DAC illesztés és jelút-diagnosztika
+│   └── WiretuneAudioEngine.cs     # IAudioEngine megvalósítás, DAC illesztés és jelút-diagnosztika
 │
-├── Wiretone.Data/                 # Helyi gyorsítótár és perzisztencia
+├── Wiretune.Data/                 # Helyi gyorsítótár és perzisztencia
 │   ├── DatabaseManager.cs         # SQLite adatbázis kapcsolat kezelő (WAL mód)
 │   └── LibraryRepository.cs       # Dapper alapú gyors kötegelt mentés és lekérdezés
 │
-├── Wiretone.UI/                   # Avalonia FluentUI felhasználói felület (Megosztott Desktop & Mobil)
+├── Wiretune.UI/                   # Avalonia FluentUI felhasználói felület (Megosztott Desktop & Mobil)
 │   ├── Assets/                    # Ikonok és alkalmazás erőforrások
 │   ├── Converters/                # Audio és állapot konverterek
 │   ├── Services/                  # ThemeService (dinamikus gradiensek és neon akcentusok)
 │   ├── ViewModels/                # MainViewModel, PlayerViewModel, Tracks, Albums, Artists, AudiophileSettings
 │   └── Views/                     # MainView.axaml (teljes felület), MainWindow.axaml
 │
-├── Wiretone.Desktop/              # Asztali futtató (Linux & Windows)
+├── Wiretune.Desktop/              # Asztali futtató (Linux & Windows)
 │   └── Program.cs
 │
-├── Wiretone.Server/               # Otthoni streaming szerver (WiretoneLibrary kiszolgáló)
-│   ├── appsettings.json           # WiretoneLibrary elérési út konfiguráció
+├── Wiretune.Server/               # Otthoni streaming szerver (WiretuneLibrary kiszolgáló)
+│   ├── appsettings.json           # WiretuneLibrary elérési út konfiguráció
 │   └── Program.cs                 # REST API & veszteségmentes audio streaming végpontok
 │
-├── Wiretone.Android/              # Android futtató (Avalonia MainActivity)
+├── Wiretune.Android/              # Android futtató (Avalonia MainActivity)
 │   └── MainActivity.cs
 │
-└── Wiretone.Tests/                # Automatizált egységtesztek (xUnit)
+└── Wiretune.Tests/                # Automatizált egységtesztek (xUnit)
     ├── AudioEngineTests.cs        # Bit-perfect hangerőzár és Hi-Res formátum tesztek
     └── LibraryServiceTests.cs     # Indexelési, keresési és lejátszási lista tesztek
 ```
@@ -84,14 +84,14 @@ Wiretone/
 
 ### 1. Asztali Kliens Indítása (Linux / Windows)
 ```bash
-cd /home/wirekurosastak/Dokumentumok/GitHub/Wiretone
-dotnet run --project Wiretone.Desktop
+cd /home/wirekurosastak/Dokumentumok/GitHub/Wiretune
+dotnet run --project Wiretune.Desktop
 ```
 
 ### 2. Otthoni Streaming Szerver Indítása (a Szervergépen)
-Állítsd be a `Wiretone.Server/appsettings.json` fájlban a zenéid főkönyvtárát (`WiretoneLibrary`), majd:
+Állítsd be a `Wiretune.Server/appsettings.json` fájlban a zenéid főkönyvtárát (`WiretuneLibrary`), majd:
 ```bash
-dotnet run --project Wiretone.Server
+dotnet run --project Wiretune.Server
 ```
 A szerver alapértelmezetten a `http://0.0.0.0:5200` címen válik elérhetővé a helyi hálózaton.
 
@@ -110,4 +110,4 @@ dotnet test
    - A rendszer szoftveres újramintavételezése kikapcsol.
 3. Kapcsold be a **Kizárólagos Mód (Exclusive Mode)** kapcsolót a DAC közvetlen lefoglalásához (pl. **SMSL USB AUDIO**).
 4. A lejátszási sávban bármikor megtekinthető a valós idejű **Jelút (Signal Path)**:
-   `Forrás FLAC (24-bit / 96.0 kHz) -> Wiretone Dekóder -> Bit-perfect (1:1 PCM) -> SMSL USB AUDIO Pro`.
+   `Forrás FLAC (24-bit / 96.0 kHz) -> Wiretune Dekóder -> Bit-perfect (1:1 PCM) -> SMSL USB AUDIO Pro`.

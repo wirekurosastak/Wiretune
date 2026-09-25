@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Wiretune.UI.ViewModels"
+        xmlns:views="using:Wiretune.UI.Views"
+        x:Class="Wiretune.UI.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Wiretune - Audiophile Streamer &amp; Player"
+        Icon="/Assets/wiretune.ico"
+        Width="1280" Height="820"
+        MinWidth="1050" MinHeight="650"
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
+        Background="{DynamicResource AppBackground}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        TransparencyLevelHint="Mica, Transparent"
+        FontFamily="Segoe UI Variable, Inter, -apple-system, Arial">
+
+  <views:MainView />
+
+</Window>
