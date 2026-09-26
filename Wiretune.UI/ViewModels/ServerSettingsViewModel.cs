@@ -96,7 +96,9 @@ public partial class ServerSettingsViewModel : ObservableObject
 
         ServerStatusBadge = _session.State switch
         {
-            ServerConnectionState.Connected => $"Online • {CurrentUserName}",
+            ServerConnectionState.Connected => _session.Source == LibrarySource.Hybrid
+                ? $"Online • {CurrentUserName} (Egyesített)"
+                : $"Online • {CurrentUserName}",
             ServerConnectionState.Connecting => "Kapcsolódás...",
             ServerConnectionState.LoginRequired => "Online • bejelentkezés szükséges",
             ServerConnectionState.SetupRequired => "Online • beállítás szükséges",
@@ -106,6 +108,7 @@ public partial class ServerSettingsViewModel : ObservableObject
 
         LibrarySourceText = _session.Source switch
         {
+            LibrarySource.Hybrid => $"Egyesített könyvtár (Helyi mappa: {_library.LibraryPath} + Szerver: {_session.ServerUrl})",
             LibrarySource.Server => $"Szerver könyvtár ({_session.ServerUrl})",
             LibrarySource.Local => $"Helyi mappa ({_library.LibraryPath})",
             _ => "Nincs kiválasztott könyvtár"
@@ -292,7 +295,11 @@ public partial class ServerSettingsViewModel : ObservableObject
             {
                 await _session.UseLocalLibraryAsync();
                 ScanProgress = 100;
-                StatusMessage = $"Helyi könyvtár beolvasva: {_library.Tracks.Count} szám.";
+                var localCount = _library.Tracks.Count(t => t.IsLocal);
+                var serverCount = _library.Tracks.Count(t => !t.IsLocal);
+                StatusMessage = serverCount > 0
+                    ? $"Könyvtár beolvasva: {localCount} helyi szám, {serverCount} szerver szám ({_library.Tracks.Count} összesen)."
+                    : $"Helyi könyvtár beolvasva: {_library.Tracks.Count} szám.";
             }
         }
         catch (Exception ex)

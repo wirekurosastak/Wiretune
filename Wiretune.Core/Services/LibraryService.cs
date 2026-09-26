@@ -87,7 +87,20 @@ public class LibraryService : ILibraryService
 
             LibraryPath = root;
             await _repository.SetSettingAsync("LibraryPath", root);
-            await ReplaceTracksCoreAsync(scanned);
+
+            var existingServerTracks = _snapshot.Tracks.Where(t => !string.IsNullOrEmpty(t.StreamUrl)).ToList();
+            List<Track> toSave;
+            if (existingServerTracks.Count > 0)
+            {
+                toSave = TrackDeduplication.MergeTracks(scanned, existingServerTracks, out var aliased);
+                await UpdatePlaylistsWithAliasesAsync(aliased);
+            }
+            else
+            {
+                toSave = scanned;
+            }
+
+            await ReplaceTracksCoreAsync(toSave);
             WiretuneLog.Info("LibraryService", $"Scan finished: {Tracks.Count} tracks, {Albums.Count} albums, {Artists.Count} artists.");
             return true;
         }
@@ -106,6 +119,54 @@ public class LibraryService : ILibraryService
 
     public Task ReplaceTracksAsync(IEnumerable<Track> tracks, CancellationToken ct = default) =>
         ReplaceTracksCoreAsync(tracks.ToList());
+
+    public async Task MergeServerTracksAsync(IEnumerable<Track> serverTracks, CancellationToken ct = default)
+    {
+        var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
+        var incomingServer = serverTracks.ToList();
+
+        List<Track> merged;
+        if (existingLocalTracks.Count > 0)
+        {
+            merged = TrackDeduplication.MergeTracks(existingLocalTracks, incomingServer, out var aliased);
+            await UpdatePlaylistsWithAliasesAsync(aliased);
+        }
+        else
+        {
+            merged = incomingServer;
+        }
+
+        await ReplaceTracksCoreAsync(merged);
+    }
+
+    public async Task RemoveServerTracksAsync(CancellationToken ct = default)
+    {
+        var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
+        await ReplaceTracksCoreAsync(existingLocalTracks);
+    }
+
+    private async Task UpdatePlaylistsWithAliasesAsync(Dictionary<string, string> aliasedTrackIds)
+    {
+        if (aliasedTrackIds.Count == 0) return;
+
+        foreach (var playlist in _playlists)
+        {
+            bool changed = false;
+            for (int i = 0; i < playlist.TrackIds.Count; i++)
+            {
+                if (aliasedTrackIds.TryGetValue(playlist.TrackIds[i], out var localId))
+                {
+                    playlist.TrackIds[i] = localId;
+                    changed = true;
+                }
+            }
+            if (changed)
+            {
+                playlist.ModifiedAt = DateTime.UtcNow;
+                await _repository.SavePlaylistAsync(playlist);
+            }
+        }
+    }
 
     private async Task ReplaceTracksCoreAsync(List<Track> tracks)
     {

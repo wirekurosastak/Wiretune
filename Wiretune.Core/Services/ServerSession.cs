@@ -17,7 +17,8 @@ public enum LibrarySource
 {
     None,
     Server,
-    Local
+    Local,
+    Hybrid
 }
 
 /// <summary>
@@ -63,7 +64,15 @@ public sealed class ServerSession : IDisposable
         var token = await _settings.GetSettingAsync("AuthToken");
         _client.AuthToken = string.IsNullOrEmpty(token) ? null : token;
 
-        SetState(Source == LibrarySource.Server ? ServerConnectionState.Offline : ServerConnectionState.NotConfigured, null);
+        bool hasLocal = _library.Tracks.Any(t => string.IsNullOrEmpty(t.StreamUrl));
+        bool hasServerTracks = _library.Tracks.Any(t => !string.IsNullOrEmpty(t.StreamUrl));
+        if (hasLocal && (hasServerTracks || Source == LibrarySource.Server || !string.IsNullOrEmpty(_client.AuthToken)))
+        {
+            Source = LibrarySource.Hybrid;
+            await _settings.SetSettingAsync("LibrarySource", nameof(LibrarySource.Hybrid));
+        }
+
+        SetState(Source is LibrarySource.Server or LibrarySource.Hybrid ? ServerConnectionState.Offline : ServerConnectionState.NotConfigured, null);
     }
 
     public static bool TryNormalizeServerUrl(string? input, out string normalized)
@@ -204,6 +213,10 @@ public sealed class ServerSession : IDisposable
         try
         {
             await ForgetTokenAsync();
+            await _library.RemoveServerTracksAsync();
+            bool hasLocal = _library.Tracks.Any(t => string.IsNullOrEmpty(t.StreamUrl));
+            Source = hasLocal ? LibrarySource.Local : LibrarySource.None;
+            await _settings.SetSettingAsync("LibrarySource", Source.ToString());
             SetState(ServerConnectionState.LoginRequired, "Kijelentkezve a szerverről.");
         }
         finally
@@ -241,26 +254,38 @@ public sealed class ServerSession : IDisposable
     public Task TriggerServerScanAsync(CancellationToken ct = default) =>
         _client.TriggerScanAsync(ServerUrl, ct);
 
-    /// <summary>Marks the local folder as the library source so the server library is no longer loaded on startup.</summary>
+    /// <summary>Marks the local folder as active, switching to Hybrid mode if the server is also connected or has tracks.</summary>
     public async Task UseLocalLibraryAsync()
     {
-        Source = LibrarySource.Local;
-        await _settings.SetSettingAsync("LibrarySource", nameof(LibrarySource.Local));
-        SetState(ServerConnectionState.NotConfigured, "Helyi könyvtár használatban.");
+        bool hasServer = IsLoggedIn || _library.Tracks.Any(t => !string.IsNullOrEmpty(t.StreamUrl));
+        Source = hasServer ? LibrarySource.Hybrid : LibrarySource.Local;
+        await _settings.SetSettingAsync("LibrarySource", Source.ToString());
+
+        if (hasServer && State == ServerConnectionState.Connected)
+        {
+            var who = CurrentUser?.DisplayName ?? CurrentUser?.Username;
+            SetState(ServerConnectionState.Connected, $"Csatlakozva: {who} ({ServerUrl}) • {_library.Tracks.Count} szám (Helyi + Szerver)");
+        }
+        else if (!hasServer)
+        {
+            SetState(ServerConnectionState.NotConfigured, "Helyi könyvtár használatban.");
+        }
     }
 
     private async Task RefreshLibraryCoreAsync(CancellationToken ct)
     {
         SetState(ServerConnectionState.Connecting, "Könyvtár letöltése a szerverről...");
         var tracks = await _client.FetchTracksAsync(ServerUrl, ct);
-        await _library.ReplaceTracksAsync(tracks, ct);
+        await _library.MergeServerTracksAsync(tracks, ct);
 
-        Source = LibrarySource.Server;
-        await _settings.SetSettingAsync("LibrarySource", nameof(LibrarySource.Server));
+        bool hasLocal = _library.Tracks.Any(t => string.IsNullOrEmpty(t.StreamUrl));
+        Source = hasLocal ? LibrarySource.Hybrid : LibrarySource.Server;
+        await _settings.SetSettingAsync("LibrarySource", Source.ToString());
 
         var who = CurrentUser?.DisplayName ?? CurrentUser?.Username;
-        WiretuneLog.Info("ServerSession", $"Loaded {tracks.Count} tracks from '{ServerUrl}'.");
-        SetState(ServerConnectionState.Connected, $"Csatlakozva: {who} ({ServerUrl}) • {tracks.Count} szám");
+        var info = hasLocal ? $" • {_library.Tracks.Count} szám (Helyi + Szerver)" : $" • {_library.Tracks.Count} szám";
+        WiretuneLog.Info("ServerSession", $"Loaded {tracks.Count} tracks from '{ServerUrl}'. Total library: {_library.Tracks.Count} tracks.");
+        SetState(ServerConnectionState.Connected, $"Csatlakozva: {who} ({ServerUrl}){info}");
     }
 
     private async Task ForgetTokenAsync()

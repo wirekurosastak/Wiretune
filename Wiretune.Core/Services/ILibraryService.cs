@@ -33,6 +33,12 @@ public interface ILibraryService
     /// <summary>Replaces the library with externally provided tracks (e.g. fetched from a server), keeping favorites and play counts of tracks that remain.</summary>
     Task ReplaceTracksAsync(IEnumerable<Track> tracks, CancellationToken ct = default);
 
+    /// <summary>Merges server tracks into the library, preserving local tracks and preferring local tracks when duplicates exist.</summary>
+    Task MergeServerTracksAsync(IEnumerable<Track> serverTracks, CancellationToken ct = default);
+
+    /// <summary>Removes all server tracks from the library, retaining only local tracks.</summary>
+    Task RemoveServerTracksAsync(CancellationToken ct = default);
+
     Task ToggleFavoriteAsync(string trackId);
     Task RecordPlayAsync(string trackId);
     Task<Playlist> CreatePlaylistAsync(string name, string? description = null);

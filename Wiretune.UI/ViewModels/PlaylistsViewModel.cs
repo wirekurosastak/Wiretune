@@ -16,6 +16,7 @@ public partial class PlaylistsViewModel : ObservableObject
     [ObservableProperty] private IReadOnlyList<Track> _selectedPlaylistTracks = Array.Empty<Track>();
     [ObservableProperty] private bool _hasPlaylists;
     [ObservableProperty] private bool _isSelectedPlaylistEmpty;
+    [ObservableProperty] private bool _isPlaylistDetailOpen;
 
     // "New playlist" dialog, optionally adding a pending track once created.
     [ObservableProperty] private bool _isCreateDialogOpen;
@@ -56,6 +57,7 @@ public partial class PlaylistsViewModel : ObservableObject
         Playlists = _library.Playlists;
         HasPlaylists = Playlists.Count > 0;
         SelectedPlaylist = selectedId == null ? null : _library.GetPlaylist(selectedId);
+        if (SelectedPlaylist == null) IsPlaylistDetailOpen = false;
         RefreshSelectedTracks();
     }
 
@@ -65,6 +67,21 @@ public partial class PlaylistsViewModel : ObservableObject
     {
         SelectedPlaylistTracks = SelectedPlaylist == null ? Array.Empty<Track>() : _library.GetPlaylistTracks(SelectedPlaylist);
         IsSelectedPlaylistEmpty = SelectedPlaylist != null && SelectedPlaylistTracks.Count == 0;
+    }
+
+    [RelayCommand]
+    public void OpenPlaylist(Playlist? playlist)
+    {
+        if (playlist == null) return;
+        SelectedPlaylist = playlist;
+        IsPlaylistDetailOpen = true;
+    }
+
+    [RelayCommand]
+    public void ClosePlaylistDetail()
+    {
+        IsPlaylistDetailOpen = false;
+        SelectedPlaylist = null;
     }
 
     [RelayCommand]
@@ -94,6 +111,7 @@ public partial class PlaylistsViewModel : ObservableObject
         TrackToAdd = null;
         RefreshPlaylists();
         SelectedPlaylist = _library.GetPlaylist(playlist.Id);
+        IsPlaylistDetailOpen = true;
     }
 
     [RelayCommand]
@@ -115,7 +133,11 @@ public partial class PlaylistsViewModel : ObservableObject
     {
         if (playlist == null) return;
         await _library.DeletePlaylistAsync(playlist.Id);
-        if (SelectedPlaylist?.Id == playlist.Id) SelectedPlaylist = null;
+        if (SelectedPlaylist?.Id == playlist.Id)
+        {
+            SelectedPlaylist = null;
+            IsPlaylistDetailOpen = false;
+        }
         RefreshPlaylists();
     }
 
@@ -126,6 +148,17 @@ public partial class PlaylistsViewModel : ObservableObject
         if (target == null) return;
         var tracks = _library.GetPlaylistTracks(target);
         if (tracks.Count > 0) _player.PlayQueue(tracks);
+    }
+
+    [RelayCommand]
+    public void ShufflePlaylist(Playlist? playlist)
+    {
+        var target = playlist ?? SelectedPlaylist;
+        if (target == null) return;
+        var tracks = _library.GetPlaylistTracks(target);
+        if (tracks.Count == 0) return;
+        _player.IsShuffle = true;
+        _player.PlayQueue(tracks);
     }
 
     [RelayCommand]
@@ -140,6 +173,7 @@ public partial class PlaylistsViewModel : ObservableObject
         if (track != null && SelectedPlaylist != null)
         {
             await _library.RemoveTrackFromPlaylistAsync(SelectedPlaylist.Id, track.Id);
+            RefreshPlaylists();
         }
     }
 

@@ -115,19 +115,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
             UpdateStatusText();
         }
 
-        if (Session.Source == LibrarySource.Server)
+        if (Session.Source is LibrarySource.Server or LibrarySource.Hybrid)
         {
             await Session.ConnectAsync();
         }
 
-        IsLoginViewActive = Session.Source == LibrarySource.None ||
-                            Session.State is ServerConnectionState.LoginRequired or ServerConnectionState.SetupRequired;
+        IsLoginViewActive = (Session.Source == LibrarySource.None && Library.Tracks.Count == 0) ||
+                            (Session.Source == LibrarySource.Server && Session.State is ServerConnectionState.LoginRequired or ServerConnectionState.SetupRequired);
     }
 
     private void OnSessionStateChanged()
     {
-        IsServerOfflineBannerVisible = Session.Source == LibrarySource.Server && Session.State == ServerConnectionState.Offline;
-        ServerBannerMessage = Session.StatusMessage ?? $"A Wiretune szerver ({Session.ServerUrl}) nem érhető el.";
+        IsServerOfflineBannerVisible = (Session.Source is LibrarySource.Server or LibrarySource.Hybrid) && Session.State == ServerConnectionState.Offline;
+        if (Session.Source == LibrarySource.Hybrid && Session.State == ServerConnectionState.Offline)
+        {
+            ServerBannerMessage = $"A Wiretune szerver ({Session.ServerUrl}) nem érhető el. A helyi zeneszámok továbbra is elérhetők offline módban.";
+        }
+        else
+        {
+            ServerBannerMessage = Session.StatusMessage ?? $"A Wiretune szerver ({Session.ServerUrl}) nem érhető el.";
+        }
 
         if (Session.IsLoggedIn) IsLoginViewActive = false;
 
@@ -162,6 +169,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         var source = Session.Source switch
         {
+            LibrarySource.Hybrid => Session.IsLoggedIn
+                ? $"Egyesített könyvtár (Szerver + Helyi) • {Library.Tracks.Count(t => t.IsLocal)} helyi, {Library.Tracks.Count(t => !t.IsLocal)} szerver"
+                : $"Helyi könyvtár (Szerver offline) • {Library.Tracks.Count(t => t.IsLocal)} helyi szám",
             LibrarySource.Server => Session.IsLoggedIn ? "Szerver: online" : "Szerver: nem elérhető",
             LibrarySource.Local => "Helyi könyvtár",
             _ => "Nincs könyvtár"
@@ -261,7 +271,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         await ServerSettings.LogoutAsync();
         UpdateAuthDisplay();
-        IsLoginViewActive = true;
+        IsLoginViewActive = Library.Tracks.Count == 0;
     }
 
     public void Dispose()
