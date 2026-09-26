@@ -291,8 +291,26 @@ public class LibraryService : ILibraryService
     public Artist? GetArtist(string artistId) =>
         _snapshot.Artists.FirstOrDefault(a => a.Id == artistId);
 
-    public Artist? GetArtistByName(string name) =>
-        _snapshot.Artists.FirstOrDefault(a => a.Name.Equals(name?.Trim(), StringComparison.OrdinalIgnoreCase));
+    public Artist? GetArtistByName(string name)
+    {
+        var trimmed = name?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+
+        var existing = _snapshot.Artists.FirstOrDefault(a => a.Name.Equals(trimmed, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) return existing;
+
+        var matchingTracks = _snapshot.Tracks.Where(t => t.Artist.Equals(trimmed, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (matchingTracks.Count == 0) return null;
+
+        return new Artist
+        {
+            Id = LibrarySnapshot.StableId(trimmed.ToUpperInvariant()),
+            Name = trimmed,
+            TrackCount = matchingTracks.Count,
+            AlbumCount = 0,
+            Tracks = matchingTracks
+        };
+    }
 
     public Playlist? GetPlaylist(string playlistId) =>
         _playlists.FirstOrDefault(p => p.Id == playlistId);
@@ -320,7 +338,7 @@ public class LibraryService : ILibraryService
         public static string AlbumIdFor(Track track) =>
             StableId($"{track.Album.ToUpperInvariant()}\u001f{track.EffectiveAlbumArtist.ToUpperInvariant()}");
 
-        private static string StableId(string key) =>
+        internal static string StableId(string key) =>
             Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..16];
 
         public static LibrarySnapshot Build(IEnumerable<Track> source)
@@ -334,6 +352,60 @@ public class LibraryService : ILibraryService
                 .ThenBy(t => t.TrackNumber ?? int.MaxValue)
                 .ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
+
+            // Consolidate multi-artist albums where explicit AlbumArtist tag is missing or incomplete.
+            // Only apply when tracks share a non-empty directory on disk and do not have colliding track numbers.
+            var multiArtistGroups = tracks
+                .Where(t => !string.IsNullOrWhiteSpace(t.Album) &&
+                            !string.IsNullOrWhiteSpace(t.FilePath) &&
+                            !t.Album.Equals("Ismeretlen album", StringComparison.OrdinalIgnoreCase) &&
+                            !t.Album.Equals("Unknown Album", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(t => (
+                    Album: t.Album.Trim(),
+                    Dir: Path.GetDirectoryName(t.FilePath)?.ToLowerInvariant() ?? string.Empty
+                ))
+                .Where(g => !string.IsNullOrEmpty(g.Key.Dir));
+
+            foreach (var group in multiArtistGroups)
+            {
+                var groupTracks = group.ToList();
+                if (groupTracks.Count < 2) continue;
+
+                // Don't merge if distinct tracks collide on (Disc, TrackNumber) where TrackNumber > 0
+                bool hasTrackNumberCollisions = groupTracks
+                    .Where(t => t.TrackNumber.HasValue && t.TrackNumber > 0)
+                    .GroupBy(t => (t.DiscNumber ?? 1, t.TrackNumber!.Value))
+                    .Any(tg => tg.Count() > 1);
+
+                if (hasTrackNumberCollisions) continue;
+
+                var explicitAlbumArtist = groupTracks.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.AlbumArtist))?.AlbumArtist;
+                if (!string.IsNullOrWhiteSpace(explicitAlbumArtist))
+                {
+                    foreach (var t in groupTracks.Where(t => string.IsNullOrWhiteSpace(t.AlbumArtist)))
+                    {
+                        t.AlbumArtist = explicitAlbumArtist;
+                    }
+                    continue;
+                }
+
+                var distinctArtists = groupTracks.Select(t => t.Artist).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (distinctArtists.Count > 1)
+                {
+                    var topGroup = groupTracks.GroupBy(t => t.Artist, StringComparer.OrdinalIgnoreCase)
+                        .OrderByDescending(g => g.Count())
+                        .First();
+
+                    var resolvedArtist = (topGroup.Count() * 2 > groupTracks.Count)
+                        ? topGroup.Key
+                        : "Various Artists";
+
+                    foreach (var t in groupTracks)
+                    {
+                        t.AlbumArtist = resolvedArtist;
+                    }
+                }
+            }
 
             var albums = tracks
                 .GroupBy(AlbumIdFor)
@@ -365,9 +437,10 @@ public class LibraryService : ILibraryService
 
             var albumsByArtist = albums.ToLookup(a => a.Artist, StringComparer.OrdinalIgnoreCase);
             var tracksByArtist = tracks.ToLookup(t => t.Artist, StringComparer.OrdinalIgnoreCase);
-            var artistNames = tracks.Select(t => t.Artist)
-                .Concat(albums.Select(a => a.Artist))
-                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            // In the Artists view, only show primary Album Artists (who have an album/release).
+            // Guest performers and one-off compilation artists do not pollute the main Artists tab.
+            var artistNames = albums.Select(a => a.Artist).Distinct(StringComparer.OrdinalIgnoreCase);
 
             var artists = artistNames
                 .Select(name =>

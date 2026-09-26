@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
+using Wiretune.UI.Controls;
 using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
@@ -11,9 +12,13 @@ public partial class ArtistsViewModel : ObservableObject
     private readonly ILibraryService _library;
     private readonly PlayerViewModel _player;
 
+    public Action<NavWaveDirection>? OnNavWave { get; set; }
+    public Action? ReturnAction { get; set; }
+
     [ObservableProperty] private IReadOnlyList<Artist> _displayedArtists = Array.Empty<Artist>();
     [ObservableProperty] private Artist? _selectedArtist;
     [ObservableProperty] private bool _isArtistDetailOpen;
+    [ObservableProperty] private string _backButtonText = "Vissza az összes előadóhoz";
     [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _selectedArtistAlbumCards = Array.Empty<AlbumCardViewModel>();
     [ObservableProperty] private bool _hasSelectedArtistAlbums;
     [ObservableProperty] private IReadOnlyList<Track> _selectedArtistTracks = Array.Empty<Track>();
@@ -30,6 +35,7 @@ public partial class ArtistsViewModel : ObservableObject
     public void RefreshArtists()
     {
         DisplayedArtists = _library.Artists;
+        ArtistPictureService.ResolveArtistPictures(DisplayedArtists);
 
         if (SelectedArtist != null)
         {
@@ -40,11 +46,21 @@ public partial class ArtistsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void OpenArtist(Artist? artist)
+    public void OpenArtist(Artist? artist) => OpenArtistWithOrigin(artist, null, null, NavWaveDirection.LeftToRight);
+
+    public void OpenArtistWithOrigin(Artist? artist, string? backText, Action? onReturn, NavWaveDirection? waveDirection = NavWaveDirection.LeftToRight)
     {
         if (artist == null) return;
+        ReturnAction = onReturn;
+        BackButtonText = string.IsNullOrWhiteSpace(backText) ? "Vissza az összes előadóhoz" : backText;
+
         SelectedArtist = artist;
+        ArtistPictureService.ResolveArtistPicture(artist);
         IsArtistDetailOpen = true;
+        if (waveDirection.HasValue)
+        {
+            OnNavWave?.Invoke(waveDirection.Value);
+        }
         SelectedArtistAlbumCards = artist.Albums.Select(a => new AlbumCardViewModel(a)).ToList();
         HasSelectedArtistAlbums = SelectedArtistAlbumCards.Count > 0;
         SelectedArtistTracks = artist.Tracks;
@@ -53,11 +69,21 @@ public partial class ArtistsViewModel : ObservableObject
     [RelayCommand]
     public void CloseArtistDetail()
     {
+        var returnAction = ReturnAction;
+        ReturnAction = null;
+        BackButtonText = "Vissza az összes előadóhoz";
+
+        if (IsArtistDetailOpen)
+        {
+            OnNavWave?.Invoke(NavWaveDirection.RightToLeft);
+        }
         IsArtistDetailOpen = false;
         SelectedArtist = null;
         SelectedArtistAlbumCards = Array.Empty<AlbumCardViewModel>();
         HasSelectedArtistAlbums = false;
         SelectedArtistTracks = Array.Empty<Track>();
+
+        returnAction?.Invoke();
     }
 
     [RelayCommand]

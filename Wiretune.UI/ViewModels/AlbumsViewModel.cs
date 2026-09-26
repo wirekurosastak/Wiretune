@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
+using Wiretune.UI.Controls;
 using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
@@ -14,10 +15,14 @@ public partial class AlbumsViewModel : ObservableObject
     private readonly ILibraryService _library;
     private readonly PlayerViewModel _player;
 
+    public Action<NavWaveDirection>? OnNavWave { get; set; }
+    public Action? ReturnAction { get; set; }
+
     [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _displayedAlbums = Array.Empty<AlbumCardViewModel>();
     [ObservableProperty] private Album? _selectedAlbum;
     [ObservableProperty] private Bitmap? _selectedAlbumCover;
     [ObservableProperty] private bool _isAlbumDetailOpen;
+    [ObservableProperty] private string _backButtonText = "Vissza az összes albumhoz";
 
     public AlbumsViewModel(ILibraryService library, PlayerViewModel player)
     {
@@ -48,14 +53,23 @@ public partial class AlbumsViewModel : ObservableObject
     };
 
     [RelayCommand]
-    public void OpenAlbum(object? param)
+    public void OpenAlbum(object? param) => OpenAlbumWithOrigin(param, null, null, NavWaveDirection.LeftToRight);
+
+    public void OpenAlbumWithOrigin(object? param, string? backText, Action? onReturn, NavWaveDirection? waveDirection = NavWaveDirection.LeftToRight)
     {
         var album = Resolve(param);
         if (album == null) return;
 
+        ReturnAction = onReturn;
+        BackButtonText = string.IsNullOrWhiteSpace(backText) ? "Vissza az összes albumhoz" : backText;
+
         SelectedAlbum = album;
         IsAlbumDetailOpen = true;
         SelectedAlbumCover = null;
+        if (waveDirection.HasValue)
+        {
+            OnNavWave?.Invoke(waveDirection.Value);
+        }
         CoverArtService.LoadBitmap(album.CoverArtPath, DetailCoverDecodeWidth, bmp =>
         {
             if (ReferenceEquals(SelectedAlbum, album)) SelectedAlbumCover = bmp;
@@ -65,9 +79,19 @@ public partial class AlbumsViewModel : ObservableObject
     [RelayCommand]
     public void CloseAlbumDetail()
     {
+        var returnAction = ReturnAction;
+        ReturnAction = null;
+        BackButtonText = "Vissza az összes albumhoz";
+
+        if (IsAlbumDetailOpen)
+        {
+            OnNavWave?.Invoke(NavWaveDirection.RightToLeft);
+        }
         IsAlbumDetailOpen = false;
         SelectedAlbum = null;
         SelectedAlbumCover = null;
+
+        returnAction?.Invoke();
     }
 
     [RelayCommand]

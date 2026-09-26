@@ -25,14 +25,13 @@
 
           <!-- Brand Logo and App Title -->
           <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Spacing="16" Margin="0,0,16,0">
-            <Panel Width="36" Height="36" ClipToBounds="False" RenderTransformOrigin="50%,50%" RenderTransform="{Binding LogoTransform}">
-              <Panel.Transitions>
-                <Transitions>
-                  <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.6" Easing="CubicEaseOut" />
-                </Transitions>
-              </Panel.Transitions>
-              <material:MaterialIcon Kind="Waveform" Foreground="{DynamicResource LimeAccent}" Width="32" Height="32" HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Panel>
+            <controls:NavVisualizerControl Width="38" Height="28"
+                                           VerticalAlignment="Center"
+                                           WaveTrigger="{Binding WaveTrigger}"
+                                           WaveDirection="{Binding LastWaveDirection}"
+                                           AccentBrush="{DynamicResource LimeAccent}"
+                                           IsPlaying="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToBoolConverter}}"
+                                           ToolTip.Tip="Wiretune Streamer Visualizer" />
             <StackPanel VerticalAlignment="Center" Spacing="0" IsVisible="{Binding !IsCompactLayout}">
               <TextBlock Text="WIRETUNE" FontSize="18" FontWeight="Black" LetterSpacing="2.0" Foreground="{DynamicResource TextMain}" />
               <TextBlock Text="STREAMER &amp; PLAYER" FontSize="9" FontWeight="Bold" LetterSpacing="1.2" Foreground="{DynamicResource CyanAccent}" />
@@ -362,34 +361,55 @@
                             GridLinesVisibility="Horizontal"
                             HorizontalScrollBarVisibility="Disabled">
                     <DataGrid.Columns>
-                      <!-- Play Column -->
+                      <!-- Album/Track Cover Column (Clickable to play track) -->
                       <DataGridTemplateColumn Width="50" Header="">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
-                            <Button Classes="cyan"
-                                    Width="26" Height="26"
-                                    CornerRadius="4"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center"
+                            <Button Classes="unstyled-cover"
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Tracks.PlayTrackCommand}"
                                     CommandParameter="{Binding}"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                     ToolTip.Tip="Szám lejátszása">
-                              <material:MaterialIcon Kind="Play" Foreground="Black" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              <Border Width="32" Height="32"
+                                      CornerRadius="4"
+                                      Background="{DynamicResource Surface2}"
+                                      ClipToBounds="True"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center">
+                                <Panel>
+                                  <material:MaterialIcon Kind="MusicNote"
+                                                         Foreground="{DynamicResource TextMuted}"
+                                                         Width="16" Height="16"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center" />
+                                  <controls:CoverImage SourcePath="{Binding CoverArtPath}"
+                                                       DecodeWidth="64"
+                                                       Stretch="UniformToFill" />
+                                </Panel>
+                              </Border>
                             </Button>
                           </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                       </DataGridTemplateColumn>
 
-                      <!-- Title -->
-                      <DataGridTextColumn Header="CÍM" Binding="{Binding Title}" Width="2*" />
+                      <!-- Title (Clickable to play track) -->
+                      <DataGridTemplateColumn Header="CÍM" Width="2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                          <DataTemplate DataType="models:Track">
+                            <Button Classes="table-link title"
+                                    Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Tracks.PlayTrackCommand}"
+                                    CommandParameter="{Binding}"
+                                    ToolTip.Tip="Szám lejátszása">
+                              <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </Button>
+                          </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                      </DataGridTemplateColumn>
 
                       <!-- Artist (Clickable to open Artist page) -->
                       <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
-                            <Button Classes="table-link"
+                            <Button Classes="table-link artist"
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenArtistByNameCommand}"
                                     CommandParameter="{Binding Artist}">
                               <TextBlock Text="{Binding Artist}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -402,7 +422,7 @@
                       <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
-                            <Button Classes="table-link"
+                            <Button Classes="table-link album"
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
                                     CommandParameter="{Binding}">
                               <TextBlock Text="{Binding Album}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -542,7 +562,7 @@
                         Command="{Binding Albums.CloseAlbumDetailCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <material:MaterialIcon Kind="ArrowLeft" Width="18" Height="18" Foreground="{DynamicResource PurpleAccent}" />
-                    <TextBlock Text="Vissza az összes albumhoz" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Albums.BackButtonText}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
 
@@ -609,31 +629,22 @@
                             GridLinesVisibility="Horizontal"
                             HorizontalScrollBarVisibility="Disabled">
                     <DataGrid.Columns>
-                      <!-- Play -->
-                      <DataGridTemplateColumn Width="50" Header="">
+                      <!-- Track # -->
+                      <DataGridTextColumn Header="#" Binding="{Binding DisplayTrackNumber}" Width="45" />
+
+                      <!-- Title (Clickable to play track) -->
+                      <DataGridTemplateColumn Header="CÍM" Width="3*">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
-                            <Button Classes="purple"
-                                    Width="26" Height="26"
-                                    CornerRadius="4"
-                                    Padding="0"
-                                    HorizontalContentAlignment="Center"
-                                    VerticalContentAlignment="Center"
+                            <Button Classes="table-link album"
                                     Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Albums.PlayAlbumTrackCommand}"
                                     CommandParameter="{Binding}"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center"
                                     ToolTip.Tip="Szám lejátszása">
-                              <material:MaterialIcon Kind="Play" Foreground="White" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                             </Button>
                           </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                       </DataGridTemplateColumn>
-
-                      <!-- Track # -->
-                      <DataGridTextColumn Header="#" Binding="{Binding DisplayTrackNumber}" Width="45" />
-
-                      <!-- Title -->
-                      <DataGridTextColumn Header="CÍM" Binding="{Binding Title}" Width="3*" />
 
                       <!-- Format / Quality -->
                       <DataGridTemplateColumn Header="MINŐSÉG" Width="185">
@@ -713,8 +724,11 @@
                                 Margin="0,6,18,12">
                           <Border Classes="metric-card coral" Width="200" Height="220">
                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10">
-                              <Border Width="72" Height="72" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
-                                <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="44" Height="44" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                              <Border Width="72" Height="72" CornerRadius="36" Background="{DynamicResource Surface2}" HorizontalAlignment="Center" ClipToBounds="True">
+                                <Panel>
+                                  <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="44" Height="44" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                  <controls:CoverImage SourcePath="{Binding PicturePath}" DecodeWidth="150" Stretch="UniformToFill" />
+                                </Panel>
                               </Border>
                               <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
                               <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} zeneszám'}" FontSize="12" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />
@@ -747,15 +761,18 @@
                         Command="{Binding Artists.CloseArtistDetailCommand}">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <material:MaterialIcon Kind="ArrowLeft" Width="18" Height="18" Foreground="{DynamicResource CoralAccent}" />
-                    <TextBlock Text="Vissza az összes előadóhoz" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Artists.BackButtonText}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                   </StackPanel>
                 </Button>
 
                 <!-- Artist Hero Card -->
                 <Border Grid.Row="1" Classes="glass coral" Margin="0,0,0,20">
                   <Grid ColumnDefinitions="95, *">
-                    <Border Grid.Column="0" Width="80" Height="80" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left">
-                      <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Border Grid.Column="0" Width="80" Height="80" CornerRadius="40" Background="{DynamicResource Surface2}" HorizontalAlignment="Left" ClipToBounds="True">
+                      <Panel>
+                        <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <controls:CoverImage SourcePath="{Binding Artists.SelectedArtist.PicturePath}" DecodeWidth="160" Stretch="UniformToFill" />
+                      </Panel>
                     </Border>
 
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6" Margin="8,0,0,0">
@@ -829,34 +846,55 @@
                                   GridLinesVisibility="Horizontal"
                                   HorizontalScrollBarVisibility="Disabled">
                           <DataGrid.Columns>
-                            <!-- Play -->
+                            <!-- Cover (Clickable to play track) -->
                             <DataGridTemplateColumn Width="50" Header="">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
-                                  <Button Classes="coral"
-                                          Width="26" Height="26"
-                                          CornerRadius="4"
-                                          Padding="0"
-                                          HorizontalContentAlignment="Center"
-                                          VerticalContentAlignment="Center"
+                                  <Button Classes="unstyled-cover"
                                           Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.PlayArtistTrackCommand}"
                                           CommandParameter="{Binding}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"
                                           ToolTip.Tip="Szám lejátszása">
-                                    <material:MaterialIcon Kind="Play" Foreground="White" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Border Width="32" Height="32"
+                                            CornerRadius="4"
+                                            Background="{DynamicResource Surface2}"
+                                            ClipToBounds="True"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                      <Panel>
+                                        <material:MaterialIcon Kind="MusicNote"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               Width="16" Height="16"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                        <controls:CoverImage SourcePath="{Binding CoverArtPath}"
+                                                             DecodeWidth="64"
+                                                             Stretch="UniformToFill" />
+                                      </Panel>
+                                    </Border>
                                   </Button>
                                 </DataTemplate>
                               </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <!-- Title -->
-                            <DataGridTextColumn Header="CÍM" Binding="{Binding Title}" Width="2.5*" />
+                            <!-- Title (Clickable to play track) -->
+                            <DataGridTemplateColumn Header="CÍM" Width="2.5*">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="table-link artist"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Artists.PlayArtistTrackCommand}"
+                                          CommandParameter="{Binding}"
+                                          ToolTip.Tip="Szám lejátszása">
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                             <!-- Album (Clickable) -->
                             <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
-                                  <Button Classes="table-link"
+                                  <Button Classes="table-link album"
                                           Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
                                           CommandParameter="{Binding}">
                                     <TextBlock Text="{Binding Album}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -1082,30 +1120,55 @@
                               AutoGenerateColumns="False" IsReadOnly="True"
                               GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Disabled">
                       <DataGrid.Columns>
-                        <!-- Play Button -->
+                        <!-- Cover (Clickable to play track) -->
                         <DataGridTemplateColumn Width="50" Header="">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
-                              <Button Classes="lime" Width="26" Height="26" CornerRadius="4" Padding="0"
-                                      HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                              <Button Classes="unstyled-cover"
                                       Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Playlists.PlayTrackCommand}"
                                       CommandParameter="{Binding}"
                                       ToolTip.Tip="Szám lejátszása">
-                                <material:MaterialIcon Kind="Play" Foreground="Black" Width="13" Height="13" />
+                                <Border Width="32" Height="32"
+                                        CornerRadius="4"
+                                        Background="{DynamicResource Surface2}"
+                                        ClipToBounds="True"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                  <Panel>
+                                    <material:MaterialIcon Kind="MusicNote"
+                                                           Foreground="{DynamicResource TextMuted}"
+                                                           Width="16" Height="16"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                    <controls:CoverImage SourcePath="{Binding CoverArtPath}"
+                                                         DecodeWidth="64"
+                                                         Stretch="UniformToFill" />
+                                  </Panel>
+                                </Border>
                               </Button>
                             </DataTemplate>
                           </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
 
-                        <!-- Title -->
-                        <DataGridTextColumn Header="CÍM" Binding="{Binding Title}" Width="2*" />
+                        <!-- Title (Clickable to play track) -->
+                        <DataGridTemplateColumn Header="CÍM" Width="2*">
+                          <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate DataType="models:Track">
+                              <Button Classes="table-link title"
+                                      Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Playlists.PlayTrackCommand}"
+                                      CommandParameter="{Binding}"
+                                      ToolTip.Tip="Szám lejátszása">
+                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                              </Button>
+                            </DataTemplate>
+                          </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
                         <!-- Artist (Clickable to open Artist page) -->
                         <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
-                              <Button Classes="table-link"
+                              <Button Classes="table-link artist"
                                       Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenArtistByNameCommand}"
                                       CommandParameter="{Binding Artist}">
                                 <TextBlock Text="{Binding Artist}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -1118,7 +1181,7 @@
                         <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
-                              <Button Classes="table-link"
+                              <Button Classes="table-link album"
                                       Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
                                       CommandParameter="{Binding}">
                                 <TextBlock Text="{Binding Album}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -1215,23 +1278,74 @@
                 <DataGrid ItemsSource="{Binding Favorites.FavoriteTracks}" AutoGenerateColumns="False" IsReadOnly="True"
                           GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Disabled">
                   <DataGrid.Columns>
-                    <DataGridTemplateColumn Width="50">
+                    <!-- Cover (Clickable to play track) -->
+                    <DataGridTemplateColumn Width="50" Header="">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="models:Track">
-                          <Button Classes="coral" Width="26" Height="26" CornerRadius="4" Padding="0"
-                                  HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                          <Button Classes="unstyled-cover"
                                   Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Favorites.PlayTrackCommand}"
                                   CommandParameter="{Binding}"
                                   ToolTip.Tip="Szám lejátszása">
-                            <material:MaterialIcon Kind="Play" Foreground="White" Width="13" Height="13" />
+                            <Border Width="32" Height="32"
+                                    CornerRadius="4"
+                                    Background="{DynamicResource Surface2}"
+                                    ClipToBounds="True"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center">
+                              <Panel>
+                                <material:MaterialIcon Kind="MusicNote"
+                                                       Foreground="{DynamicResource TextMuted}"
+                                                       Width="16" Height="16"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                <controls:CoverImage SourcePath="{Binding CoverArtPath}"
+                                                     DecodeWidth="64"
+                                                     Stretch="UniformToFill" />
+                              </Panel>
+                            </Border>
                           </Button>
                         </DataTemplate>
                       </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="CÍM" Binding="{Binding Title}" Width="2*" />
-                    <DataGridTextColumn Header="ELŐADÓ" Binding="{Binding Artist}" Width="1.5*" />
-                    <DataGridTextColumn Header="ALBUM" Binding="{Binding Album}" Width="1.5*" />
+                    <!-- Title (Clickable to play track) -->
+                    <DataGridTemplateColumn Header="CÍM" Width="2*">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate DataType="models:Track">
+                          <Button Classes="table-link title"
+                                  Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Favorites.PlayTrackCommand}"
+                                  CommandParameter="{Binding}"
+                                  ToolTip.Tip="Szám lejátszása">
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                          </Button>
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Artist (Clickable to open Artist page) -->
+                    <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate DataType="models:Track">
+                          <Button Classes="table-link artist"
+                                  Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenArtistByNameCommand}"
+                                  CommandParameter="{Binding Artist}">
+                            <TextBlock Text="{Binding Artist}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                          </Button>
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Album (Clickable to open Album page) -->
+                    <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
+                      <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate DataType="models:Track">
+                          <Button Classes="table-link album"
+                                  Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
+                                  CommandParameter="{Binding}">
+                            <TextBlock Text="{Binding Album}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                          </Button>
+                        </DataTemplate>
+                      </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="90" />
                     <DataGridTemplateColumn Width="44" Header="">
                       <DataGridTemplateColumn.CellTemplate>
@@ -1562,32 +1676,54 @@
                                   GridLinesVisibility="Horizontal"
                                   HorizontalScrollBarVisibility="Disabled">
                           <DataGrid.Columns>
-                            <!-- Play Button: Square 26x26 -->
+                            <!-- Cover (Clickable to play track) -->
                             <DataGridTemplateColumn Width="50" Header="">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
-                                  <Button Classes="cyan"
-                                          Width="26" Height="26"
-                                          CornerRadius="4"
-                                          Padding="0"
-                                          HorizontalContentAlignment="Center"
-                                          VerticalContentAlignment="Center"
+                                  <Button Classes="unstyled-cover"
                                           Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.PlayTrackCommand}"
                                           CommandParameter="{Binding}"
-                                          HorizontalAlignment="Center" VerticalAlignment="Center"
                                           ToolTip.Tip="Szám lejátszása">
-                                    <material:MaterialIcon Kind="Play" Foreground="Black" Width="13" Height="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <Border Width="32" Height="32"
+                                            CornerRadius="4"
+                                            Background="{DynamicResource Surface2}"
+                                            ClipToBounds="True"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                      <Panel>
+                                        <material:MaterialIcon Kind="MusicNote"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               Width="16" Height="16"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center" />
+                                        <controls:CoverImage SourcePath="{Binding CoverArtPath}"
+                                                             DecodeWidth="64"
+                                                             Stretch="UniformToFill" />
+                                      </Panel>
+                                    </Border>
                                   </Button>
                                 </DataTemplate>
                               </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="CÍM" Binding="{Binding Title}" Width="2.5*" />
+                            <!-- Title (Clickable to play track) -->
+                            <DataGridTemplateColumn Header="CÍM" Width="2.5*">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="table-link title"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.PlayTrackCommand}"
+                                          CommandParameter="{Binding}"
+                                          ToolTip.Tip="Szám lejátszása">
+                                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                             <DataGridTemplateColumn Header="ELŐADÓ" Width="2*">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
-                                  <Button Classes="table-link"
+                                  <Button Classes="table-link artist"
                                           Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenArtistByNameCommand}"
                                           CommandParameter="{Binding Artist}">
                                     <TextBlock Text="{Binding Artist}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -1599,7 +1735,7 @@
                             <DataGridTemplateColumn Header="ALBUM" Width="2*">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
-                                  <Button Classes="table-link"
+                                  <Button Classes="table-link album"
                                           Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
                                           CommandParameter="{Binding}">
                                     <TextBlock Text="{Binding Album}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -1644,8 +1780,11 @@
                                   Margin="0,6,18,12">
                             <Border Classes="metric-card coral" Width="180" Height="200">
                               <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="8">
-                                <Border Width="64" Height="64" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Center">
-                                  <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="40" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                <Border Width="64" Height="64" CornerRadius="32" Background="{DynamicResource Surface2}" HorizontalAlignment="Center" ClipToBounds="True">
+                                  <Panel>
+                                    <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="40" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <controls:CoverImage SourcePath="{Binding PicturePath}" DecodeWidth="130" Stretch="UniformToFill" />
+                                  </Panel>
                                 </Border>
                                 <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
                                 <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} zeneszám'}" FontSize="11" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" />

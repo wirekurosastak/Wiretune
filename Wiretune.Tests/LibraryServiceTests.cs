@@ -333,5 +333,55 @@ public class LibraryServiceTests
         Assert.Equal(13, card.TrackCount);
         Assert.Equal("HI-RES LOSSLESS • 24bit/88.2kHz", card.FormatBadge);
     }
+
+    [Fact]
+    public async Task MultiArtist_CompilationTracksInSameDirectory_ConsolidatesToVariousArtistsAndExcludesGuestArtists()
+    {
+        var repo = new MockRepository();
+        var service = new LibraryService(repo, new MetadataScanner());
+
+        await repo.SaveTracksBatchAsync(new[]
+        {
+            new Track { Id = "1", Title = "Song 1", Artist = "Guest Alpha", Album = "Top Hits", TrackNumber = 1, FilePath = "/Music/Compilations/TopHits/01.flac" },
+            new Track { Id = "2", Title = "Song 2", Artist = "Guest Beta", Album = "Top Hits", TrackNumber = 2, FilePath = "/Music/Compilations/TopHits/02.flac" },
+            new Track { Id = "3", Title = "Song 3", Artist = "Guest Gamma", Album = "Top Hits", TrackNumber = 3, FilePath = "/Music/Compilations/TopHits/03.flac" }
+        });
+
+        await service.InitializeAsync();
+
+        Assert.Single(service.Albums);
+        Assert.Equal("Various Artists", service.Albums[0].Artist);
+        Assert.Single(service.Artists);
+        Assert.Equal("Various Artists", service.Artists[0].Name);
+
+        // Guest artists should not pollute primary Artists list, but should resolve on-demand
+        Assert.DoesNotContain(service.Artists, a => a.Name == "Guest Alpha");
+        var resolved = service.GetArtistByName("Guest Alpha");
+        Assert.NotNull(resolved);
+        Assert.Equal("Guest Alpha", resolved.Name);
+        Assert.Single(resolved.Tracks);
+    }
+
+    [Fact]
+    public async Task MultiArtist_DominantArtist_ResolvesToDominantAlbumArtist()
+    {
+        var repo = new MockRepository();
+        var service = new LibraryService(repo, new MetadataScanner());
+
+        await repo.SaveTracksBatchAsync(new[]
+        {
+            new Track { Id = "1", Title = "One More Time", Artist = "Daft Punk", Album = "Discovery", TrackNumber = 1, FilePath = "/Music/DaftPunk/Discovery/01.flac" },
+            new Track { Id = "2", Title = "Aerodynamic", Artist = "Daft Punk", Album = "Discovery", TrackNumber = 2, FilePath = "/Music/DaftPunk/Discovery/02.flac" },
+            new Track { Id = "3", Title = "Too Long", Artist = "Daft Punk feat. Romanthony", Album = "Discovery", TrackNumber = 3, FilePath = "/Music/DaftPunk/Discovery/03.flac" }
+        });
+
+        await service.InitializeAsync();
+
+        Assert.Single(service.Albums);
+        Assert.Equal("Daft Punk", service.Albums[0].Artist);
+        Assert.Single(service.Artists);
+        Assert.Equal("Daft Punk", service.Artists[0].Name);
+        Assert.DoesNotContain(service.Artists, a => a.Name == "Daft Punk feat. Romanthony");
+    }
 }
 

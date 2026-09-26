@@ -94,7 +94,13 @@ public static class CoverArtService
             pathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, pathOrUrl);
-            if (!string.IsNullOrEmpty(AuthToken)) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthToken);
+            var isExternalCdn = pathOrUrl.Contains("dzcdn.net", StringComparison.OrdinalIgnoreCase) ||
+                                pathOrUrl.Contains("deezer.com", StringComparison.OrdinalIgnoreCase) ||
+                                pathOrUrl.Contains("wikimedia.org", StringComparison.OrdinalIgnoreCase);
+            if (!string.IsNullOrEmpty(AuthToken) && !isExternalCdn)
+            {
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthToken);
+            }
 
             using var response = await Http.SendAsync(request).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode) return null;

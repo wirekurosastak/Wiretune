@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
+using Wiretune.UI.Controls;
 using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
@@ -10,6 +11,8 @@ public partial class PlaylistsViewModel : ObservableObject
 {
     private readonly ILibraryService _library;
     private readonly PlayerViewModel _player;
+
+    public Action<NavWaveDirection>? OnNavWave { get; set; }
 
     [ObservableProperty] private IReadOnlyList<Playlist> _playlists = Array.Empty<Playlist>();
     [ObservableProperty] private Playlist? _selectedPlaylist;
@@ -75,11 +78,16 @@ public partial class PlaylistsViewModel : ObservableObject
         if (playlist == null) return;
         SelectedPlaylist = playlist;
         IsPlaylistDetailOpen = true;
+        OnNavWave?.Invoke(NavWaveDirection.LeftToRight);
     }
 
     [RelayCommand]
     public void ClosePlaylistDetail()
     {
+        if (IsPlaylistDetailOpen)
+        {
+            OnNavWave?.Invoke(NavWaveDirection.RightToLeft);
+        }
         IsPlaylistDetailOpen = false;
         SelectedPlaylist = null;
     }
