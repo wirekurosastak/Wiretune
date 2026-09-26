@@ -44,11 +44,10 @@ public class BoundaryValueTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BVT-002 — Empty folder scan: known bug — old tracks remain
-    // This test documents the current (broken) behavior so a fix can be verified.
+    // BVT-002 — Scanning a folder that no longer contains music empties the library
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public async Task BVT002_ScanEmptyFolder_DocumentsBugThatOldTracksAreNotCleared()
+    public async Task BVT002_ScanEmptyFolder_ClearsPreviousTracks()
     {
         var (service, repo) = CreateService();
         await repo.SaveTracksBatchAsync(new[] { MakeTrack("old", "Old Song", "Old Band", "Old Album") });
@@ -58,13 +57,11 @@ public class BoundaryValueTests
         var tempDir = Directory.CreateTempSubdirectory("wiretune_empty_").FullName;
         try
         {
-            await service.ScanFolderAsync(tempDir);
+            Assert.True(await service.ScanFolderAsync(tempDir));
 
-            // BUG: because scanned.Count == 0, the guard `if (scanned.Count > 0)` is false
-            // so old tracks are NOT cleared from the in-memory library.
-            // Expected (fixed behavior): service.Tracks should be empty.
-            // This assertion deliberately documents the CURRENT broken state:
-            Assert.Single(service.Tracks); // <-- remove when bug is fixed
+            Assert.Empty(service.Tracks);
+            Assert.Empty(service.Albums);
+            Assert.Empty(repo.Tracks);
         }
         finally
         {
@@ -143,20 +140,21 @@ public class BoundaryValueTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BVT-010 — BitsPerSample fallback bug: always returns 16
+    // BVT-010 — Lossy files are labelled by codec/bitrate, never as "16-bit" or Hi-Res;
+    // ALAC inside .m4a is recognised as lossless.
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public void BVT010_BitsPerSample_FallbackBug_AlwaysReturns16()
+    public void BVT010_LossyAndLosslessFormats_AreClassifiedCorrectly()
     {
-        // In MetadataScanner.cs line 56:
-        //   bitsPerSample = ext.Equals(".flac") ? 16 : 16;
-        // Both branches return 16 — lossy files are incorrectly assigned 16-bit depth.
-        // This test documents the bug. When fixed, mp3 fallback should return 0 or be left unset.
-        int bitsFromFlac = ".flac".Equals(".flac", StringComparison.OrdinalIgnoreCase) ? 16 : 16;
-        int bitsFromMp3  = ".mp3".Equals(".flac", StringComparison.OrdinalIgnoreCase) ? 16 : 16;
+        Assert.Equal(("MP3", false), AudioFileTypes.Describe("/m/a.mp3"));
+        Assert.Equal(("FLAC", true), AudioFileTypes.Describe("/m/a.FLAC"));
+        Assert.Equal(("AAC", false), AudioFileTypes.Describe("/m/a.m4a", "MPEG-4 Audio (mp4a)"));
+        Assert.Equal(("ALAC", true), AudioFileTypes.Describe("/m/a.m4a", "MPEG-4 Audio (alac)"));
 
-        Assert.Equal(16, bitsFromFlac);
-        Assert.Equal(16, bitsFromMp3); // BUG: should be 0 or unset for lossy
+        var mp3 = new AudioFormat { Codec = "MP3", SampleRate = 96000, BitsPerSample = 0, BitrateKbps = 320, IsLossless = false };
+        Assert.False(mp3.IsHiRes);
+        Assert.Equal("MP3 • 320 kbps", mp3.QualityLabel);
+        Assert.Equal("audio/flac", AudioFileTypes.GetMimeType("x.flac"));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -230,7 +228,7 @@ public class BoundaryValueTests
     [Fact]
     public void BVT017_SetVolume_ExactlyZero_SetsVolumeToZero()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         engine.SetVolume(0.0);
 
@@ -243,7 +241,7 @@ public class BoundaryValueTests
     [Fact]
     public void BVT018_SetVolume_ExactlyOne_SetsVolumeToOne()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         engine.SetVolume(1.0);
 
@@ -256,7 +254,7 @@ public class BoundaryValueTests
     [Fact]
     public async Task BVT019_SeekToZero_UpdatesPositionToZero()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SeekAsync(TimeSpan.FromSeconds(90));
 
         await engine.SeekAsync(TimeSpan.Zero);
@@ -270,7 +268,7 @@ public class BoundaryValueTests
     [Fact]
     public void BVT020_PlayQueue_SingleTrack_DoesNotThrowOnNextOrPrevious()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var player = new Wiretune.UI.ViewModels.PlayerViewModel(engine, service);
 
@@ -291,7 +289,7 @@ public class BoundaryValueTests
     [Fact]
     public void BVT021_PlayQueue_EmptyList_DoesNotThrow()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var player = new Wiretune.UI.ViewModels.PlayerViewModel(engine, service);
 
@@ -311,7 +309,7 @@ public class BoundaryValueTests
     [Fact]
     public async Task BVT022_NextTrack_AtEndOfQueue_NoRepeat_StopsPlayback()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var player = new Wiretune.UI.ViewModels.PlayerViewModel(engine, service);
 
@@ -476,16 +474,6 @@ public class BoundaryValueTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // BVT — SpectrumBarViewModel clamps Value between 0.05 and 0.95
-    // ─────────────────────────────────────────────────────────────────────────
-    [Fact]
-    public void BVT_SpectrumBarViewModel_DefaultValue_IsAboveZero()
-    {
-        var bar = new Wiretune.UI.ViewModels.SpectrumBarViewModel();
-        Assert.Equal(0.05, bar.Value, precision: 2);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
     // BVT — IntEqualConverter: edge cases
     // ─────────────────────────────────────────────────────────────────────────
     [Theory]
@@ -498,30 +486,6 @@ public class BoundaryValueTests
         var converter = new Wiretune.UI.Converters.IntEqualConverter();
         var result = converter.Convert(value, typeof(bool), param, System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(expected, (bool)result!);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // BVT — DurationConverter: zero, sub-hour, over-hour
-    // ─────────────────────────────────────────────────────────────────────────
-    [Theory]
-    [InlineData(0.0, "0:00")]
-    [InlineData(65.0, "1:05")]
-    [InlineData(3661.0, "1:01:01")]
-    public void BVT_DurationConverter_TimeSpanValues(double seconds, string expected)
-    {
-        var converter = new Wiretune.UI.Converters.DurationConverter();
-        var result = converter.Convert(TimeSpan.FromSeconds(seconds), typeof(string), null,
-            System.Globalization.CultureInfo.InvariantCulture);
-        Assert.Equal(expected, result);
-    }
-
-    [Fact]
-    public void BVT_DurationConverter_NullInput_ReturnsZeroString()
-    {
-        var converter = new Wiretune.UI.Converters.DurationConverter();
-        var result = converter.Convert(null, typeof(string), null,
-            System.Globalization.CultureInfo.InvariantCulture);
-        Assert.Equal("0:00", result);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -12,4 +12,8 @@
     <ProjectReference Include="..\Wiretune.Core\Wiretune.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Wiretune.Tests" />
+  </ItemGroup>
+
 </Project>

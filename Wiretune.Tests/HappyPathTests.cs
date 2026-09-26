@@ -335,7 +335,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP026_BitperfectMode_LocksVolumeToUnityGain()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SetBitperfectModeAsync(true);
 
@@ -353,7 +353,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP027_ExclusiveMode_TogglesStateCorrectly()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SetExclusiveModeAsync(true);
         Assert.True(engine.IsExclusiveMode);
@@ -368,7 +368,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP029_SeekAsync_UpdatesCurrentPosition()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SeekAsync(TimeSpan.FromSeconds(42));
 
@@ -381,7 +381,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP032_RepeatOne_TrackQueueIndexStaysConstant()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, repo) = CreateService();
         var tracks = new[]
         {
@@ -404,7 +404,7 @@ public class HappyPathTests
     [Fact]
     public void HP033_ToggleRepeat_CyclesThroughAllModes()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var player = new Wiretune.UI.ViewModels.PlayerViewModel(engine, service);
 
@@ -426,7 +426,7 @@ public class HappyPathTests
     [Fact]
     public void HP034_ToggleShuffle_FlipsIsShuffleState()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var player = new Wiretune.UI.ViewModels.PlayerViewModel(engine, service);
 
@@ -457,9 +457,9 @@ public class HappyPathTests
     [Fact]
     public void HP046_NavigateToCommand_WithInt_SetsIndex()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(engine, service);
+        var vm = TestSupport.CreateMainViewModel(service, engine);
 
         vm.NavigateToCommand.Execute(1);
 
@@ -469,9 +469,9 @@ public class HappyPathTests
     [Fact]
     public void HP047_NavigateToCommand_WithStringParam_SetsIndex()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(engine, service);
+        var vm = TestSupport.CreateMainViewModel(service, engine);
 
         vm.NavigateToCommand.Execute("5");
 
@@ -484,9 +484,9 @@ public class HappyPathTests
     [Fact]
     public void HP048_OpenAlbumCommand_SetsAlbumDetailAndNavigates()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(engine, service);
+        var vm = TestSupport.CreateMainViewModel(service, engine);
 
         var album = new Album
         {
@@ -508,9 +508,9 @@ public class HappyPathTests
     [Fact]
     public void HP050_CloseAlbumDetail_ResetsDetailState()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(engine, service);
+        var vm = TestSupport.CreateMainViewModel(service, engine);
         var album = new Album { Id = "alb-2", Title = "Discovery", Artist = "Daft Punk", Tracks = new() };
         vm.OpenAlbumCommand.Execute(album);
 
@@ -526,9 +526,9 @@ public class HappyPathTests
     [Fact]
     public void HP049_OpenArtistCommand_SetsArtistDetailAndNavigates()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(engine, service);
+        var vm = TestSupport.CreateMainViewModel(service, engine);
 
         var album = new Album
         {
@@ -539,7 +539,7 @@ public class HappyPathTests
                 new() { Id = "t4", Title = "Paranoid Android" }
             }
         };
-        var artist = new Artist { Id = "art-1", Name = "Radiohead", Albums = new() { album } };
+        var artist = new Artist { Id = "art-1", Name = "Radiohead", Albums = new() { album }, Tracks = album.Tracks };
 
         vm.OpenArtistCommand.Execute(artist);
 
@@ -662,7 +662,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP_BitperfectMode_AutomaticallyEnablesExclusiveMode()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SetExclusiveModeAsync(false);
 
         await engine.SetBitperfectModeAsync(true);
@@ -677,7 +677,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP_DisablingExclusiveMode_DisablesBitperfect()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SetBitperfectModeAsync(true);
 
         await engine.SetExclusiveModeAsync(false);
@@ -692,7 +692,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP_ExclusiveModeAlone_DoesNotEnableBitperfect()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SetExclusiveModeAsync(true);
 
@@ -706,7 +706,7 @@ public class HappyPathTests
     [Fact]
     public async Task HP_Volume_SetCorrectly_WhenBitperfectOff()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SetBitperfectModeAsync(false);
 
         engine.SetVolume(0.75);

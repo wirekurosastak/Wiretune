@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -10,63 +9,57 @@ namespace Wiretune.UI.ViewModels;
 
 public partial class AlbumsViewModel : ObservableObject
 {
+    private const int DetailCoverDecodeWidth = 480;
+
     private readonly ILibraryService _library;
     private readonly PlayerViewModel _player;
 
-    [ObservableProperty] private string _searchFilter = string.Empty;
+    [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _displayedAlbums = Array.Empty<AlbumCardViewModel>();
     [ObservableProperty] private Album? _selectedAlbum;
     [ObservableProperty] private Bitmap? _selectedAlbumCover;
     [ObservableProperty] private bool _isAlbumDetailOpen;
-
-    public ObservableCollection<AlbumCardViewModel> DisplayedAlbums { get; } = new();
 
     public AlbumsViewModel(ILibraryService library, PlayerViewModel player)
     {
         _library = library;
         _player = player;
 
-        _library.LibraryChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(RefreshAlbums);
+        _library.LibraryChanged += (_, _) => Ui.Post(RefreshAlbums);
         RefreshAlbums();
     }
 
     public void RefreshAlbums()
     {
-        var albums = string.IsNullOrWhiteSpace(SearchFilter)
-            ? _library.Albums
-            : _library.Albums.Where(a => a.Title.Contains(SearchFilter, StringComparison.OrdinalIgnoreCase) ||
-                                         a.Artist.Contains(SearchFilter, StringComparison.OrdinalIgnoreCase));
+        DisplayedAlbums = _library.Albums.Select(a => new AlbumCardViewModel(a)).ToList();
 
-        DisplayedAlbums.Clear();
-        foreach (var a in albums)
+        if (SelectedAlbum != null)
         {
-            DisplayedAlbums.Add(new AlbumCardViewModel(a));
+            var updated = _library.GetAlbum(SelectedAlbum.Id);
+            if (updated == null) CloseAlbumDetail();
+            else SelectedAlbum = updated;
         }
     }
 
-    partial void OnSearchFilterChanged(string value)
+    private static Album? Resolve(object? param) => param switch
     {
-        RefreshAlbums();
-    }
+        Album a => a,
+        AlbumCardViewModel vm => vm.Album,
+        _ => null
+    };
 
     [RelayCommand]
     public void OpenAlbum(object? param)
     {
-        Album? album = param switch
-        {
-            Album a => a,
-            AlbumCardViewModel vm => vm.Album,
-            _ => null
-        };
+        var album = Resolve(param);
         if (album == null) return;
+
         SelectedAlbum = album;
         IsAlbumDetailOpen = true;
-
-        var path = album.CoverArtPath ?? album.Tracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.CoverArtPath))?.CoverArtPath;
         SelectedAlbumCover = null;
-        if (!string.IsNullOrEmpty(path))
+        CoverArtService.LoadBitmap(album.CoverArtPath, DetailCoverDecodeWidth, bmp =>
         {
-            CoverArtService.LoadBitmap(path, bmp => SelectedAlbumCover = bmp);
-        }
+            if (ReferenceEquals(SelectedAlbum, album)) SelectedAlbumCover = bmp;
+        });
     }
 
     [RelayCommand]
@@ -80,12 +73,7 @@ public partial class AlbumsViewModel : ObservableObject
     [RelayCommand]
     public void PlayAlbum(object? param)
     {
-        Album? album = param switch
-        {
-            Album a => a,
-            AlbumCardViewModel vm => vm.Album,
-            _ => null
-        };
+        var album = Resolve(param) ?? SelectedAlbum;
         if (album == null || album.Tracks.Count == 0) return;
         _player.PlayQueue(album.Tracks);
     }
@@ -93,19 +81,13 @@ public partial class AlbumsViewModel : ObservableObject
     [RelayCommand]
     public void PlayAlbumTrack(Track? track)
     {
-        if (track == null || SelectedAlbum == null) return;
-        _player.PlayQueue(SelectedAlbum.Tracks, track);
+        if (track != null && SelectedAlbum != null) _player.PlayQueue(SelectedAlbum.Tracks, track);
     }
 
     [RelayCommand]
     public void ShuffleAlbum(object? param)
     {
-        Album? album = param switch
-        {
-            Album a => a,
-            AlbumCardViewModel vm => vm.Album,
-            _ => SelectedAlbum
-        };
+        var album = Resolve(param) ?? SelectedAlbum;
         if (album == null || album.Tracks.Count == 0) return;
         _player.IsShuffle = true;
         _player.PlayQueue(album.Tracks);

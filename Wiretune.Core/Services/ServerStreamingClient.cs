@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -5,179 +6,148 @@ using Wiretune.Core.Models;
 
 namespace Wiretune.Core.Services;
 
-public class ServerStreamingClient
+public sealed class ServerUnauthorizedException : Exception
 {
-    private readonly HttpClient _httpClient;
-    private string? _authToken;
+    public ServerUnauthorizedException() : base("The server rejected the credentials.") { }
+}
 
-    public string? AuthToken
+public sealed class ServerRequestException : Exception
+{
+    public HttpStatusCode? StatusCode { get; }
+
+    public ServerRequestException(string message, HttpStatusCode? statusCode = null, Exception? inner = null)
+        : base(message, inner)
     {
-        get => _authToken;
-        set
-        {
-            _authToken = value;
-            _httpClient.DefaultRequestHeaders.Authorization = !string.IsNullOrEmpty(value)
-                ? new AuthenticationHeaderValue("Bearer", value)
-                : null;
-        }
+        StatusCode = statusCode;
     }
+}
 
-    public UserInfo? CurrentUser { get; set; }
+/// <summary>Thin typed HTTP client for the Wiretune server REST API.</summary>
+public sealed class ServerStreamingClient : IDisposable
+{
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan LibraryTimeout = TimeSpan.FromMinutes(3);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
+
+    public string? AuthToken { get; set; }
 
     public ServerStreamingClient(HttpClient? httpClient = null)
     {
-        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        _ownsClient = httpClient == null;
+        _httpClient = httpClient ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
     }
 
-    public async Task<bool> PingServerAsync(string baseUrl, CancellationToken ct = default)
-    {
-        try
-        {
-            var url = $"{baseUrl.TrimEnd('/')}/api/library/status";
-            var response = await _httpClient.GetAsync(url, ct);
-            // 200 OK or 401 Unauthorized both mean the server is running and reachable
-            return response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.Unauthorized;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    public static string BuildStreamUrl(string baseUrl, string trackId) =>
+        $"{baseUrl.TrimEnd('/')}/api/stream/{Uri.EscapeDataString(trackId)}";
+
+    public static string BuildCoverUrl(string baseUrl, string trackId) =>
+        $"{baseUrl.TrimEnd('/')}/api/cover/{Uri.EscapeDataString(trackId)}";
 
     public async Task<bool> CheckSetupRequiredAsync(string baseUrl, CancellationToken ct = default)
     {
-        try
-        {
-            var url = $"{baseUrl.TrimEnd('/')}/api/auth/setup-required";
-            var response = await _httpClient.GetFromJsonAsync<JsonElement>(url, cancellationToken: ct);
-            if (response.TryGetProperty("setupRequired", out var prop))
-            {
-                return prop.GetBoolean();
-            }
-            if (response.TryGetProperty("SetupRequired", out var propPascal))
-            {
-                return propPascal.GetBoolean();
-            }
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
+        var element = await SendAsync<JsonElement>(HttpMethod.Get, baseUrl, "/api/auth/setup-required", null, false, DefaultTimeout, ct);
+        return element.TryGetProperty("setupRequired", out var prop) && prop.GetBoolean();
     }
 
-    public async Task<AuthResponse?> SetupAdminAsync(string baseUrl, string username, string password, string? displayName = null, CancellationToken ct = default)
-    {
-        try
-        {
-            var url = $"{baseUrl.TrimEnd('/')}/api/auth/setup";
-            var req = new RegisterRequest(username, password, displayName);
-            var response = await _httpClient.PostAsJsonAsync(url, req, cancellationToken: ct);
-            if (!response.IsSuccessStatusCode) return null;
+    public Task<AuthResponse> SetupAdminAsync(string baseUrl, string username, string password, string? displayName, CancellationToken ct = default) =>
+        SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/setup", new RegisterRequest(username, password, displayName), false, DefaultTimeout, ct);
 
-            var auth = await response.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: ct);
-            if (auth != null)
-            {
-                AuthToken = auth.Token;
-                CurrentUser = auth.User;
-            }
-            return auth;
-        }
-        catch (Exception ex)
-        {
-            WiretuneLog.Error("ServerStreamingClient", $"Setup admin error: {ex.Message}", ex);
-            return null;
-        }
-    }
+    public Task<AuthResponse> LoginAsync(string baseUrl, string username, string password, bool rememberMe, CancellationToken ct = default) =>
+        SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/login", new LoginRequest(username, password, rememberMe), false, DefaultTimeout, ct);
 
-    public async Task<AuthResponse?> LoginAsync(string baseUrl, string username, string password, bool rememberMe = false, CancellationToken ct = default)
-    {
-        try
-        {
-            var url = $"{baseUrl.TrimEnd('/')}/api/auth/login";
-            var req = new LoginRequest(username, password, rememberMe);
-            var response = await _httpClient.PostAsJsonAsync(url, req, cancellationToken: ct);
-            if (!response.IsSuccessStatusCode) return null;
+    public Task<UserInfo> GetCurrentUserAsync(string baseUrl, CancellationToken ct = default) =>
+        SendAsync<UserInfo>(HttpMethod.Get, baseUrl, "/api/auth/me", null, true, DefaultTimeout, ct);
 
-            var auth = await response.Content.ReadFromJsonAsync<AuthResponse>(cancellationToken: ct);
-            if (auth != null)
-            {
-                AuthToken = auth.Token;
-                CurrentUser = auth.User;
-            }
-            return auth;
-        }
-        catch (Exception ex)
-        {
-            WiretuneLog.Error("ServerStreamingClient", $"Login error: {ex.Message}", ex);
-            return null;
-        }
-    }
+    public Task<ServerLibraryStatus> GetLibraryStatusAsync(string baseUrl, CancellationToken ct = default) =>
+        SendAsync<ServerLibraryStatus>(HttpMethod.Get, baseUrl, "/api/library/status", null, true, DefaultTimeout, ct);
 
-    public async Task<UserInfo?> GetCurrentUserAsync(string baseUrl, CancellationToken ct = default)
-    {
-        try
-        {
-            var url = $"{baseUrl.TrimEnd('/')}/api/auth/me";
-            var user = await _httpClient.GetFromJsonAsync<UserInfo>(url, cancellationToken: ct);
-            if (user != null)
-            {
-                CurrentUser = user;
-            }
-            return user;
-        }
-        catch
-        {
-            return null;
-        }
-    }
+    public async Task TriggerScanAsync(string baseUrl, CancellationToken ct = default) =>
+        await SendAsync<JsonElement>(HttpMethod.Post, baseUrl, "/api/library/scan", null, true, DefaultTimeout, ct);
 
+    /// <summary>Fetches the server library. Stream and cover URLs are token-free; authorization is added at playback time.</summary>
     public async Task<List<Track>> FetchTracksAsync(string baseUrl, CancellationToken ct = default)
     {
-        var cleanBase = baseUrl.TrimEnd('/');
-        var url = $"{cleanBase}/api/tracks";
-        var tracks = await _httpClient.GetFromJsonAsync<List<Track>>(url, cancellationToken: ct) ?? new List<Track>();
-
-        var tokenQuery = !string.IsNullOrEmpty(AuthToken) ? $"?token={Uri.EscapeDataString(AuthToken)}" : "";
-
+        var tracks = await SendAsync<List<Track>>(HttpMethod.Get, baseUrl, "/api/tracks", null, true, LibraryTimeout, ct) ?? new List<Track>();
         foreach (var t in tracks)
         {
-            t.StreamUrl = $"{cleanBase}/api/stream/{t.Id}{tokenQuery}";
-            t.CoverArtPath = $"{cleanBase}/api/cover/{t.Id}{tokenQuery}";
-            t.HasCoverArt = true;
+            t.StreamUrl = BuildStreamUrl(baseUrl, t.Id);
+            t.CoverArtPath = t.HasCoverArt ? BuildCoverUrl(baseUrl, t.Id) : null;
         }
-
         return tracks;
     }
 
-    public string GetStreamUrl(string baseUrl, string trackId)
+    private async Task<T> SendAsync<T>(HttpMethod method, string baseUrl, string path, object? body, bool authorize, TimeSpan timeout, CancellationToken ct)
     {
-        var tokenQuery = !string.IsNullOrEmpty(AuthToken) ? $"?token={Uri.EscapeDataString(AuthToken)}" : "";
-        return $"{baseUrl.TrimEnd('/')}/api/stream/{trackId}{tokenQuery}";
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeout);
+
+        using var request = new HttpRequestMessage(method, baseUrl.TrimEnd('/') + path);
+        if (body != null) request.Content = JsonContent.Create(body, body.GetType(), options: JsonOptions);
+        if (authorize && !string.IsNullOrEmpty(AuthToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthToken);
+        }
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new ServerRequestException($"A szerver nem válaszolt {timeout.TotalSeconds:0} másodpercen belül.");
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ServerRequestException(ex.Message, inner: ex);
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.Unauthorized) throw new ServerUnauthorizedException();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new ServerRequestException(await ReadErrorAsync(response, timeoutCts.Token), response.StatusCode);
+            }
+
+            if (typeof(T) == typeof(JsonElement) && response.Content.Headers.ContentLength == 0) return default!;
+
+            try
+            {
+                var value = await response.Content.ReadFromJsonAsync<T>(JsonOptions, timeoutCts.Token);
+                if (value is null) throw new ServerRequestException("A szerver üres választ küldött.", response.StatusCode);
+                return value;
+            }
+            catch (JsonException ex)
+            {
+                throw new ServerRequestException("A szerver válasza nem értelmezhető (nem Wiretune szerver?).", response.StatusCode, ex);
+            }
+        }
     }
 
-    public string GetCoverArtUrl(string baseUrl, string trackId)
-    {
-        var tokenQuery = !string.IsNullOrEmpty(AuthToken) ? $"?token={Uri.EscapeDataString(AuthToken)}" : "";
-        return $"{baseUrl.TrimEnd('/')}/api/cover/{trackId}{tokenQuery}";
-    }
-
-    public async Task<bool> TriggerScanAsync(string baseUrl, string? path = null, CancellationToken ct = default)
+    private static async Task<string> ReadErrorAsync(HttpResponseMessage response, CancellationToken ct)
     {
         try
         {
-            var cleanBase = baseUrl.TrimEnd('/');
-            var url = $"{cleanBase}/api/library/scan";
-            if (!string.IsNullOrWhiteSpace(path))
+            var element = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct);
+            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("error", out var error))
             {
-                url += $"?path={Uri.EscapeDataString(path)}";
+                return error.GetString() ?? response.ReasonPhrase ?? "Ismeretlen hiba";
             }
-            var response = await _httpClient.PostAsync(url, null, ct);
-            return response.IsSuccessStatusCode;
         }
         catch
         {
-            return false;
+            // Not a JSON error body.
         }
+
+        return $"HTTP {(int)response.StatusCode} {response.ReasonPhrase}";
+    }
+
+    public void Dispose()
+    {
+        if (_ownsClient) _httpClient.Dispose();
     }
 }

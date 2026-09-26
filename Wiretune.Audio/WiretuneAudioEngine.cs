@@ -8,14 +8,20 @@ namespace Wiretune.Audio;
 
 public class WiretuneAudioEngine : IAudioEngine
 {
-    private IAudioDriver _driver;
+    private readonly IAudioDriver _driver;
+    private readonly Func<Task<List<AudioOutputDevice>>> _detectDevices;
+    private readonly Task _initialDeviceScan;
+    private readonly object _deviceLock = new();
+    private IReadOnlyList<AudioOutputDevice> _availableDevices = Array.Empty<AudioOutputDevice>();
     private Track? _currentTrack;
     private AudioOutputDevice? _currentDevice;
-    private readonly List<AudioOutputDevice> _availableDevices = new();
-    private bool _isExclusiveMode = false;
-    private bool _isBitperfect = false;
+    private bool _isExclusiveMode;
+    private bool _isBitperfect;
     private double _volume = 1.0;
-    private bool _isMuted = false;
+    private double _volumeBeforeBitperfect = 1.0;
+    private bool _isMuted;
+    private string? _streamToken;
+    private bool _disposed;
 
     public Track? CurrentTrack => _currentTrack;
     public PlaybackState State => _driver.State;
@@ -38,17 +44,20 @@ public class WiretuneAudioEngine : IAudioEngine
 
             var fmt = _currentTrack.Format;
             var dev = _currentDevice?.DisplayTitle ?? "Alapértelmezett kimenet";
-            var bp = _isBitperfect
+            var source = fmt.IsLossless
+                ? $"{fmt.QualityLabel} ({fmt.Codec} {fmt.BitsPerSample}b/{fmt.SampleRate / 1000.0:0.#}kHz)"
+                : fmt.QualityLabel;
+            var processing = _isBitperfect
                 ? "Bit-perfect (1:1 PCM, Unity Gain 0dB, Resampler KIKAPCSOLVA)"
-                : "Alapértelmezett keverő (Shared Audio)";
-            var exc = _isExclusiveMode
-                ? "Kizárólagos mód (Exclusive Hardware Lock)"
-                : "Megosztott mód (Shared)";
+                : "Rendszerkeverő (megosztott kimenet)";
+            var access = _isExclusiveMode ? "Kizárólagos mód (közvetlen hardver)" : "Megosztott mód";
+            var transport = !string.IsNullOrEmpty(_currentTrack.StreamUrl) ? "Szerver stream (veszteségmentes, átkódolás nélkül)" : "Helyi fájl";
 
-            return $"Forrás: {fmt.QualityLabel} ({fmt.Codec} {fmt.BitsPerSample}b/{fmt.SampleRate / 1000.0:0.#}kHz)\n" +
-                   $"Feldolgozás: {bp}\n" +
-                   $"Hozzáférés: {exc}\n" +
-                   $"Cél DAC eszköz: {dev}";
+            return $"Forrás: {source}\n" +
+                   $"Átvitel: {transport}\n" +
+                   $"Feldolgozás: {processing}\n" +
+                   $"Hozzáférés: {access}\n" +
+                   $"Cél eszköz: {dev}";
         }
     }
 
@@ -59,90 +68,92 @@ public class WiretuneAudioEngine : IAudioEngine
     public event EventHandler<bool>? ExclusiveModeChanged;
     public event EventHandler<float[]>? SpectrumDataAvailable;
     public event EventHandler? TrackEnded;
+    public event EventHandler? DevicesChanged;
+    public event EventHandler<string>? PlaybackFailed;
 
-    public WiretuneAudioEngine(IAudioDriver? driver = null)
+    public WiretuneAudioEngine(IAudioDriver? driver = null, Func<Task<List<AudioOutputDevice>>>? deviceDetector = null)
     {
-        _driver = driver ?? new LinuxAudioDriver();
-        HookDriverEvents();
-        _ = RefreshDevicesAsync();
+        _driver = driver ?? new FfmpegAudioDriver();
+        _detectDevices = deviceDetector ?? AudioDeviceManager.DetectOutputDevicesAsync;
+
+        _driver.StateChanged += (_, state) => StateChanged?.Invoke(this, state);
+        _driver.PositionChanged += (_, pos) => PositionChanged?.Invoke(this, pos);
+        _driver.SpectrumDataAvailable += (_, bands) => SpectrumDataAvailable?.Invoke(this, bands);
+        _driver.TrackEnded += (_, e) => TrackEnded?.Invoke(this, e);
+        _driver.PlaybackFailed += (_, message) => PlaybackFailed?.Invoke(this, message);
+
+        _initialDeviceScan = RefreshDevicesAsync();
     }
 
-    private void HookDriverEvents()
-    {
-        _driver.StateChanged += (s, state) => StateChanged?.Invoke(this, state);
-        _driver.PositionChanged += (s, pos) => PositionChanged?.Invoke(this, pos);
-        _driver.SpectrumDataAvailable += (s, bands) => SpectrumDataAvailable?.Invoke(this, bands);
-        _driver.TrackEnded += (s, e) => TrackEnded?.Invoke(this, e);
-    }
+    public void SetStreamAuthorization(string? bearerToken) => _streamToken = string.IsNullOrEmpty(bearerToken) ? null : bearerToken;
 
     public async Task RefreshDevicesAsync()
     {
-        var devices = await AudioDeviceManager.DetectOutputDevicesAsync();
-        _availableDevices.Clear();
-        _availableDevices.AddRange(devices);
-
-        if (_currentDevice == null)
+        List<AudioOutputDevice> devices;
+        try
         {
-            _currentDevice = _availableDevices.FirstOrDefault(d => d.IsDefault) ??
-                             _availableDevices.FirstOrDefault();
+            devices = await _detectDevices();
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Warn("AudioEngine", $"Audio device detection failed: {ex.Message}");
+            devices = new List<AudioOutputDevice>();
+        }
+
+        lock (_deviceLock)
+        {
+            _availableDevices = devices;
+            if (_currentDevice == null || devices.All(d => d.Id != _currentDevice.Id))
+            {
+                _currentDevice = devices.FirstOrDefault(d => d.IsDefault) ?? devices.FirstOrDefault();
+            }
+            else
+            {
+                _currentDevice = devices.First(d => d.Id == _currentDevice.Id);
+            }
         }
 
         if (_currentDevice != null)
         {
             await _driver.InitializeAsync(_currentDevice, _isExclusiveMode, _isBitperfect);
         }
+
+        DevicesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task PlayTrackAsync(Track track, CancellationToken ct = default)
     {
         _currentTrack = track;
-        TrackChanged?.Invoke(this, _currentTrack);
+        TrackChanged?.Invoke(this, track);
 
-        var source = !string.IsNullOrEmpty(track.StreamUrl) ? track.StreamUrl : track.FilePath;
-        WiretuneLog.Info("AudioEngine", $"PlayTrack: '{track.Artist} - {track.Title}' ({track.Format.QualityLabel}) via '{source}'");
+        var source = ResolveSource(track);
+        if (string.IsNullOrEmpty(source))
+        {
+            PlaybackFailed?.Invoke(this, $"A(z) „{track.Title}” szám nem játszható le: nincs elérhető forrás.");
+            return;
+        }
+
+        WiretuneLog.Info("AudioEngine", $"PlayTrack: '{track.Artist} - {track.Title}' ({track.Format.QualityLabel})");
         await _driver.PlayAsync(source, track.Format, TimeSpan.Zero, ct);
     }
 
-    public async Task PlayStreamAsync(string streamUrl, Track track, CancellationToken ct = default)
-    {
-        _currentTrack = track;
-        TrackChanged?.Invoke(this, _currentTrack);
-        WiretuneLog.Info("AudioEngine", $"PlayStream: '{track.Artist} - {track.Title}' from '{streamUrl}'");
-        await _driver.PlayAsync(streamUrl, track.Format, TimeSpan.Zero, ct);
-    }
+    public Task PauseAsync() => _driver.PauseAsync();
 
-    public Task PauseAsync()
-    {
-        WiretuneLog.Info("AudioEngine", "Pause requested");
-        return _driver.PauseAsync();
-    }
-
-    public Task ResumeAsync()
-    {
-        WiretuneLog.Info("AudioEngine", "Resume requested");
-        return _driver.ResumeAsync();
-    }
+    public Task ResumeAsync() => _driver.ResumeAsync();
 
     public Task StopAsync()
     {
-        WiretuneLog.Info("AudioEngine", "Stop requested");
         _currentTrack = null;
         TrackChanged?.Invoke(this, null);
         return _driver.StopAsync();
     }
 
-    public Task SeekAsync(TimeSpan position)
-    {
-        WiretuneLog.Info("AudioEngine", $"Seek requested to {position:mm\\:ss}");
-        return _driver.SeekAsync(position);
-    }
+    public Task SeekAsync(TimeSpan position) => _driver.SeekAsync(position);
 
     public void SetVolume(double volume)
     {
         if (_isBitperfect)
         {
-            // Bit-perfect requires 100% (0 dB unity gain) so bits aren't truncated or rescaled
-            _volume = 1.0;
             _driver.SetVolume(1.0);
             return;
         }
@@ -162,89 +173,123 @@ public class WiretuneAudioEngine : IAudioEngine
 
     public async Task SetExclusiveModeAsync(bool enabled)
     {
-        if (_isExclusiveMode == enabled && (!_isBitperfect || enabled)) return;
-        _isExclusiveMode = enabled;
-        ExclusiveModeChanged?.Invoke(this, _isExclusiveMode);
+        await _initialDeviceScan;
+        if (_isExclusiveMode == enabled) return;
 
-        if (!_isExclusiveMode && _isBitperfect)
+        if (enabled)
         {
-            // Bit-perfect is impossible in shared mixer mode!
-            _isBitperfect = false;
-            BitperfectChanged?.Invoke(this, false);
-        }
-
-        if (_isExclusiveMode)
-        {
-            var directAlsa = _availableDevices.FirstOrDefault(d => d.DriverType.Contains("ALSA") || d.Id.StartsWith("hw:"));
-            if (directAlsa != null)
+            var exclusiveDevice = PreferredExclusiveDevice();
+            if (exclusiveDevice == null)
             {
-                _currentDevice = directAlsa;
+                PlaybackFailed?.Invoke(this, "Egyik kimeneti eszköz sem támogatja a kizárólagos módot ezen a rendszeren.");
+                ExclusiveModeChanged?.Invoke(this, false);
+                return;
             }
+            _currentDevice = exclusiveDevice;
         }
         else
         {
-            var defaultPw = _availableDevices.FirstOrDefault(d => d.IsDefault) ?? _availableDevices.FirstOrDefault();
-            if (defaultPw != null)
-            {
-                _currentDevice = defaultPw;
-            }
+            if (_isBitperfect) DisableBitperfect();
+            _currentDevice = _availableDevices.FirstOrDefault(d => d.IsDefault) ?? _availableDevices.FirstOrDefault() ?? _currentDevice;
         }
 
-        if (_currentDevice != null)
-        {
-            await _driver.InitializeAsync(_currentDevice, _isExclusiveMode, _isBitperfect);
-
-            if (_currentTrack != null && State == PlaybackState.Playing)
-            {
-                var pos = CurrentPosition;
-                var source = !string.IsNullOrEmpty(_currentTrack.StreamUrl) ? _currentTrack.StreamUrl : _currentTrack.FilePath;
-                await _driver.PlayAsync(source, _currentTrack.Format, pos);
-            }
-        }
+        _isExclusiveMode = enabled;
+        ExclusiveModeChanged?.Invoke(this, enabled);
+        await ReinitializeOutputAsync();
     }
 
     public async Task SetBitperfectModeAsync(bool enabled)
     {
+        await _initialDeviceScan;
         if (_isBitperfect == enabled) return;
-        _isBitperfect = enabled;
 
-        if (_isBitperfect)
+        if (!enabled)
         {
-            // Bit-perfect requires direct Exclusive access to DAC and unity gain
-            if (!_isExclusiveMode)
-            {
-                _isExclusiveMode = true;
-                ExclusiveModeChanged?.Invoke(this, true);
-            }
-
-            _volume = 1.0;
-            _driver.SetVolume(1.0);
+            DisableBitperfect();
+            await ReinitializeOutputAsync();
+            return;
         }
 
-        BitperfectChanged?.Invoke(this, _isBitperfect);
-
-        if (_currentDevice != null)
+        var device = _currentDevice is { IsBitperfectSupported: true, IsExclusiveSupported: true }
+            ? _currentDevice
+            : PreferredExclusiveDevice(requireBitperfect: true);
+        if (device == null)
         {
-            await _driver.InitializeAsync(_currentDevice, _isExclusiveMode, _isBitperfect);
+            PlaybackFailed?.Invoke(this, "Egyik kimeneti eszköz sem támogatja a bit-perfect lejátszást ezen a rendszeren.");
+            BitperfectChanged?.Invoke(this, false);
+            return;
         }
+
+        _currentDevice = device;
+        if (!_isExclusiveMode)
+        {
+            _isExclusiveMode = true;
+            ExclusiveModeChanged?.Invoke(this, true);
+        }
+
+        _volumeBeforeBitperfect = _volume;
+        _isBitperfect = true;
+        _volume = 1.0;
+        _driver.SetVolume(1.0);
+        BitperfectChanged?.Invoke(this, true);
+        await ReinitializeOutputAsync();
     }
 
     public async Task SetOutputDeviceAsync(AudioOutputDevice device)
     {
         _currentDevice = device;
-        await _driver.InitializeAsync(device, _isExclusiveMode, _isBitperfect);
-
-        // If currently playing, restart playback on new device seamlessly
-        if (_currentTrack != null && State == PlaybackState.Playing)
+        if (!device.IsExclusiveSupported && _isExclusiveMode)
         {
-            var pos = CurrentPosition;
-            var source = !string.IsNullOrEmpty(_currentTrack.StreamUrl) ? _currentTrack.StreamUrl : _currentTrack.FilePath;
-            await _driver.PlayAsync(source, _currentTrack.Format, pos);
+            if (_isBitperfect) DisableBitperfect();
+            _isExclusiveMode = false;
+            ExclusiveModeChanged?.Invoke(this, false);
         }
+        await ReinitializeOutputAsync();
+    }
+
+    private void DisableBitperfect()
+    {
+        _isBitperfect = false;
+        _volume = _volumeBeforeBitperfect;
+        _driver.SetVolume(_isMuted ? 0.0 : _volume);
+        BitperfectChanged?.Invoke(this, false);
+    }
+
+    private AudioOutputDevice? PreferredExclusiveDevice(bool requireBitperfect = false)
+    {
+        var candidates = _availableDevices.Where(d => d.IsExclusiveSupported && (!requireBitperfect || d.IsBitperfectSupported)).ToList();
+        return candidates.FirstOrDefault(d => d.Id == _currentDevice?.Id)
+               ?? candidates.FirstOrDefault(d => d.DriverType.Contains("ALSA") || d.Id.StartsWith("hw:"))
+               ?? candidates.FirstOrDefault();
+    }
+
+    /// <summary>Applies the current device/mode to the driver and restarts playback in place if a track is playing.</summary>
+    private async Task ReinitializeOutputAsync()
+    {
+        if (_currentDevice == null) return;
+
+        await _driver.InitializeAsync(_currentDevice, _isExclusiveMode, _isBitperfect);
+
+        if (_currentTrack != null && State == PlaybackState.Playing && ResolveSource(_currentTrack) is { } source)
+        {
+            await _driver.PlayAsync(source, _currentTrack.Format, CurrentPosition);
+        }
+    }
+
+    private string? ResolveSource(Track track)
+    {
+        if (string.IsNullOrEmpty(track.StreamUrl)) return string.IsNullOrEmpty(track.FilePath) ? null : track.FilePath;
+        if (_streamToken == null) return track.StreamUrl;
+
+        var separator = track.StreamUrl.Contains('?') ? '&' : '?';
+        return $"{track.StreamUrl}{separator}token={Uri.EscapeDataString(_streamToken)}";
     }
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _driver.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

@@ -5,27 +5,6 @@ using Wiretune.Core.Models;
 
 namespace Wiretune.UI.Converters;
 
-public class DurationConverter : IValueConverter
-{
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is TimeSpan ts)
-        {
-            return ts.Hours > 0
-                ? ts.ToString(@"h\:mm\:ss")
-                : ts.ToString(@"m\:ss");
-        }
-        if (value is double seconds)
-        {
-            var t = TimeSpan.FromSeconds(seconds);
-            return t.Hours > 0 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
-        }
-        return "0:00";
-    }
-
-    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
-}
-
 public class PlayStateToIconConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
@@ -174,24 +153,3 @@ public class NavActiveBackgroundConverter : IValueConverter
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
 }
-
-public class SpectrumBarHeightConverter : IValueConverter
-{
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is double d)
-        {
-            return Math.Clamp(d * 29.0 + 3.0, 3.0, 32.0);
-        }
-        if (value is float f)
-        {
-            return Math.Clamp((double)f * 29.0 + 3.0, 3.0, 32.0);
-        }
-        return 3.0;
-    }
-
-    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
-}
-
-
-

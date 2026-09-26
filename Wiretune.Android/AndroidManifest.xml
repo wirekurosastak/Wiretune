@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
+  <!-- Streaming from a Wiretune server on the local network. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- Self-hosted servers are usually plain HTTP on the LAN; Android 9+ blocks cleartext unless allowed. -->
+  <application android:label="Wiretune" android:icon="@drawable/icon" android:usesCleartextTraffic="true" />
+</manifest>

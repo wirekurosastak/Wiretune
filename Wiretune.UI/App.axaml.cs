@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Wiretune.Audio.Drivers;
+using Wiretune.UI.Services;
 using Wiretune.UI.ViewModels;
 using Wiretune.UI.Views;
 
@@ -8,6 +10,9 @@ namespace Wiretune.UI;
 
 public partial class App : Application
 {
+    /// <summary>Platform heads (e.g. Android) set this before startup to supply a native audio driver.</summary>
+    public static Func<IAudioDriver>? AudioDriverFactory { get; set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -15,30 +20,32 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        var mainVm = MainViewModel.CreateDefault(AudioDriverFactory?.Invoke());
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var mainVm = new MainViewModel();
-            var mainWindow = new MainWindow
-            {
-                DataContext = mainVm
-            };
+            var mainWindow = new MainWindow { DataContext = mainVm };
             desktop.MainWindow = mainWindow;
 
-            var automationServer = new Services.UiAutomationServer(mainWindow, mainVm);
-            automationServer.Start();
+            UiAutomationServer? automation = null;
+            if (UiAutomationServer.IsEnabled)
+            {
+                automation = new UiAutomationServer(mainWindow, mainVm);
+                automation.Start();
+            }
 
-            desktop.ShutdownRequested += (_, _) => { automationServer.Dispose(); mainVm.Dispose(); };
-            desktop.Exit += (_, _) => { automationServer.Dispose(); mainVm.Dispose(); };
+            desktop.Exit += (_, _) =>
+            {
+                automation?.Dispose();
+                mainVm.Dispose();
+            };
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleView)
         {
-            var mainVm = new MainViewModel();
-            singleView.MainView = new MainView
-            {
-                DataContext = mainVm
-            };
+            singleView.MainView = new MainView { DataContext = mainVm };
         }
 
+        Ui.Forget(mainVm.StartAsync(), "App");
         base.OnFrameworkInitializationCompleted();
     }
 }

@@ -37,14 +37,20 @@ public class MockRepository : ILibraryRepository
             LastPlayed  = t.LastPlayed,
             DateAdded   = t.DateAdded
         }).ToList());
+    public int ReplaceCalls { get; private set; }
+
+    /// <summary>Test helper for seeding stored tracks.</summary>
     public Task SaveTracksBatchAsync(IEnumerable<Track> tracks)
     {
         Tracks.AddRange(tracks);
         return Task.CompletedTask;
     }
-    public Task ClearTracksAsync()
+    public Task ReplaceAllTracksAsync(IEnumerable<Track> tracks)
     {
+        ReplaceCalls++;
+        var list = tracks.ToList();
         Tracks.Clear();
+        Tracks.AddRange(list);
         return Task.CompletedTask;
     }
     public Task UpdateTrackFavoriteAsync(string trackId, bool isFavorite)
@@ -179,8 +185,8 @@ public class LibraryServiceTests
         var repo = new MockRepository();
         var scanner = new MetadataScanner();
         var service = new LibraryService(repo, scanner);
-        var audioEngine = new Wiretune.Audio.WiretuneAudioEngine();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(audioEngine, service);
+        var audioEngine = TestSupport.CreateEngine();
+        var vm = TestSupport.CreateMainViewModel(service, audioEngine);
 
         // Verify initial (Előadók is now index 2, first in sidebar)
         Assert.Equal(2, vm.SelectedNavigationIndex);
@@ -203,7 +209,7 @@ public class LibraryServiceTests
     [Fact]
     public async Task AudiophileEngine_BitperfectRequiresExclusive_AndDisablingExclusiveDisablesBitperfect()
     {
-        var engine = new Wiretune.Audio.WiretuneAudioEngine();
+        var engine = TestSupport.CreateEngine();
 
         // Initial state: neither is active
         Assert.False(engine.IsExclusiveMode);
@@ -232,8 +238,8 @@ public class LibraryServiceTests
         var repo = new MockRepository();
         var scanner = new MetadataScanner();
         var service = new LibraryService(repo, scanner);
-        var audioEngine = new Wiretune.Audio.WiretuneAudioEngine();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(audioEngine, service);
+        var audioEngine = TestSupport.CreateEngine();
+        var vm = TestSupport.CreateMainViewModel(service, audioEngine);
 
         var sampleAlbum = new Album
         {
@@ -251,7 +257,8 @@ public class LibraryServiceTests
         {
             Id = "art_1",
             Name = "Miles Davis",
-            Albums = new List<Album> { sampleAlbum }
+            Albums = new List<Album> { sampleAlbum },
+            Tracks = sampleAlbum.Tracks
         };
 
         // 1. Open Artist
@@ -280,8 +287,8 @@ public class LibraryServiceTests
         var repo = new MockRepository();
         var scanner = new MetadataScanner();
         var service = new LibraryService(repo, scanner);
-        var audioEngine = new Wiretune.Audio.WiretuneAudioEngine();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(audioEngine, service);
+        var audioEngine = TestSupport.CreateEngine();
+        var vm = TestSupport.CreateMainViewModel(service, audioEngine);
 
         // Navigate to Settings (Tab 5)
         vm.NavigateToCommand.Execute(5);

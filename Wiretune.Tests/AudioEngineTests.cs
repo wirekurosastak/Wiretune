@@ -9,7 +9,7 @@ public class AudioEngineTests
     [Fact]
     public async Task BitperfectMode_WhenEnabled_LocksVolumeToUnityGain()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         // Enable Bitperfect
         await engine.SetBitperfectModeAsync(true);
@@ -28,7 +28,7 @@ public class AudioEngineTests
     [Fact]
     public async Task BitperfectMode_WhenDisabled_AllowsVolumeAdjustment()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SetBitperfectModeAsync(false);
         Assert.False(engine.IsBitperfect);
@@ -41,7 +41,7 @@ public class AudioEngineTests
     [Fact]
     public async Task ExclusiveMode_TogglesStateCorrectly()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SetExclusiveModeAsync(true);
         Assert.True(engine.IsExclusiveMode);
@@ -85,7 +85,7 @@ public class AudioEngineTests
     [Fact]
     public async Task BitperfectMode_WhenEnabled_AutomaticallyEnablesExclusiveMode()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SetExclusiveModeAsync(false);
         Assert.False(engine.IsExclusiveMode);
@@ -100,7 +100,7 @@ public class AudioEngineTests
     [Fact]
     public async Task ExclusiveMode_WhenDisabledWhileBitperfectActive_DisablesBitperfectMode()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         await engine.SetBitperfectModeAsync(true);
         Assert.True(engine.IsBitperfect);
@@ -115,7 +115,7 @@ public class AudioEngineTests
     [Fact]
     public async Task SeekAsync_UpdatesEnginePosition()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SeekAsync(TimeSpan.FromSeconds(42));
         Assert.Equal(TimeSpan.FromSeconds(42), engine.CurrentPosition);
     }

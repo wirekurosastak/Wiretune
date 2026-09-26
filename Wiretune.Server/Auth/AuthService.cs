@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -11,207 +12,173 @@ namespace Wiretune.Server.Auth;
 
 public class AuthService
 {
-    private readonly DatabaseManager _db;
-    private readonly string _jwtSecret;
-    private readonly string _issuer = "WiretuneServer";
+    public const string Issuer = "WiretuneServer";
+    public const string Audience = "WiretuneClient";
+    private const int BcryptWorkFactor = 12;
 
-    public AuthService(DatabaseManager db, string? jwtSecret = null)
+    private readonly DatabaseManager _db;
+    private readonly SymmetricSecurityKey _signingKey;
+    private readonly Lazy<string> _dummyHash = new(() => BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString(), BcryptWorkFactor));
+
+    public AuthService(DatabaseManager db)
     {
         _db = db;
-        // Generate or load a persistent JWT secret
-        _jwtSecret = jwtSecret ?? LoadOrGenerateSecret(db);
-        EnsureDefaultAdmin(db);
+        _db.InitializeSchema();
+        _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(LoadOrGenerateSecret()));
     }
 
-    private static void EnsureDefaultAdmin(DatabaseManager db)
+    private string LoadOrGenerateSecret()
     {
-        try
-        {
-            using var conn = db.CreateConnection();
-            var count = conn.QueryFirstOrDefault<int>("SELECT COUNT(*) FROM users");
-            if (count == 0)
-            {
-                var hash = BCrypt.Net.BCrypt.HashPassword("admin", workFactor: 10);
-                conn.Execute(
-                    @"INSERT INTO users (id, username, password_hash, display_name, is_admin, created_at, last_login)
-                      VALUES (@Id, 'admin', @Hash, 'Adminisztrátor', 1, @Now, NULL)",
-                    new
-                    {
-                        Id = Guid.NewGuid().ToString("N"),
-                        Hash = hash,
-                        Now = DateTime.UtcNow.ToString("O")
-                    });
-            }
-        }
-        catch
-        {
-            // Ignore if schema not ready yet
-        }
-    }
-
-    private static string LoadOrGenerateSecret(DatabaseManager db)
-    {
-        db.InitializeSchema();
-        using var conn = db.CreateConnection();
-        var existing = conn.QueryFirstOrDefault<string>(
-            "SELECT value FROM settings WHERE key = 'jwt_secret'");
+        using var conn = _db.CreateConnection();
+        var existing = conn.QueryFirstOrDefault<string>("SELECT value FROM settings WHERE key = 'jwt_secret'");
         if (!string.IsNullOrEmpty(existing)) return existing;
 
         var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        conn.Execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('jwt_secret', @secret)",
-            new { secret });
-        return secret;
+        conn.Execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('jwt_secret', @secret)", new { secret });
+        return conn.QueryFirst<string>("SELECT value FROM settings WHERE key = 'jwt_secret'");
     }
 
-    public async Task<AuthResponse?> LoginAsync(LoginRequest request)
+    public static string? ValidateCredentials(string? username, string? password)
     {
-        using var conn = _db.CreateConnection();
-        var row = await conn.QueryFirstOrDefaultAsync<dynamic>(
-            "SELECT id, username, password_hash, display_name, is_admin, created_at, last_login FROM users WHERE username = @Username COLLATE NOCASE",
-            new { request.Username });
-
-        if (row == null) return null;
-
-        string hash = (string)row.password_hash;
-        if (!BCrypt.Net.BCrypt.Verify(request.Password, hash)) return null;
-
-        // Update last login
-        await conn.ExecuteAsync(
-            "UPDATE users SET last_login = @Now WHERE id = @Id",
-            new { Now = DateTime.UtcNow.ToString("O"), Id = (string)row.id });
-
-        var user = new UserInfo(
-            (string)row.id,
-            (string)row.username,
-            row.display_name as string,
-            Convert.ToBoolean(row.is_admin),
-            DateTime.Parse((string)row.created_at, System.Globalization.CultureInfo.InvariantCulture),
-            DateTime.UtcNow
-        );
-
-        var expiry = request.RememberMe ? TimeSpan.FromDays(90) : TimeSpan.FromHours(24);
-        var token = GenerateToken(user, expiry);
-        var expiresAt = DateTime.UtcNow.Add(expiry);
-
-        return new AuthResponse(token, user, expiresAt);
-    }
-
-    public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
-    {
-        using var conn = _db.CreateConnection();
-
-        // Check if user exists
-        var exists = await conn.QueryFirstOrDefaultAsync<int>(
-            "SELECT COUNT(*) FROM users WHERE username = @Username COLLATE NOCASE",
-            new { request.Username });
-        if (exists > 0) return null;
-
-        var user = new UserInfo(
-            Guid.NewGuid().ToString("N"),
-            request.Username.Trim(),
-            request.DisplayName?.Trim(),
-            false,
-            DateTime.UtcNow,
-            DateTime.UtcNow
-        );
-
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
-
-        await conn.ExecuteAsync(
-            @"INSERT INTO users (id, username, password_hash, display_name, is_admin, created_at, last_login)
-              VALUES (@Id, @Username, @Hash, @DisplayName, @IsAdmin, @CreatedAt, @LastLogin)",
-            new
-            {
-                user.Id,
-                user.Username,
-                Hash = passwordHash,
-                user.DisplayName,
-                IsAdmin = user.IsAdmin ? 1 : 0,
-                CreatedAt = user.CreatedAt.ToString("O"),
-                LastLogin = user.LastLogin?.ToString("O")
-            });
-
-        var token = GenerateToken(user, TimeSpan.FromHours(24));
-        return new AuthResponse(token, user, DateTime.UtcNow.AddHours(24));
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrEmpty(password))
+            return "Username and password are required.";
+        var trimmed = username.Trim();
+        if (trimmed.Length > AuthRules.MaxUsernameLength || trimmed.Any(char.IsControl))
+            return $"Username must be at most {AuthRules.MaxUsernameLength} printable characters.";
+        if (password.Length < AuthRules.MinPasswordLength)
+            return $"Password must be at least {AuthRules.MinPasswordLength} characters.";
+        return null;
     }
 
     public async Task<bool> HasAnyUsersAsync()
     {
         using var conn = _db.CreateConnection();
-        var count = await conn.QueryFirstOrDefaultAsync<int>("SELECT COUNT(*) FROM users");
-        return count > 0;
+        return await conn.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM users") > 0;
     }
 
+    public async Task<AuthResponse?> LoginAsync(LoginRequest request)
+    {
+        using var conn = _db.CreateConnection();
+        var row = await conn.QueryFirstOrDefaultAsync<UserRow>(
+            "SELECT id, username, password_hash, display_name, is_admin, created_at, last_login FROM users WHERE username = @Username COLLATE NOCASE",
+            new { Username = request.Username.Trim() });
+
+        if (row == null)
+        {
+            // Equalise timing so response time does not reveal whether the username exists.
+            BCrypt.Net.BCrypt.Verify(request.Password, _dummyHash.Value);
+            return null;
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.Password, row.password_hash)) return null;
+
+        var now = DateTime.UtcNow;
+        await conn.ExecuteAsync("UPDATE users SET last_login = @Now WHERE id = @Id",
+            new { Now = now.ToString("O", CultureInfo.InvariantCulture), Id = row.id });
+
+        var user = row.ToUserInfo() with { LastLogin = now };
+        var expiry = request.RememberMe ? TimeSpan.FromDays(90) : TimeSpan.FromHours(24);
+        return new AuthResponse(GenerateToken(user, expiry), user, now.Add(expiry));
+    }
+
+    /// <summary>Creates the first administrator. Returns null if any account already exists (checked atomically).</summary>
     public async Task<AuthResponse?> CreateAdminAsync(RegisterRequest request)
     {
-        // Only works if no users exist yet (first-run setup)
-        if (await HasAnyUsersAsync()) return null;
-
+        var user = NewUser(request, isAdmin: true);
         using var conn = _db.CreateConnection();
-        var user = new UserInfo(
-            Guid.NewGuid().ToString("N"),
-            request.Username.Trim(),
-            request.DisplayName?.Trim() ?? request.Username.Trim(),
-            true,
-            DateTime.UtcNow,
-            DateTime.UtcNow
-        );
+        var inserted = await conn.ExecuteAsync("""
+            INSERT INTO users (id, username, password_hash, display_name, is_admin, created_at, last_login)
+            SELECT @Id, @Username, @Hash, @DisplayName, 1, @CreatedAt, NULL
+            WHERE NOT EXISTS (SELECT 1 FROM users)
+            """,
+            UserParameters(user, request.Password));
 
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password, workFactor: 12);
+        if (inserted == 0) return null;
 
-        await conn.ExecuteAsync(
-            @"INSERT INTO users (id, username, password_hash, display_name, is_admin, created_at, last_login)
-              VALUES (@Id, @Username, @Hash, @DisplayName, 1, @CreatedAt, @LastLogin)",
-            new
-            {
-                user.Id,
-                user.Username,
-                Hash = passwordHash,
-                user.DisplayName,
-                CreatedAt = user.CreatedAt.ToString("O"),
-                LastLogin = user.LastLogin?.ToString("O")
-            });
-
-        var token = GenerateToken(user, TimeSpan.FromHours(24));
-        return new AuthResponse(token, user, DateTime.UtcNow.AddHours(24));
+        var expiry = TimeSpan.FromDays(90);
+        return new AuthResponse(GenerateToken(user, expiry), user, DateTime.UtcNow.Add(expiry));
     }
+
+    /// <summary>Creates a regular user. Returns null if the username is taken.</summary>
+    public async Task<UserInfo?> RegisterAsync(RegisterRequest request)
+    {
+        var user = NewUser(request, isAdmin: false);
+        using var conn = _db.CreateConnection();
+        var inserted = await conn.ExecuteAsync("""
+            INSERT OR IGNORE INTO users (id, username, password_hash, display_name, is_admin, created_at, last_login)
+            VALUES (@Id, @Username, @Hash, @DisplayName, 0, @CreatedAt, NULL)
+            """,
+            UserParameters(user, request.Password));
+
+        return inserted == 0 ? null : user;
+    }
+
+    public async Task<UserInfo?> GetUserAsync(string userId)
+    {
+        using var conn = _db.CreateConnection();
+        var row = await conn.QueryFirstOrDefaultAsync<UserRow>(
+            "SELECT id, username, password_hash, display_name, is_admin, created_at, last_login FROM users WHERE id = @userId",
+            new { userId });
+        return row?.ToUserInfo();
+    }
+
+    public TokenValidationParameters GetValidationParameters() => new()
+    {
+        ValidateIssuer = true,
+        ValidIssuer = Issuer,
+        ValidateAudience = true,
+        ValidAudience = Audience,
+        ValidateLifetime = true,
+        IssuerSigningKey = _signingKey,
+        ValidateIssuerSigningKey = true,
+        ClockSkew = TimeSpan.FromMinutes(2),
+        NameClaimType = ClaimTypes.Name,
+        RoleClaimType = ClaimTypes.Role
+    };
+
+    private static UserInfo NewUser(RegisterRequest request, bool isAdmin)
+    {
+        var username = request.Username.Trim();
+        var displayName = string.IsNullOrWhiteSpace(request.DisplayName) ? username : request.DisplayName.Trim();
+        return new UserInfo(Guid.NewGuid().ToString("N"), username, displayName, isAdmin, DateTime.UtcNow, null);
+    }
+
+    private static object UserParameters(UserInfo user, string password) => new
+    {
+        user.Id,
+        user.Username,
+        Hash = BCrypt.Net.BCrypt.HashPassword(password, BcryptWorkFactor),
+        user.DisplayName,
+        CreatedAt = user.CreatedAt.ToString("O", CultureInfo.InvariantCulture)
+    };
 
     private string GenerateToken(UserInfo user, TimeSpan expiry)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecret));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id),
             new Claim(ClaimTypes.Name, user.Username),
-            new Claim("display_name", user.DisplayName ?? user.Username),
             new Claim(ClaimTypes.Role, user.IsAdmin ? "admin" : "user")
         };
 
         var token = new JwtSecurityToken(
-            issuer: _issuer,
-            audience: "WiretuneClient",
+            issuer: Issuer,
+            audience: Audience,
             claims: claims,
             expires: DateTime.UtcNow.Add(expiry),
-            signingCredentials: creds
-        );
+            signingCredentials: new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256));
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    public TokenValidationParameters GetValidationParameters()
+    private sealed record UserRow(string id, string username, string password_hash, string? display_name, long is_admin, string created_at, string? last_login)
     {
-        return new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = _issuer,
-            ValidateAudience = true,
-            ValidAudience = "WiretuneClient",
-            ValidateLifetime = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSecret)),
-            ValidateIssuerSigningKey = true,
-            ClockSkew = TimeSpan.FromMinutes(5)
-        };
+        public UserInfo ToUserInfo() => new(
+            id,
+            username,
+            display_name,
+            is_admin != 0,
+            DateTime.Parse(created_at, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal),
+            last_login == null ? null : DateTime.Parse(last_login, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal));
     }
 }

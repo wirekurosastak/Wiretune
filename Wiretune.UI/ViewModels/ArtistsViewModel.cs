@@ -1,8 +1,8 @@
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
+using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
 
@@ -11,39 +11,32 @@ public partial class ArtistsViewModel : ObservableObject
     private readonly ILibraryService _library;
     private readonly PlayerViewModel _player;
 
-    [ObservableProperty] private string _searchFilter = string.Empty;
+    [ObservableProperty] private IReadOnlyList<Artist> _displayedArtists = Array.Empty<Artist>();
     [ObservableProperty] private Artist? _selectedArtist;
     [ObservableProperty] private bool _isArtistDetailOpen;
-
-    public ObservableCollection<Artist> DisplayedArtists { get; } = new();
-    public ObservableCollection<AlbumCardViewModel> SelectedArtistAlbumCards { get; } = new();
-    public ObservableCollection<Track> SelectedArtistTracks { get; } = new();
+    [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _selectedArtistAlbumCards = Array.Empty<AlbumCardViewModel>();
+    [ObservableProperty] private bool _hasSelectedArtistAlbums;
+    [ObservableProperty] private IReadOnlyList<Track> _selectedArtistTracks = Array.Empty<Track>();
 
     public ArtistsViewModel(ILibraryService library, PlayerViewModel player)
     {
         _library = library;
         _player = player;
 
-        _library.LibraryChanged += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(RefreshArtists);
+        _library.LibraryChanged += (_, _) => Ui.Post(RefreshArtists);
         RefreshArtists();
     }
 
     public void RefreshArtists()
     {
-        var artists = string.IsNullOrWhiteSpace(SearchFilter)
-            ? _library.Artists
-            : _library.Artists.Where(a => a.Name.Contains(SearchFilter, StringComparison.OrdinalIgnoreCase));
+        DisplayedArtists = _library.Artists;
 
-        DisplayedArtists.Clear();
-        foreach (var a in artists)
+        if (SelectedArtist != null)
         {
-            DisplayedArtists.Add(a);
+            var updated = _library.GetArtist(SelectedArtist.Id);
+            if (updated == null) CloseArtistDetail();
+            else OpenArtist(updated);
         }
-    }
-
-    partial void OnSearchFilterChanged(string value)
-    {
-        RefreshArtists();
     }
 
     [RelayCommand]
@@ -52,18 +45,9 @@ public partial class ArtistsViewModel : ObservableObject
         if (artist == null) return;
         SelectedArtist = artist;
         IsArtistDetailOpen = true;
-
-        SelectedArtistAlbumCards.Clear();
-        foreach (var a in artist.Albums)
-        {
-            SelectedArtistAlbumCards.Add(new AlbumCardViewModel(a));
-        }
-
-        SelectedArtistTracks.Clear();
-        foreach (var t in artist.Albums.SelectMany(a => a.Tracks))
-        {
-            SelectedArtistTracks.Add(t);
-        }
+        SelectedArtistAlbumCards = artist.Albums.Select(a => new AlbumCardViewModel(a)).ToList();
+        HasSelectedArtistAlbums = SelectedArtistAlbumCards.Count > 0;
+        SelectedArtistTracks = artist.Tracks;
     }
 
     [RelayCommand]
@@ -71,27 +55,22 @@ public partial class ArtistsViewModel : ObservableObject
     {
         IsArtistDetailOpen = false;
         SelectedArtist = null;
-        SelectedArtistAlbumCards.Clear();
-        SelectedArtistTracks.Clear();
+        SelectedArtistAlbumCards = Array.Empty<AlbumCardViewModel>();
+        HasSelectedArtistAlbums = false;
+        SelectedArtistTracks = Array.Empty<Track>();
     }
 
     [RelayCommand]
     public void PlayArtist(Artist? artist)
     {
         var target = artist ?? SelectedArtist;
-        if (target == null) return;
-        var allArtistTracks = target.Albums.SelectMany(a => a.Tracks).ToList();
-        if (allArtistTracks.Count > 0)
-        {
-            _player.PlayQueue(allArtistTracks);
-        }
+        if (target == null || target.Tracks.Count == 0) return;
+        _player.PlayQueue(target.Tracks);
     }
 
     [RelayCommand]
     public void PlayArtistTrack(Track? track)
     {
-        if (track == null || SelectedArtist == null) return;
-        var allArtistTracks = SelectedArtist.Albums.SelectMany(a => a.Tracks).ToList();
-        _player.PlayQueue(allArtistTracks, track);
+        if (track != null && SelectedArtist != null) _player.PlayQueue(SelectedArtist.Tracks, track);
     }
 }

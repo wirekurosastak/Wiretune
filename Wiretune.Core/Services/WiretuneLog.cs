@@ -26,141 +26,114 @@ public record LogEntry(
 
 public static class WiretuneLog
 {
+    private const long MaxLogBytes = 10 * 1024 * 1024;
     private static readonly object _lock = new();
     private static string? _logFilePath;
     private static StreamWriter? _logWriter;
-    private static LogLevel _minLevel = LogLevel.Debug;
-    private static bool _initialized = false;
+    private static bool _initAttempted;
 
     public static event Action<LogEntry>? OnLogEntry;
+
+    public static LogLevel MinimumLevel { get; set; } = LogLevel.Debug;
 
     public static string LogFilePath
     {
         get
         {
-            if (_logFilePath == null)
+            lock (_lock)
             {
-                var dir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Wiretune");
-                try
-                {
-                    Directory.CreateDirectory(dir);
-                    _logFilePath = Path.Combine(dir, "wiretune.log");
-                }
-                catch
-                {
-                    _logFilePath = Path.Combine(Path.GetTempPath(), "wiretune.log");
-                }
+                return _logFilePath ??= DefaultLogPath();
             }
-            return _logFilePath;
         }
     }
 
-    public static LogLevel MinimumLevel
-    {
-        get => _minLevel;
-        set => _minLevel = value;
-    }
-
+    /// <summary>
+    /// Opens the log file. Calling it again with a different path switches files (the server uses its own
+    /// data directory); calling it without arguments after a successful open is a no-op.
+    /// </summary>
     public static void Initialize(string? customLogPath = null, LogLevel? minLevel = null)
     {
+        if (minLevel.HasValue) MinimumLevel = minLevel.Value;
+
+        string path;
         lock (_lock)
         {
-            if (_initialized && _logWriter != null) return;
+            if (_logWriter != null && (customLogPath == null || customLogPath == _logFilePath)) return;
 
-            if (minLevel.HasValue)
-            {
-                _minLevel = minLevel.Value;
-            }
-            if (!string.IsNullOrEmpty(customLogPath))
-            {
-                _logFilePath = customLogPath;
-                var dir = Path.GetDirectoryName(_logFilePath);
-                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            }
+            _logWriter?.Dispose();
+            _logWriter = null;
+            _initAttempted = true;
+            _logFilePath = customLogPath ?? _logFilePath ?? DefaultLogPath();
+            path = _logFilePath;
 
             try
             {
-                var path = LogFilePath;
-                var fileInfo = new FileInfo(path);
-                // Rotate log if larger than 10MB
-                if (fileInfo.Exists && fileInfo.Length > 10 * 1024 * 1024)
+                var dir = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+                var info = new FileInfo(path);
+                if (info.Exists && info.Length > MaxLogBytes)
                 {
-                    var backupPath = path + ".1";
-                    try { File.Delete(backupPath); } catch { }
-                    try { File.Move(path, backupPath); } catch { }
+                    var backup = path + ".1";
+                    try { File.Delete(backup); } catch { }
+                    try { File.Move(path, backup); } catch { }
                 }
 
                 var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
                 _logWriter = new StreamWriter(stream) { AutoFlush = true };
-                _initialized = true;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[WiretuneLog] Failed to open log file: {ex.Message}");
+                Console.Error.WriteLine($"[WiretuneLog] Failed to open log file '{path}': {ex.Message}");
             }
         }
 
-        if (_minLevel <= LogLevel.Info)
-        {
-            Info("WiretuneLog", $"=== Wiretune Logging Initialized (Log: {LogFilePath}, Level: {_minLevel}) ===");
-        }
+        Info("WiretuneLog", $"=== Wiretune logging initialized (Log: {path}, Level: {MinimumLevel}) ===");
     }
 
     public static void Log(LogLevel level, string category, string message, Exception? ex = null)
     {
-        if (level < _minLevel) return;
+        if (level < MinimumLevel) return;
 
-        var entry = new LogEntry(DateTime.UtcNow, level, category, message, ex);
+        var entry = new LogEntry(DateTime.Now, level, category, message, ex);
+        var line = entry.ToString();
 
-        // 1. Console Output
         try
         {
-            var oldColor = Console.ForegroundColor;
-            Console.ForegroundColor = level switch
-            {
-                LogLevel.Error => ConsoleColor.Red,
-                LogLevel.Warn => ConsoleColor.Yellow,
-                LogLevel.Info => ConsoleColor.Cyan,
-                LogLevel.Debug => ConsoleColor.Gray,
-                _ => ConsoleColor.DarkGray
-            };
-
-            Console.WriteLine(entry.ToString());
-            Console.ForegroundColor = oldColor;
+            if (level >= LogLevel.Warn) Console.Error.WriteLine(line);
+            else Console.WriteLine(line);
         }
         catch
         {
-            // Ignore console writing errors in GUI/headless contexts
+            // No console in GUI/headless contexts.
         }
 
-        // 2. File Output
+        var needsInit = false;
         lock (_lock)
         {
-            if (!_initialized)
+            if (!_initAttempted) needsInit = true;
+            else
             {
-                Initialize();
-            }
-
-            try
-            {
-                _logWriter?.WriteLine(entry.ToString());
-            }
-            catch
-            {
-                // Never crash application due to logging failure
+                try { _logWriter?.WriteLine(line); } catch { }
             }
         }
 
-        // 3. Event dispatch
+        if (needsInit)
+        {
+            Initialize();
+            lock (_lock)
+            {
+                try { _logWriter?.WriteLine(line); } catch { }
+            }
+        }
+
         try
         {
             OnLogEntry?.Invoke(entry);
         }
         catch
         {
-            // Safeguard against subscriber exceptions
+            // Subscriber failures must never break logging.
         }
     }
 
@@ -168,4 +141,16 @@ public static class WiretuneLog
     public static void Info(string category, string message) => Log(LogLevel.Info, category, message);
     public static void Warn(string category, string message) => Log(LogLevel.Warn, category, message);
     public static void Error(string category, string message, Exception? ex = null) => Log(LogLevel.Error, category, message, ex);
+
+    private static string DefaultLogPath()
+    {
+        try
+        {
+            return Path.Combine(AppPaths.GetDataDirectory(), "wiretune.log");
+        }
+        catch
+        {
+            return Path.Combine(Path.GetTempPath(), "wiretune.log");
+        }
+    }
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Dapper;
 using Wiretune.Core.Models;
@@ -14,16 +15,12 @@ public class LibraryRepository : ILibraryRepository
         _dbManager = dbManager ?? new DatabaseManager();
     }
 
-    public Task InitializeAsync()
-    {
-        return Task.Run(() => _dbManager.InitializeSchema());
-    }
+    public Task InitializeAsync() => Task.Run(_dbManager.InitializeSchema);
 
     public async Task<List<Track>> GetAllTracksAsync()
     {
         using var connection = _dbManager.CreateConnection();
-        const string sql = "SELECT * FROM tracks ORDER BY artist, album, disc_number, track_number, title";
-        var rows = await connection.QueryAsync(sql);
+        var rows = await connection.QueryAsync("SELECT * FROM tracks");
 
         var list = new List<Track>();
         foreach (var r in rows)
@@ -35,13 +32,14 @@ public class LibraryRepository : ILibraryRepository
                 Artist = (string)r.artist,
                 Album = (string)r.album,
                 AlbumArtist = (string?)r.album_artist,
-                TrackNumber = r.track_number != null ? (int?)Convert.ToInt32(r.track_number) : null,
-                TrackCount = r.track_count != null ? (int?)Convert.ToInt32(r.track_count) : null,
-                DiscNumber = r.disc_number != null ? (int?)Convert.ToInt32(r.disc_number) : null,
-                Year = r.year != null ? (int?)Convert.ToInt32(r.year) : null,
+                TrackNumber = ToNullableInt(r.track_number),
+                TrackCount = ToNullableInt(r.track_count),
+                DiscNumber = ToNullableInt(r.disc_number),
+                Year = ToNullableInt(r.year),
                 Genre = (string?)r.genre,
                 Duration = TimeSpan.FromSeconds(Convert.ToDouble(r.duration_seconds)),
                 FileSizeBytes = Convert.ToInt64(r.file_size_bytes),
+                FileModifiedUtc = ParseDate((string?)r.file_modified_utc),
                 FilePath = (string)r.file_path,
                 StreamUrl = (string?)r.stream_url,
                 HasCoverArt = Convert.ToInt32(r.has_cover_art) == 1,
@@ -57,31 +55,33 @@ public class LibraryRepository : ILibraryRepository
                 },
                 IsFavorite = Convert.ToInt32(r.is_favorite) == 1,
                 PlayCount = Convert.ToInt32(r.play_count),
-                LastPlayed = r.last_played != null ? DateTime.Parse((string)r.last_played) : null,
-                DateAdded = DateTime.Parse((string)r.date_added)
+                LastPlayed = ParseDate((string?)r.last_played),
+                DateAdded = ParseDate((string?)r.date_added) ?? DateTime.UtcNow
             });
         }
         return list;
     }
 
-    public async Task SaveTracksBatchAsync(IEnumerable<Track> tracks)
+    public async Task ReplaceAllTracksAsync(IEnumerable<Track> tracks)
     {
         using var connection = _dbManager.CreateConnection();
         using var transaction = connection.BeginTransaction();
 
+        await connection.ExecuteAsync("DELETE FROM tracks", transaction: transaction);
+
         const string insertSql = """
             INSERT OR REPLACE INTO tracks (
                 id, title, artist, album, album_artist, track_number, track_count, disc_number,
-                year, genre, duration_seconds, file_size_bytes, file_path, stream_url,
+                year, genre, duration_seconds, file_size_bytes, file_modified_utc, file_path, stream_url,
                 has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
                 bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added
             ) VALUES (
                 @Id, @Title, @Artist, @Album, @AlbumArtist, @TrackNumber, @TrackCount, @DiscNumber,
-                @Year, @Genre, @DurationSeconds, @FileSizeBytes, @FilePath, @StreamUrl,
+                @Year, @Genre, @DurationSeconds, @FileSizeBytes, @FileModifiedUtc, @FilePath, @StreamUrl,
                 @HasCoverArt, @CoverArtPath, @Codec, @SampleRate, @BitsPerSample, @Channels,
                 @BitrateKbps, @IsLossless, @IsFavorite, @PlayCount, @LastPlayed, @DateAdded
             )
-        """;
+            """;
 
         var parameters = tracks.Select(t => new
         {
@@ -97,30 +97,25 @@ public class LibraryRepository : ILibraryRepository
             t.Genre,
             DurationSeconds = t.Duration.TotalSeconds,
             t.FileSizeBytes,
+            FileModifiedUtc = FormatDate(t.FileModifiedUtc),
             t.FilePath,
             t.StreamUrl,
             HasCoverArt = t.HasCoverArt ? 1 : 0,
             t.CoverArtPath,
-            Codec = t.Format.Codec,
-            SampleRate = t.Format.SampleRate,
-            BitsPerSample = t.Format.BitsPerSample,
-            Channels = t.Format.Channels,
-            BitrateKbps = t.Format.BitrateKbps,
+            t.Format.Codec,
+            t.Format.SampleRate,
+            t.Format.BitsPerSample,
+            t.Format.Channels,
+            t.Format.BitrateKbps,
             IsLossless = t.Format.IsLossless ? 1 : 0,
             IsFavorite = t.IsFavorite ? 1 : 0,
             t.PlayCount,
-            LastPlayed = t.LastPlayed?.ToString("O"),
-            DateAdded = t.DateAdded.ToString("O")
+            LastPlayed = FormatDate(t.LastPlayed),
+            DateAdded = FormatDate(t.DateAdded)
         });
 
         await connection.ExecuteAsync(insertSql, parameters, transaction);
         transaction.Commit();
-    }
-
-    public async Task ClearTracksAsync()
-    {
-        using var connection = _dbManager.CreateConnection();
-        await connection.ExecuteAsync("DELETE FROM tracks");
     }
 
     public async Task UpdateTrackFavoriteAsync(string trackId, bool isFavorite)
@@ -133,30 +128,36 @@ public class LibraryRepository : ILibraryRepository
     public async Task IncrementPlayCountAsync(string trackId)
     {
         using var connection = _dbManager.CreateConnection();
-        await connection.ExecuteAsync("""
-            UPDATE tracks 
-            SET play_count = play_count + 1, last_played = @Now 
-            WHERE id = @Id
-        """, new { Now = DateTime.UtcNow.ToString("O"), Id = trackId });
+        await connection.ExecuteAsync(
+            "UPDATE tracks SET play_count = play_count + 1, last_played = @Now WHERE id = @Id",
+            new { Now = FormatDate(DateTime.UtcNow), Id = trackId });
     }
 
     public async Task<List<Playlist>> GetAllPlaylistsAsync()
     {
         using var connection = _dbManager.CreateConnection();
-        const string sql = "SELECT * FROM playlists ORDER BY name";
-        var rows = await connection.QueryAsync(sql);
+        var rows = await connection.QueryAsync("SELECT * FROM playlists ORDER BY name");
 
         var list = new List<Playlist>();
         foreach (var r in rows)
         {
-            var trackIds = JsonSerializer.Deserialize<List<string>>((string)r.track_ids_json) ?? new();
+            List<string> trackIds;
+            try
+            {
+                trackIds = JsonSerializer.Deserialize<List<string>>((string)r.track_ids_json) ?? new();
+            }
+            catch (JsonException)
+            {
+                trackIds = new();
+            }
+
             list.Add(new Playlist
             {
                 Id = (string)r.id,
                 Name = (string)r.name,
                 Description = (string?)r.description,
-                CreatedAt = DateTime.Parse((string)r.created_at),
-                ModifiedAt = DateTime.Parse((string)r.modified_at),
+                CreatedAt = ParseDate((string?)r.created_at) ?? DateTime.UtcNow,
+                ModifiedAt = ParseDate((string?)r.modified_at) ?? DateTime.UtcNow,
                 TrackIds = trackIds
             });
         }
@@ -166,20 +167,19 @@ public class LibraryRepository : ILibraryRepository
     public async Task SavePlaylistAsync(Playlist playlist)
     {
         using var connection = _dbManager.CreateConnection();
-        const string sql = """
+        await connection.ExecuteAsync("""
             INSERT OR REPLACE INTO playlists (id, name, description, track_ids_json, created_at, modified_at)
             VALUES (@Id, @Name, @Description, @TrackIdsJson, @CreatedAt, @ModifiedAt)
-        """;
-
-        await connection.ExecuteAsync(sql, new
-        {
-            playlist.Id,
-            playlist.Name,
-            playlist.Description,
-            TrackIdsJson = JsonSerializer.Serialize(playlist.TrackIds),
-            CreatedAt = playlist.CreatedAt.ToString("O"),
-            ModifiedAt = playlist.ModifiedAt.ToString("O")
-        });
+            """,
+            new
+            {
+                playlist.Id,
+                playlist.Name,
+                playlist.Description,
+                TrackIdsJson = JsonSerializer.Serialize(playlist.TrackIds),
+                CreatedAt = FormatDate(playlist.CreatedAt),
+                ModifiedAt = FormatDate(playlist.ModifiedAt)
+            });
     }
 
     public async Task DeletePlaylistAsync(string playlistId)
@@ -199,7 +199,18 @@ public class LibraryRepository : ILibraryRepository
     public async Task SetSettingAsync(string key, string value)
     {
         using var connection = _dbManager.CreateConnection();
-        const string sql = "INSERT OR REPLACE INTO settings (key, value) VALUES (@Key, @Value)";
-        await connection.ExecuteAsync(sql, new { Key = key, Value = value });
+        await connection.ExecuteAsync(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (@Key, @Value)",
+            new { Key = key, Value = value });
     }
+
+    private static int? ToNullableInt(object? value) => value == null ? null : Convert.ToInt32(value);
+
+    private static string? FormatDate(DateTime? value) =>
+        value?.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+
+    private static DateTime? ParseDate(string? value) =>
+        DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
+            ? parsed
+            : null;
 }

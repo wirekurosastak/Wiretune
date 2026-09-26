@@ -129,8 +129,7 @@ public class ExtendedIntegrationAndEdgeTests
     [InlineData("https://wiretune.internal:5200", "99", "https://wiretune.internal:5200/api/stream/99")]
     public void ServerStreamingClient_GetStreamUrl_FormatsCorrectly(string baseUrl, string trackId, string expected)
     {
-        var client = new ServerStreamingClient();
-        var result = client.GetStreamUrl(baseUrl, trackId);
+        var result = ServerStreamingClient.BuildStreamUrl(baseUrl, trackId);
         Assert.Equal(expected, result);
     }
 
@@ -139,8 +138,7 @@ public class ExtendedIntegrationAndEdgeTests
     [InlineData("http://localhost:5200/", "t1", "http://localhost:5200/api/cover/t1")]
     public void ServerStreamingClient_GetCoverArtUrl_FormatsCorrectly(string baseUrl, string trackId, string expected)
     {
-        var client = new ServerStreamingClient();
-        var result = client.GetCoverArtUrl(baseUrl, trackId);
+        var result = ServerStreamingClient.BuildCoverUrl(baseUrl, trackId);
         Assert.Equal(expected, result);
     }
 
@@ -150,7 +148,7 @@ public class ExtendedIntegrationAndEdgeTests
     [Fact]
     public void PlayerViewModel_PlayQueue_ShufflePreservesExactTrackSet()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var repo = new MockRepository();
         repo.Settings["ServerUrl"] = string.Empty;
         var service = new LibraryService(repo, new MetadataScanner());
@@ -189,7 +187,7 @@ public class ExtendedIntegrationAndEdgeTests
     [Fact]
     public void PlayerViewModel_PreviousTrack_WhenOverThreeSeconds_RewindsTrack()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var repo = new MockRepository();
         repo.Settings["ServerUrl"] = string.Empty;
         var service = new LibraryService(repo, new MetadataScanner());

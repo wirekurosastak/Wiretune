@@ -162,25 +162,17 @@ public static class AudioDeviceManager
 
     private static List<AudioOutputDevice> DetectWindowsAudioDevices()
     {
+        // ffplay (SDL) only reaches the shared Windows mixer; exclusive/bit-perfect output is not available here.
         return new List<AudioOutputDevice>
         {
             new AudioOutputDevice
             {
                 Id = "wasapi_default",
-                Name = "WASAPI Default Audio Endpoint",
+                Name = "Windows alapértelmezett kimenet",
                 DriverType = "WASAPI Shared",
                 IsDefault = true,
-                IsExclusiveSupported = true,
-                IsBitperfectSupported = true
-            },
-            new AudioOutputDevice
-            {
-                Id = "wasapi_exclusive",
-                Name = "WASAPI Exclusive Mode (Bit-Perfect Direct DAC)",
-                DriverType = "WASAPI Exclusive",
-                IsDefault = false,
-                IsExclusiveSupported = true,
-                IsBitperfectSupported = true
+                IsExclusiveSupported = false,
+                IsBitperfectSupported = false
             }
         };
     }

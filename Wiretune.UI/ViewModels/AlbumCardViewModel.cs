@@ -5,8 +5,12 @@ using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
 
-public partial class AlbumCardViewModel : ObservableObject
+public partial class AlbumCardViewModel : ObservableObject, ILazyLoad
 {
+    public const int CoverDecodeWidth = 320;
+
+    private bool _coverRequested;
+
     public Album Album { get; }
     public string Title => Album.Title;
     public string Artist => Album.Artist;
@@ -20,15 +24,12 @@ public partial class AlbumCardViewModel : ObservableObject
     public AlbumCardViewModel(Album album)
     {
         Album = album;
-        LoadCover();
     }
 
-    public void LoadCover()
+    public void EnsureLoaded()
     {
-        var path = Album.CoverArtPath ?? Album.Tracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.CoverArtPath))?.CoverArtPath;
-        if (!string.IsNullOrEmpty(path))
-        {
-            CoverArtService.LoadBitmap(path, bmp => CoverBitmap = bmp);
-        }
+        if (_coverRequested || string.IsNullOrEmpty(Album.CoverArtPath)) return;
+        _coverRequested = true;
+        CoverArtService.LoadBitmap(Album.CoverArtPath, CoverDecodeWidth, bmp => CoverBitmap = bmp);
     }
 }

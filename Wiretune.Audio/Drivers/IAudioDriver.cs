@@ -13,6 +13,9 @@ public interface IAudioDriver : IDisposable
     event EventHandler<float[]>? SpectrumDataAvailable;
     event EventHandler? TrackEnded;
 
+    /// <summary>Playback could not start or stopped unexpectedly; the argument is a user-facing message.</summary>
+    event EventHandler<string>? PlaybackFailed;
+
     Task InitializeAsync(AudioOutputDevice device, bool exclusive, bool bitperfect);
     Task PlayAsync(string audioSource, AudioFormat format, TimeSpan startPosition, CancellationToken ct = default);
     Task PauseAsync();

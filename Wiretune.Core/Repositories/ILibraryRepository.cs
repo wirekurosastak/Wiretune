@@ -6,8 +6,10 @@ public interface ILibraryRepository
 {
     Task InitializeAsync();
     Task<List<Track>> GetAllTracksAsync();
-    Task SaveTracksBatchAsync(IEnumerable<Track> tracks);
-    Task ClearTracksAsync();
+
+    /// <summary>Atomically replaces every stored track with <paramref name="tracks"/>.</summary>
+    Task ReplaceAllTracksAsync(IEnumerable<Track> tracks);
+
     Task UpdateTrackFavoriteAsync(string trackId, bool isFavorite);
     Task IncrementPlayCountAsync(string trackId);
     Task<List<Playlist>> GetAllPlaylistsAsync();

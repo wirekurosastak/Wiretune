@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Wiretune.Core.Models;
 using Wiretune.Core.Repositories;
 
@@ -7,145 +9,87 @@ public class LibraryService : ILibraryService
 {
     private readonly ILibraryRepository _repository;
     private readonly IMetadataScanner _scanner;
-    private readonly ServerStreamingClient _streamingClient = new();
-    private readonly List<Track> _tracks = new();
-    private readonly List<Album> _albums = new();
-    private readonly List<Artist> _artists = new();
-    private readonly List<Playlist> _playlists = new();
-    private readonly List<string> _genres = new();
-    private readonly object _syncLock = new();
+    private readonly string _coverCacheDirectory;
+    private readonly object _playlistLock = new();
+    private readonly SemaphoreSlim _scanGate = new(1, 1);
+    private volatile LibrarySnapshot _snapshot = LibrarySnapshot.Empty;
+    private volatile IReadOnlyList<Playlist> _playlists = Array.Empty<Playlist>();
+    private volatile bool _isScanning;
 
-    public IReadOnlyList<Track> Tracks { get { lock (_syncLock) return _tracks.ToList(); } }
-    public IReadOnlyList<Album> Albums { get { lock (_syncLock) return _albums.ToList(); } }
-    public IReadOnlyList<Artist> Artists { get { lock (_syncLock) return _artists.ToList(); } }
-    public IReadOnlyList<Playlist> Playlists { get { lock (_syncLock) return _playlists.ToList(); } }
-    public IReadOnlyList<Track> Favorites { get { lock (_syncLock) return _tracks.Where(t => t.IsFavorite).ToList(); } }
-    public IReadOnlyList<string> Genres { get { lock (_syncLock) return _genres.ToList(); } }
+    public IReadOnlyList<Track> Tracks => _snapshot.Tracks;
+    public IReadOnlyList<Album> Albums => _snapshot.Albums;
+    public IReadOnlyList<Artist> Artists => _snapshot.Artists;
+    public IReadOnlyList<string> Genres => _snapshot.Genres;
+    public IReadOnlyList<Playlist> Playlists => _playlists;
+    public IReadOnlyList<Track> Favorites => _snapshot.Tracks.Where(t => t.IsFavorite).ToList();
 
-    public bool IsScanning { get; private set; }
-    public string LibraryPath { get; set; } = string.Empty;
-    public string ServerUrl { get; set; } = "http://localhost:5200";
-    public bool IsServerConnected { get; private set; }
-    public string? ServerStatusMessage { get; private set; }
-    public UserInfo? CurrentUser => _streamingClient.CurrentUser;
-    public bool IsLoggedIn => _streamingClient.CurrentUser != null && !string.IsNullOrEmpty(_streamingClient.AuthToken);
-    public bool IsSetupRequired { get; private set; }
+    public bool IsScanning => _isScanning;
+    public string LibraryPath { get; private set; } = string.Empty;
 
     public event EventHandler? LibraryChanged;
+    public event EventHandler? PlaylistsChanged;
+    public event EventHandler<Track>? FavoriteChanged;
     public event EventHandler<bool>? ScanningStateChanged;
-    public event EventHandler<string?>? ServerStatusChanged;
-    public event EventHandler<UserInfo?>? AuthStateChanged;
 
-    public LibraryService(ILibraryRepository repository, IMetadataScanner scanner)
+    public LibraryService(ILibraryRepository repository, IMetadataScanner scanner, string? coverCacheDirectory = null)
     {
         _repository = repository;
         _scanner = scanner;
+        _coverCacheDirectory = coverCacheDirectory ?? Path.Combine(AppPaths.GetDataDirectory(), "Covers");
     }
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
         await _repository.InitializeAsync();
         LibraryPath = await _repository.GetSettingAsync("LibraryPath", string.Empty) ?? string.Empty;
-        ServerUrl = await _repository.GetSettingAsync("ServerUrl", "http://localhost:5200") ?? "http://localhost:5200";
 
         var storedTracks = await _repository.GetAllTracksAsync();
         var storedPlaylists = await _repository.GetAllPlaylistsAsync();
 
-        var savedToken = await _repository.GetSettingAsync("AuthToken");
-        var stayLoggedIn = await _repository.GetSettingAsync("StayLoggedIn");
-        if (stayLoggedIn == "true" && !string.IsNullOrEmpty(savedToken))
-        {
-            _streamingClient.AuthToken = savedToken;
-            try
-            {
-                var user = await _streamingClient.GetCurrentUserAsync(ServerUrl, ct);
-                if (user != null)
-                {
-                    AuthStateChanged?.Invoke(this, user);
-                }
-            }
-            catch { }
-        }
+        _snapshot = LibrarySnapshot.Build(storedTracks);
+        _playlists = storedPlaylists.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
 
-        lock (_syncLock)
-        {
-            _tracks.Clear();
-            _tracks.AddRange(storedTracks);
-            _playlists.Clear();
-            _playlists.AddRange(storedPlaylists);
-            RebuildIndexes();
-        }
-
-        WiretuneLog.Info("LibraryService", $"Initialized with {_tracks.Count} tracks, {_albums.Count} albums, {_artists.Count} artists, {_playlists.Count} playlists. ServerUrl='{ServerUrl}'");
+        WiretuneLog.Info("LibraryService", $"Initialized with {Tracks.Count} tracks, {Albums.Count} albums, {Artists.Count} artists, {Playlists.Count} playlists.");
         LibraryChanged?.Invoke(this, EventArgs.Empty);
-
-        // Always verify server connection if ServerUrl is configured
-        if (!string.IsNullOrWhiteSpace(ServerUrl))
-        {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await ConnectServerAsync(ServerUrl, CancellationToken.None);
-                }
-                catch (Exception ex)
-                {
-                    IsServerConnected = false;
-                    ServerStatusMessage = $"A WiretuneLibrary szerver ({ServerUrl}) nem érhető el: {ex.Message}";
-                    ServerStatusChanged?.Invoke(this, ServerStatusMessage);
-                }
-            });
-        }
+        PlaylistsChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public async Task ScanFolderAsync(string folderPath, IProgress<ScanProgressReport>? progress = null, CancellationToken ct = default)
+    public async Task<bool> ScanFolderAsync(string folderPath, IProgress<ScanProgressReport>? progress = null, CancellationToken ct = default)
     {
-        if (IsScanning || string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath)) return;
+        if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath)) return false;
+        if (!await _scanGate.WaitAsync(0, CancellationToken.None)) return false;
 
         try
         {
-            IsScanning = true;
+            _isScanning = true;
             ScanningStateChanged?.Invoke(this, true);
 
-            LibraryPath = folderPath;
-            await _repository.SetSettingAsync("LibraryPath", folderPath);
-            WiretuneLog.Info("LibraryService", $"Starting scan of '{folderPath}'...");
+            var root = Path.GetFullPath(folderPath);
+            WiretuneLog.Info("LibraryService", $"Scanning '{root}'...");
 
-            var cacheDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "Wiretune",
-                "Covers");
+            var known = _snapshot.Tracks
+                .Where(t => !string.IsNullOrEmpty(t.FilePath))
+                .GroupBy(t => t.FilePath, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
-            var scanned = await _scanner.ScanDirectoryAsync(folderPath, cacheDir, progress, ct);
-            WiretuneLog.Info("LibraryService", $"Scan found {scanned.Count} audio tracks.");
-
-            if (!ct.IsCancellationRequested && scanned.Count > 0)
+            List<Track> scanned;
+            try
             {
-                // Preserve favorites and play counts for matching files
-                var existingMap = _tracks.ToDictionary(t => t.FilePath, t => t);
-                foreach (var st in scanned)
-                {
-                    if (existingMap.TryGetValue(st.FilePath, out var existing))
-                    {
-                        st.IsFavorite = existing.IsFavorite;
-                        st.PlayCount = existing.PlayCount;
-                        st.LastPlayed = existing.LastPlayed;
-                    }
-                }
-
-                await _repository.ClearTracksAsync();
-                await _repository.SaveTracksBatchAsync(scanned);
-
-                lock (_syncLock)
-                {
-                    _tracks.Clear();
-                    _tracks.AddRange(scanned);
-                    RebuildIndexes();
-                }
-
-                WiretuneLog.Info("LibraryService", $"Indexed {_albums.Count} albums, {_artists.Count} artists from {scanned.Count} tracks.");
-                LibraryChanged?.Invoke(this, EventArgs.Empty);
+                scanned = await _scanner.ScanDirectoryAsync(root, _coverCacheDirectory, progress, ct, known);
             }
+            catch (OperationCanceledException)
+            {
+                WiretuneLog.Info("LibraryService", "Scan cancelled; library left unchanged.");
+                return false;
+            }
+
+            if (ct.IsCancellationRequested) return false;
+
+            LibraryPath = root;
+            await _repository.SetSettingAsync("LibraryPath", root);
+            await ReplaceTracksCoreAsync(scanned);
+            WiretuneLog.Info("LibraryService", $"Scan finished: {Tracks.Count} tracks, {Albums.Count} albums, {Artists.Count} artists.");
+            return true;
         }
         catch (Exception ex)
         {
@@ -154,175 +98,52 @@ public class LibraryService : ILibraryService
         }
         finally
         {
-            IsScanning = false;
+            _isScanning = false;
+            _scanGate.Release();
             ScanningStateChanged?.Invoke(this, false);
         }
     }
 
-    public async Task ConnectServerAsync(string serverUrl, CancellationToken ct = default)
+    public Task ReplaceTracksAsync(IEnumerable<Track> tracks, CancellationToken ct = default) =>
+        ReplaceTracksCoreAsync(tracks.ToList());
+
+    private async Task ReplaceTracksCoreAsync(List<Track> tracks)
     {
-        if (string.IsNullOrWhiteSpace(serverUrl)) return;
-        ServerUrl = serverUrl.TrimEnd('/');
-        await _repository.SetSettingAsync("ServerUrl", ServerUrl);
-        WiretuneLog.Info("LibraryService", $"Connecting to server: '{ServerUrl}'");
-
-        try
+        var previous = _snapshot.TrackById;
+        foreach (var track in tracks)
         {
-            var isOnline = await _streamingClient.PingServerAsync(ServerUrl, ct);
-            IsServerConnected = isOnline;
-
-            if (isOnline)
+            if (previous.TryGetValue(track.Id, out var old) && !ReferenceEquals(old, track))
             {
-                IsSetupRequired = await _streamingClient.CheckSetupRequiredAsync(ServerUrl, ct);
-                if (IsSetupRequired)
-                {
-                    ServerStatusMessage = "A szerver még nincs beállítva. Hozz létre admin fiókot!";
-                    ServerStatusChanged?.Invoke(this, ServerStatusMessage);
-                    LibraryChanged?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
-
-                if (!IsLoggedIn && !string.IsNullOrEmpty(_streamingClient.AuthToken))
-                {
-                    await _streamingClient.GetCurrentUserAsync(ServerUrl, ct);
-                    if (CurrentUser != null)
-                    {
-                        AuthStateChanged?.Invoke(this, CurrentUser);
-                    }
-                }
-
-                if (!IsLoggedIn)
-                {
-                    ServerStatusMessage = $"A szerver ({ServerUrl}) elérhető, de bejelentkezés szükséges.";
-                    ServerStatusChanged?.Invoke(this, ServerStatusMessage);
-                    LibraryChanged?.Invoke(this, EventArgs.Empty);
-                    return;
-                }
-
-                ServerStatusMessage = $"Csatlakozva: {CurrentUser?.DisplayName ?? CurrentUser?.Username} ({ServerUrl})";
-                ServerStatusChanged?.Invoke(this, ServerStatusMessage);
-                WiretuneLog.Info("LibraryService", $"Server '{ServerUrl}' is ONLINE and authenticated. Fetching tracks...");
-
-                var serverTracks = await _streamingClient.FetchTracksAsync(ServerUrl, ct);
-                WiretuneLog.Info("LibraryService", $"Fetched {serverTracks.Count} tracks from server.");
-                if (serverTracks.Count > 0)
-                {
-                    try
-                    {
-                        await _repository.ClearTracksAsync();
-                        await _repository.SaveTracksBatchAsync(serverTracks);
-                    }
-                    catch
-                    {
-                        // Cache write is optional
-                    }
-
-                    lock (_syncLock)
-                    {
-                        _tracks.Clear();
-                        _tracks.AddRange(serverTracks);
-                        RebuildIndexes();
-                    }
-                }
-                else
-                {
-                    // Server has 0 indexed tracks, trigger server-side scan!
-                    WiretuneLog.Info("LibraryService", "Server has 0 indexed tracks, triggering remote scan...");
-                    await _streamingClient.TriggerScanAsync(ServerUrl, null, ct);
-                }
-            }
-            else
-            {
-                IsServerConnected = false;
-                ServerStatusMessage = $"A WiretuneLibrary szerver ({ServerUrl}) nem érhető el. Ellenőrizd a szervergépet!";
-                ServerStatusChanged?.Invoke(this, ServerStatusMessage);
-                WiretuneLog.Warn("LibraryService", $"Server '{ServerUrl}' is OFFLINE.");
+                track.IsFavorite = old.IsFavorite;
+                track.PlayCount = old.PlayCount;
+                track.LastPlayed = old.LastPlayed;
+                track.DateAdded = old.DateAdded;
             }
         }
-        catch (Exception ex)
-        {
-            IsServerConnected = false;
-            ServerStatusMessage = $"Nem sikerült kapcsolódni a szerverhez ({ServerUrl}): {ex.Message}";
-            ServerStatusChanged?.Invoke(this, ServerStatusMessage);
-            WiretuneLog.Error("LibraryService", $"Failed to connect to server '{ServerUrl}': {ex.Message}", ex);
-        }
 
-        LibraryChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    public async Task<bool> CheckServerSetupRequiredAsync(CancellationToken ct = default)
-    {
-        IsSetupRequired = await _streamingClient.CheckSetupRequiredAsync(ServerUrl, ct);
-        return IsSetupRequired;
-    }
-
-    public async Task<bool> SetupServerAdminAsync(string username, string password, string? displayName = null, CancellationToken ct = default)
-    {
-        var auth = await _streamingClient.SetupAdminAsync(ServerUrl, username, password, displayName, ct);
-        if (auth != null)
-        {
-            await _repository.SetSettingAsync("AuthToken", auth.Token);
-            await _repository.SetSettingAsync("StayLoggedIn", "true");
-            IsSetupRequired = false;
-            AuthStateChanged?.Invoke(this, auth.User);
-            await ConnectServerAsync(ServerUrl, ct);
-            return true;
-        }
-        return false;
-    }
-
-    public async Task<bool> LoginServerAsync(string username, string password, bool rememberMe = false, CancellationToken ct = default)
-    {
-        var auth = await _streamingClient.LoginAsync(ServerUrl, username, password, rememberMe, ct);
-        if (auth != null)
-        {
-            if (rememberMe)
-            {
-                await _repository.SetSettingAsync("AuthToken", auth.Token);
-                await _repository.SetSettingAsync("StayLoggedIn", "true");
-            }
-            else
-            {
-                await _repository.SetSettingAsync("AuthToken", string.Empty);
-                await _repository.SetSettingAsync("StayLoggedIn", "false");
-            }
-
-            AuthStateChanged?.Invoke(this, auth.User);
-            await ConnectServerAsync(ServerUrl, ct);
-            return true;
-        }
-        return false;
-    }
-
-    public async Task LogoutServerAsync()
-    {
-        _streamingClient.AuthToken = null;
-        _streamingClient.CurrentUser = null;
-        await _repository.SetSettingAsync("AuthToken", string.Empty);
-        await _repository.SetSettingAsync("StayLoggedIn", "false");
-        AuthStateChanged?.Invoke(this, null);
-        ServerStatusMessage = "Kijelentkezve a szerverről.";
-        ServerStatusChanged?.Invoke(this, ServerStatusMessage);
+        await _repository.ReplaceAllTracksAsync(tracks);
+        _snapshot = LibrarySnapshot.Build(tracks);
         LibraryChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task ToggleFavoriteAsync(string trackId)
     {
-        Track? track;
-        lock (_syncLock)
-        {
-            track = _tracks.FirstOrDefault(t => t.Id == trackId);
-            if (track != null)
-            {
-                track.IsFavorite = !track.IsFavorite;
-            }
-        }
+        var track = GetTrack(trackId);
+        if (track == null) return;
 
-        if (track != null)
-        {
-            await _repository.UpdateTrackFavoriteAsync(track.Id, track.IsFavorite);
-            LibraryChanged?.Invoke(this, EventArgs.Empty);
-        }
+        track.IsFavorite = !track.IsFavorite;
+        await _repository.UpdateTrackFavoriteAsync(track.Id, track.IsFavorite);
+        FavoriteChanged?.Invoke(this, track);
+    }
+
+    public async Task RecordPlayAsync(string trackId)
+    {
+        var track = GetTrack(trackId);
+        if (track == null) return;
+
+        track.PlayCount++;
+        track.LastPlayed = DateTime.UtcNow;
+        await _repository.IncrementPlayCountAsync(track.Id);
     }
 
     public async Task<Playlist> CreatePlaylistAsync(string name, string? description = null)
@@ -336,170 +157,196 @@ public class LibraryService : ILibraryService
             ModifiedAt = DateTime.UtcNow
         };
 
-        lock (_syncLock)
+        await _repository.SavePlaylistAsync(playlist);
+        lock (_playlistLock)
         {
-            _playlists.Add(playlist);
+            _playlists = _playlists.Append(playlist)
+                .OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
         }
 
-        await _repository.SavePlaylistAsync(playlist);
-        LibraryChanged?.Invoke(this, EventArgs.Empty);
+        PlaylistsChanged?.Invoke(this, EventArgs.Empty);
         return playlist;
     }
 
-    public async Task AddTrackToPlaylistAsync(string playlistId, string trackId)
+    public Task AddTrackToPlaylistAsync(string playlistId, string trackId) =>
+        UpdatePlaylistAsync(playlistId, ids => ids.Contains(trackId) ? null : ids.Append(trackId).ToList());
+
+    public Task RemoveTrackFromPlaylistAsync(string playlistId, string trackId) =>
+        UpdatePlaylistAsync(playlistId, ids => ids.Contains(trackId) ? ids.Where(id => id != trackId).ToList() : null);
+
+    private async Task UpdatePlaylistAsync(string playlistId, Func<List<string>, List<string>?> change)
     {
         Playlist? playlist;
-        lock (_syncLock)
+        lock (_playlistLock)
         {
             playlist = _playlists.FirstOrDefault(p => p.Id == playlistId);
-            if (playlist != null && !playlist.TrackIds.Contains(trackId))
-            {
-                playlist.TrackIds.Add(trackId);
-                playlist.ModifiedAt = DateTime.UtcNow;
-            }
+            var updated = playlist == null ? null : change(playlist.TrackIds);
+            if (updated == null) return;
+
+            playlist!.TrackIds = updated;
+            playlist.ModifiedAt = DateTime.UtcNow;
         }
 
-        if (playlist != null)
-        {
-            await _repository.SavePlaylistAsync(playlist);
-            LibraryChanged?.Invoke(this, EventArgs.Empty);
-        }
-    }
-
-    public async Task RemoveTrackFromPlaylistAsync(string playlistId, string trackId)
-    {
-        Playlist? playlist;
-        lock (_syncLock)
-        {
-            playlist = _playlists.FirstOrDefault(p => p.Id == playlistId);
-            if (playlist != null)
-            {
-                playlist.TrackIds.Remove(trackId);
-                playlist.ModifiedAt = DateTime.UtcNow;
-            }
-        }
-
-        if (playlist != null)
-        {
-            await _repository.SavePlaylistAsync(playlist);
-            LibraryChanged?.Invoke(this, EventArgs.Empty);
-        }
+        await _repository.SavePlaylistAsync(playlist);
+        PlaylistsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task DeletePlaylistAsync(string playlistId)
     {
-        lock (_syncLock)
+        lock (_playlistLock)
         {
-            _playlists.RemoveAll(p => p.Id == playlistId);
+            if (_playlists.All(p => p.Id != playlistId)) return;
+            _playlists = _playlists.Where(p => p.Id != playlistId).ToList();
         }
 
         await _repository.DeletePlaylistAsync(playlistId);
-        LibraryChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    public async Task RecordPlayAsync(string trackId)
-    {
-        Track? track;
-        lock (_syncLock)
-        {
-            track = _tracks.FirstOrDefault(t => t.Id == trackId);
-            if (track != null)
-            {
-                track.PlayCount++;
-                track.LastPlayed = DateTime.UtcNow;
-            }
-        }
-
-        if (track != null)
-        {
-            await _repository.IncrementPlayCountAsync(track.Id);
-        }
+        PlaylistsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public IEnumerable<Track> Search(string query)
     {
-        List<Track> snapshot;
-        lock (_syncLock)
-        {
-            snapshot = _tracks.ToList();
-        }
-
-        if (string.IsNullOrWhiteSpace(query)) return snapshot;
+        var tracks = _snapshot.Tracks;
+        if (string.IsNullOrWhiteSpace(query)) return tracks;
 
         var q = query.Trim();
-        return snapshot.Where(t =>
+        return tracks.Where(t =>
             t.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
             t.Artist.Contains(q, StringComparison.OrdinalIgnoreCase) ||
             t.Album.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-            (t.Genre != null && t.Genre.Contains(q, StringComparison.OrdinalIgnoreCase)));
+            (t.AlbumArtist?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false) ||
+            (t.Genre?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false));
     }
 
-    public Album? GetAlbum(string albumId) { lock (_syncLock) return _albums.FirstOrDefault(a => a.Id == albumId); }
-    public Artist? GetArtist(string artistId) { lock (_syncLock) return _artists.FirstOrDefault(a => a.Id == artistId); }
-    public Playlist? GetPlaylist(string playlistId) { lock (_syncLock) return _playlists.FirstOrDefault(p => p.Id == playlistId); }
+    public Track? GetTrack(string trackId) =>
+        _snapshot.TrackById.GetValueOrDefault(trackId);
 
-    private void RebuildIndexes()
+    public Album? GetAlbum(string albumId) =>
+        _snapshot.Albums.FirstOrDefault(a => a.Id == albumId);
+
+    public Album? GetAlbumForTrack(Track track) =>
+        _snapshot.Albums.FirstOrDefault(a => a.Id == LibrarySnapshot.AlbumIdFor(track));
+
+    public Artist? GetArtist(string artistId) =>
+        _snapshot.Artists.FirstOrDefault(a => a.Id == artistId);
+
+    public Artist? GetArtistByName(string name) =>
+        _snapshot.Artists.FirstOrDefault(a => a.Name.Equals(name?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    public Playlist? GetPlaylist(string playlistId) =>
+        _playlists.FirstOrDefault(p => p.Id == playlistId);
+
+    public IReadOnlyList<Track> GetPlaylistTracks(Playlist playlist)
     {
-        _albums.Clear();
-        _artists.Clear();
-        _genres.Clear();
+        var byId = _snapshot.TrackById;
+        return playlist.TrackIds
+            .Select(id => byId.GetValueOrDefault(id))
+            .OfType<Track>()
+            .ToList();
+    }
 
-        // Build Albums
-        var albumGroups = _tracks.GroupBy(t => (t.Album, AlbumArtist: !string.IsNullOrWhiteSpace(t.AlbumArtist) ? t.AlbumArtist : t.Artist));
-        foreach (var grp in albumGroups)
+    /// <summary>Immutable view of the library; replaced wholesale so readers never need a lock or a copy.</summary>
+    private sealed class LibrarySnapshot
+    {
+        public static readonly LibrarySnapshot Empty = Build(Array.Empty<Track>());
+
+        public required IReadOnlyList<Track> Tracks { get; init; }
+        public required IReadOnlyDictionary<string, Track> TrackById { get; init; }
+        public required IReadOnlyList<Album> Albums { get; init; }
+        public required IReadOnlyList<Artist> Artists { get; init; }
+        public required IReadOnlyList<string> Genres { get; init; }
+
+        public static string AlbumIdFor(Track track) =>
+            StableId($"{track.Album.ToUpperInvariant()}\u001f{track.EffectiveAlbumArtist.ToUpperInvariant()}");
+
+        private static string StableId(string key) =>
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..16];
+
+        public static LibrarySnapshot Build(IEnumerable<Track> source)
         {
-            var orderedTracks = grp.OrderBy(t => t.DiscNumber ?? 1)
-                                   .ThenBy(t => t.TrackNumber ?? 999)
-                                   .ToList();
+            var tracks = source
+                .GroupBy(t => t.Id)
+                .Select(g => g.First())
+                .OrderBy(t => t.Artist, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(t => t.Album, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(t => t.DiscNumber ?? 1)
+                .ThenBy(t => t.TrackNumber ?? int.MaxValue)
+                .ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
 
-            var first = orderedTracks[0];
-            var album = new Album
+            var albums = tracks
+                .GroupBy(AlbumIdFor)
+                .Select(g =>
+                {
+                    var ordered = g.OrderBy(t => t.DiscNumber ?? 1)
+                        .ThenBy(t => t.TrackNumber ?? int.MaxValue)
+                        .ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase)
+                        .ToList();
+                    var first = ordered[0];
+                    var hiRes = ordered.FirstOrDefault(t => t.Format.IsHiRes);
+                    return new Album
+                    {
+                        Id = g.Key,
+                        Title = first.Album,
+                        Artist = first.EffectiveAlbumArtist,
+                        Year = ordered.Select(t => t.Year).FirstOrDefault(y => y.HasValue),
+                        Genre = ordered.Select(t => t.Genre).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x)),
+                        CoverArtPath = ordered.FirstOrDefault(t => !string.IsNullOrEmpty(t.CoverArtPath))?.CoverArtPath,
+                        TrackCount = ordered.Count,
+                        TotalDuration = TimeSpan.FromSeconds(ordered.Sum(t => t.Duration.TotalSeconds)),
+                        IsHiRes = hiRes != null,
+                        FormatBadge = (hiRes ?? first).Format.DisplayBadge,
+                        Tracks = ordered
+                    };
+                })
+                .OrderBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            var albumsByArtist = albums.ToLookup(a => a.Artist, StringComparer.OrdinalIgnoreCase);
+            var tracksByArtist = tracks.ToLookup(t => t.Artist, StringComparer.OrdinalIgnoreCase);
+            var artistNames = tracks.Select(t => t.Artist)
+                .Concat(albums.Select(a => a.Artist))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            var artists = artistNames
+                .Select(name =>
+                {
+                    var artistAlbums = albumsByArtist[name].ToList();
+                    var artistTracks = artistAlbums.SelectMany(a => a.Tracks)
+                        .Concat(tracksByArtist[name])
+                        .DistinctBy(t => t.Id)
+                        .OrderBy(t => t.Album, StringComparer.CurrentCultureIgnoreCase)
+                        .ThenBy(t => t.DiscNumber ?? 1)
+                        .ThenBy(t => t.TrackNumber ?? int.MaxValue)
+                        .ToList();
+                    return new Artist
+                    {
+                        Id = StableId(name.ToUpperInvariant()),
+                        Name = name,
+                        AlbumCount = artistAlbums.Count,
+                        TrackCount = artistTracks.Count,
+                        PicturePath = artistAlbums.FirstOrDefault(a => !string.IsNullOrEmpty(a.CoverArtPath))?.CoverArtPath,
+                        Albums = artistAlbums,
+                        Tracks = artistTracks
+                    };
+                })
+                .OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            var genres = tracks.Where(t => !string.IsNullOrWhiteSpace(t.Genre))
+                .Select(t => t.Genre!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            return new LibrarySnapshot
             {
-                Id = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                    System.Text.Encoding.UTF8.GetBytes($"{first.Album}_{first.Artist}")))[..16],
-                Title = first.Album,
-                Artist = first.Artist,
-                Year = first.Year,
-                Genre = first.Genre,
-                CoverArtPath = orderedTracks.FirstOrDefault(t => !string.IsNullOrEmpty(t.CoverArtPath))?.CoverArtPath,
-                TrackCount = orderedTracks.Count,
-                TotalDuration = TimeSpan.FromSeconds(orderedTracks.Sum(t => t.Duration.TotalSeconds)),
-                IsHiRes = orderedTracks.Any(t => t.Format.IsHiRes),
-                FormatBadge = orderedTracks.Any(t => t.Format.IsHiRes)
-                    ? orderedTracks.First(t => t.Format.IsHiRes).Format.DisplayBadge
-                    : first.Format.DisplayBadge,
-                Tracks = orderedTracks
+                Tracks = tracks,
+                TrackById = tracks.ToDictionary(t => t.Id),
+                Albums = albums,
+                Artists = artists,
+                Genres = genres
             };
-            _albums.Add(album);
         }
-
-        // Build Artists
-        var artistGroups = _tracks.GroupBy(t => t.Artist);
-        foreach (var grp in artistGroups)
-        {
-            var artistName = grp.Key;
-            var artistAlbums = _albums.Where(a => a.Artist.Equals(artistName, StringComparison.OrdinalIgnoreCase)).ToList();
-            var artist = new Artist
-            {
-                Id = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                    System.Text.Encoding.UTF8.GetBytes(artistName)))[..16],
-                Name = artistName,
-                AlbumCount = artistAlbums.Count,
-                TrackCount = grp.Count(),
-                PicturePath = artistAlbums.FirstOrDefault(a => !string.IsNullOrEmpty(a.CoverArtPath))?.CoverArtPath,
-                Albums = artistAlbums
-            };
-            _artists.Add(artist);
-        }
-
-        _albums.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase));
-        _artists.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase));
-
-        // Build Genres
-        var genres = _tracks.Where(t => !string.IsNullOrWhiteSpace(t.Genre))
-                            .Select(t => t.Genre!)
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .OrderBy(g => g);
-        _genres.AddRange(genres);
     }
 }

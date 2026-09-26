@@ -1,37 +1,33 @@
 # 🎵 Wiretune — Audiophile Lossless Streamer & Player
 
-> **Natív, bit-perfect és exkluzív módú veszteségmentes zenelejátszó és otthoni streaming rendszer (C# • Avalonia FluentUI).**
-> Tervezve a Spotify és Tidal előfizetések kiváltására, a **spotiFLAC** által letöltött FLAC albumok és zeneszámok professzionális lejátszására és hálózati streamelésére.
+> **Önállóan hosztolt, veszteségmentes zenei streaming rendszer: szerver + asztali (Linux / Windows) és Android kliens (C# • Avalonia FluentUI).**
+> Tervezve a Spotify és Tidal előfizetések kiváltására, a saját FLAC gyűjtemény professzionális lejátszására és hálózati streamelésére.
 
 ---
 
 ## ⚡ Főbb Funkciók
 
-- **🎧 Audiophile Bit-Perfect Mód**:
-  - Teljes mértékben megkerüli az operációs rendszer szoftveres keverőjét (OS Mixer bypass).
-  - Automatikus hardveres mintavételezési frekvencia illesztés a DAC-hoz (44.1 kHz, 48 kHz, 88.2 kHz, 96 kHz, 176.4 kHz, 192 kHz).
-  - **0 dB Unity Gain hangerőrögzítés**: Kizárja a digitális csonkolást, dither-t és felbontásvesztést a 24-bites FLAC hangfájloknál.
+- **🌐 Otthoni Streaming Szerver**:
+  - `Wiretune.Server`: ASP.NET Core szerver az otthoni gépre, JWT alapú felhasználókezeléssel.
+  - A zenemappa indexelése induláskor, beállítható időközönként (inkrementálisan: a változatlan fájlokat nem olvassa újra) és kérésre.
+  - **HTTP 206 Partial Content (Range Request)**: azonnali tekerés, a FLAC bitfolyam átkódolás nélkül jut el a kliensig.
+  - Első indításkor a kliensből hozható létre az adminisztrátori fiók – **nincs alapértelmezett jelszó**.
+- **🎧 Audiophile Bit-Perfect Mód (Linux)**:
+  - Közvetlen ALSA hardveres kimenet (`hw:X,Y`) vagy PipeWire órajel-illesztés a forrás mintavételezési frekvenciájára.
+  - **0 dB Unity Gain hangerőrögzítés**: kikapcsoláskor a korábbi hangerő visszaáll.
 - **🔒 Kizárólagos Mód (Exclusive Mode)**:
-  - **Linux**: Közvetlen hardveres ALSA kimenet (`hw:X,Y`, pl. SMSL USB AUDIO DAC) és PipeWire Pro Audio stream közvetlen illesztéssel.
-  - **Windows**: WASAPI Exclusive Mode (`AUDCLNT_SHAREMODE_EXCLUSIVE`), hardveres DMA pufferméret-vezérléssel.
-- **🏷️ Teljes Metaadat és Borítókép Kezelés**:
-  - `TagLibSharp` alapú közvetlen metaadat-kiolvasás FLAC, MP3, WAV, ALAC, AAC formátumokból.
-  - Cím, Előadó, Album, Év, Műfaj, Lemez- és számsorszám, Bitmélység (16/24/32-bit), Mintavételezési frekvencia (kHz), Bitráta.
-  - Beágyazott lemezborítók automatikus kibontása és memóriahatékony gyorsítótárazása.
-- **📁 Könyvtár Rendszerezés & Keresés**:
-  - Számok (Tracks), Albumok (Albums), Előadók (Artists), Műfajok (Genres).
-  - Kedvencek (Favorites) egykattintásos mentése.
-  - Egyedi lejátszási listák (Playlists) létrehozása, szerkesztése.
-  - Valós idejű, azonnali keresőmező.
-- **🌐 Otthoni Streaming Szerver Architektúra**:
-  - `Wiretune.Server`: Pehelykönnyű ASP.NET Core szerver az otthoni szervergépre.
-  - A szerveren lévő `WiretuneLibrary` főkönyvtár automatikus figyelése és indexelése.
-  - **HTTP 206 Partial Content (Range Request)** támogatás: Azonnali tekerés és streamelés veszteségmentes FLAC bitfolyammal, újrakódolás nélkül!
-- **💎 Prémium Neon & Glassmorphism Felület**:
-  - Az `EnergyStorageModel` modern, cyber-neon és üveghatású stílusvilágára épül.
-  - Sötét és világos téma dinamikus háttérgradienssel.
-  - Élő 16-sávos spektrumanalizátor (audio visualizer).
-  - Folyamatos vizuális jelút (Signal Path Diagnostics) kijelzés.
+  - **Linux**: közvetlen ALSA / PipeWire eszközhozzáférés.
+  - **Windows**: jelenleg csak megosztott (WASAPI shared) kimenet érhető el; a felület ezt jelzi, és nem kínál nem létező módot.
+- **🏷️ Metaadat és Borítókép Kezelés**:
+  - `TagLibSharp` alapú kiolvasás: FLAC, ALAC (m4a), WAV, AIFF, WavPack, APE, DSF, MP3, AAC, Ogg Vorbis, Opus.
+  - Beágyazott és mappaszintű (`cover.jpg`, `Folder.png` stb.) borítók; a kliens a képeket megjelenítési méretre dekódolva, korlátos gyorsítótárban tartja.
+  - Válogatásalbumok helyes kezelése (Album Artist szerint csoportosítva).
+- **📁 Könyvtár, Kedvencek, Lejátszási listák & Keresés**:
+  - Előadók, Albumok, Számok nézet, azonnali keresés legjobb találattal.
+  - Kedvencek és lejátszási listák (létrehozás, számok hozzáadása/eltávolítása, törlés megerősítéssel) – eszközönként tárolva.
+- **💎 Neon & Glassmorphism Felület**:
+  - Sötét és világos téma dinamikus háttérgradienssel, keskeny ablakban kompakt elrendezés.
+  - Élő 32-sávos spektrumanalizátor és jelút (Signal Path) kijelzés.
 
 ---
 
@@ -39,75 +35,92 @@
 
 ```
 Wiretune/
-├── Wiretune.slnx                  # Solution fájl (Modern .NET 10 formátum)
+├── Wiretune.slnx                  # Solution fájl (.NET 10)
 │
-├── Wiretune.Core/                 # Platformfüggetlen üzleti logika és modellek
-│   ├── Models/                    # Track, Album, Artist, Playlist, AudioFormat, AudioOutputDevice
-│   ├── Audio/                     # IAudioEngine, PlaybackState
-│   ├── Services/                  # MetadataScanner (TagLibSharp), LibraryService, ServerStreamingClient
-│   └── Repositories/              # ILibraryRepository adatbázis interfész
+├── Wiretune.Core/                 # Platformfüggetlen modellek és üzleti logika (szerver és kliens közös)
+│   ├── Models/                    # Track, Album, Artist, Playlist, AudioFormat, AudioFileTypes, UserInfo
+│   ├── Audio/                     # IAudioEngine
+│   ├── Services/                  # LibraryService, MetadataScanner, ServerSession + ServerStreamingClient (kliens), AppPaths, WiretuneLog
+│   └── Repositories/              # ILibraryRepository
 │
-├── Wiretune.Audio/                # Audiophile lejátszó motor
-│   ├── Devices/                   # AudioDeviceManager (ALSA, PipeWire, WASAPI hardvereszköz-detektálás)
-│   ├── Drivers/                   # LinuxAudioDriver (bitperfect unity gain, PipeWire/ALSA közvetlen vezérlés)
-│   └── WiretuneAudioEngine.cs     # IAudioEngine megvalósítás, DAC illesztés és jelút-diagnosztika
+├── Wiretune.Audio/                # Lejátszó motor
+│   ├── Devices/                   # AudioDeviceManager (ALSA, PipeWire, Windows eszközök)
+│   ├── Drivers/                   # FfmpegAudioDriver (ffplay alapú lejátszás, ALSA/PipeWire útvonalválasztás)
+│   ├── Dsp/                       # FFT spektrumanalizátor, PCM gyorsítótár
+│   └── WiretuneAudioEngine.cs     # Módok, eszközök, stream-hitelesítés
 │
-├── Wiretune.Data/                 # Helyi gyorsítótár és perzisztencia
-│   ├── DatabaseManager.cs         # SQLite adatbázis kapcsolat kezelő (WAL mód)
-│   └── LibraryRepository.cs       # Dapper alapú gyors kötegelt mentés és lekérdezés
+├── Wiretune.Data/                 # SQLite perzisztencia (sémaverziózás és migráció)
 │
-├── Wiretune.UI/                   # Avalonia FluentUI felhasználói felület (Megosztott Desktop & Mobil)
-│   ├── Assets/                    # Ikonok és alkalmazás erőforrások
-│   ├── Converters/                # Audio és állapot konverterek
-│   ├── Services/                  # ThemeService (dinamikus gradiensek és neon akcentusok)
-│   ├── ViewModels/                # MainViewModel, PlayerViewModel, Tracks, Albums, Artists, AudiophileSettings
-│   └── Views/                     # MainView.axaml (teljes felület), MainWindow.axaml
+├── Wiretune.UI/                   # Avalonia felület (asztal és mobil közös)
 │
 ├── Wiretune.Desktop/              # Asztali futtató (Linux & Windows)
-│   └── Program.cs
+├── Wiretune.Android/              # Android futtató (MediaPlayer alapú lejátszás)
 │
-├── Wiretune.Server/               # Otthoni streaming szerver (WiretuneLibrary kiszolgáló)
-│   ├── appsettings.json           # WiretuneLibrary elérési út konfiguráció
-│   └── Program.cs                 # REST API & veszteségmentes audio streaming végpontok
+├── Wiretune.Server/               # Streaming szerver
+│   ├── Auth/AuthService.cs        # Felhasználók, BCrypt, JWT
+│   ├── LibraryScanService.cs      # Indítási, időzített és kézi indexelés
+│   ├── ServerOptions.cs           # Konfiguráció
+│   └── Program.cs                 # REST API és streaming végpontok
 │
-├── Wiretune.Android/              # Android futtató (Avalonia MainActivity)
-│   └── MainActivity.cs
-│
-└── Wiretune.Tests/                # Automatizált egységtesztek (xUnit)
-    ├── AudioEngineTests.cs        # Bit-perfect hangerőzár és Hi-Res formátum tesztek
-    └── LibraryServiceTests.cs     # Indexelési, keresési és lejátszási lista tesztek
+└── Wiretune.Tests/                # xUnit tesztek, köztük memóriában futó szerver–kliens integrációs tesztek
 ```
 
 ---
 
 ## 🚀 Indítás és Használat
 
-### 1. Asztali Kliens Indítása (Linux / Windows)
-```bash
-cd /home/wirekurosastak/Dokumentumok/GitHub/Wiretune
-dotnet run --project Wiretune.Desktop
-```
+### Követelmények
+- .NET 10 SDK
+- Asztali kliensen **FFmpeg** (`ffplay` és `ffmpeg` a `PATH`-ban). Nélküle a lejátszó hibaüzenetet jelez.
 
-### 2. Otthoni Streaming Szerver Indítása (a Szervergépen)
-Állítsd be a `Wiretune.Server/appsettings.json` fájlban a zenéid főkönyvtárát (`WiretuneLibrary`), majd:
+### 1. Szerver indítása (a zenét tároló gépen)
+Állítsd be a `Wiretune.Server/appsettings.json` fájlban:
+
+| Kulcs | Jelentés | Alapérték |
+|---|---|---|
+| `Wiretune:LibraryPath` | A zenemappa (relatív út a szerver mappájához képest) | `WiretuneLibrary`, ha nem létezik: a felhasználó Zene mappája |
+| `Wiretune:DataDirectory` | Adatbázis, borító-gyorsítótár, napló helye | `<AppData>/Wiretune/Server` |
+| `Wiretune:ScanIntervalMinutes` | Időzített inkrementális újraindexelés (0 = kikapcsolva) | `30` |
+| `Wiretune:Port` | HTTP port | `5200` |
+
 ```bash
 dotnet run --project Wiretune.Server
 ```
-A szerver alapértelmezetten a `http://0.0.0.0:5200` címen válik elérhetővé a helyi hálózaton.
+A szerver a `http://0.0.0.0:5200` címen érhető el a helyi hálózaton. Bármely kulcs parancssorból is megadható, pl. `-- --Wiretune:LibraryPath=/srv/music`.
 
-### 3. Tesztek Futtatása
+### 2. Asztali kliens indítása (Linux / Windows)
+```bash
+dotnet run --project Wiretune.Desktop
+```
+Első indításkor add meg a szerver címét (pl. `192.168.1.10:5200`) és kattints a **Csatlakozás** gombra.
+- Friss szervernél itt hozod létre az **adminisztrátori fiókot** (legalább 8 karakteres jelszó).
+- Később ugyanitt jelentkezhetsz be; a „Maradjak bejelentkezve” opcióval a kliens induláskor automatikusan visszakapcsolódik.
+- Szerver nélkül is használható: **Beállítások → Helyi zenemappa**.
+
+A kliens adatai (gyorsítótár, kedvencek, lejátszási listák) a `<AppData>/Wiretune` mappában vannak; ez a `WIRETUNE_DATA_DIR` környezeti változóval felülírható.
+
+### 3. Tesztek futtatása
 ```bash
 dotnet test
 ```
+
+### Android
+A `Wiretune.Android` projekt nincs a solutionben, mert fordításához az Android workload szükséges (`dotnet workload install android`). A lejátszás az Android `MediaPlayer`-rel történik, exkluzív/bit-perfect mód nélkül.
 
 ---
 
 ## 🎛️ Audiophile Beállítások
 
-1. Nyisd meg az alkalmazásban a bal oldali menüből az **Audiophile Mód** fület.
-2. Kapcsold be a **Bit-Perfect Mód** kapcsolót:
-   - A lejátszó azonnal rögzíti a digitális szoftveres hangerőt 100%-ra (0 dB Unity Gain).
-   - A rendszer szoftveres újramintavételezése kikapcsol.
-3. Kapcsold be a **Kizárólagos Mód (Exclusive Mode)** kapcsolót a DAC közvetlen lefoglalásához (pl. **SMSL USB AUDIO**).
-4. A lejátszási sávban bármikor megtekinthető a valós idejű **Jelút (Signal Path)**:
-   `Forrás FLAC (24-bit / 96.0 kHz) -> Wiretune Dekóder -> Bit-perfect (1:1 PCM) -> SMSL USB AUDIO Pro`.
+1. Nyisd meg a **Beállítások → Hangkimenet** részt.
+2. **Kizárólagos (Exclusive) mód**: a kiválasztott DAC közvetlen lefoglalása (Linux: ALSA `hw:X,Y` vagy PipeWire).
+3. **Bit-Perfect mód**: bekapcsolja a kizárólagos módot is, 0 dB-re rögzíti a hangerőt, és a forrás mintavételezési frekvenciáján szól.
+4. A **Jelút** panel mutatja a teljes útvonalat, pl.:
+   `Forrás: Hi-Res Studio Master (96kHz/24b) → Szerver stream → Bit-perfect (1:1 PCM) → Közvetlen ALSA: USB Audio`.
+
+Ha az adott rendszer egyik eszköze sem támogatja ezeket a módokat (pl. Windows), a kapcsolók inaktívak, és a felület jelzi az okát.
+
+---
+
+## 🧪 Fejlesztői UI-automatizálás
+
+`WIRETUNE_UI_AUTOMATION=1` környezeti változóval az asztali kliens a `http://127.0.0.1:5201/api/ui/...` címen egy csak helyi, böngészőből nem elérhető tesztelő végpontot indít (állapot, navigáció, képernyőkép stb.). Alapértelmezetten ki van kapcsolva.

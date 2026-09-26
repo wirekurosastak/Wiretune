@@ -1,20 +1,25 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Audio;
+using Wiretune.Audio.Drivers;
 using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
-using Wiretune.Core.Repositories;
 using Wiretune.Core.Services;
 using Wiretune.Data;
 using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
 
-public partial class MainViewModel : ObservableObject
+public partial class MainViewModel : ObservableObject, IDisposable
 {
+    public const int CompactLayoutWidth = 1000;
+
+    private bool _disposed;
+
     public ThemeService Theme { get; }
     public IAudioEngine AudioEngine { get; }
     public ILibraryService Library { get; }
+    public ServerSession Session { get; }
 
     public PlayerViewModel Player { get; }
     public TracksViewModel Tracks { get; }
@@ -29,25 +34,24 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private int _selectedNavigationIndex = 2;
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private bool _isSearchActive;
-    [ObservableProperty] private string _statusText = "Készenlétben";
-    [ObservableProperty] private string _rightFooterStatusText = "Wiretune v1.0 • Hi-Fi Audio Engine Kész";
+    [ObservableProperty] private string _statusText = "Indítás...";
+    [ObservableProperty] private string _rightFooterStatusText = "Wiretune";
     [ObservableProperty] private string _logoTransform = "rotate(0deg)";
-    [ObservableProperty] private bool _isServerOfflineBannerVisible = false;
+    [ObservableProperty] private bool _isServerOfflineBannerVisible;
     [ObservableProperty] private string _serverBannerMessage = string.Empty;
-    [ObservableProperty] private bool _isLoginViewActive = false;
-    [ObservableProperty] private bool _isUserLoggedIn = false;
+    [ObservableProperty] private bool _isLoginViewActive;
+    [ObservableProperty] private bool _isUserLoggedIn;
     [ObservableProperty] private string _currentUserBadge = "Bejelentkezés";
+    [ObservableProperty] private bool _isCompactLayout;
+    [ObservableProperty] private bool _isStarting = true;
+    [ObservableProperty] private bool _isLibraryEmpty;
 
-    public MainViewModel()
-        : this(new WiretuneAudioEngine(), new LibraryService(new LibraryRepository(), new MetadataScanner()))
-    {
-    }
-
-    public MainViewModel(IAudioEngine audioEngine, ILibraryService library)
+    public MainViewModel(IAudioEngine audioEngine, ILibraryService library, ServerSession session)
     {
         Theme = new ThemeService();
         AudioEngine = audioEngine;
         Library = library;
+        Session = session;
 
         Player = new PlayerViewModel(AudioEngine, Library);
         Tracks = new TracksViewModel(Library, Player);
@@ -56,103 +60,114 @@ public partial class MainViewModel : ObservableObject
         Playlists = new PlaylistsViewModel(Library, Player);
         Favorites = new FavoritesViewModel(Library, Player);
         AudiophileSettings = new AudiophileSettingsViewModel(AudioEngine);
-        ServerSettings = new ServerSettingsViewModel(Library);
+        ServerSettings = new ServerSettingsViewModel(Library, Session);
+        Search = new SearchResultsViewModel(Library, Player, q => SearchQuery = q, OpenAlbum, OpenArtist);
 
-        Search = new SearchResultsViewModel(
-            Library,
-            AudioEngine,
-            Player,
-            q => SearchQuery = q,
-            album => OpenAlbum(album),
-            artist => OpenArtist(artist));
+        AudioEngine.TrackChanged += (_, _) => Ui.Post(UpdateStatusText);
+        AudioEngine.BitperfectChanged += (_, _) => Ui.Post(UpdateStatusText);
+        AudioEngine.ExclusiveModeChanged += (_, _) => Ui.Post(UpdateStatusText);
+        AudioEngine.StateChanged += (_, _) => Ui.Post(UpdateStatusText);
+        AudioEngine.DevicesChanged += (_, _) => Ui.Post(UpdateStatusText);
+        Library.LibraryChanged += (_, _) => Ui.Post(UpdateStatusText);
 
-        _ = Task.Run(async () =>
+        Session.StateChanged += (_, _) =>
         {
-            await Library.InitializeAsync();
-            DispatchToUI(() =>
-            {
-                // If user has a valid saved session from "Stay Logged In", skip login view!
-                if (Library.IsLoggedIn)
-                {
-                    IsLoginViewActive = false;
-                }
-                UpdateAuthDisplay();
-            });
-        });
+            // Apply credentials immediately so a play command issued right after login is authorised.
+            AudioEngine.SetStreamAuthorization(Session.AuthToken);
+            CoverArtService.AuthToken = Session.AuthToken;
+            Ui.Post(OnSessionStateChanged);
+        };
 
-        UpdateStatusText();
-        AudioEngine.TrackChanged += (_, _) => DispatchToUI(UpdateStatusText);
-        AudioEngine.BitperfectChanged += (_, _) => DispatchToUI(UpdateStatusText);
-        AudioEngine.ExclusiveModeChanged += (_, _) => DispatchToUI(UpdateStatusText);
-        AudioEngine.StateChanged += (_, _) => DispatchToUI(UpdateStatusText);
-
-        Library.ServerStatusChanged += (_, msg) => DispatchToUI(() =>
-        {
-            if (!Library.IsServerConnected && !string.IsNullOrWhiteSpace(Library.ServerUrl))
-            {
-                ServerBannerMessage = msg ?? $"A WiretuneLibrary szerver ({Library.ServerUrl}) nem érhető el.";
-                IsServerOfflineBannerVisible = true;
-            }
-            else
-            {
-                IsServerOfflineBannerVisible = false;
-            }
-            UpdateStatusText();
-        });
-
-        Library.LibraryChanged += (_, _) => DispatchToUI(UpdateStatusText);
-        Library.AuthStateChanged += (_, user) => DispatchToUI(() =>
-        {
-            UpdateAuthDisplay();
-            if (user != null)
-            {
-                IsLoginViewActive = false;
-            }
-        });
         UpdateAuthDisplay();
-
+        UpdateStatusText();
         Theme.UpdateDynamicBackground(SelectedNavigationIndex);
         LogoTransform = $"rotate({SelectedNavigationIndex * 90}deg)";
     }
 
-    private static void DispatchToUI(Action action)
+    /// <summary>Creates the production object graph (SQLite cache, ffplay or platform audio driver).</summary>
+    public static MainViewModel CreateDefault(IAudioDriver? audioDriver = null)
     {
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        var repository = new LibraryRepository(new DatabaseManager());
+        var library = new LibraryService(repository, new MetadataScanner());
+        var session = new ServerSession(library, repository);
+        return new MainViewModel(new WiretuneAudioEngine(audioDriver), library, session);
+    }
+
+    /// <summary>Loads the local cache, then reconnects to the server if it is the library source.</summary>
+    public async Task StartAsync()
+    {
+        try
         {
-            action();
+            await Library.InitializeAsync();
+            await Session.InitializeAsync();
+            ServerSettings.SyncWithSession();
         }
-        else
+        catch (Exception ex)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(action);
+            WiretuneLog.Error("MainViewModel", $"Startup failed: {ex.Message}", ex);
+            StatusText = $"Indítási hiba: {ex.Message}";
+            return;
         }
+        finally
+        {
+            // The cached library is usable now; the server connection below may take a while.
+            IsStarting = false;
+            UpdateStatusText();
+        }
+
+        if (Session.Source == LibrarySource.Server)
+        {
+            await Session.ConnectAsync();
+        }
+
+        IsLoginViewActive = Session.Source == LibrarySource.None ||
+                            Session.State is ServerConnectionState.LoginRequired or ServerConnectionState.SetupRequired;
+    }
+
+    private void OnSessionStateChanged()
+    {
+        IsServerOfflineBannerVisible = Session.Source == LibrarySource.Server && Session.State == ServerConnectionState.Offline;
+        ServerBannerMessage = Session.StatusMessage ?? $"A Wiretune szerver ({Session.ServerUrl}) nem érhető el.";
+
+        if (Session.IsLoggedIn) IsLoginViewActive = false;
+
+        UpdateAuthDisplay();
+        UpdateStatusText();
+    }
+
+    private void UpdateAuthDisplay()
+    {
+        IsUserLoggedIn = Session.IsLoggedIn;
+        CurrentUserBadge = Session.CurrentUser is { } user ? user.DisplayName ?? user.Username : "Bejelentkezés";
     }
 
     private void UpdateStatusText()
     {
-        if (AudioEngine.CurrentTrack != null)
-        {
-            var modeText = AudioEngine.IsBitperfect && AudioEngine.IsExclusiveMode
-                ? "Bit-Perfect [Exclusive Direct]"
-                : (AudioEngine.IsBitperfect
-                    ? "Bit-Perfect [PipeWire]"
-                    : (AudioEngine.IsExclusiveMode ? "Exclusive Direct" : "Standard [Shared]"));
-            var dev = AudioEngine.CurrentDevice?.Name ?? "Audio DAC";
-            StatusText = $"Lejátszás: {AudioEngine.CurrentTrack.Artist} - {AudioEngine.CurrentTrack.Title} | {modeText} -> {dev}";
+        IsLibraryEmpty = !IsStarting && Library.Tracks.Count == 0;
 
-            var fmt = AudioEngine.CurrentTrack.Format;
-            var transport = AudioEngine.IsExclusiveMode
-                ? "ALSA Direct (hw)"
-                : (AudioEngine.IsBitperfect ? "PipeWire Bit-Perfect Clock" : "PipeWire Shared");
-            RightFooterStatusText = $"{fmt.Codec.ToUpperInvariant()} {fmt.BitsPerSample}-bit/{fmt.SampleRate / 1000.0:0.#}kHz • {transport}";
-        }
-        else
+        var device = AudioEngine.CurrentDevice;
+        var mode = AudioEngine.IsBitperfect ? "Bit-Perfect" : AudioEngine.IsExclusiveMode ? "Exclusive" : "Megosztott";
+        var deviceName = device?.Name ?? "Alapértelmezett kimenet";
+
+        if (AudioEngine.CurrentTrack is { } track)
         {
-            var bp = AudioEngine.IsBitperfect ? "Bit-Perfect aktív" : (AudioEngine.IsExclusiveMode ? "Exclusive aktív" : "Standard audio");
-            var dev = AudioEngine.CurrentDevice?.Name ?? "Alapértelmezett kimenet";
-            var srv = Library.IsServerConnected ? "Szerver: Online" : (string.IsNullOrWhiteSpace(Library.ServerUrl) ? "Helyi könyvtár" : "Szerver: Nem elérhető");
-            StatusText = $"{bp} | Kimenet: {dev} | {srv} | {Library.Tracks.Count} szám elérhető";
-            RightFooterStatusText = "Wiretune v1.0 • Audiophile Native Engine Kész";
+            StatusText = $"Lejátszás: {track.Artist} - {track.Title} | {mode} -> {deviceName}";
+            var fmt = track.Format;
+            var quality = fmt.IsLossless
+                ? $"{fmt.Codec.ToUpperInvariant()} {fmt.BitsPerSample}-bit/{fmt.SampleRate / 1000.0:0.#}kHz"
+                : fmt.QualityLabel;
+            RightFooterStatusText = $"{quality} • {device?.DriverType ?? "Audio"} • {mode}";
+            return;
         }
+
+        var source = Session.Source switch
+        {
+            LibrarySource.Server => Session.IsLoggedIn ? "Szerver: online" : "Szerver: nem elérhető",
+            LibrarySource.Local => "Helyi könyvtár",
+            _ => "Nincs könyvtár"
+        };
+        StatusText = $"{mode} | Kimenet: {deviceName} | {source} | {Library.Tracks.Count} szám elérhető";
+        RightFooterStatusText = $"Wiretune • {device?.DriverType ?? "Audio"}";
     }
 
     partial void OnSelectedNavigationIndexChanged(int value)
@@ -163,71 +178,46 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchQueryChanged(string value)
     {
-        Tracks.SearchFilter = value;
-        Albums.SearchFilter = value;
-        Artists.SearchFilter = value;
         Search.UpdateQuery(value);
         IsSearchActive = !string.IsNullOrWhiteSpace(value);
     }
 
     [RelayCommand]
-    public void ClearSearch()
-    {
-        SearchQuery = string.Empty;
-    }
+    public void ClearSearch() => SearchQuery = string.Empty;
 
     [RelayCommand]
     public void NavigateTo(object? parameter)
     {
-        int targetIndex = -1;
-        if (parameter is int i)
+        var targetIndex = parameter switch
         {
-            targetIndex = i;
-        }
-        else if (parameter != null && int.TryParse(parameter.ToString(), out var parsed))
-        {
-            targetIndex = parsed;
-        }
+            int i => i,
+            _ when int.TryParse(parameter?.ToString(), out var parsed) => parsed,
+            _ => -1
+        };
+        if (targetIndex < 0 || targetIndex > 5) return;
 
-        if (targetIndex >= 0)
-        {
-            if (targetIndex == 1)
-            {
-                Albums.CloseAlbumDetail();
-            }
-            else if (targetIndex == 2)
-            {
-                Artists.CloseArtistDetail();
-            }
-            SearchQuery = string.Empty;
-            SelectedNavigationIndex = targetIndex;
-        }
+        if (targetIndex == 1) Albums.CloseAlbumDetail();
+        else if (targetIndex == 2) Artists.CloseArtistDetail();
+
+        SearchQuery = string.Empty;
+        SelectedNavigationIndex = targetIndex;
     }
 
     [RelayCommand]
     public void OpenAlbum(object? parameter)
     {
-        Album? album = parameter switch
+        var album = parameter switch
         {
             Album a => a,
             AlbumCardViewModel vm => vm.Album,
+            Track t => Library.GetAlbumForTrack(t),
             _ => null
         };
         if (album == null) return;
+
         SearchQuery = string.Empty;
         Albums.OpenAlbum(album);
         SelectedNavigationIndex = 1;
-    }
-
-    [RelayCommand]
-    public void OpenAlbumByTitle(string? albumTitle)
-    {
-        if (string.IsNullOrWhiteSpace(albumTitle)) return;
-        var found = Library.Albums.FirstOrDefault(a => a.Title.Equals(albumTitle, StringComparison.OrdinalIgnoreCase));
-        if (found != null)
-        {
-            OpenAlbum(found);
-        }
     }
 
     [RelayCommand]
@@ -242,46 +232,29 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     public void OpenArtistByName(string? artistName)
     {
-        if (string.IsNullOrWhiteSpace(artistName)) return;
-        var found = Library.Artists.FirstOrDefault(a => a.Name.Equals(artistName, StringComparison.OrdinalIgnoreCase));
-        if (found != null)
-        {
-            OpenArtist(found);
-        }
+        if (!string.IsNullOrWhiteSpace(artistName)) OpenArtist(Library.GetArtistByName(artistName));
     }
 
     [RelayCommand]
-    public async Task RetryConnectServerAsync()
+    public void AddToPlaylist(Track? track)
     {
-        if (!string.IsNullOrWhiteSpace(Library.ServerUrl))
-        {
-            await Library.ConnectServerAsync(Library.ServerUrl);
-        }
+        if (track != null) Playlists.BeginAddTrack(track);
     }
 
     [RelayCommand]
-    public void DismissServerBanner()
-    {
-        IsServerOfflineBannerVisible = false;
-    }
+    public Task RetryConnectServerAsync() => Session.ConnectAsync();
 
     [RelayCommand]
-    public void ToggleTheme()
-    {
-        Theme.ToggleTheme();
-    }
+    public void DismissServerBanner() => IsServerOfflineBannerVisible = false;
 
     [RelayCommand]
-    public void ContinueOffline()
-    {
-        IsLoginViewActive = false;
-    }
+    public void ToggleTheme() => Theme.ToggleTheme();
 
     [RelayCommand]
-    public void ShowLoginScreen()
-    {
-        IsLoginViewActive = true;
-    }
+    public void ContinueOffline() => IsLoginViewActive = false;
+
+    [RelayCommand]
+    public void ShowLoginScreen() => IsLoginViewActive = true;
 
     [RelayCommand]
     public async Task LogoutAsync()
@@ -291,16 +264,12 @@ public partial class MainViewModel : ObservableObject
         IsLoginViewActive = true;
     }
 
-    private void UpdateAuthDisplay()
-    {
-        IsUserLoggedIn = Library.IsLoggedIn;
-        CurrentUserBadge = Library.CurrentUser != null
-            ? (Library.CurrentUser.DisplayName ?? Library.CurrentUser.Username)
-            : "Bejelentkezés";
-    }
-
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         AudioEngine.Dispose();
+        Session.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

@@ -7,7 +7,7 @@
         Title="Wiretune - Audiophile Streamer &amp; Player"
         Icon="/Assets/wiretune.ico"
         Width="1280" Height="820"
-        MinWidth="1050" MinHeight="650"
+        MinWidth="720" MinHeight="560"
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
         Background="{DynamicResource AppBackground}"
@@ -16,6 +16,6 @@
         TransparencyLevelHint="Mica, Transparent"
         FontFamily="Segoe UI Variable, Inter, -apple-system, Arial">
 
-  <views:MainView />
+  <views:MainView x:Name="RootView" />
 
 </Window>

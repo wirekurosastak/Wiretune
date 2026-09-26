@@ -25,9 +25,13 @@ public interface IAudioEngine : IDisposable
     event EventHandler<bool>? ExclusiveModeChanged;
     event EventHandler<float[]>? SpectrumDataAvailable;
     event EventHandler? TrackEnded;
+    event EventHandler? DevicesChanged;
+    event EventHandler<string>? PlaybackFailed;
+
+    /// <summary>Bearer token appended to server stream URLs at playback time (never stored on the track).</summary>
+    void SetStreamAuthorization(string? bearerToken);
 
     Task PlayTrackAsync(Track track, CancellationToken ct = default);
-    Task PlayStreamAsync(string streamUrl, Track track, CancellationToken ct = default);
     Task PauseAsync();
     Task ResumeAsync();
     Task StopAsync();

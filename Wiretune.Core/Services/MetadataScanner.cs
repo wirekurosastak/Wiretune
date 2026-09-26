@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Wiretune.Core.Models;
@@ -6,211 +7,66 @@ namespace Wiretune.Core.Services;
 
 public class MetadataScanner : IMetadataScanner
 {
-    private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly string[] FolderCoverNames =
     {
-        ".flac", ".mp3", ".wav", ".m4a", ".aac", ".alac", ".ogg", ".opus", ".aiff", ".dsf"
+        "cover.jpg", "cover.jpeg", "cover.png", "folder.jpg", "folder.jpeg", "folder.png",
+        "front.jpg", "front.jpeg", "front.png", "albumart.jpg", "artwork.jpg"
     };
 
     public Task<Track?> ReadTrackMetadataAsync(string filePath, string? coverCacheDirectory = null, CancellationToken ct = default)
     {
-        return Task.Run(() =>
-        {
-            try
-            {
-                if (!File.Exists(filePath)) return null;
-
-                var ext = Path.GetExtension(filePath);
-                if (!SupportedExtensions.Contains(ext)) return null;
-
-                var fileInfo = new FileInfo(filePath);
-                using var tagFile = TagLib.File.Create(filePath);
-
-                var tag = tagFile.Tag;
-                var props = tagFile.Properties;
-
-                var title = !string.IsNullOrWhiteSpace(tag?.Title)
-                    ? tag.Title.Trim()
-                    : Path.GetFileNameWithoutExtension(filePath);
-
-                var artist = !string.IsNullOrWhiteSpace(tag?.FirstPerformer)
-                    ? tag.FirstPerformer.Trim()
-                    : (!string.IsNullOrWhiteSpace(tag?.FirstAlbumArtist)
-                        ? tag.FirstAlbumArtist.Trim()
-                        : "Ismeretlen előadó");
-
-                var album = !string.IsNullOrWhiteSpace(tag?.Album)
-                    ? tag.Album.Trim()
-                    : "Ismeretlen album";
-
-                var genre = tag?.FirstGenre;
-                var year = tag?.Year > 0 ? (int?)tag.Year : null;
-                var trackNum = tag?.Track > 0 ? (int?)tag.Track : null;
-                var trackCount = tag?.TrackCount > 0 ? (int?)tag.TrackCount : null;
-                var discNum = tag?.Disc > 0 ? (int?)tag.Disc : null;
-
-                var sampleRate = props?.AudioSampleRate ?? 44100;
-                var bitsPerSample = props?.BitsPerSample ?? 16;
-                if (bitsPerSample == 0)
-                {
-                    // Fallback for formats where TagLib reports 0 bits (like some FLAC or lossy)
-                    bitsPerSample = 16; // TagLib reports 0 for some formats; default to CD quality
-                }
-
-                var codec = !string.IsNullOrWhiteSpace(props?.Description)
-                    ? props.Description.ToUpperInvariant()
-                    : ext.TrimStart('.').ToUpperInvariant();
-
-                var isLossless = ext.Equals(".flac", StringComparison.OrdinalIgnoreCase) ||
-                                 ext.Equals(".wav", StringComparison.OrdinalIgnoreCase) ||
-                                 ext.Equals(".alac", StringComparison.OrdinalIgnoreCase) ||
-                                 ext.Equals(".aiff", StringComparison.OrdinalIgnoreCase) ||
-                                 ext.Equals(".dsf", StringComparison.OrdinalIgnoreCase);
-
-                var format = new AudioFormat
-                {
-                    Codec = codec,
-                    SampleRate = sampleRate,
-                    BitsPerSample = bitsPerSample,
-                    Channels = props?.AudioChannels ?? 2,
-                    BitrateKbps = props?.AudioBitrate ?? 1411,
-                    IsLossless = isLossless
-                };
-
-                string? coverArtPath = null;
-                var hasCover = tag?.Pictures != null && tag.Pictures.Length > 0;
-                string? folderCoverPath = null;
-
-                try
-                {
-                    var dir = Path.GetDirectoryName(filePath);
-                    if (!string.IsNullOrEmpty(dir))
-                    {
-                        string[] candidates = { "cover.jpg", "cover.png", "cover.jpeg", "folder.jpg", "folder.png", "front.jpg", "front.png", "albumart.jpg", "artwork.jpg" };
-                        foreach (var c in candidates)
-                        {
-                            var p = Path.Combine(dir, c);
-                            if (File.Exists(p))
-                            {
-                                hasCover = true;
-                                folderCoverPath = p;
-                                break;
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    // Ignore folder search error
-                }
-
-                if (hasCover)
-                {
-                    if (tag?.Pictures != null && tag.Pictures.Length > 0 && !string.IsNullOrWhiteSpace(coverCacheDirectory))
-                    {
-                        try
-                        {
-                            Directory.CreateDirectory(coverCacheDirectory);
-                            var hashSource = $"{artist}_{album}";
-                            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(hashSource)))[..16];
-                            var coverFileName = $"cover_{hash}.jpg";
-                            coverArtPath = Path.Combine(coverCacheDirectory, coverFileName);
-
-                            if (!File.Exists(coverArtPath))
-                            {
-                                var pic = tag.Pictures[0];
-                                if (pic?.Data != null)
-                                {
-                                    File.WriteAllBytes(coverArtPath, pic.Data.Data);
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            // Ignore cache write failures
-                        }
-                    }
-                    else if (!string.IsNullOrEmpty(folderCoverPath))
-                    {
-                        coverArtPath = folderCoverPath;
-                    }
-                }
-
-                return new Track
-                {
-                    Id = Convert.ToHexString(SHA256.HashData(
-                        Encoding.UTF8.GetBytes(Path.GetFullPath(filePath).ToLowerInvariant())))[..32],
-                    Title = title,
-                    Artist = artist,
-                    Album = album,
-                    AlbumArtist = tag?.FirstAlbumArtist,
-                    TrackNumber = trackNum,
-                    TrackCount = trackCount,
-                    DiscNumber = discNum,
-                    Year = year,
-                    Genre = genre,
-                    Duration = props?.Duration ?? TimeSpan.Zero,
-                    FileSizeBytes = fileInfo.Length,
-                    FilePath = filePath,
-                    HasCoverArt = hasCover,
-                    CoverArtPath = coverArtPath,
-                    Format = format,
-                    DateAdded = DateTime.UtcNow
-                };
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }, ct);
+        return Task.Run(() => ReadTrackMetadata(filePath, coverCacheDirectory, null), ct);
     }
 
-    public async Task<List<Track>> ScanDirectoryAsync(
+    public Task<List<Track>> ScanDirectoryAsync(
         string rootPath,
         string? coverCacheDirectory = null,
         IProgress<ScanProgressReport>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IReadOnlyDictionary<string, Track>? knownTracks = null)
     {
-        return await Task.Run(async () =>
+        return Task.Run(async () =>
         {
-            var tracks = new List<Track>();
-            if (!Directory.Exists(rootPath)) return tracks;
+            if (!Directory.Exists(rootPath)) return new List<Track>();
 
-            var allFiles = Directory.EnumerateFiles(rootPath, "*.*", new EnumerationOptions
+            var files = Directory.EnumerateFiles(rootPath, "*", new EnumerationOptions
                 {
                     IgnoreInaccessible = true,
                     RecurseSubdirectories = true,
-                    AttributesToSkip = FileAttributes.System
+                    AttributesToSkip = FileAttributes.System | FileAttributes.Hidden
                 })
-                .Where(f => SupportedExtensions.Contains(Path.GetExtension(f)))
+                .Where(AudioFileTypes.IsSupported)
                 .ToList();
 
-            int total = allFiles.Count;
-            int count = 0;
+            var total = files.Count;
+            var processed = 0;
+            var results = new ConcurrentBag<Track>();
+            var folderCovers = new ConcurrentDictionary<string, string?>(StringComparer.Ordinal);
 
-            foreach (var file in allFiles)
-            {
-                if (ct.IsCancellationRequested) break;
-
-                var track = await ReadTrackMetadataAsync(file, coverCacheDirectory, ct);
-                if (track != null)
+            await Parallel.ForEachAsync(
+                files,
+                new ParallelOptions { CancellationToken = ct, MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 2, 8) },
+                (file, _) =>
                 {
-                    tracks.Add(track);
-                }
+                    var track = TryReuse(file, knownTracks) ?? ReadTrackMetadata(file, coverCacheDirectory, folderCovers);
+                    if (track != null) results.Add(track);
 
-                count++;
-                if (count % 5 == 0 || count == total)
-                {
-                    progress?.Report(new ScanProgressReport
+                    var done = Interlocked.Increment(ref processed);
+                    if (progress != null && (done % 10 == 0 || done == total))
                     {
-                        ScannedFiles = count,
-                        TotalEstimatedFiles = total,
-                        CurrentFile = Path.GetFileName(file),
-                        CurrentArtist = track?.Artist ?? string.Empty
-                    });
-                }
-            }
+                        progress.Report(new ScanProgressReport
+                        {
+                            ScannedFiles = done,
+                            TotalEstimatedFiles = total,
+                            CurrentFile = Path.GetFileName(file),
+                            CurrentArtist = track?.Artist ?? string.Empty
+                        });
+                    }
 
-            return tracks;
+                    return ValueTask.CompletedTask;
+                }).ConfigureAwait(false);
+
+            return results.ToList();
         }, ct);
     }
 
@@ -218,40 +74,192 @@ public class MetadataScanner : IMetadataScanner
     {
         return Task.Run(() =>
         {
+            if (!File.Exists(filePath)) return null;
+
             try
             {
-                if (!File.Exists(filePath)) return null;
                 using var tagFile = TagLib.File.Create(filePath);
-                var pictures = tagFile.Tag?.Pictures;
-                if (pictures != null && pictures.Length > 0 && pictures[0]?.Data?.Data != null)
-                {
-                    return pictures[0].Data.Data;
-                }
+                var data = tagFile.Tag?.Pictures?.FirstOrDefault()?.Data?.Data;
+                if (data is { Length: > 0 }) return data;
             }
             catch
             {
-                // Fallback to folder check below
+                // Unreadable tags: fall back to a folder image below.
             }
 
+            var folderCover = FindFolderCover(Path.GetDirectoryName(filePath));
             try
             {
-                var dir = Path.GetDirectoryName(filePath);
-                if (!string.IsNullOrEmpty(dir))
-                {
-                    string[] candidates = { "cover.jpg", "cover.png", "cover.jpeg", "folder.jpg", "folder.png", "front.jpg", "front.png", "albumart.jpg", "artwork.jpg" };
-                    foreach (var c in candidates)
-                    {
-                        var p = Path.Combine(dir, c);
-                        if (File.Exists(p)) return File.ReadAllBytes(p);
-                    }
-                }
+                return folderCover != null ? File.ReadAllBytes(folderCover) : null;
             }
             catch
             {
-                // Ignore folder read error
+                return null;
             }
-
-            return null;
         }, ct);
     }
+
+    public static string ComputeTrackId(string filePath) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(filePath).ToLowerInvariant())))[..32];
+
+    private static Track? TryReuse(string file, IReadOnlyDictionary<string, Track>? knownTracks)
+    {
+        if (knownTracks == null || !knownTracks.TryGetValue(Path.GetFullPath(file), out var known)) return null;
+        if (known.FileModifiedUtc == null) return null;
+        if (!string.IsNullOrEmpty(known.CoverArtPath) && !File.Exists(known.CoverArtPath)) return null;
+
+        try
+        {
+            var info = new FileInfo(file);
+            return info.Length == known.FileSizeBytes && info.LastWriteTimeUtc == known.FileModifiedUtc.Value
+                ? known
+                : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static Track? ReadTrackMetadata(string filePath, string? coverCacheDirectory, ConcurrentDictionary<string, string?>? folderCoverCache)
+    {
+        try
+        {
+            if (!File.Exists(filePath) || !AudioFileTypes.IsSupported(filePath)) return null;
+
+            var fullPath = Path.GetFullPath(filePath);
+            var fileInfo = new FileInfo(fullPath);
+            using var tagFile = TagLib.File.Create(fullPath);
+            var tag = tagFile.Tag;
+            var props = tagFile.Properties;
+
+            var title = Clean(tag?.Title) ?? Path.GetFileNameWithoutExtension(fullPath);
+            var albumArtist = Clean(tag?.FirstAlbumArtist);
+            var artist = Clean(tag?.FirstPerformer) ?? albumArtist ?? "Ismeretlen előadó";
+            var album = Clean(tag?.Album) ?? "Ismeretlen album";
+
+            var streamDescription = props?.Codecs?.FirstOrDefault(c => c != null)?.Description ?? props?.Description;
+            var (codec, isLossless) = AudioFileTypes.Describe(fullPath, streamDescription);
+
+            var bitsPerSample = props?.BitsPerSample ?? 0;
+            if (bitsPerSample == 0 && isLossless) bitsPerSample = 16;
+            if (!isLossless) bitsPerSample = 0;
+
+            var format = new AudioFormat
+            {
+                Codec = codec,
+                SampleRate = props?.AudioSampleRate is > 0 ? props.AudioSampleRate : 44100,
+                BitsPerSample = bitsPerSample,
+                Channels = props?.AudioChannels is > 0 ? props.AudioChannels : 2,
+                BitrateKbps = props?.AudioBitrate ?? 0,
+                IsLossless = isLossless
+            };
+
+            var dir = Path.GetDirectoryName(fullPath);
+            var coverArtPath = CacheEmbeddedCover(tag, coverCacheDirectory, albumArtist ?? artist, album)
+                               ?? (folderCoverCache != null && dir != null
+                                   ? folderCoverCache.GetOrAdd(dir, FindFolderCover)
+                                   : FindFolderCover(dir));
+            var hasEmbedded = tag?.Pictures is { Length: > 0 };
+
+            return new Track
+            {
+                Id = ComputeTrackId(fullPath),
+                Title = title,
+                Artist = artist,
+                Album = album,
+                AlbumArtist = albumArtist,
+                TrackNumber = tag?.Track > 0 ? (int)tag.Track : null,
+                TrackCount = tag?.TrackCount > 0 ? (int)tag.TrackCount : null,
+                DiscNumber = tag?.Disc > 0 ? (int)tag.Disc : null,
+                Year = tag?.Year > 0 ? (int)tag.Year : null,
+                Genre = Clean(tag?.FirstGenre),
+                Duration = props?.Duration ?? TimeSpan.Zero,
+                FileSizeBytes = fileInfo.Length,
+                FileModifiedUtc = fileInfo.LastWriteTimeUtc,
+                FilePath = fullPath,
+                HasCoverArt = hasEmbedded || coverArtPath != null,
+                CoverArtPath = coverArtPath,
+                Format = format,
+                DateAdded = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Debug("MetadataScanner", $"Skipping unreadable file '{filePath}': {ex.Message}");
+            return null;
+        }
+    }
+
+    private static string? CacheEmbeddedCover(TagLib.Tag? tag, string? coverCacheDirectory, string albumArtist, string album)
+    {
+        var picture = tag?.Pictures?.FirstOrDefault();
+        var data = picture?.Data?.Data;
+        if (data is not { Length: > 0 } || string.IsNullOrWhiteSpace(coverCacheDirectory)) return null;
+
+        try
+        {
+            Directory.CreateDirectory(coverCacheDirectory);
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+                $"{albumArtist.ToUpperInvariant()}\u001f{album.ToUpperInvariant()}")))[..16];
+            var extension = ImageFormat.IsPng(data) ? ".png" : ".jpg";
+            var path = Path.Combine(coverCacheDirectory, $"cover_{hash}{extension}");
+
+            if (!File.Exists(path))
+            {
+                // Tracks of one album are read in parallel; write to a unique temp file and move it in place.
+                var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllBytes(temp, data);
+                try
+                {
+                    File.Move(temp, path, overwrite: false);
+                }
+                catch (IOException)
+                {
+                    File.Delete(temp);
+                }
+            }
+
+            return path;
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Debug("MetadataScanner", $"Could not cache embedded cover for '{album}': {ex.Message}");
+            return null;
+        }
+    }
+
+    private static string? FindFolderCover(string? directory)
+    {
+        if (string.IsNullOrEmpty(directory)) return null;
+
+        try
+        {
+            var files = Directory.EnumerateFiles(directory)
+                .ToDictionary(f => Path.GetFileName(f), f => f, StringComparer.OrdinalIgnoreCase);
+            foreach (var name in FolderCoverNames)
+            {
+                if (files.TryGetValue(name, out var match)) return match;
+            }
+        }
+        catch
+        {
+            // Unreadable directory: no folder cover.
+        }
+
+        return null;
+    }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+
+public static class ImageFormat
+{
+    public static bool IsPng(ReadOnlySpan<byte> data) =>
+        data.Length >= 8 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47;
+
+    public static string GetMimeType(ReadOnlySpan<byte> data) => IsPng(data) ? "image/png" : "image/jpeg";
+
+    public static string GetMimeTypeFromPath(string path) =>
+        Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase) ? "image/png" : "image/jpeg";
 }

@@ -1,32 +1,53 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Wiretune.Core.Models;
 using Wiretune.Core.Repositories;
 using Wiretune.Core.Services;
 using Wiretune.Data;
+using Wiretune.Server;
 using Wiretune.Server.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register Core & Data services
-builder.Services.AddSingleton<DatabaseManager>();
+var options = builder.Configuration.GetSection("Wiretune").Get<ServerOptions>() ?? new ServerOptions();
+builder.Services.Configure<ServerOptions>(builder.Configuration.GetSection("Wiretune"));
+
+var dataDirectory = AppPaths.GetDataDirectory(options.DataDirectory, "Server");
+WiretuneLog.Initialize(Path.Combine(dataDirectory, "wiretune-server.log"));
+WiretuneLog.Info("Wiretune.Server", "=== Starting Wiretune.Server ===");
+
+var paths = new ServerPaths(
+    ResolveLibraryRoot(options.LibraryPath, builder.Environment.ContentRootPath),
+    dataDirectory,
+    Path.Combine(dataDirectory, "Covers"));
+WiretuneLog.Info("Wiretune.Server", $"Library: '{paths.LibraryRoot}' (exists: {Directory.Exists(paths.LibraryRoot)}), data: '{paths.DataDirectory}'");
+
+builder.Services.AddSingleton(paths);
+builder.Services.AddSingleton(new DatabaseManager(Path.Combine(dataDirectory, "wiretune-server.db")));
 builder.Services.AddSingleton<ILibraryRepository, LibraryRepository>();
 builder.Services.AddSingleton<IMetadataScanner, MetadataScanner>();
-builder.Services.AddSingleton<ILibraryService, LibraryService>();
+builder.Services.AddSingleton<ILibraryService>(sp => new LibraryService(
+    sp.GetRequiredService<ILibraryRepository>(),
+    sp.GetRequiredService<IMetadataScanner>(),
+    paths.CoverCacheDirectory));
 builder.Services.AddSingleton<AuthService>();
-builder.Services.AddCors();
+builder.Services.AddSingleton<LibraryScanService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<LibraryScanService>());
 
-// JWT Authentication — configured after build so AuthService can generate keys
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<AuthService>((jwt, auth) =>
     {
-        options.Events = new JwtBearerEvents
+        jwt.TokenValidationParameters = auth.GetValidationParameters();
+        jwt.Events = new JwtBearerEvents
         {
+            // Players that cannot send headers (e.g. external media players) may pass the token in the query string.
             OnMessageReceived = context =>
             {
-                var token = context.Request.Query["token"].FirstOrDefault()
-                            ?? context.Request.Query["access_token"].FirstOrDefault();
-                if (!string.IsNullOrEmpty(token))
+                if (string.IsNullOrEmpty(context.Token) &&
+                    context.Request.Query.TryGetValue("token", out var token) &&
+                    !string.IsNullOrEmpty(token))
                 {
                     context.Token = token;
                 }
@@ -34,257 +55,143 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             }
         };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("admin", policy => policy.RequireRole("admin"));
+
+if (string.IsNullOrEmpty(builder.Configuration["urls"]) && string.IsNullOrEmpty(builder.Configuration["ASPNETCORE_URLS"]))
+{
+    builder.WebHost.UseUrls($"http://0.0.0.0:{options.Port}");
+}
 
 var app = builder.Build();
 
-// Ensure database schema is initialized before services query it
-var db = app.Services.GetRequiredService<DatabaseManager>();
-db.InitializeSchema();
-
-// Configure JWT validation parameters from AuthService
-var authService = app.Services.GetRequiredService<AuthService>();
-app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptionsMonitor<JwtBearerOptions>>().CurrentValue.TokenValidationParameters = authService.GetValidationParameters();
-
-// CORS — restrict to localhost and LAN by default
-app.UseCors(policy => policy
-    .AllowAnyOrigin()
-    .AllowAnyHeader()
-    .AllowAnyMethod());
+await app.Services.GetRequiredService<ILibraryService>().InitializeAsync();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-WiretuneLog.Initialize();
-WiretuneLog.Info("Wiretune.Server", "=== Starting Wiretune.Server ===");
+var library = app.Services.GetRequiredService<ILibraryService>();
+var authService = app.Services.GetRequiredService<AuthService>();
 
-// Initialize Library Service (without self-connection attempt)
-var libraryService = app.Services.GetRequiredService<ILibraryService>();
-await libraryService.InitializeAsync();
-
-var config = app.Configuration.GetSection("Wiretune");
-var configuredPath = config.GetValue<string>("LibraryPath");
-var userMusicDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Music");
-if (string.IsNullOrWhiteSpace(configuredPath) || (!Directory.Exists(configuredPath) && Directory.Exists(userMusicDir)))
-{
-    configuredPath = userMusicDir;
-}
-
-WiretuneLog.Info("Wiretune.Server", $"Library path configured: '{configuredPath}' (Exists: {Directory.Exists(configuredPath)})");
-
-if (Directory.Exists(configuredPath) && libraryService.Tracks.Count == 0)
-{
-    WiretuneLog.Info("Wiretune.Server", $"Starting initial scan: '{configuredPath}'");
-    _ = Task.Run(async () =>
-    {
-        try
-        {
-            await libraryService.ScanFolderAsync(configuredPath, null, CancellationToken.None);
-            WiretuneLog.Info("Wiretune.Server", $"Scan complete! Tracks: {libraryService.Tracks.Count}, Albums: {libraryService.Albums.Count}, Artists: {libraryService.Artists.Count}");
-        }
-        catch (Exception ex)
-        {
-            WiretuneLog.Error("Wiretune.Server", $"Scan error: {ex.Message}", ex);
-        }
-    });
-}
-
-// ── Auth Endpoints (unauthenticated) ──
+// ── Auth (anonymous) ──
 
 app.MapGet("/api/auth/setup-required", async () =>
-{
-    var hasUsers = await authService.HasAnyUsersAsync();
-    return Results.Ok(new { SetupRequired = !hasUsers });
-});
+    Results.Ok(new { SetupRequired = !await authService.HasAnyUsersAsync() }));
 
 app.MapPost("/api/auth/setup", async (RegisterRequest request) =>
 {
-    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-        return Results.BadRequest(new { Error = "Username and password are required." });
-    if (request.Password.Length < 6)
-        return Results.BadRequest(new { Error = "Password must be at least 6 characters." });
+    if (AuthService.ValidateCredentials(request.Username, request.Password) is { } error)
+        return Results.BadRequest(new { Error = error });
 
     var result = await authService.CreateAdminAsync(request);
-    if (result == null)
-        return Results.Conflict(new { Error = "Admin account already exists. Use /api/auth/login instead." });
-
-    return Results.Ok(result);
+    return result == null
+        ? Results.Conflict(new { Error = "The server is already set up. Sign in instead." })
+        : Results.Ok(result);
 });
 
 app.MapPost("/api/auth/login", async (LoginRequest request) =>
 {
-    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
+    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrEmpty(request.Password))
         return Results.BadRequest(new { Error = "Username and password are required." });
 
     var result = await authService.LoginAsync(request);
-    if (result == null)
-        return Results.Unauthorized();
-
-    return Results.Ok(result);
+    return result == null ? Results.Unauthorized() : Results.Ok(result);
 });
 
-app.MapPost("/api/auth/register", async (RegisterRequest request, ClaimsPrincipal user) =>
+// ── Auth (authenticated) ──
+
+app.MapPost("/api/auth/register", async (RegisterRequest request) =>
 {
-    // Only admins can create new accounts
-    if (!user.Identity?.IsAuthenticated ?? true)
-        return Results.Unauthorized();
-    if (!user.IsInRole("admin"))
-        return Results.Forbid();
+    if (AuthService.ValidateCredentials(request.Username, request.Password) is { } error)
+        return Results.BadRequest(new { Error = error });
 
-    if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-        return Results.BadRequest(new { Error = "Username and password are required." });
-    if (request.Password.Length < 6)
-        return Results.BadRequest(new { Error = "Password must be at least 6 characters." });
+    var user = await authService.RegisterAsync(request);
+    return user == null ? Results.Conflict(new { Error = "Username already taken." }) : Results.Ok(user);
+}).RequireAuthorization("admin");
 
-    var result = await authService.RegisterAsync(request);
-    if (result == null)
-        return Results.Conflict(new { Error = "Username already taken." });
-
-    return Results.Ok(result);
+app.MapGet("/api/auth/me", async (ClaimsPrincipal principal) =>
+{
+    var id = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+    var user = id == null ? null : await authService.GetUserAsync(id);
+    return user == null ? Results.Unauthorized() : Results.Ok(user);
 }).RequireAuthorization();
 
-app.MapGet("/api/auth/me", (ClaimsPrincipal user) =>
+// ── Library ──
+
+var api = app.MapGroup("/api").RequireAuthorization();
+
+api.MapGet("/library/status", (LibraryScanService scanner) => Results.Ok(new ServerLibraryStatus(
+    library.Tracks.Count,
+    library.Albums.Count,
+    library.Artists.Count,
+    library.IsScanning,
+    scanner.LastScanCompletedUtc,
+    scanner.LastScanError)));
+
+api.MapPost("/library/scan", (LibraryScanService scanner) =>
 {
-    if (!user.Identity?.IsAuthenticated ?? true)
-        return Results.Unauthorized();
+    scanner.RequestScan();
+    return Results.Accepted("/api/library/status", new { Message = "Scan requested." });
+}).RequireAuthorization("admin");
 
-    return Results.Ok(new
-    {
-        Id = user.FindFirst(ClaimTypes.NameIdentifier)?.Value,
-        Username = user.FindFirst(ClaimTypes.Name)?.Value,
-        DisplayName = user.FindFirst("display_name")?.Value,
-        Role = user.FindFirst(ClaimTypes.Role)?.Value
-    });
-}).RequireAuthorization();
+api.MapGet("/tracks", (string? q) => Results.Ok(string.IsNullOrWhiteSpace(q) ? library.Tracks : library.Search(q).ToList()));
+api.MapGet("/albums", () => Results.Ok(library.Albums));
+api.MapGet("/artists", () => Results.Ok(library.Artists));
 
-// ── Library Endpoints (authenticated) ──
-
-app.MapGet("/api/library/status", () => Results.Ok(new
+api.MapGet("/stream/{trackId}", (string trackId) =>
 {
-    Status = "Online",
-    TrackCount = libraryService.Tracks.Count,
-    AlbumCount = libraryService.Albums.Count,
-    ArtistCount = libraryService.Artists.Count,
-    LibraryPath = configuredPath,
-    IsScanning = libraryService.IsScanning,
-    ServerTime = DateTime.UtcNow
-})).RequireAuthorization();
-
-// Scan — with path traversal protection
-app.MapPost("/api/library/scan", async (string? path, CancellationToken ct) =>
-{
-    var targetPath = !string.IsNullOrWhiteSpace(path) ? path : configuredPath;
-
-    // Path traversal protection: only allow scanning within the configured library root
-    var canonicalTarget = Path.GetFullPath(targetPath);
-    var canonicalLibrary = Path.GetFullPath(configuredPath);
-    if (!canonicalTarget.StartsWith(canonicalLibrary, StringComparison.OrdinalIgnoreCase))
-    {
-        return Results.Forbid();
-    }
-
-    if (!Directory.Exists(canonicalTarget))
-    {
-        return Results.BadRequest(new { Error = $"Directory does not exist: {targetPath}" });
-    }
-
-    if (!libraryService.IsScanning)
-    {
-        _ = Task.Run(async () =>
-        {
-            await libraryService.ScanFolderAsync(canonicalTarget, null, CancellationToken.None);
-        }, ct);
-    }
-
-    return Results.Accepted("/api/library/status", new { Message = $"Scan started: {targetPath}" });
-}).RequireAuthorization();
-
-app.MapGet("/api/tracks", (string? q) =>
-{
-    var tracks = string.IsNullOrWhiteSpace(q)
-        ? libraryService.Tracks
-        : libraryService.Search(q);
-    return Results.Ok(tracks);
-}).RequireAuthorization();
-
-app.MapGet("/api/albums", () => Results.Ok(libraryService.Albums)).RequireAuthorization();
-app.MapGet("/api/artists", () => Results.Ok(libraryService.Artists)).RequireAuthorization();
-app.MapGet("/api/playlists", () => Results.Ok(libraryService.Playlists)).RequireAuthorization();
-
-// Stream audio with HTTP 206 Partial Content
-app.MapGet("/api/stream/{trackId}", (string trackId, HttpContext context) =>
-{
-    var track = libraryService.Tracks.FirstOrDefault(t => t.Id == trackId);
-    if (track == null || !File.Exists(track.FilePath))
-    {
+    var track = library.GetTrack(trackId);
+    if (track == null || !AppPaths.IsPathUnderRoot(track.FilePath, paths.LibraryRoot) || !File.Exists(track.FilePath))
         return Results.NotFound(new { Error = "Track not found." });
-    }
 
-    // Validate file is within library path
-    var canonicalFile = Path.GetFullPath(track.FilePath);
-    var canonicalLib = Path.GetFullPath(configuredPath);
-    if (!canonicalFile.StartsWith(canonicalLib, StringComparison.OrdinalIgnoreCase))
-    {
-        return Results.Forbid();
-    }
+    return Results.File(track.FilePath, AudioFileTypes.GetMimeType(track.FilePath), enableRangeProcessing: true);
+});
 
-    var contentType = Path.GetExtension(track.FilePath).ToLowerInvariant() switch
-    {
-        ".flac" => "audio/flac",
-        ".mp3" => "audio/mpeg",
-        ".wav" => "audio/wav",
-        ".m4a" => "audio/mp4",
-        ".aac" => "audio/aac",
-        ".ogg" => "audio/ogg",
-        _ => "application/octet-stream"
-    };
+api.MapGet("/cover/{trackId}", async (string trackId, IMetadataScanner scanner, HttpContext http) =>
+    await CoverResultAsync(library.GetTrack(trackId), scanner, http));
 
-    return Results.File(track.FilePath, contentType: contentType, enableRangeProcessing: true);
-}).RequireAuthorization();
-
-// Cover art
-app.MapGet("/api/cover/{trackId}", async (string trackId, IMetadataScanner scanner) =>
-{
-    var track = libraryService.Tracks.FirstOrDefault(t => t.Id == trackId);
-    if (track == null || !File.Exists(track.FilePath))
-        return Results.NotFound();
-
-    if (!string.IsNullOrEmpty(track.CoverArtPath) && File.Exists(track.CoverArtPath))
-    {
-        var ext = Path.GetExtension(track.CoverArtPath).ToLowerInvariant();
-        var mime = ext == ".png" ? "image/png" : "image/jpeg";
-        return Results.File(track.CoverArtPath, mime);
-    }
-
-    var coverBytes = await scanner.ExtractCoverArtAsync(track.FilePath);
-    if (coverBytes != null && coverBytes.Length > 0)
-        return Results.Bytes(coverBytes, "image/jpeg");
-
-    return Results.NotFound();
-}).RequireAuthorization();
-
-app.MapGet("/api/cover/album/{albumId}", async (string albumId, IMetadataScanner scanner) =>
-{
-    var album = libraryService.Albums.FirstOrDefault(a => a.Id == albumId);
-    var firstTrack = album?.Tracks.FirstOrDefault();
-    if (firstTrack == null || !File.Exists(firstTrack.FilePath))
-        return Results.NotFound();
-
-    if (!string.IsNullOrEmpty(firstTrack.CoverArtPath) && File.Exists(firstTrack.CoverArtPath))
-    {
-        var ext = Path.GetExtension(firstTrack.CoverArtPath).ToLowerInvariant();
-        var mime = ext == ".png" ? "image/png" : "image/jpeg";
-        return Results.File(firstTrack.CoverArtPath, mime);
-    }
-
-    var coverBytes = await scanner.ExtractCoverArtAsync(firstTrack.FilePath);
-    if (coverBytes != null && coverBytes.Length > 0)
-        return Results.Bytes(coverBytes, "image/jpeg");
-
-    return Results.NotFound();
-}).RequireAuthorization();
-
-var port = config.GetValue<int>("Port", 5200);
-app.Urls.Add($"http://0.0.0.0:{port}");
+api.MapGet("/cover/album/{albumId}", async (string albumId, IMetadataScanner scanner, HttpContext http) =>
+    await CoverResultAsync(library.GetAlbum(albumId)?.Tracks.FirstOrDefault(t => t.HasCoverArt), scanner, http));
 
 app.Run();
+
+async Task<IResult> CoverResultAsync(Track? track, IMetadataScanner scanner, HttpContext http)
+{
+    if (track == null || !AppPaths.IsPathUnderRoot(track.FilePath, paths.LibraryRoot)) return Results.NotFound();
+
+    http.Response.Headers.CacheControl = "private, max-age=86400";
+
+    var coverPath = track.CoverArtPath;
+    if (!string.IsNullOrEmpty(coverPath) && File.Exists(coverPath) &&
+        (AppPaths.IsPathUnderRoot(coverPath, paths.CoverCacheDirectory) || AppPaths.IsPathUnderRoot(coverPath, paths.LibraryRoot)))
+    {
+        return Results.File(coverPath, ImageFormat.GetMimeTypeFromPath(coverPath));
+    }
+
+    var bytes = File.Exists(track.FilePath) ? await scanner.ExtractCoverArtAsync(track.FilePath, http.RequestAborted) : null;
+    return bytes is { Length: > 0 } ? Results.Bytes(bytes, ImageFormat.GetMimeType(bytes)) : Results.NotFound();
+}
+
+static string ResolveLibraryRoot(string? configured, string contentRoot)
+{
+    if (!string.IsNullOrWhiteSpace(configured))
+    {
+        var resolved = Path.GetFullPath(Path.IsPathRooted(configured) ? configured : Path.Combine(contentRoot, configured));
+        if (Directory.Exists(resolved)) return resolved;
+        WiretuneLog.Warn("Wiretune.Server", $"Configured library path '{resolved}' does not exist.");
+    }
+
+    var musicDir = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
+    if (string.IsNullOrEmpty(musicDir))
+        musicDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Music");
+
+    if (string.IsNullOrWhiteSpace(configured) || Directory.Exists(musicDir))
+    {
+        WiretuneLog.Warn("Wiretune.Server", $"Falling back to the user's music folder: '{musicDir}'. Set Wiretune:LibraryPath to choose another folder.");
+        return Path.GetFullPath(musicDir);
+    }
+
+    return Path.GetFullPath(Path.IsPathRooted(configured) ? configured : Path.Combine(contentRoot, configured));
+}
+
+public partial class Program;

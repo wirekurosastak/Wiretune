@@ -141,14 +141,16 @@ public class NegativeTests
     [Fact]
     public async Task NEG008_ConnectServer_UnreachableHost_SetsConnectedFalse()
     {
-        var (service, _) = CreateService();
-        await service.InitializeAsync();
+        var (service, repo) = CreateService();
+        using var session = new ServerSession(service, repo);
+        await session.InitializeAsync();
 
-        // Use a valid-looking but non-routable address (RFC 5737 TEST-NET)
-        await service.ConnectServerAsync("http://192.0.2.1:5200");
+        // Nothing listens on loopback port 1, so the connection is refused immediately.
+        await session.ConnectAsync("http://127.0.0.1:1");
 
-        Assert.False(service.IsServerConnected);
-        Assert.NotEmpty(service.ServerStatusMessage ?? "");
+        Assert.Equal(ServerConnectionState.Offline, session.State);
+        Assert.False(session.IsLoggedIn);
+        Assert.NotEmpty(session.StatusMessage ?? "");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -157,13 +159,15 @@ public class NegativeTests
     [Fact]
     public async Task NEG010_ConnectServer_EmptyUrl_ReturnsEarly()
     {
-        var (service, _) = CreateService();
-        await service.InitializeAsync();
+        var (service, repo) = CreateService();
+        using var session = new ServerSession(service, repo);
+        await session.InitializeAsync();
 
-        var ex = await Record.ExceptionAsync(() => service.ConnectServerAsync(""));
+        var ex = await Record.ExceptionAsync(() => session.ConnectAsync(""));
 
         Assert.Null(ex);
-        Assert.False(service.IsServerConnected);
+        Assert.False(session.IsLoggedIn);
+        Assert.Contains("Érvénytelen", session.StatusMessage);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -172,13 +176,15 @@ public class NegativeTests
     [Fact]
     public async Task NEG011_ConnectServer_WhitespaceUrl_ReturnsEarly()
     {
-        var (service, _) = CreateService();
-        await service.InitializeAsync();
+        var (service, repo) = CreateService();
+        using var session = new ServerSession(service, repo);
+        await session.InitializeAsync();
 
-        var ex = await Record.ExceptionAsync(() => service.ConnectServerAsync("   "));
+        var ex = await Record.ExceptionAsync(() => session.ConnectAsync("   "));
 
         Assert.Null(ex);
-        Assert.False(service.IsServerConnected);
+        Assert.False(session.IsLoggedIn);
+        Assert.Contains("Érvénytelen", session.StatusMessage);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -266,7 +272,7 @@ public class NegativeTests
     [Fact]
     public void NEG023_SetVolume_BelowZero_ClampsToZero()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         engine.SetVolume(-0.5);
 
@@ -279,7 +285,7 @@ public class NegativeTests
     [Fact]
     public void NEG024_SetVolume_AboveOne_ClampsToOne()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         engine.SetVolume(2.0);
 
@@ -372,7 +378,7 @@ public class NegativeTests
     [Fact]
     public async Task NEG_PlayerViewModel_ToggleMute_BlockedInBitperfectMode()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         await engine.SetBitperfectModeAsync(true);
 

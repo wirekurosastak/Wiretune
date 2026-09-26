@@ -29,29 +29,20 @@ public class LogicAndSecurityTests
         };
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SEC-001 / SEC-002 — Command Injection via ffplay argument string
-    // Documents the quoting vulnerability in StartPlaybackProcess.
-    // A file path containing a double-quote breaks argument boundaries.
+    // SEC-001 / SEC-002 — ffplay receives the source as one discrete argument,
+    // so quotes or shell metacharacters in a file name cannot inject arguments.
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public void SEC001_CommandInjection_DoubleQuoteInFilePath_BreaksArgumentQuoting()
+    public void SEC001_FfplayArguments_KeepSourceAsSingleArgument()
     {
-        // The vulnerable argument construction in LinuxAudioDriver.cs line 121:
-        //   $"-nodisp -autoexit ... \"{audioSource}\""
-        // If audioSource = /music/song"evil, the result is:
-        //   -nodisp -autoexit ... "/music/song"evil"  ← broken quoting!
+        const string hostilePath = "/music/song\"evil; rm -rf /home -i x.flac";
 
-        const string maliciousPath = "/music/song\"evil; rm -rf /home";
-        var arguments = $"-nodisp -autoexit -loglevel quiet  \"{maliciousPath}\"";
+        var args = Wiretune.Audio.Drivers.FfmpegAudioDriver.BuildFfplayArguments(hostilePath, TimeSpan.FromSeconds(12.5), 150);
 
-        // The argument string contains unmatched/extra quotes — a well-formed
-        // argument would never contain a free " inside the quoted section.
-        var quoteCount = arguments.Count(c => c == '"');
-
-        // If the path has an internal quote, we get an ODD number of quotes
-        // which signals broken quoting (should be exactly 2 for one arg).
-        // This test DOCUMENTS the vulnerability; fix: use ArgumentList instead.
-        Assert.NotEqual(2, quoteCount); // BUG: quoting is broken
+        Assert.Equal(hostilePath, args[^1]);
+        Assert.Equal(1, args.Count(a => a.Contains("evil")));
+        Assert.Equal("12.500", args[args.IndexOf("-ss") + 1]);
+        Assert.Equal("100", args[args.IndexOf("-volume") + 1]);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -60,10 +51,8 @@ public class LogicAndSecurityTests
     [Fact]
     public void SEC003_GetStreamUrl_TrailingSlash_TrimmedCorrectly()
     {
-        var client = new ServerStreamingClient();
-
-        var url1 = client.GetStreamUrl("http://server:5200/", "track123");
-        var url2 = client.GetStreamUrl("http://server:5200", "track123");
+        var url1 = ServerStreamingClient.BuildStreamUrl("http://server:5200/", "track123");
+        var url2 = ServerStreamingClient.BuildStreamUrl("http://server:5200", "track123");
 
         Assert.Equal("http://server:5200/api/stream/track123", url1);
         Assert.Equal("http://server:5200/api/stream/track123", url2);
@@ -71,31 +60,18 @@ public class LogicAndSecurityTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SEC-004 — Path Traversal: document that server scan endpoint accepts
-    //           arbitrary paths (no whitelist). This test verifies the guard
-    //           in the server's scan endpoint only checks Directory.Exists.
+    // SEC-004 — Path containment used by the server's stream/cover endpoints
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public void SEC004_PathTraversal_ServerScanEndpoint_LacksWhitelistValidation()
+    public void SEC004_PathContainment_RejectsTraversalAndPrefixSiblings()
     {
-        // In Server/Program.cs, the scan endpoint:
-        //   var targetPath = !string.IsNullOrWhiteSpace(path) ? path : configuredPath;
-        //   if (!Directory.Exists(targetPath)) return Results.BadRequest(...);
-        //
-        // No whitelist or prefix check. Any existing path on the server is accepted.
-        // This test DOCUMENTS the vulnerability — a fix should ensure targetPath
-        // starts with the configured library root.
+        var root = Path.Combine(Path.GetTempPath(), "wt-root", "music");
 
-        const string configuredRoot = "/srv/music";
-        const string maliciousInput = "../../etc/passwd";
-
-        // Simulated traversal resolution
-        var combined = Path.GetFullPath(Path.Combine(configuredRoot, maliciousInput));
-
-        // The combined path escapes the configured root — that is the vulnerability.
-        Assert.False(combined.StartsWith(configuredRoot),
-            "Traversal path escapes the configured library root — " +
-            "this documents SEC-004. Fix: reject paths that don't start with configuredRoot.");
+        Assert.True(AppPaths.IsPathUnderRoot(Path.Combine(root, "a", "b.flac"), root));
+        Assert.True(AppPaths.IsPathUnderRoot(root, root));
+        Assert.False(AppPaths.IsPathUnderRoot(Path.Combine(root, "..", "secret.txt"), root));
+        Assert.False(AppPaths.IsPathUnderRoot(root + "2" + Path.DirectorySeparatorChar + "x.flac", root));
+        Assert.False(AppPaths.IsPathUnderRoot("", root));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -129,25 +105,17 @@ public class LogicAndSecurityTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SEC-009 — Memory Leak: static _artCache in PlayerViewModel never cleared
+    // SEC-009 — Cover art is cached in one bounded LRU cache, not per view model
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public void SEC009_StaticArtCache_IsUnbounded_DocumentsMemoryLeakRisk()
+    public void SEC009_CoverArtCache_IsBoundedAndCentralised()
     {
-        // PlayerViewModel._artCache is a static Dictionary<string, Bitmap>
-        // that accumulates every loaded cover art bitmap without eviction.
-        // This test documents the architectural issue.
-        // Fix: use a bounded LRU cache or WeakReference<Bitmap>.
+        var staticBitmapCaches = typeof(Wiretune.UI.ViewModels.PlayerViewModel)
+            .GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+            .Where(f => f.FieldType.IsGenericType && f.FieldType.GetGenericArguments().Any(t => t.Name == "Bitmap"));
 
-        // Verify the type is static (by reflecting the field)
-        var fieldInfo = typeof(Wiretune.UI.ViewModels.PlayerViewModel)
-            .GetField("_artCache",
-                System.Reflection.BindingFlags.NonPublic |
-                System.Reflection.BindingFlags.Static);
-
-        Assert.NotNull(fieldInfo); // Field exists
-        Assert.True(fieldInfo!.IsStatic,  // It IS static — no eviction possible
-            "SEC-009: _artCache is static and never evicted. Risk of unbounded memory growth.");
+        Assert.Empty(staticBitmapCaches);
+        Assert.InRange(Wiretune.UI.Services.CoverArtService.MaxCachedBitmaps, 1, 1000);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -156,9 +124,9 @@ public class LogicAndSecurityTests
     //        disables bitperfect → volume stays at 1.0 instead of 50%
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public async Task SEC013_VolumeLost_WhenBitperfectToggled()
+    public async Task SEC013_VolumeRestored_WhenBitperfectToggledOff()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         // User sets a preferred volume of 50%
         engine.SetVolume(0.5);
@@ -171,10 +139,7 @@ public class LogicAndSecurityTests
         // Disable bitperfect
         await engine.SetBitperfectModeAsync(false);
 
-        // BUG: original volume (0.5) is NOT restored.
-        // The engine still reads _volume which was overwritten to 1.0.
-        // This assertion documents the BUG — when fixed, it should be 0.5.
-        Assert.Equal(1.0, engine.Volume, precision: 2); // BROKEN behavior documented
+        Assert.Equal(0.5, engine.Volume, precision: 2);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -183,7 +148,7 @@ public class LogicAndSecurityTests
     [Fact]
     public void SEC014_RepeatAll_EmptyQueue_DoesNotInfinitelyIncrementIndex()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var player = new Wiretune.UI.ViewModels.PlayerViewModel(engine, service);
 
@@ -202,36 +167,29 @@ public class LogicAndSecurityTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SEC-018 — Logic Flaw: Unstable Track Identity — new GUID on every scan
-    // Favorites and play counts cannot survive a rescan.
+    // SEC-018 — Track identity is derived from the file path, so favorites,
+    // play counts and playlists survive rescans.
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public async Task SEC018_TrackId_IsNewGuidOnEachScan_BreaksFavoritePersistence()
+    public async Task SEC018_TrackId_IsStableAcrossScans()
     {
-        // MetadataScanner always calls Guid.NewGuid() regardless of file path.
-        // Two successive scans of the same file produce different IDs.
-        var scanner = new MetadataScanner();
-
-        // Simulate: create a real (minimal) audio file so scanner can open it
-        var tempDir = Directory.CreateTempSubdirectory("wiretune_id_").FullName;
+        var dir = Directory.CreateTempSubdirectory("wiretune_id_").FullName;
         try
         {
-            // Write an empty FLAC-extension file; TagLib will fail, returning null.
-            // We verify the GUID generation logic via direct model construction.
-            var track1 = new Track { Id = Guid.NewGuid().ToString("N"), FilePath = "/music/song.flac" };
-            var track2 = new Track { Id = Guid.NewGuid().ToString("N"), FilePath = "/music/song.flac" };
+            var file = Path.Combine(dir, "song.wav");
+            WavFile.Write(file, 44100, 0.2);
+            var scanner = new MetadataScanner();
 
-            // Same file path → different IDs: this IS the documented bug
-            Assert.Equal(track1.FilePath, track2.FilePath);
-            Assert.NotEqual(track1.Id, track2.Id);
+            var first = await scanner.ReadTrackMetadataAsync(file);
+            var second = await scanner.ReadTrackMetadataAsync(file);
 
-            // When a rescan runs, favorites stored against track1.Id are now
-            // orphaned because the new scan uses track2.Id.
-            // Fix: use FilePath (or a hash of FilePath) as the stable primary key.
+            Assert.NotNull(first);
+            Assert.Equal(first!.Id, second!.Id);
+            Assert.Equal(MetadataScanner.ComputeTrackId(file), first.Id);
         }
         finally
         {
-            Directory.Delete(tempDir, recursive: true);
+            Directory.Delete(dir, recursive: true);
         }
     }
 
@@ -239,17 +197,16 @@ public class LogicAndSecurityTests
     // SEC-025 — Logic Flaw: NavigateToCommand accepts out-of-range index
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public void SEC025_NavigationIndex_OutOfRange_AcceptedWithoutValidation()
+    public void SEC025_NavigationIndex_OutOfRange_IsIgnored()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
-        var vm = new Wiretune.UI.ViewModels.MainViewModel(engine, service);
+        var vm = TestSupport.CreateMainViewModel(service, engine);
 
-        // BUG: No range validation — any integer is accepted
         vm.NavigateToCommand.Execute(999);
+        vm.NavigateToCommand.Execute(-1);
 
-        // This documents the bug. Fix: clamp to valid range [0..5].
-        Assert.Equal(999, vm.SelectedNavigationIndex);
+        Assert.Equal(2, vm.SelectedNavigationIndex);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -318,58 +275,63 @@ public class LogicAndSecurityTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SEC — LibraryChanged event fires after ToggleFavorite
+    // SEC — ToggleFavorite raises FavoriteChanged (not a full LibraryChanged rebuild)
+    // and the track notifies bound views directly.
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public async Task SEC_LibraryChangedEvent_FiredAfterToggleFavorite()
+    public async Task SEC_FavoriteChangedEvent_FiredAfterToggleFavorite()
     {
         var (service, repo) = CreateService();
         repo.Tracks.Add(MakeTrack("t1", "Song"));
         await service.InitializeAsync();
 
-        int eventCount = 0;
-        service.LibraryChanged += (_, _) => eventCount++;
+        int libraryEvents = 0;
+        Track? changed = null;
+        var propertyNotifications = new List<string?>();
+        service.LibraryChanged += (_, _) => libraryEvents++;
+        service.FavoriteChanged += (_, t) => changed = t;
+        service.Tracks[0].PropertyChanged += (_, e) => propertyNotifications.Add(e.PropertyName);
 
         await service.ToggleFavoriteAsync("t1");
 
-        Assert.True(eventCount >= 1);
+        Assert.Equal("t1", changed?.Id);
+        Assert.Equal(0, libraryEvents);
+        Assert.Contains(nameof(Track.IsFavorite), propertyNotifications);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SEC — LibraryChanged event fires after CreatePlaylist
+    // SEC — PlaylistsChanged event fires after CreatePlaylist
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public async Task SEC_LibraryChangedEvent_FiredAfterCreatePlaylist()
+    public async Task SEC_PlaylistsChangedEvent_FiredAfterCreatePlaylist()
     {
         var (service, _) = CreateService();
         await service.InitializeAsync();
 
         int eventCount = 0;
-        service.LibraryChanged += (_, _) => eventCount++;
+        service.PlaylistsChanged += (_, _) => eventCount++;
 
         await service.CreatePlaylistAsync("New List");
 
-        Assert.True(eventCount >= 1);
+        Assert.Equal(1, eventCount);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
     // SEC — ServerUrl TrimEnd('/'): trailing slashes normalized on save
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public async Task SEC_ServerUrl_TrimmedBeforeSave()
+    public async Task SEC_ServerUrl_NormalizedBeforeSave()
     {
         var (service, repo) = CreateService();
         await service.InitializeAsync();
+        using var session = new ServerSession(service, repo);
+        await session.InitializeAsync();
 
-        // ConnectServerAsync sets ServerUrl = serverUrl.TrimEnd('/')
-        // We can verify the saved value in the mock repo
-        await service.ConnectServerAsync("http://192.0.2.1:5200///"); // unreachable, but tests URL normalization
+        // Port 1 on loopback refuses immediately; normalisation happens before the network call.
+        await session.ConnectAsync("  127.0.0.1:1///  ");
 
-        var saved = await repo.GetSettingAsync("ServerUrl");
-        // It should be trimmed (no trailing slashes) or null if connection failed
-        // but the save call happens before the ping attempt
-        Assert.True(saved == null || !saved!.EndsWith("/"),
-            "ServerUrl should be saved without trailing slashes");
+        Assert.Equal("http://127.0.0.1:1", await repo.GetSettingAsync("ServerUrl"));
+        Assert.Equal(ServerConnectionState.Offline, session.State);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -392,7 +354,7 @@ public class LogicAndSecurityTests
     [Fact]
     public void SEC_Mute_WhenEnabled_EngineReportsZeroEffectiveVolume()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         engine.SetVolume(0.8);
 
         engine.SetMuted(true);
@@ -408,7 +370,7 @@ public class LogicAndSecurityTests
     [Fact]
     public void SEC_Unmute_RestoresPreviousVolume()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         engine.SetVolume(0.6);
         engine.SetMuted(true);
 
@@ -424,7 +386,7 @@ public class LogicAndSecurityTests
     [Fact]
     public async Task SEC_Mute_InBitperfectMode_VolumeSaysAtUnity()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SetBitperfectModeAsync(true);
 
         engine.SetMuted(true);
@@ -439,7 +401,7 @@ public class LogicAndSecurityTests
     [Fact]
     public void SEC_SignalPathDescription_NoTrack_ReturnsIdleString()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
 
         var desc = engine.SignalPathDescription;
 
@@ -455,10 +417,11 @@ public class LogicAndSecurityTests
         var (service, repo) = CreateService();
         repo.Settings["ServerUrl"] = "http://myserver:5200";
 
-        await service.InitializeAsync();
-        await Task.Delay(50);
+        using var session = new ServerSession(service, repo);
+        await session.InitializeAsync();
 
-        Assert.Equal("http://myserver:5200", service.ServerUrl);
+        Assert.Equal("http://myserver:5200", session.ServerUrl);
+        Assert.Equal(ServerConnectionState.NotConfigured, session.State);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -561,7 +524,7 @@ public class LogicAndSecurityTests
     [Fact]
     public async Task SEC_BitperfectEnabled_EventsFireInCorrectOrder()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SetExclusiveModeAsync(false);
 
         var exclusiveEvents  = new List<bool>();
@@ -585,7 +548,7 @@ public class LogicAndSecurityTests
     [Fact]
     public async Task SEC_DisableExclusive_WhileBitperfect_BothEventsFireCorrectly()
     {
-        using var engine = new WiretuneAudioEngine();
+        using var engine = TestSupport.CreateEngine();
         await engine.SetBitperfectModeAsync(true);
 
         var exclusiveEvents  = new List<bool>();

@@ -1,15 +1,21 @@
 using Avalonia.Controls;
-using Wiretune.UI.ViewModels;
 
 namespace Wiretune.UI.Views;
 
 public partial class MainWindow : Window
 {
+    // Width of the minimize/maximize/close buttons Windows draws over the extended client area.
+    private const double WindowsCaptionButtonsWidth = 140;
+
     public MainWindow()
     {
         InitializeComponent();
-
-        Closing += (_, _) => (DataContext as MainViewModel)?.Dispose();
-        Closed += (_, _) => (DataContext as MainViewModel)?.Dispose();
+        Opened += (_, _) =>
+        {
+            if (IsExtendedIntoWindowDecorations && OperatingSystem.IsWindows())
+            {
+                RootView.SetCaptionButtonsInset(WindowsCaptionButtonsWidth);
+            }
+        };
     }
 }
