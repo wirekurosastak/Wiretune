@@ -15,7 +15,9 @@ public partial class PlaylistsViewModel : ObservableObject
     public Action<NavWaveDirection>? OnNavWave { get; set; }
 
     [ObservableProperty] private IReadOnlyList<Playlist> _playlists = Array.Empty<Playlist>();
+    [ObservableProperty] private IReadOnlyList<PlaylistCardViewModel> _displayedPlaylists = Array.Empty<PlaylistCardViewModel>();
     [ObservableProperty] private Playlist? _selectedPlaylist;
+    [ObservableProperty] private PlaylistCardViewModel? _selectedPlaylistCard;
     [ObservableProperty] private IReadOnlyList<Track> _selectedPlaylistTracks = Array.Empty<Track>();
     [ObservableProperty] private bool _hasPlaylists;
     [ObservableProperty] private bool _isSelectedPlaylistEmpty;
@@ -58,6 +60,27 @@ public partial class PlaylistsViewModel : ObservableObject
     {
         var selectedId = SelectedPlaylist?.Id;
         Playlists = _library.Playlists;
+        var cardList = new List<PlaylistCardViewModel>();
+        foreach (var pl in Playlists)
+        {
+            var tracks = _library.GetPlaylistTracks(pl);
+            if (tracks.Count == 0)
+            {
+                pl.FormatBadge = string.Empty;
+            }
+            else
+            {
+                var distinctSpecs = tracks.Select(t => t.Format)
+                    .Select(f => (f.BitsPerSample, f.SampleRate, f.IsLossless, f.Codec))
+                    .Distinct()
+                    .ToList();
+                pl.FormatBadge = distinctSpecs.Count > 1
+                    ? "Mixed HQ"
+                    : tracks[0].Format.DisplayBadge;
+            }
+            cardList.Add(new PlaylistCardViewModel(pl, tracks));
+        }
+        DisplayedPlaylists = cardList;
         HasPlaylists = Playlists.Count > 0;
         SelectedPlaylist = selectedId == null ? null : _library.GetPlaylist(selectedId);
         if (SelectedPlaylist == null) IsPlaylistDetailOpen = false;
@@ -69,12 +92,38 @@ public partial class PlaylistsViewModel : ObservableObject
     private void RefreshSelectedTracks()
     {
         SelectedPlaylistTracks = SelectedPlaylist == null ? Array.Empty<Track>() : _library.GetPlaylistTracks(SelectedPlaylist);
+        SelectedPlaylistCard = SelectedPlaylist == null ? null : new PlaylistCardViewModel(SelectedPlaylist, SelectedPlaylistTracks);
         IsSelectedPlaylistEmpty = SelectedPlaylist != null && SelectedPlaylistTracks.Count == 0;
+        if (SelectedPlaylist != null)
+        {
+            if (SelectedPlaylistTracks.Count == 0)
+            {
+                SelectedPlaylist.FormatBadge = string.Empty;
+            }
+            else
+            {
+                var distinctSpecs = SelectedPlaylistTracks.Select(t => t.Format)
+                    .Select(f => (f.BitsPerSample, f.SampleRate, f.IsLossless, f.Codec))
+                    .Distinct()
+                    .ToList();
+                SelectedPlaylist.FormatBadge = distinctSpecs.Count > 1
+                    ? "Mixed HQ"
+                    : SelectedPlaylistTracks[0].Format.DisplayBadge;
+            }
+        }
     }
 
-    [RelayCommand]
-    public void OpenPlaylist(Playlist? playlist)
+    private static Playlist? Resolve(object? param) => param switch
     {
+        Playlist p => p,
+        PlaylistCardViewModel vm => vm.Playlist,
+        _ => null
+    };
+
+    [RelayCommand]
+    public void OpenPlaylist(object? param)
+    {
+        var playlist = Resolve(param);
         if (playlist == null) return;
         SelectedPlaylist = playlist;
         IsPlaylistDetailOpen = true;
@@ -123,7 +172,7 @@ public partial class PlaylistsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void RequestDeletePlaylist(Playlist? playlist) => PlaylistPendingDelete = playlist;
+    public void RequestDeletePlaylist(object? param) => PlaylistPendingDelete = Resolve(param);
 
     [RelayCommand]
     public void CancelDeletePlaylist() => PlaylistPendingDelete = null;
@@ -137,8 +186,9 @@ public partial class PlaylistsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task DeletePlaylistAsync(Playlist? playlist)
+    public async Task DeletePlaylistAsync(object? param)
     {
+        var playlist = Resolve(param);
         if (playlist == null) return;
         await _library.DeletePlaylistAsync(playlist.Id);
         if (SelectedPlaylist?.Id == playlist.Id)
@@ -150,18 +200,18 @@ public partial class PlaylistsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public void PlayPlaylist(Playlist? playlist)
+    public void PlayPlaylist(object? param)
     {
-        var target = playlist ?? SelectedPlaylist;
+        var target = Resolve(param) ?? SelectedPlaylist;
         if (target == null) return;
         var tracks = _library.GetPlaylistTracks(target);
         if (tracks.Count > 0) _player.PlayQueue(tracks);
     }
 
     [RelayCommand]
-    public void ShufflePlaylist(Playlist? playlist)
+    public void ShufflePlaylist(object? param)
     {
-        var target = playlist ?? SelectedPlaylist;
+        var target = Resolve(param) ?? SelectedPlaylist;
         if (target == null) return;
         var tracks = _library.GetPlaylistTracks(target);
         if (tracks.Count == 0) return;

@@ -23,6 +23,8 @@ public partial class ServerSettingsViewModel : ObservableObject
     [ObservableProperty] private int _totalTracksCount;
     [ObservableProperty] private int _totalAlbumsCount;
     [ObservableProperty] private int _totalArtistsCount;
+    [ObservableProperty] private int _totalFavoritesCount;
+    [ObservableProperty] private int _totalPlaylistsCount;
     [ObservableProperty] private string _serverStatusBadge = "Nincs kapcsolat";
     [ObservableProperty] private string _librarySourceText = "Nincs kiválasztott könyvtár";
 
@@ -67,6 +69,7 @@ public partial class ServerSettingsViewModel : ObservableObject
             : Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
 
         _library.LibraryChanged += (_, _) => Ui.Post(UpdateStats);
+        _library.PlaylistsChanged += (_, _) => Ui.Post(UpdateStats);
         _library.ScanningStateChanged += (_, scanning) => Ui.Post(() => IsScanning = scanning);
         _session.StateChanged += (_, _) => Ui.Post(SyncWithSession);
 
@@ -96,22 +99,20 @@ public partial class ServerSettingsViewModel : ObservableObject
 
         ServerStatusBadge = _session.State switch
         {
-            ServerConnectionState.Connected => _session.Source == LibrarySource.Hybrid
-                ? $"Online • {CurrentUserName} (Egyesített)"
-                : $"Online • {CurrentUserName}",
+            ServerConnectionState.Connected => IsLoggedIn ? "Csatlakoztatva" : "Online",
             ServerConnectionState.Connecting => "Kapcsolódás...",
-            ServerConnectionState.LoginRequired => "Online • bejelentkezés szükséges",
-            ServerConnectionState.SetupRequired => "Online • beállítás szükséges",
-            ServerConnectionState.Offline => "Nem elérhető",
+            ServerConnectionState.LoginRequired => "Bejelentkezés szükséges",
+            ServerConnectionState.SetupRequired => "Beállítás szükséges",
+            ServerConnectionState.Offline => "Offline",
             _ => "Nincs kapcsolat"
         };
 
         LibrarySourceText = _session.Source switch
         {
-            LibrarySource.Hybrid => $"Egyesített könyvtár (Helyi mappa: {_library.LibraryPath} + Szerver: {_session.ServerUrl})",
-            LibrarySource.Server => $"Szerver könyvtár ({_session.ServerUrl})",
+            LibrarySource.Hybrid => $"Egyesített ({_session.ServerUrl} + helyi mappa)",
+            LibrarySource.Server => $"Szerver ({_session.ServerUrl})",
             LibrarySource.Local => $"Helyi mappa ({_library.LibraryPath})",
-            _ => "Nincs kiválasztott könyvtár"
+            _ => "Nincs aktív forrás"
         };
     }
 
@@ -120,6 +121,8 @@ public partial class ServerSettingsViewModel : ObservableObject
         TotalTracksCount = _library.Tracks.Count;
         TotalAlbumsCount = _library.Albums.Count;
         TotalArtistsCount = _library.Artists.Count;
+        TotalFavoritesCount = _library.Favorites.Count;
+        TotalPlaylistsCount = _library.Playlists.Count;
     }
 
     private void ShowAuthError(string? message)

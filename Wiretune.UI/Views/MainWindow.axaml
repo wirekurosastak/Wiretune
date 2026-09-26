@@ -13,6 +13,7 @@
         Background="{DynamicResource AppBackground}"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="-1"
+        SystemDecorations="None"
         TransparencyLevelHint="Mica, Transparent"
         FontFamily="Segoe UI Variable, Inter, -apple-system, Arial">
 

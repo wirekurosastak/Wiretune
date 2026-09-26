@@ -64,6 +64,10 @@ public class NavVisualizerControl : Control
     private readonly DispatcherTimer _timer;
     private readonly float[] _currentHeights = new float[BandsCount];
     private readonly float[] _baseHeights = { 0.24f, 0.40f, 0.62f, 0.46f, 0.54f, 0.70f, 0.44f, 0.26f };
+    private readonly Color[] _sourceColors = new Color[BandsCount];
+    private readonly Color[] _currentColors = new Color[BandsCount];
+    private readonly IBrush[] _barBrushes = new IBrush[BandsCount];
+    private Color _targetColor = Color.Parse("#67C8E0");
 
     private float _waveProgress = 1.0f;
     private bool _isWaveActive;
@@ -79,10 +83,14 @@ public class NavVisualizerControl : Control
     {
         ClipToBounds = false;
 
-        // Initialize resting heights
+        var initColor = Color.Parse("#67C8E0");
+        // Initialize resting heights and bar colors
         for (int i = 0; i < BandsCount; i++)
         {
             _currentHeights[i] = _baseHeights[i] * 0.32f;
+            _sourceColors[i] = initColor;
+            _currentColors[i] = initColor;
+            _barBrushes[i] = new SolidColorBrush(initColor);
         }
 
         _timer = new DispatcherTimer(DispatcherPriority.Render)
@@ -95,6 +103,16 @@ public class NavVisualizerControl : Control
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        if (AccentBrush != null)
+        {
+            _targetColor = ExtractColor(AccentBrush);
+            for (int i = 0; i < BandsCount; i++)
+            {
+                _sourceColors[i] = _targetColor;
+                _currentColors[i] = _targetColor;
+                _barBrushes[i] = new SolidColorBrush(_targetColor);
+            }
+        }
         EnsureTimerState();
     }
 
@@ -111,6 +129,19 @@ public class NavVisualizerControl : Control
         if (change.Property == WaveTriggerProperty)
         {
             TriggerWave(WaveDirection);
+        }
+        else if (change.Property == AccentBrushProperty)
+        {
+            var newColor = ExtractColor(change.GetNewValue<IBrush?>());
+            if (newColor != _targetColor)
+            {
+                _targetColor = newColor;
+                for (int i = 0; i < BandsCount; i++)
+                {
+                    _sourceColors[i] = _currentColors[i];
+                }
+                EnsureTimerState();
+            }
         }
         else if (change.Property == IsPlayingProperty)
         {
@@ -130,12 +161,26 @@ public class NavVisualizerControl : Control
         _activeDirection = direction;
         _waveProgress = 0.0f;
         _isWaveActive = true;
+        for (int i = 0; i < BandsCount; i++)
+        {
+            _sourceColors[i] = _currentColors[i];
+        }
         EnsureTimerState();
     }
 
     private void EnsureTimerState()
     {
-        if (_isWaveActive || IsPlaying)
+        bool hasColorMismatch = false;
+        for (int i = 0; i < BandsCount; i++)
+        {
+            if (_currentColors[i] != _targetColor)
+            {
+                hasColorMismatch = true;
+                break;
+            }
+        }
+
+        if (_isWaveActive || IsPlaying || hasColorMismatch)
         {
             if (!_timer.IsEnabled) _timer.Start();
         }
@@ -209,6 +254,27 @@ public class NavVisualizerControl : Control
                 }
             }
 
+            // Color wave sweep or smooth transition
+            if (_isWaveActive)
+            {
+                float factor = _activeDirection == NavWaveDirection.LeftToRight
+                    ? Math.Clamp((crest - (i - 1.0f)) / 2.0f, 0.0f, 1.0f)
+                    : Math.Clamp(((i + 1.0f) - crest) / 2.0f, 0.0f, 1.0f);
+
+                var colorNow = LerpColor(_sourceColors[i], _targetColor, factor);
+                if (colorNow != _currentColors[i])
+                {
+                    _currentColors[i] = colorNow;
+                    _barBrushes[i] = new SolidColorBrush(colorNow);
+                }
+            }
+            else if (_currentColors[i] != _targetColor)
+            {
+                var colorNow = LerpColor(_currentColors[i], _targetColor, 0.16f);
+                _currentColors[i] = colorNow;
+                _barBrushes[i] = new SolidColorBrush(colorNow);
+            }
+
             // Physical spring physics: snappy attack, smooth release
             if (target > _currentHeights[i])
             {
@@ -232,7 +298,17 @@ public class NavVisualizerControl : Control
 
         InvalidateVisual();
 
-        if (!_isWaveActive && !IsPlaying && !hasMovingBars)
+        bool hasColorMismatch = false;
+        for (int i = 0; i < BandsCount; i++)
+        {
+            if (_currentColors[i] != _targetColor)
+            {
+                hasColorMismatch = true;
+                break;
+            }
+        }
+
+        if (!_isWaveActive && !IsPlaying && !hasMovingBars && !hasColorMismatch)
         {
             _timer.Stop();
         }
@@ -245,7 +321,6 @@ public class NavVisualizerControl : Control
         var bounds = Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
-        var brush = AccentBrush ?? Brushes.Lime;
         double totalWidth = bounds.Width;
         double totalHeight = bounds.Height;
         double gap = 2.0;
@@ -260,7 +335,26 @@ public class NavVisualizerControl : Control
             double y = centerY - barHeight / 2.0;
 
             var rect = new Rect(x, y, barWidth, barHeight);
-            context.DrawRectangle(brush, null, new RoundedRect(rect, radius));
+            var barBrush = _barBrushes[i] ?? AccentBrush ?? Brushes.Lime;
+            context.DrawRectangle(barBrush, null, new RoundedRect(rect, radius));
         }
     }
+
+    private static Color LerpColor(Color from, Color to, float t)
+    {
+        if (t <= 0f) return from;
+        if (t >= 1f) return to;
+        byte a = (byte)(from.A + (to.A - from.A) * t);
+        byte r = (byte)(from.R + (to.R - from.R) * t);
+        byte g = (byte)(from.G + (to.G - from.G) * t);
+        byte b = (byte)(from.B + (to.B - from.B) * t);
+        return Color.FromArgb(a, r, g, b);
+    }
+
+    private static Color ExtractColor(IBrush? brush)
+    {
+        if (brush is ISolidColorBrush scb) return scb.Color;
+        return Color.Parse("#67C8E0");
+    }
 }
+

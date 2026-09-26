@@ -294,11 +294,13 @@ public class LibraryServiceTests
         vm.NavigateToCommand.Execute(5);
         Assert.Equal(5, vm.SelectedNavigationIndex);
 
-        // Verify Idle footer status
-        Assert.Contains("Kimenet", vm.StatusText);
-        Assert.Contains("Wiretune", vm.RightFooterStatusText);
+        // Verify Idle footer status: audio on left, library on right (no Kimenet prefix, no Wiretune brand text)
+        Assert.Contains("Test USB DAC", vm.StatusText);
+        Assert.DoesNotContain("Kimenet", vm.StatusText);
+        Assert.DoesNotContain("Wiretune", vm.RightFooterStatusText);
+        Assert.False(string.IsNullOrWhiteSpace(vm.RightFooterStatusText));
 
-        // Set track and test dynamic right footer
+        // Set track and test footer status on left side (device info retained without redundant format/title/artist)
         var testTrack = new Track
         {
             Id = "t100",
@@ -309,9 +311,11 @@ public class LibraryServiceTests
 
         _ = audioEngine.PlayTrackAsync(testTrack);
 
-        Assert.Contains("Eagles", vm.StatusText);
-        Assert.Contains("Hotel California", vm.StatusText);
-        Assert.Contains("FLAC 24-bit/192kHz", vm.RightFooterStatusText);
+        Assert.Contains("Test USB DAC", vm.StatusText);
+        Assert.DoesNotContain("Kimenet", vm.StatusText);
+        Assert.DoesNotContain("Eagles", vm.StatusText);
+        Assert.DoesNotContain("Hotel California", vm.StatusText);
+        Assert.DoesNotContain("Wiretune", vm.RightFooterStatusText);
     }
 
     [Fact]
@@ -323,7 +327,7 @@ public class LibraryServiceTests
             Title = "Random Access Memories",
             Artist = "Daft Punk",
             TrackCount = 13,
-            FormatBadge = "HI-RES LOSSLESS • 24bit/88.2kHz"
+            FormatBadge = "FLAC / 24bit / 88.2kHz"
         };
 
         var card = new Wiretune.UI.ViewModels.AlbumCardViewModel(album);
@@ -331,7 +335,7 @@ public class LibraryServiceTests
         Assert.Equal("Random Access Memories", card.Title);
         Assert.Equal("Daft Punk", card.Artist);
         Assert.Equal(13, card.TrackCount);
-        Assert.Equal("HI-RES LOSSLESS • 24bit/88.2kHz", card.FormatBadge);
+        Assert.Equal("FLAC / 24bit / 88.2kHz", card.FormatBadge);
     }
 
     [Fact]
@@ -382,6 +386,44 @@ public class LibraryServiceTests
         Assert.Single(service.Artists);
         Assert.Equal("Daft Punk", service.Artists[0].Name);
         Assert.DoesNotContain(service.Artists, a => a.Name == "Daft Punk feat. Romanthony");
+    }
+
+    [Fact]
+    public async Task Album_WithMixedHiResAndCdTracks_AssignsMixedHqBadge()
+    {
+        var repo = new MockRepository();
+        var service = new LibraryService(repo, new MetadataScanner());
+
+        await repo.SaveTracksBatchAsync(new[]
+        {
+            new Track
+            {
+                Id = "t1",
+                Title = "Track 1 - Hi-Res",
+                Artist = "Artist X",
+                Album = "Mixed Album",
+                TrackNumber = 1,
+                FilePath = "/Music/ArtistX/Mixed/01.flac",
+                Format = new AudioFormat { Codec = "FLAC", SampleRate = 96000, BitsPerSample = 24, IsLossless = true }
+            },
+            new Track
+            {
+                Id = "t2",
+                Title = "Track 2 - CD Quality",
+                Artist = "Artist X",
+                Album = "Mixed Album",
+                TrackNumber = 2,
+                FilePath = "/Music/ArtistX/Mixed/02.flac",
+                Format = new AudioFormat { Codec = "FLAC", SampleRate = 44100, BitsPerSample = 16, IsLossless = true }
+            }
+        });
+
+        await service.InitializeAsync();
+
+        Assert.Single(service.Albums);
+        var album = service.Albums[0];
+        Assert.Equal("Mixed HQ", album.FormatBadge);
+        Assert.True(album.IsHiRes);
     }
 }
 

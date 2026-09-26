@@ -1,5 +1,6 @@
 using Wiretune.Audio;
 using Wiretune.Core.Models;
+using Wiretune.Core.Services;
 using Xunit;
 
 namespace Wiretune.Tests;
@@ -78,8 +79,8 @@ public class AudioEngineTests
         Assert.True(hiResMaster.IsHiRes);
         Assert.True(dsdFormat.IsHiRes);
         Assert.Contains("96", hiResMaster.DisplayBadge);
-        Assert.Contains("HI-RES LOSSLESS", hiResMaster.DisplayBadge);
-        Assert.Contains("CD LOSSLESS", cdQuality.DisplayBadge);
+        Assert.Contains("24bit", hiResMaster.DisplayBadge);
+        Assert.Contains("16bit", cdQuality.DisplayBadge);
     }
 
     [Fact]
@@ -118,5 +119,98 @@ public class AudioEngineTests
         using var engine = TestSupport.CreateEngine();
         await engine.SeekAsync(TimeSpan.FromSeconds(42));
         Assert.Equal(TimeSpan.FromSeconds(42), engine.CurrentPosition);
+    }
+
+    [Fact]
+    public async Task ExclusiveMode_PicksMatchingAlsaDirectDevice_WhenCurrentIsSharedPipeWireSink()
+    {
+        var pipewireSink = new AudioOutputDevice
+        {
+            Id = "pw_81",
+            Name = "SMSL USB AUDIO Pro",
+            DriverType = "PipeWire",
+            HardwareCard = "SMSL USB DAC",
+            IsDefault = true,
+            IsExclusiveSupported = false,
+            IsBitperfectSupported = false
+        };
+
+        var directAlsa = new AudioOutputDevice
+        {
+            Id = "hw:2,0",
+            Name = "Közvetlen ALSA: SMSL USB AUDIO",
+            DriverType = "ALSA Direct",
+            HardwareCard = "SMSL USB AUDIO",
+            IsDefault = false,
+            IsExclusiveSupported = true,
+            IsBitperfectSupported = true
+        };
+
+        using var engine = TestSupport.CreateEngine(null, pipewireSink, directAlsa);
+
+        // Initially default shared sink
+        Assert.Equal("pw_81", engine.CurrentDevice?.Id);
+
+        // When activating exclusive mode, it should switch to direct ALSA hardware
+        await engine.SetExclusiveModeAsync(true);
+        Assert.True(engine.IsExclusiveMode);
+        Assert.Equal("hw:2,0", engine.CurrentDevice?.Id);
+
+        // When switching back to shared mode, it should revert to default sink
+        await engine.SetExclusiveModeAsync(false);
+        Assert.False(engine.IsExclusiveMode);
+        Assert.Equal("pw_81", engine.CurrentDevice?.Id);
+    }
+
+    [Fact]
+    public void PlayerViewModel_IsVolumeDisabledOrMuted_TracksMuteAndVolumeLocked()
+    {
+        using var engine = TestSupport.CreateEngine();
+        var mockRepo = new MockRepository();
+        var service = new Wiretune.Core.Services.LibraryService(mockRepo, new MetadataScanner());
+        var player = new Wiretune.UI.ViewModels.PlayerViewModel(engine, service);
+
+        Assert.False(player.IsVolumeDisabledOrMuted);
+
+        // Muting should disable/mute volume
+        player.IsMuted = true;
+        Assert.True(player.IsVolumeDisabledOrMuted);
+
+        player.IsMuted = false;
+        Assert.False(player.IsVolumeDisabledOrMuted);
+
+        // Bitperfect volume locking should disable/mute volume
+        player.IsVolumeLocked = true;
+        Assert.True(player.IsVolumeDisabledOrMuted);
+
+        player.IsVolumeLocked = false;
+        Assert.False(player.IsVolumeDisabledOrMuted);
+    }
+
+    [Fact]
+    public async Task SignalPathDescription_ReflectsAudioModesAccurately()
+    {
+        using var engine = TestSupport.CreateEngine();
+        var track = new Track
+        {
+            Title = "Test Track",
+            Artist = "Test Artist",
+            Format = new AudioFormat { Codec = "FLAC", SampleRate = 44100, BitsPerSample = 16 },
+            FilePath = "/path/to/test.flac"
+        };
+
+        await engine.PlayTrackAsync(track);
+
+        // Shared mode
+        Assert.Contains("Megosztott mód", engine.SignalPathDescription);
+
+        // Exclusive mode
+        await engine.SetExclusiveModeAsync(true);
+        Assert.Contains("Kizárólagos mód", engine.SignalPathDescription);
+
+        // Bit-perfect mode
+        await engine.SetBitperfectModeAsync(true);
+        Assert.Contains("Bit-perfect", engine.SignalPathDescription);
+        Assert.Contains("Unity Gain", engine.SignalPathDescription);
     }
 }

@@ -91,8 +91,8 @@ public static class AudioDeviceManager
                                 DriverType = "PipeWire",
                                 HardwareCard = name.Contains("SMSL") ? "SMSL USB DAC" : "PipeWire Sink",
                                 IsDefault = isDefault,
-                                IsExclusiveSupported = true,
-                                IsBitperfectSupported = true,
+                                IsExclusiveSupported = false,
+                                IsBitperfectSupported = false,
                                 SupportedSampleRates = new() { 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000 }
                             });
                         }
@@ -124,20 +124,23 @@ public static class AudioDeviceManager
                 proc.WaitForExit(1000);
 
                 // Example: card 2: AUDIO [SMSL USB AUDIO], device 0: USB Audio [USB Audio]
-                var matches = Regex.Matches(output, @"card\s+(?<card>\d+):\s+(?<cardName>[^,]+),\s+device\s+(?<dev>\d+):\s+(?<devName>[^\[]+)\[(?<fullName>[^\]]+)\]");
+                var matches = Regex.Matches(output, @"card\s+(?<card>\d+):\s+(?<cardShort>[^\[]+)\[(?<cardName>[^\]]+)\],\s+device\s+(?<dev>\d+):\s+(?<devShort>[^\[]+)\[(?<fullName>[^\]]+)\]");
                 foreach (Match m in matches)
                 {
                     var card = m.Groups["card"].Value;
                     var dev = m.Groups["dev"].Value;
-                    var fullName = m.Groups["fullName"].Value.Trim();
                     var cardName = m.Groups["cardName"].Value.Trim();
+                    var fullName = m.Groups["fullName"].Value.Trim();
+                    var displayName = string.Equals(cardName, fullName, StringComparison.OrdinalIgnoreCase)
+                        ? $"Közvetlen ALSA: {cardName}"
+                        : $"Közvetlen ALSA: {cardName} ({fullName})";
 
                     list.Add(new AudioOutputDevice
                     {
                         Id = $"hw:{card},{dev}",
-                        Name = $"Közvetlen ALSA: {fullName}",
+                        Name = displayName,
                         DriverType = "ALSA Direct",
-                        HardwareCard = $"hw:{card},{dev} ({cardName})",
+                        HardwareCard = cardName,
                         IsDefault = false,
                         IsExclusiveSupported = true,
                         IsBitperfectSupported = true,

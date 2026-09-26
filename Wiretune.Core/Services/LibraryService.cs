@@ -417,6 +417,25 @@ public class LibraryService : ILibraryService
                         .ToList();
                     var first = ordered[0];
                     var hiRes = ordered.FirstOrDefault(t => t.Format.IsHiRes);
+
+                    var formats = ordered.Select(t => t.Format).ToList();
+                    var distinctSpecs = formats
+                        .Select(f => (f.BitsPerSample, f.SampleRate, f.IsLossless, f.Codec))
+                        .Distinct()
+                        .ToList();
+
+                    string badge;
+                    var hasHiRes = formats.Any(f => f.IsHiRes);
+
+                    if (distinctSpecs.Count > 1)
+                    {
+                        badge = "Mixed HQ";
+                    }
+                    else
+                    {
+                        badge = formats[0].DisplayBadge;
+                    }
+
                     return new Album
                     {
                         Id = g.Key,
@@ -427,8 +446,8 @@ public class LibraryService : ILibraryService
                         CoverArtPath = ordered.FirstOrDefault(t => !string.IsNullOrEmpty(t.CoverArtPath))?.CoverArtPath,
                         TrackCount = ordered.Count,
                         TotalDuration = TimeSpan.FromSeconds(ordered.Sum(t => t.Duration.TotalSeconds)),
-                        IsHiRes = hiRes != null,
-                        FormatBadge = (hiRes ?? first).Format.DisplayBadge,
+                        IsHiRes = hasHiRes,
+                        FormatBadge = badge,
                         Tracks = ordered
                     };
                 })
@@ -445,7 +464,10 @@ public class LibraryService : ILibraryService
             var artists = artistNames
                 .Select(name =>
                 {
-                    var artistAlbums = albumsByArtist[name].ToList();
+                    var artistAlbums = albumsByArtist[name]
+                        .OrderByDescending(a => a.Year ?? int.MinValue)
+                        .ThenBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
+                        .ToList();
                     var artistTracks = artistAlbums.SelectMany(a => a.Tracks)
                         .Concat(tracksByArtist[name])
                         .DistinctBy(t => t.Id)

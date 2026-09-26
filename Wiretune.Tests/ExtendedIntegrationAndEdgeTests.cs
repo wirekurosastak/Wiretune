@@ -216,12 +216,12 @@ public class ExtendedIntegrationAndEdgeTests
     // 8. AudioFormat: HiRes Studio Master and Format Badge
     // ─────────────────────────────────────────────────────────────────────────
     [Theory]
-    [InlineData(192000, 24, true, "HI-RES LOSSLESS • 24bit/192kHz")]
-    [InlineData(96000, 24, true, "HI-RES LOSSLESS • 24bit/96kHz")]
-    [InlineData(88200, 24, true, "HI-RES LOSSLESS • 24bit/88,2kHz")]
-    [InlineData(44100, 24, true, "HI-RES LOSSLESS • 24bit/44,1kHz")]
-    [InlineData(44100, 16, false, "CD LOSSLESS • 16bit/44,1kHz")]
-    [InlineData(48000, 16, false, "CD LOSSLESS • 16bit/48kHz")]
+    [InlineData(192000, 24, true, "FLAC / 24bit / 192kHz")]
+    [InlineData(96000, 24, true, "FLAC / 24bit / 96kHz")]
+    [InlineData(88200, 24, true, "FLAC / 24bit / 88.2kHz")]
+    [InlineData(44100, 24, true, "FLAC / 24bit / 44.1kHz")]
+    [InlineData(44100, 16, false, "FLAC / 16bit / 44.1kHz")]
+    [InlineData(48000, 16, false, "FLAC / 16bit / 48kHz")]
     public void AudioFormat_DisplayBadge_FormatsCorrectly(int rate, int bits, bool expectedHiRes, string expectedBadge)
     {
         var format = new AudioFormat
@@ -259,5 +259,103 @@ public class ExtendedIntegrationAndEdgeTests
         Assert.Equal("A Album", service.Albums[0].Title);
         Assert.Equal("B Album", service.Albums[1].Title);
         Assert.Equal("Z Album", service.Albums[2].Title);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 10. PlayerViewModel: MoveQueueTrack, RemoveQueueTrack and ClearQueue
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact]
+    public void PlayerViewModel_MoveQueueTrack_ReordersTracksAndUpdatesQueueItems()
+    {
+        using var engine = TestSupport.CreateEngine();
+        var repo = new MockRepository();
+        repo.Settings["ServerUrl"] = string.Empty;
+        var service = new LibraryService(repo, new MetadataScanner());
+        var player = new PlayerViewModel(engine, service);
+
+        var track1 = new Track { Id = "t1", Title = "Song 1", Format = new AudioFormat { Codec = "FLAC" } };
+        var track2 = new Track { Id = "t2", Title = "Song 2", Format = new AudioFormat { Codec = "FLAC" } };
+        var track3 = new Track { Id = "t3", Title = "Song 3", Format = new AudioFormat { Codec = "FLAC" } };
+
+        player.PlayQueue(new[] { track1, track2, track3 }, track1);
+
+        Assert.Equal(3, player.QueueTracks.Count);
+        Assert.Equal(3, player.QueueItems.Count);
+        Assert.Equal("Song 1", player.QueueTracks[0].Title);
+        Assert.Equal("Song 2", player.QueueTracks[1].Title);
+        Assert.Equal("Song 3", player.QueueTracks[2].Title);
+        Assert.True(player.QueueItems[0].IsCurrent);
+
+        // Move Song 3 from index 2 to index 0
+        player.MoveQueueTrack(2, 0);
+
+        Assert.Equal("Song 3", player.QueueTracks[0].Title);
+        Assert.Equal("Song 1", player.QueueTracks[1].Title);
+        Assert.Equal("Song 2", player.QueueTracks[2].Title);
+
+        // Song 1 is still currently playing and now at index 1
+        Assert.False(player.QueueItems[0].IsCurrent);
+        Assert.True(player.QueueItems[1].IsCurrent);
+        Assert.False(player.QueueItems[2].IsCurrent);
+        Assert.Equal(1, player.CurrentQueueIndex);
+    }
+
+    [Fact]
+    public void PlayerViewModel_RemoveQueueTrack_And_ClearQueue()
+    {
+        using var engine = TestSupport.CreateEngine();
+        var repo = new MockRepository();
+        repo.Settings["ServerUrl"] = string.Empty;
+        var service = new LibraryService(repo, new MetadataScanner());
+        var player = new PlayerViewModel(engine, service);
+
+        var track1 = new Track { Id = "t1", Title = "Song 1", Format = new AudioFormat { Codec = "FLAC" } };
+        var track2 = new Track { Id = "t2", Title = "Song 2", Format = new AudioFormat { Codec = "FLAC" } };
+        var track3 = new Track { Id = "t3", Title = "Song 3", Format = new AudioFormat { Codec = "FLAC" } };
+
+        player.PlayQueue(new[] { track1, track2, track3 }, track1);
+
+        player.RemoveQueueTrackCommand.Execute(track2);
+
+        Assert.Equal(2, player.QueueTracks.Count);
+        Assert.Equal("Song 1", player.QueueTracks[0].Title);
+        Assert.Equal("Song 3", player.QueueTracks[1].Title);
+
+        // Clear queue retains currently playing track
+        player.ClearQueueCommand.Execute(null);
+
+        Assert.Single(player.QueueTracks);
+        Assert.Equal("Song 1", player.QueueTracks[0].Title);
+    }
+
+    [Fact]
+    public void PlayerViewModel_MoveQueueTrackUp_And_Down()
+    {
+        using var engine = TestSupport.CreateEngine();
+        var repo = new MockRepository();
+        repo.Settings["ServerUrl"] = string.Empty;
+        var service = new LibraryService(repo, new MetadataScanner());
+        var player = new PlayerViewModel(engine, service);
+
+        var track1 = new Track { Id = "t1", Title = "Song 1", Format = new AudioFormat { Codec = "FLAC" } };
+        var track2 = new Track { Id = "t2", Title = "Song 2", Format = new AudioFormat { Codec = "FLAC" } };
+        var track3 = new Track { Id = "t3", Title = "Song 3", Format = new AudioFormat { Codec = "FLAC" } };
+
+        player.PlayQueue(new[] { track1, track2, track3 }, track1);
+
+        // Move track 3 up by 1 position (swap with track 2)
+        var item3 = player.QueueItems[2];
+        player.MoveQueueTrackUpCommand.Execute(item3);
+
+        Assert.Equal("Song 1", player.QueueTracks[0].Title);
+        Assert.Equal("Song 3", player.QueueTracks[1].Title);
+        Assert.Equal("Song 2", player.QueueTracks[2].Title);
+
+        // Move track 3 down by 1 position (back to index 2)
+        player.MoveQueueTrackDownCommand.Execute(item3);
+
+        Assert.Equal("Song 1", player.QueueTracks[0].Title);
+        Assert.Equal("Song 2", player.QueueTracks[1].Title);
+        Assert.Equal("Song 3", player.QueueTracks[2].Title);
     }
 }

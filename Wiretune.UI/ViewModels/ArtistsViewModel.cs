@@ -61,7 +61,11 @@ public partial class ArtistsViewModel : ObservableObject
         {
             OnNavWave?.Invoke(waveDirection.Value);
         }
-        SelectedArtistAlbumCards = artist.Albums.Select(a => new AlbumCardViewModel(a)).ToList();
+        SelectedArtistAlbumCards = artist.Albums
+            .OrderByDescending(a => a.Year ?? int.MinValue)
+            .ThenBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
+            .Select(a => new AlbumCardViewModel(a))
+            .ToList();
         HasSelectedArtistAlbums = SelectedArtistAlbumCards.Count > 0;
         SelectedArtistTracks = artist.Tracks;
     }
@@ -92,6 +96,15 @@ public partial class ArtistsViewModel : ObservableObject
         var target = artist ?? SelectedArtist;
         if (target == null || target.Tracks.Count == 0) return;
         _player.PlayQueue(target.Tracks);
+    }
+
+    [RelayCommand]
+    public void ShuffleArtist(Artist? artist)
+    {
+        var target = artist ?? SelectedArtist;
+        if (target == null || target.Tracks.Count == 0) return;
+        var shuffled = target.Tracks.OrderBy(_ => Random.Shared.Next()).ToList();
+        _player.PlayQueue(shuffled);
     }
 
     [RelayCommand]

@@ -39,7 +39,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private bool _isSearchActive;
     [ObservableProperty] private string _statusText = "Indítás...";
-    [ObservableProperty] private string _rightFooterStatusText = "Wiretune";
+    [ObservableProperty] private string _rightFooterStatusText = "Könyvtár betöltése...";
     [ObservableProperty] private string _logoTransform = "rotate(0deg)";
     [ObservableProperty] private bool _isServerOfflineBannerVisible;
     [ObservableProperty] private string _serverBannerMessage = string.Empty;
@@ -164,29 +164,42 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var device = AudioEngine.CurrentDevice;
         var mode = AudioEngine.IsBitperfect ? "Bit-Perfect" : AudioEngine.IsExclusiveMode ? "Exclusive" : "Megosztott";
         var deviceName = device?.Name ?? "Alapértelmezett kimenet";
+        var driver = !string.IsNullOrWhiteSpace(device?.DriverType) ? $"[{device.DriverType}]" : string.Empty;
 
-        if (AudioEngine.CurrentTrack is { } track)
+        // Left side: Mode and Device (Format is already displayed on player bar, remove Kimenet: word)
+        StatusText = string.IsNullOrEmpty(driver)
+            ? $"{mode} • {deviceName}"
+            : $"{mode} • {deviceName} {driver}";
+
+        // Right side: Library Info in order: x artists • x albums • x songs (x local, x server)
+        if (Library.IsScanning)
         {
-            StatusText = $"Lejátszás: {track.Artist} - {track.Title} | {mode} -> {deviceName}";
-            var fmt = track.Format;
-            var quality = fmt.IsLossless
-                ? $"{fmt.Codec.ToUpperInvariant()} {fmt.BitsPerSample}-bit/{fmt.SampleRate / 1000.0:0.#}kHz"
-                : fmt.QualityLabel;
-            RightFooterStatusText = $"{quality} • {device?.DriverType ?? "Audio"} • {mode}";
+            RightFooterStatusText = "Könyvtár beolvasása...";
             return;
         }
 
-        var source = Session.Source switch
+        var songCount = Library.Tracks.Count;
+        var albumCount = Library.Albums.Count;
+        var artistCount = Library.Artists.Count;
+        var localCount = Library.Tracks.Count(t => t.IsLocal);
+        var serverCount = Library.Tracks.Count(t => !t.IsLocal);
+
+        if (songCount == 0)
         {
-            LibrarySource.Hybrid => Session.IsLoggedIn
-                ? $"Egyesített könyvtár (Szerver + Helyi) • {Library.Tracks.Count(t => t.IsLocal)} helyi, {Library.Tracks.Count(t => !t.IsLocal)} szerver"
-                : $"Helyi könyvtár (Szerver offline) • {Library.Tracks.Count(t => t.IsLocal)} helyi szám",
-            LibrarySource.Server => Session.IsLoggedIn ? "Szerver: online" : "Szerver: nem elérhető",
-            LibrarySource.Local => "Helyi könyvtár",
-            _ => "Nincs könyvtár"
-        };
-        StatusText = $"{mode} | Kimenet: {deviceName} | {source} | {Library.Tracks.Count} szám elérhető";
-        RightFooterStatusText = $"Wiretune • {device?.DriverType ?? "Audio"}";
+            RightFooterStatusText = "Nincs elérhető zeneszám";
+        }
+        else if (localCount > 0 && serverCount > 0)
+        {
+            RightFooterStatusText = $"{artistCount} előadó • {albumCount} album • {songCount} szám ({localCount} helyi, {serverCount} szerver)";
+        }
+        else if (serverCount > 0)
+        {
+            RightFooterStatusText = $"{artistCount} előadó • {albumCount} album • {songCount} szám ({serverCount} szerver)";
+        }
+        else
+        {
+            RightFooterStatusText = $"{artistCount} előadó • {albumCount} album • {songCount} szám ({localCount} helyi)";
+        }
     }
 
     public void TriggerNavWave(NavWaveDirection direction)
