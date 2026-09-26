@@ -16,10 +16,8 @@ public record AudioFormat
 
     [JsonIgnore]
     public string DisplayBadge => !IsLossless
-        ? $"{Codec.ToUpperInvariant()} • {BitrateKbps}kbps"
-        : IsHiRes
-            ? $"HI-RES LOSSLESS • {BitsPerSample}bit/{SampleRate / 1000.0:0.#}kHz"
-            : $"CD LOSSLESS • {BitsPerSample}bit/{SampleRate / 1000.0:0.#}kHz";
+        ? $"{Codec.ToUpperInvariant()} / {BitrateKbps}kbps"
+        : $"{Codec.ToUpperInvariant()} / {BitsPerSample}bit / {(SampleRate / 1000.0).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}kHz";
 
     [JsonIgnore]
     public string QualityLabel => !IsLossless

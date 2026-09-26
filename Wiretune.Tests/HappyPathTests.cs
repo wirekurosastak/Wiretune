@@ -70,7 +70,7 @@ public class HappyPathTests
         var format = new AudioFormat { Codec = "FLAC", SampleRate = 96000, BitsPerSample = 24 };
 
         Assert.True(format.IsHiRes);
-        Assert.Contains("HI-RES LOSSLESS", format.DisplayBadge);
+        Assert.Contains("24bit / 96kHz", format.DisplayBadge);
         Assert.Equal("Hi-Res Studio Master (96kHz/24b)", format.QualityLabel);
     }
 
@@ -83,7 +83,7 @@ public class HappyPathTests
         var format = new AudioFormat { Codec = "FLAC", SampleRate = 44100, BitsPerSample = 16 };
 
         Assert.False(format.IsHiRes);
-        Assert.Contains("CD LOSSLESS", format.DisplayBadge);
+        Assert.Contains("16bit / 44.1kHz", format.DisplayBadge);
         Assert.Equal("CD Quality Lossless (16-bit / 44.1 kHz)", format.QualityLabel);
     }
 

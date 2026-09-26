@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -33,6 +34,11 @@ public partial class PlayerViewModel : ObservableObject
     [ObservableProperty] private bool _isExclusiveMode;
     [ObservableProperty] private bool _isBitperfect;
     [ObservableProperty] private bool _isVolumeLocked;
+
+    public bool IsVolumeDisabledOrMuted => IsMuted || IsVolumeLocked;
+    public bool IsVolumeActive => !IsMuted && !IsVolumeLocked;
+    public bool IsVolumeLockedAndNotMuted => !IsMuted && IsVolumeLocked;
+    public string VolumeToolTip => IsMuted ? "Némítás feloldása" : (IsVolumeLocked ? "Bit-perfect mód (Hangerő rögzítve)" : "Némítás");
     [ObservableProperty] private bool _isShuffle;
     [ObservableProperty] private RepeatMode _repeatMode = RepeatMode.Off;
     [ObservableProperty] private Bitmap? _coverBitmap;
@@ -42,8 +48,171 @@ public partial class PlayerViewModel : ObservableObject
     [ObservableProperty] private string _qualityShortBadge = string.Empty;
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private float[] _spectrumBands = new float[32];
+    [ObservableProperty] private bool _isQueueOpen;
+    [ObservableProperty] private IReadOnlyList<Track> _queueTracks = Array.Empty<Track>();
+    [ObservableProperty] private ObservableCollection<QueueItemViewModel> _queueItems = new();
+    [ObservableProperty] private int _currentQueueIndex = -1;
 
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
+
+    [RelayCommand]
+    public void ToggleQueue()
+    {
+        IsQueueOpen = !IsQueueOpen;
+        if (IsQueueOpen)
+        {
+            UpdateQueueState();
+        }
+    }
+
+    [RelayCommand]
+    public void CloseQueue() => IsQueueOpen = false;
+
+    [RelayCommand]
+    public void PlayQueueTrack(Track? track)
+    {
+        if (track == null) return;
+        var idx = _playbackQueue.IndexOf(track);
+        if (idx >= 0) PlayAt(idx);
+    }
+
+    public void MoveQueueTrack(int oldIndex, int newIndex)
+    {
+        if (oldIndex < 0 || oldIndex >= _playbackQueue.Count) return;
+        if (newIndex < 0 || newIndex >= _playbackQueue.Count) return;
+        if (oldIndex == newIndex) return;
+
+        var track = _playbackQueue[oldIndex];
+        _playbackQueue.RemoveAt(oldIndex);
+        _playbackQueue.Insert(newIndex, track);
+
+        if (!IsShuffle)
+        {
+            _originalQueue.Clear();
+            _originalQueue.AddRange(_playbackQueue);
+        }
+
+        if (CurrentTrack != null)
+        {
+            _queueIndex = _playbackQueue.IndexOf(CurrentTrack);
+        }
+        else if (_queueIndex >= 0)
+        {
+            if (oldIndex == _queueIndex)
+                _queueIndex = newIndex;
+            else if (oldIndex < _queueIndex && newIndex >= _queueIndex)
+                _queueIndex--;
+            else if (oldIndex > _queueIndex && newIndex <= _queueIndex)
+                _queueIndex++;
+        }
+
+        if (QueueItems.Count == _playbackQueue.Count)
+        {
+            QueueItems.Move(oldIndex, newIndex);
+            for (int i = 0; i < QueueItems.Count; i++)
+            {
+                QueueItems[i].Index = i;
+                QueueItems[i].IsCurrent = (i == _queueIndex);
+                QueueItems[i].IsDropTarget = false;
+            }
+            QueueTracks = _playbackQueue.ToList();
+            CurrentQueueIndex = _queueIndex;
+        }
+        else
+        {
+            UpdateQueueState();
+        }
+    }
+
+    [RelayCommand]
+    public void MoveQueueTrackUp(QueueItemViewModel? item)
+    {
+        if (item == null || item.Index <= 0) return;
+        MoveQueueTrack(item.Index, item.Index - 1);
+    }
+
+    [RelayCommand]
+    public void MoveQueueTrackDown(QueueItemViewModel? item)
+    {
+        if (item == null || item.Index >= _playbackQueue.Count - 1) return;
+        MoveQueueTrack(item.Index, item.Index + 1);
+    }
+
+    [RelayCommand]
+    public void RemoveQueueTrack(Track? track)
+    {
+        if (track == null) return;
+        var idx = _playbackQueue.IndexOf(track);
+        if (idx < 0) return;
+        _playbackQueue.RemoveAt(idx);
+        if (!IsShuffle)
+        {
+            _originalQueue.Remove(track);
+        }
+        if (CurrentTrack != null)
+        {
+            _queueIndex = _playbackQueue.IndexOf(CurrentTrack);
+        }
+        else if (_queueIndex >= 0)
+        {
+            if (idx == _queueIndex)
+                _queueIndex = Math.Min(_queueIndex, _playbackQueue.Count - 1);
+            else if (idx < _queueIndex)
+                _queueIndex--;
+        }
+        UpdateQueueState();
+    }
+
+    [RelayCommand]
+    public void ClearQueue()
+    {
+        var current = CurrentTrack ?? (_queueIndex >= 0 && _queueIndex < _playbackQueue.Count ? _playbackQueue[_queueIndex] : null);
+        _playbackQueue.Clear();
+        _originalQueue.Clear();
+        if (current != null)
+        {
+            _playbackQueue.Add(current);
+            _originalQueue.Add(current);
+            _queueIndex = 0;
+        }
+        else
+        {
+            _queueIndex = -1;
+        }
+        UpdateQueueState();
+    }
+
+    private void UpdateQueueState()
+    {
+        QueueTracks = _playbackQueue.ToList();
+        CurrentQueueIndex = _queueIndex;
+
+        if (QueueItems.Count == _playbackQueue.Count)
+        {
+            var match = true;
+            for (int i = 0; i < _playbackQueue.Count; i++)
+            {
+                if (!ReferenceEquals(QueueItems[i].Track, _playbackQueue[i]))
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (match)
+            {
+                for (int i = 0; i < _playbackQueue.Count; i++)
+                {
+                    QueueItems[i].Index = i;
+                    QueueItems[i].IsCurrent = (i == _queueIndex);
+                    QueueItems[i].IsDropTarget = false;
+                }
+                return;
+            }
+        }
+
+        QueueItems = new ObservableCollection<QueueItemViewModel>(
+            _playbackQueue.Select((t, i) => new QueueItemViewModel(t, i, i == _queueIndex)));
+    }
 
     public PlayerViewModel(IAudioEngine engine, ILibraryService library)
     {
@@ -109,7 +278,7 @@ public partial class PlayerViewModel : ObservableObject
         FormattedDuration = track.FormattedDuration;
         IsHiRes = track.Format.IsHiRes;
         QualityBadge = track.Format.DisplayBadge;
-        QualityShortBadge = track.Format.IsHiRes ? "HI-RES" : (track.Format.IsLossless ? "LOSSLESS" : track.Format.Codec);
+        QualityShortBadge = track.Format.DisplayBadge;
         SignalPath = _engine.SignalPathDescription;
 
         CoverArtService.LoadBitmap(track.CoverArtPath, CoverDecodeWidth, bmp =>
@@ -166,12 +335,14 @@ public partial class PlayerViewModel : ObservableObject
             _playbackQueue.AddRange(_originalQueue);
             PlayAt(start != null ? _playbackQueue.IndexOf(start) : 0);
         }
+        UpdateQueueState();
     }
 
     private void PlayAt(int index)
     {
         if (index < 0 || index >= _playbackQueue.Count) return;
         _queueIndex = index;
+        UpdateQueueState();
         ErrorMessage = null;
         _ = RunSafeAsync(() => _engine.PlayTrackAsync(_playbackQueue[index]));
     }
@@ -248,6 +419,7 @@ public partial class PlayerViewModel : ObservableObject
         _playbackQueue.Add(current);
         _playbackQueue.AddRange(rest);
         _queueIndex = 0;
+        UpdateQueueState();
     }
 
     [RelayCommand]
@@ -320,6 +492,22 @@ public partial class PlayerViewModel : ObservableObject
         if (!IsBitperfect) _engine.SetVolume(value / 100.0);
     }
 
+    partial void OnIsMutedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsVolumeDisabledOrMuted));
+        OnPropertyChanged(nameof(IsVolumeActive));
+        OnPropertyChanged(nameof(IsVolumeLockedAndNotMuted));
+        OnPropertyChanged(nameof(VolumeToolTip));
+    }
+
+    partial void OnIsVolumeLockedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsVolumeDisabledOrMuted));
+        OnPropertyChanged(nameof(IsVolumeActive));
+        OnPropertyChanged(nameof(IsVolumeLockedAndNotMuted));
+        OnPropertyChanged(nameof(VolumeToolTip));
+    }
+
     [RelayCommand]
     public void ToggleMute()
     {
@@ -352,4 +540,23 @@ public partial class PlayerViewModel : ObservableObject
             WiretuneLog.Error("PlayerViewModel", $"Playback command failed: {ex.Message}", ex);
         }
     }
+}
+
+public sealed partial class QueueItemViewModel : ObservableObject
+{
+    public Track Track { get; }
+    [ObservableProperty] private int _index;
+    [ObservableProperty] private bool _isCurrent;
+    [ObservableProperty] private bool _isDropTarget;
+
+    public int DisplayIndex => Index + 1;
+
+    public QueueItemViewModel(Track track, int index, bool isCurrent)
+    {
+        Track = track;
+        _index = index;
+        _isCurrent = isCurrent;
+    }
+
+    partial void OnIndexChanged(int value) => OnPropertyChanged(nameof(DisplayIndex));
 }

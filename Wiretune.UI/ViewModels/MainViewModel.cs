@@ -6,6 +6,7 @@ using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.Data;
+using Wiretune.UI.Controls;
 using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
@@ -32,10 +33,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public SearchResultsViewModel Search { get; }
 
     [ObservableProperty] private int _selectedNavigationIndex = 2;
+    [ObservableProperty] private int _waveTrigger;
+    [ObservableProperty] private NavWaveDirection _lastWaveDirection = NavWaveDirection.LeftToRight;
+    private int _previousNavIndex = 2;
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private bool _isSearchActive;
     [ObservableProperty] private string _statusText = "Indítás...";
-    [ObservableProperty] private string _rightFooterStatusText = "Wiretune";
+    [ObservableProperty] private string _rightFooterStatusText = "Könyvtár betöltése...";
     [ObservableProperty] private string _logoTransform = "rotate(0deg)";
     [ObservableProperty] private bool _isServerOfflineBannerVisible;
     [ObservableProperty] private string _serverBannerMessage = string.Empty;
@@ -82,6 +86,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         UpdateStatusText();
         Theme.UpdateDynamicBackground(SelectedNavigationIndex);
         LogoTransform = $"rotate({SelectedNavigationIndex * 90}deg)";
+
+        Albums.OnNavWave = TriggerNavWave;
+        Artists.OnNavWave = TriggerNavWave;
+        Playlists.OnNavWave = TriggerNavWave;
+        _previousNavIndex = SelectedNavigationIndex;
     }
 
     /// <summary>Creates the production object graph (SQLite cache, ffplay or platform audio driver).</summary>
@@ -115,19 +124,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
             UpdateStatusText();
         }
 
-        if (Session.Source == LibrarySource.Server)
+        if (Session.Source is LibrarySource.Server or LibrarySource.Hybrid)
         {
             await Session.ConnectAsync();
         }
 
-        IsLoginViewActive = Session.Source == LibrarySource.None ||
-                            Session.State is ServerConnectionState.LoginRequired or ServerConnectionState.SetupRequired;
+        IsLoginViewActive = (Session.Source == LibrarySource.None && Library.Tracks.Count == 0) ||
+                            (Session.Source == LibrarySource.Server && Session.State is ServerConnectionState.LoginRequired or ServerConnectionState.SetupRequired);
     }
 
     private void OnSessionStateChanged()
     {
-        IsServerOfflineBannerVisible = Session.Source == LibrarySource.Server && Session.State == ServerConnectionState.Offline;
-        ServerBannerMessage = Session.StatusMessage ?? $"A Wiretune szerver ({Session.ServerUrl}) nem érhető el.";
+        IsServerOfflineBannerVisible = (Session.Source is LibrarySource.Server or LibrarySource.Hybrid) && Session.State == ServerConnectionState.Offline;
+        if (Session.Source == LibrarySource.Hybrid && Session.State == ServerConnectionState.Offline)
+        {
+            ServerBannerMessage = $"A Wiretune szerver ({Session.ServerUrl}) nem érhető el. A helyi zeneszámok továbbra is elérhetők offline módban.";
+        }
+        else
+        {
+            ServerBannerMessage = Session.StatusMessage ?? $"A Wiretune szerver ({Session.ServerUrl}) nem érhető el.";
+        }
 
         if (Session.IsLoggedIn) IsLoginViewActive = false;
 
@@ -148,32 +164,80 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var device = AudioEngine.CurrentDevice;
         var mode = AudioEngine.IsBitperfect ? "Bit-Perfect" : AudioEngine.IsExclusiveMode ? "Exclusive" : "Megosztott";
         var deviceName = device?.Name ?? "Alapértelmezett kimenet";
+        var driver = !string.IsNullOrWhiteSpace(device?.DriverType) ? $"[{device.DriverType}]" : string.Empty;
 
-        if (AudioEngine.CurrentTrack is { } track)
+        // Left side: Mode and Device (Format is already displayed on player bar, remove Kimenet: word)
+        StatusText = string.IsNullOrEmpty(driver)
+            ? $"{mode} • {deviceName}"
+            : $"{mode} • {deviceName} {driver}";
+
+        // Right side: Library Info in order: x artists • x albums • x songs (x local, x server)
+        if (Library.IsScanning)
         {
-            StatusText = $"Lejátszás: {track.Artist} - {track.Title} | {mode} -> {deviceName}";
-            var fmt = track.Format;
-            var quality = fmt.IsLossless
-                ? $"{fmt.Codec.ToUpperInvariant()} {fmt.BitsPerSample}-bit/{fmt.SampleRate / 1000.0:0.#}kHz"
-                : fmt.QualityLabel;
-            RightFooterStatusText = $"{quality} • {device?.DriverType ?? "Audio"} • {mode}";
+            RightFooterStatusText = "Könyvtár beolvasása...";
             return;
         }
 
-        var source = Session.Source switch
+        var songCount = Library.Tracks.Count;
+        var albumCount = Library.Albums.Count;
+        var artistCount = Library.Artists.Count;
+        var localCount = Library.Tracks.Count(t => t.IsLocal);
+        var serverCount = Library.Tracks.Count(t => !t.IsLocal);
+
+        if (songCount == 0)
         {
-            LibrarySource.Server => Session.IsLoggedIn ? "Szerver: online" : "Szerver: nem elérhető",
-            LibrarySource.Local => "Helyi könyvtár",
-            _ => "Nincs könyvtár"
-        };
-        StatusText = $"{mode} | Kimenet: {deviceName} | {source} | {Library.Tracks.Count} szám elérhető";
-        RightFooterStatusText = $"Wiretune • {device?.DriverType ?? "Audio"}";
+            RightFooterStatusText = "Nincs elérhető zeneszám";
+        }
+        else if (localCount > 0 && serverCount > 0)
+        {
+            RightFooterStatusText = $"{artistCount} előadó • {albumCount} album • {songCount} szám ({localCount} helyi, {serverCount} szerver)";
+        }
+        else if (serverCount > 0)
+        {
+            RightFooterStatusText = $"{artistCount} előadó • {albumCount} album • {songCount} szám ({serverCount} szerver)";
+        }
+        else
+        {
+            RightFooterStatusText = $"{artistCount} előadó • {albumCount} album • {songCount} szám ({localCount} helyi)";
+        }
     }
+
+    public void TriggerNavWave(NavWaveDirection direction)
+    {
+        LastWaveDirection = direction;
+        WaveTrigger++;
+    }
+
+    public static int GetNavVisualOrder(int navIndex) => navIndex switch
+    {
+        2 => 0, // Artists
+        1 => 1, // Albums
+        0 => 2, // Songs
+        4 => 3, // Favorites
+        3 => 4, // Playlists
+        5 => 5, // Settings
+        _ => navIndex
+    };
 
     partial void OnSelectedNavigationIndexChanged(int value)
     {
         Theme.UpdateDynamicBackground(value);
         LogoTransform = $"rotate({value * 90}deg)";
+
+        if (_previousNavIndex >= 0 && _previousNavIndex != value)
+        {
+            var oldOrder = GetNavVisualOrder(_previousNavIndex);
+            var newOrder = GetNavVisualOrder(value);
+            if (newOrder > oldOrder)
+            {
+                TriggerNavWave(NavWaveDirection.LeftToRight); // downwards
+            }
+            else if (newOrder < oldOrder)
+            {
+                TriggerNavWave(NavWaveDirection.RightToLeft); // upwards
+            }
+        }
+        _previousNavIndex = value;
     }
 
     partial void OnSearchQueryChanged(string value)
@@ -196,8 +260,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
         if (targetIndex < 0 || targetIndex > 5) return;
 
-        if (targetIndex == 1) Albums.CloseAlbumDetail();
-        else if (targetIndex == 2) Artists.CloseArtistDetail();
+        if (targetIndex == 1) { Albums.ReturnAction = null; Albums.CloseAlbumDetail(); }
+        else if (targetIndex == 2) { Artists.ReturnAction = null; Artists.CloseArtistDetail(); }
 
         SearchQuery = string.Empty;
         SelectedNavigationIndex = targetIndex;
@@ -215,8 +279,47 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
         if (album == null) return;
 
+        string? backText = null;
+        Action? onReturn = null;
+
+        if (SelectedNavigationIndex == 2 && Artists.IsArtistDetailOpen && Artists.SelectedArtist != null)
+        {
+            var returnArtist = Artists.SelectedArtist;
+            backText = $"Vissza: {returnArtist.Name}";
+            onReturn = () =>
+            {
+                SelectedNavigationIndex = 2;
+                Artists.OpenArtistWithOrigin(returnArtist, null, null, NavWaveDirection.RightToLeft);
+            };
+        }
+        else if (SelectedNavigationIndex == 3 && Playlists.IsPlaylistDetailOpen && Playlists.SelectedPlaylist != null)
+        {
+            var returnPlaylist = Playlists.SelectedPlaylist;
+            backText = $"Vissza: {returnPlaylist.Name}";
+            onReturn = () =>
+            {
+                SelectedNavigationIndex = 3;
+                Playlists.OpenPlaylist(returnPlaylist);
+            };
+        }
+        else if (SelectedNavigationIndex == 4)
+        {
+            backText = "Vissza a kedvencekhez";
+            onReturn = () => SelectedNavigationIndex = 4;
+        }
+        else if (SelectedNavigationIndex == 0)
+        {
+            backText = "Vissza a számokhoz";
+            onReturn = () => SelectedNavigationIndex = 0;
+        }
+        else if (IsSearchActive)
+        {
+            backText = "Vissza a kereséshez";
+            onReturn = () => IsSearchActive = true;
+        }
+
         SearchQuery = string.Empty;
-        Albums.OpenAlbum(album);
+        Albums.OpenAlbumWithOrigin(album, backText, onReturn);
         SelectedNavigationIndex = 1;
     }
 
@@ -224,8 +327,48 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void OpenArtist(Artist? artist)
     {
         if (artist == null) return;
+
+        string? backText = null;
+        Action? onReturn = null;
+
+        if (SelectedNavigationIndex == 1 && Albums.IsAlbumDetailOpen && Albums.SelectedAlbum != null)
+        {
+            var returnAlbum = Albums.SelectedAlbum;
+            backText = $"Vissza: {returnAlbum.Title}";
+            onReturn = () =>
+            {
+                SelectedNavigationIndex = 1;
+                Albums.OpenAlbumWithOrigin(returnAlbum, null, null, NavWaveDirection.RightToLeft);
+            };
+        }
+        else if (SelectedNavigationIndex == 3 && Playlists.IsPlaylistDetailOpen && Playlists.SelectedPlaylist != null)
+        {
+            var returnPlaylist = Playlists.SelectedPlaylist;
+            backText = $"Vissza: {returnPlaylist.Name}";
+            onReturn = () =>
+            {
+                SelectedNavigationIndex = 3;
+                Playlists.OpenPlaylist(returnPlaylist);
+            };
+        }
+        else if (SelectedNavigationIndex == 4)
+        {
+            backText = "Vissza a kedvencekhez";
+            onReturn = () => SelectedNavigationIndex = 4;
+        }
+        else if (SelectedNavigationIndex == 0)
+        {
+            backText = "Vissza a számokhoz";
+            onReturn = () => SelectedNavigationIndex = 0;
+        }
+        else if (IsSearchActive)
+        {
+            backText = "Vissza a kereséshez";
+            onReturn = () => IsSearchActive = true;
+        }
+
         SearchQuery = string.Empty;
-        Artists.OpenArtist(artist);
+        Artists.OpenArtistWithOrigin(artist, backText, onReturn);
         SelectedNavigationIndex = 2;
     }
 
@@ -261,7 +404,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         await ServerSettings.LogoutAsync();
         UpdateAuthDisplay();
-        IsLoginViewActive = true;
+        IsLoginViewActive = Library.Tracks.Count == 0;
     }
 
     public void Dispose()

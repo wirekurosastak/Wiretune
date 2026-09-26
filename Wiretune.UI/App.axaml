@@ -19,11 +19,19 @@
       <!-- Slider Dimensions & Spacing to Prevent Horizontal/Vertical Clipping -->
       <GridLength x:Key="SliderPreContentMargin">0</GridLength>
       <GridLength x:Key="SliderPostContentMargin">0</GridLength>
-      <x:Double x:Key="SliderHorizontalHeight">28</x:Double>
+      <x:Double x:Key="SliderHorizontalHeight">14</x:Double>
       <x:Double x:Key="SliderTrackThemeHeight">5</x:Double>
       <CornerRadius x:Key="SliderThumbCornerRadius">7</CornerRadius>
       <x:Double x:Key="SliderHorizontalThumbWidth">14</x:Double>
       <x:Double x:Key="SliderHorizontalThumbHeight">14</x:Double>
+
+      <!-- Fluent Slider Theme Accent Overrides to Prevent Blue Hover -->
+      <SolidColorBrush x:Key="SliderThumbBackground" Color="{DynamicResource PrimaryActionColor}" />
+      <SolidColorBrush x:Key="SliderThumbBackgroundPointerOver" Color="#8BE0F5" />
+      <SolidColorBrush x:Key="SliderThumbBackgroundPressed" Color="#4FB0C8" />
+      <SolidColorBrush x:Key="SliderTrackValueFill" Color="{DynamicResource PrimaryActionColor}" />
+      <SolidColorBrush x:Key="SliderTrackValueFillPointerOver" Color="{DynamicResource PrimaryActionColor}" />
+      <SolidColorBrush x:Key="SliderTrackValueFillPressed" Color="#4FB0C8" />
 
       <!-- Dynamic Primary Action Brushes (Updated per active section tab by ThemeService) -->
       <SolidColorBrush x:Key="PrimaryAction" Color="#67C8E0" />
@@ -250,6 +258,16 @@
     <Style Selector="Button.icon:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
     </Style>
+    <Style Selector="Button.icon.close-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Background" Value="#E03030" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+    </Style>
+    <Style Selector="Button.icon.action-btn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
+      <Setter Property="Background" Value="{DynamicResource GlassHighlight}" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+    </Style>
 
     <Style Selector="Button.unstyled-card">
       <Setter Property="Height" Value="NaN" />
@@ -270,6 +288,34 @@
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
       <Setter Property="ClipToBounds" Value="False" />
+    </Style>
+
+    <Style Selector="Button.unstyled-cover">
+      <Setter Property="Height" Value="NaN" />
+      <Setter Property="Width" Value="NaN" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.unstyled-cover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+    </Style>
+    <Style Selector="Button.unstyled-cover:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Opacity" Value="0.82" />
+    </Style>
+    <Style Selector="Button.unstyled-cover:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Opacity" Value="0.65" />
     </Style>
 
     <Style Selector="Button.coral">
@@ -487,6 +533,91 @@
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
+    <!-- Cover queue hover overlay and rotating chevron -->
+    <Style Selector="Border.cover-queue-overlay">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.18" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Button.cover-queue-btn:pointerover Border.cover-queue-overlay">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Border.cover-queue-overlay.open">
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+    <Style Selector="Button.cover-queue-btn:pointerover Border.cover-queue-overlay.open">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector="materialIcons|MaterialIcon.queue-chevron">
+      <Setter Property="RenderTransform" Value="rotate(0deg)" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="materialIcons|MaterialIcon.queue-chevron.open">
+      <Setter Property="RenderTransform" Value="rotate(180deg)" />
+    </Style>
+
+    <!-- Queue Docked Drawer Panel (Slide-in from left, full height of workspace) -->
+    <Style Selector="Border.queue-docked-panel, Border.queue-drawer-panel">
+      <Setter Property="Background" Value="{DynamicResource ModalBackground}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
+      <Setter Property="BorderThickness" Value="0,0,1,0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="BoxShadow" Value="16 0 40 -6 #90000000, 1 0 0 0 #18FFFFFF" />
+      <Style.Animations>
+        <Animation Duration="0:0:0.25" Easing="CubicEaseOut" FillMode="Forward">
+          <KeyFrame Cue="0%">
+            <Setter Property="TranslateTransform.X" Value="-420" />
+            <Setter Property="Opacity" Value="0.6" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="TranslateTransform.X" Value="0" />
+            <Setter Property="Opacity" Value="1" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- Playback Queue Drawer Item Styles -->
+    <Style Selector="Border.queue-item">
+      <Setter Property="Background" Value="{DynamicResource Surface1}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <BrushTransition Property="Background" Duration="0:0:0.15" />
+          <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.queue-item:pointerover">
+      <Setter Property="Background" Value="{DynamicResource Surface2}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource GlassHighlight}" />
+    </Style>
+    <Style Selector="Border.queue-item.current-track">
+      <Setter Property="Background" Value="{DynamicResource Surface2}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="Border.queue-item.current-track:pointerover">
+      <Setter Property="Background" Value="{DynamicResource GlassHighlight}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Border.queue-item.drop-target">
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="Background" Value="{DynamicResource GlassHighlight}" />
+    </Style>
+
     <!-- TextBox & ComboBox -->
     <Style Selector="TextBox, ComboBox">
       <Setter Property="CornerRadius" Value="4" />
@@ -562,6 +693,9 @@
       <Setter Property="Height" Value="28" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
+    <Style Selector="Slider /template/ Grid#SliderContainer">
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <Style Selector="Slider:horizontal">
       <Setter Property="MinHeight" Value="28" />
       <Setter Property="Height" Value="28" />
@@ -569,8 +703,8 @@
     </Style>
     <Style Selector="Slider:horizontal /template/ Grid#HorizontalTemplate">
       <Setter Property="ClipToBounds" Value="False" />
-      <Setter Property="MinHeight" Value="28" />
-      <Setter Property="Height" Value="28" />
+      <Setter Property="MinHeight" Value="14" />
+      <Setter Property="Height" Value="14" />
       <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
     <Style Selector="Slider /template/ Track#PART_Track">
@@ -597,6 +731,58 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0" />
     </Style>
+
+    <!-- PointerOver & Pressed States: keep dynamic theme accent, never turn blue -->
+    <Style Selector="Slider:pointerover /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Slider:pointerover /template/ Thumb /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Slider /template/ Thumb:pointerover">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Slider /template/ Thumb:pointerover /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Slider.seek-slider:pointerover /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Slider.seek-slider:pointerover /template/ Thumb /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Slider.seek-slider /template/ Thumb:pointerover">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+    <Style Selector="Slider.seek-slider /template/ Thumb:pointerover /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+    </Style>
+
+    <Style Selector="Slider:pressed /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+    <Style Selector="Slider:pressed /template/ Thumb /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+    <Style Selector="Slider /template/ Thumb:pressed">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+    <Style Selector="Slider /template/ Thumb:pressed /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+    <Style Selector="Slider.seek-slider:pressed /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+    <Style Selector="Slider.seek-slider:pressed /template/ Thumb /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+    <Style Selector="Slider.seek-slider /template/ Thumb:pressed">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+    <Style Selector="Slider.seek-slider /template/ Thumb:pressed /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+
     <Style Selector="Slider /template/ RepeatButton#PART_DecreaseButton">
       <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
       <Setter Property="Height" Value="5" />
@@ -604,6 +790,13 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0" />
     </Style>
+    <Style Selector="Slider:pointerover /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+    </Style>
+    <Style Selector="Slider:pressed /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+    </Style>
+
     <Style Selector="Slider /template/ RepeatButton#PART_IncreaseButton">
       <Setter Property="Background" Value="{DynamicResource Surface2}" />
       <Setter Property="Height" Value="5" />
@@ -611,6 +804,13 @@
       <Setter Property="VerticalAlignment" Value="Center" />
       <Setter Property="Margin" Value="0" />
     </Style>
+    <Style Selector="Slider:pointerover /template/ RepeatButton#PART_IncreaseButton">
+      <Setter Property="Background" Value="{DynamicResource Surface2}" />
+    </Style>
+    <Style Selector="Slider:pressed /template/ RepeatButton#PART_IncreaseButton">
+      <Setter Property="Background" Value="{DynamicResource Surface2}" />
+    </Style>
+
     <Style Selector="Slider.seek-slider">
       <Setter Property="MinHeight" Value="28" />
       <Setter Property="Height" Value="28" />
@@ -619,9 +819,43 @@
       <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
     </Style>
     <Style Selector="Slider:disabled">
-      <Setter Property="Opacity" Value="0.4" />
+      <Setter Property="Opacity" Value="0.6" />
     </Style>
     <Style Selector="Slider:disabled /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider:disabled /template/ Thumb /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider:disabled /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+
+    <Style Selector="Slider.volume-muted /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted:pointerover /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted:pressed /template/ RepeatButton#PART_DecreaseButton">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted /template/ Thumb /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted:pointerover /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted:pointerover /template/ Thumb /template/ Border">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted:pressed /template/ Thumb">
+      <Setter Property="Background" Value="{DynamicResource TextMuted}" />
+    </Style>
+    <Style Selector="Slider.volume-muted:pressed /template/ Thumb /template/ Border">
       <Setter Property="Background" Value="{DynamicResource TextMuted}" />
     </Style>
 
@@ -697,6 +931,67 @@
     </Style>
     <Style Selector="Button.table-link:pointerover TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
+    </Style>
+    <Style Selector="Button.table-link:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- Specific Hover and Pressed Color Classes for Table Links -->
+    <Style Selector="Button.table-link.title:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource CyanAccent}" />
+    </Style>
+    <Style Selector="Button.table-link.title:pressed TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource CyanAccent}" />
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="Button.table-link.cyan:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource CyanAccent}" />
+    </Style>
+    <Style Selector="Button.table-link.artist:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource CoralAccent}" />
+    </Style>
+    <Style Selector="Button.table-link.artist:pressed TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource CoralAccent}" />
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="Button.table-link.coral:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource CoralAccent}" />
+    </Style>
+    <Style Selector="Button.table-link.album:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource PurpleAccent}" />
+    </Style>
+    <Style Selector="Button.table-link.album:pressed TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource PurpleAccent}" />
+      <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="Button.table-link.purple:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource PurpleAccent}" />
+    </Style>
+
+    <!-- Unstyled Cover Button for DataGrid -->
+    <Style Selector="Button.unstyled-cover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.unstyled-cover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.unstyled-cover:pointerover /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.unstyled-cover:pressed /template/ ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.unstyled-cover:pointerover Border">
+      <Setter Property="Opacity" Value="0.82" />
+    </Style>
+    <Style Selector="Button.unstyled-cover:pressed Border">
+      <Setter Property="Opacity" Value="0.65" />
     </Style>
   </Application.Styles>
 </Application>

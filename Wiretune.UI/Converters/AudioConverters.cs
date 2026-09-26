@@ -68,9 +68,20 @@ public class QualityBadgeColorConverter : IValueConverter
         }
         if (value is string s)
         {
-            if (s.Contains("HI-RES", StringComparison.OrdinalIgnoreCase) || s.Contains("24bit", StringComparison.OrdinalIgnoreCase))
+            if (s.Contains("Mixed", StringComparison.OrdinalIgnoreCase) || s.Contains("Vegyes", StringComparison.OrdinalIgnoreCase))
+                return new SolidColorBrush(Color.Parse("#FF6E6E")); // Reddish / Coral
+            if (s.Contains("24bit", StringComparison.OrdinalIgnoreCase) || s.Contains("32bit", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("HI-RES", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("96kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("88.2kHz", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("176.4kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("192kHz", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("384kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("DSD", StringComparison.OrdinalIgnoreCase))
                 return new SolidColorBrush(Color.Parse("#D05CE3")); // PurpleAccent
-            return new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
+            if (s.Contains("16bit", StringComparison.OrdinalIgnoreCase) || s.Contains("CD", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("44.1kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("48kHz", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("FLAC", StringComparison.OrdinalIgnoreCase) || s.Contains("ALAC", StringComparison.OrdinalIgnoreCase)
+                || s.Contains("WAV", StringComparison.OrdinalIgnoreCase))
+                return new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
+            return new SolidColorBrush(Color.Parse("#737373")); // TextMuted
         }
         return new SolidColorBrush(Color.Parse("#737373")); // TextMuted
     }

@@ -101,6 +101,13 @@ public partial class ThemeService : ObservableObject
                 dict["SystemAccentColorBrush"]  = accentBrush;
                 dict["HighlightBrush"]          = accentBrush;
                 dict["WindowGradient"]          = windowGradient;
+
+                dict["SliderThumbBackground"]            = accentBrush;
+                dict["SliderThumbBackgroundPointerOver"] = hoverBrush;
+                dict["SliderThumbBackgroundPressed"]     = pressedBrush;
+                dict["SliderTrackValueFill"]             = accentBrush;
+                dict["SliderTrackValueFillPointerOver"]  = accentBrush;
+                dict["SliderTrackValueFillPressed"]      = pressedBrush;
             }
 
             ApplyToDictionary(res);

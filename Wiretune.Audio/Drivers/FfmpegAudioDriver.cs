@@ -26,6 +26,8 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private readonly AudioPcmCache _pcmCache = new();
 
     private Process? _playbackProcess;
+    private Process? _decoderProcess;
+    private CancellationTokenSource? _pipeCts;
     private bool _processSuspended;
     private string? _lastProcessError;
     private long _playbackGeneration;
@@ -43,10 +45,10 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private string? _currentSource;
     private AudioFormat? _currentFormat;
     private bool _pipewireForceRateActive;
-    private string? _claimedPipeWireDeviceId;
+    private Process? _reserveProcess;
     private bool _disposed;
 
-    public string DriverName => "FFmpeg (ffplay) engine";
+    public string DriverName => "FFmpeg audio engine";
     public PlaybackState State => _state;
     public TimeSpan CurrentPosition => _currentPosition;
 
@@ -240,11 +242,144 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         return false;
     }
 
-    /// <summary>Starts ffplay for the current source. Must be called under <see cref="_stateLock"/>.</summary>
+    /// <summary>Starts playback for the current source. Must be called under <see cref="_stateLock"/>.</summary>
     private bool StartPlaybackProcess(TimeSpan startPosition, long gen)
     {
         KillPlaybackProcess();
         if (_currentSource == null || _currentFormat == null) return false;
+
+        var isAlsaDirect = OperatingSystem.IsLinux() && (_isExclusive || (_currentDevice != null && (_currentDevice.DriverType.Contains("ALSA") || _currentDevice.Id.StartsWith("hw:"))));
+        if (isAlsaDirect)
+        {
+            var (cardNum, devNum) = ResolveAlsaCardAndDev(_currentDevice);
+            return StartDirectAlsaPlayback(startPosition, gen, cardNum, devNum);
+        }
+
+        return StartSharedPlaybackProcess(startPosition, gen);
+    }
+
+    private bool StartDirectAlsaPlayback(TimeSpan startPosition, long gen, string cardNum, string devNum)
+    {
+        AcquireDeviceReservation(cardNum);
+
+        var ffmpegPsi = new ProcessStartInfo
+        {
+            FileName = "ffmpeg",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        ffmpegPsi.ArgumentList.Add("-nostdin");
+        ffmpegPsi.ArgumentList.Add("-v");
+        ffmpegPsi.ArgumentList.Add("error");
+
+        if (startPosition > TimeSpan.Zero)
+        {
+            ffmpegPsi.ArgumentList.Add("-ss");
+            ffmpegPsi.ArgumentList.Add(startPosition.TotalSeconds.ToString("0.000", CultureInfo.InvariantCulture));
+        }
+
+        ffmpegPsi.ArgumentList.Add("-i");
+        ffmpegPsi.ArgumentList.Add(_currentSource!);
+
+        if (!_isBitperfect && _volume < 0.999)
+        {
+            ffmpegPsi.ArgumentList.Add("-af");
+            ffmpegPsi.ArgumentList.Add($"volume={_volume.ToString("0.0000", CultureInfo.InvariantCulture)}");
+        }
+
+        ffmpegPsi.ArgumentList.Add("-c:a");
+        ffmpegPsi.ArgumentList.Add("pcm_s32le");
+        ffmpegPsi.ArgumentList.Add("-f");
+        ffmpegPsi.ArgumentList.Add("wav");
+        ffmpegPsi.ArgumentList.Add("-");
+
+        var aplayPsi = new ProcessStartInfo
+        {
+            FileName = "aplay",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardInput = true,
+            RedirectStandardError = true
+        };
+
+        aplayPsi.ArgumentList.Add("-q");
+        aplayPsi.ArgumentList.Add("-D");
+        aplayPsi.ArgumentList.Add($"plughw:{cardNum},{devNum}");
+
+        WiretuneLog.Info("FfmpegAudioDriver", $"Starting direct ALSA (ffmpeg | aplay) on plughw:{cardNum},{devNum} at {startPosition:mm\\:ss} for '{RedactToken(_currentSource!)}'");
+
+        Process ffmpegProc;
+        Process aplayProc;
+        try
+        {
+            ffmpegProc = Process.Start(ffmpegPsi) ?? throw new InvalidOperationException("ffmpeg did not start.");
+            aplayProc = Process.Start(aplayPsi) ?? throw new InvalidOperationException("aplay did not start.");
+        }
+        catch (Win32Exception ex)
+        {
+            Fail($"A közvetlen ALSA lejátszó nem indítható (ffmpeg vagy aplay hiányzik): {ex.Message}");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Fail($"A közvetlen ALSA lejátszás nem indítható: {ex.Message}");
+            return false;
+        }
+
+        _decoderProcess = ffmpegProc;
+        _playbackProcess = aplayProc;
+        _processSuspended = false;
+        _lastProcessError = null;
+        _playStartTime = DateTime.UtcNow;
+
+        lock (ProcessLock)
+        {
+            ActiveProcesses.Add(ffmpegProc);
+            ActiveProcesses.Add(aplayProc);
+        }
+
+        aplayProc.ErrorDataReceived += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Data)) _lastProcessError = e.Data.Trim();
+        };
+        ffmpegProc.ErrorDataReceived += (_, e) =>
+        {
+            if (!string.IsNullOrWhiteSpace(e.Data)) _lastProcessError = e.Data.Trim();
+        };
+
+        aplayProc.EnableRaisingEvents = true;
+        aplayProc.Exited += (_, _) => OnProcessExited(aplayProc, gen);
+        aplayProc.BeginErrorReadLine();
+        ffmpegProc.BeginErrorReadLine();
+
+        var pipeCts = new CancellationTokenSource();
+        _pipeCts = pipeCts;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await ffmpegProc.StandardOutput.BaseStream.CopyToAsync(aplayProc.StandardInput.BaseStream, 81920, pipeCts.Token);
+            }
+            catch
+            {
+                // Broken pipe or cancellation on seek/stop is expected
+            }
+            finally
+            {
+                try { aplayProc.StandardInput.Close(); } catch { }
+            }
+        }, pipeCts.Token);
+
+        return true;
+    }
+
+    private bool StartSharedPlaybackProcess(TimeSpan startPosition, long gen)
+    {
+        ReleaseDeviceReservation();
 
         var psi = new ProcessStartInfo
         {
@@ -255,11 +390,11 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             RedirectStandardOutput = false
         };
         var volumePercent = _isBitperfect ? 100 : (int)Math.Round(_volume * 100);
-        foreach (var arg in BuildFfplayArguments(_currentSource, startPosition, volumePercent)) psi.ArgumentList.Add(arg);
+        foreach (var arg in BuildFfplayArguments(_currentSource!, startPosition, volumePercent)) psi.ArgumentList.Add(arg);
 
-        ConfigureOutputRouting(psi, _currentFormat);
+        ConfigureOutputRouting(psi, _currentFormat!);
 
-        WiretuneLog.Info("FfmpegAudioDriver", $"Starting ffplay at {startPosition:mm\\:ss} for '{RedactToken(_currentSource)}'");
+        WiretuneLog.Info("FfmpegAudioDriver", $"Starting ffplay at {startPosition:mm\\:ss} for '{RedactToken(_currentSource!)}'");
 
         Process proc;
         try
@@ -293,6 +428,45 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         return true;
     }
 
+    private static (string cardNum, string devNum) ResolveAlsaCardAndDev(AudioOutputDevice? dev)
+    {
+        if (dev != null && dev.Id.StartsWith("hw:"))
+        {
+            var parts = dev.Id.Replace("hw:", "").Split(',');
+            return (parts[0], parts.Length > 1 ? parts[1] : "0");
+        }
+
+        try
+        {
+            if (File.Exists("/proc/asound/cards"))
+            {
+                var content = File.ReadAllText("/proc/asound/cards");
+                var matches = Regex.Matches(content, @"^\s*(\d+)\s+\[[^\]]+\]:\s+(.+)$", RegexOptions.Multiline);
+                foreach (Match m in matches)
+                {
+                    var card = m.Groups[1].Value;
+                    var desc = m.Groups[2].Value;
+                    if (dev != null)
+                    {
+                        if ((!string.IsNullOrEmpty(dev.HardwareCard) && desc.Contains(dev.HardwareCard, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrEmpty(dev.Name) && desc.Contains(dev.Name, StringComparison.OrdinalIgnoreCase)) ||
+                            (dev.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase) && desc.Contains("SMSL", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            return (card, "0");
+                        }
+                    }
+                    else if (desc.Contains("USB", StringComparison.OrdinalIgnoreCase) || desc.Contains("SMSL", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return (card, "0");
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return ("0", "0");
+    }
+
     /// <summary>ffplay arguments; the source is always one discrete argument, never spliced into a command line.</summary>
     internal static List<string> BuildFfplayArguments(string source, TimeSpan startPosition, int volumePercent)
     {
@@ -321,6 +495,15 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
             StopTimers();
             _playbackProcess = null;
+            if (_decoderProcess != null)
+            {
+                var dec = _decoderProcess;
+                _decoderProcess = null;
+                lock (ProcessLock) ActiveProcesses.Remove(dec);
+                try { if (!dec.HasExited) dec.Kill(true); } catch { }
+                try { dec.Dispose(); } catch { }
+            }
+
             if (exitCode == 0)
             {
                 SetState(PlaybackState.Stopped);
@@ -329,7 +512,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             else
             {
                 Fail(string.IsNullOrEmpty(_lastProcessError)
-                    ? $"A lejátszás váratlanul leállt (ffplay kilépési kód: {exitCode})."
+                    ? $"A lejátszás váratlanul leállt (kilépési kód: {exitCode})."
                     : $"A lejátszás sikertelen: {RedactToken(_lastProcessError)}");
             }
         }
@@ -338,17 +521,6 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private void ConfigureOutputRouting(ProcessStartInfo psi, AudioFormat format)
     {
         if (!OperatingSystem.IsLinux() || _currentDevice is not { } dev) return;
-
-        var isAlsaDirect = dev.DriverType.Contains("ALSA") || dev.Id.StartsWith("hw:");
-        if (isAlsaDirect)
-        {
-            ClaimAlsaDevice(dev);
-            psi.EnvironmentVariables["SDL_AUDIODRIVER"] = "alsa";
-            psi.EnvironmentVariables["AUDIODEV"] = _isBitperfect || !dev.Id.StartsWith("hw:")
-                ? dev.Id
-                : dev.Id.Replace("hw:", "plughw:");
-            return;
-        }
 
         psi.EnvironmentVariables["SDL_AUDIODRIVER"] = "pipewire";
         psi.EnvironmentVariables["PIPEWIRE_NODE"] = dev.Id.Replace("pw_", "");
@@ -362,75 +534,74 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         }
     }
 
-    /// <summary>Releases the PipeWire card profile so ffplay can open the raw ALSA hardware device.</summary>
-    private void ClaimAlsaDevice(AudioOutputDevice dev)
+    private void AcquireDeviceReservation(string cardNum)
     {
-        if (_claimedPipeWireDeviceId != null) return;
+        if (!OperatingSystem.IsLinux()) return;
 
-        var pwDeviceId = FindPipeWireDeviceIdForCard(dev.Name);
-        if (!string.IsNullOrEmpty(pwDeviceId) && RunQuiet("wpctl", "set-profile", pwDeviceId, "0"))
+        if (_reserveProcess == null || _reserveProcess.HasExited)
         {
-            _claimedPipeWireDeviceId = pwDeviceId;
+            _reserveProcess?.Dispose();
+            _reserveProcess = null;
+
+            try
+            {
+                var psi = new ProcessStartInfo("pw-reserve")
+                {
+                    Arguments = $"-n Audio{cardNum} -a Wiretune -p 10 -r",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                var proc = Process.Start(psi);
+                if (proc != null)
+                {
+                    _reserveProcess = proc;
+                    lock (ProcessLock) ActiveProcesses.Add(proc);
+                    WiretuneLog.Info("FfmpegAudioDriver", $"Acquired exclusive reservation for Audio{cardNum} via pw-reserve (PID {proc.Id})");
+                    Thread.Sleep(100);
+                }
+            }
+            catch (Exception ex)
+            {
+                WiretuneLog.Debug("FfmpegAudioDriver", $"pw-reserve start failed: {ex.Message}");
+            }
+        }
+    }
+
+    private void ReleaseDeviceReservation()
+    {
+        if (_reserveProcess != null)
+        {
+            try
+            {
+                lock (ProcessLock) ActiveProcesses.Remove(_reserveProcess);
+                if (!_reserveProcess.HasExited)
+                {
+                    _reserveProcess.Kill(entireProcessTree: true);
+                    _reserveProcess.WaitForExit(300);
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                _reserveProcess.Dispose();
+                _reserveProcess = null;
+            }
         }
     }
 
     private void ResetAudioHardwareSettings()
     {
+        ReleaseDeviceReservation();
+
         if (_pipewireForceRateActive)
         {
             _pipewireForceRateActive = false;
             RunQuiet("pw-metadata", "-n", "settings", "0", "clock.force-rate", "0");
         }
-
-        if (_claimedPipeWireDeviceId != null)
-        {
-            RunQuiet("wpctl", "set-profile", _claimedPipeWireDeviceId, "1");
-            _claimedPipeWireDeviceId = null;
-        }
-    }
-
-    private static string? FindPipeWireDeviceIdForCard(string? cardName)
-    {
-        if (string.IsNullOrEmpty(cardName)) return null;
-
-        try
-        {
-            var psi = new ProcessStartInfo("wpctl", "status")
-            {
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            psi.EnvironmentVariables["LC_ALL"] = "C";
-            using var proc = Process.Start(psi);
-            if (proc == null) return null;
-            var text = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(1000);
-
-            var inDevices = false;
-            foreach (var line in text.Split('\n'))
-            {
-                if (line.Contains("Devices:")) { inDevices = true; continue; }
-                if (inDevices && (line.Contains("Sinks:") || line.Contains("Sources:"))) break;
-                if (!inDevices) continue;
-
-                var match = DeviceLineRegex().Match(line);
-                if (!match.Success) continue;
-
-                var name = match.Groups["name"].Value.Trim();
-                if (cardName.Contains(name, StringComparison.OrdinalIgnoreCase) ||
-                    name.Contains(cardName, StringComparison.OrdinalIgnoreCase))
-                {
-                    return match.Groups["id"].Value.Trim();
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            WiretuneLog.Debug("FfmpegAudioDriver", $"wpctl status failed: {ex.Message}");
-        }
-
-        return null;
     }
 
     private void StartTimers()
@@ -479,27 +650,53 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
     private void KillPlaybackProcess()
     {
-        var proc = _playbackProcess;
-        _playbackProcess = null;
         _processSuspended = false;
-        if (proc == null) return;
 
-        lock (ProcessLock) ActiveProcesses.Remove(proc);
-        try
+        if (_pipeCts != null)
         {
-            if (!proc.HasExited)
+            try { _pipeCts.Cancel(); } catch { }
+            _pipeCts.Dispose();
+            _pipeCts = null;
+        }
+
+        if (_decoderProcess != null)
+        {
+            var dec = _decoderProcess;
+            _decoderProcess = null;
+            lock (ProcessLock) ActiveProcesses.Remove(dec);
+            try
             {
-                proc.Kill(true);
-                proc.WaitForExit(200);
+                if (!dec.HasExited)
+                {
+                    dec.Kill(true);
+                    dec.WaitForExit(150);
+                }
+            }
+            catch { }
+            finally
+            {
+                try { dec.Dispose(); } catch { }
             }
         }
-        catch
+
+        if (_playbackProcess != null)
         {
-            // Already gone.
-        }
-        finally
-        {
-            try { proc.Dispose(); } catch { }
+            var proc = _playbackProcess;
+            _playbackProcess = null;
+            lock (ProcessLock) ActiveProcesses.Remove(proc);
+            try
+            {
+                if (!proc.HasExited)
+                {
+                    proc.Kill(true);
+                    proc.WaitForExit(150);
+                }
+            }
+            catch { }
+            finally
+            {
+                try { proc.Dispose(); } catch { }
+            }
         }
     }
 
@@ -507,6 +704,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     {
         WiretuneLog.Warn("FfmpegAudioDriver", message);
         StopTimers();
+        ResetAudioHardwareSettings();
         SetState(PlaybackState.Error);
         PlaybackFailed?.Invoke(this, message);
     }
@@ -556,9 +754,6 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
     [DllImport("libc", SetLastError = true)]
     private static extern int kill(int pid, int sig);
-
-    [GeneratedRegex(@"(?<id>\d+)\.\s+(?<name>[^\[]+)")]
-    private static partial Regex DeviceLineRegex();
 
     [GeneratedRegex(@"token=[^&\s""']+")]
     private static partial Regex TokenRegex();

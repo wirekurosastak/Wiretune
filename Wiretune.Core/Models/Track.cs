@@ -60,6 +60,12 @@ public class Track : INotifyPropertyChanged
     [JsonIgnore]
     public string DisplayTrackNumber => TrackNumber.HasValue ? TrackNumber.Value.ToString("D2") : "--";
 
+    [JsonIgnore]
+    public bool IsLocal => string.IsNullOrEmpty(StreamUrl);
+
+    [JsonIgnore]
+    public string SourceBadge => IsLocal ? "Helyi" : "Szerver";
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

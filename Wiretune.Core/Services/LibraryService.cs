@@ -87,7 +87,20 @@ public class LibraryService : ILibraryService
 
             LibraryPath = root;
             await _repository.SetSettingAsync("LibraryPath", root);
-            await ReplaceTracksCoreAsync(scanned);
+
+            var existingServerTracks = _snapshot.Tracks.Where(t => !string.IsNullOrEmpty(t.StreamUrl)).ToList();
+            List<Track> toSave;
+            if (existingServerTracks.Count > 0)
+            {
+                toSave = TrackDeduplication.MergeTracks(scanned, existingServerTracks, out var aliased);
+                await UpdatePlaylistsWithAliasesAsync(aliased);
+            }
+            else
+            {
+                toSave = scanned;
+            }
+
+            await ReplaceTracksCoreAsync(toSave);
             WiretuneLog.Info("LibraryService", $"Scan finished: {Tracks.Count} tracks, {Albums.Count} albums, {Artists.Count} artists.");
             return true;
         }
@@ -106,6 +119,54 @@ public class LibraryService : ILibraryService
 
     public Task ReplaceTracksAsync(IEnumerable<Track> tracks, CancellationToken ct = default) =>
         ReplaceTracksCoreAsync(tracks.ToList());
+
+    public async Task MergeServerTracksAsync(IEnumerable<Track> serverTracks, CancellationToken ct = default)
+    {
+        var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
+        var incomingServer = serverTracks.ToList();
+
+        List<Track> merged;
+        if (existingLocalTracks.Count > 0)
+        {
+            merged = TrackDeduplication.MergeTracks(existingLocalTracks, incomingServer, out var aliased);
+            await UpdatePlaylistsWithAliasesAsync(aliased);
+        }
+        else
+        {
+            merged = incomingServer;
+        }
+
+        await ReplaceTracksCoreAsync(merged);
+    }
+
+    public async Task RemoveServerTracksAsync(CancellationToken ct = default)
+    {
+        var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
+        await ReplaceTracksCoreAsync(existingLocalTracks);
+    }
+
+    private async Task UpdatePlaylistsWithAliasesAsync(Dictionary<string, string> aliasedTrackIds)
+    {
+        if (aliasedTrackIds.Count == 0) return;
+
+        foreach (var playlist in _playlists)
+        {
+            bool changed = false;
+            for (int i = 0; i < playlist.TrackIds.Count; i++)
+            {
+                if (aliasedTrackIds.TryGetValue(playlist.TrackIds[i], out var localId))
+                {
+                    playlist.TrackIds[i] = localId;
+                    changed = true;
+                }
+            }
+            if (changed)
+            {
+                playlist.ModifiedAt = DateTime.UtcNow;
+                await _repository.SavePlaylistAsync(playlist);
+            }
+        }
+    }
 
     private async Task ReplaceTracksCoreAsync(List<Track> tracks)
     {
@@ -230,8 +291,26 @@ public class LibraryService : ILibraryService
     public Artist? GetArtist(string artistId) =>
         _snapshot.Artists.FirstOrDefault(a => a.Id == artistId);
 
-    public Artist? GetArtistByName(string name) =>
-        _snapshot.Artists.FirstOrDefault(a => a.Name.Equals(name?.Trim(), StringComparison.OrdinalIgnoreCase));
+    public Artist? GetArtistByName(string name)
+    {
+        var trimmed = name?.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed)) return null;
+
+        var existing = _snapshot.Artists.FirstOrDefault(a => a.Name.Equals(trimmed, StringComparison.OrdinalIgnoreCase));
+        if (existing != null) return existing;
+
+        var matchingTracks = _snapshot.Tracks.Where(t => t.Artist.Equals(trimmed, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (matchingTracks.Count == 0) return null;
+
+        return new Artist
+        {
+            Id = LibrarySnapshot.StableId(trimmed.ToUpperInvariant()),
+            Name = trimmed,
+            TrackCount = matchingTracks.Count,
+            AlbumCount = 0,
+            Tracks = matchingTracks
+        };
+    }
 
     public Playlist? GetPlaylist(string playlistId) =>
         _playlists.FirstOrDefault(p => p.Id == playlistId);
@@ -259,7 +338,7 @@ public class LibraryService : ILibraryService
         public static string AlbumIdFor(Track track) =>
             StableId($"{track.Album.ToUpperInvariant()}\u001f{track.EffectiveAlbumArtist.ToUpperInvariant()}");
 
-        private static string StableId(string key) =>
+        internal static string StableId(string key) =>
             Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..16];
 
         public static LibrarySnapshot Build(IEnumerable<Track> source)
@@ -274,6 +353,60 @@ public class LibraryService : ILibraryService
                 .ThenBy(t => t.Title, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
 
+            // Consolidate multi-artist albums where explicit AlbumArtist tag is missing or incomplete.
+            // Only apply when tracks share a non-empty directory on disk and do not have colliding track numbers.
+            var multiArtistGroups = tracks
+                .Where(t => !string.IsNullOrWhiteSpace(t.Album) &&
+                            !string.IsNullOrWhiteSpace(t.FilePath) &&
+                            !t.Album.Equals("Ismeretlen album", StringComparison.OrdinalIgnoreCase) &&
+                            !t.Album.Equals("Unknown Album", StringComparison.OrdinalIgnoreCase))
+                .GroupBy(t => (
+                    Album: t.Album.Trim(),
+                    Dir: Path.GetDirectoryName(t.FilePath)?.ToLowerInvariant() ?? string.Empty
+                ))
+                .Where(g => !string.IsNullOrEmpty(g.Key.Dir));
+
+            foreach (var group in multiArtistGroups)
+            {
+                var groupTracks = group.ToList();
+                if (groupTracks.Count < 2) continue;
+
+                // Don't merge if distinct tracks collide on (Disc, TrackNumber) where TrackNumber > 0
+                bool hasTrackNumberCollisions = groupTracks
+                    .Where(t => t.TrackNumber.HasValue && t.TrackNumber > 0)
+                    .GroupBy(t => (t.DiscNumber ?? 1, t.TrackNumber!.Value))
+                    .Any(tg => tg.Count() > 1);
+
+                if (hasTrackNumberCollisions) continue;
+
+                var explicitAlbumArtist = groupTracks.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t.AlbumArtist))?.AlbumArtist;
+                if (!string.IsNullOrWhiteSpace(explicitAlbumArtist))
+                {
+                    foreach (var t in groupTracks.Where(t => string.IsNullOrWhiteSpace(t.AlbumArtist)))
+                    {
+                        t.AlbumArtist = explicitAlbumArtist;
+                    }
+                    continue;
+                }
+
+                var distinctArtists = groupTracks.Select(t => t.Artist).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (distinctArtists.Count > 1)
+                {
+                    var topGroup = groupTracks.GroupBy(t => t.Artist, StringComparer.OrdinalIgnoreCase)
+                        .OrderByDescending(g => g.Count())
+                        .First();
+
+                    var resolvedArtist = (topGroup.Count() * 2 > groupTracks.Count)
+                        ? topGroup.Key
+                        : "Various Artists";
+
+                    foreach (var t in groupTracks)
+                    {
+                        t.AlbumArtist = resolvedArtist;
+                    }
+                }
+            }
+
             var albums = tracks
                 .GroupBy(AlbumIdFor)
                 .Select(g =>
@@ -284,6 +417,25 @@ public class LibraryService : ILibraryService
                         .ToList();
                     var first = ordered[0];
                     var hiRes = ordered.FirstOrDefault(t => t.Format.IsHiRes);
+
+                    var formats = ordered.Select(t => t.Format).ToList();
+                    var distinctSpecs = formats
+                        .Select(f => (f.BitsPerSample, f.SampleRate, f.IsLossless, f.Codec))
+                        .Distinct()
+                        .ToList();
+
+                    string badge;
+                    var hasHiRes = formats.Any(f => f.IsHiRes);
+
+                    if (distinctSpecs.Count > 1)
+                    {
+                        badge = "Mixed HQ";
+                    }
+                    else
+                    {
+                        badge = formats[0].DisplayBadge;
+                    }
+
                     return new Album
                     {
                         Id = g.Key,
@@ -294,8 +446,8 @@ public class LibraryService : ILibraryService
                         CoverArtPath = ordered.FirstOrDefault(t => !string.IsNullOrEmpty(t.CoverArtPath))?.CoverArtPath,
                         TrackCount = ordered.Count,
                         TotalDuration = TimeSpan.FromSeconds(ordered.Sum(t => t.Duration.TotalSeconds)),
-                        IsHiRes = hiRes != null,
-                        FormatBadge = (hiRes ?? first).Format.DisplayBadge,
+                        IsHiRes = hasHiRes,
+                        FormatBadge = badge,
                         Tracks = ordered
                     };
                 })
@@ -304,14 +456,18 @@ public class LibraryService : ILibraryService
 
             var albumsByArtist = albums.ToLookup(a => a.Artist, StringComparer.OrdinalIgnoreCase);
             var tracksByArtist = tracks.ToLookup(t => t.Artist, StringComparer.OrdinalIgnoreCase);
-            var artistNames = tracks.Select(t => t.Artist)
-                .Concat(albums.Select(a => a.Artist))
-                .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            // In the Artists view, only show primary Album Artists (who have an album/release).
+            // Guest performers and one-off compilation artists do not pollute the main Artists tab.
+            var artistNames = albums.Select(a => a.Artist).Distinct(StringComparer.OrdinalIgnoreCase);
 
             var artists = artistNames
                 .Select(name =>
                 {
-                    var artistAlbums = albumsByArtist[name].ToList();
+                    var artistAlbums = albumsByArtist[name]
+                        .OrderByDescending(a => a.Year ?? int.MinValue)
+                        .ThenBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
+                        .ToList();
                     var artistTracks = artistAlbums.SelectMany(a => a.Tracks)
                         .Concat(tracksByArtist[name])
                         .DistinctBy(t => t.Id)

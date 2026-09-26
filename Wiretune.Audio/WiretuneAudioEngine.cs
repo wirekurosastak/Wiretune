@@ -258,9 +258,34 @@ public class WiretuneAudioEngine : IAudioEngine
     private AudioOutputDevice? PreferredExclusiveDevice(bool requireBitperfect = false)
     {
         var candidates = _availableDevices.Where(d => d.IsExclusiveSupported && (!requireBitperfect || d.IsBitperfectSupported)).ToList();
-        return candidates.FirstOrDefault(d => d.Id == _currentDevice?.Id)
-               ?? candidates.FirstOrDefault(d => d.DriverType.Contains("ALSA") || d.Id.StartsWith("hw:"))
-               ?? candidates.FirstOrDefault();
+        if (candidates.Count == 0) return null;
+
+        // 1. If current device is already an exclusive candidate, keep it
+        if (_currentDevice != null && candidates.FirstOrDefault(d => d.Id == _currentDevice.Id) is { } currentMatch)
+            return currentMatch;
+
+        // 2. If current device was a shared sink (e.g. PipeWire SMSL), find matching hardware ALSA device
+        if (_currentDevice != null)
+        {
+            var match = candidates.FirstOrDefault(d =>
+                (!string.IsNullOrEmpty(d.HardwareCard) && _currentDevice.Name.Contains(d.HardwareCard, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(_currentDevice.HardwareCard) && d.Name.Contains(_currentDevice.HardwareCard, StringComparison.OrdinalIgnoreCase)) ||
+                (_currentDevice.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase) && d.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase)));
+            if (match != null) return match;
+        }
+
+        // 3. Prefer USB DAC or dedicated external DAC over internal HDMI / motherboard audio
+        var usbDac = candidates.FirstOrDefault(d =>
+            d.Name.Contains("USB", StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrEmpty(d.HardwareCard) && d.HardwareCard.Contains("USB", StringComparison.OrdinalIgnoreCase)) ||
+            d.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase));
+        if (usbDac != null) return usbDac;
+
+        // 4. Any direct ALSA device
+        var alsaDev = candidates.FirstOrDefault(d => d.DriverType.Contains("ALSA") || d.Id.StartsWith("hw:"));
+        if (alsaDev != null) return alsaDev;
+
+        return candidates.FirstOrDefault();
     }
 
     /// <summary>Applies the current device/mode to the driver and restarts playback in place if a track is playing.</summary>

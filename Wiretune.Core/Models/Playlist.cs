@@ -25,8 +25,24 @@ public class Playlist : INotifyPropertyChanged
         }
     }
 
+    private string _formatBadge = string.Empty;
+
     [JsonIgnore]
     public int TrackCount => TrackIds.Count;
+
+    [JsonIgnore]
+    public string FormatBadge
+    {
+        get => _formatBadge;
+        set
+        {
+            if (_formatBadge != value)
+            {
+                _formatBadge = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormatBadge)));
+            }
+        }
+    }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 }

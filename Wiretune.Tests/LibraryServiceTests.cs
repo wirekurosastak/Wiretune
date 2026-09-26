@@ -294,11 +294,13 @@ public class LibraryServiceTests
         vm.NavigateToCommand.Execute(5);
         Assert.Equal(5, vm.SelectedNavigationIndex);
 
-        // Verify Idle footer status
-        Assert.Contains("Kimenet", vm.StatusText);
-        Assert.Contains("Wiretune", vm.RightFooterStatusText);
+        // Verify Idle footer status: audio on left, library on right (no Kimenet prefix, no Wiretune brand text)
+        Assert.Contains("Test USB DAC", vm.StatusText);
+        Assert.DoesNotContain("Kimenet", vm.StatusText);
+        Assert.DoesNotContain("Wiretune", vm.RightFooterStatusText);
+        Assert.False(string.IsNullOrWhiteSpace(vm.RightFooterStatusText));
 
-        // Set track and test dynamic right footer
+        // Set track and test footer status on left side (device info retained without redundant format/title/artist)
         var testTrack = new Track
         {
             Id = "t100",
@@ -309,9 +311,11 @@ public class LibraryServiceTests
 
         _ = audioEngine.PlayTrackAsync(testTrack);
 
-        Assert.Contains("Eagles", vm.StatusText);
-        Assert.Contains("Hotel California", vm.StatusText);
-        Assert.Contains("FLAC 24-bit/192kHz", vm.RightFooterStatusText);
+        Assert.Contains("Test USB DAC", vm.StatusText);
+        Assert.DoesNotContain("Kimenet", vm.StatusText);
+        Assert.DoesNotContain("Eagles", vm.StatusText);
+        Assert.DoesNotContain("Hotel California", vm.StatusText);
+        Assert.DoesNotContain("Wiretune", vm.RightFooterStatusText);
     }
 
     [Fact]
@@ -323,7 +327,7 @@ public class LibraryServiceTests
             Title = "Random Access Memories",
             Artist = "Daft Punk",
             TrackCount = 13,
-            FormatBadge = "HI-RES LOSSLESS • 24bit/88.2kHz"
+            FormatBadge = "FLAC / 24bit / 88.2kHz"
         };
 
         var card = new Wiretune.UI.ViewModels.AlbumCardViewModel(album);
@@ -331,7 +335,95 @@ public class LibraryServiceTests
         Assert.Equal("Random Access Memories", card.Title);
         Assert.Equal("Daft Punk", card.Artist);
         Assert.Equal(13, card.TrackCount);
-        Assert.Equal("HI-RES LOSSLESS • 24bit/88.2kHz", card.FormatBadge);
+        Assert.Equal("FLAC / 24bit / 88.2kHz", card.FormatBadge);
+    }
+
+    [Fact]
+    public async Task MultiArtist_CompilationTracksInSameDirectory_ConsolidatesToVariousArtistsAndExcludesGuestArtists()
+    {
+        var repo = new MockRepository();
+        var service = new LibraryService(repo, new MetadataScanner());
+
+        await repo.SaveTracksBatchAsync(new[]
+        {
+            new Track { Id = "1", Title = "Song 1", Artist = "Guest Alpha", Album = "Top Hits", TrackNumber = 1, FilePath = "/Music/Compilations/TopHits/01.flac" },
+            new Track { Id = "2", Title = "Song 2", Artist = "Guest Beta", Album = "Top Hits", TrackNumber = 2, FilePath = "/Music/Compilations/TopHits/02.flac" },
+            new Track { Id = "3", Title = "Song 3", Artist = "Guest Gamma", Album = "Top Hits", TrackNumber = 3, FilePath = "/Music/Compilations/TopHits/03.flac" }
+        });
+
+        await service.InitializeAsync();
+
+        Assert.Single(service.Albums);
+        Assert.Equal("Various Artists", service.Albums[0].Artist);
+        Assert.Single(service.Artists);
+        Assert.Equal("Various Artists", service.Artists[0].Name);
+
+        // Guest artists should not pollute primary Artists list, but should resolve on-demand
+        Assert.DoesNotContain(service.Artists, a => a.Name == "Guest Alpha");
+        var resolved = service.GetArtistByName("Guest Alpha");
+        Assert.NotNull(resolved);
+        Assert.Equal("Guest Alpha", resolved.Name);
+        Assert.Single(resolved.Tracks);
+    }
+
+    [Fact]
+    public async Task MultiArtist_DominantArtist_ResolvesToDominantAlbumArtist()
+    {
+        var repo = new MockRepository();
+        var service = new LibraryService(repo, new MetadataScanner());
+
+        await repo.SaveTracksBatchAsync(new[]
+        {
+            new Track { Id = "1", Title = "One More Time", Artist = "Daft Punk", Album = "Discovery", TrackNumber = 1, FilePath = "/Music/DaftPunk/Discovery/01.flac" },
+            new Track { Id = "2", Title = "Aerodynamic", Artist = "Daft Punk", Album = "Discovery", TrackNumber = 2, FilePath = "/Music/DaftPunk/Discovery/02.flac" },
+            new Track { Id = "3", Title = "Too Long", Artist = "Daft Punk feat. Romanthony", Album = "Discovery", TrackNumber = 3, FilePath = "/Music/DaftPunk/Discovery/03.flac" }
+        });
+
+        await service.InitializeAsync();
+
+        Assert.Single(service.Albums);
+        Assert.Equal("Daft Punk", service.Albums[0].Artist);
+        Assert.Single(service.Artists);
+        Assert.Equal("Daft Punk", service.Artists[0].Name);
+        Assert.DoesNotContain(service.Artists, a => a.Name == "Daft Punk feat. Romanthony");
+    }
+
+    [Fact]
+    public async Task Album_WithMixedHiResAndCdTracks_AssignsMixedHqBadge()
+    {
+        var repo = new MockRepository();
+        var service = new LibraryService(repo, new MetadataScanner());
+
+        await repo.SaveTracksBatchAsync(new[]
+        {
+            new Track
+            {
+                Id = "t1",
+                Title = "Track 1 - Hi-Res",
+                Artist = "Artist X",
+                Album = "Mixed Album",
+                TrackNumber = 1,
+                FilePath = "/Music/ArtistX/Mixed/01.flac",
+                Format = new AudioFormat { Codec = "FLAC", SampleRate = 96000, BitsPerSample = 24, IsLossless = true }
+            },
+            new Track
+            {
+                Id = "t2",
+                Title = "Track 2 - CD Quality",
+                Artist = "Artist X",
+                Album = "Mixed Album",
+                TrackNumber = 2,
+                FilePath = "/Music/ArtistX/Mixed/02.flac",
+                Format = new AudioFormat { Codec = "FLAC", SampleRate = 44100, BitsPerSample = 16, IsLossless = true }
+            }
+        });
+
+        await service.InitializeAsync();
+
+        Assert.Single(service.Albums);
+        var album = service.Albums[0];
+        Assert.Equal("Mixed HQ", album.FormatBadge);
+        Assert.True(album.IsHiRes);
     }
 }
 
