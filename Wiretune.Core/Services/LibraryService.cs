@@ -253,6 +253,22 @@ public class LibraryService : ILibraryService
         PlaylistsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public async Task RenamePlaylistAsync(string playlistId, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName)) return;
+        Playlist? playlist;
+        lock (_playlistLock)
+        {
+            playlist = _playlists.FirstOrDefault(p => p.Id == playlistId);
+            if (playlist == null) return;
+            playlist.Name = newName.Trim();
+            playlist.ModifiedAt = DateTime.UtcNow;
+        }
+
+        await _repository.SavePlaylistAsync(playlist);
+        PlaylistsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public async Task DeletePlaylistAsync(string playlistId)
     {
         lock (_playlistLock)
@@ -429,7 +445,7 @@ public class LibraryService : ILibraryService
 
                     if (distinctSpecs.Count > 1)
                     {
-                        badge = "Mixed HQ";
+                        badge = "MIXED HQ";
                     }
                     else
                     {

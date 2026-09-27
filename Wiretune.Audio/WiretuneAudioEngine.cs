@@ -73,7 +73,7 @@ public class WiretuneAudioEngine : IAudioEngine
 
     public WiretuneAudioEngine(IAudioDriver? driver = null, Func<Task<List<AudioOutputDevice>>>? deviceDetector = null)
     {
-        _driver = driver ?? new FfmpegAudioDriver();
+        _driver = driver ?? CreateDefaultDriver();
         _detectDevices = deviceDetector ?? AudioDeviceManager.DetectOutputDevicesAsync;
 
         _driver.StateChanged += (_, state) => StateChanged?.Invoke(this, state);
@@ -308,6 +308,13 @@ public class WiretuneAudioEngine : IAudioEngine
 
         var separator = track.StreamUrl.Contains('?') ? '&' : '?';
         return $"{track.StreamUrl}{separator}token={Uri.EscapeDataString(_streamToken)}";
+    }
+
+    private static IAudioDriver CreateDefaultDriver()
+    {
+        if (OperatingSystem.IsWindows())
+            return new WasapiAudioDriver();
+        return new FfmpegAudioDriver();
     }
 
     public void Dispose()

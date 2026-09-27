@@ -19,6 +19,7 @@ public partial class PlaylistsViewModel : ObservableObject
     [ObservableProperty] private Playlist? _selectedPlaylist;
     [ObservableProperty] private PlaylistCardViewModel? _selectedPlaylistCard;
     [ObservableProperty] private IReadOnlyList<Track> _selectedPlaylistTracks = Array.Empty<Track>();
+    [ObservableProperty] private string _selectedPlaylistTotalDuration = string.Empty;
     [ObservableProperty] private bool _hasPlaylists;
     [ObservableProperty] private bool _isSelectedPlaylistEmpty;
     [ObservableProperty] private bool _isPlaylistDetailOpen;
@@ -33,6 +34,10 @@ public partial class PlaylistsViewModel : ObservableObject
 
     // Delete confirmation.
     [ObservableProperty] private Playlist? _playlistPendingDelete;
+
+    // Inline renaming.
+    [ObservableProperty] private bool _isEditingName;
+    [ObservableProperty] private string _editingPlaylistName = string.Empty;
 
     public bool IsDeleteConfirmOpen => PlaylistPendingDelete != null;
     public bool IsAnyDialogOpen => IsCreateDialogOpen || IsAddToPlaylistDialogOpen || IsDeleteConfirmOpen;
@@ -75,7 +80,7 @@ public partial class PlaylistsViewModel : ObservableObject
                     .Distinct()
                     .ToList();
                 pl.FormatBadge = distinctSpecs.Count > 1
-                    ? "Mixed HQ"
+                    ? "MIXED HQ"
                     : tracks[0].Format.DisplayBadge;
             }
             cardList.Add(new PlaylistCardViewModel(pl, tracks));
@@ -87,13 +92,20 @@ public partial class PlaylistsViewModel : ObservableObject
         RefreshSelectedTracks();
     }
 
-    partial void OnSelectedPlaylistChanged(Playlist? value) => RefreshSelectedTracks();
+    partial void OnSelectedPlaylistChanged(Playlist? value)
+    {
+        IsEditingName = false;
+        RefreshSelectedTracks();
+    }
 
     private void RefreshSelectedTracks()
     {
         SelectedPlaylistTracks = SelectedPlaylist == null ? Array.Empty<Track>() : _library.GetPlaylistTracks(SelectedPlaylist);
         SelectedPlaylistCard = SelectedPlaylist == null ? null : new PlaylistCardViewModel(SelectedPlaylist, SelectedPlaylistTracks);
         IsSelectedPlaylistEmpty = SelectedPlaylist != null && SelectedPlaylistTracks.Count == 0;
+        SelectedPlaylistTotalDuration = SelectedPlaylistTracks.Count == 0
+            ? string.Empty
+            : TracksViewModel.FormatTotal(TimeSpan.FromSeconds(SelectedPlaylistTracks.Sum(t => t.Duration.TotalSeconds)));
         if (SelectedPlaylist != null)
         {
             if (SelectedPlaylistTracks.Count == 0)
@@ -107,7 +119,7 @@ public partial class PlaylistsViewModel : ObservableObject
                     .Distinct()
                     .ToList();
                 SelectedPlaylist.FormatBadge = distinctSpecs.Count > 1
-                    ? "Mixed HQ"
+                    ? "MIXED HQ"
                     : SelectedPlaylistTracks[0].Format.DisplayBadge;
             }
         }
@@ -197,6 +209,40 @@ public partial class PlaylistsViewModel : ObservableObject
             IsPlaylistDetailOpen = false;
         }
         RefreshPlaylists();
+    }
+
+    [RelayCommand]
+    public void StartRename()
+    {
+        if (SelectedPlaylist == null) return;
+        EditingPlaylistName = SelectedPlaylist.Name;
+        IsEditingName = true;
+    }
+
+    [RelayCommand]
+    public async Task ConfirmRenamePlaylistAsync()
+    {
+        if (SelectedPlaylist == null || string.IsNullOrWhiteSpace(EditingPlaylistName))
+        {
+            IsEditingName = false;
+            return;
+        }
+
+        var newName = EditingPlaylistName.Trim();
+        var targetId = SelectedPlaylist.Id;
+        if (newName != SelectedPlaylist.Name)
+        {
+            await _library.RenamePlaylistAsync(targetId, newName);
+            SelectedPlaylist = _library.GetPlaylist(targetId);
+            RefreshPlaylists();
+        }
+        IsEditingName = false;
+    }
+
+    [RelayCommand]
+    public void CancelRename()
+    {
+        IsEditingName = false;
     }
 
     [RelayCommand]

@@ -46,9 +46,9 @@ Wiretune/
 
 | Képesség | Linux (Desktop) | Windows (Desktop) | Android |
 |---|:---:|:---:|:---:|
-| **Lejátszó motor** | FFmpeg / ALSA / PipeWire | FFmpeg / WASAPI Shared | Natív `MediaPlayer` |
-| **Kizárólagos (Exclusive) mód** | ✅ (Közvetlen ALSA / PipeWire) | ❌ (WASAPI Shared) | ❌ |
-| **Bit-Perfect mód (0 dB / rate match)** | ✅ | ❌ | ❌ |
+| **Lejátszó motor** | FFmpeg / ALSA / PipeWire | Natív WASAPI (Shared & Exclusive) | Natív `MediaPlayer` |
+| **Kizárólagos (Exclusive) mód** | ✅ (Közvetlen ALSA / PipeWire) | ✅ (WASAPI Exclusive DAC) | ❌ |
+| **Bit-Perfect mód (0 dB / rate match)** | ✅ | ✅ | ❌ |
 | **Spektrum vizualizáció** | ✅ | ✅ | ❌ |
 | **Offline helyi könyvtár** | ✅ | ✅ | ❌ |
 
@@ -57,7 +57,8 @@ Wiretune/
 ## 🛠️ Előfeltételek
 
 - **SDK**: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- **Asztali lejátszás**: **FFmpeg** (`ffmpeg` és `ffplay` a rendszer `PATH`-jában).
+- **Linux asztali lejátszás**: **FFmpeg** (`ffmpeg` és `ffplay` a rendszer `PATH`-jában).
+- **Windows asztali lejátszás**: Beépített Windows Media Foundation + WASAPI (külső FFmpeg függőség nélkül).
 - *(Opcionális) Android build*: `dotnet workload install android`.
 
 ---

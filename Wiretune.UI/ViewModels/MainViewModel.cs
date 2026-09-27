@@ -186,7 +186,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (songCount == 0)
         {
-            RightFooterStatusText = "Nincs elérhető zeneszám";
+            RightFooterStatusText = "Nincs elérhető szám";
         }
         else if (localCount > 0 && serverCount > 0)
         {
@@ -221,6 +221,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedNavigationIndexChanged(int value)
     {
+        Player.CloseQueue();
         Theme.UpdateDynamicBackground(value);
         LogoTransform = $"rotate({value * 90}deg)";
 

@@ -81,9 +81,9 @@ public class QualityBadgeColorConverter : IValueConverter
                 || s.Contains("FLAC", StringComparison.OrdinalIgnoreCase) || s.Contains("ALAC", StringComparison.OrdinalIgnoreCase)
                 || s.Contains("WAV", StringComparison.OrdinalIgnoreCase))
                 return new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
-            return new SolidColorBrush(Color.Parse("#737373")); // TextMuted
+            return new SolidColorBrush(Color.Parse("#A0A6B0")); // TextMuted (high contrast on dark tag background)
         }
-        return new SolidColorBrush(Color.Parse("#737373")); // TextMuted
+        return new SolidColorBrush(Color.Parse("#A0A6B0")); // TextMuted (high contrast on dark tag background)
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();

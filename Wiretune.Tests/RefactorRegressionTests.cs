@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using Microsoft.Data.Sqlite;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
@@ -313,4 +314,147 @@ public class RefactorRegressionTests
         Assert.Equal(valid, ServerSession.TryNormalizeServerUrl(input, out var normalized));
         Assert.Equal(expected, normalized);
     }
+
+    [Fact]
+    public async Task FavoritesViewModel_ComputesTotalDuration_AndEnablesShuffle()
+    {
+        var (service, repo) = CreateService();
+        var t1 = TestSupport.MakeTrack("1", "Fav 1", minutes: 3.5);
+        t1.IsFavorite = true;
+        var t2 = TestSupport.MakeTrack("2", "Fav 2", minutes: 4.5);
+        t2.IsFavorite = true;
+        await repo.SaveTracksBatchAsync(new[] { t1, t2 });
+        await service.InitializeAsync();
+
+        var player = new PlayerViewModel(TestSupport.CreateEngine(), service);
+        var favoritesVm = new FavoritesViewModel(service, player);
+
+        Assert.Equal(2, favoritesVm.FavoriteTracks.Count);
+        Assert.False(favoritesVm.IsEmpty);
+        Assert.Equal("8 perc 0 mp", favoritesVm.TotalFavoritesDuration);
+
+        favoritesVm.ShuffleAll();
+        Assert.True(player.IsShuffle);
+        Assert.Equal(2, player.QueueTracks.Count);
+    }
+
+    [Fact]
+    public async Task PlaylistsViewModel_ComputesSelectedPlaylistTotalDuration()
+    {
+        var (service, repo) = CreateService();
+        var t1 = TestSupport.MakeTrack("1", "Track 1", minutes: 30.0);
+        var t2 = TestSupport.MakeTrack("2", "Track 2", minutes: 45.0);
+        await repo.SaveTracksBatchAsync(new[] { t1, t2 });
+        await service.InitializeAsync();
+
+        var playlist = await service.CreatePlaylistAsync("Chill");
+        await service.AddTrackToPlaylistAsync(playlist.Id, "1");
+        await service.AddTrackToPlaylistAsync(playlist.Id, "2");
+
+        var player = new PlayerViewModel(TestSupport.CreateEngine(), service);
+        var playlistsVm = new PlaylistsViewModel(service, player);
+
+        playlistsVm.SelectedPlaylist = playlist;
+        Assert.Equal("1 óra 15 perc", playlistsVm.SelectedPlaylistTotalDuration);
+    }
+
+    [Fact]
+    public async Task PlaylistsViewModel_SetsMixedHqBadge_WhenTracksHaveMixedFormats()
+    {
+        var (service, repo) = CreateService();
+        var t1 = TestSupport.MakeTrack("1", "Track 1", minutes: 3.0);
+        t1.Format = new AudioFormat { Codec = "FLAC", SampleRate = 44100, BitsPerSample = 16, IsLossless = true };
+        var t2 = TestSupport.MakeTrack("2", "Track 2", minutes: 4.0);
+        t2.Format = new AudioFormat { Codec = "FLAC", SampleRate = 96000, BitsPerSample = 24, IsLossless = true };
+        await repo.SaveTracksBatchAsync(new[] { t1, t2 });
+        await service.InitializeAsync();
+
+        var playlist = await service.CreatePlaylistAsync("HiFi Mix");
+        await service.AddTrackToPlaylistAsync(playlist.Id, "1");
+        await service.AddTrackToPlaylistAsync(playlist.Id, "2");
+
+        var player = new PlayerViewModel(TestSupport.CreateEngine(), service);
+        var playlistsVm = new PlaylistsViewModel(service, player);
+
+        playlistsVm.SelectedPlaylist = playlist;
+        Assert.Equal("MIXED HQ", playlistsVm.SelectedPlaylist?.FormatBadge);
+    }
+
+    [Fact]
+    public async Task LibraryService_RenamePlaylist_UpdatesNameAndPersists()
+    {
+        var (service, repo) = CreateService();
+        await service.InitializeAsync();
+        var playlist = await service.CreatePlaylistAsync("Original");
+
+        await service.RenamePlaylistAsync(playlist.Id, "Renamed");
+
+        var retrieved = service.Playlists.FirstOrDefault(p => p.Id == playlist.Id);
+        Assert.NotNull(retrieved);
+        Assert.Equal("Renamed", retrieved.Name);
+    }
+
+    [Fact]
+    public async Task PlaylistsViewModel_RenameWorkflow_WorksCorrectly()
+    {
+        var (service, repo) = CreateService();
+        await service.InitializeAsync();
+        var playlist = await service.CreatePlaylistAsync("Initial Name");
+
+        var player = new PlayerViewModel(TestSupport.CreateEngine(), service);
+        var vm = new PlaylistsViewModel(service, player)
+        {
+            SelectedPlaylist = playlist
+        };
+
+        // Start rename
+        vm.StartRenameCommand.Execute(null);
+        Assert.True(vm.IsEditingName);
+        Assert.Equal("Initial Name", vm.EditingPlaylistName);
+
+        // Cancel rename
+        vm.EditingPlaylistName = "Cancelled Name";
+        vm.CancelRenameCommand.Execute(null);
+        Assert.False(vm.IsEditingName);
+        Assert.Equal("Initial Name", vm.SelectedPlaylist.Name);
+
+        // Rename confirmed with valid name
+        vm.StartRenameCommand.Execute(null);
+        vm.EditingPlaylistName = "New Favorite Name";
+        vm.ConfirmRenamePlaylistCommand.Execute(null);
+        Assert.False(vm.IsEditingName);
+        Assert.Equal("New Favorite Name", vm.SelectedPlaylist.Name);
+    }
+
+    [Fact]
+    public async Task SearchResultsViewModel_BestMatch_SetsAppropriateTypeLabelsAndBrushes()
+    {
+        var (service, repo) = CreateService();
+        var track = TestSupport.MakeTrack("t1", "Starboy");
+        track.Artist = "The Weeknd";
+        track.Album = "Starboy";
+        await repo.SaveTracksBatchAsync(new[] { track });
+        await service.InitializeAsync();
+
+        var player = new PlayerViewModel(TestSupport.CreateEngine(), service);
+        var searchVm = new SearchResultsViewModel(service, player, _ => { }, _ => { }, _ => { });
+
+        // Search for artist
+        searchVm.UpdateQuery("The Weeknd");
+        Assert.NotNull(searchVm.BestMatch);
+        Assert.Equal("ELŐADÓ", searchVm.BestMatch.TypeLabel);
+        Assert.Equal("#ffff6b6b", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
+
+        // Search for album
+        searchVm.UpdateQuery("Starboy");
+        Assert.NotNull(searchVm.BestMatch);
+        // Could match album or track; verify type label matches its assigned brush color
+        if (searchVm.BestMatch.TypeLabel == "ALBUM")
+            Assert.Equal("#ffd05ce3", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
+        else if (searchVm.BestMatch.TypeLabel == "SZÁM")
+            Assert.Equal("#ff67c8e0", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
+    }
 }
+
+
+

@@ -12,6 +12,7 @@ public partial class FavoritesViewModel : ObservableObject
     private readonly PlayerViewModel _player;
 
     [ObservableProperty] private IReadOnlyList<Track> _favoriteTracks = Array.Empty<Track>();
+    [ObservableProperty] private string _totalFavoritesDuration = "0 perc";
     [ObservableProperty] private bool _isEmpty = true;
 
     public FavoritesViewModel(ILibraryService library, PlayerViewModel player)
@@ -28,6 +29,7 @@ public partial class FavoritesViewModel : ObservableObject
     {
         FavoriteTracks = _library.Favorites;
         IsEmpty = FavoriteTracks.Count == 0;
+        TotalFavoritesDuration = TracksViewModel.FormatTotal(TimeSpan.FromSeconds(FavoriteTracks.Sum(t => t.Duration.TotalSeconds)));
     }
 
     [RelayCommand]
@@ -40,6 +42,14 @@ public partial class FavoritesViewModel : ObservableObject
     public void PlayAll()
     {
         if (FavoriteTracks.Count > 0) _player.PlayQueue(FavoriteTracks);
+    }
+
+    [RelayCommand]
+    public void ShuffleAll()
+    {
+        if (FavoriteTracks.Count == 0) return;
+        _player.IsShuffle = true;
+        _player.PlayQueue(FavoriteTracks);
     }
 
     [RelayCommand]

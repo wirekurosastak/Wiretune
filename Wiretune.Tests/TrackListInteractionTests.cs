@@ -118,6 +118,60 @@ public class TrackListInteractionTests
         Assert.Equal("Money", current.Title);
     }
 
+    [Fact]
+    public void RowPressSync_AttachedProperty_CanBeSetAndRetrieved()
+    {
+        var btn = new Avalonia.Controls.Button();
+        Assert.False(RowPressSync.GetSyncWithTitle(btn));
+
+        RowPressSync.SetSyncWithTitle(btn, true);
+        Assert.True(RowPressSync.GetSyncWithTitle(btn));
+
+        RowPressSync.SetSyncWithTitle(btn, false);
+        Assert.False(RowPressSync.GetSyncWithTitle(btn));
+    }
+
+    [Fact]
+    public void PlaylistCardViewModel_CoversCollage_ReflectsTrackCountCorrectly()
+    {
+        // 0 tracks -> No covers
+        var plEmpty = new Playlist { Name = "Empty" };
+        var cardEmpty = new PlaylistCardViewModel(plEmpty, Array.Empty<Track>());
+        Assert.False(cardEmpty.HasCovers);
+        Assert.False(cardEmpty.HasSingleCover);
+        Assert.False(cardEmpty.HasMultipleCovers);
+
+        // 1-3 tracks -> Single cover
+        var plSingle = new Playlist { Name = "Single" };
+        var tracksSingle = new List<Track>
+        {
+            new Track { Title = "T1", CoverArtPath = "/path/to/c1.jpg" }
+        };
+        var cardSingle = new PlaylistCardViewModel(plSingle, tracksSingle);
+        Assert.True(cardSingle.HasCovers);
+        Assert.True(cardSingle.HasSingleCover);
+        Assert.False(cardSingle.HasMultipleCovers);
+        Assert.Equal("/path/to/c1.jpg", cardSingle.SingleCoverPath);
+
+        // 4+ tracks with covers -> Multiple covers (2x2 collage)
+        var plMulti = new Playlist { Name = "Multi" };
+        var tracksMulti = new List<Track>
+        {
+            new Track { Title = "T1", CoverArtPath = "/path/c1.jpg", Album = "A1" },
+            new Track { Title = "T2", CoverArtPath = "/path/c2.jpg", Album = "A2" },
+            new Track { Title = "T3", CoverArtPath = "/path/c3.jpg", Album = "A3" },
+            new Track { Title = "T4", CoverArtPath = "/path/c4.jpg", Album = "A4" }
+        };
+        var cardMulti = new PlaylistCardViewModel(plMulti, tracksMulti);
+        Assert.True(cardMulti.HasCovers);
+        Assert.False(cardMulti.HasSingleCover);
+        Assert.True(cardMulti.HasMultipleCovers);
+        Assert.Equal("/path/c1.jpg", cardMulti.Cover0);
+        Assert.Equal("/path/c2.jpg", cardMulti.Cover1);
+        Assert.Equal("/path/c3.jpg", cardMulti.Cover2);
+        Assert.Equal("/path/c4.jpg", cardMulti.Cover3);
+    }
+
     private static Track? GetCurrentPlayingTrack(PlayerViewModel player)
     {
         var indexField = typeof(PlayerViewModel).GetField("_queueIndex",
@@ -135,3 +189,4 @@ public class TrackListInteractionTests
         return null;
     }
 }
+

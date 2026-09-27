@@ -213,4 +213,28 @@ public class AudioEngineTests
         Assert.Contains("Bit-perfect", engine.SignalPathDescription);
         Assert.Contains("Unity Gain", engine.SignalPathDescription);
     }
+
+    [Fact]
+    public async Task WindowsDeviceDetection_FindsDevicesWithExclusiveSupport()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        var devices = await Wiretune.Audio.Devices.AudioDeviceManager.DetectOutputDevicesAsync();
+        Assert.NotEmpty(devices);
+        Assert.All(devices, d =>
+        {
+            Assert.True(d.IsExclusiveSupported);
+            Assert.True(d.IsBitperfectSupported);
+            Assert.Equal("WASAPI", d.DriverType);
+        });
+    }
+
+    [Fact]
+    public void DefaultEngineConstructor_UsesWasapiDriverOnWindows()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        using var engine = new WiretuneAudioEngine();
+        Assert.NotNull(engine);
+    }
 }

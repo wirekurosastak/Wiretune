@@ -257,6 +257,24 @@ public partial class PlayerViewModel : ObservableObject
 
     partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
 
+    partial void OnCurrentTrackChanged(Track? oldValue, Track? newValue)
+    {
+        if (oldValue != null)
+        {
+            oldValue.IsPlaying = false;
+            var oldLib = _library.GetTrack(oldValue.Id);
+            if (oldLib != null && !ReferenceEquals(oldLib, oldValue))
+                oldLib.IsPlaying = false;
+        }
+        if (newValue != null)
+        {
+            newValue.IsPlaying = true;
+            var newLib = _library.GetTrack(newValue.Id);
+            if (newLib != null && !ReferenceEquals(newLib, newValue))
+                newLib.IsPlaying = true;
+        }
+    }
+
     private void OnEngineTrackChanged(Track? track)
     {
         _seekDebounceCts?.Cancel();

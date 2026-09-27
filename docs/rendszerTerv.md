@@ -258,7 +258,8 @@ részleges állapotot, és nincs szükség lock-ra olvasáskor.
 Wiretune.Core.Audio.IAudioEngine        — platformfüggetlen szerződés (UI ezt látja)
   └─ Wiretune.Audio.WiretuneAudioEngine — mód-logika (exclusive/bitperfect), eszközkezelés
        └─ Wiretune.Audio.Drivers.IAudioDriver — tényleges lejátszás
-            ├─ FfmpegAudioDriver   (Desktop: Linux + Windows, ffplay child process)
+            ├─ FfmpegAudioDriver   (Linux Desktop: ALSA hw:X,Y / PipeWire routing, ffplay)
+            ├─ WasapiAudioDriver   (Windows Desktop: WASAPI Shared + WASAPI Exclusive bit-perfect)
             └─ AndroidAudioDriver  (Android: natív MediaPlayer)
 ```
 

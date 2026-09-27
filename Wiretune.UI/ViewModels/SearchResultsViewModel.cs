@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -10,6 +11,7 @@ namespace Wiretune.UI.ViewModels;
 public sealed partial class SearchBestMatchViewModel : ObservableObject
 {
     [ObservableProperty] private string _typeLabel = "TALÁLAT";
+    [ObservableProperty] private IBrush _typeBrush = new SolidColorBrush(Color.Parse("#67C8E0"));
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _subtitle = string.Empty;
     [ObservableProperty] private string _meta = string.Empty;
@@ -135,9 +137,10 @@ public sealed partial class SearchResultsViewModel : ObservableObject
     private SearchBestMatchViewModel ArtistMatch(Artist artist) => new()
     {
         TypeLabel = "ELŐADÓ",
+        TypeBrush = new SolidColorBrush(Color.Parse("#FF6B6B")),
         Title = artist.Name,
         Subtitle = "Előadó",
-        Meta = $"{artist.AlbumCount} album • {artist.TrackCount} zeneszám",
+        Meta = $"{artist.AlbumCount} album • {artist.TrackCount} szám",
         IconKind = "AccountMusic",
         PlayCommand = new RelayCommand(() => { if (artist.Tracks.Count > 0) _player.PlayQueue(artist.Tracks); }),
         OpenCommand = new RelayCommand(() => _openArtistAction(artist))
@@ -148,9 +151,10 @@ public sealed partial class SearchResultsViewModel : ObservableObject
         var vm = new SearchBestMatchViewModel
         {
             TypeLabel = "ALBUM",
+            TypeBrush = new SolidColorBrush(Color.Parse("#D05CE3")),
             Title = album.Title,
             Subtitle = album.Artist,
-            Meta = album.Year.HasValue ? $"{album.Year} • {album.TrackCount} zeneszám" : $"{album.TrackCount} zeneszám",
+            Meta = album.Year.HasValue ? $"{album.Year} • {album.TrackCount} szám" : $"{album.TrackCount} szám",
             IconKind = "Album",
             PlayCommand = new RelayCommand(() => { if (album.Tracks.Count > 0) _player.PlayQueue(album.Tracks); }),
             OpenCommand = new RelayCommand(() => _openAlbumAction(album))
@@ -164,7 +168,8 @@ public sealed partial class SearchResultsViewModel : ObservableObject
         var album = _library.GetAlbumForTrack(track);
         var vm = new SearchBestMatchViewModel
         {
-            TypeLabel = "ZENESZÁM",
+            TypeLabel = "SZÁM",
+            TypeBrush = new SolidColorBrush(Color.Parse("#67C8E0")),
             Title = track.Title,
             Subtitle = $"{track.Artist} • {track.Album}",
             Meta = $"{track.FormattedDuration} • {track.Format.QualityLabel}",

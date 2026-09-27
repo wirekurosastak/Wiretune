@@ -9,6 +9,7 @@ public class Track : INotifyPropertyChanged
     private bool _isFavorite;
     private int _playCount;
     private DateTime? _lastPlayed;
+    private bool _isPlaying;
 
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Title { get; set; } = "Unknown Title";
@@ -46,6 +47,13 @@ public class Track : INotifyPropertyChanged
     {
         get => _lastPlayed;
         set => SetField(ref _lastPlayed, value);
+    }
+
+    [JsonIgnore]
+    public bool IsPlaying
+    {
+        get => _isPlaying;
+        set => SetField(ref _isPlaying, value);
     }
 
     /// <summary>The artist an album is filed under: the album artist when tagged, otherwise the track artist.</summary>

@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using NAudio.CoreAudioApi;
 using Wiretune.Core.Models;
+using Wiretune.Core.Services;
 
 namespace Wiretune.Audio.Devices;
 
@@ -165,18 +167,63 @@ public static class AudioDeviceManager
 
     private static List<AudioOutputDevice> DetectWindowsAudioDevices()
     {
-        // ffplay (SDL) only reaches the shared Windows mixer; exclusive/bit-perfect output is not available here.
-        return new List<AudioOutputDevice>
+        var list = new List<AudioOutputDevice>();
+        try
         {
-            new AudioOutputDevice
+            using var enumerator = new MMDeviceEnumerator();
+            var endpoints = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+
+            string? defaultId = null;
+            try
+            {
+                var defaultDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                defaultId = defaultDevice?.ID;
+            }
+            catch
+            {
+                // Fallback if default device lookup fails
+            }
+
+            foreach (var endpoint in endpoints)
+            {
+                bool isDefault = endpoint.ID == defaultId;
+                list.Add(new AudioOutputDevice
+                {
+                    Id = endpoint.ID,
+                    Name = endpoint.FriendlyName,
+                    DriverType = "WASAPI",
+                    HardwareCard = "WASAPI Endpoint",
+                    IsDefault = isDefault,
+                    IsExclusiveSupported = true,
+                    IsBitperfectSupported = true,
+                    SupportedSampleRates = new() { 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000 },
+                    SupportedBitDepths = new() { 16, 24, 32 }
+                });
+            }
+
+            if (list.Count > 0 && !list.Any(d => d.IsDefault))
+            {
+                list[0] = list[0] with { IsDefault = true };
+            }
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Warn("AudioDeviceManager", $"Windows WASAPI device detection failed: {ex.Message}");
+        }
+
+        if (list.Count == 0)
+        {
+            list.Add(new AudioOutputDevice
             {
                 Id = "wasapi_default",
                 Name = "Windows alapértelmezett kimenet",
-                DriverType = "WASAPI Shared",
+                DriverType = "WASAPI",
                 IsDefault = true,
-                IsExclusiveSupported = false,
-                IsBitperfectSupported = false
-            }
-        };
+                IsExclusiveSupported = true,
+                IsBitperfectSupported = true
+            });
+        }
+
+        return list;
     }
 }

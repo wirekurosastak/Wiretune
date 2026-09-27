@@ -44,6 +44,7 @@ public interface ILibraryService
     Task<Playlist> CreatePlaylistAsync(string name, string? description = null);
     Task AddTrackToPlaylistAsync(string playlistId, string trackId);
     Task RemoveTrackFromPlaylistAsync(string playlistId, string trackId);
+    Task RenamePlaylistAsync(string playlistId, string newName);
     Task DeletePlaylistAsync(string playlistId);
 
     IEnumerable<Track> Search(string query);

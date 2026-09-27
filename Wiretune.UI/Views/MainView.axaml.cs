@@ -20,11 +20,6 @@ public partial class MainView : UserControl
         InitializeComponent();
     }
 
-    /// <summary>Keeps header controls clear of window caption buttons drawn over an extended client area.</summary>
-    public void SetCaptionButtonsInset(double right)
-    {
-        HeaderBar.Padding = new Thickness(24, 0, 24 + right, 0);
-    }
 
     private void HeaderBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {

@@ -422,7 +422,7 @@ public class LibraryServiceTests
 
         Assert.Single(service.Albums);
         var album = service.Albums[0];
-        Assert.Equal("Mixed HQ", album.FormatBadge);
+        Assert.Equal("MIXED HQ", album.FormatBadge);
         Assert.True(album.IsHiRes);
     }
 }
