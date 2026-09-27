@@ -86,7 +86,7 @@ public class ServerIntegrationTests
     private static async Task<(HttpClient Client, AuthResponse Auth)> SetupAdminAsync(WiretuneServerFixture server)
     {
         var client = server.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", AdminPassword, "Owner"));
+        var response = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", AdminPassword));
         response.EnsureSuccessStatusCode();
         var auth = (await response.Content.ReadFromJsonAsync<AuthResponse>(WiretuneServerFixture.Json))!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
@@ -223,7 +223,7 @@ public class ServerIntegrationTests
         Assert.Equal(ServerConnectionState.SetupRequired, session.State);
 
         // Creating the admin logs in and downloads the library (after the server's first scan).
-        Assert.Null(await session.SetupAdminAsync("owner", AdminPassword, null));
+        Assert.Null(await session.SetupAdminAsync("owner", AdminPassword));
         await server.WaitForTracksAsync(AuthorizedClient(server, session.AuthToken!), 3);
         await session.RefreshLibraryAsync();
 

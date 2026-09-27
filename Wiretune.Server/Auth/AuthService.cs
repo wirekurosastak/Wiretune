@@ -60,7 +60,7 @@ public class AuthService
     {
         using var conn = _db.CreateConnection();
         var row = await conn.QueryFirstOrDefaultAsync<UserRow>(
-            "SELECT id, username, password_hash, display_name, is_admin, created_at, last_login FROM users WHERE username = @Username COLLATE NOCASE",
+            "SELECT id, username, password_hash, is_admin, created_at, last_login FROM users WHERE username = @Username COLLATE NOCASE",
             new { Username = request.Username.Trim() });
 
         if (row == null)
@@ -87,8 +87,8 @@ public class AuthService
         var user = NewUser(request, isAdmin: true);
         using var conn = _db.CreateConnection();
         var inserted = await conn.ExecuteAsync("""
-            INSERT INTO users (id, username, password_hash, display_name, is_admin, created_at, last_login)
-            SELECT @Id, @Username, @Hash, @DisplayName, 1, @CreatedAt, NULL
+            INSERT INTO users (id, username, password_hash, is_admin, created_at, last_login)
+            SELECT @Id, @Username, @Hash, 1, @CreatedAt, NULL
             WHERE NOT EXISTS (SELECT 1 FROM users)
             """,
             UserParameters(user, request.Password));
@@ -105,8 +105,8 @@ public class AuthService
         var user = NewUser(request, isAdmin: false);
         using var conn = _db.CreateConnection();
         var inserted = await conn.ExecuteAsync("""
-            INSERT OR IGNORE INTO users (id, username, password_hash, display_name, is_admin, created_at, last_login)
-            VALUES (@Id, @Username, @Hash, @DisplayName, 0, @CreatedAt, NULL)
+            INSERT OR IGNORE INTO users (id, username, password_hash, is_admin, created_at, last_login)
+            VALUES (@Id, @Username, @Hash, 0, @CreatedAt, NULL)
             """,
             UserParameters(user, request.Password));
 
@@ -117,9 +117,24 @@ public class AuthService
     {
         using var conn = _db.CreateConnection();
         var row = await conn.QueryFirstOrDefaultAsync<UserRow>(
-            "SELECT id, username, password_hash, display_name, is_admin, created_at, last_login FROM users WHERE id = @userId",
+            "SELECT id, username, password_hash, is_admin, created_at, last_login FROM users WHERE id = @userId",
             new { userId });
         return row?.ToUserInfo();
+    }
+
+    public async Task<List<UserInfo>> GetAllUsersAsync()
+    {
+        using var conn = _db.CreateConnection();
+        var rows = await conn.QueryAsync<UserRow>(
+            "SELECT id, username, password_hash, is_admin, created_at, last_login FROM users ORDER BY username ASC");
+        return rows.Select(r => r.ToUserInfo()).ToList();
+    }
+
+    public async Task<bool> DeleteUserAsync(string userId)
+    {
+        using var conn = _db.CreateConnection();
+        var count = await conn.ExecuteAsync("DELETE FROM users WHERE id = @userId", new { userId });
+        return count > 0;
     }
 
     public TokenValidationParameters GetValidationParameters() => new()
@@ -139,8 +154,7 @@ public class AuthService
     private static UserInfo NewUser(RegisterRequest request, bool isAdmin)
     {
         var username = request.Username.Trim();
-        var displayName = string.IsNullOrWhiteSpace(request.DisplayName) ? username : request.DisplayName.Trim();
-        return new UserInfo(Guid.NewGuid().ToString("N"), username, displayName, isAdmin, DateTime.UtcNow, null);
+        return new UserInfo(Guid.NewGuid().ToString("N"), username, isAdmin, DateTime.UtcNow, null);
     }
 
     private static object UserParameters(UserInfo user, string password) => new
@@ -148,7 +162,6 @@ public class AuthService
         user.Id,
         user.Username,
         Hash = BCrypt.Net.BCrypt.HashPassword(password, BcryptWorkFactor),
-        user.DisplayName,
         CreatedAt = user.CreatedAt.ToString("O", CultureInfo.InvariantCulture)
     };
 
@@ -171,12 +184,11 @@ public class AuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
-    private sealed record UserRow(string id, string username, string password_hash, string? display_name, long is_admin, string created_at, string? last_login)
+    private sealed record UserRow(string id, string username, string password_hash, long is_admin, string created_at, string? last_login)
     {
         public UserInfo ToUserInfo() => new(
             id,
             username,
-            display_name,
             is_admin != 0,
             DateTime.Parse(created_at, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal),
             last_login == null ? null : DateTime.Parse(last_login, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal));

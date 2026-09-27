@@ -14,5 +14,16 @@ public sealed class ServerOptions
     public int ScanIntervalMinutes { get; set; } = 30;
 }
 
-/// <summary>Resolved, immutable server paths shared by the endpoints and background services.</summary>
-public sealed record ServerPaths(string LibraryRoot, string DataDirectory, string CoverCacheDirectory);
+public sealed class ServerPaths
+{
+    public string LibraryRoot { get; set; }
+    public string DataDirectory { get; }
+    public string CoverCacheDirectory { get; }
+
+    public ServerPaths(string libraryRoot, string dataDirectory, string coverCacheDirectory)
+    {
+        LibraryRoot = libraryRoot;
+        DataDirectory = dataDirectory;
+        CoverCacheDirectory = coverCacheDirectory;
+    }
+}

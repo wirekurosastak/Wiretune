@@ -6,7 +6,8 @@
              xmlns:services="using:Wiretune.UI.Services"
              xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="Wiretune.UI.Views.MainView"
-             x:DataType="vm:MainViewModel">
+             x:DataType="vm:MainViewModel"
+             x:Name="RootControl">
 
   <Panel Background="{DynamicResource WindowGradient}">
     <Grid RowDefinitions="70, Auto, *, 96, 30"
@@ -399,6 +400,7 @@
                   <DataGrid ItemsSource="{Binding Tracks.DisplayedTracks}"
                             AutoGenerateColumns="False"
                             IsReadOnly="True"
+                            CanUserSortColumns="True"
                             IsVisible="{Binding Tracks.HasTracks}"
                             GridLinesVisibility="Horizontal"
                             HorizontalScrollBarVisibility="Disabled">
@@ -427,6 +429,14 @@
                                   <controls:CoverImage SourcePath="{Binding CoverArtPath}"
                                                        DecodeWidth="64"
                                                        Stretch="UniformToFill" />
+
+                                  <!-- Currently Playing Volume Overlay -->
+                                  <Border Background="#A0000000" IsVisible="{Binding IsPlaying}">
+                                    <material:MaterialIcon Kind="VolumeHigh" Width="16" Height="16"
+                                                           Foreground="{DynamicResource PrimaryAction}"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center" />
+                                  </Border>
                                 </Panel>
                               </Border>
                             </Button>
@@ -435,7 +445,7 @@
                       </DataGridTemplateColumn>
 
                       <!-- Title (Clickable to play track) -->
-                      <DataGridTemplateColumn Header="CÍM" Width="2*">
+                      <DataGridTemplateColumn Header="CÍM" Width="2*" SortMemberPath="Title">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Button Classes="table-link title"
@@ -449,7 +459,7 @@
                       </DataGridTemplateColumn>
 
                       <!-- Artist (Clickable to open Artist page) -->
-                      <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*">
+                      <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*" SortMemberPath="Artist">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Button Classes="table-link artist"
@@ -462,7 +472,7 @@
                       </DataGridTemplateColumn>
 
                       <!-- Album (Clickable to open Album page) -->
-                      <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
+                      <DataGridTemplateColumn Header="ALBUM" Width="1.5*" SortMemberPath="Album">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Button Classes="table-link album"
@@ -475,7 +485,7 @@
                       </DataGridTemplateColumn>
 
                       <!-- Audio Format / Quality Badge -->
-                      <DataGridTemplateColumn Header="MINŐSÉG" Width="185">
+                      <DataGridTemplateColumn Header="MINŐSÉG" Width="185" SortMemberPath="Format.DisplayBadge">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Border Background="{DynamicResource TagBackground}"
@@ -493,10 +503,10 @@
                       </DataGridTemplateColumn>
 
                       <!-- Duration -->
-                      <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="95" />
+                      <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="95" SortMemberPath="Duration" />
 
                       <!-- Favorite -->
-                      <DataGridTemplateColumn Width="50" Header="">
+                      <DataGridTemplateColumn Width="50" Header="" SortMemberPath="IsFavorite">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Button Classes="icon"
@@ -675,11 +685,12 @@
                   <DataGrid ItemsSource="{Binding Albums.SelectedAlbum.Tracks}"
                             AutoGenerateColumns="False"
                             IsReadOnly="True"
+                            CanUserSortColumns="True"
                             GridLinesVisibility="Horizontal"
                             HorizontalScrollBarVisibility="Disabled">
                     <DataGrid.Columns>
                       <!-- Track # (Clickable to play track) -->
-                      <DataGridTemplateColumn Header="#" Width="52">
+                      <DataGridTemplateColumn Header="#" Width="52" SortMemberPath="TrackNumber">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Button Classes="table-link track-num"
@@ -706,7 +717,7 @@
                       </DataGridTemplateColumn>
 
                       <!-- Title (Clickable to play track) -->
-                      <DataGridTemplateColumn Header="CÍM" Width="3*">
+                      <DataGridTemplateColumn Header="CÍM" Width="3*" SortMemberPath="Title">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Button Classes="table-link title"
@@ -720,7 +731,7 @@
                       </DataGridTemplateColumn>
 
                       <!-- Format / Quality -->
-                      <DataGridTemplateColumn Header="MINŐSÉG" Width="185">
+                      <DataGridTemplateColumn Header="MINŐSÉG" Width="185" SortMemberPath="Format.DisplayBadge">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center">
@@ -731,10 +742,10 @@
                       </DataGridTemplateColumn>
 
                       <!-- Duration -->
-                      <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="95" />
+                      <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="95" SortMemberPath="Duration" />
 
                       <!-- Favorite -->
-                      <DataGridTemplateColumn Width="50" Header="">
+                      <DataGridTemplateColumn Width="50" Header="" SortMemberPath="IsFavorite">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
                             <Button Classes="icon"
@@ -946,6 +957,7 @@
                         <DataGrid ItemsSource="{Binding Artists.SelectedArtistTracks}"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
+                                  CanUserSortColumns="True"
                                   GridLinesVisibility="Horizontal"
                                   HorizontalScrollBarVisibility="Disabled">
                           <DataGrid.Columns>
@@ -973,6 +985,14 @@
                                         <controls:CoverImage SourcePath="{Binding CoverArtPath}"
                                                              DecodeWidth="64"
                                                              Stretch="UniformToFill" />
+
+                                        <!-- Currently Playing Volume Overlay -->
+                                        <Border Background="#A0000000" IsVisible="{Binding IsPlaying}">
+                                          <material:MaterialIcon Kind="VolumeHigh" Width="16" Height="16"
+                                                                 Foreground="{DynamicResource PrimaryAction}"
+                                                                 HorizontalAlignment="Center"
+                                                                 VerticalAlignment="Center" />
+                                        </Border>
                                       </Panel>
                                     </Border>
                                   </Button>
@@ -981,7 +1001,7 @@
                             </DataGridTemplateColumn>
 
                             <!-- Title (Clickable to play track) -->
-                            <DataGridTemplateColumn Header="CÍM" Width="2.5*">
+                            <DataGridTemplateColumn Header="CÍM" Width="2.5*" SortMemberPath="Title">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
                                   <Button Classes="table-link title"
@@ -995,7 +1015,7 @@
                             </DataGridTemplateColumn>
 
                             <!-- Album (Clickable) -->
-                            <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
+                            <DataGridTemplateColumn Header="ALBUM" Width="1.5*" SortMemberPath="Album">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
                                   <Button Classes="table-link album"
@@ -1007,7 +1027,7 @@
                               </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="MINŐSÉG" Width="185">
+                            <DataGridTemplateColumn Header="MINŐSÉG" Width="185" SortMemberPath="Format.DisplayBadge">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
                                   <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left" VerticalAlignment="Center">
@@ -1016,19 +1036,36 @@
                                 </DataTemplate>
                               </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
-                            <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="95" />
-                      <DataGridTemplateColumn Width="44" Header="">
-                        <DataGridTemplateColumn.CellTemplate>
-                          <DataTemplate DataType="models:Track">
-                            <Button Classes="icon" ToolTip.Tip="Hozzáadás lejátszási listához"
-                                    Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).AddToPlaylistCommand}"
-                                    CommandParameter="{Binding}"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                              <material:MaterialIcon Kind="PlaylistPlus" Width="18" Height="18" />
-                            </Button>
-                          </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                      </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="95" SortMemberPath="Duration" />
+
+                            <!-- Favorite -->
+                            <DataGridTemplateColumn Width="50" Header="" SortMemberPath="IsFavorite">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="icon"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Tracks.ToggleFavoriteCommand}"
+                                          CommandParameter="{Binding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <material:MaterialIcon Kind="{Binding IsFavorite, Converter={StaticResource FavoriteIconConverter}}"
+                                                           Foreground="{Binding IsFavorite, Converter={StaticResource FavoriteColorConverter}}"
+                                                           Width="18" Height="18" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Width="44" Header="">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="icon" ToolTip.Tip="Hozzáadás lejátszási listához"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).AddToPlaylistCommand}"
+                                          CommandParameter="{Binding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <material:MaterialIcon Kind="PlaylistPlus" Width="18" Height="18" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                           </DataGrid.Columns>
                         </DataGrid>
                       </Border>
@@ -1287,6 +1324,7 @@
                     <DataGrid ItemsSource="{Binding Playlists.SelectedPlaylistTracks}"
                               IsVisible="{Binding !Playlists.IsSelectedPlaylistEmpty}"
                               AutoGenerateColumns="False" IsReadOnly="True"
+                              CanUserSortColumns="True"
                               GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Disabled">
                       <DataGrid.Columns>
                         <!-- Cover (Clickable to play track) -->
@@ -1321,7 +1359,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Title (Clickable to play track) -->
-                        <DataGridTemplateColumn Header="CÍM" Width="2*">
+                        <DataGridTemplateColumn Header="CÍM" Width="2*" SortMemberPath="Title">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
                               <Button Classes="table-link title"
@@ -1335,7 +1373,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Artist (Clickable to open Artist page) -->
-                        <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*">
+                        <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*" SortMemberPath="Artist">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
                               <Button Classes="table-link artist"
@@ -1348,7 +1386,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Album (Clickable to open Album page) -->
-                        <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
+                        <DataGridTemplateColumn Header="ALBUM" Width="1.5*" SortMemberPath="Album">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
                               <Button Classes="table-link album"
@@ -1361,7 +1399,7 @@
                         </DataGridTemplateColumn>
 
                         <!-- Audio Format / Quality Badge -->
-                        <DataGridTemplateColumn Header="MINŐSÉG" Width="185">
+                        <DataGridTemplateColumn Header="MINŐSÉG" Width="185" SortMemberPath="Format.DisplayBadge">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
                               <Border Background="{DynamicResource TagBackground}"
@@ -1379,10 +1417,10 @@
                         </DataGridTemplateColumn>
 
                         <!-- Duration -->
-                        <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="90" />
+                        <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="90" SortMemberPath="Duration" />
 
                         <!-- Favorite Heart Button -->
-                        <DataGridTemplateColumn Width="44" Header="">
+                        <DataGridTemplateColumn Width="44" Header="" SortMemberPath="IsFavorite">
                           <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate DataType="models:Track">
                               <Button Classes="icon"
@@ -1458,6 +1496,7 @@
 
               <Border Grid.Row="1" Classes="glass coral" Padding="0" ClipToBounds="True" IsVisible="{Binding !Favorites.IsEmpty}">
                 <DataGrid ItemsSource="{Binding Favorites.FavoriteTracks}" AutoGenerateColumns="False" IsReadOnly="True"
+                          CanUserSortColumns="True"
                           GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Disabled">
                   <DataGrid.Columns>
                     <!-- Cover (Clickable to play track) -->
@@ -1484,6 +1523,14 @@
                                 <controls:CoverImage SourcePath="{Binding CoverArtPath}"
                                                      DecodeWidth="64"
                                                      Stretch="UniformToFill" />
+
+                                <!-- Currently Playing Volume Overlay -->
+                                <Border Background="#A0000000" IsVisible="{Binding IsPlaying}">
+                                  <material:MaterialIcon Kind="VolumeHigh" Width="16" Height="16"
+                                                         Foreground="{DynamicResource PrimaryAction}"
+                                                         HorizontalAlignment="Center"
+                                                         VerticalAlignment="Center" />
+                                </Border>
                               </Panel>
                             </Border>
                           </Button>
@@ -1491,7 +1538,7 @@
                       </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
                     <!-- Title (Clickable to play track) -->
-                    <DataGridTemplateColumn Header="CÍM" Width="2*">
+                    <DataGridTemplateColumn Header="CÍM" Width="2*" SortMemberPath="Title">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="models:Track">
                           <Button Classes="table-link title"
@@ -1505,7 +1552,7 @@
                     </DataGridTemplateColumn>
 
                     <!-- Artist (Clickable to open Artist page) -->
-                    <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*">
+                    <DataGridTemplateColumn Header="ELŐADÓ" Width="1.5*" SortMemberPath="Artist">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="models:Track">
                           <Button Classes="table-link artist"
@@ -1518,7 +1565,7 @@
                     </DataGridTemplateColumn>
 
                     <!-- Album (Clickable to open Album page) -->
-                    <DataGridTemplateColumn Header="ALBUM" Width="1.5*">
+                    <DataGridTemplateColumn Header="ALBUM" Width="1.5*" SortMemberPath="Album">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="models:Track">
                           <Button Classes="table-link album"
@@ -1531,7 +1578,7 @@
                     </DataGridTemplateColumn>
 
                     <!-- Audio Format / Quality Badge -->
-                    <DataGridTemplateColumn Header="MINŐSÉG" Width="185">
+                    <DataGridTemplateColumn Header="MINŐSÉG" Width="185" SortMemberPath="Format.DisplayBadge">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="models:Track">
                           <Border Background="{DynamicResource TagBackground}"
@@ -1548,7 +1595,7 @@
                       </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
 
-                    <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="90" />
+                    <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="90" SortMemberPath="Duration" />
                     <DataGridTemplateColumn Width="44" Header="">
                       <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="models:Track">
@@ -1672,6 +1719,23 @@
                           <TextBlock Text="{Binding ServerSettings.StatusMessage}" FontSize="12" Foreground="{DynamicResource CyanAccent}" TextWrapping="Wrap" IsVisible="{Binding ServerSettings.IsBusy}" />
                         </StackPanel>
 
+                        <!-- Szerveroldali zenemappa (Adminisztrátori felület) -->
+                        <Border BorderBrush="{DynamicResource GlassBorder}" BorderThickness="0,1,0,0" Padding="0,12,0,0"
+                                IsVisible="{Binding ServerSettings.IsAdmin}">
+                          <StackPanel Spacing="8">
+                            <TextBlock Text="SZERVER ZENEMAPPA (ADMIN)" Classes="group-title" FontSize="10" Margin="0,0,0,2" />
+                            <Grid ColumnDefinitions="*, Auto">
+                              <TextBox Grid.Column="0" Text="{Binding ServerSettings.ServerLibraryPath, Mode=TwoWay}" Watermark="/eleresi/ut/a/szerveren/zenek" Margin="0,0,8,0" />
+                              <Button Grid.Column="1" Classes="primary" Command="{Binding ServerSettings.UpdateServerLibraryPathCommand}" IsEnabled="{Binding !ServerSettings.IsUpdatingServerConfig}" Height="38" Padding="16,0">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                  <material:MaterialIcon Kind="FolderEditOutline" Width="18" Height="18" />
+                                  <TextBlock Text="Mappa mentése" FontWeight="Bold" />
+                                </StackPanel>
+                              </Button>
+                            </Grid>
+                          </StackPanel>
+                        </Border>
+
                         <!-- Helyi zenemappa -->
                         <Border BorderBrush="{DynamicResource GlassBorder}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
                           <StackPanel Spacing="8">
@@ -1689,6 +1753,76 @@
                                          Foreground="{DynamicResource LimeAccent}" IsVisible="{Binding ServerSettings.IsScanning}" />
                           </StackPanel>
                         </Border>
+                      </StackPanel>
+                    </Border>
+
+                    <!-- Felhasználókezelés (Adminisztrátori kártya) -->
+                    <Border Classes="glass lime" IsVisible="{Binding ServerSettings.IsAdmin}">
+                      <StackPanel Spacing="14">
+                        <Grid ColumnDefinitions="*, Auto">
+                          <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Felhasználók" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                            <TextBlock Text="Felhasználók regisztrálása és eltávolítása a szerverről" FontSize="12" Foreground="{DynamicResource TextMuted}" />
+                          </StackPanel>
+                          <Button Grid.Column="1" Classes="icon" Command="{Binding ServerSettings.LoadUsersCommand}" ToolTip.Tip="Lista frissítése">
+                            <material:MaterialIcon Kind="Refresh" Width="18" Height="18" />
+                          </Button>
+                        </Grid>
+
+                        <!-- Új felhasználó hozzáadása form -->
+                        <StackPanel Spacing="8">
+                          <TextBlock Text="Új felhasználó" Classes="group-title" FontSize="10" Margin="0,0,0,2" />
+                          <Grid ColumnDefinitions="*, *, *, Auto">
+                            <TextBox Grid.Column="0" Text="{Binding ServerSettings.NewUsername, Mode=TwoWay}" Watermark="Felhasználónév" Margin="0,0,6,0" />
+                            <TextBox Grid.Column="1" Text="{Binding ServerSettings.NewPassword, Mode=TwoWay}" Watermark="Jelszó (min. 8)" PasswordChar="•" Margin="0,0,6,0" />
+                            <TextBox Grid.Column="2" Text="{Binding ServerSettings.ConfirmPassword, Mode=TwoWay}" Watermark="Jelszó megerősítése" PasswordChar="•" Margin="0,0,6,0" />
+                            <Button Grid.Column="3" Classes="primary" Command="{Binding ServerSettings.AddUserCommand}" IsEnabled="{Binding !ServerSettings.IsAddingUser}" Height="38" Padding="14,0">
+                              <StackPanel Orientation="Horizontal" Spacing="6">
+                                <material:MaterialIcon Kind="AccountPlus" Width="16" Height="16" />
+                                <TextBlock Text="Hozzáadás" FontWeight="Bold" />
+                              </StackPanel>
+                            </Button>
+                          </Grid>
+                        </StackPanel>
+
+                        <!-- Error alert -->
+                        <Border Background="#28FF003C" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1" CornerRadius="6" Padding="10,6"
+                                IsVisible="{Binding ServerSettings.HasUserManagementError}">
+                          <TextBlock Text="{Binding ServerSettings.UserManagementErrorMessage}" Foreground="{DynamicResource DangerColor}" FontSize="12" FontWeight="SemiBold" />
+                        </Border>
+
+                        <!-- Felhasználói lista -->
+                        <StackPanel Spacing="6">
+                          <TextBlock Text="REGISZTRÁLT FELHASZNÁLÓK" Classes="group-title" FontSize="10" Margin="0,4,0,2" />
+                          <ItemsControl ItemsSource="{Binding ServerSettings.ServerUsers}">
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate DataType="models:UserInfo">
+                                <Border Background="{DynamicResource Surface2}" CornerRadius="6" Padding="12,8" Margin="0,0,0,4">
+                                  <Grid ColumnDefinitions="Auto, *, Auto, Auto">
+                                    <material:MaterialIcon Grid.Column="0" Kind="{Binding IsAdmin, Converter={StaticResource BoolToAdminIconConverter}}"
+                                                           Width="20" Height="20" Foreground="{DynamicResource LimeAccent}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                      <TextBlock Text="{Binding Username}" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource TextMain}" />
+                                      <TextBlock Text="{Binding CreatedAt, StringFormat='Létrehozva: {0:yyyy.MM.dd HH:mm}'}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+
+                                    <Border Grid.Column="2" Background="{DynamicResource Surface1}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="0,0,10,0">
+                                      <TextBlock Text="{Binding IsAdmin, Converter={StaticResource BoolToRoleTextConverter}}" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource LimeAccent}" />
+                                    </Border>
+
+                                    <Button Grid.Column="3" Classes="icon"
+                                            Command="{Binding #RootControl.((vm:MainViewModel)DataContext).ServerSettings.DeleteUserCommand}"
+                                            CommandParameter="{Binding Id}"
+                                            ToolTip.Tip="Felhasználó törlése"
+                                            IsVisible="{Binding !IsAdmin}">
+                                      <material:MaterialIcon Kind="DeleteOutline" Width="18" Height="18" Foreground="{DynamicResource DangerColor}" />
+                                    </Button>
+                                  </Grid>
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
+                        </StackPanel>
                       </StackPanel>
                     </Border>
                   </StackPanel>
@@ -1867,6 +2001,7 @@
                         <DataGrid ItemsSource="{Binding Search.MatchingTracks}"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
+                                  CanUserSortColumns="True"
                                   MaxHeight="360"
                                   GridLinesVisibility="Horizontal"
                                   HorizontalScrollBarVisibility="Disabled">
@@ -1903,7 +2038,7 @@
                             </DataGridTemplateColumn>
 
                             <!-- Title (Clickable to play track) -->
-                            <DataGridTemplateColumn Header="CÍM" Width="2.5*">
+                            <DataGridTemplateColumn Header="CÍM" Width="2.5*" SortMemberPath="Title">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
                                   <Button Classes="table-link title"
@@ -1916,7 +2051,7 @@
                               </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="ELŐADÓ" Width="2*">
+                            <DataGridTemplateColumn Header="ELŐADÓ" Width="2*" SortMemberPath="Artist">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
                                   <Button Classes="table-link artist"
@@ -1928,7 +2063,7 @@
                               </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="ALBUM" Width="2*">
+                            <DataGridTemplateColumn Header="ALBUM" Width="2*" SortMemberPath="Album">
                               <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="models:Track">
                                   <Button Classes="table-link album"
@@ -1940,7 +2075,7 @@
                               </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="85" />
+                            <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="85" SortMemberPath="Duration" />
                       <DataGridTemplateColumn Width="44" Header="">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
@@ -2405,7 +2540,7 @@
     <Grid IsVisible="{Binding IsLoginViewActive}"
           Background="{DynamicResource WindowGradient}">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-        <Border Classes="glass purple"
+        <Border Classes="glass view-accent"
                 Width="500"
                 MaxWidth="{Binding $parent[ScrollViewer].Bounds.Width}"
                 CornerRadius="16"
@@ -2417,11 +2552,21 @@
 
             <Grid ColumnDefinitions="*, Auto">
               <StackPanel Grid.Column="0" HorizontalAlignment="Center" Spacing="8" Margin="24,0,0,0">
-                <material:MaterialIcon Kind="Waveform" Foreground="{DynamicResource LimeAccent}" Width="52" Height="52" HorizontalAlignment="Center" />
+                <controls:NavVisualizerControl Width="52" Height="38"
+                                               HorizontalAlignment="Center"
+                                               WaveTrigger="{Binding WaveTrigger}"
+                                               WaveDirection="{Binding LastWaveDirection}"
+                                               AccentBrush="{DynamicResource PrimaryAction}"
+                                               IsPlaying="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToBoolConverter}}"
+                                               ToolTip.Tip="Wiretune Streamer Visualizer" />
                 <TextBlock Text="WIRETUNE" FontSize="26" FontWeight="Black" LetterSpacing="3.0" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" />
-                <Border Background="{DynamicResource Surface2}" CornerRadius="4" Padding="10,4" HorizontalAlignment="Center">
-                  <TextBlock Text="LOSSLESS STREAMER &amp; PLAYER" FontSize="10" FontWeight="Bold" LetterSpacing="1.2" Foreground="{DynamicResource CyanAccent}" />
-                </Border>
+                <TextBlock Text="STREAMER &amp; PLAYER" FontSize="10" FontWeight="Bold" LetterSpacing="1.2" Foreground="{DynamicResource PrimaryAction}" HorizontalAlignment="Center">
+                  <TextBlock.Transitions>
+                    <Transitions>
+                      <BrushTransition Property="Foreground" Duration="0:0:0.35" />
+                    </Transitions>
+                  </TextBlock.Transitions>
+                </TextBlock>
               </StackPanel>
               <Button Grid.Column="1" Classes="icon" Command="{Binding ContinueOfflineCommand}" VerticalAlignment="Top" ToolTip.Tip="Bezárás / vissza a lejátszóhoz">
                 <material:MaterialIcon Kind="Close" Width="20" Height="20" />
@@ -2508,7 +2653,6 @@
                     <KeyBinding Gesture="Enter" Command="{Binding ServerSettings.SetupAdminCommand}" />
                   </TextBox.KeyBindings>
                 </TextBox>
-                <TextBox Text="{Binding ServerSettings.DisplayName, Mode=TwoWay}" Watermark="Megjelenített név (opcionális)" Height="40" />
 
                 <Button Classes="primary" Command="{Binding ServerSettings.SetupAdminCommand}" IsEnabled="{Binding !ServerSettings.IsAuthenticating}"
                         Height="44" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center">
@@ -2528,7 +2672,7 @@
                   </TextBox.KeyBindings>
                 </TextBox>
                 <CheckBox IsChecked="{Binding ServerSettings.StayLoggedIn, Mode=TwoWay}"
-                          Content="Maradjak bejelentkezve ezen az eszközön"
+                          Content="Bejelentkezve maradok"
                           FontSize="12"
                           Foreground="{DynamicResource TextMain}" />
 
@@ -2629,7 +2773,7 @@
             <Button Classes="lime" Height="36" Padding="16,0" Command="{Binding Playlists.CreatePlaylistForPendingTrackCommand}">
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <material:MaterialIcon Kind="Plus" Width="16" Height="16" />
-                <TextBlock Text="Új lista" FontWeight="Bold" />
+                <TextBlock Text="Új lejátszási lista" FontWeight="Bold" />
               </StackPanel>
             </Button>
           </StackPanel>

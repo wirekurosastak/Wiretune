@@ -15,6 +15,8 @@
       <conv:RepeatModeToIconConverter x:Key="RepeatModeToIconConverter" />
       <conv:IntEqualConverter x:Key="IntEqualConverter" />
       <conv:NavActiveBackgroundConverter x:Key="NavActiveBackgroundConverter" />
+      <conv:BoolToAdminIconConverter x:Key="BoolToAdminIconConverter" />
+      <conv:BoolToRoleTextConverter x:Key="BoolToRoleTextConverter" />
 
       <!-- Slider Dimensions & Spacing to Prevent Horizontal/Vertical Clipping -->
       <GridLength x:Key="SliderPreContentMargin">0</GridLength>
@@ -1142,7 +1144,7 @@
     <Style Selector="Button.unstyled-cover:pressed /template/ ContentPresenter">
       <Setter Property="Background" Value="Transparent" />
     </Style>
-    <Style Selector="Button.unstyled-cover Border">
+    <Style Selector="Button.unstyled-cover > Border">
       <Setter Property="Transitions">
         <Transitions>
           <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut" />
@@ -1151,23 +1153,20 @@
         </Transitions>
       </Setter>
     </Style>
-    <Style Selector="Button.unstyled-cover:pointerover Border">
+    <Style Selector="Button.unstyled-cover:pointerover > Border">
       <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
       <Setter Property="BorderThickness" Value="1.5" />
       <Setter Property="RenderTransform" Value="scale(1.06)" />
       <Setter Property="BoxShadow" Value="0 4 12 -2 #80000000" />
       <Setter Property="Opacity" Value="1" />
     </Style>
-    <Style Selector="Button.unstyled-cover:pressed Border">
+    <Style Selector="Button.unstyled-cover:pressed > Border">
       <Setter Property="BorderBrush" Value="{DynamicResource PrimaryActionPressed}" />
       <Setter Property="BorderThickness" Value="2" />
       <Setter Property="RenderTransform" Value="scale(0.92)" />
       <Setter Property="Opacity" Value="0.85" />
     </Style>
     <Style Selector="Button.unstyled-cover.playing Border">
-      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
-      <Setter Property="BorderThickness" Value="1.5" />
-      <Setter Property="BoxShadow" Value="0 0 10 1 #503A9FB8" />
     </Style>
   </Application.Styles>
 </Application>

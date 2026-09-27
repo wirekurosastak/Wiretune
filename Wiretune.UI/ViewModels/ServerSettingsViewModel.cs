@@ -30,7 +30,6 @@ public partial class ServerSettingsViewModel : ObservableObject
 
     [ObservableProperty] private string _username = string.Empty;
     [ObservableProperty] private string _password = string.Empty;
-    [ObservableProperty] private string _displayName = string.Empty;
     [ObservableProperty] private bool _stayLoggedIn = true;
     [ObservableProperty] private bool _isLoggedIn;
     [ObservableProperty] private bool _isAdmin;
@@ -41,6 +40,18 @@ public partial class ServerSettingsViewModel : ObservableObject
     [ObservableProperty] private bool _hasAuthError;
     [ObservableProperty] private bool _isAuthenticating;
     [ObservableProperty] private bool _isServerOffline;
+
+    [ObservableProperty] private string _serverLibraryPath = string.Empty;
+    [ObservableProperty] private bool _isLoadingServerConfig;
+    [ObservableProperty] private bool _isUpdatingServerConfig;
+    [ObservableProperty] private System.Collections.ObjectModel.ObservableCollection<UserInfo> _serverUsers = new();
+    [ObservableProperty] private bool _isLoadingUsers;
+    [ObservableProperty] private string _newUsername = string.Empty;
+    [ObservableProperty] private string _newPassword = string.Empty;
+    [ObservableProperty] private string _confirmPassword = string.Empty;
+    [ObservableProperty] private bool _isAddingUser;
+    [ObservableProperty] private string _userManagementErrorMessage = string.Empty;
+    [ObservableProperty] private bool _hasUserManagementError;
 
     private string? _lastSyncedServerUrl;
 
@@ -93,7 +104,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         IsLoggedIn = _session.IsLoggedIn;
         IsSetupRequired = _session.State == ServerConnectionState.SetupRequired;
         IsAdmin = _session.CurrentUser?.IsAdmin == true;
-        CurrentUserName = _session.CurrentUser?.DisplayName ?? _session.CurrentUser?.Username ?? string.Empty;
+        CurrentUserName = _session.CurrentUser?.Username ?? string.Empty;
         CurrentUserRole = IsAdmin ? "Adminisztrátor" : "Felhasználó";
         if (!string.IsNullOrWhiteSpace(_session.StatusMessage)) StatusMessage = _session.StatusMessage;
 
@@ -114,6 +125,12 @@ public partial class ServerSettingsViewModel : ObservableObject
             LibrarySource.Local => $"Helyi mappa ({_library.LibraryPath})",
             _ => "Nincs aktív forrás"
         };
+
+        if (IsLoggedIn && IsAdmin)
+        {
+            _ = LoadServerConfigAsync();
+            _ = LoadUsersAsync();
+        }
     }
 
     private void UpdateStats()
@@ -205,7 +222,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         ShowAuthError(null);
         try
         {
-            var error = await _session.SetupAdminAsync(Username, Password, string.IsNullOrWhiteSpace(DisplayName) ? null : DisplayName);
+            var error = await _session.SetupAdminAsync(Username, Password);
             ShowAuthError(error);
             if (error == null) Password = string.Empty;
         }
@@ -313,5 +330,137 @@ public partial class ServerSettingsViewModel : ObservableObject
         {
             SyncWithSession();
         }
+    }
+
+    [RelayCommand]
+    public async Task LoadServerConfigAsync()
+    {
+        if (!IsLoggedIn || !IsAdmin) return;
+        IsLoadingServerConfig = true;
+        try
+        {
+            var config = await _session.GetServerConfigAsync();
+            ServerLibraryPath = config.LibraryPath;
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Szerver beállítások betöltési hiba: {ex.Message}";
+        }
+        finally
+        {
+            IsLoadingServerConfig = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task UpdateServerLibraryPathAsync()
+    {
+        if (!IsLoggedIn || !IsAdmin) return;
+        if (string.IsNullOrWhiteSpace(ServerLibraryPath))
+        {
+            StatusMessage = "Add meg a szerver zenemappájának elérését!";
+            return;
+        }
+
+        IsUpdatingServerConfig = true;
+        try
+        {
+            var config = await _session.UpdateServerLibraryPathAsync(ServerLibraryPath);
+            ServerLibraryPath = config.LibraryPath;
+            StatusMessage = "Szerver zenemappa frissítve, indexelés elindítva!";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Hiba a mappa mentésekor: {ex.Message}";
+        }
+        finally
+        {
+            IsUpdatingServerConfig = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task LoadUsersAsync()
+    {
+        if (!IsLoggedIn || !IsAdmin) return;
+        IsLoadingUsers = true;
+        ShowUserManagementError(null);
+        try
+        {
+            var users = await _session.GetUsersAsync();
+            ServerUsers = new System.Collections.ObjectModel.ObservableCollection<UserInfo>(users);
+        }
+        catch (Exception ex)
+        {
+            ShowUserManagementError($"Felhasználók betöltési hiba: {ex.Message}");
+        }
+        finally
+        {
+            IsLoadingUsers = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task AddUserAsync()
+    {
+        if (!IsLoggedIn || !IsAdmin) return;
+        if (string.IsNullOrWhiteSpace(NewUsername) || string.IsNullOrEmpty(NewPassword))
+        {
+            ShowUserManagementError("Add meg a felhasználónevet és a jelszót!");
+            return;
+        }
+
+        if (NewPassword.Length < AuthRules.MinPasswordLength)
+        {
+            ShowUserManagementError($"A jelszónak legalább {AuthRules.MinPasswordLength} karakternek kell lennie!");
+            return;
+        }
+
+        if (NewPassword != ConfirmPassword)
+        {
+            ShowUserManagementError("A megadott jelszavak nem egyeznek!");
+            return;
+        }
+
+        IsAddingUser = true;
+        ShowUserManagementError(null);
+        try
+        {
+            await _session.RegisterUserAsync(NewUsername, NewPassword);
+            NewUsername = string.Empty;
+            NewPassword = string.Empty;
+            ConfirmPassword = string.Empty;
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowUserManagementError($"Hiba a felhasználó hozzáadásakor: {ex.Message}");
+        }
+        finally
+        {
+            IsAddingUser = false;
+        }
+    }
+
+    [RelayCommand]
+    public async Task DeleteUserAsync(string? userId)
+    {
+        if (!IsLoggedIn || !IsAdmin || string.IsNullOrEmpty(userId)) return;
+        ShowUserManagementError(null);
+        try
+        {
+            await _session.DeleteUserAsync(userId);
+            await LoadUsersAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowUserManagementError($"Hiba a törlésnél: {ex.Message}");
+        }
+    }
+
+    private void ShowUserManagementError(string? message)
+    {
+        UserManagementErrorMessage = message ?? string.Empty;
+        HasUserManagementError = !string.IsNullOrEmpty(message);
     }
 }

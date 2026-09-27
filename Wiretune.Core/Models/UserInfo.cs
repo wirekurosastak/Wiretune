@@ -3,7 +3,6 @@ namespace Wiretune.Core.Models;
 public record UserInfo(
     string Id,
     string Username,
-    string? DisplayName,
     bool IsAdmin,
     DateTime CreatedAt,
     DateTime? LastLogin
@@ -11,7 +10,7 @@ public record UserInfo(
 
 public record LoginRequest(string Username, string Password, bool RememberMe = false);
 
-public record RegisterRequest(string Username, string Password, string? DisplayName = null);
+public record RegisterRequest(string Username, string Password);
 
 public record AuthResponse(string Token, UserInfo User, DateTime ExpiresAt);
 
@@ -23,6 +22,9 @@ public record ServerLibraryStatus(
     DateTime? LastScanCompletedUtc,
     string? LastScanError
 );
+
+public record ServerConfigInfo(string LibraryPath);
+public record UpdateLibraryPathRequest(string NewPath);
 
 public static class AuthRules
 {

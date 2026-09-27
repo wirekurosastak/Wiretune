@@ -164,8 +164,8 @@ public sealed class ServerSession : IDisposable
         AuthenticateAsync(() => _client.LoginAsync(ServerUrl, username.Trim(), password, rememberMe, ct), rememberMe, ct,
             unauthorizedMessage: "Hibás felhasználónév vagy jelszó.");
 
-    public Task<string?> SetupAdminAsync(string username, string password, string? displayName, CancellationToken ct = default) =>
-        AuthenticateAsync(() => _client.SetupAdminAsync(ServerUrl, username.Trim(), password, displayName, ct), rememberMe: true, ct,
+    public Task<string?> SetupAdminAsync(string username, string password, CancellationToken ct = default) =>
+        AuthenticateAsync(() => _client.SetupAdminAsync(ServerUrl, username.Trim(), password, ct), rememberMe: true, ct,
             unauthorizedMessage: "A szerver elutasította a kérést.");
 
     /// <summary>Returns null on success, otherwise a user-facing error message.</summary>
@@ -248,6 +248,21 @@ public sealed class ServerSession : IDisposable
         }
     }
 
+    public Task<List<UserInfo>> GetUsersAsync(CancellationToken ct = default) =>
+        _client.GetUsersAsync(ServerUrl, ct);
+
+    public Task<UserInfo> RegisterUserAsync(string username, string password, CancellationToken ct = default) =>
+        _client.RegisterUserAsync(ServerUrl, username, password, ct);
+
+    public Task DeleteUserAsync(string userId, CancellationToken ct = default) =>
+        _client.DeleteUserAsync(ServerUrl, userId, ct);
+
+    public Task<ServerConfigInfo> GetServerConfigAsync(CancellationToken ct = default) =>
+        _client.GetServerConfigAsync(ServerUrl, ct);
+
+    public Task<ServerConfigInfo> UpdateServerLibraryPathAsync(string newPath, CancellationToken ct = default) =>
+        _client.UpdateServerLibraryPathAsync(ServerUrl, newPath, ct);
+
     public Task<ServerLibraryStatus> GetLibraryStatusAsync(CancellationToken ct = default) =>
         _client.GetLibraryStatusAsync(ServerUrl, ct);
 
@@ -263,7 +278,7 @@ public sealed class ServerSession : IDisposable
 
         if (hasServer && State == ServerConnectionState.Connected)
         {
-            var who = CurrentUser?.DisplayName ?? CurrentUser?.Username;
+            var who = CurrentUser?.Username;
             SetState(ServerConnectionState.Connected, $"Csatlakozva: {who} ({ServerUrl}) • {_library.Tracks.Count} szám (Helyi + Szerver)");
         }
         else if (!hasServer)
@@ -282,7 +297,7 @@ public sealed class ServerSession : IDisposable
         Source = hasLocal ? LibrarySource.Hybrid : LibrarySource.Server;
         await _settings.SetSettingAsync("LibrarySource", Source.ToString());
 
-        var who = CurrentUser?.DisplayName ?? CurrentUser?.Username;
+        var who = CurrentUser?.Username;
         var info = hasLocal ? $" • {_library.Tracks.Count} szám (Helyi + Szerver)" : $" • {_library.Tracks.Count} szám";
         WiretuneLog.Info("ServerSession", $"Loaded {tracks.Count} tracks from '{ServerUrl}'. Total library: {_library.Tracks.Count} tracks.");
         SetState(ServerConnectionState.Connected, $"Csatlakozva: {who} ({ServerUrl}){info}");

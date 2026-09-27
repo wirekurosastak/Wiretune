@@ -116,6 +116,38 @@ app.MapGet("/api/auth/me", async (ClaimsPrincipal principal) =>
     return user == null ? Results.Unauthorized() : Results.Ok(user);
 }).RequireAuthorization();
 
+app.MapGet("/api/users", async () =>
+{
+    var users = await authService.GetAllUsersAsync();
+    return Results.Ok(users);
+}).RequireAuthorization("admin");
+
+app.MapDelete("/api/users/{userId}", async (string userId, ClaimsPrincipal principal) =>
+{
+    var currentUserId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (string.Equals(currentUserId, userId, StringComparison.OrdinalIgnoreCase))
+        return Results.BadRequest(new { Error = "Saját fiókodat nem törölheted." });
+
+    var deleted = await authService.DeleteUserAsync(userId);
+    return deleted ? Results.Ok() : Results.NotFound(new { Error = "A felhasználó nem található." });
+}).RequireAuthorization("admin");
+
+app.MapGet("/api/config", () => Results.Ok(new ServerConfigInfo(paths.LibraryRoot))).RequireAuthorization("admin");
+
+app.MapPost("/api/config/library-path", async (UpdateLibraryPathRequest request, LibraryScanService scanner) =>
+{
+    if (string.IsNullOrWhiteSpace(request.NewPath))
+        return Results.BadRequest(new { Error = "A mappa el elérési útja nem lehet üres." });
+
+    var fullPath = Path.GetFullPath(request.NewPath);
+    if (!Directory.Exists(fullPath))
+        return Results.BadRequest(new { Error = $"A megadott mappa nem létezik: {fullPath}" });
+
+    paths.LibraryRoot = fullPath;
+    scanner.RequestScan();
+    return Results.Ok(new ServerConfigInfo(paths.LibraryRoot));
+}).RequireAuthorization("admin");
+
 // ── Library ──
 
 var api = app.MapGroup("/api").RequireAuthorization();

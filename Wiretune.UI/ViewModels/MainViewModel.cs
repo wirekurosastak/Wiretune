@@ -154,7 +154,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private void UpdateAuthDisplay()
     {
         IsUserLoggedIn = Session.IsLoggedIn;
-        CurrentUserBadge = Session.CurrentUser is { } user ? user.DisplayName ?? user.Username : "Bejelentkezés";
+        CurrentUserBadge = Session.CurrentUser is { } user ? user.Username : "Bejelentkezés";
     }
 
     private void UpdateStatusText()

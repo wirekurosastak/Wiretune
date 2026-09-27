@@ -52,8 +52,8 @@ public sealed class ServerStreamingClient : IDisposable
         return element.TryGetProperty("setupRequired", out var prop) && prop.GetBoolean();
     }
 
-    public Task<AuthResponse> SetupAdminAsync(string baseUrl, string username, string password, string? displayName, CancellationToken ct = default) =>
-        SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/setup", new RegisterRequest(username, password, displayName), false, DefaultTimeout, ct);
+    public Task<AuthResponse> SetupAdminAsync(string baseUrl, string username, string password, CancellationToken ct = default) =>
+        SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/setup", new RegisterRequest(username, password), false, DefaultTimeout, ct);
 
     public Task<AuthResponse> LoginAsync(string baseUrl, string username, string password, bool rememberMe, CancellationToken ct = default) =>
         SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/login", new LoginRequest(username, password, rememberMe), false, DefaultTimeout, ct);
@@ -63,6 +63,21 @@ public sealed class ServerStreamingClient : IDisposable
 
     public Task<ServerLibraryStatus> GetLibraryStatusAsync(string baseUrl, CancellationToken ct = default) =>
         SendAsync<ServerLibraryStatus>(HttpMethod.Get, baseUrl, "/api/library/status", null, true, DefaultTimeout, ct);
+
+    public Task<List<UserInfo>> GetUsersAsync(string baseUrl, CancellationToken ct = default) =>
+        SendAsync<List<UserInfo>>(HttpMethod.Get, baseUrl, "/api/users", null, true, DefaultTimeout, ct);
+
+    public Task<UserInfo> RegisterUserAsync(string baseUrl, string username, string password, CancellationToken ct = default) =>
+        SendAsync<UserInfo>(HttpMethod.Post, baseUrl, "/api/auth/register", new RegisterRequest(username, password), true, DefaultTimeout, ct);
+
+    public async Task DeleteUserAsync(string baseUrl, string userId, CancellationToken ct = default) =>
+        await SendAsync<JsonElement>(HttpMethod.Delete, baseUrl, $"/api/users/{Uri.EscapeDataString(userId)}", null, true, DefaultTimeout, ct);
+
+    public Task<ServerConfigInfo> GetServerConfigAsync(string baseUrl, CancellationToken ct = default) =>
+        SendAsync<ServerConfigInfo>(HttpMethod.Get, baseUrl, "/api/config", null, true, DefaultTimeout, ct);
+
+    public Task<ServerConfigInfo> UpdateServerLibraryPathAsync(string baseUrl, string newPath, CancellationToken ct = default) =>
+        SendAsync<ServerConfigInfo>(HttpMethod.Post, baseUrl, "/api/config/library-path", new UpdateLibraryPathRequest(newPath), true, DefaultTimeout, ct);
 
     public async Task TriggerScanAsync(string baseUrl, CancellationToken ct = default) =>
         await SendAsync<JsonElement>(HttpMethod.Post, baseUrl, "/api/library/scan", null, true, DefaultTimeout, ct);
