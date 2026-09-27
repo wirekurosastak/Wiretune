@@ -315,13 +315,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         else if (IsSearchActive)
         {
+            var activeQuery = SearchQuery;
             backText = "Vissza a kereséshez";
-            onReturn = () => IsSearchActive = true;
+            onReturn = () =>
+            {
+                SearchQuery = activeQuery;
+                IsSearchActive = true;
+            };
         }
 
-        SearchQuery = string.Empty;
         Albums.OpenAlbumWithOrigin(album, backText, onReturn);
         SelectedNavigationIndex = 1;
+        if (!string.IsNullOrEmpty(backText) && backText == "Vissza a kereséshez")
+        {
+            IsSearchActive = false;
+        }
     }
 
     [RelayCommand]
@@ -364,13 +372,21 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
         else if (IsSearchActive)
         {
+            var activeQuery = SearchQuery;
             backText = "Vissza a kereséshez";
-            onReturn = () => IsSearchActive = true;
+            onReturn = () =>
+            {
+                SearchQuery = activeQuery;
+                IsSearchActive = true;
+            };
         }
 
-        SearchQuery = string.Empty;
         Artists.OpenArtistWithOrigin(artist, backText, onReturn);
         SelectedNavigationIndex = 2;
+        if (!string.IsNullOrEmpty(backText) && backText == "Vissza a kereséshez")
+        {
+            IsSearchActive = false;
+        }
     }
 
     [RelayCommand]

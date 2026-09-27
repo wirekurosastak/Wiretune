@@ -8,6 +8,12 @@ using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
 
+public enum AlbumSortMode
+{
+    TitleAsc,
+    YearDesc
+}
+
 public partial class AlbumsViewModel : ObservableObject
 {
     private const int DetailCoverDecodeWidth = 480;
@@ -18,11 +24,14 @@ public partial class AlbumsViewModel : ObservableObject
     public Action<NavWaveDirection>? OnNavWave { get; set; }
     public Action? ReturnAction { get; set; }
 
+    public IReadOnlyList<AlbumSortMode> SortModes { get; } = new[] { AlbumSortMode.TitleAsc, AlbumSortMode.YearDesc };
+
     [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _displayedAlbums = Array.Empty<AlbumCardViewModel>();
     [ObservableProperty] private Album? _selectedAlbum;
     [ObservableProperty] private Bitmap? _selectedAlbumCover;
     [ObservableProperty] private bool _isAlbumDetailOpen;
     [ObservableProperty] private string _backButtonText = "Vissza az összes albumhoz";
+    [ObservableProperty] private AlbumSortMode _sortMode = AlbumSortMode.TitleAsc;
 
     public AlbumsViewModel(ILibraryService library, PlayerViewModel player)
     {
@@ -33,9 +42,26 @@ public partial class AlbumsViewModel : ObservableObject
         RefreshAlbums();
     }
 
+    public bool IsSortByTitle => SortMode == AlbumSortMode.TitleAsc;
+    public bool IsSortByYear => SortMode == AlbumSortMode.YearDesc;
+
+    partial void OnSortModeChanged(AlbumSortMode value)
+    {
+        OnPropertyChanged(nameof(IsSortByTitle));
+        OnPropertyChanged(nameof(IsSortByYear));
+        ApplySort();
+    }
+
+    [RelayCommand]
+    public void SetSortMode(object? param)
+    {
+        if (param is AlbumSortMode mode) SortMode = mode;
+        else if (param is string s && Enum.TryParse<AlbumSortMode>(s, out var parsed)) SortMode = parsed;
+    }
+
     public void RefreshAlbums()
     {
-        DisplayedAlbums = _library.Albums.Select(a => new AlbumCardViewModel(a)).ToList();
+        ApplySort();
 
         if (SelectedAlbum != null)
         {
@@ -43,6 +69,20 @@ public partial class AlbumsViewModel : ObservableObject
             if (updated == null) CloseAlbumDetail();
             else SelectedAlbum = updated;
         }
+    }
+
+    private void ApplySort()
+    {
+        IEnumerable<Album> ordered = SortMode switch
+        {
+            AlbumSortMode.YearDesc => _library.Albums
+                .OrderByDescending(a => a.Year ?? int.MinValue)
+                .ThenBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase),
+            _ => _library.Albums
+                .OrderBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
+        };
+
+        DisplayedAlbums = ordered.Select(a => new AlbumCardViewModel(a)).ToList();
     }
 
     private static Album? Resolve(object? param) => param switch

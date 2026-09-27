@@ -545,7 +545,21 @@
 
               <!-- Subview 1: Albums Grid (when no album detail open) -->
               <Grid RowDefinitions="Auto, *" IsVisible="{Binding !Albums.IsAlbumDetailOpen}">
-                <TextBlock Grid.Row="0" Text="Albumok" FontSize="26" FontWeight="Black" Margin="0,0,0,20" Foreground="{DynamicResource TextMain}" />
+                <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
+                  <TextBlock Grid.Column="0" Text="Albumok" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
+
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Text="Rendezés:" FontSize="12" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByTitle}" Height="32" Padding="14,0"
+                            Command="{Binding Albums.SetSortModeCommand}" CommandParameter="TitleAsc">
+                      <TextBlock Text="ABC" FontWeight="SemiBold" FontSize="12" />
+                    </Button>
+                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByYear}" Height="32" Padding="14,0"
+                            Command="{Binding Albums.SetSortModeCommand}" CommandParameter="YearDesc">
+                      <TextBlock Text="Év" FontWeight="SemiBold" FontSize="12" />
+                    </Button>
+                  </StackPanel>
+                </Grid>
                 
                 <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
                             IsVisible="{Binding IsLibraryEmpty}">
@@ -585,13 +599,15 @@
 
                               <!-- Badge & Play Button (Sleek non-circular rounded button) -->
                               <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,8,0,0">
-                                <Border Grid.Column="0" Background="{DynamicResource TagBackground}"
-                                        CornerRadius="4"
-                                        Padding="6,2"
-                                        HorizontalAlignment="Left"
-                                        VerticalAlignment="Center">
-                                  <TextBlock Text="{Binding FormatBadge}" FontSize="10" FontWeight="Black" Foreground="{Binding FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                                </Border>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                  <TextBlock Text="{Binding Year, StringFormat='{}{0}'}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" IsVisible="{Binding Year, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                  <Border Background="{DynamicResource TagBackground}"
+                                          CornerRadius="4"
+                                          Padding="6,2"
+                                          VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FormatBadge}" FontSize="10" FontWeight="Black" Foreground="{Binding FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                  </Border>
+                                </StackPanel>
                                 <Button Grid.Column="1" Classes="purple"
                                         Width="32" Height="32"
                                         CornerRadius="4"
@@ -1924,21 +1940,14 @@
             <Grid IsVisible="{Binding IsSearchActive}" RowDefinitions="Auto, *">
               
               <!-- Search Results Header -->
-              <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
-                <StackPanel Grid.Column="0" Spacing="4">
+              <Grid Grid.Row="0" Margin="0,0,0,20">
+                <StackPanel Spacing="4">
                   <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBlock Text="Keresési találatok:" FontSize="24" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
                     <TextBlock Text="{Binding Search.Query, StringFormat='„{0}”'}" FontSize="24" FontWeight="Black" Foreground="{DynamicResource PrimaryAction}" />
                   </StackPanel>
                   <TextBlock Text="Számok, albumok és előadók egy helyen" FontSize="13" Foreground="{DynamicResource TextMuted}" />
                 </StackPanel>
-
-                <Button Grid.Column="1" Classes="secondary" Height="36" Padding="14,0" Command="{Binding ClearSearchCommand}">
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <material:MaterialIcon Kind="Close" Width="16" Height="16" />
-                    <TextBlock Text="Bezárás" FontWeight="SemiBold" />
-                  </StackPanel>
-                </Button>
               </Grid>
 
               <!-- Search Results Content (Scrollable) -->
@@ -1962,21 +1971,27 @@
                       <TextBlock Text="LEGJOBB TALÁLAT" Classes="group-title" Margin="0,0,0,4" />
                       <Border Classes="glass view-accent" Padding="20" CornerRadius="8">
                         <StackPanel Spacing="14">
-                          <Border Width="110" Height="110" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left" ClipToBounds="True">
-                            <Panel>
-                              <Image Source="{Binding Search.BestMatch.CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding Search.BestMatch.HasCover}" />
-                              <material:MaterialIcon Kind="{Binding Search.BestMatch.IconKind}" Foreground="{Binding Search.BestMatch.TypeBrush}" Width="54" Height="54" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Search.BestMatch.HasCover}" />
-                            </Panel>
-                          </Border>
+                          <Button Classes="unstyled-card" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                                  Command="{Binding Search.BestMatch.OpenCommand}"
+                                  IsEnabled="{Binding Search.BestMatch.CanOpen}">
+                            <StackPanel Spacing="14">
+                              <Border Width="110" Height="110" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left" ClipToBounds="True">
+                                <Panel>
+                                  <Image Source="{Binding Search.BestMatch.CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding Search.BestMatch.HasCover}" />
+                                  <material:MaterialIcon Kind="{Binding Search.BestMatch.IconKind}" Foreground="{Binding Search.BestMatch.TypeBrush}" Width="54" Height="54" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !Search.BestMatch.HasCover}" />
+                                </Panel>
+                              </Border>
 
-                          <StackPanel Spacing="4">
-                            <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
-                              <TextBlock Text="{Binding Search.BestMatch.TypeLabel}" FontSize="10" FontWeight="Black" Foreground="{Binding Search.BestMatch.TypeBrush}" />
-                            </Border>
-                            <TextBlock Text="{Binding Search.BestMatch.Title}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding Search.BestMatch.Subtitle}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding Search.BestMatch.Meta}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
-                          </StackPanel>
+                              <StackPanel Spacing="4" HorizontalAlignment="Left">
+                                <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left">
+                                  <TextBlock Text="{Binding Search.BestMatch.TypeLabel}" FontSize="10" FontWeight="Black" Foreground="{Binding Search.BestMatch.TypeBrush}" />
+                                </Border>
+                                <TextBlock Text="{Binding Search.BestMatch.Title}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Search.BestMatch.Subtitle}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Search.BestMatch.Meta}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                              </StackPanel>
+                            </StackPanel>
+                          </Button>
 
                           <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
                             <!-- Square Play Button: 36x36 -->
@@ -1984,10 +1999,6 @@
                                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                     Command="{Binding Search.BestMatch.PlayCommand}" ToolTip.Tip="Lejátszás">
                               <material:MaterialIcon Kind="Play" Width="18" Height="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Button>
-                            <Button Classes="secondary" Height="36" Padding="14,0"
-                                    Command="{Binding Search.BestMatch.OpenCommand}" ToolTip.Tip="Megnyitás">
-                              <TextBlock Text="Megnyitás" FontWeight="SemiBold" />
                             </Button>
                           </StackPanel>
                         </StackPanel>
@@ -2109,20 +2120,20 @@
                                   Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.OpenArtistCommand}"
                                   CommandParameter="{Binding}"
                                   Margin="0,6,18,12">
-                            <Border Classes="metric-card coral" Width="180" Height="240">
-                              <Grid RowDefinitions="130, *, Auto">
-                                <!-- Artist Artwork / Portrait (Round portrait matching 130px album size) -->
-                                <Border Grid.Row="0" Width="130" Height="130" CornerRadius="65" Background="{DynamicResource Surface2}" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
+                            <Border Classes="metric-card coral" Width="210" Height="270">
+                              <Grid RowDefinitions="150, *, Auto">
+                                <!-- Artist Artwork / Portrait (Round portrait matching 150px album size) -->
+                                <Border Grid.Row="0" Width="150" Height="150" CornerRadius="75" Background="{DynamicResource Surface2}" HorizontalAlignment="Center" VerticalAlignment="Center" ClipToBounds="True">
                                   <Panel>
-                                    <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="56" Height="56" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    <controls:CoverImage SourcePath="{Binding PicturePath}" DecodeWidth="180" Stretch="UniformToFill" />
+                                    <material:MaterialIcon Kind="AccountMusic" Foreground="{DynamicResource CoralAccent}" Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <controls:CoverImage SourcePath="{Binding PicturePath}" DecodeWidth="210" Stretch="UniformToFill" />
                                   </Panel>
                                 </Border>
-                                <StackPanel Grid.Row="1" Margin="0,8,0,0" Spacing="2">
-                                  <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
-                                  <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} szám'}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                                <StackPanel Grid.Row="1" Margin="0,10,0,0" Spacing="2">
+                                  <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
+                                  <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} szám'}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,4,0,0">
+                                <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,8,0,0">
                                   <Border Grid.Column="0" Background="{DynamicResource TagBackground}"
                                           CornerRadius="4"
                                           Padding="6,2"
@@ -2166,19 +2177,19 @@
                                   Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Search.OpenAlbumCommand}"
                                   CommandParameter="{Binding}"
                                   Margin="0,6,18,12">
-                            <Border Classes="metric-card purple" Width="180" Height="240" services:ViewportLoad.Target="{Binding}">
-                              <Grid RowDefinitions="130, *, Auto">
+                            <Border Classes="metric-card purple" Width="210" Height="270" services:ViewportLoad.Target="{Binding}">
+                              <Grid RowDefinitions="150, *, Auto">
                                 <Border Grid.Row="0" CornerRadius="6" Background="{DynamicResource Surface2}" ClipToBounds="True">
                                   <Panel>
                                     <Image Source="{Binding CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                    <material:MaterialIcon Kind="Album" Foreground="{DynamicResource PurpleAccent}" Width="56" Height="56" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                                    <material:MaterialIcon Kind="Album" Foreground="{DynamicResource PurpleAccent}" Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
                                   </Panel>
                                 </Border>
-                                <StackPanel Grid.Row="1" Margin="0,8,0,0" Spacing="2">
-                                  <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
-                                  <TextBlock Text="{Binding Artist}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                                <StackPanel Grid.Row="1" Margin="0,10,0,0" Spacing="2">
+                                  <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
+                                  <TextBlock Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
                                 </StackPanel>
-                                <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,4,0,0">
+                                <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,8,0,0">
                                   <TextBlock Grid.Column="0" Text="{Binding Year, StringFormat='{}{0}'}" FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                   <!-- Square Play Button: 32x32 -->
                                   <Button Grid.Column="1" Classes="purple"

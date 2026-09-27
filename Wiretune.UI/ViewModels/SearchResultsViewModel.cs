@@ -12,12 +12,14 @@ public sealed partial class SearchBestMatchViewModel : ObservableObject
 {
     [ObservableProperty] private string _typeLabel = "TALÁLAT";
     [ObservableProperty] private IBrush _typeBrush = new SolidColorBrush(Color.Parse("#67C8E0"));
+    [ObservableProperty] private string _accentClass = "cyan";
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _subtitle = string.Empty;
     [ObservableProperty] private string _meta = string.Empty;
     [ObservableProperty] private string _iconKind = "MusicNote";
     [ObservableProperty] private Bitmap? _coverBitmap;
     [ObservableProperty] private bool _hasCover;
+    [ObservableProperty] private bool _canOpen;
 
     public IRelayCommand? PlayCommand { get; init; }
     public IRelayCommand? OpenCommand { get; init; }
@@ -134,17 +136,24 @@ public sealed partial class SearchResultsViewModel : ObservableObject
         return null;
     }
 
-    private SearchBestMatchViewModel ArtistMatch(Artist artist) => new()
+    private SearchBestMatchViewModel ArtistMatch(Artist artist)
     {
-        TypeLabel = "ELŐADÓ",
-        TypeBrush = new SolidColorBrush(Color.Parse("#FF6B6B")),
-        Title = artist.Name,
-        Subtitle = "Előadó",
-        Meta = $"{artist.AlbumCount} album • {artist.TrackCount} szám",
-        IconKind = "AccountMusic",
-        PlayCommand = new RelayCommand(() => { if (artist.Tracks.Count > 0) _player.PlayQueue(artist.Tracks); }),
-        OpenCommand = new RelayCommand(() => _openArtistAction(artist))
-    };
+        var vm = new SearchBestMatchViewModel
+        {
+            TypeLabel = "ELŐADÓ",
+            TypeBrush = new SolidColorBrush(Color.Parse("#FF6B6B")),
+            AccentClass = "coral",
+            Title = artist.Name,
+            Subtitle = "Előadó",
+            Meta = $"{artist.AlbumCount} album • {artist.TrackCount} szám",
+            IconKind = "AccountMusic",
+            CanOpen = true,
+            PlayCommand = new RelayCommand(() => { if (artist.Tracks.Count > 0) _player.PlayQueue(artist.Tracks); }),
+            OpenCommand = new RelayCommand(() => _openArtistAction(artist))
+        };
+        vm.LoadCover(artist.PicturePath);
+        return vm;
+    }
 
     private SearchBestMatchViewModel AlbumMatch(Album album)
     {
@@ -152,10 +161,12 @@ public sealed partial class SearchResultsViewModel : ObservableObject
         {
             TypeLabel = "ALBUM",
             TypeBrush = new SolidColorBrush(Color.Parse("#D05CE3")),
+            AccentClass = "purple",
             Title = album.Title,
             Subtitle = album.Artist,
             Meta = album.Year.HasValue ? $"{album.Year} • {album.TrackCount} szám" : $"{album.TrackCount} szám",
             IconKind = "Album",
+            CanOpen = true,
             PlayCommand = new RelayCommand(() => { if (album.Tracks.Count > 0) _player.PlayQueue(album.Tracks); }),
             OpenCommand = new RelayCommand(() => _openAlbumAction(album))
         };
@@ -170,10 +181,12 @@ public sealed partial class SearchResultsViewModel : ObservableObject
         {
             TypeLabel = "SZÁM",
             TypeBrush = new SolidColorBrush(Color.Parse("#67C8E0")),
+            AccentClass = "cyan",
             Title = track.Title,
             Subtitle = $"{track.Artist} • {track.Album}",
             Meta = $"{track.FormattedDuration} • {track.Format.QualityLabel}",
             IconKind = "MusicNote",
+            CanOpen = false,
             PlayCommand = new RelayCommand(() => _player.PlayQueue(new[] { track }, track)),
             OpenCommand = new RelayCommand(() =>
             {
