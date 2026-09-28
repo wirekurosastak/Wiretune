@@ -550,13 +550,13 @@
 
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <TextBlock Text="Rendezés:" FontSize="12" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByTitle}" Height="32" Padding="14,0"
-                            Command="{Binding Albums.SetSortModeCommand}" CommandParameter="TitleAsc">
-                      <TextBlock Text="ABC" FontWeight="SemiBold" FontSize="12" />
+                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByTitle}" Height="32" Padding="14,0" MinWidth="72"
+                            Command="{Binding Albums.SetSortFieldCommand}" CommandParameter="Title">
+                      <TextBlock Text="{Binding Albums.SortTitleLabel}" FontWeight="SemiBold" FontSize="12" />
                     </Button>
-                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByYear}" Height="32" Padding="14,0"
-                            Command="{Binding Albums.SetSortModeCommand}" CommandParameter="YearDesc">
-                      <TextBlock Text="Év" FontWeight="SemiBold" FontSize="12" />
+                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByYear}" Height="32" Padding="14,0" MinWidth="72"
+                            Command="{Binding Albums.SetSortFieldCommand}" CommandParameter="Year">
+                      <TextBlock Text="{Binding Albums.SortYearLabel}" FontWeight="SemiBold" FontSize="12" />
                     </Button>
                   </StackPanel>
                 </Grid>
@@ -1861,9 +1861,7 @@
                       <TextBlock Text="LEGJOBB TALÁLAT" Classes="group-title" Margin="0,0,0,4" />
                       <Border Classes="glass view-accent" Padding="20" CornerRadius="8">
                         <StackPanel Spacing="14">
-                          <Button Classes="unstyled-card" Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
-                                  Command="{Binding Search.BestMatch.OpenCommand}"
-                                  IsEnabled="{Binding Search.BestMatch.CanOpen}">
+                          <Panel>
                             <StackPanel Spacing="14">
                               <Border Width="110" Height="110" CornerRadius="8" Background="{DynamicResource Surface2}" HorizontalAlignment="Left" ClipToBounds="True">
                                 <Panel>
@@ -1881,7 +1879,13 @@
                                 <TextBlock Text="{Binding Search.BestMatch.Meta}" FontSize="11" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
                               </StackPanel>
                             </StackPanel>
-                          </Button>
+
+                            <!-- Transparent click overlay: only exists for album/artist matches, so a song card has no button visuals at all -->
+                            <Button Classes="unstyled-card" Padding="0" Background="Transparent" BorderThickness="0"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                    Command="{Binding Search.BestMatch.OpenCommand}"
+                                    IsVisible="{Binding Search.BestMatch.CanOpen}" />
+                          </Panel>
 
                           <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0">
                             <!-- Square Play Button: 36x36 -->
@@ -1977,6 +1981,22 @@
                             </DataGridTemplateColumn>
 
                             <DataGridTextColumn Header="HOSSZ" Binding="{Binding FormattedDuration}" Width="85" SortMemberPath="Duration" />
+
+                            <!-- Favorite -->
+                            <DataGridTemplateColumn Width="44" Header="" SortMemberPath="IsFavorite">
+                              <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="models:Track">
+                                  <Button Classes="icon"
+                                          Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Tracks.ToggleFavoriteCommand}"
+                                          CommandParameter="{Binding}"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <material:MaterialIcon Kind="{Binding IsFavorite, Converter={StaticResource FavoriteIconConverter}}"
+                                                           Foreground="{Binding IsFavorite, Converter={StaticResource FavoriteColorConverter}}"
+                                                           Width="18" Height="18" />
+                                  </Button>
+                                </DataTemplate>
+                              </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                       <DataGridTemplateColumn Width="44" Header="">
                         <DataGridTemplateColumn.CellTemplate>
                           <DataTemplate DataType="models:Track">
@@ -2078,9 +2098,9 @@
 
             <!-- Queue Content (Glass Panel matching other views) -->
             <Border Grid.Row="1" Classes="glass view-accent" Padding="0" ClipToBounds="True">
-              <Panel>
+              <Grid ColumnDefinitions="*, *">
                 <!-- Empty Queue Placeholder -->
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
+                <StackPanel Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
                             IsVisible="{Binding !Player.QueueTracks.Count}">
                   <material:MaterialIcon Kind="PlaylistPlay" Width="64" Height="64" Foreground="{DynamicResource PrimaryAction}" HorizontalAlignment="Center" />
                   <StackPanel Spacing="6" HorizontalAlignment="Center">
@@ -2091,7 +2111,7 @@
                 </StackPanel>
 
                 <!-- Queue Tracks List -->
-                <ScrollViewer IsVisible="{Binding Player.QueueTracks.Count}" Padding="16">
+                <ScrollViewer Grid.Column="0" IsVisible="{Binding Player.QueueTracks.Count}" Padding="16">
                   <ItemsControl ItemsSource="{Binding Player.QueueItems}">
                     <ItemsControl.ItemTemplate>
                       <DataTemplate DataType="vm:QueueItemViewModel">
@@ -2182,7 +2202,32 @@
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
                 </ScrollViewer>
-              </Panel>
+                <!-- Lyrics (right half) -->
+                <Border Grid.Column="1" IsVisible="{Binding Player.QueueTracks.Count}"
+                        BorderBrush="{DynamicResource TagBackground}" BorderThickness="1,0,0,0" Padding="24,20">
+                  <Grid RowDefinitions="Auto, *">
+                    <StackPanel Grid.Row="0" Spacing="2" Margin="0,0,0,14">
+                      <TextBlock Text="DALSZÖVEG" Classes="group-title" />
+                      <TextBlock Text="{Binding Player.CurrentTrack.Title}" FontSize="16" FontWeight="Black"
+                                 Foreground="{DynamicResource TextMain}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding Player.CurrentTrack.Artist}" FontSize="12"
+                                 Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+
+                    <ScrollViewer Grid.Row="1" IsVisible="{Binding Player.HasLyrics}">
+                      <SelectableTextBlock Text="{Binding Player.CurrentLyrics}" TextWrapping="Wrap"
+                                           FontSize="15" LineHeight="26" Foreground="{DynamicResource TextMain}" />
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
+                                IsVisible="{Binding !Player.HasLyrics}">
+                      <material:MaterialIcon Kind="TextBoxOutline" Width="40" Height="40" Foreground="{DynamicResource TextDisabled}" HorizontalAlignment="Center" />
+                      <TextBlock Text="Ehhez a számhoz nincs dalszöveg a metaadatokban." FontSize="13"
+                                 Foreground="{DynamicResource TextMuted}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </Grid>
             </Border>
           </Grid>
 

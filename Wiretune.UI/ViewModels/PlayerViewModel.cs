@@ -24,6 +24,9 @@ public partial class PlayerViewModel : ObservableObject
     private CancellationTokenSource? _seekDebounceCts;
 
     [ObservableProperty] private Track? _currentTrack;
+    [ObservableProperty] private string? _currentLyrics;
+    public bool HasLyrics => !string.IsNullOrWhiteSpace(CurrentLyrics);
+    partial void OnCurrentLyricsChanged(string? value) => OnPropertyChanged(nameof(HasLyrics));
     [ObservableProperty] private PlaybackState _playbackState = PlaybackState.Stopped;
     [ObservableProperty] private double _positionSeconds;
     [ObservableProperty] private double _durationSeconds;
@@ -259,6 +262,8 @@ public partial class PlayerViewModel : ObservableObject
 
     partial void OnCurrentTrackChanged(Track? oldValue, Track? newValue)
     {
+        // TODO: read the lyrics tag of newValue once the metadata reader is known.
+        CurrentLyrics = null;
         if (oldValue != null)
         {
             oldValue.IsPlaying = false;

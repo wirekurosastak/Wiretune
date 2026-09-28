@@ -8,10 +8,10 @@ using Wiretune.UI.Services;
 
 namespace Wiretune.UI.ViewModels;
 
-public enum AlbumSortMode
+public enum AlbumSortField
 {
-    TitleAsc,
-    YearDesc
+    Title,
+    Year
 }
 
 public partial class AlbumsViewModel : ObservableObject
@@ -24,14 +24,13 @@ public partial class AlbumsViewModel : ObservableObject
     public Action<NavWaveDirection>? OnNavWave { get; set; }
     public Action? ReturnAction { get; set; }
 
-    public IReadOnlyList<AlbumSortMode> SortModes { get; } = new[] { AlbumSortMode.TitleAsc, AlbumSortMode.YearDesc };
-
     [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _displayedAlbums = Array.Empty<AlbumCardViewModel>();
     [ObservableProperty] private Album? _selectedAlbum;
     [ObservableProperty] private Bitmap? _selectedAlbumCover;
     [ObservableProperty] private bool _isAlbumDetailOpen;
     [ObservableProperty] private string _backButtonText = "Vissza az összes albumhoz";
-    [ObservableProperty] private AlbumSortMode _sortMode = AlbumSortMode.TitleAsc;
+    [ObservableProperty] private AlbumSortField _sortField = AlbumSortField.Title;
+    [ObservableProperty] private bool _isSortDescending;
 
     public AlbumsViewModel(ILibraryService library, PlayerViewModel player)
     {
@@ -42,22 +41,53 @@ public partial class AlbumsViewModel : ObservableObject
         RefreshAlbums();
     }
 
-    public bool IsSortByTitle => SortMode == AlbumSortMode.TitleAsc;
-    public bool IsSortByYear => SortMode == AlbumSortMode.YearDesc;
+    public bool IsSortByTitle => SortField == AlbumSortField.Title;
+    public bool IsSortByYear => SortField == AlbumSortField.Year;
 
-    partial void OnSortModeChanged(AlbumSortMode value)
+    public string SortTitleLabel => IsSortByTitle ? $"ABC {(IsSortDescending ? "↓" : "↑")}" : "ABC";
+    public string SortYearLabel => IsSortByYear ? $"Év {(IsSortDescending ? "↓" : "↑")}" : "Év";
+
+    partial void OnSortFieldChanged(AlbumSortField value) => OnSortChanged();
+    partial void OnIsSortDescendingChanged(bool value) => OnSortChanged();
+
+    private void OnSortChanged()
     {
         OnPropertyChanged(nameof(IsSortByTitle));
         OnPropertyChanged(nameof(IsSortByYear));
+        OnPropertyChanged(nameof(SortTitleLabel));
+        OnPropertyChanged(nameof(SortYearLabel));
         ApplySort();
     }
 
+    /// <summary>
+    /// Clicking the active sort field flips its direction; clicking the other one switches to it
+    /// with its natural default (A→Z for titles, newest first for years).
+    /// </summary>
     [RelayCommand]
-    public void SetSortMode(object? param)
+    public void SetSortField(object? param)
     {
-        if (param is AlbumSortMode mode) SortMode = mode;
-        else if (param is string s && Enum.TryParse<AlbumSortMode>(s, out var parsed)) SortMode = parsed;
+        var field = param switch
+        {
+            AlbumSortField f => f,
+            string s when Enum.TryParse<AlbumSortField>(s, out var parsed) => parsed,
+            _ => (AlbumSortField?)null
+        };
+        if (field == null) return;
+
+        if (field == SortField)
+        {
+            IsSortDescending = !IsSortDescending;
+            return;
+        }
+
+        // Set direction first so the single re-sort below already sees the final state.
+        _suppressSort = true;
+        IsSortDescending = field == AlbumSortField.Year;
+        _suppressSort = false;
+        SortField = field.Value;
     }
+
+    private bool _suppressSort;
 
     public void RefreshAlbums()
     {
@@ -73,14 +103,23 @@ public partial class AlbumsViewModel : ObservableObject
 
     private void ApplySort()
     {
-        IEnumerable<Album> ordered = SortMode switch
+        if (_suppressSort) return;
+
+        IEnumerable<Album> ordered;
+        if (SortField == AlbumSortField.Year)
         {
-            AlbumSortMode.YearDesc => _library.Albums
-                .OrderByDescending(a => a.Year ?? int.MinValue)
-                .ThenBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase),
-            _ => _library.Albums
-                .OrderBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
-        };
+            // Albums without a year always go last, in either direction.
+            var byYear = _library.Albums.OrderBy(a => a.Year == null);
+            ordered = IsSortDescending
+                ? byYear.ThenByDescending(a => a.Year ?? 0).ThenBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
+                : byYear.ThenBy(a => a.Year ?? 0).ThenBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase);
+        }
+        else
+        {
+            ordered = IsSortDescending
+                ? _library.Albums.OrderByDescending(a => a.Title, StringComparer.CurrentCultureIgnoreCase)
+                : _library.Albums.OrderBy(a => a.Title, StringComparer.CurrentCultureIgnoreCase);
+        }
 
         DisplayedAlbums = ordered.Select(a => new AlbumCardViewModel(a)).ToList();
     }
