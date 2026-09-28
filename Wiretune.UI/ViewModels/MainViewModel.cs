@@ -283,7 +283,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         string? backText = null;
         Action? onReturn = null;
 
-        if (SelectedNavigationIndex == 2 && Artists.IsArtistDetailOpen && Artists.SelectedArtist != null)
+        if (IsSearchActive)
+        {
+            var activeQuery = SearchQuery;
+            backText = "Vissza a kereséshez";
+            onReturn = () =>
+            {
+                SearchQuery = activeQuery;
+                IsSearchActive = true;
+            };
+        }
+        else if (SelectedNavigationIndex == 2 && Artists.IsArtistDetailOpen && Artists.SelectedArtist != null)
         {
             var returnArtist = Artists.SelectedArtist;
             backText = $"Vissza: {returnArtist.Name}";
@@ -313,23 +323,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             backText = "Vissza a számokhoz";
             onReturn = () => SelectedNavigationIndex = 0;
         }
-        else if (IsSearchActive)
-        {
-            var activeQuery = SearchQuery;
-            backText = "Vissza a kereséshez";
-            onReturn = () =>
-            {
-                SearchQuery = activeQuery;
-                IsSearchActive = true;
-            };
-        }
 
         Albums.OpenAlbumWithOrigin(album, backText, onReturn);
+        IsSearchActive = false;
         SelectedNavigationIndex = 1;
-        if (!string.IsNullOrEmpty(backText) && backText == "Vissza a kereséshez")
-        {
-            IsSearchActive = false;
-        }
     }
 
     [RelayCommand]
@@ -340,7 +337,17 @@ public partial class MainViewModel : ObservableObject, IDisposable
         string? backText = null;
         Action? onReturn = null;
 
-        if (SelectedNavigationIndex == 1 && Albums.IsAlbumDetailOpen && Albums.SelectedAlbum != null)
+        if (IsSearchActive)
+        {
+            var activeQuery = SearchQuery;
+            backText = "Vissza a kereséshez";
+            onReturn = () =>
+            {
+                SearchQuery = activeQuery;
+                IsSearchActive = true;
+            };
+        }
+        else if (SelectedNavigationIndex == 1 && Albums.IsAlbumDetailOpen && Albums.SelectedAlbum != null)
         {
             var returnAlbum = Albums.SelectedAlbum;
             backText = $"Vissza: {returnAlbum.Title}";
@@ -370,23 +377,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
             backText = "Vissza a számokhoz";
             onReturn = () => SelectedNavigationIndex = 0;
         }
-        else if (IsSearchActive)
-        {
-            var activeQuery = SearchQuery;
-            backText = "Vissza a kereséshez";
-            onReturn = () =>
-            {
-                SearchQuery = activeQuery;
-                IsSearchActive = true;
-            };
-        }
 
         Artists.OpenArtistWithOrigin(artist, backText, onReturn);
+        IsSearchActive = false;
         SelectedNavigationIndex = 2;
-        if (!string.IsNullOrEmpty(backText) && backText == "Vissza a kereséshez")
-        {
-            IsSearchActive = false;
-        }
     }
 
     [RelayCommand]
