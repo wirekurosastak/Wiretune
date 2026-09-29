@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
@@ -9,7 +9,7 @@ namespace Wiretune.UI.ViewModels;
 
 public partial class ArtistsViewModel : ObservableObject
 {
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly PlayerViewModel _player;
 
     public Action<NavWaveDirection>? OnNavWave { get; set; }
@@ -23,7 +23,7 @@ public partial class ArtistsViewModel : ObservableObject
     [ObservableProperty] private bool _hasSelectedArtistAlbums;
     [ObservableProperty] private IReadOnlyList<Track> _selectedArtistTracks = Array.Empty<Track>();
 
-    public ArtistsViewModel(ILibraryService library, PlayerViewModel player)
+    public ArtistsViewModel(LibraryService library, PlayerViewModel player)
     {
         _library = library;
         _player = player;
@@ -113,3 +113,5 @@ public partial class ArtistsViewModel : ObservableObject
         if (track != null && SelectedArtist != null) _player.PlayQueue(SelectedArtist.Tracks, track);
     }
 }
+
+

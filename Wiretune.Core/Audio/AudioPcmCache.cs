@@ -1,7 +1,7 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Wiretune.Core.Services;
 
-namespace Wiretune.Audio.Dsp;
+namespace Wiretune.Core.Audio.Dsp;
 
 /// <summary>
 /// High-performance asynchronous PCM sample cache for the currently playing audio track.
@@ -178,3 +178,4 @@ public sealed class AudioPcmCache : IDisposable
         CancelAndReset();
     }
 }
+

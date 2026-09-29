@@ -1,4 +1,4 @@
-using Wiretune.Audio.Dsp;
+﻿using Wiretune.Core.Audio.Dsp;
 using Xunit;
 
 namespace Wiretune.Tests;
@@ -130,3 +130,4 @@ public class FxSoundSpectrumEngineTests
         }
     }
 }
+

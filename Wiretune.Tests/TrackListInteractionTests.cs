@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.UI.Controls;
@@ -43,7 +43,7 @@ public class TrackListInteractionTests
         await library.InitializeAsync();
 
         var session = new ServerSession(library, repo);
-        var vm = new MainViewModel(new Audio.WiretuneAudioEngine(), library, session);
+        var vm = new MainViewModel(new Wiretune.Core.Audio.WiretuneAudioEngine(), library, session);
         vm.Tracks.RefreshTracks();
 
         // The user clicks on track2's title row in the displayed songs DataGrid
@@ -62,7 +62,7 @@ public class TrackListInteractionTests
         var repo = new MockRepository();
         var library = new LibraryService(repo, new MetadataScanner());
         var session = new ServerSession(library, repo);
-        var vm = new MainViewModel(new Audio.WiretuneAudioEngine(), library, session);
+        var vm = new MainViewModel(new Wiretune.Core.Audio.WiretuneAudioEngine(), library, session);
 
         var track1 = new Track { Id = "trk_10", Title = "Come Together", Artist = "The Beatles", Album = "Abbey Road", TrackNumber = 1 };
         var track2 = new Track { Id = "trk_11", Title = "Something", Artist = "The Beatles", Album = "Abbey Road", TrackNumber = 2 };
@@ -101,7 +101,7 @@ public class TrackListInteractionTests
         await library.InitializeAsync();
 
         var session = new ServerSession(library, repo);
-        var vm = new MainViewModel(new Audio.WiretuneAudioEngine(), library, session);
+        var vm = new MainViewModel(new Wiretune.Core.Audio.WiretuneAudioEngine(), library, session);
         vm.Artists.RefreshArtists();
 
         var artist = vm.Artists.DisplayedArtists.First(a => a.Name == "Pink Floyd");
@@ -189,4 +189,5 @@ public class TrackListInteractionTests
         return null;
     }
 }
+
 

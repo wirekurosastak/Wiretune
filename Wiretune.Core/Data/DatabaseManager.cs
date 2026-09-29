@@ -1,7 +1,7 @@
-using Microsoft.Data.Sqlite;
+﻿using Microsoft.Data.Sqlite;
 using Wiretune.Core.Services;
 
-namespace Wiretune.Data;
+namespace Wiretune.Core.Data;
 
 public class DatabaseManager
 {
@@ -148,3 +148,4 @@ public class DatabaseManager
         return cmd.ExecuteScalar();
     }
 }
+

@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
@@ -9,7 +9,7 @@ namespace Wiretune.UI.ViewModels;
 
 public partial class PlaylistsViewModel : ObservableObject
 {
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly PlayerViewModel _player;
 
     public Action<NavWaveDirection>? OnNavWave { get; set; }
@@ -42,7 +42,7 @@ public partial class PlaylistsViewModel : ObservableObject
     public bool IsDeleteConfirmOpen => PlaylistPendingDelete != null;
     public bool IsAnyDialogOpen => IsCreateDialogOpen || IsAddToPlaylistDialogOpen || IsDeleteConfirmOpen;
 
-    public PlaylistsViewModel(ILibraryService library, PlayerViewModel player)
+    public PlaylistsViewModel(LibraryService library, PlayerViewModel player)
     {
         _library = library;
         _player = player;
@@ -312,3 +312,4 @@ public partial class PlaylistsViewModel : ObservableObject
         IsCreateDialogOpen = true;
     }
 }
+

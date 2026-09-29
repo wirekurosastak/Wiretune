@@ -1,8 +1,8 @@
-using Avalonia.Media;
+﻿using Avalonia.Media;
 using Microsoft.Data.Sqlite;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
-using Wiretune.Data;
+using Wiretune.Core.Data;
 using Wiretune.UI.ViewModels;
 using Xunit;
 
@@ -455,6 +455,8 @@ public class RefactorRegressionTests
             Assert.Equal("#ff67c8e0", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
     }
 }
+
+
 
 
 

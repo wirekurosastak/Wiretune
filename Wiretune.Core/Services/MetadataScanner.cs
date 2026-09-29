@@ -1,11 +1,11 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using Wiretune.Core.Models;
 
 namespace Wiretune.Core.Services;
 
-public class MetadataScanner : IMetadataScanner
+public class MetadataScanner 
 {
     private static readonly string[] FolderCoverNames =
     {
@@ -263,3 +263,5 @@ public static class ImageFormat
     public static string GetMimeTypeFromPath(string path) =>
         Path.GetExtension(path).Equals(".png", StringComparison.OrdinalIgnoreCase) ? "image/png" : "image/jpeg";
 }
+
+

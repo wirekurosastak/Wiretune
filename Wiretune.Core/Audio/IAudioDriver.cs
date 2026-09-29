@@ -1,6 +1,6 @@
-using Wiretune.Core.Models;
+﻿using Wiretune.Core.Models;
 
-namespace Wiretune.Audio.Drivers;
+namespace Wiretune.Core.Audio.Drivers;
 
 public interface IAudioDriver : IDisposable
 {
@@ -24,3 +24,4 @@ public interface IAudioDriver : IDisposable
     Task StopAsync();
     void SetVolume(double volume);
 }
+

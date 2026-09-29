@@ -1,4 +1,4 @@
-using Avalonia.Threading;
+﻿using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
@@ -9,7 +9,7 @@ namespace Wiretune.UI.ViewModels;
 
 public partial class ServerSettingsViewModel : ObservableObject
 {
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly ServerSession _session;
 
     [ObservableProperty] private string _serverUrl = ServerSession.DefaultServerUrl;
@@ -70,7 +70,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(CanRescanServer));
     }
 
-    public ServerSettingsViewModel(ILibraryService library, ServerSession session)
+    public ServerSettingsViewModel(LibraryService library, ServerSession session)
     {
         _library = library;
         _session = session;
@@ -464,3 +464,5 @@ public partial class ServerSettingsViewModel : ObservableObject
         HasUserManagementError = !string.IsNullOrEmpty(message);
     }
 }
+
+

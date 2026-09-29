@@ -1,11 +1,11 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using NAudio.CoreAudioApi;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
-namespace Wiretune.Audio.Devices;
+namespace Wiretune.Core.Audio.Devices;
 
 public static class AudioDeviceManager
 {
@@ -227,3 +227,5 @@ public static class AudioDeviceManager
         return list;
     }
 }
+
+

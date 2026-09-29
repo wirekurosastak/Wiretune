@@ -1,14 +1,14 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Wiretune.Core.Models;
-using Wiretune.Core.Repositories;
+using Wiretune.Core.Data;
 
 namespace Wiretune.Core.Services;
 
-public class LibraryService : ILibraryService
+public class LibraryService 
 {
-    private readonly ILibraryRepository _repository;
-    private readonly IMetadataScanner _scanner;
+    private readonly LibraryRepository _repository;
+    private readonly MetadataScanner _scanner;
     private readonly string _coverCacheDirectory;
     private readonly object _playlistLock = new();
     private readonly SemaphoreSlim _scanGate = new(1, 1);
@@ -31,7 +31,7 @@ public class LibraryService : ILibraryService
     public event EventHandler<Track>? FavoriteChanged;
     public event EventHandler<bool>? ScanningStateChanged;
 
-    public LibraryService(ILibraryRepository repository, IMetadataScanner scanner, string? coverCacheDirectory = null)
+    public LibraryService(LibraryRepository repository, MetadataScanner scanner, string? coverCacheDirectory = null)
     {
         _repository = repository;
         _scanner = scanner;
@@ -522,3 +522,6 @@ public class LibraryService : ILibraryService
         }
     }
 }
+
+
+

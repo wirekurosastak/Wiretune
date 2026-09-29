@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -6,7 +6,7 @@ using System.Text;
 using Dapper;
 using Microsoft.IdentityModel.Tokens;
 using Wiretune.Core.Models;
-using Wiretune.Data;
+using Wiretune.Core.Data;
 
 namespace Wiretune.Server.Auth;
 
@@ -194,3 +194,4 @@ public class AuthService
             last_login == null ? null : DateTime.Parse(last_login, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal));
     }
 }
+

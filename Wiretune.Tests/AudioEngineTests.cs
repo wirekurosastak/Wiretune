@@ -1,4 +1,4 @@
-using Wiretune.Audio;
+﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Xunit;
@@ -219,7 +219,7 @@ public class AudioEngineTests
     {
         if (!OperatingSystem.IsWindows()) return;
 
-        var devices = await Wiretune.Audio.Devices.AudioDeviceManager.DetectOutputDevicesAsync();
+        var devices = await Wiretune.Core.Audio.Devices.AudioDeviceManager.DetectOutputDevicesAsync();
         Assert.NotEmpty(devices);
         Assert.All(devices, d =>
         {
@@ -238,3 +238,6 @@ public class AudioEngineTests
         Assert.NotNull(engine);
     }
 }
+
+
+

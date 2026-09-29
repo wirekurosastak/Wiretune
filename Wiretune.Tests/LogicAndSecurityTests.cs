@@ -1,4 +1,4 @@
-using Wiretune.Audio;
+﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Xunit;
@@ -37,7 +37,7 @@ public class LogicAndSecurityTests
     {
         const string hostilePath = "/music/song\"evil; rm -rf /home -i x.flac";
 
-        var args = Wiretune.Audio.Drivers.FfmpegAudioDriver.BuildFfplayArguments(hostilePath, TimeSpan.FromSeconds(12.5), 150);
+        var args = Wiretune.Core.Audio.Drivers.FfmpegAudioDriver.BuildFfplayArguments(hostilePath, TimeSpan.FromSeconds(12.5), 150);
 
         Assert.Equal(hostilePath, args[^1]);
         Assert.Equal(1, args.Count(a => a.Contains("evil")));
@@ -562,3 +562,6 @@ public class LogicAndSecurityTests
         Assert.Contains(false, bitperfectEvents); // bitperfect forcibly turned off
     }
 }
+
+
+

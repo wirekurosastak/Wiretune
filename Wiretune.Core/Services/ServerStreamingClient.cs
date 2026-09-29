@@ -25,8 +25,9 @@ public sealed class ServerRequestException : Exception
 /// <summary>Thin typed HTTP client for the Wiretune server REST API.</summary>
 public sealed class ServerStreamingClient : IDisposable
 {
-    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan LibraryTimeout = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan ProbeTimeout  = TimeSpan.FromSeconds(15); // initial server reachability check
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30); // normal API calls
+    private static readonly TimeSpan LibraryTimeout = TimeSpan.FromMinutes(3);  // large library fetch
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly HttpClient _httpClient;
@@ -48,7 +49,7 @@ public sealed class ServerStreamingClient : IDisposable
 
     public async Task<bool> CheckSetupRequiredAsync(string baseUrl, CancellationToken ct = default)
     {
-        var element = await SendAsync<JsonElement>(HttpMethod.Get, baseUrl, "/api/auth/setup-required", null, false, DefaultTimeout, ct);
+        var element = await SendAsync<JsonElement>(HttpMethod.Get, baseUrl, "/api/auth/setup-required", null, false, ProbeTimeout, ct);
         return element.TryGetProperty("setupRequired", out var prop) && prop.GetBoolean();
     }
 

@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Audio;
@@ -9,7 +9,7 @@ namespace Wiretune.UI.ViewModels;
 
 public partial class AudiophileSettingsViewModel : ObservableObject
 {
-    private readonly IAudioEngine _engine;
+    private readonly WiretuneAudioEngine _engine;
     private bool _isSyncingWithEngine;
 
     [ObservableProperty] private bool _isExclusiveMode;
@@ -22,7 +22,7 @@ public partial class AudiophileSettingsViewModel : ObservableObject
 
     public ObservableCollection<AudioOutputDevice> AvailableDevices { get; } = new();
 
-    public AudiophileSettingsViewModel(IAudioEngine engine)
+    public AudiophileSettingsViewModel(WiretuneAudioEngine engine)
     {
         _engine = engine;
 
@@ -115,3 +115,5 @@ public partial class AudiophileSettingsViewModel : ObservableObject
         RefreshDevices();
     }
 }
+
+

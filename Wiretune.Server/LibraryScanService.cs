@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using Wiretune.Core.Services;
 
 namespace Wiretune.Server;
@@ -9,7 +9,7 @@ namespace Wiretune.Server;
 /// </summary>
 public sealed class LibraryScanService : BackgroundService
 {
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly ServerPaths _paths;
     private readonly TimeSpan? _interval;
     private readonly SemaphoreSlim _trigger = new(0, 1);
@@ -17,7 +17,7 @@ public sealed class LibraryScanService : BackgroundService
     public DateTime? LastScanCompletedUtc { get; private set; }
     public string? LastScanError { get; private set; }
 
-    public LibraryScanService(ILibraryService library, ServerPaths paths, IOptions<ServerOptions> options)
+    public LibraryScanService(LibraryService library, ServerPaths paths, IOptions<ServerOptions> options)
     {
         _library = library;
         _paths = paths;
@@ -102,3 +102,4 @@ public sealed class LibraryScanService : BackgroundService
         }
     }
 }
+

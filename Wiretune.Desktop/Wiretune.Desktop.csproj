@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -14,7 +14,13 @@
     <Product>Wiretune</Product>
     <AssemblyTitle>Wiretune - Audiophile Streamer &amp; Player</AssemblyTitle>
     <Authors>Wiretune</Authors>
-    <Description>Natív, bit-perfect és exkluzív módú veszteségmentes zenelejátszó és streamelő kliens.</Description>
+    <Description>NatĂ­v, bit-perfect Ă©s exkluzĂ­v mĂłdĂş vesztesĂ©gmentes zenelejĂˇtszĂł Ă©s streamelĹ‘ kliens.</Description>
+  </PropertyGroup>
+
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
@@ -27,3 +33,6 @@
   </ItemGroup>
 
 </Project>
+
+
+

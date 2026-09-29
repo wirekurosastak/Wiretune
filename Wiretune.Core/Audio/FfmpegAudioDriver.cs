@@ -1,13 +1,13 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using Wiretune.Audio.Dsp;
+using Wiretune.Core.Audio.Dsp;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
-namespace Wiretune.Audio.Drivers;
+namespace Wiretune.Core.Audio.Drivers;
 
 /// <summary>
 /// Desktop playback through an ffplay child process. On Linux it routes to PipeWire nodes or raw ALSA
@@ -773,3 +773,6 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         _pcmCache.Dispose();
     }
 }
+
+
+

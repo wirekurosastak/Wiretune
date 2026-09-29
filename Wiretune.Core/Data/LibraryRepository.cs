@@ -1,12 +1,12 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.Json;
 using Dapper;
 using Wiretune.Core.Models;
-using Wiretune.Core.Repositories;
+using Wiretune.Core.Data;
 
-namespace Wiretune.Data;
+namespace Wiretune.Core.Data;
 
-public class LibraryRepository : ILibraryRepository
+public class LibraryRepository 
 {
     private readonly DatabaseManager _dbManager;
 
@@ -15,9 +15,9 @@ public class LibraryRepository : ILibraryRepository
         _dbManager = dbManager ?? new DatabaseManager();
     }
 
-    public Task InitializeAsync() => Task.Run(_dbManager.InitializeSchema);
+    public virtual Task InitializeAsync() => Task.Run(_dbManager.InitializeSchema);
 
-    public async Task<List<Track>> GetAllTracksAsync()
+    public virtual async Task<List<Track>> GetAllTracksAsync()
     {
         using var connection = _dbManager.CreateConnection();
         var rows = await connection.QueryAsync("SELECT * FROM tracks");
@@ -62,7 +62,7 @@ public class LibraryRepository : ILibraryRepository
         return list;
     }
 
-    public async Task ReplaceAllTracksAsync(IEnumerable<Track> tracks)
+    public virtual async Task ReplaceAllTracksAsync(IEnumerable<Track> tracks)
     {
         using var connection = _dbManager.CreateConnection();
         using var transaction = connection.BeginTransaction();
@@ -118,14 +118,14 @@ public class LibraryRepository : ILibraryRepository
         transaction.Commit();
     }
 
-    public async Task UpdateTrackFavoriteAsync(string trackId, bool isFavorite)
+    public virtual async Task UpdateTrackFavoriteAsync(string trackId, bool isFavorite)
     {
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync("UPDATE tracks SET is_favorite = @Fav WHERE id = @Id",
             new { Fav = isFavorite ? 1 : 0, Id = trackId });
     }
 
-    public async Task IncrementPlayCountAsync(string trackId)
+    public virtual async Task IncrementPlayCountAsync(string trackId)
     {
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync(
@@ -133,7 +133,7 @@ public class LibraryRepository : ILibraryRepository
             new { Now = FormatDate(DateTime.UtcNow), Id = trackId });
     }
 
-    public async Task<List<Playlist>> GetAllPlaylistsAsync()
+    public virtual async Task<List<Playlist>> GetAllPlaylistsAsync()
     {
         using var connection = _dbManager.CreateConnection();
         var rows = await connection.QueryAsync("SELECT * FROM playlists ORDER BY name");
@@ -164,7 +164,7 @@ public class LibraryRepository : ILibraryRepository
         return list;
     }
 
-    public async Task SavePlaylistAsync(Playlist playlist)
+    public virtual async Task SavePlaylistAsync(Playlist playlist)
     {
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync("""
@@ -182,13 +182,13 @@ public class LibraryRepository : ILibraryRepository
             });
     }
 
-    public async Task DeletePlaylistAsync(string playlistId)
+    public virtual async Task DeletePlaylistAsync(string playlistId)
     {
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync("DELETE FROM playlists WHERE id = @Id", new { Id = playlistId });
     }
 
-    public async Task<string?> GetSettingAsync(string key, string? defaultValue = null)
+    public virtual async Task<string?> GetSettingAsync(string key, string? defaultValue = null)
     {
         using var connection = _dbManager.CreateConnection();
         var val = await connection.QuerySingleOrDefaultAsync<string?>(
@@ -196,7 +196,7 @@ public class LibraryRepository : ILibraryRepository
         return val ?? defaultValue;
     }
 
-    public async Task SetSettingAsync(string key, string value)
+    public virtual async Task SetSettingAsync(string key, string value)
     {
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync(
@@ -214,3 +214,6 @@ public class LibraryRepository : ILibraryRepository
             ? parsed
             : null;
 }
+
+
+

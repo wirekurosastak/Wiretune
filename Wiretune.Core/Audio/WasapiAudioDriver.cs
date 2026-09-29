@@ -1,13 +1,13 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.MediaFoundation;
 using NAudio.Wave;
-using Wiretune.Audio.Dsp;
+using Wiretune.Core.Audio.Dsp;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using PlaybackState = Wiretune.Core.Models.PlaybackState;
 
-namespace Wiretune.Audio.Drivers;
+namespace Wiretune.Core.Audio.Drivers;
 
 /// <summary>
 /// Native Windows audio driver using WASAPI (Shared & Exclusive bit-perfect output)
@@ -510,3 +510,6 @@ public sealed class WasapiAudioDriver : IAudioDriver
         }
     }
 }
+
+
+

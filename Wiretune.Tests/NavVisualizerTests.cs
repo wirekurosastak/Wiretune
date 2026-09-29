@@ -1,4 +1,4 @@
-using Wiretune.Core.Models;
+﻿using Wiretune.Core.Models;
 using Wiretune.UI.Controls;
 using Wiretune.UI.ViewModels;
 using Xunit;
@@ -208,7 +208,8 @@ public class NavVisualizerTests
         var repo = new MockRepository();
         var library = new Core.Services.LibraryService(repo, new Core.Services.MetadataScanner());
         var session = new Core.Services.ServerSession(library, repo);
-        var vm = new MainViewModel(new Audio.WiretuneAudioEngine(), library, session);
+        var vm = new MainViewModel(new Wiretune.Core.Audio.WiretuneAudioEngine(), library, session);
         return (vm, repo);
     }
 }
+

@@ -12,6 +12,16 @@
     <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
   </PropertyGroup>
 
+  <!-- Release-only: trim IL, enable AOT, and strip unused native code for a smaller APK. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <RunAOTCompilation>true</RunAOTCompilation>
+    <AndroidLinkMode>SdkOnly</AndroidLinkMode>
+    <!-- R8 is the modern shrinker/minifier required by the D8 DEX compiler. -->
+    <AndroidLinkTool>r8</AndroidLinkTool>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" Version="11.2.7" />
   </ItemGroup>
@@ -21,3 +31,4 @@
   </ItemGroup>
 
 </Project>
+

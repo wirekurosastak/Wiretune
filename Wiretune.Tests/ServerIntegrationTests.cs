@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -169,7 +169,7 @@ public class ServerIntegrationTests
         await server.WaitForTracksAsync(client, 3);
 
         // Inject a track that points at a sibling folder sharing the root's name prefix ("library2").
-        var library = server.Services.GetRequiredService<ILibraryService>();
+        var library = server.Services.GetRequiredService<LibraryService>();
         var outsidePath = Path.Combine(server.Root, "library2", "Outside.wav");
         var outside = TestSupport.MakeTrack("outside", "Outside");
         outside.FilePath = outsidePath;
@@ -267,3 +267,4 @@ public class ServerIntegrationTests
         return client;
     }
 }
+

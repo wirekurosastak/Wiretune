@@ -1,5 +1,5 @@
-using Wiretune.Core.Models;
-using Wiretune.Core.Repositories;
+﻿using Wiretune.Core.Models;
+using Wiretune.Core.Data;
 
 namespace Wiretune.Core.Services;
 
@@ -23,14 +23,14 @@ public enum LibrarySource
 
 /// <summary>
 /// Client-side connection to a Wiretune server: server address, authentication, and synchronising the
-/// server's track list into the local <see cref="ILibraryService"/> cache.
+/// server's track list into the local <see cref="LibraryService"/> cache.
 /// </summary>
 public sealed class ServerSession : IDisposable
 {
     public const string DefaultServerUrl = "http://localhost:5200";
 
-    private readonly ILibraryService _library;
-    private readonly ILibraryRepository _settings;
+    private readonly LibraryService _library;
+    private readonly LibraryRepository _settings;
     private readonly ServerStreamingClient _client;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -47,7 +47,7 @@ public sealed class ServerSession : IDisposable
     /// <summary>Raised (possibly from a background thread) whenever state, user or status message changes.</summary>
     public event EventHandler? StateChanged;
 
-    public ServerSession(ILibraryService library, ILibraryRepository settings, ServerStreamingClient? client = null)
+    public ServerSession(LibraryService library, LibraryRepository settings, ServerStreamingClient? client = null)
     {
         _library = library;
         _settings = settings;
@@ -323,3 +323,6 @@ public sealed class ServerSession : IDisposable
         _gate.Dispose();
     }
 }
+
+
+

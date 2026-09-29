@@ -1,5 +1,5 @@
-using Wiretune.Audio;
-using Wiretune.Audio.Drivers;
+﻿using Wiretune.Core.Audio;
+using Wiretune.Core.Audio.Drivers;
 using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
@@ -125,7 +125,7 @@ public static class TestSupport
         return new WiretuneAudioEngine(driver ?? new FakeAudioDriver(), () => Task.FromResult(list));
     }
 
-    public static MainViewModel CreateMainViewModel(ILibraryService library, IAudioEngine? engine = null) =>
+    public static MainViewModel CreateMainViewModel(LibraryService library, WiretuneAudioEngine? engine = null) =>
         new(engine ?? CreateEngine(), library, new ServerSession(library, new MockRepository()));
 
     public static Track MakeTrack(string id, string title, string artist = "Artist", string album = "Album",
@@ -143,3 +143,6 @@ public static class TestSupport
             Format = new AudioFormat { Codec = "FLAC", SampleRate = sampleRate, BitsPerSample = bits, IsLossless = true }
         };
 }
+
+
+

@@ -1,10 +1,10 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Wiretune.Core.Models;
-using Wiretune.Core.Repositories;
+using Wiretune.Core.Data;
 using Wiretune.Core.Services;
-using Wiretune.Data;
+using Wiretune.Core.Data;
 using Wiretune.Server;
 using Wiretune.Server.Auth;
 
@@ -25,11 +25,11 @@ WiretuneLog.Info("Wiretune.Server", $"Library: '{paths.LibraryRoot}' (exists: {D
 
 builder.Services.AddSingleton(paths);
 builder.Services.AddSingleton(new DatabaseManager(Path.Combine(dataDirectory, "wiretune-server.db")));
-builder.Services.AddSingleton<ILibraryRepository, LibraryRepository>();
-builder.Services.AddSingleton<IMetadataScanner, MetadataScanner>();
-builder.Services.AddSingleton<ILibraryService>(sp => new LibraryService(
-    sp.GetRequiredService<ILibraryRepository>(),
-    sp.GetRequiredService<IMetadataScanner>(),
+builder.Services.AddSingleton<LibraryRepository, LibraryRepository>();
+builder.Services.AddSingleton<MetadataScanner, MetadataScanner>();
+builder.Services.AddSingleton<LibraryService>(sp => new LibraryService(
+    sp.GetRequiredService<LibraryRepository>(),
+    sp.GetRequiredService<MetadataScanner>(),
     paths.CoverCacheDirectory));
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<LibraryScanService>();
@@ -65,12 +65,12 @@ if (string.IsNullOrEmpty(builder.Configuration["urls"]) && string.IsNullOrEmpty(
 
 var app = builder.Build();
 
-await app.Services.GetRequiredService<ILibraryService>().InitializeAsync();
+await app.Services.GetRequiredService<LibraryService>().InitializeAsync();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-var library = app.Services.GetRequiredService<ILibraryService>();
+var library = app.Services.GetRequiredService<LibraryService>();
 var authService = app.Services.GetRequiredService<AuthService>();
 
 // ── Auth (anonymous) ──
@@ -179,15 +179,15 @@ api.MapGet("/stream/{trackId}", (string trackId) =>
     return Results.File(track.FilePath, AudioFileTypes.GetMimeType(track.FilePath), enableRangeProcessing: true);
 });
 
-api.MapGet("/cover/{trackId}", async (string trackId, IMetadataScanner scanner, HttpContext http) =>
+api.MapGet("/cover/{trackId}", async (string trackId, MetadataScanner scanner, HttpContext http) =>
     await CoverResultAsync(library.GetTrack(trackId), scanner, http));
 
-api.MapGet("/cover/album/{albumId}", async (string albumId, IMetadataScanner scanner, HttpContext http) =>
+api.MapGet("/cover/album/{albumId}", async (string albumId, MetadataScanner scanner, HttpContext http) =>
     await CoverResultAsync(library.GetAlbum(albumId)?.Tracks.FirstOrDefault(t => t.HasCoverArt), scanner, http));
 
 app.Run();
 
-async Task<IResult> CoverResultAsync(Track? track, IMetadataScanner scanner, HttpContext http)
+async Task<IResult> CoverResultAsync(Track? track, MetadataScanner scanner, HttpContext http)
 {
     if (track == null || !AppPaths.IsPathUnderRoot(track.FilePath, paths.LibraryRoot)) return Results.NotFound();
 
@@ -227,3 +227,6 @@ static string ResolveLibraryRoot(string? configured, string contentRoot)
 }
 
 public partial class Program;
+
+
+

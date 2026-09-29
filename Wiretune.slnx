@@ -1,9 +1,10 @@
-<Solution>
+﻿<Solution>
   <Project Path="Wiretune.Core/Wiretune.Core.csproj" />
-  <Project Path="Wiretune.Audio/Wiretune.Audio.csproj" />
-  <Project Path="Wiretune.Data/Wiretune.Data.csproj" />
   <Project Path="Wiretune.UI/Wiretune.UI.csproj" />
   <Project Path="Wiretune.Desktop/Wiretune.Desktop.csproj" DefaultStartup="true" />
   <Project Path="Wiretune.Server/Wiretune.Server.csproj" />
   <Project Path="Wiretune.Tests/Wiretune.Tests.csproj" />
+  <Project Path="Wiretune.Android/Wiretune.Android.csproj" />
 </Solution>
+
+

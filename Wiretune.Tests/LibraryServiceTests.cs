@@ -1,18 +1,18 @@
-using Wiretune.Core.Models;
-using Wiretune.Core.Repositories;
+﻿using Wiretune.Core.Models;
+using Wiretune.Core.Data;
 using Wiretune.Core.Services;
 using Xunit;
 
 namespace Wiretune.Tests;
 
-public class MockRepository : ILibraryRepository
+public class MockRepository : LibraryRepository 
 {
     public List<Track> Tracks { get; } = new();
     public List<Playlist> Playlists { get; } = new();
     public Dictionary<string, string> Settings { get; } = new();
 
-    public Task InitializeAsync() => Task.CompletedTask;
-    public Task<List<Track>> GetAllTracksAsync() => Task.FromResult(
+    public override Task InitializeAsync() => Task.CompletedTask;
+    public override Task<List<Track>> GetAllTracksAsync() => Task.FromResult(
         Tracks.Select(t => new Track
         {
             Id          = t.Id,
@@ -45,7 +45,7 @@ public class MockRepository : ILibraryRepository
         Tracks.AddRange(tracks);
         return Task.CompletedTask;
     }
-    public Task ReplaceAllTracksAsync(IEnumerable<Track> tracks)
+    public override Task ReplaceAllTracksAsync(IEnumerable<Track> tracks)
     {
         ReplaceCalls++;
         var list = tracks.ToList();
@@ -53,35 +53,35 @@ public class MockRepository : ILibraryRepository
         Tracks.AddRange(list);
         return Task.CompletedTask;
     }
-    public Task UpdateTrackFavoriteAsync(string trackId, bool isFavorite)
+    public override Task UpdateTrackFavoriteAsync(string trackId, bool isFavorite)
     {
         var tr = Tracks.FirstOrDefault(t => t.Id == trackId);
         if (tr != null) tr.IsFavorite = isFavorite;
         return Task.CompletedTask;
     }
-    public Task IncrementPlayCountAsync(string trackId)
+    public override Task IncrementPlayCountAsync(string trackId)
     {
         var tr = Tracks.FirstOrDefault(t => t.Id == trackId);
         if (tr != null) tr.PlayCount++;
         return Task.CompletedTask;
     }
-    public Task<List<Playlist>> GetAllPlaylistsAsync() => Task.FromResult(new List<Playlist>(Playlists));
-    public Task SavePlaylistAsync(Playlist playlist)
+    public override Task<List<Playlist>> GetAllPlaylistsAsync() => Task.FromResult(new List<Playlist>(Playlists));
+    public override Task SavePlaylistAsync(Playlist playlist)
     {
         Playlists.RemoveAll(p => p.Id == playlist.Id);
         Playlists.Add(playlist);
         return Task.CompletedTask;
     }
-    public Task DeletePlaylistAsync(string playlistId)
+    public override Task DeletePlaylistAsync(string playlistId)
     {
         Playlists.RemoveAll(p => p.Id == playlistId);
         return Task.CompletedTask;
     }
-    public Task<string?> GetSettingAsync(string key, string? defaultValue = null)
+    public override Task<string?> GetSettingAsync(string key, string? defaultValue = null)
     {
         return Task.FromResult(Settings.TryGetValue(key, out var val) ? val : defaultValue);
     }
-    public Task SetSettingAsync(string key, string value)
+    public override Task SetSettingAsync(string key, string value)
     {
         Settings[key] = value;
         return Task.CompletedTask;
@@ -426,4 +426,8 @@ public class LibraryServiceTests
         Assert.True(album.IsHiRes);
     }
 }
+
+
+
+
 

@@ -1,7 +1,7 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
-using Wiretune.Audio.Drivers;
+using Wiretune.Core.Audio.Drivers;
 using Wiretune.UI.Services;
 using Wiretune.UI.ViewModels;
 using Wiretune.UI.Views;
@@ -13,6 +13,9 @@ public partial class App : Application
     /// <summary>Platform heads (e.g. Android) set this before startup to supply a native audio driver.</summary>
     public static Func<IAudioDriver>? AudioDriverFactory { get; set; }
 
+    /// <summary>The running MainViewModel; available after OnFrameworkInitializationCompleted.</summary>
+    public static MainViewModel? MainVm { get; private set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
@@ -21,6 +24,7 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         var mainVm = MainViewModel.CreateDefault(AudioDriverFactory?.Invoke());
+        MainVm = mainVm;
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -42,10 +46,11 @@ public partial class App : Application
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleView)
         {
-            singleView.MainView = new MainView { DataContext = mainVm };
+            singleView.MainView = new AndroidMainView { DataContext = mainVm };
         }
 
         Ui.Forget(mainVm.StartAsync(), "App");
         base.OnFrameworkInitializationCompleted();
     }
 }
+

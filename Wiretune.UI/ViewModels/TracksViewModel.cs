@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
@@ -8,7 +8,7 @@ namespace Wiretune.UI.ViewModels;
 
 public partial class TracksViewModel : ObservableObject
 {
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly PlayerViewModel _player;
 
     [ObservableProperty] private IReadOnlyList<Track> _displayedTracks = Array.Empty<Track>();
@@ -16,7 +16,7 @@ public partial class TracksViewModel : ObservableObject
     [ObservableProperty] private string _totalTracksDuration = "0 perc";
     [ObservableProperty] private bool _hasTracks;
 
-    public TracksViewModel(ILibraryService library, PlayerViewModel player)
+    public TracksViewModel(LibraryService library, PlayerViewModel player)
     {
         _library = library;
         _player = player;
@@ -63,3 +63,5 @@ public partial class TracksViewModel : ObservableObject
         if (track != null) await _library.ToggleFavoriteAsync(track.Id);
     }
 }
+
+

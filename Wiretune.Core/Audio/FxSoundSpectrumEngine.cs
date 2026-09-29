@@ -1,4 +1,4 @@
-namespace Wiretune.Audio.Dsp;
+﻿namespace Wiretune.Core.Audio.Dsp;
 
 /// <summary>
 /// Studio-grade 32-band Real-Time Analyzer (RTA) frequency spectrum engine focused
@@ -305,3 +305,4 @@ public sealed class FxSoundSpectrumEngine
         }
     }
 }
+

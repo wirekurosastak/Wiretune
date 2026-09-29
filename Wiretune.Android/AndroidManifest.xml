@@ -1,7 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:installLocation="auto">
-  <!-- Streaming from a Wiretune server on the local network. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          android:installLocation="auto">
+
+  <!-- Network access for streaming from a Wiretune server -->
   <uses-permission android:name="android.permission.INTERNET" />
-  <!-- Self-hosted servers are usually plain HTTP on the LAN; Android 9+ blocks cleartext unless allowed. -->
-  <application android:label="Wiretune" android:icon="@drawable/icon" android:usesCleartextTraffic="true" />
+
+  <!-- Cleartext HTTP is allowed only for private/LAN IP ranges via network_security_config.xml.
+       The global usesCleartextTraffic flag has been removed; the config file enforces HTTPS for
+       all public internet destinations while still allowing plain HTTP on the local network. -->
+
+  <!-- Local file playback: READ_MEDIA_AUDIO (Android 13+) and READ_EXTERNAL_STORAGE (legacy) -->
+  <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+                   android:maxSdkVersion="32" />
+
+  <!-- Foreground service for background playback -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+  <!-- Keep CPU awake during playback -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+  <!-- Media notification controls (Android 13+) -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application android:label="Wiretune"
+               android:icon="@drawable/icon"
+               android:networkSecurityConfig="@xml/network_security_config"
+               android:allowBackup="false">
+
+    <!-- Foreground playback service -->
+    <service android:name="wiretune.android.PlaybackService"
+             android:exported="false"
+             android:foregroundServiceType="mediaPlayback" />
+
+  </application>
 </manifest>
+

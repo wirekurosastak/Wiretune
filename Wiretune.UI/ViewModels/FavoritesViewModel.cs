@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
@@ -8,14 +8,14 @@ namespace Wiretune.UI.ViewModels;
 
 public partial class FavoritesViewModel : ObservableObject
 {
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly PlayerViewModel _player;
 
     [ObservableProperty] private IReadOnlyList<Track> _favoriteTracks = Array.Empty<Track>();
     [ObservableProperty] private string _totalFavoritesDuration = "0 perc";
     [ObservableProperty] private bool _isEmpty = true;
 
-    public FavoritesViewModel(ILibraryService library, PlayerViewModel player)
+    public FavoritesViewModel(LibraryService library, PlayerViewModel player)
     {
         _library = library;
         _player = player;
@@ -60,3 +60,4 @@ public partial class FavoritesViewModel : ObservableObject
         RefreshFavorites();
     }
 }
+

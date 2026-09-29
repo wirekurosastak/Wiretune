@@ -15,6 +15,7 @@
       <conv:RepeatModeToIconConverter x:Key="RepeatModeToIconConverter" />
       <conv:IntEqualConverter x:Key="IntEqualConverter" />
       <conv:NavActiveBackgroundConverter x:Key="NavActiveBackgroundConverter" />
+      <conv:NavActiveTextConverter x:Key="NavActiveTextConverter" />
       <conv:BoolToAdminIconConverter x:Key="BoolToAdminIconConverter" />
       <conv:BoolToRoleTextConverter x:Key="BoolToRoleTextConverter" />
 

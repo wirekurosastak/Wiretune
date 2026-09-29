@@ -1,4 +1,4 @@
-using Avalonia.Media;
+﻿using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -39,7 +39,7 @@ public sealed partial class SearchResultsViewModel : ObservableObject
     private const int MaxTracks = 25;
     private const int MaxCards = 12;
 
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly PlayerViewModel _player;
     private readonly Action<string> _setSearchQueryAction;
     private readonly Action<Album> _openAlbumAction;
@@ -57,7 +57,7 @@ public sealed partial class SearchResultsViewModel : ObservableObject
     [ObservableProperty] private IReadOnlyList<Artist> _matchingArtists = Array.Empty<Artist>();
 
     public SearchResultsViewModel(
-        ILibraryService library,
+        LibraryService library,
         PlayerViewModel player,
         Action<string> setSearchQueryAction,
         Action<Album> openAlbumAction,
@@ -225,3 +225,5 @@ public sealed partial class SearchResultsViewModel : ObservableObject
     [RelayCommand]
     public void ClearSearch() => _setSearchQueryAction(string.Empty);
 }
+
+

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,10 +18,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Wiretune.Core\Wiretune.Core.csproj" />
-    <ProjectReference Include="..\Wiretune.Audio\Wiretune.Audio.csproj" />
-    <ProjectReference Include="..\Wiretune.Data\Wiretune.Data.csproj" />
+
+
     <ProjectReference Include="..\Wiretune.UI\Wiretune.UI.csproj" />
     <ProjectReference Include="..\Wiretune.Server\Wiretune.Server.csproj" />
   </ItemGroup>
 
 </Project>
+
+

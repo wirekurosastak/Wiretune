@@ -1,4 +1,4 @@
-using Avalonia.Media.Imaging;
+﻿using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
@@ -18,7 +18,7 @@ public partial class AlbumsViewModel : ObservableObject
 {
     private const int DetailCoverDecodeWidth = 480;
 
-    private readonly ILibraryService _library;
+    private readonly LibraryService _library;
     private readonly PlayerViewModel _player;
 
     public Action<NavWaveDirection>? OnNavWave { get; set; }
@@ -32,7 +32,7 @@ public partial class AlbumsViewModel : ObservableObject
     [ObservableProperty] private AlbumSortField _sortField = AlbumSortField.Title;
     [ObservableProperty] private bool _isSortDescending;
 
-    public AlbumsViewModel(ILibraryService library, PlayerViewModel player)
+    public AlbumsViewModel(LibraryService library, PlayerViewModel player)
     {
         _library = library;
         _player = player;
@@ -196,3 +196,5 @@ public partial class AlbumsViewModel : ObservableObject
         _player.PlayQueue(album.Tracks);
     }
 }
+
+

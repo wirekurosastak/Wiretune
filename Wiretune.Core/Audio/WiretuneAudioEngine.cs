@@ -1,12 +1,12 @@
-using Wiretune.Audio.Devices;
-using Wiretune.Audio.Drivers;
+﻿using Wiretune.Core.Audio.Devices;
+using Wiretune.Core.Audio.Drivers;
 using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
-namespace Wiretune.Audio;
+namespace Wiretune.Core.Audio;
 
-public class WiretuneAudioEngine : IAudioEngine
+public class WiretuneAudioEngine : IDisposable
 {
     private readonly IAudioDriver _driver;
     private readonly Func<Task<List<AudioOutputDevice>>> _detectDevices;
@@ -325,3 +325,7 @@ public class WiretuneAudioEngine : IAudioEngine
         GC.SuppressFinalize(this);
     }
 }
+
+
+
+

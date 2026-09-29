@@ -1,11 +1,11 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Wiretune.Audio;
-using Wiretune.Audio.Drivers;
+using Wiretune.Core.Audio;
+using Wiretune.Core.Audio.Drivers;
 using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
-using Wiretune.Data;
+using Wiretune.Core.Data;
 using Wiretune.UI.Controls;
 using Wiretune.UI.Services;
 
@@ -18,8 +18,8 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private bool _disposed;
 
     public ThemeService Theme { get; }
-    public IAudioEngine AudioEngine { get; }
-    public ILibraryService Library { get; }
+    public WiretuneAudioEngine AudioEngine { get; }
+    public LibraryService Library { get; }
     public ServerSession Session { get; }
 
     public PlayerViewModel Player { get; }
@@ -50,7 +50,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isStarting = true;
     [ObservableProperty] private bool _isLibraryEmpty;
 
-    public MainViewModel(IAudioEngine audioEngine, ILibraryService library, ServerSession session)
+    public MainViewModel(WiretuneAudioEngine audioEngine, LibraryService library, ServerSession session)
     {
         Theme = new ThemeService();
         AudioEngine = audioEngine;
@@ -427,3 +427,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         GC.SuppressFinalize(this);
     }
 }
+
+
+
+

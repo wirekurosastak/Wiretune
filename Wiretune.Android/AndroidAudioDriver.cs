@@ -1,5 +1,6 @@
+﻿using Android.Content;
 using Android.Media;
-using Wiretune.Audio.Drivers;
+using Wiretune.Core.Audio.Drivers;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
@@ -10,6 +11,8 @@ public sealed class AndroidAudioDriver : IAudioDriver
 {
     private readonly object _lock = new();
     private MediaPlayer? _player;
+    private AudioFocusRequestClass? _audioFocusRequest;
+    private AudioManager? _audioManager;
     private Timer? _positionTimer;
     private double _volume = 1.0;
     private long _generation;
@@ -25,9 +28,16 @@ public sealed class AndroidAudioDriver : IAudioDriver
     public event EventHandler? TrackEnded;
     public event EventHandler<string>? PlaybackFailed;
 
-    public Task InitializeAsync(AudioOutputDevice device, bool exclusive, bool bitperfect) => Task.CompletedTask;
+    public Task InitializeAsync(AudioOutputDevice device, bool exclusive, bool bitperfect)
+    {
+        if (_audioManager == null)
+        {
+            _audioManager = (AudioManager?)global::Android.App.Application.Context.GetSystemService(Context.AudioService);
+        }
+        return Task.CompletedTask;
+    }
 
-    public Task PlayAsync(string audioSource, AudioFormat format, TimeSpan startPosition, CancellationToken ct = default)
+    public Task PlayAsync(string audioSource, Wiretune.Core.Models.AudioFormat format, TimeSpan startPosition, CancellationToken ct = default)
     {
         lock (_lock)
         {
@@ -50,7 +60,9 @@ public sealed class AndroidAudioDriver : IAudioDriver
                     lock (_lock)
                     {
                         if (gen != _generation) return;
-                        if (startPosition > TimeSpan.Zero) player.SeekTo((int)startPosition.TotalMilliseconds);
+                        if (startPosition > TimeSpan.Zero)
+                            SeekPlayerTo(player, startPosition);
+                        RequestAudioFocus();
                         player.Start();
                         SetState(PlaybackState.Playing);
                         StartPositionTimer();
@@ -72,7 +84,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
                     lock (_lock)
                     {
                         if (gen != _generation) return;
-                        Fail($"A lejátszás sikertelen (MediaPlayer hiba: {e.What}, {e.Extra}).");
+                        Fail($"Playback failed (MediaPlayer error: {e.What}, extra: {e.Extra}).");
                     }
                 };
 
@@ -82,7 +94,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
             }
             catch (Exception ex)
             {
-                Fail($"A lejátszó nem indítható: {ex.Message}");
+                Fail($"Player could not be started: {ex.Message}");
             }
         }
         return Task.CompletedTask;
@@ -96,6 +108,8 @@ public sealed class AndroidAudioDriver : IAudioDriver
             _player.Pause();
             StopPositionTimer();
             SetState(PlaybackState.Paused);
+            // Abandon focus while paused so other apps may play; reacquire on resume.
+            AbandonAudioFocus();
         }
         return Task.CompletedTask;
     }
@@ -105,6 +119,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
         lock (_lock)
         {
             if (_state != PlaybackState.Paused || _player == null) return Task.CompletedTask;
+            RequestAudioFocus();
             _player.Start();
             SetState(PlaybackState.Playing);
             StartPositionTimer();
@@ -119,7 +134,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
             CurrentPosition = position;
             if (_player != null && _state is PlaybackState.Playing or PlaybackState.Paused)
             {
-                _player.SeekTo((int)position.TotalMilliseconds);
+                SeekPlayerTo(_player, position);
             }
         }
         PositionChanged?.Invoke(this, position);
@@ -132,6 +147,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
         {
             _generation++;
             ReleasePlayer();
+            AbandonAudioFocus();
             CurrentPosition = TimeSpan.Zero;
             SetState(PlaybackState.Stopped);
         }
@@ -189,10 +205,84 @@ public sealed class AndroidAudioDriver : IAudioDriver
         player.Dispose();
     }
 
+    // â”€â”€ Seek helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    /// <summary>Seeks to <paramref name="position"/> using the precise API on API 26+, legacy int on older devices.</summary>
+    private static void SeekPlayerTo(MediaPlayer player, TimeSpan position)
+    {
+        var ms = (long)position.TotalMilliseconds;
+        if (OperatingSystem.IsAndroidVersionAtLeast(26))
+        {
+#pragma warning disable CA1416 // Both calls are guarded by the version check above.
+            player.SeekTo(ms, MediaPlayerSeekMode.PreviousSync);
+#pragma warning restore CA1416
+        }
+        else
+        {
+#pragma warning disable CA1416 // Legacy overload intentionally used for API < 26.
+            player.SeekTo((int)Math.Clamp(ms, int.MinValue, int.MaxValue));
+#pragma warning restore CA1416
+        }
+    }
+
+    /// <summary>Requests transient audio focus so Wiretune can co-exist with phone calls and other apps.</summary>
+    private void RequestAudioFocus()
+    {
+        if (_audioManager == null) return;
+
+        if (OperatingSystem.IsAndroidVersionAtLeast(26))
+        {
+#pragma warning disable CA1416 // All calls in this branch are guarded by the version check.
+            var attrs = new AudioAttributes.Builder()
+                .SetUsage(AudioUsageKind.Media)!
+                .SetContentType(AudioContentType.Music)!
+                .Build()!;
+
+            _audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
+                .SetAudioAttributes(attrs)!
+                .SetAcceptsDelayedFocusGain(false)!
+                .SetOnAudioFocusChangeListener(new AudioFocusListener(this))!
+                .Build();
+
+            _audioManager.RequestAudioFocus(_audioFocusRequest);
+#pragma warning restore CA1416
+        }
+        else
+        {
+            // Legacy API (deprecated in API 26 but still functional).
+#pragma warning disable CA1416
+            _audioManager.RequestAudioFocus(
+                new AudioFocusListener(this),
+                global::Android.Media.Stream.Music,
+                AudioFocus.Gain);
+#pragma warning restore CA1416
+        }
+    }
+
+    private void AbandonAudioFocus()
+    {
+        if (_audioManager == null) return;
+
+        if (OperatingSystem.IsAndroidVersionAtLeast(26) && _audioFocusRequest != null)
+        {
+#pragma warning disable CA1416
+            _audioManager.AbandonAudioFocusRequest(_audioFocusRequest);
+#pragma warning restore CA1416
+            _audioFocusRequest = null;
+        }
+        else
+        {
+#pragma warning disable CA1416
+            _audioManager.AbandonAudioFocus(new AudioFocusListener(this));
+#pragma warning restore CA1416
+        }
+    }
+
     private void Fail(string message)
     {
         WiretuneLog.Warn("AndroidAudioDriver", message);
         ReleasePlayer();
+        AbandonAudioFocus();
         SetState(PlaybackState.Error);
         PlaybackFailed?.Invoke(this, message);
     }
@@ -210,6 +300,38 @@ public sealed class AndroidAudioDriver : IAudioDriver
         {
             _generation++;
             ReleasePlayer();
+            AbandonAudioFocus();
+        }
+    }
+
+    // â”€â”€ Inner class â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    /// <summary>Handles transient audio focus loss (e.g. phone call, notification beep).</summary>
+    private sealed class AudioFocusListener : Java.Lang.Object, AudioManager.IOnAudioFocusChangeListener
+    {
+        private readonly AndroidAudioDriver _driver;
+        internal AudioFocusListener(AndroidAudioDriver driver) => _driver = driver;
+
+        public void OnAudioFocusChange(AudioFocus focusChange)
+        {
+            switch (focusChange)
+            {
+                case AudioFocus.Loss:
+                case AudioFocus.LossTransient:
+                    // Phone call or another app grabbed focus permanently or transiently â†’ pause.
+                    _ = _driver.PauseAsync();
+                    break;
+                case AudioFocus.LossTransientCanDuck:
+                    // Notification sound â†’ lower volume temporarily.
+                    _driver._player?.SetVolume(0.2f, 0.2f);
+                    break;
+                case AudioFocus.Gain:
+                    // We got focus back after a transient loss â†’ restore volume.
+                    var vol = (float)_driver._volume;
+                    _driver._player?.SetVolume(vol, vol);
+                    break;
+            }
         }
     }
 }
+

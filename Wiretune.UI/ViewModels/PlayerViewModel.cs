@@ -14,8 +14,8 @@ public partial class PlayerViewModel : ObservableObject
 {
     private const int CoverDecodeWidth = 160;
 
-    private readonly IAudioEngine _engine;
-    private readonly ILibraryService _library;
+    private readonly WiretuneAudioEngine _engine;
+    private readonly LibraryService _library;
     private readonly List<Track> _originalQueue = new();
     private readonly List<Track> _playbackQueue = new();
     private int _queueIndex = -1;
@@ -72,11 +72,37 @@ public partial class PlayerViewModel : ObservableObject
     public void CloseQueue() => IsQueueOpen = false;
 
     [RelayCommand]
-    public void PlayQueueTrack(Track? track)
+    public void PlayQueueTrack(object? parameter)
     {
+        Track? track = parameter switch
+        {
+            Track t => t,
+            IEnumerable<Track> list => list.FirstOrDefault(),
+            _ => null
+        };
+
         if (track == null) return;
+
+        // If a list was passed in, use it as the new queue context.
+        if (parameter is IEnumerable<Track> tracks && !(parameter is Track))
+        {
+            PlayQueue(tracks, track);
+            return;
+        }
+
         var idx = _playbackQueue.IndexOf(track);
-        if (idx >= 0) PlayAt(idx);
+        if (idx >= 0)
+        {
+            // Track is already in the queue — just jump to it.
+            PlayAt(idx);
+        }
+        else
+        {
+            // Track is not in the queue yet (e.g. first play from a list view on Android).
+            // Build a queue from the full library using this track as the starting point.
+            var allTracks = _library.Tracks.Count > 0 ? _library.Tracks : (IReadOnlyList<Track>)new[] { track };
+            PlayQueue(allTracks, track);
+        }
     }
 
     public void MoveQueueTrack(int oldIndex, int newIndex)
@@ -217,7 +243,7 @@ public partial class PlayerViewModel : ObservableObject
             _playbackQueue.Select((t, i) => new QueueItemViewModel(t, i, i == _queueIndex)));
     }
 
-    public PlayerViewModel(IAudioEngine engine, ILibraryService library)
+    public PlayerViewModel(WiretuneAudioEngine engine, LibraryService library)
     {
         _engine = engine;
         _library = library;
@@ -583,3 +609,5 @@ public sealed partial class QueueItemViewModel : ObservableObject
 
     partial void OnIndexChanged(int value) => OnPropertyChanged(nameof(DisplayIndex));
 }
+
+
