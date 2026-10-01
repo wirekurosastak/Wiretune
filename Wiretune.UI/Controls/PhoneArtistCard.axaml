@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:Wiretune.UI.Localization"
+             xmlns:material="using:Material.Icons.Avalonia"
+             xmlns:controls="using:Wiretune.UI.Controls"
+             xmlns:models="using:Wiretune.Core.Models"
+             x:Class="Wiretune.UI.Controls.PhoneArtistCard"
+             x:DataType="models:Artist"
+             x:Name="Root">
+  <!-- An artist in a phone grid: round portrait, name and track count. -->
+  <Button Classes="phone-tap"
+          Command="{Binding OpenCommand, ElementName=Root}"
+          CommandParameter="{Binding}">
+    <Grid RowDefinitions="Auto, *" Margin="4">
+      <Border Grid.Row="0" Height="{Binding $self.Bounds.Width}" CornerRadius="500"
+              Background="{DynamicResource Surface2}" ClipToBounds="True">
+        <Panel>
+          <material:MaterialIcon Kind="AccountMusic" Width="48" Height="48"
+                                 Foreground="{DynamicResource CoralAccent}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+          <controls:CoverImage SourcePath="{Binding PicturePath}" DecodeWidth="240" Stretch="UniformToFill" />
+        </Panel>
+      </Border>
+      <StackPanel Grid.Row="1" Margin="2,8,2,0" Spacing="1">
+        <TextBlock Classes="phone-row-title" Text="{Binding Name}" FontSize="14" HorizontalAlignment="Center" />
+        <TextBlock Classes="phone-row-sub" Text="{loc:TFormat TrackCount, Path=TrackCount}" HorizontalAlignment="Center" />
+      </StackPanel>
+    </Grid>
+  </Button>
+</UserControl>

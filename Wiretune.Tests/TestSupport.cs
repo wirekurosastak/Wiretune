@@ -1,6 +1,5 @@
 ﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Audio.Drivers;
-using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.UI.ViewModels;

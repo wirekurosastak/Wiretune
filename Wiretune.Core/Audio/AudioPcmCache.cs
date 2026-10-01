@@ -12,6 +12,9 @@ public sealed class AudioPcmCache : IDisposable
 {
     public const int SampleRate = 44100;
 
+    /// <summary>Decoding stops here (20 minutes, ~106 MB) so a very long mix or audiobook cannot exhaust memory.</summary>
+    private const int MaxSamples = SampleRate * 60 * 20;
+
     private readonly object _lock = new();
     private short[] _samples = Array.Empty<short>();
     private int _sampleCount = 0;
@@ -39,7 +42,7 @@ public sealed class AudioPcmCache : IDisposable
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
 
-            // Initial buffer capacity: 3 minutes @ 44.1kHz mono = ~8M samples (~16MB RAM)
+            // Initial buffer capacity: 3 minutes @ 44.1kHz mono = ~8M samples (~16MB RAM); it grows on demand.
             _samples = new short[SampleRate * 180];
             _sampleCount = 0;
 
@@ -52,14 +55,16 @@ public sealed class AudioPcmCache : IDisposable
         Process? proc = null;
         try
         {
+            // ArgumentList (not a command-line string): file names may contain quotes and must never become options.
             var psi = new ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = $"-loglevel error -i \"{source}\" -f s16le -ac 1 -ar {SampleRate} -vn -",
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            foreach (var arg in new[] { "-nostdin", "-loglevel", "error", "-i", source, "-f", "s16le", "-ac", "1", "-ar", SampleRate.ToString(), "-vn", "-" })
+                psi.ArgumentList.Add(arg);
 
             proc = Process.Start(psi);
             if (proc == null) return;
@@ -84,9 +89,19 @@ public sealed class AudioPcmCache : IDisposable
                 int samplesInChunk = bytesRead / 2;
                 lock (_lock)
                 {
+                    // Cancellation is decided under the same lock that swaps the buffer: a worker that lost the race
+                    // must not append the previous track's audio to the next track's samples.
+                    if (ct.IsCancellationRequested) return;
+
+                    if (_sampleCount + samplesInChunk > MaxSamples)
+                    {
+                        WiretuneLog.Info("AudioPcmCache", "Track longer than the spectrum cache limit; visualisation stops after 20 minutes.");
+                        return;
+                    }
+
                     if (_sampleCount + samplesInChunk > _samples.Length)
                     {
-                        int newCapacity = Math.Max(_samples.Length * 2, _sampleCount + samplesInChunk + SampleRate * 60);
+                        int newCapacity = Math.Min(MaxSamples, Math.Max(_samples.Length * 2, _sampleCount + samplesInChunk + SampleRate * 60));
                         Array.Resize(ref _samples, newCapacity);
                     }
 
@@ -99,9 +114,10 @@ public sealed class AudioPcmCache : IDisposable
                 }
             }
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            WiretuneLog.Warn("AudioPcmCache", $"PCM decode error: {ex.Message}");
+            // Failures after cancellation are expected (the process is killed under the reader) and not worth logging.
+            WiretuneLog.Warn("AudioPcmCache", $"PCM decode error (is ffmpeg installed?): {ex.Message}");
         }
         finally
         {
@@ -178,4 +194,3 @@ public sealed class AudioPcmCache : IDisposable
         CancelAndReset();
     }
 }
-

@@ -7,12 +7,13 @@ using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.UI.Services;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.UI.ViewModels;
 
 public partial class PlayerViewModel : ObservableObject
 {
-    private const int CoverDecodeWidth = 160;
+    private const int CoverDecodeWidth = 640; // large enough for the full-screen phone player
 
     private readonly WiretuneAudioEngine _engine;
     private readonly LibraryService _library;
@@ -22,10 +23,15 @@ public partial class PlayerViewModel : ObservableObject
     private bool _isUpdatingPositionFromEngine;
     private bool _isUserSeeking;
     private CancellationTokenSource? _seekDebounceCts;
+    private CancellationTokenSource? _lyricsCts;
+    private string? _lyricsTrackId;
 
     [ObservableProperty] private Track? _currentTrack;
     [ObservableProperty] private string? _currentLyrics;
     public bool HasLyrics => !string.IsNullOrWhiteSpace(CurrentLyrics);
+
+    /// <summary>Finds the lyrics of a track (tag of a local file, server request for a server track); set by the application.</summary>
+    public Func<Track, CancellationToken, Task<string?>>? LyricsProvider { get; set; }
     partial void OnCurrentLyricsChanged(string? value) => OnPropertyChanged(nameof(HasLyrics));
     [ObservableProperty] private PlaybackState _playbackState = PlaybackState.Stopped;
     [ObservableProperty] private double _positionSeconds;
@@ -41,12 +47,25 @@ public partial class PlayerViewModel : ObservableObject
     public bool IsVolumeDisabledOrMuted => IsMuted || IsVolumeLocked;
     public bool IsVolumeActive => !IsMuted && !IsVolumeLocked;
     public bool IsVolumeLockedAndNotMuted => !IsMuted && IsVolumeLocked;
-    public string VolumeToolTip => IsMuted ? "Némítás feloldása" : (IsVolumeLocked ? "Bit-perfect mód (Hangerő rögzítve)" : "Némítás");
+    public string VolumeToolTip => Localizer.Get(IsMuted ? "VolumeUnmute" : IsVolumeLocked ? "VolumeLocked" : "VolumeMute");
+
+    /// <summary>Title of the current track, or a hint when nothing is loaded.</summary>
+    public string NowPlayingTitle => CurrentTrack?.Title ?? Localizer.Get("NothingPlaying");
+
+    /// <summary>Artist of the current track, or a hint when nothing is loaded.</summary>
+    public string NowPlayingArtist => CurrentTrack?.Artist ?? Localizer.Get("ChooseMusic");
+
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts()
+    {
+        OnPropertyChanged(nameof(VolumeToolTip));
+        OnPropertyChanged(nameof(NowPlayingTitle));
+        OnPropertyChanged(nameof(NowPlayingArtist));
+    }
     [ObservableProperty] private bool _isShuffle;
     [ObservableProperty] private RepeatMode _repeatMode = RepeatMode.Off;
     [ObservableProperty] private Bitmap? _coverBitmap;
     [ObservableProperty] private string _signalPath = string.Empty;
-    [ObservableProperty] private bool _isHiRes;
     [ObservableProperty] private string _qualityBadge = string.Empty;
     [ObservableProperty] private string _qualityShortBadge = string.Empty;
     [ObservableProperty] private string? _errorMessage;
@@ -173,22 +192,22 @@ public partial class PlayerViewModel : ObservableObject
         if (track == null) return;
         var idx = _playbackQueue.IndexOf(track);
         if (idx < 0) return;
+
+        var removedCurrent = idx == _queueIndex;
         _playbackQueue.RemoveAt(idx);
-        if (!IsShuffle)
+        _originalQueue.Remove(track); // also while shuffled, or turning shuffle off would bring the track back
+
+        if (removedCurrent)
         {
-            _originalQueue.Remove(track);
+            // The playing track was taken out of the queue: carry on with whatever followed it (or stop at the end).
+            _queueIndex = idx - 1;
+            UpdateQueueState();
+            if (_playbackQueue.Count > 0) NextTrack();
+            else _ = RunSafeAsync(_engine.StopAsync);
+            return;
         }
-        if (CurrentTrack != null)
-        {
-            _queueIndex = _playbackQueue.IndexOf(CurrentTrack);
-        }
-        else if (_queueIndex >= 0)
-        {
-            if (idx == _queueIndex)
-                _queueIndex = Math.Min(_queueIndex, _playbackQueue.Count - 1);
-            else if (idx < _queueIndex)
-                _queueIndex--;
-        }
+
+        if (idx < _queueIndex) _queueIndex--;
         UpdateQueueState();
     }
 
@@ -259,6 +278,13 @@ public partial class PlayerViewModel : ObservableObject
             if (state != PlaybackState.Playing) SpectrumBands = new float[32];
         });
 
+        // The player keeps the Track instance it started with; a favourite toggled elsewhere changes the library's instance.
+        _library.FavoriteChanged += (_, changed) => Ui.Post(() =>
+        {
+            if (CurrentTrack is { } current && current.Id == changed.Id && !ReferenceEquals(current, changed))
+                current.IsFavorite = changed.IsFavorite;
+        });
+
         _engine.PlaybackFailed += (_, message) => Dispatcher.UIThread.Post(() => ErrorMessage = message);
         _engine.TrackEnded += (_, _) => Dispatcher.UIThread.Post(OnTrackEnded);
         _engine.PositionChanged += (_, pos) => Dispatcher.UIThread.Post(() =>
@@ -286,10 +312,59 @@ public partial class PlayerViewModel : ObservableObject
 
     partial void OnErrorMessageChanged(string? value) => OnPropertyChanged(nameof(HasError));
 
+    partial void OnIsQueueOpenChanged(bool value)
+    {
+        if (value) RefreshLyrics();
+    }
+
+    /// <summary>Loads the lyrics of the current track, but only while the queue panel that shows them is open.</summary>
+    private void RefreshLyrics()
+    {
+        var track = CurrentTrack;
+        if (track == null)
+        {
+            _lyricsCts?.Cancel();
+            _lyricsTrackId = null;
+            CurrentLyrics = null;
+            return;
+        }
+
+        if (_lyricsTrackId == track.Id) return; // already loaded, or loading, for this track
+
+        _lyricsCts?.Cancel();
+        CurrentLyrics = null;
+        if (!IsQueueOpen || LyricsProvider == null) return; // loaded when the panel is opened
+
+        _lyricsTrackId = track.Id;
+        var cts = _lyricsCts = new CancellationTokenSource();
+        _ = LoadLyricsAsync(track, cts);
+    }
+
+    private async Task LoadLyricsAsync(Track track, CancellationTokenSource cts)
+    {
+        string? text = null;
+        try
+        {
+            text = await LyricsProvider!(track, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Debug("PlayerViewModel", $"Lyrics unavailable for '{track.Title}': {ex.Message}");
+        }
+
+        if (!cts.IsCancellationRequested && ReferenceEquals(CurrentTrack, track)) CurrentLyrics = text;
+    }
+
     partial void OnCurrentTrackChanged(Track? oldValue, Track? newValue)
     {
-        // TODO: read the lyrics tag of newValue once the metadata reader is known.
-        CurrentLyrics = null;
+        OnPropertyChanged(nameof(NowPlayingTitle));
+        OnPropertyChanged(nameof(NowPlayingArtist));
+        _lyricsTrackId = null;
+        RefreshLyrics();
         if (oldValue != null)
         {
             oldValue.IsPlaying = false;
@@ -325,7 +400,6 @@ public partial class PlayerViewModel : ObservableObject
 
         DurationSeconds = track.Duration.TotalSeconds;
         FormattedDuration = track.FormattedDuration;
-        IsHiRes = track.Format.IsHiRes;
         QualityBadge = track.Format.DisplayBadge;
         QualityShortBadge = track.Format.DisplayBadge;
         SignalPath = _engine.SignalPathDescription;
@@ -334,7 +408,7 @@ public partial class PlayerViewModel : ObservableObject
         {
             if (ReferenceEquals(CurrentTrack, track)) CoverBitmap = bmp;
         });
-        _ = RunSafeAsync(() => _library.RecordPlayAsync(track.Id));
+        Ui.Forget(_library.RecordPlayAsync(track.Id), "PlayerViewModel"); // bookkeeping only: no error banner
     }
 
     private void OnTrackEnded()
@@ -430,7 +504,8 @@ public partial class PlayerViewModel : ObservableObject
         }
         else
         {
-            _queueIndex = _playbackQueue.Count;
+            _queueIndex = _playbackQueue.Count; // past the end: nothing is current any more
+            UpdateQueueState();
             _ = RunSafeAsync(_engine.StopAsync);
         }
     }
@@ -485,7 +560,13 @@ public partial class PlayerViewModel : ObservableObject
     [RelayCommand]
     public async Task ToggleFavoriteCurrentAsync()
     {
-        if (CurrentTrack != null) await _library.ToggleFavoriteAsync(CurrentTrack.Id);
+        if (CurrentTrack is not { } current) return;
+
+        await _library.ToggleFavoriteAsync(current.Id);
+        // A server refresh replaces the library's Track objects while the player keeps the one it started playing:
+        // mirror the change so the heart in the player bar follows.
+        if (_library.GetTrack(current.Id) is { } inLibrary && !ReferenceEquals(inLibrary, current))
+            current.IsFavorite = inLibrary.IsFavorite;
     }
 
     [RelayCommand]
@@ -578,7 +659,7 @@ public partial class PlayerViewModel : ObservableObject
 
     private static string Format(TimeSpan t) => t.Hours > 0 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
 
-    private static async Task RunSafeAsync(Func<Task> action)
+    private async Task RunSafeAsync(Func<Task> action)
     {
         try
         {
@@ -587,6 +668,7 @@ public partial class PlayerViewModel : ObservableObject
         catch (Exception ex)
         {
             WiretuneLog.Error("PlayerViewModel", $"Playback command failed: {ex.Message}", ex);
+            ErrorMessage = ex.Message;
         }
     }
 }

@@ -6,26 +6,51 @@ namespace Wiretune.Core.Services;
 
 /// <summary>
 /// Fetches artist profile pictures from the internet (using Deezer's public artist API)
-/// and caches results locally on disk and in memory.
+/// and caches results locally on disk and in memory. Artist names are sent to api.deezer.com;
+/// set <c>WIRETUNE_NO_ARTIST_PICTURES=1</c> to keep the library entirely offline.
 /// </summary>
 public static class ArtistPictureService
 {
-    private static readonly HttpClient Http = new()
-    {
-        Timeout = TimeSpan.FromSeconds(10)
-    };
+    public const string DisableEnvironmentVariable = "WIRETUNE_NO_ARTIST_PICTURES";
+
+    /// <summary>After a network/server failure no further requests are made for this long (and nothing is cached).</summary>
+    private static readonly TimeSpan FailureBackoff = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan SaveDelay = TimeSpan.FromSeconds(2);
 
     private static readonly ConcurrentDictionary<string, string> Cache = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentDictionary<string, Task<string?>> InFlight = new(StringComparer.OrdinalIgnoreCase);
     private static readonly SemaphoreSlim BatchThrottle = new(2);
     private static readonly object FileLock = new();
+    private static readonly Timer SaveTimer = new(_ => SaveCache(), null, Timeout.Infinite, Timeout.Infinite);
     private static bool _isLoaded;
+    private static long _retryAfterTicks;
+
+    // Replaceable by tests (InternalsVisibleTo) so nothing needs the real network or the real profile folder.
+    internal static HttpClient Http { get; set; } = CreateHttpClient();
+    internal static string? CacheFileOverride { get; set; }
 
     static ArtistPictureService()
     {
-        Http.DefaultRequestHeaders.UserAgent.ParseAdd("Wiretune/1.0 (Audiophile Music Player)");
         LoadCache();
     }
+
+    private static HttpClient CreateHttpClient()
+    {
+        var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("Wiretune/1.0 (Audiophile Music Player)");
+        return http;
+    }
+
+    private static bool IsDisabled => Environment.GetEnvironmentVariable(DisableEnvironmentVariable) is { Length: > 0 } v && v != "0";
+
+    internal static void ResetForTests()
+    {
+        Cache.Clear();
+        InFlight.Clear();
+        Interlocked.Exchange(ref _retryAfterTicks, 0);
+    }
+
+    internal static bool IsCached(string artistName) => Cache.ContainsKey(artistName.Trim());
 
     /// <summary>
     /// Gets the cached or fetched artist picture URL. Returns null if not found or on error.
@@ -33,7 +58,7 @@ public static class ArtistPictureService
     public static async Task<string?> GetArtistPictureUrlAsync(string? artistName, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(artistName) ||
-            string.Equals(artistName, "Unknown Artist", StringComparison.OrdinalIgnoreCase))
+            MetadataScanner.IsUnknownArtist(artistName))
         {
             return null;
         }
@@ -46,8 +71,11 @@ public static class ArtistPictureService
             return string.IsNullOrEmpty(cached) ? null : cached;
         }
 
-        // 2. In-flight coalescing
-        return await InFlight.GetOrAdd(normalized, k => FetchFromInternetAsync(k, ct)).ConfigureAwait(false);
+        if (IsDisabled || DateTime.UtcNow.Ticks < Interlocked.Read(ref _retryAfterTicks)) return null;
+
+        // 2. In-flight coalescing. The shared fetch must not depend on the first caller's token, so callers only
+        // cancel their own wait.
+        return await InFlight.GetOrAdd(normalized, k => FetchFromInternetAsync(k)).WaitAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -132,57 +160,48 @@ public static class ArtistPictureService
         });
     }
 
-    private static async Task<string?> FetchFromInternetAsync(string artistName, CancellationToken ct)
+    private static async Task<string?> FetchFromInternetAsync(string artistName)
     {
         try
         {
             var queryUrl = $"https://api.deezer.com/search/artist?q={Uri.EscapeDataString(artistName)}&limit=1";
-            using var response = await Http.GetAsync(queryUrl, ct).ConfigureAwait(false);
+            using var response = await Http.GetAsync(queryUrl).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                Cache[artistName] = string.Empty;
+                // Rate limiting or an outage says nothing about the artist: remember nothing, back off instead.
+                BackOff($"Deezer answered HTTP {(int)response.StatusCode}");
                 return null;
             }
 
-            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
+            await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            using var doc = await JsonDocument.ParseAsync(stream).ConfigureAwait(false);
 
+            string? picUrl = null;
             if (doc.RootElement.TryGetProperty("data", out var data) &&
                 data.ValueKind == JsonValueKind.Array &&
                 data.GetArrayLength() > 0)
             {
                 var first = data[0];
-                string? picUrl = null;
-
-                if (first.TryGetProperty("picture_medium", out var medium) && medium.ValueKind == JsonValueKind.String)
+                foreach (var field in new[] { "picture_medium", "picture_big", "picture" })
                 {
-                    picUrl = medium.GetString();
-                }
-                else if (first.TryGetProperty("picture_big", out var big) && big.ValueKind == JsonValueKind.String)
-                {
-                    picUrl = big.GetString();
-                }
-                else if (first.TryGetProperty("picture", out var pic) && pic.ValueKind == JsonValueKind.String)
-                {
-                    picUrl = pic.GetString();
-                }
-
-                if (!string.IsNullOrEmpty(picUrl))
-                {
-                    Cache[artistName] = picUrl;
-                    SaveCache();
-                    return picUrl;
+                    if (first.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.String &&
+                        Uri.TryCreate(value.GetString(), UriKind.Absolute, out var uri) &&
+                        uri.Scheme == Uri.UriSchemeHttps)
+                    {
+                        picUrl = uri.AbsoluteUri;
+                        break;
+                    }
                 }
             }
 
-            // Not found on Deezer: cache empty string to prevent repeated queries
-            Cache[artistName] = string.Empty;
-            SaveCache();
-            return null;
+            // A definitive answer, including "no such artist" (empty string), is cached so it is never asked again.
+            Cache[artistName] = picUrl ?? string.Empty;
+            SaveTimer.Change(SaveDelay, Timeout.InfiniteTimeSpan);
+            return picUrl;
         }
         catch (Exception ex)
         {
-            WiretuneLog.Debug("ArtistPicture", $"Failed to fetch picture for '{artistName}': {ex.Message}");
+            BackOff(ex.Message);
             return null;
         }
         finally
@@ -191,8 +210,14 @@ public static class ArtistPictureService
         }
     }
 
+    private static void BackOff(string reason)
+    {
+        Interlocked.Exchange(ref _retryAfterTicks, (DateTime.UtcNow + FailureBackoff).Ticks);
+        WiretuneLog.Debug("ArtistPicture", $"Artist picture lookup failed ({reason}); pausing lookups for {FailureBackoff.TotalMinutes:0} minutes.");
+    }
+
     private static string GetCacheFilePath() =>
-        Path.Combine(AppPaths.GetDataDirectory(), "artist_pictures.json");
+        CacheFileOverride ?? Path.Combine(AppPaths.GetDataDirectory(), "artist_pictures.json");
 
     private static void LoadCache()
     {
@@ -234,9 +259,10 @@ public static class ArtistPictureService
             try
             {
                 var path = GetCacheFilePath();
-                var dict = new Dictionary<string, string>(Cache);
-                var json = JsonSerializer.Serialize(dict, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(path, json);
+                var json = JsonSerializer.Serialize(new Dictionary<string, string>(Cache), new JsonSerializerOptions { WriteIndented = true });
+                var temp = path + ".tmp";
+                File.WriteAllText(temp, json);
+                File.Move(temp, path, overwrite: true); // never leave a half-written cache behind
             }
             catch (Exception ex)
             {

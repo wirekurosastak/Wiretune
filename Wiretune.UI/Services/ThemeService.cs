@@ -18,12 +18,17 @@ public partial class ThemeService : ObservableObject
         }
     }
 
-    public void ToggleTheme()
+    public bool IsLight => Application.Current is { } app &&
+        (app.RequestedThemeVariant == ThemeVariant.Light ||
+         (app.RequestedThemeVariant == ThemeVariant.Default && app.ActualThemeVariant == ThemeVariant.Light));
+
+    public void ToggleTheme() => SetTheme(!IsLight);
+
+    public void SetTheme(bool light)
     {
         if (Application.Current is not { } app) return;
-        var isLight = app.RequestedThemeVariant == ThemeVariant.Light ||
-                      (app.RequestedThemeVariant == ThemeVariant.Default && app.ActualThemeVariant == ThemeVariant.Light);
-        app.RequestedThemeVariant = isLight ? ThemeVariant.Dark : ThemeVariant.Light;
+        app.RequestedThemeVariant = light ? ThemeVariant.Light : ThemeVariant.Dark;
+        OnPropertyChanged(nameof(IsLight));
         UpdateDynamicBackground(_lastIndex);
     }
 
@@ -39,7 +44,6 @@ public partial class ThemeService : ObservableObject
         string[] lightHoverAccents  = { "#52B3CC", "#B848CF", "#E85D5D", "#91CF05", "#E85D5D", "#52B3CC" };
         string[] darkPressedAccents = { "#4FB0C8", "#B835CD", "#E05555", "#95CA00", "#E05555", "#4FB0C8" };
         string[] lightPressedAccents= { "#2A8F98", "#88289E", "#B83535", "#6B9900", "#B83535", "#2A8F98" };
-        string[] fgColors           = { "#000000", "#000000", "#000000", "#000000", "#000000", "#000000" };
 
         string activeAccent  = isDark ? darkAccents[tabIndex % darkAccents.Length] : lightAccents[tabIndex % lightAccents.Length];
         string activeHover   = isDark ? darkHoverAccents[tabIndex % darkHoverAccents.Length] : lightHoverAccents[tabIndex % lightHoverAccents.Length];

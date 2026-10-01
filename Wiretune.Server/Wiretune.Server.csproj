@@ -7,12 +7,6 @@
     <RootNamespace>Wiretune.Server</RootNamespace>
   </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-  </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Wiretune.Core\Wiretune.Core.csproj" />
 

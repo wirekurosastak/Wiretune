@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.UI.Services;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.UI.ViewModels;
 
@@ -69,20 +70,26 @@ public partial class AudiophileSettingsViewModel : ObservableObject
         UpdateSignalPath();
     }
 
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts()
+    {
+        RefreshDevices(); // device names of the "default output" entries are translated
+    }
+
     private void UpdateSignalPath()
     {
         SignalPath = _engine.SignalPathDescription;
         var dev = _engine.CurrentDevice;
         if (dev == null)
         {
-            HardwareStatusText = "Nincs elérhető audio kimenet";
+            HardwareStatusText = Localizer.Get("AudioNoOutput");
             return;
         }
 
         var rates = dev.SupportedSampleRates.Count > 0
             ? $"{dev.SupportedSampleRates.Min() / 1000.0:0.#}–{dev.SupportedSampleRates.Max() / 1000.0:0.#} kHz"
-            : "ismeretlen";
-        var modes = dev.IsBitperfectSupported ? "exclusive / bit-perfect támogatott" : "csak megosztott mód";
+            : Localizer.Get("Unknown");
+        var modes = Localizer.Get(dev.IsBitperfectSupported ? "AudioModesFull" : "AudioModesShared");
         HardwareStatusText = $"{dev.Name} [{dev.DriverType}] • {rates} • {modes}";
     }
 

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.UI.Services;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.UI.ViewModels;
 
@@ -13,7 +14,7 @@ public partial class TracksViewModel : ObservableObject
 
     [ObservableProperty] private IReadOnlyList<Track> _displayedTracks = Array.Empty<Track>();
     [ObservableProperty] private int _totalTracksCount;
-    [ObservableProperty] private string _totalTracksDuration = "0 perc";
+    [ObservableProperty] private string _totalTracksDuration = string.Empty;
     [ObservableProperty] private bool _hasTracks;
 
     public TracksViewModel(LibraryService library, PlayerViewModel player)
@@ -33,9 +34,7 @@ public partial class TracksViewModel : ObservableObject
         TotalTracksDuration = FormatTotal(TimeSpan.FromSeconds(DisplayedTracks.Sum(t => t.Duration.TotalSeconds)));
     }
 
-    internal static string FormatTotal(TimeSpan ts) => ts.TotalHours >= 1
-        ? $"{(int)ts.TotalHours} óra {ts.Minutes} perc"
-        : $"{ts.Minutes} perc {ts.Seconds} mp";
+    internal static string FormatTotal(TimeSpan ts) => Localizer.FormatTotalDuration(ts);
 
     [RelayCommand]
     public void PlayTrack(Track? track)

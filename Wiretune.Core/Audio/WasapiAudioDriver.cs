@@ -3,6 +3,7 @@ using NAudio.CoreAudioApi;
 using NAudio.MediaFoundation;
 using NAudio.Wave;
 using Wiretune.Core.Audio.Dsp;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using PlaybackState = Wiretune.Core.Models.PlaybackState;
@@ -34,8 +35,6 @@ public sealed class WasapiAudioDriver : IAudioDriver
     private Timer? _spectrumTimer;
     private long _generation;
     private bool _disposed;
-    private string? _currentSource;
-    private AudioFormat? _currentFormat;
 
     public string DriverName => _isBitperfect ? "WASAPI Bit-Perfect" : _isExclusive ? "WASAPI Exclusive" : "WASAPI Shared";
     public PlaybackState State => _state;
@@ -52,86 +51,82 @@ public sealed class WasapiAudioDriver : IAudioDriver
         EnsureMediaFoundation();
     }
 
-    public async Task InitializeAsync(AudioOutputDevice device, bool exclusive, bool bitperfect)
+    /// <summary>
+    /// Records the output settings for the next <see cref="PlayAsync"/>. Like the other drivers it does not restart
+    /// a running track: the engine does that (<c>ReinitializeOutputAsync</c>), and doing it here too would open the
+    /// source twice.
+    /// </summary>
+    public Task InitializeAsync(AudioOutputDevice device, bool exclusive, bool bitperfect)
     {
-        bool needsRestart = false;
-        string? source = null;
-        AudioFormat? format = null;
-        TimeSpan pos = TimeSpan.Zero;
-
         lock (_stateLock)
         {
-            if (_currentDevice?.Id != device.Id || _isExclusive != exclusive || _isBitperfect != bitperfect)
+            _currentDevice = device;
+            _isExclusive = exclusive;
+            _isBitperfect = bitperfect;
+
+            if (_playbackStream != null)
             {
-                _currentDevice = device;
-                _isExclusive = exclusive;
-                _isBitperfect = bitperfect;
-
-                if (_playbackStream != null)
-                {
-                    _playbackStream.IsBitperfect = bitperfect;
-                }
-
-                if (_state == PlaybackState.Playing && _currentSource != null)
-                {
-                    needsRestart = true;
-                    source = _currentSource;
-                    format = _currentFormat;
-                    pos = _currentPosition;
-                }
+                _playbackStream.IsBitperfect = bitperfect;
             }
         }
 
-        if (needsRestart && source != null)
-        {
-            await PlayAsync(source, format ?? new AudioFormat(), pos);
-        }
+        return Task.CompletedTask;
     }
 
-    public Task PlayAsync(string audioSource, AudioFormat format, TimeSpan startPosition, CancellationToken ct = default)
+    /// <summary>
+    /// Opening a source can take a long time (an HTTP stream from an unreachable server blocks until the request
+    /// times out), so it happens on a worker thread without holding the state lock; the caller and the other
+    /// commands (Pause, Stop, ...) stay responsive. If another Play or a Stop arrives meanwhile, the result of the
+    /// slow open is discarded.
+    /// </summary>
+    public async Task PlayAsync(string audioSource, AudioFormat format, TimeSpan startPosition, CancellationToken ct = default)
     {
+        long gen;
+        AudioOutputDevice? device;
+        bool exclusive, bitperfect;
+        double volume;
         lock (_stateLock)
         {
+            if (_disposed) return;
             StopInternal();
-            var gen = ++_generation;
-            _currentSource = audioSource;
-            _currentFormat = format;
+            gen = ++_generation;
+            device = _currentDevice;
+            exclusive = _isExclusive;
+            bitperfect = _isBitperfect;
+            volume = _volume;
+        }
+
+        OpenedOutput opened;
+        try
+        {
+            opened = await Task.Run(() => Open(audioSource, startPosition, device, exclusive, bitperfect, volume), CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Error("WasapiAudioDriver", $"PlayAsync failed for '{audioSource}': {ex.Message}", ex);
+            lock (_stateLock)
+            {
+                if (gen == _generation && !_disposed) Fail(Localizer.Format("DriverCannotStart", ex.Message));
+            }
+            return;
+        }
+
+        lock (_stateLock)
+        {
+            if (gen != _generation || _disposed || ct.IsCancellationRequested)
+            {
+                opened.Dispose();
+                return;
+            }
 
             try
             {
-                EnsureMediaFoundation();
-
-                _reader = new MediaFoundationReader(audioSource);
-                if (startPosition > TimeSpan.Zero && startPosition < _reader.TotalTime)
-                {
-                    _reader.CurrentTime = startPosition;
-                }
-
-                _playbackStream = new SpectrumAndVolumeWaveProvider(_reader, _spectrumEngine, bands =>
-                {
-                    SpectrumDataAvailable?.Invoke(this, bands);
-                })
-                {
-                    Volume = _volume,
-                    IsBitperfect = _isBitperfect
-                };
-
-                var device = GetTargetMMDevice();
-                var shareMode = _isExclusive ? AudioClientShareMode.Exclusive : AudioClientShareMode.Shared;
-                int latency = _isExclusive ? 50 : 100;
-
-                try
-                {
-                    _wasapiOut = new WasapiOut(device, shareMode, true, latency);
-                    _wasapiOut.Init(_playbackStream);
-                }
-                catch (COMException ex) when (_isExclusive)
-                {
-                    WiretuneLog.Warn("WasapiAudioDriver", $"Exclusive mode failed (0x{ex.HResult:X8}), falling back to Shared mode: {ex.Message}");
-                    _wasapiOut?.Dispose();
-                    _wasapiOut = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
-                    _wasapiOut.Init(_playbackStream);
-                }
+                _reader = opened.Reader;
+                _playbackStream = opened.Stream;
+                _wasapiOut = opened.Output;
+                // Settings may have changed while the source was opening.
+                _playbackStream.Volume = _volume;
+                _playbackStream.IsBitperfect = _isBitperfect;
 
                 _wasapiOut.PlaybackStopped += (_, e) =>
                 {
@@ -142,7 +137,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
 
                         if (e.Exception != null)
                         {
-                            Fail($"WASAPI hiba: {e.Exception.Message}");
+                            Fail(Localizer.Format("DriverWasapiError", e.Exception.Message));
                         }
                         else
                         {
@@ -160,11 +155,75 @@ public sealed class WasapiAudioDriver : IAudioDriver
             catch (Exception ex)
             {
                 WiretuneLog.Error("WasapiAudioDriver", $"PlayAsync failed for '{audioSource}': {ex.Message}", ex);
-                Fail($"A lejátszás nem indítható: {ex.Message}");
+                Fail(Localizer.Format("DriverCannotStart", ex.Message));
             }
         }
+    }
 
-        return Task.CompletedTask;
+    /// <summary>Everything a track needs to play; disposed as a unit when it is not going to be used.</summary>
+    private sealed class OpenedOutput(MediaFoundationReader reader, SpectrumAndVolumeWaveProvider stream, WasapiOut output) : IDisposable
+    {
+        public MediaFoundationReader Reader { get; } = reader;
+        public SpectrumAndVolumeWaveProvider Stream { get; } = stream;
+        public WasapiOut Output { get; } = output;
+
+        public void Dispose()
+        {
+            try { Output.Dispose(); } catch { }
+            try { Reader.Dispose(); } catch { }
+        }
+    }
+
+    private OpenedOutput Open(string audioSource, TimeSpan startPosition, AudioOutputDevice? deviceInfo, bool exclusive, bool bitperfect, double volume)
+    {
+        EnsureMediaFoundation();
+
+        MediaFoundationReader? reader = null;
+        WasapiOut? output = null;
+        try
+        {
+            reader = new MediaFoundationReader(audioSource);
+            if (startPosition > TimeSpan.Zero && startPosition < reader.TotalTime)
+            {
+                reader.CurrentTime = startPosition;
+            }
+
+            var stream = new SpectrumAndVolumeWaveProvider(reader, _spectrumEngine, bands =>
+            {
+                SpectrumDataAvailable?.Invoke(this, bands);
+            })
+            {
+                Volume = volume,
+                IsBitperfect = bitperfect
+            };
+
+            var device = GetTargetMMDevice(deviceInfo);
+            var shareMode = exclusive ? AudioClientShareMode.Exclusive : AudioClientShareMode.Shared;
+            var latency = exclusive ? 50 : 100;
+
+            try
+            {
+                output = new WasapiOut(device, shareMode, true, latency);
+                output.Init(stream);
+            }
+            // Bit-perfect promises an untouched signal: a shared-mode fallback would resample it behind the user's
+            // back, so in that mode the failure is reported instead.
+            catch (COMException ex) when (exclusive && !bitperfect)
+            {
+                WiretuneLog.Warn("WasapiAudioDriver", $"Exclusive mode failed (0x{ex.HResult:X8}), falling back to Shared mode: {ex.Message}");
+                output?.Dispose();
+                output = new WasapiOut(device, AudioClientShareMode.Shared, true, 100);
+                output.Init(stream);
+            }
+
+            return new OpenedOutput(reader, stream, output);
+        }
+        catch
+        {
+            output?.Dispose();
+            reader?.Dispose();
+            throw;
+        }
     }
 
     public Task PauseAsync()
@@ -238,18 +297,18 @@ public sealed class WasapiAudioDriver : IAudioDriver
         }
     }
 
-    private MMDevice GetTargetMMDevice()
+    private static MMDevice GetTargetMMDevice(AudioOutputDevice? deviceInfo)
     {
         using var enumerator = new MMDeviceEnumerator();
-        if (!string.IsNullOrEmpty(_currentDevice?.Id) && _currentDevice.Id != "default" && _currentDevice.Id != "wasapi_default")
+        if (!string.IsNullOrEmpty(deviceInfo?.Id) && deviceInfo.Id != "default" && deviceInfo.Id != "wasapi_default")
         {
             try
             {
-                return enumerator.GetDevice(_currentDevice.Id);
+                return enumerator.GetDevice(deviceInfo.Id);
             }
             catch (Exception ex)
             {
-                WiretuneLog.Warn("WasapiAudioDriver", $"Could not find device {_currentDevice.Id}: {ex.Message}, falling back to default");
+                WiretuneLog.Warn("WasapiAudioDriver", $"Could not find device {deviceInfo.Id}: {ex.Message}, falling back to default");
             }
         }
 
@@ -332,6 +391,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
     private void Fail(string message)
     {
         WiretuneLog.Warn("WasapiAudioDriver", message);
+        _generation++;
         StopInternal();
         SetState(PlaybackState.Error);
         PlaybackFailed?.Invoke(this, message);
@@ -376,13 +436,16 @@ public sealed class WasapiAudioDriver : IAudioDriver
     /// <summary>
     /// Stream wrapper that measures live FFT spectrum and applies software volume when not in Bit-Perfect mode.
     /// </summary>
-    private sealed class SpectrumAndVolumeWaveProvider : IWaveProvider
+    internal sealed class SpectrumAndVolumeWaveProvider : IWaveProvider
     {
         private readonly IWaveProvider _source;
         private readonly FxSoundSpectrumEngine _spectrumEngine;
         private readonly Action<float[]> _onSpectrumAvailable;
         private readonly float[] _fftWindow = new float[FxSoundSpectrumEngine.FftSize];
         private int _fftIndex;
+        private readonly int _decimation;
+        private int _decimationCount;
+        private float _decimationSum;
         private readonly object _fftLock = new();
 
         public WaveFormat WaveFormat => _source.WaveFormat;
@@ -397,6 +460,9 @@ public sealed class WasapiAudioDriver : IAudioDriver
             _source = source;
             _spectrumEngine = spectrumEngine;
             _onSpectrumAvailable = onSpectrumAvailable;
+            // The analyser's frequency bands are laid out for 44.1 kHz; average down higher rates so that 96 or
+            // 192 kHz files do not shift every band upwards.
+            _decimation = Math.Max(1, (int)Math.Round(source.WaveFormat.SampleRate / 44100.0));
         }
 
         public int Read(byte[] buffer, int offset, int count)
@@ -417,28 +483,43 @@ public sealed class WasapiAudioDriver : IAudioDriver
         private void ApplyVolume(byte[] buffer, int offset, int bytesRead, float volume)
         {
             int bitsPerSample = WaveFormat.BitsPerSample;
+            int end = offset + bytesRead;
             if (bitsPerSample == 16)
             {
-                for (int i = offset; i < offset + bytesRead; i += 2)
+                for (int i = offset; i + 2 <= end; i += 2)
                 {
                     short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
-                    int scaled = (int)(sample * volume);
-                    scaled = Math.Clamp(scaled, short.MinValue, short.MaxValue);
+                    int scaled = Math.Clamp((int)(sample * volume), short.MinValue, short.MaxValue);
                     buffer[i] = (byte)(scaled & 0xFF);
                     buffer[i + 1] = (byte)((scaled >> 8) & 0xFF);
                 }
             }
+            else if (bitsPerSample == 24)
+            {
+                for (int i = offset; i + 3 <= end; i += 3)
+                {
+                    int sample = buffer[i] | (buffer[i + 1] << 8) | ((sbyte)buffer[i + 2] << 16);
+                    int scaled = Math.Clamp((int)(sample * (double)volume), -8388608, 8388607);
+                    buffer[i] = (byte)(scaled & 0xFF);
+                    buffer[i + 1] = (byte)((scaled >> 8) & 0xFF);
+                    buffer[i + 2] = (byte)((scaled >> 16) & 0xFF);
+                }
+            }
             else if (bitsPerSample == 32 && WaveFormat.Encoding == WaveFormatEncoding.IeeeFloat)
             {
-                for (int i = offset; i < offset + bytesRead; i += 4)
+                for (int i = offset; i + 4 <= end; i += 4)
                 {
-                    float sample = BitConverter.ToSingle(buffer, i);
-                    sample *= volume;
-                    byte[] bytes = BitConverter.GetBytes(sample);
-                    buffer[i] = bytes[0];
-                    buffer[i + 1] = bytes[1];
-                    buffer[i + 2] = bytes[2];
-                    buffer[i + 3] = bytes[3];
+                    float sample = BitConverter.ToSingle(buffer, i) * volume;
+                    BitConverter.TryWriteBytes(new Span<byte>(buffer, i, 4), sample);
+                }
+            }
+            else if (bitsPerSample == 32)
+            {
+                for (int i = offset; i + 4 <= end; i += 4)
+                {
+                    int sample = BitConverter.ToInt32(buffer, i);
+                    int scaled = (int)Math.Clamp(sample * (double)volume, int.MinValue, int.MaxValue);
+                    BitConverter.TryWriteBytes(new Span<byte>(buffer, i, 4), scaled);
                 }
             }
         }
@@ -482,9 +563,21 @@ public sealed class WasapiAudioDriver : IAudioDriver
                             monoSample += BitConverter.ToSingle(buffer, frameOffset + ch * 4);
                         }
                     }
+                    else if (bitsPerSample == 32)
+                    {
+                        for (int ch = 0; ch < channels; ch++)
+                        {
+                            monoSample += BitConverter.ToInt32(buffer, frameOffset + ch * 4) / 2147483648.0f;
+                        }
+                    }
                     monoSample /= channels;
 
-                    _fftWindow[_fftIndex++] = monoSample;
+                    _decimationSum += monoSample;
+                    if (++_decimationCount < _decimation) continue;
+
+                    _fftWindow[_fftIndex++] = _decimationSum / _decimation;
+                    _decimationSum = 0f;
+                    _decimationCount = 0;
                     if (_fftIndex >= FxSoundSpectrumEngine.FftSize)
                     {
                         _fftIndex = 0;
@@ -510,6 +603,3 @@ public sealed class WasapiAudioDriver : IAudioDriver
         }
     }
 }
-
-
-

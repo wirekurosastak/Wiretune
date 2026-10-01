@@ -4,6 +4,7 @@ using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.UI.Controls;
 using Wiretune.UI.Services;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.UI.ViewModels;
 
@@ -18,7 +19,7 @@ public partial class ArtistsViewModel : ObservableObject
     [ObservableProperty] private IReadOnlyList<Artist> _displayedArtists = Array.Empty<Artist>();
     [ObservableProperty] private Artist? _selectedArtist;
     [ObservableProperty] private bool _isArtistDetailOpen;
-    [ObservableProperty] private string _backButtonText = "Vissza az összes előadóhoz";
+    private Func<string>? _backTextSource;
     [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _selectedArtistAlbumCards = Array.Empty<AlbumCardViewModel>();
     [ObservableProperty] private bool _hasSelectedArtistAlbums;
     [ObservableProperty] private IReadOnlyList<Track> _selectedArtistTracks = Array.Empty<Track>();
@@ -32,6 +33,12 @@ public partial class ArtistsViewModel : ObservableObject
         RefreshArtists();
     }
 
+    /// <summary>Label of the back button: where it leads to, or "all artists" when the detail was opened from the artist list.</summary>
+    public string BackButtonText => _backTextSource?.Invoke() is { Length: > 0 } text ? text : Localizer.Get("BackToArtists");
+
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts() => OnPropertyChanged(nameof(BackButtonText));
+
     public void RefreshArtists()
     {
         DisplayedArtists = _library.Artists;
@@ -41,19 +48,25 @@ public partial class ArtistsViewModel : ObservableObject
         {
             var updated = _library.GetArtist(SelectedArtist.Id);
             if (updated == null) CloseArtistDetail();
-            else OpenArtist(updated);
+            else ShowArtist(updated, waveDirection: null); // keep where "back" leads to
         }
     }
 
     [RelayCommand]
     public void OpenArtist(Artist? artist) => OpenArtistWithOrigin(artist, null, null, NavWaveDirection.LeftToRight);
 
-    public void OpenArtistWithOrigin(Artist? artist, string? backText, Action? onReturn, NavWaveDirection? waveDirection = NavWaveDirection.LeftToRight)
+    /// <param name="backTextSource">Produces the back button label; called again whenever the language changes.</param>
+    public void OpenArtistWithOrigin(Artist? artist, Func<string>? backTextSource, Action? onReturn, NavWaveDirection? waveDirection = NavWaveDirection.LeftToRight)
     {
         if (artist == null) return;
         ReturnAction = onReturn;
-        BackButtonText = string.IsNullOrWhiteSpace(backText) ? "Vissza az összes előadóhoz" : backText;
+        _backTextSource = backTextSource;
+        OnPropertyChanged(nameof(BackButtonText));
+        ShowArtist(artist, waveDirection);
+    }
 
+    private void ShowArtist(Artist artist, NavWaveDirection? waveDirection)
+    {
         SelectedArtist = artist;
         ArtistPictureService.ResolveArtistPicture(artist);
         IsArtistDetailOpen = true;
@@ -75,7 +88,8 @@ public partial class ArtistsViewModel : ObservableObject
     {
         var returnAction = ReturnAction;
         ReturnAction = null;
-        BackButtonText = "Vissza az összes előadóhoz";
+        _backTextSource = null;
+        OnPropertyChanged(nameof(BackButtonText));
 
         if (IsArtistDetailOpen)
         {

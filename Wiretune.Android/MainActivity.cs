@@ -19,6 +19,14 @@ namespace Wiretune.Android;
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.UiMode)]
 public class MainActivity : AvaloniaMainActivity<App>
 {
+    // How long the service outlives a stopped player, so the gap between two tracks (or a quick skip) does not tear the
+    // foreground service down and then have to start it again - which Android refuses once the app is in the background.
+    private const int ServiceStopDelayMs = 10_000;
+
+    private System.ComponentModel.PropertyChangedEventHandler? _playbackStateHandler;
+    private Handler? _handler;
+    private Java.Lang.Runnable? _pendingStop;
+
     protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
     {
         // ffplay does not exist on Android; play through the platform MediaPlayer instead.
@@ -46,18 +54,18 @@ public class MainActivity : AvaloniaMainActivity<App>
         HookPlaybackService();
     }
 
-    /// <summary>Requests storage and notification permissions at runtime.</summary>
+    /// <summary>
+    /// Asks for the notification permission (Android 13+), which the playback notification needs. Wiretune plays
+    /// server streams only, so it needs no access to the device's media files.
+    /// </summary>
     private void RequestRuntimePermissions()
     {
-        if (Build.VERSION.SdkInt >= BuildVersionCodes.Tiramisu)
+        if (!OperatingSystem.IsAndroidVersionAtLeast(33)) return;
+
+        const string notifications = "android.permission.POST_NOTIFICATIONS";
+        if (CheckSelfPermission(notifications) != Permission.Granted)
         {
-            // READ_MEDIA_AUDIO (replaces READ_EXTERNAL_STORAGE on API 33+)
-            // POST_NOTIFICATIONS required to show the playback notification on API 33+
-            RequestPermissions(new[]
-            {
-                "android.permission.READ_MEDIA_AUDIO",
-                "android.permission.POST_NOTIFICATIONS"
-            }, 0);
+            RequestPermissions(new[] { notifications }, 0);
         }
     }
 
@@ -69,43 +77,49 @@ public class MainActivity : AvaloniaMainActivity<App>
             var vm = App.MainVm;
             if (vm == null) return;
 
-            // Push the real status bar height to the view spacer.
-            if ((Avalonia.Application.Current?.ApplicationLifetime as
-                Avalonia.Controls.ApplicationLifetimes.ISingleViewApplicationLifetime)?.MainView is AndroidMainView view)
-            {
-                ApplyStatusBarInset(view);
-            }
-
-            vm.Player.PropertyChanged += (_, e) =>
+            _handler ??= new Handler(Looper.MainLooper!);
+            _playbackStateHandler = (_, e) =>
             {
                 if (e.PropertyName != nameof(vm.Player.PlaybackState)) return;
-                if (vm.Player.PlaybackState == PlaybackState.Playing)
-                    PlaybackService.StartPlayback(this);
-                else if (vm.Player.PlaybackState is PlaybackState.Stopped or PlaybackState.Error)
-                    PlaybackService.StopPlayback(this);
+
+                switch (vm.Player.PlaybackState)
+                {
+                    case PlaybackState.Playing or PlaybackState.Buffering:
+                        CancelPendingStop();
+                        PlaybackService.StartPlayback(this);
+                        break;
+                    case PlaybackState.Paused:
+                        CancelPendingStop(); // the notification stays while paused; it goes when playback is stopped
+                        break;
+                    case PlaybackState.Stopped or PlaybackState.Error:
+                        SchedulePendingStop();
+                        break;
+                }
             };
+            vm.Player.PropertyChanged += _playbackStateHandler;
         }, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
-    private void ApplyStatusBarInset(AndroidMainView view)
+    private void SchedulePendingStop()
     {
-        try
-        {
-            var res = global::Android.App.Application.Context.Resources;
-            var resourceId = res?.GetIdentifier("status_bar_height", "dimen", "android") ?? 0;
-            var px = resourceId > 0 ? (res?.GetDimensionPixelSize(resourceId) ?? 0) : 0;
-            var density = res?.DisplayMetrics?.Density ?? 3.0f;
-            var dip = px > 0 ? px / density : 24.0;
-            view.SetStatusBarHeight(dip);
-        }
-        catch
-        {
-            view.SetStatusBarHeight(28);
-        }
+        CancelPendingStop();
+        _pendingStop = new Java.Lang.Runnable(() => PlaybackService.StopPlayback(this));
+        _handler?.PostDelayed(_pendingStop, ServiceStopDelayMs);
+    }
+
+    private void CancelPendingStop()
+    {
+        if (_pendingStop != null) _handler?.RemoveCallbacks(_pendingStop);
+        _pendingStop = null;
     }
 
     protected override void OnDestroy()
     {
+        // The view model outlives the activity; don't leave a handler behind that keeps this activity alive.
+        if (_playbackStateHandler != null && App.MainVm is { } vm) vm.Player.PropertyChanged -= _playbackStateHandler;
+        _playbackStateHandler = null;
+
+        CancelPendingStop();
         PlaybackService.StopPlayback(this);
         base.OnDestroy();
     }

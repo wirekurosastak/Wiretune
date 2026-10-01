@@ -1,8 +1,8 @@
 # Wiretune — Rendszerterv
 
-> Ez a dokumentum a `csizmi` ág jelenlegi állapotát írja le. Forrás: a projekt teljes
-> kódbázisának átvizsgálása (2026-09-26). Ha a kód változik, ezt a dokumentumot is
-> frissíteni kell — ellenkező esetben a leírás elavulttá válik.
+> Ez a dokumentum a projekt jelenlegi állapotát írja le (utolsó teljes átvizsgálás:
+> 2026-09-29). Ha a kód változik, ezt a dokumentumot is frissíteni kell — ellenkező
+> esetben a leírás elavulttá válik.
 
 ## 1. Áttekintés
 
@@ -18,9 +18,8 @@ veszteségmentes gyűjteményre, hálózati streameléssel és — Linuxon — a
 ## 2. Projektstruktúra és rétegek
 
 ```
-Wiretune.Core     — platformfüggetlen modellek és üzleti logika (szerver ÉS kliens)
-Wiretune.Data     — SQLite perzisztencia (Dapper + Microsoft.Data.Sqlite)
-Wiretune.Audio    — lejátszó motor (IAudioEngine, driver absztrakció, DSP)
+Wiretune.Core     — modellek, üzleti logika, SQLite perzisztencia (Data/), lejátszó
+                    motor és driverek (Audio/) — szerver ÉS kliens is ezt használja
 Wiretune.UI       — Avalonia MVVM felület (asztal és Android közös)
 Wiretune.Desktop  — asztali belépési pont (Linux, Windows)
 Wiretune.Android  — Android belépési pont
@@ -31,13 +30,16 @@ Wiretune.Tests    — xUnit tesztek (unit + memóriában futó integrációs tes
 ### 2.1 Rétegfüggőségek
 
 ```
-Wiretune.Server ──┬─> Wiretune.Data ──> Wiretune.Core
-                   └─> Wiretune.Core
+Wiretune.Server ──> Wiretune.Core
 
-Wiretune.Desktop ─> Wiretune.UI ──┬─> Wiretune.Audio ──> Wiretune.Core
-Wiretune.Android ─┘               ├─> Wiretune.Data ────> Wiretune.Core
-                                   └─> Wiretune.Core
+Wiretune.Desktop ─> Wiretune.UI ──> Wiretune.Core
+Wiretune.Android ─┘
 ```
+
+Nincs külön adat- vagy audio-projekt, és nincsenek interfészek egyetlen
+implementáció előtt: a `LibraryService`, `LibraryRepository`, `MetadataScanner`
+és `WiretuneAudioEngine` konkrét osztályok. Az egyetlen valódi bővítési pont az
+`IAudioDriver` (három platformfüggő megvalósítás + a tesztek `FakeAudioDriver`-e).
 
 A `Wiretune.Core` a közös nyelv szerver és kliens között: ugyanazok a modellek
 (`Track`, `Album`, `Artist`, `Playlist`, `AudioFormat`, `UserInfo`) és ugyanaz a
@@ -58,7 +60,7 @@ kliensen a szerverről letöltött (vagy helyi mappából beolvasott) számokkal
 | `ServerLibraryStatus` | A `/api/library/status` válasza (szám/album/előadó darabszám, szkennelés állapota, utolsó hiba). |
 | `AuthRules` | `MinPasswordLength = 8`, `MaxUsernameLength = 64` — egy helyen definiálva, szerver és kliens validáció is ezt használja. |
 
-## 4. Adatbázis (`Wiretune.Data`)
+## 4. Adatbázis (`Wiretune.Core/Data`)
 
 SQLite, WAL módban. **A szerver és minden kliens külön adatbázis-fájlt használ**
 (lásd 6. pont) — ez szándékos elkülönítés, nem közös állapot.
@@ -77,8 +79,8 @@ tracks (
   file_modified_utc  -- v2-ben hozzáadva (inkrementális szkenneléshez)
 )
 playlists (id PK, name, description, track_ids_json, created_at, modified_at)
-settings  (key PK, value)          -- ServerUrl, AuthToken, LibrarySource, jwt_secret (csak szerveren)
-users     (id PK, username UNIQUE COLLATE NOCASE, password_hash, display_name,
+settings  (key PK, value)          -- ServerUrl, AuthToken, LibrarySource; szerveren: jwt_secret, library_path
+users     (id PK, username UNIQUE COLLATE NOCASE, password_hash,
            is_admin, created_at, last_login)   -- csak a szerver adatbázisában releváns
 ```
 
@@ -94,14 +96,21 @@ Minimal API, JWT Bearer hitelesítéssel. Belépési pont: `Program.cs`.
 
 | Kulcs | Jelentés | Alapérték |
 |---|---|---|
-| `LibraryPath` | Zenei gyökérmappa | `WiretuneLibrary`; ha nem létezik, a felhasználó Zene mappája |
+| `LibraryPath` | Zenei gyökérmappa (relatív út a szerver tartalomgyökeréhez képest) | üres; ha üres vagy nem létezik, a felhasználó Zene mappája |
 | `DataDirectory` | DB, borító-cache, napló helye | `<AppData>/Wiretune/Server` |
 | `ScanIntervalMinutes` | Időzített inkrementális rescan | 30 (0 = kikapcsolva) |
 | `Port` | HTTP port | 5200 |
 
+Az admin által az API-n (`POST /api/config/library-path`) megváltoztatott
+könyvtármappa a `settings` táblába (`library_path`) kerül, és újraindítás után
+**felülírja** a konfigurációs fájl értékét (amíg a mappa létezik).
+
 A könyvtárgyökér és az adatkönyvtár feloldását az `AppPaths` (Core) végzi;
 `WIRETUNE_DATA_DIR` környezeti változóval felülírható (teszteknél és a
 kliens/szerver adatkönyvtárak szétválasztásánál használt mechanizmus).
+Unixon a **létrehozott** adatkönyvtár jogosultsága `0700` (a kliens tokenje és
+a szerver JWT-aláírókulcsa van benne); egy már létező könyvtár jogosultságát
+nem módosítja.
 
 ### 5.2 Hitelesítés (`Auth/AuthService.cs`)
 
@@ -115,7 +124,17 @@ kliens/szerver adatkönyvtárak szétválasztásánál használt mechanizmus).
   (dummy BCrypt-ellenőrzés), hogy a válaszidő ne árulja el a felhasználó
   létezését.
 - Szerepkör: `admin` / `user` (JWT `role` claim). `admin` policy védi a
-  regisztrációt és a manuális szkennelés-indítást.
+  regisztrációt, a felhasználók kezelését, a könyvtármappa módosítását és a
+  manuális szkennelés-indítást.
+- **Token érvényesség**: a token lejárata (24 óra, „emlékezz rám” esetén 90 nap)
+  mellett minden hitelesített kérésnél ellenőrzi a szerver, hogy a fiók még
+  létezik (`OnTokenValidated`) — egy törölt felhasználó tokenje azonnal
+  használhatatlan.
+- **Jelszó**: legalább 8 karakter, legfeljebb 72 *bájt* (a bcrypt a 72. bájt után
+  csendben levágna, ezért a szerver inkább elutasítja).
+- **Sebességkorlát**: a `/api/auth/login` és `/api/auth/setup` végpont IP-nként
+  percenként 10 kérést fogad el (429 + `Retry-After`). Fordított proxy mögött
+  minden kérés a proxy címéről érkezik, ott a korlát közös.
 
 ### 5.3 Végpontok
 
@@ -126,6 +145,10 @@ kliens/szerver adatkönyvtárak szétválasztásánál használt mechanizmus).
 | POST | `/api/auth/login` | — | Bejelentkezés, JWT visszaadása |
 | POST | `/api/auth/register` | admin | Új (nem-admin) felhasználó |
 | GET | `/api/auth/me` | bármely | Bejelentkezett felhasználó adatai |
+| GET | `/api/users` | admin | Felhasználók listája |
+| DELETE | `/api/users/{userId}` | admin | Felhasználó törlése (saját fiók nem törölhető) |
+| GET | `/api/config` | admin | A szerver könyvtármappája |
+| POST | `/api/config/library-path` | admin | Könyvtármappa módosítása (mentődik), rescan indítása |
 | GET | `/api/library/status` | bármely | Szám/album/előadó szám, szkennelés állapota |
 | POST | `/api/library/scan` | admin | Manuális (inkrementális) rescan kérése |
 | GET | `/api/tracks?q=` | bármely | Számlista, opcionális kereséssel |
@@ -134,17 +157,28 @@ kliens/szerver adatkönyvtárak szétválasztásánál használt mechanizmus).
 | GET | `/api/stream/{trackId}` | bármely | Fájl streamelése, `enableRangeProcessing: true` (HTTP 206) |
 | GET | `/api/cover/{trackId}` | bármely | Borítókép (beágyazott vagy mappaszintű) |
 | GET | `/api/cover/album/{albumId}` | bármely | Album borítója (első számáról) |
+| GET | `/api/lyrics/{trackId}` | bármely | A fájl beágyazott dalszöveg-címkéje (egyszerű szöveg, méretkorláttal); nincs címke: `404` |
 
-A JWT tokent fejlécben (`Authorization: Bearer`) vagy — ha a kliens ezt nem
-tudja küldeni (pl. натив médialejátszó) — `?token=` query paraméterben is el
-lehet fogadtatni (`OnMessageReceived`).
+A JWT tokent fejlécben (`Authorization: Bearer`) kell küldeni. Kivétel a
+`/api/stream/…` és `/api/cover/…` útvonal, ahol — mert az `ffplay` és az Android
+`MediaPlayer` nem tud fejlécet küldeni — a `?token=` query paraméter is
+elfogadott (`OnMessageReceived`). Máshol a query-token nem számít: egy naplóba
+került stream-URL nem használható a kezelő API ellen.
+
+A válaszokat a szerver tömöríti (gzip/brotli, `Accept-Encoding` alapján); ez a
+több megabájtos `/api/tracks` listán számít, a hangfájlokat (nem tömöríthető
+MIME-típus) és a Range-válaszokat nem érinti. A kérések törzse legfeljebb 64 KB.
+
+A hibaüzenetek (`{"error": "..."}`) angolul érkeznek; a kliens a saját (a
+felhasználó által választott) nyelvén szöveggel körbeveszi őket.
 
 ### 5.4 Könyvtárindexelés (`LibraryScanService : BackgroundService`)
 
 - Induláskor lefut egy scan.
 - Ha `ScanIntervalMinutes > 0`, azon időközönként ismétlődik.
 - `/api/library/scan` hívás egy `SemaphoreSlim(0,1)`-en keresztül azonnali
-  scant kér (nem torlódik, ha már fut egy).
+  scant kér (nem torlódik, ha már fut egy); a várakozás a `WaitAsync(interval)`
+  időtúllépéses változata, így nem marad függő várakozó a kérések között.
 - **Védelem le nem csatolt hálózati megosztás ellen**: ha a könyvtár korábban
   nem volt üres, de a gyökérmappa hirtelen üresnek látszik, a szolgáltatás
   *nem* üríti ki az indexet — csak naplózza a hibát. Ez azért fontos, mert egy
@@ -160,7 +194,8 @@ A stream és cover végpontok minden fájlelérést ellenőriznek: a kért fájl
 útvonala a könyvtárgyökér *alatt* kell legyen. Az ellenőrzés útvonal-szegmens
 alapú (nem puszta `StartsWith`), így egy `library2` nevű testvérmappa nem
 számít `library` alattinak — enélkül egy előtag-egyezés kijátszhatná a
-korlátozást.
+korlátozást. Ha a gyökér maga egy fájlrendszer-gyökér (`/` vagy `C:\`), az már
+szeparátorral végződik, ezért nem kap még egyet.
 
 ## 6. Kliens–szerver kapcsolat (`Wiretune.Core.Services.ServerSession`)
 
@@ -181,6 +216,14 @@ NotConfigured → Connecting → { Offline | SetupRequired | LoginRequired | Con
 
 Lejárt/érvénytelen token esetén a session automatikusan `LoginRequired`
 állapotba vált (nem próbálkozik végtelenül 401-es kéréssel).
+
+Minden hálózati művelet a `ServerSession.GuardedAsync`-en megy át: a hívók
+fire-and-forget UI parancsok, ahol egy kivétel az egész alkalmazást
+leállítaná, és az állapot sem maradhat `Connecting`-en. Ezért a hiba mindig
+állapot + üzenet lesz (`Offline`/`LoginRequired`), a váratlan kivétel pedig
+naplózódik. Sikeres bejelentkezés utáni sikertelen könyvtárletöltés `Offline`
+állapotot ad, a token megmarad (a következő kapcsolódás újrapróbálja).
+A szervercím nem tartalmazhat `felhasználó:jelszó@` részt.
 
 ### 6.2 Könyvtárforrás (`LibrarySource`)
 
@@ -207,7 +250,12 @@ ServerSession.RefreshLibraryCoreAsync
 Típusos kivételek: `ServerUnauthorizedException` (401), `ServerRequestException`
 (hálózati hiba vagy egyéb HTTP hiba, `StatusCode`-dal). A `ServerSession` ezek
 alapján dönt állapotváltásról (pl. 409 setup közben → már beállított szerver
-üzenet; hálózati hiba → Offline).
+üzenet; hálózati hiba → Offline). A válasz *törzsének* olvasása közbeni
+megszakadás (`IOException`, időtúllépés, sérült gzip) és a nem Wiretune
+szervertől érkező válasz (pl. hiányzó `setupRequired` mező) is
+`ServerRequestException`-ként jelenik meg. A nem kezelt UI-szálas kivételeket
+az `App` naplózza és az állapotsoron jeleníti meg, nem állítja le az
+alkalmazást.
 
 ## 7. Zenei könyvtár szolgáltatás (`Wiretune.Core.Services.LibraryService`)
 
@@ -250,16 +298,16 @@ részleges állapotot, és nincs szükség lock-ra olvasáskor.
 - `Track.Id` a fájl teljes, normalizált útvonalának hash-e — **stabil scan-ek
   között**, így a kedvencek/lejátszásszám nem vész el újraindexeléskor.
 
-## 8. Lejátszási architektúra (`Wiretune.Audio`)
+## 8. Lejátszási architektúra (`Wiretune.Core/Audio`)
 
 ### 8.1 Absztrakció
 
 ```
-Wiretune.Core.Audio.IAudioEngine        — platformfüggetlen szerződés (UI ezt látja)
-  └─ Wiretune.Audio.WiretuneAudioEngine — mód-logika (exclusive/bitperfect), eszközkezelés
-       └─ Wiretune.Audio.Drivers.IAudioDriver — tényleges lejátszás
+Wiretune.Core.Audio.WiretuneAudioEngine — mód-logika (exclusive/bitperfect), eszközkezelés (UI ezt látja)
+  └─ Wiretune.Core.Audio.Drivers.IAudioDriver — tényleges lejátszás
             ├─ FfmpegAudioDriver   (Linux Desktop: ALSA hw:X,Y / PipeWire routing, ffplay)
-            ├─ WasapiAudioDriver   (Windows Desktop: WASAPI Shared + WASAPI Exclusive bit-perfect)
+            ├─ WasapiAudioDriver   (Windows Desktop: WASAPI Shared + WASAPI Exclusive bit-perfect;
+            │                       bit-perfect módban nincs csendes visszaesés shared módra — hibaként jelenik meg)
             └─ AndroidAudioDriver  (Android: natív MediaPlayer)
 ```
 
@@ -278,10 +326,18 @@ Az `App.AudioDriverFactory` static delegate-en át a platform belépési pont
 - Windowson: nincs `SIGSTOP` — szüneteltetéskor a folyamat leáll, majd
   folytatáskor a mentett pozícióról újraindul.
 - Hiba esetén (`ffplay` hiányzik, nem-nulla kilépőkód) `PlaybackFailed`
-  eseményt küld felhasználóbarát üzenettel, és `PlaybackState.Error`-ba vált —
-  ez korábban csendben, jelzés nélkül történt.
-- Hangerő: ha van vezérelhető kimenet (PipeWire/ALSA mixer), azonnal alkalmazza;
-  ha nincs, a `-volume` csak indításkor állítható, ezért 400 ms debounce-szal
+  eseményt küld felhasználóbarát üzenettel, és `PlaybackState.Error`-ba vált.
+  Fontos: az `ffplay` **0-s kilépőkóddal** lép ki akkor is, ha a forrást meg
+  sem tudta nyitni (elérhetetlen szerver, lejárt token, hiányzó fájl). Ezért a
+  driver a 3 másodpercen belüli kilépést hibaüzenettel a stderr-en hibának
+  tekinti — különben a sor másodpercek alatt „végigpörögne” a lejátszhatatlan
+  számokon. A közvetlen ALSA csővezetéknél (`ffmpeg | aplay`) az `aplay` tiszta
+  bemeneti vég után is 0-val lép ki, ezért az `ffmpeg` kilépőkódja is számít.
+- A spektrum a szám külön, mono 44,1 kHz-es dekódolásából (`AudioPcmCache`,
+  második `ffmpeg` folyamat) készül; hálózati forrásnál ez a szám második
+  letöltését jelenti. A gyorsítótár legfeljebb 20 percnyi hangot tart meg.
+- Hangerő: ha van vezérelhető kimenet (PipeWire/ALSA mixer), a mixert (`wpctl`/
+  `amixer`) 60 ms debounce-szal, a hívó szálon kívül állítja; ha nincs, a `-volume` csak indításkor állítható, ezért 400 ms debounce-szal
   újraindítja a folyamatot a jelenlegi pozícióról (csúszka húzása közben nem
   minden tick indít új folyamatot).
 
@@ -301,6 +357,13 @@ Ez azért fontos, mert a token éles ideje rövidebb, mint amíg egy track-objek
 él a kliens gyorsítótárában — ha a tokent tárolnánk, egy lejárt/kicserélt
 tokennel ellátott URL használhatatlanná válna újralejátszáskor.
 
+A borítóképek kéréséhez (`CoverArtService`) a token fejlécben megy, és **csak**
+a csatlakoztatott szerver címére (`CoverArtService.ServerUrl`); harmadik fél
+szerverére (pl. előadóképek) soha. Az `ffplay`/`ffmpeg` parancssorában viszont
+a stream-URL a tokennel együtt szerepel, így azt ugyanazon a gépen más
+felhasználók is láthatják a folyamatlistában — többfelhasználós gépen ezt
+érdemes szem előtt tartani.
+
 ### 8.5 Mód-logika (`WiretuneAudioEngine`)
 
 - `SetBitperfectModeAsync(true)`: automatikusan bekapcsolja az exclusive
@@ -309,9 +372,11 @@ tokennel ellátott URL használhatatlanná válna újralejátszáskor.
 - `SetBitperfectModeAsync(false)`: visszaállítja a mentett hangerőt.
 - `SetExclusiveModeAsync(false)` bit-perfect aktív állapotban: kikapcsolja a
   bit-perfectet is (megosztott keverőben ez fizikailag nem értelmezhető).
+- Kizárólagos módba váltáskor a motor megkeresi az aktuális megosztott sinkhez
+  tartozó közvetlen hardvereszközt (a kártya neve alapján), ennek híján az első
+  USB-eszközt, végül bármely közvetlen ALSA-eszközt.
 - Ha egy eszköz nem támogatja a kért módot (`IsExclusiveSupported` /
-  `IsBitperfectSupported` false — pl. Windows `AudioDeviceManager`
-  jelenleg csak megosztott WASAPI-t ad vissza), a mód bekapcsolása
+  `IsBitperfectSupported` false — pl. a PipeWire sinkek), a mód bekapcsolása
   `PlaybackFailed` üzenettel elutasításra kerül, a mód nem vált be
   hamisan „bekapcsolva” állapotba.
 
@@ -350,10 +415,57 @@ ténylegesen látható kártyák borítóját tölti be.
 ### 9.3 UI-automatizálás (`UiAutomationServer`)
 
 Csak `WIRETUNE_UI_AUTOMATION=1` esetén indul el, kizárólag `127.0.0.1`-en
-figyel, és minden kérést elutasít, amelynek van `Origin` fejléce (böngészőből
-nem hívható). Fejlesztői/tesztelési célra szolgáló, állapot-lekérdező és
+figyel, és elutasít minden böngészőből érkező kérést (`Origin` fejléc, vagy
+`Sec-Fetch-Site` ≠ `none` — utóbbi a sima `<img>`/`<a>` kéréseket is fogja),
+valamint minden olyat, amelynek `Host` fejléce nem `127.0.0.1:<port>` /
+`localhost:<port>` (DNS-rebinding ellen). Fejlesztői/tesztelési célra szolgáló, állapot-lekérdező és
 művelet-indító HTTP végpontokat ad (`/api/ui/state`, `/api/ui/play-track`,
 `/api/ui/screenshot` stb.).
+
+### 9.4 Nyelvek (`Wiretune.Core/Localization`, `Wiretune.UI/Localization`)
+
+Az összes felhasználónak szánt szöveg a `Strings.cs` táblázatában van: kulcs →
+(magyar, angol, német). A `Localizer` egyke adja vissza (`Get`, `Format`; ha az
+első formázási argumentum pontosan 1 és van `<kulcs>_One` változat, azt
+használja), a nyelvet `SetLanguage` váltja, és `LanguageChanged` eseményt küld.
+
+- A XAML-ben `{loc:T Kulcs}` (és `{loc:TFormat Kulcs, Path=…}`) a `Localizer`
+  indexeréhez köt, ezért futás közben, újraindítás nélkül frissül minden
+  tulajdonságon, az `AutomationProperties.Name`-en is.
+- A nézetmodellekben számolt szövegek (állapotsor, jelvények, számlálók) a
+  `RefreshLocalizedTexts()`-ben épülnek újra.
+- A nyelv és a téma a `Preference.Language` / `Preference.Theme` beállításban
+  marad meg (`LibraryService.Get/SetPreferenceAsync`); ha még nincs mentett
+  nyelv, az operációs rendszeré érvényes (magyar/angol/német), egyébként angol.
+- A `LocalizationTests` kikényszeríti: minden kulcsnak megvan mindhárom szövege,
+  a `{0}`, `{1}` helyőrzők nyelvenként azonosak, nincs használaton kívüli kulcs, és
+  a kódban/XAML-ben hivatkozott minden kulcs létezik.
+
+### 9.5 Telefonos felület (`AndroidMainView`)
+
+Androidon az `AndroidMainView` a `MainView` helyett jelenik meg, de ugyanazokat a
+nézetmodelleket használja. A navigációs állapot közös az asztallal
+(`SelectedNavigationIndex`: 0 Számok, 1 Albumok, 2 Előadók, 3 Lejátszási
+listák, 4 Kedvencek, 5 Beállítások; a Kedvencek a Lejátszási listák lapon
+kapcsolóval érhető el), a telefonos rétegeket a `MainViewModel` néhány
+tulajdonsága írja le: `IsSearchOpen`, `IsNowPlayingOpen`, `NowPlayingTab`
+(0 lejátszó, 1 sor, 2 dalszöveg). A vissza-gesztus a `TryNavigateBack()`-re
+megy: a legbelső nyitott réteget zárja (dialógus → teljes képernyős lejátszó →
+kereső → részletoldal → Kedvencek), és `false`-t ad, ha nincs mit bezárni.
+
+- Az ismétlődő elemek külön vezérlők: `TrackRowView`, `PhoneHeader`,
+  `PhoneEmptyState`, `PhoneAlbumCard`, `PhoneArtistCard`. A stílusok a
+  `Styles/PhoneStyles.axaml`-ban vannak (`phone-*` osztályok).
+- Az album- és előadórács a `TileGrid`: a csempéket annyi oszlopba osztja, ahány
+  elfér, és csak a látható (plusz néhány szomszédos) sort hozza létre, így
+  ezres könyvtárnál is kevés vezérlő él. Minden sor magassága ismert, ezért a
+  görgetősáv az elejétől pontos. A számlista `VirtualizingStackPanel`.
+- A biztonságos terület (kivágás, rendszersávok) a `TopLevel.InsetsManager`-ből
+  jön, és az `AndroidMainView.SafeArea` tulajdonságon át kerül a kijelölt
+  szélekre.
+- Az Avalonia-rendereren egy `BoxShadow`-val ellátott, gyerekeket tartalmazó
+  `Border` gyerekei nem rajzolódnak ki megbízhatóan; ezért az árnyék mindig külön,
+  testvér `Border` rétegen van a tartalom mögött.
 
 ## 10. Konfiguráció és környezeti változók
 
@@ -361,6 +473,7 @@ művelet-indító HTTP végpontokat ad (`/api/ui/state`, `/api/ui/play-track`,
 |---|---|
 | `WIRETUNE_DATA_DIR` | Felülírja az `AppPaths.GetDataDirectory` alap (AppData) útvonalát |
 | `WIRETUNE_UI_AUTOMATION=1` | Elindítja a helyi UI-automatizálási HTTP szervert |
+| `WIRETUNE_NO_ARTIST_PICTURES=1` | Kikapcsolja az előadóképek internetes (Deezer) keresését; ennélkül az előadók nevei az `api.deezer.com`-ra kerülnek |
 
 Szerver oldali `appsettings.json` kulcsok: ld. 5.1.
 
@@ -376,6 +489,9 @@ Szerver oldali `appsettings.json` kulcsok: ld. 5.1.
   WAV-fájlokból épített könyvtárral. Lefedi: first-run setup versenyhelyzetet,
   JWT-alapú jogosultságkezelést, Range-kéréseket, útvonal-ellenőrzést, teljes
   kliens (`ServerSession`) életciklust bejelentkezéstől kijelentkezésig.
+- **`FfmpegPipelineTests`**: valódi `ffmpeg`/`ffplay` gyerekfolyamatokkal (az
+  `ffplay` SDL „dummy” hangmeghajtóval fut, nem szól semmi); `ffmpeg` nélküli
+  gépen kihagyják magukat.
 - **`RefactorRegressionTests`**: válogatásalbum-csoportosítás, inkrementális/
   párhuzamos szkennelés, kedvencek megőrzése, eszközképesség-ellenőrzés,
   DB-migráció, URL-normalizálás.
@@ -387,7 +503,17 @@ Szerver oldali `appsettings.json` kulcsok: ld. 5.1.
 - Nincs átkódolás (transzkódolás); a szerver mindig az eredeti fájlt streameli.
 - Windowson és Androidon nincs exclusive/bit-perfect kimenet — csak Linuxon
   (ALSA/PipeWire).
-- Nincs felhasználókezelő felület a kliensben (csak API-végpont a regisztrációra).
+- A szerver HTTP-t beszél (TLS nélkül): a jelszó és a token nyílt szövegben megy.
+  Otthoni hálózaton kívülről csak HTTPS-t záró fordított proxyn át érdemes
+  elérni. Az Android alkalmazás emiatt engedélyezi a titkosítatlan forgalmat.
+- A szám azonosítója (`Track.Id`) a szerveren lévő útvonal hash-e; a könyvtár
+  áthelyezése új azonosítókat ad (kedvencek/listák kliensoldalon elárvulnak).
+- A `/api/tracks` a szerver fájlrendszerbeli útvonalait (`FilePath`) is
+  tartalmazza minden hitelesített felhasználónak.
 - Az Android build nem volt lefordítva ellenőrzésképp ezen a gépen (hiányzó
-  workload); a `AndroidAudioDriver` és a manifest-módosítások kód szerint
-  helyesek, de futásidőben nincsenek tesztelve.
+  workload): az `AndroidAudioDriver`, a `PlaybackService`, a `MainActivity`, a
+  manifest és a telefonos felület kód szerint helyes, de sem lefordítva, sem
+  eszközön futtatva nem lett kipróbálva. (A telefonos felület XAML-je az UI
+  projekt részeként lefordul, és az asztali renderelővel képernyőképen
+  ellenőrzött.)
+- Nincs dalszöveg-kereső szolgáltatás: csak a fájl saját címkéje számít.

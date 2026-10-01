@@ -27,3 +27,17 @@ bld/
 *.db-wal
 Covers/
 cache/
+
+## Test, publish and packaging output
+TestResults/
+publish/
+artifacts/
+*.apk
+*.aab
+
+## Runtime data and OS clutter
+*.db
+*.log
+*.lnk
+.DS_Store
+Thumbs.db

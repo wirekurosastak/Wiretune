@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using Wiretune.Core.Models;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.UI.Converters;
 
@@ -197,7 +198,7 @@ public class BoolToRoleTextConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        return value is true ? "Adminisztrátor" : "Felhasználó";
+        return Localizer.Get(value is true ? "RoleAdmin" : "RoleUser");
     }
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();

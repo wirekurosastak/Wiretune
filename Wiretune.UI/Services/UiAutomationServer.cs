@@ -76,10 +76,19 @@ public sealed class UiAutomationServer : IDisposable
         var resp = context.Response;
         resp.ContentType = "application/json; charset=utf-8";
 
-        // Reject browser-originated requests outright.
-        if (!string.IsNullOrEmpty(req.Headers["Origin"]))
+        // Reject browser-originated requests outright. Origin covers fetch/XHR; Sec-Fetch-Site also covers plain
+        // <img>/<a> requests, which carry no Origin but would otherwise let a web page trigger these GET actions.
+        if (!string.IsNullOrEmpty(req.Headers["Origin"]) ||
+            req.Headers["Sec-Fetch-Site"] is { Length: > 0 } fetchSite && fetchSite != "none")
         {
             await WriteJson(resp, 403, new { Error = "Cross-origin requests are not allowed." });
+            return;
+        }
+
+        // DNS rebinding: a web page whose name resolves to 127.0.0.1 reaches this port with a foreign Host header.
+        if (req.UserHostName != $"127.0.0.1:{Port}" && req.UserHostName != $"localhost:{Port}")
+        {
+            await WriteJson(resp, 403, new { Error = "Unexpected Host header." });
             return;
         }
 

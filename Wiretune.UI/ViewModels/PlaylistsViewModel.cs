@@ -98,6 +98,9 @@ public partial class PlaylistsViewModel : ObservableObject
         RefreshSelectedTracks();
     }
 
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts() => RefreshSelectedTracks();
+
     private void RefreshSelectedTracks()
     {
         SelectedPlaylistTracks = SelectedPlaylist == null ? Array.Empty<Track>() : _library.GetPlaylistTracks(SelectedPlaylist);

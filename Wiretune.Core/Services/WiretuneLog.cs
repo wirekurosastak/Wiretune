@@ -19,7 +19,8 @@ public record LogEntry(
 {
     public override string ToString()
     {
-        var exStr = Exception != null ? $" | Exception: {Exception.GetType().Name}: {Exception.Message}\n{Exception.StackTrace}" : "";
+        // Exception.ToString() keeps the type, message, inner exceptions and stack trace.
+        var exStr = Exception != null ? $" | Exception: {Exception}" : "";
         return $"[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{Level.ToString().ToUpperInvariant(),-5}] [{Category}] {Message}{exStr}";
     }
 }
@@ -30,6 +31,7 @@ public static class WiretuneLog
     private static readonly object _lock = new();
     private static string? _logFilePath;
     private static StreamWriter? _logWriter;
+    private static long _bytesWritten;
     private static bool _initAttempted;
 
     public static event Action<LogEntry>? OnLogEntry;
@@ -60,35 +62,61 @@ public static class WiretuneLog
         {
             if (_logWriter != null && (customLogPath == null || customLogPath == _logFilePath)) return;
 
-            _logWriter?.Dispose();
-            _logWriter = null;
             _initAttempted = true;
             _logFilePath = customLogPath ?? _logFilePath ?? DefaultLogPath();
             path = _logFilePath;
 
-            try
-            {
-                var dir = Path.GetDirectoryName(path);
-                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-
-                var info = new FileInfo(path);
-                if (info.Exists && info.Length > MaxLogBytes)
-                {
-                    var backup = path + ".1";
-                    try { File.Delete(backup); } catch { }
-                    try { File.Move(path, backup); } catch { }
-                }
-
-                var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                _logWriter = new StreamWriter(stream) { AutoFlush = true };
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[WiretuneLog] Failed to open log file '{path}': {ex.Message}");
-            }
+            OpenWriterLocked(path);
         }
 
         Info("WiretuneLog", $"=== Wiretune logging initialized (Log: {path}, Level: {MinimumLevel}) ===");
+    }
+
+    /// <summary>Opens the log for appending, first moving an oversized file to <c>.1</c> (one backup is kept). Call under the lock.</summary>
+    private static void OpenWriterLocked(string path)
+    {
+        try
+        {
+            _logWriter?.Dispose();
+            _logWriter = null;
+
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+
+            var info = new FileInfo(path);
+            if (info.Exists && info.Length > MaxLogBytes)
+            {
+                var backup = path + ".1";
+                try { File.Delete(backup); } catch { }
+                try { File.Move(path, backup); } catch { }
+            }
+
+            var stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            // If the rotation above failed (file in use), don't retry it on every line: count from zero again.
+            _bytesWritten = stream.Length > MaxLogBytes ? 0 : stream.Length;
+            _logWriter = new StreamWriter(stream) { AutoFlush = true };
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[WiretuneLog] Failed to open log file '{path}': {ex.Message}");
+        }
+    }
+
+    /// <summary>Appends a line and rotates when the file grows past the limit, so long-running servers stay bounded. Call under the lock.</summary>
+    private static void WriteLineLocked(string line)
+    {
+        if (_logWriter == null) return;
+
+        try
+        {
+            _logWriter.WriteLine(line);
+            _bytesWritten += line.Length + Environment.NewLine.Length;
+            if (_bytesWritten > MaxLogBytes && _logFilePath != null) OpenWriterLocked(_logFilePath);
+        }
+        catch
+        {
+            // Logging must never take the application down.
+        }
     }
 
     public static void Log(LogLevel level, string category, string message, Exception? ex = null)
@@ -112,19 +140,13 @@ public static class WiretuneLog
         lock (_lock)
         {
             if (!_initAttempted) needsInit = true;
-            else
-            {
-                try { _logWriter?.WriteLine(line); } catch { }
-            }
+            else WriteLineLocked(line);
         }
 
         if (needsInit)
         {
             Initialize();
-            lock (_lock)
-            {
-                try { _logWriter?.WriteLine(line); } catch { }
-            }
+            lock (_lock) WriteLineLocked(line);
         }
 
         try

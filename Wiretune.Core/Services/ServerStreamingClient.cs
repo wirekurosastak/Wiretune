@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 
 namespace Wiretune.Core.Services;
@@ -29,6 +30,7 @@ public sealed class ServerStreamingClient : IDisposable
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30); // normal API calls
     private static readonly TimeSpan LibraryTimeout = TimeSpan.FromMinutes(3);  // large library fetch
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static string NotWiretuneMessage => Localizer.Get("ClientNotWiretune");
 
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
@@ -38,7 +40,11 @@ public sealed class ServerStreamingClient : IDisposable
     public ServerStreamingClient(HttpClient? httpClient = null)
     {
         _ownsClient = httpClient == null;
-        _httpClient = httpClient ?? new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        // The server gzips its JSON (the library listing is large); per-request timeouts are enforced in SendAsync.
+        _httpClient = httpClient ?? new HttpClient(new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All })
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
     }
 
     public static string BuildStreamUrl(string baseUrl, string trackId) =>
@@ -50,7 +56,13 @@ public sealed class ServerStreamingClient : IDisposable
     public async Task<bool> CheckSetupRequiredAsync(string baseUrl, CancellationToken ct = default)
     {
         var element = await SendAsync<JsonElement>(HttpMethod.Get, baseUrl, "/api/auth/setup-required", null, false, ProbeTimeout, ct);
-        return element.TryGetProperty("setupRequired", out var prop) && prop.GetBoolean();
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty("setupRequired", out var prop) ||
+            prop.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            throw new ServerRequestException(NotWiretuneMessage, HttpStatusCode.OK);
+        }
+        return prop.GetBoolean();
     }
 
     public Task<AuthResponse> SetupAdminAsync(string baseUrl, string username, string password, CancellationToken ct = default) =>
@@ -83,10 +95,24 @@ public sealed class ServerStreamingClient : IDisposable
     public async Task TriggerScanAsync(string baseUrl, CancellationToken ct = default) =>
         await SendAsync<JsonElement>(HttpMethod.Post, baseUrl, "/api/library/scan", null, true, DefaultTimeout, ct);
 
+    /// <summary>The lyrics of a server track, or null when it has none (or the server predates the endpoint).</summary>
+    public async Task<string?> GetLyricsAsync(string baseUrl, string trackId, CancellationToken ct = default)
+    {
+        try
+        {
+            var element = await SendAsync<JsonElement>(HttpMethod.Get, baseUrl, $"/api/lyrics/{Uri.EscapeDataString(trackId)}", null, true, DefaultTimeout, ct);
+            return element.ValueKind == JsonValueKind.Object && element.TryGetProperty("lyrics", out var lyrics) ? lyrics.GetString() : null;
+        }
+        catch (ServerRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Fetches the server library. Stream and cover URLs are token-free; authorization is added at playback time.</summary>
     public async Task<List<Track>> FetchTracksAsync(string baseUrl, CancellationToken ct = default)
     {
-        var tracks = await SendAsync<List<Track>>(HttpMethod.Get, baseUrl, "/api/tracks", null, true, LibraryTimeout, ct) ?? new List<Track>();
+        var tracks = await SendAsync<List<Track>>(HttpMethod.Get, baseUrl, "/api/tracks", null, true, LibraryTimeout, ct);
         foreach (var t in tracks)
         {
             t.StreamUrl = BuildStreamUrl(baseUrl, t.Id);
@@ -114,7 +140,7 @@ public sealed class ServerStreamingClient : IDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw new ServerRequestException($"A szerver nem válaszolt {timeout.TotalSeconds:0} másodpercen belül.");
+            throw new ServerRequestException(Localizer.Format("ClientTimeout", timeout.TotalSeconds.ToString("0")));
         }
         catch (HttpRequestException ex)
         {
@@ -134,12 +160,22 @@ public sealed class ServerStreamingClient : IDisposable
             try
             {
                 var value = await response.Content.ReadFromJsonAsync<T>(JsonOptions, timeoutCts.Token);
-                if (value is null) throw new ServerRequestException("A szerver üres választ küldött.", response.StatusCode);
+                if (value is null) throw new ServerRequestException(Localizer.Get("ClientEmptyResponse"), response.StatusCode);
                 return value;
             }
             catch (JsonException ex)
             {
-                throw new ServerRequestException("A szerver válasza nem értelmezhető (nem Wiretune szerver?).", response.StatusCode, ex);
+                throw new ServerRequestException(NotWiretuneMessage, response.StatusCode, ex);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new ServerRequestException(Localizer.Format("ClientBodyTimeout", timeout.TotalSeconds.ToString("0")));
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidDataException)
+            {
+                // The connection dropped (or the body was corrupt) after the headers arrived, e.g. a server restart
+                // in the middle of the library download.
+                throw new ServerRequestException(Localizer.Format("ClientConnectionCutOff", ex.Message), inner: ex);
             }
         }
     }
@@ -151,7 +187,7 @@ public sealed class ServerStreamingClient : IDisposable
             var element = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct);
             if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty("error", out var error))
             {
-                return error.GetString() ?? response.ReasonPhrase ?? "Ismeretlen hiba";
+                return error.GetString() ?? response.ReasonPhrase ?? Localizer.Get("ClientUnknownError");
             }
         }
         catch

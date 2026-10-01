@@ -1,10 +1,11 @@
 ﻿using System.Security.Claims;
+using System.Threading.RateLimiting;
+using Dapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.RateLimiting;
+using Wiretune.Core.Data;
 using Wiretune.Core.Models;
-using Wiretune.Core.Data;
 using Wiretune.Core.Services;
-using Wiretune.Core.Data;
 using Wiretune.Server;
 using Wiretune.Server.Auth;
 
@@ -17,14 +18,18 @@ var dataDirectory = AppPaths.GetDataDirectory(options.DataDirectory, "Server");
 WiretuneLog.Initialize(Path.Combine(dataDirectory, "wiretune-server.log"));
 WiretuneLog.Info("Wiretune.Server", "=== Starting Wiretune.Server ===");
 
+var database = new DatabaseManager(Path.Combine(dataDirectory, "wiretune-server.db"));
+database.InitializeSchema();
+
+// A library folder chosen through the admin API wins over the configured one, so it survives restarts.
 var paths = new ServerPaths(
-    ResolveLibraryRoot(options.LibraryPath, builder.Environment.ContentRootPath),
+    LoadSavedLibraryRoot(database) ?? ResolveLibraryRoot(options.LibraryPath, builder.Environment.ContentRootPath),
     dataDirectory,
     Path.Combine(dataDirectory, "Covers"));
 WiretuneLog.Info("Wiretune.Server", $"Library: '{paths.LibraryRoot}' (exists: {Directory.Exists(paths.LibraryRoot)}), data: '{paths.DataDirectory}'");
 
 builder.Services.AddSingleton(paths);
-builder.Services.AddSingleton(new DatabaseManager(Path.Combine(dataDirectory, "wiretune-server.db")));
+builder.Services.AddSingleton(database);
 builder.Services.AddSingleton<LibraryRepository, LibraryRepository>();
 builder.Services.AddSingleton<MetadataScanner, MetadataScanner>();
 builder.Services.AddSingleton<LibraryService>(sp => new LibraryService(
@@ -42,31 +47,65 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         jwt.TokenValidationParameters = auth.GetValidationParameters();
         jwt.Events = new JwtBearerEvents
         {
-            // Players that cannot send headers (e.g. external media players) may pass the token in the query string.
+            // Players that cannot send headers (ffplay, Android MediaPlayer) pass the token in the query string.
+            // Only the media endpoints accept that, so a URL that ends up in a log cannot drive the management API.
             OnMessageReceived = context =>
             {
+                var path = context.Request.Path;
                 if (string.IsNullOrEmpty(context.Token) &&
+                    (path.StartsWithSegments("/api/stream") || path.StartsWithSegments("/api/cover")) &&
                     context.Request.Query.TryGetValue("token", out var token) &&
                     !string.IsNullOrEmpty(token))
                 {
                     context.Token = token;
                 }
                 return Task.CompletedTask;
+            },
+            // Tokens live for up to 90 days: deleting an account must end its access immediately.
+            OnTokenValidated = async context =>
+            {
+                var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+                var auth = context.HttpContext.RequestServices.GetRequiredService<AuthService>();
+                if (userId == null || !await auth.UserExistsAsync(userId))
+                    context.Fail("The account no longer exists.");
             }
         };
     });
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("admin", policy => policy.RequireRole("admin"));
 
+// bcrypt makes every guess expensive for the server, but nothing stops a client from guessing forever.
+builder.Services.AddRateLimiter(limiter =>
+{
+    limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    limiter.OnRejected = async (context, ct) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            context.HttpContext.Response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        await context.HttpContext.Response.WriteAsJsonAsync(new { Error = "Too many attempts. Try again in a minute." }, ct);
+    };
+    limiter.AddPolicy("auth", http => RateLimitPartition.GetFixedWindowLimiter(
+        http.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+});
+
+// The library listing can be several megabytes of JSON; audio and cover formats are not on the default MIME list.
+builder.Services.AddResponseCompression();
+
 if (string.IsNullOrEmpty(builder.Configuration["urls"]) && string.IsNullOrEmpty(builder.Configuration["ASPNETCORE_URLS"]))
 {
     builder.WebHost.UseUrls($"http://0.0.0.0:{options.Port}");
 }
 
+// The API never accepts uploads; only small JSON bodies (login, setup, library path).
+builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 64 * 1024);
+
 var app = builder.Build();
 
 await app.Services.GetRequiredService<LibraryService>().InitializeAsync();
 
+app.UseResponseCompression();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -87,7 +126,7 @@ app.MapPost("/api/auth/setup", async (RegisterRequest request) =>
     return result == null
         ? Results.Conflict(new { Error = "The server is already set up. Sign in instead." })
         : Results.Ok(result);
-});
+}).RequireRateLimiting("auth");
 
 app.MapPost("/api/auth/login", async (LoginRequest request) =>
 {
@@ -96,7 +135,7 @@ app.MapPost("/api/auth/login", async (LoginRequest request) =>
 
     var result = await authService.LoginAsync(request);
     return result == null ? Results.Unauthorized() : Results.Ok(result);
-});
+}).RequireRateLimiting("auth");
 
 // ── Auth (authenticated) ──
 
@@ -126,10 +165,10 @@ app.MapDelete("/api/users/{userId}", async (string userId, ClaimsPrincipal princ
 {
     var currentUserId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
     if (string.Equals(currentUserId, userId, StringComparison.OrdinalIgnoreCase))
-        return Results.BadRequest(new { Error = "Saját fiókodat nem törölheted." });
+        return Results.BadRequest(new { Error = "You cannot delete your own account." });
 
     var deleted = await authService.DeleteUserAsync(userId);
-    return deleted ? Results.Ok() : Results.NotFound(new { Error = "A felhasználó nem található." });
+    return deleted ? Results.Ok() : Results.NotFound(new { Error = "User not found." });
 }).RequireAuthorization("admin");
 
 app.MapGet("/api/config", () => Results.Ok(new ServerConfigInfo(paths.LibraryRoot))).RequireAuthorization("admin");
@@ -137,12 +176,22 @@ app.MapGet("/api/config", () => Results.Ok(new ServerConfigInfo(paths.LibraryRoo
 app.MapPost("/api/config/library-path", async (UpdateLibraryPathRequest request, LibraryScanService scanner) =>
 {
     if (string.IsNullOrWhiteSpace(request.NewPath))
-        return Results.BadRequest(new { Error = "A mappa el elérési útja nem lehet üres." });
+        return Results.BadRequest(new { Error = "The folder path must not be empty." });
 
-    var fullPath = Path.GetFullPath(request.NewPath);
+    string fullPath;
+    try
+    {
+        fullPath = Path.GetFullPath(request.NewPath);
+    }
+    catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+    {
+        return Results.BadRequest(new { Error = "The folder path is not valid." });
+    }
+
     if (!Directory.Exists(fullPath))
-        return Results.BadRequest(new { Error = $"A megadott mappa nem létezik: {fullPath}" });
+        return Results.BadRequest(new { Error = $"The folder does not exist: {fullPath}" });
 
+    SaveLibraryRoot(database, fullPath);
     paths.LibraryRoot = fullPath;
     scanner.RequestScan();
     return Results.Ok(new ServerConfigInfo(paths.LibraryRoot));
@@ -182,6 +231,15 @@ api.MapGet("/stream/{trackId}", (string trackId) =>
 api.MapGet("/cover/{trackId}", async (string trackId, MetadataScanner scanner, HttpContext http) =>
     await CoverResultAsync(library.GetTrack(trackId), scanner, http));
 
+api.MapGet("/lyrics/{trackId}", async (string trackId, HttpContext http) =>
+{
+    var track = library.GetTrack(trackId);
+    if (track == null || !AppPaths.IsPathUnderRoot(track.FilePath, paths.LibraryRoot)) return Results.NotFound();
+
+    var lyrics = await MetadataScanner.ReadLyricsAsync(track.FilePath, http.RequestAborted);
+    return lyrics == null ? Results.NotFound() : Results.Ok(new { lyrics });
+});
+
 api.MapGet("/cover/album/{albumId}", async (string albumId, MetadataScanner scanner, HttpContext http) =>
     await CoverResultAsync(library.GetAlbum(albumId)?.Tracks.FirstOrDefault(t => t.HasCoverArt), scanner, http));
 
@@ -202,6 +260,23 @@ async Task<IResult> CoverResultAsync(Track? track, MetadataScanner scanner, Http
 
     var bytes = File.Exists(track.FilePath) ? await scanner.ExtractCoverArtAsync(track.FilePath, http.RequestAborted) : null;
     return bytes is { Length: > 0 } ? Results.Bytes(bytes, ImageFormat.GetMimeType(bytes)) : Results.NotFound();
+}
+
+static string? LoadSavedLibraryRoot(DatabaseManager db)
+{
+    using var conn = db.CreateConnection();
+    var saved = conn.QueryFirstOrDefault<string>("SELECT value FROM settings WHERE key = 'library_path'");
+    if (string.IsNullOrWhiteSpace(saved)) return null;
+    if (Directory.Exists(saved)) return saved;
+
+    WiretuneLog.Warn("Wiretune.Server", $"Saved library path '{saved}' no longer exists; using the configured one instead.");
+    return null;
+}
+
+static void SaveLibraryRoot(DatabaseManager db, string path)
+{
+    using var conn = db.CreateConnection();
+    conn.Execute("INSERT INTO settings (key, value) VALUES ('library_path', @path) ON CONFLICT(key) DO UPDATE SET value = excluded.value", new { path });
 }
 
 static string ResolveLibraryRoot(string? configured, string contentRoot)
@@ -227,6 +302,3 @@ static string ResolveLibraryRoot(string? configured, string contentRoot)
 }
 
 public partial class Program;
-
-
-

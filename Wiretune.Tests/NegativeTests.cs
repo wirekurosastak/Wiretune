@@ -1,4 +1,4 @@
-﻿using Wiretune.Core.Audio;
+﻿﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Xunit;
@@ -167,7 +167,7 @@ public class NegativeTests
 
         Assert.Null(ex);
         Assert.False(session.IsLoggedIn);
-        Assert.Contains("Érvénytelen", session.StatusMessage);
+        Assert.Contains("Invalid server address", session.StatusMessage);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -184,7 +184,7 @@ public class NegativeTests
 
         Assert.Null(ex);
         Assert.False(session.IsLoggedIn);
-        Assert.Contains("Érvénytelen", session.StatusMessage);
+        Assert.Contains("Invalid server address", session.StatusMessage);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -306,7 +306,7 @@ public class NegativeTests
 
         var pl = await service.CreatePlaylistAsync(name);
 
-        Assert.Equal("Új lejátszási lista", pl.Name);
+        Assert.Equal("New playlist", pl.Name);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

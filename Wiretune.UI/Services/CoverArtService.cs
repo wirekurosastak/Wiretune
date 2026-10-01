@@ -15,7 +15,8 @@ public static class CoverArtService
     public const int MaxCachedBitmaps = 300;
     private static readonly TimeSpan FailureRetryDelay = TimeSpan.FromMinutes(2);
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    // Covers are small images; a hostile or broken URL must not be able to make us buffer gigabytes.
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = 16 * 1024 * 1024 };
     private static readonly SemaphoreSlim DecodeThrottle = new(4);
     private static readonly object CacheLock = new();
     private static readonly Dictionary<string, LinkedListNode<KeyValuePair<string, Bitmap>>> CacheIndex = new();
@@ -23,8 +24,11 @@ public static class CoverArtService
     private static readonly ConcurrentDictionary<string, Task<Bitmap?>> InFlight = new();
     private static readonly ConcurrentDictionary<string, DateTime> RecentFailures = new();
 
-    /// <summary>Bearer token sent with server cover requests.</summary>
+    /// <summary>Bearer token sent with cover requests to <see cref="ServerUrl"/>. It is never sent anywhere else.</summary>
     public static string? AuthToken { get; set; }
+
+    /// <summary>Base address of the Wiretune server whose covers may be requested with <see cref="AuthToken"/>.</summary>
+    public static string? ServerUrl { get; set; }
 
     public static int CachedCount
     {
@@ -94,10 +98,8 @@ public static class CoverArtService
             pathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, pathOrUrl);
-            var isExternalCdn = pathOrUrl.Contains("dzcdn.net", StringComparison.OrdinalIgnoreCase) ||
-                                pathOrUrl.Contains("deezer.com", StringComparison.OrdinalIgnoreCase) ||
-                                pathOrUrl.Contains("wikimedia.org", StringComparison.OrdinalIgnoreCase);
-            if (!string.IsNullOrEmpty(AuthToken) && !isExternalCdn)
+            // Artist pictures come from third-party hosts: only our own server ever sees the credentials.
+            if (!string.IsNullOrEmpty(AuthToken) && IsServerUrl(pathOrUrl))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", AuthToken);
             }
@@ -110,6 +112,10 @@ public static class CoverArtService
 
         return File.Exists(pathOrUrl) ? File.OpenRead(pathOrUrl) : null;
     }
+
+    private static bool IsServerUrl(string url) =>
+        ServerUrl is { Length: > 0 } server &&
+        url.StartsWith(server.TrimEnd('/') + "/", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryGetCached(string key, out Bitmap bitmap)
     {

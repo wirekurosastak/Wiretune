@@ -82,6 +82,10 @@
 
           <BoxShadows x:Key="GlassHoverShadow">0 20 40 -10 #CC000000, 0 0 1 1 #15FFFFFF</BoxShadows>
           <BoxShadows x:Key="MetricHoverShadow">0 25 50 -10 #FF000000, 0 0 1 1 #25FFFFFF</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowCoral">0 24 48 -10 #E6000000, 0 0 34 -8 #60FF6B6B</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowPurple">0 24 48 -10 #E6000000, 0 0 34 -8 #60D05CE3</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowCyan">0 24 48 -10 #E6000000, 0 0 34 -8 #6067C8E0</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowLime">0 24 48 -10 #E6000000, 0 0 34 -8 #60AEEA00</BoxShadows>
 
           <LinearGradientBrush x:Key="WindowGradient" StartPoint="0%,0%" EndPoint="100%,100%">
             <GradientStop Offset="0" Color="#051522" />
@@ -126,6 +130,10 @@
 
           <BoxShadows x:Key="GlassHoverShadow">0 12 32 -8 #30000000</BoxShadows>
           <BoxShadows x:Key="MetricHoverShadow">0 15 40 -10 #40000000</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowCoral">0 18 38 -10 #38000000, 0 0 30 -8 #40D94A4A</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowPurple">0 18 38 -10 #38000000, 0 0 30 -8 #40A03BB5</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowCyan">0 18 38 -10 #38000000, 0 0 30 -8 #403A9FB8</BoxShadows>
+          <BoxShadows x:Key="MetricHoverShadowLime">0 18 38 -10 #38000000, 0 0 30 -8 #407FB800</BoxShadows>
 
           <LinearGradientBrush x:Key="WindowGradient" StartPoint="0%,0%" EndPoint="100%,100%">
             <GradientStop Offset="0" Color="#E8F7FC" />
@@ -141,6 +149,7 @@
     <FluentTheme />
     <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     <materialIcons:MaterialIconStyles />
+    <StyleInclude Source="avares://Wiretune.UI/Styles/PhoneStyles.axaml" />
 
     <!-- Smooth Transitions on All Borders -->
     <Style Selector="Border">
@@ -240,6 +249,17 @@
     </Style>
     <Style Selector="Button.secondary:pressed /template/ ContentPresenter#PART_ContentPresenter">
       <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+    </Style>
+
+    <!-- Selected option of a button group, e.g. the active language -->
+    <Style Selector="Button.secondary.selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
+      <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForeground}" />
+    </Style>
+    <Style Selector="Button.secondary.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource PrimaryActionHover}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PrimaryActionHover}" />
     </Style>
 
     <Style Selector="Button.icon">
@@ -472,7 +492,7 @@
       <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
     </Style>
 
-    <!-- Metric Cards -->
+    <!-- Metric cards (album / artist / playlist tiles): they pop up when hovered -->
     <Style Selector="Border.metric-card">
       <Setter Property="CornerRadius" Value="8" />
       <Setter Property="Padding" Value="16" />
@@ -480,36 +500,40 @@
       <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
       <Setter Property="BorderThickness" Value="1" />
       <Setter Property="RenderTransformOrigin" Value="50%,50%" />
-      <Setter Property="RenderTransform" Value="translateY(0px)" />
+      <Setter Property="RenderTransform" Value="scale(1) translateY(0px)" />
       <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="Transitions">
         <Transitions>
-          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" Easing="CubicEaseOut" />
-          <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.2" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.25" Easing="CubicEaseOut" />
+          <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.25" Easing="CubicEaseOut" />
           <BrushTransition Property="BorderBrush" Duration="0:0:0.2" Easing="QuarticEaseOut" />
         </Transitions>
       </Setter>
     </Style>
     <Style Selector="Border.metric-card:pointerover">
-      <Setter Property="RenderTransform" Value="translateY(-3px)" />
+      <Setter Property="RenderTransform" Value="scale(1.035) translateY(-5px)" />
       <Setter Property="BorderBrush" Value="{DynamicResource GlassHighlight}" />
-      <Setter Property="BoxShadow" Value="0 12 36 -8 #60000000" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MetricHoverShadow}" />
     </Style>
     <Style Selector="Border.metric-card.coral:pointerover">
       <Setter Property="BorderBrush" Value="{DynamicResource CoralAccent}" />
-      <Setter Property="BoxShadow" Value="0 12 36 -8 #35FF6B6B" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MetricHoverShadowCoral}" />
     </Style>
     <Style Selector="Border.metric-card.purple:pointerover">
       <Setter Property="BorderBrush" Value="{DynamicResource PurpleAccent}" />
-      <Setter Property="BoxShadow" Value="0 12 36 -8 #35D05CE3" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MetricHoverShadowPurple}" />
     </Style>
     <Style Selector="Border.metric-card.cyan:pointerover">
       <Setter Property="BorderBrush" Value="{DynamicResource CyanAccent}" />
-      <Setter Property="BoxShadow" Value="0 12 36 -8 #3567C8E0" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MetricHoverShadowCyan}" />
     </Style>
     <Style Selector="Border.metric-card.lime:pointerover">
       <Setter Property="BorderBrush" Value="{DynamicResource LimeAccent}" />
-      <Setter Property="BoxShadow" Value="0 12 36 -8 #35AEEA00" />
+      <Setter Property="BoxShadow" Value="{DynamicResource MetricHoverShadowLime}" />
+    </Style>
+    <!-- The hovered tile is drawn above its neighbours, so its scaled-up edge and shadow are never covered -->
+    <Style Selector="WrapPanel > ContentPresenter:pointerover">
+      <Setter Property="ZIndex" Value="10" />
     </Style>
 
     <!-- Text Styles -->
@@ -573,27 +597,6 @@
     </Style>
     <Style Selector="materialIcons|MaterialIcon.queue-chevron.open">
       <Setter Property="RenderTransform" Value="rotate(180deg)" />
-    </Style>
-
-    <!-- Queue Docked Drawer Panel (Slide-in from left, full height of workspace) -->
-    <Style Selector="Border.queue-docked-panel, Border.queue-drawer-panel">
-      <Setter Property="Background" Value="{DynamicResource ModalBackground}" />
-      <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
-      <Setter Property="BorderThickness" Value="0,0,1,0" />
-      <Setter Property="CornerRadius" Value="0" />
-      <Setter Property="BoxShadow" Value="16 0 40 -6 #90000000, 1 0 0 0 #18FFFFFF" />
-      <Style.Animations>
-        <Animation Duration="0:0:0.25" Easing="CubicEaseOut" FillMode="Forward">
-          <KeyFrame Cue="0%">
-            <Setter Property="TranslateTransform.X" Value="-420" />
-            <Setter Property="Opacity" Value="0.6" />
-          </KeyFrame>
-          <KeyFrame Cue="100%">
-            <Setter Property="TranslateTransform.X" Value="0" />
-            <Setter Property="Opacity" Value="1" />
-          </KeyFrame>
-        </Animation>
-      </Style.Animations>
     </Style>
 
     <!-- Playback Queue Drawer Item Styles -->

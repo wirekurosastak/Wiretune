@@ -14,12 +14,22 @@ namespace Wiretune.Tests;
 /// <summary>Runs the real Wiretune.Server in memory against a generated music folder.</summary>
 public sealed class WiretuneServerFixture : WebApplicationFactory<Program>
 {
-    public string Root { get; } = Directory.CreateTempSubdirectory("wiretune_server_").FullName;
+    private readonly bool _ownsRoot;
+
+    public string Root { get; }
     public string LibraryPath => Path.Combine(Root, "library");
     public string DataPath => Path.Combine(Root, "data");
 
-    public WiretuneServerFixture()
+    /// <summary>Set before disposing to leave the files behind, e.g. to start a second server on the same data.</summary>
+    public bool KeepFilesOnDispose { get; set; }
+
+    /// <param name="existingRoot">Reuse the folders of an earlier fixture (a "restart"); null creates fresh ones.</param>
+    public WiretuneServerFixture(string? existingRoot = null)
     {
+        _ownsRoot = existingRoot == null;
+        Root = existingRoot ?? Directory.CreateTempSubdirectory("wiretune_server_").FullName;
+        if (!_ownsRoot) return;
+
         WavFile.Write(Path.Combine(LibraryPath, "Artist A", "Album 1", "01 First.wav"), 44100);
         WavFile.Write(Path.Combine(LibraryPath, "Artist A", "Album 1", "02 Second.wav"), 44100);
         WavFile.Write(Path.Combine(LibraryPath, "Artist B", "Album 2", "01 Third.wav"), 96000);
@@ -50,7 +60,10 @@ public sealed class WiretuneServerFixture : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        try { Directory.Delete(Root, recursive: true); } catch { }
+        if (_ownsRoot && !KeepFilesOnDispose)
+        {
+            try { Directory.Delete(Root, recursive: true); } catch { }
+        }
     }
 }
 
@@ -87,6 +100,16 @@ public class ServerIntegrationTests
     {
         var client = server.CreateClient();
         var response = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", AdminPassword));
+        response.EnsureSuccessStatusCode();
+        var auth = (await response.Content.ReadFromJsonAsync<AuthResponse>(WiretuneServerFixture.Json))!;
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
+        return (client, auth);
+    }
+
+    private static async Task<(HttpClient Client, AuthResponse Auth)> LoginAdminAsync(WiretuneServerFixture server)
+    {
+        var client = server.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("owner", AdminPassword));
         response.EnsureSuccessStatusCode();
         var auth = (await response.Content.ReadFromJsonAsync<AuthResponse>(WiretuneServerFixture.Json))!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
@@ -206,6 +229,153 @@ public class ServerIntegrationTests
 
         var wrong = await guest.PostAsJsonAsync("/api/auth/login", new LoginRequest("guest", "not-the-password"));
         Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeletedUser_LosesAccessImmediately()
+    {
+        using var server = new WiretuneServerFixture();
+        var (admin, _) = await SetupAdminAsync(server);
+
+        var created = await (await admin.PostAsJsonAsync("/api/auth/register", new RegisterRequest("guest", "guest-password")))
+            .Content.ReadFromJsonAsync<UserInfo>(WiretuneServerFixture.Json);
+        var guest = server.CreateClient();
+        var login = await guest.PostAsJsonAsync("/api/auth/login", new LoginRequest("guest", "guest-password", RememberMe: true));
+        var guestAuth = await login.Content.ReadFromJsonAsync<AuthResponse>(WiretuneServerFixture.Json);
+        guest.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", guestAuth!.Token);
+        Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync("/api/tracks")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await admin.DeleteAsync($"/api/users/{created!.Id}")).StatusCode);
+
+        // The 90-day token is still cryptographically valid, but the account behind it is gone.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.GetAsync("/api/tracks")).StatusCode);
+    }
+
+    [Fact]
+    public async Task QueryToken_IsOnlyAcceptedForMediaEndpoints()
+    {
+        using var server = new WiretuneServerFixture();
+        var (client, auth) = await SetupAdminAsync(server);
+        var track = (await server.WaitForTracksAsync(client, 3))[0];
+        var anonymous = server.CreateClient();
+        var token = Uri.EscapeDataString(auth.Token);
+
+        Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync($"/api/stream/{track.Id}?token={token}")).StatusCode);
+        Assert.NotEqual(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"/api/cover/{track.Id}?token={token}")).StatusCode);
+
+        // A token that leaked through a URL must not be usable against the rest of the API.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"/api/tracks?token={token}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"/api/auth/me?token={token}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"/api/users?token={token}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Login_IsRateLimited_WithAReadableError()
+    {
+        using var server = new WiretuneServerFixture();
+        var client = server.CreateClient();
+
+        HttpResponseMessage? last = null;
+        for (var i = 0; i < 12; i++)
+            last = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest("owner", $"wrong-password-{i}"));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, last!.StatusCode);
+        var body = await last.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Contains("Too many attempts", body.GetProperty("error").GetString());
+        Assert.True(last.Headers.RetryAfter != null);
+    }
+
+    [Fact]
+    public async Task Passwords_BeyondWhatBcryptCanHash_AreRejectedInsteadOfTruncated()
+    {
+        using var server = new WiretuneServerFixture();
+        var client = server.CreateClient();
+
+        var tooLong = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", new string('a', AuthRules.MaxPasswordBytes + 1)));
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+
+        // 72 bytes is fine; multi-byte characters count by bytes ("é" is two bytes in UTF-8).
+        var multiByte = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", new string('é', 37)));
+        Assert.Equal(HttpStatusCode.BadRequest, multiByte.StatusCode);
+        var exact = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", new string('a', AuthRules.MaxPasswordBytes)));
+        Assert.Equal(HttpStatusCode.OK, exact.StatusCode);
+    }
+
+    [Fact]
+    public async Task LibraryPath_ChosenByTheAdmin_SurvivesARestart()
+    {
+        var first = new WiretuneServerFixture { KeepFilesOnDispose = true };
+        try
+        {
+            var (admin, _) = await SetupAdminAsync(first);
+            var other = Path.Combine(first.Root, "library2");
+
+            var missing = await admin.PostAsJsonAsync("/api/config/library-path", new UpdateLibraryPathRequest(Path.Combine(first.Root, "nope")));
+            Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+
+            var changed = await admin.PostAsJsonAsync("/api/config/library-path", new UpdateLibraryPathRequest(other));
+            Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+            first.Dispose();
+
+            // "Restart": same folders, and the configured LibraryPath still points at the original library.
+            using var second = new WiretuneServerFixture(first.Root);
+            var (admin2, _) = await LoginAdminAsync(second);
+            var config = await admin2.GetFromJsonAsync<ServerConfigInfo>("/api/config", WiretuneServerFixture.Json);
+            Assert.Equal(Path.GetFullPath(other), config!.LibraryPath);
+        }
+        finally
+        {
+            first.Dispose();
+            try { Directory.Delete(first.Root, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public async Task SwitchingToAnEmptyFolder_ClearsTheIndex_ButAVanishedMountDoesNot()
+    {
+        using var server = new WiretuneServerFixture();
+        var (admin, _) = await SetupAdminAsync(server);
+        await server.WaitForTracksAsync(admin, 3);
+
+        // A deliberate switch to a new (empty) folder must not leave the old library listed but unplayable...
+        var empty = Directory.CreateDirectory(Path.Combine(server.Root, "empty")).FullName;
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/config/library-path", new UpdateLibraryPathRequest(empty))).StatusCode);
+        await server.WaitForTracksAsync(admin, 0);
+
+        // ...whereas the unmounted-share guard still protects the folder the index was built from.
+        Assert.Equal(HttpStatusCode.OK, (await admin.PostAsJsonAsync("/api/config/library-path", new UpdateLibraryPathRequest(server.LibraryPath))).StatusCode);
+        await server.WaitForTracksAsync(admin, 3);
+        foreach (var file in Directory.GetFiles(server.LibraryPath, "*", SearchOption.AllDirectories)) File.Delete(file);
+        foreach (var dir in Directory.GetDirectories(server.LibraryPath)) Directory.Delete(dir, recursive: true);
+        Assert.Equal(HttpStatusCode.Accepted, (await admin.PostAsync("/api/library/scan", null)).StatusCode);
+
+        var status = await admin.GetFromJsonAsync<ServerLibraryStatus>("/api/library/status", WiretuneServerFixture.Json);
+        for (var i = 0; i < 50 && status!.LastScanError == null; i++)
+        {
+            await Task.Delay(100);
+            status = await admin.GetFromJsonAsync<ServerLibraryStatus>("/api/library/status", WiretuneServerFixture.Json);
+        }
+        Assert.Equal(3, status!.TrackCount);
+        Assert.Contains("empty", status.LastScanError);
+    }
+
+    [Fact]
+    public async Task Compression_AppliesToJson_ButNeverToRangedAudio()
+    {
+        using var server = new WiretuneServerFixture();
+        var (client, _) = await SetupAdminAsync(server);
+        var track = (await server.WaitForTracksAsync(client, 3))[0];
+        client.DefaultRequestHeaders.AcceptEncoding.ParseAdd("gzip");
+
+        var tracks = await client.GetAsync("/api/tracks");
+        Assert.Contains("gzip", tracks.Content.Headers.ContentEncoding);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/stream/{track.Id}");
+        request.Headers.Range = new RangeHeaderValue(0, 1023);
+        var audio = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.PartialContent, audio.StatusCode);
+        Assert.Empty(audio.Content.Headers.ContentEncoding);
+        Assert.Equal(1024, (await audio.Content.ReadAsByteArrayAsync()).Length);
     }
 
     [Fact]

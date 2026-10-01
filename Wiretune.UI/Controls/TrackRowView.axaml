@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:Wiretune.UI.Localization"
+             xmlns:material="using:Material.Icons.Avalonia"
+             xmlns:controls="using:Wiretune.UI.Controls"
+             xmlns:models="using:Wiretune.Core.Models"
+             x:Class="Wiretune.UI.Controls.TrackRowView"
+             x:DataType="models:Track"
+             x:Name="Root"
+             Height="64">
+  <!-- One track in a phone list: tap to play, heart to favorite, "+" to add to a playlist. -->
+  <Border Classes="phone-row" Classes.playing="{Binding IsPlaying}" Margin="0,2">
+    <Grid ColumnDefinitions="*, Auto, Auto">
+      <Button Grid.Column="0" Classes="phone-tap"
+              Command="{Binding PlayCommand, ElementName=Root}"
+              CommandParameter="{Binding}">
+        <Grid ColumnDefinitions="Auto, *, Auto" Margin="8,0,4,0">
+          <!-- Cover art, or the track number in album views -->
+          <Border Grid.Column="0" Width="48" Height="48" CornerRadius="10"
+                  Background="{DynamicResource Surface2}" ClipToBounds="True"
+                  IsVisible="{Binding ShowCover, ElementName=Root}">
+            <Panel>
+              <material:MaterialIcon Kind="MusicNote" Width="22" Height="22"
+                                     Foreground="{DynamicResource TextMuted}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+              <controls:CoverImage SourcePath="{Binding CoverArtPath}" DecodeWidth="96" Stretch="UniformToFill" />
+            </Panel>
+          </Border>
+          <Panel Grid.Column="0" Width="48" Height="48"
+                 IsVisible="{Binding !ShowCover, ElementName=Root}">
+            <TextBlock Text="{Binding DisplayTrackNumber}" FontSize="14" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextMuted}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       IsVisible="{Binding !IsPlaying}" />
+            <material:MaterialIcon Kind="VolumeHigh" Width="20" Height="20"
+                                   Foreground="{DynamicResource PrimaryAction}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsVisible="{Binding IsPlaying}" />
+          </Panel>
+
+          <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center" Spacing="2">
+            <TextBlock Classes="phone-row-title" Classes.playing="{Binding IsPlaying}" Text="{Binding Title}" />
+            <TextBlock Classes="phone-row-sub" Text="{Binding Artist}"
+                       IsVisible="{Binding !ShowAlbum, ElementName=Root}" />
+            <TextBlock Classes="phone-row-sub" IsVisible="{Binding ShowAlbum, ElementName=Root}">
+              <TextBlock.Text>
+                <MultiBinding StringFormat="{}{0} • {1}">
+                  <Binding Path="Artist" />
+                  <Binding Path="Album" />
+                </MultiBinding>
+              </TextBlock.Text>
+            </TextBlock>
+          </StackPanel>
+
+          <TextBlock Grid.Column="2" Text="{Binding FormattedDuration}" FontSize="12"
+                     Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
+                     IsVisible="{Binding ShowDuration, ElementName=Root}" />
+        </Grid>
+      </Button>
+
+      <Button Grid.Column="1" Classes="phone-icon"
+              Command="{Binding FavoriteCommand, ElementName=Root}"
+              CommandParameter="{Binding}"
+              AutomationProperties.Name="{loc:T TipFavorite}">
+        <material:MaterialIcon Kind="{Binding IsFavorite, Converter={StaticResource FavoriteIconConverter}}"
+                               Foreground="{Binding IsFavorite, Converter={StaticResource FavoriteColorConverter}}"
+                               Width="22" Height="22" />
+      </Button>
+      <Button Grid.Column="2" Classes="phone-icon"
+              Command="{Binding AddCommand, ElementName=Root}"
+              CommandParameter="{Binding}"
+              AutomationProperties.Name="{Binding ActionLabel, ElementName=Root}">
+        <material:MaterialIcon Kind="{Binding ActionIcon, ElementName=Root}" Width="22" Height="22" />
+      </Button>
+    </Grid>
+  </Border>
+</UserControl>

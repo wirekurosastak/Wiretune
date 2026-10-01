@@ -46,15 +46,12 @@ public sealed class LibraryScanService : BackgroundService
 
             try
             {
-                var waitForTrigger = _trigger.WaitAsync(stoppingToken);
+                // Wake up on an explicit request or when the interval elapses, whichever comes first.
+                // (A timeout simply returns false; the wait is abandoned cleanly, unlike Task.WhenAny over WaitAsync.)
                 if (_interval is { } interval)
-                {
-                    await Task.WhenAny(waitForTrigger, Task.Delay(interval, stoppingToken));
-                }
+                    await _trigger.WaitAsync(interval, stoppingToken);
                 else
-                {
-                    await waitForTrigger;
-                }
+                    await _trigger.WaitAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -76,7 +73,10 @@ public sealed class LibraryScanService : BackgroundService
             }
 
             // An unmounted network share usually shows up as an empty mount point; never wipe the library for that.
-            if (_library.Tracks.Count > 0 && !Directory.EnumerateFileSystemEntries(root).Any())
+            // This only applies to the folder the index was built from: pointing the server at a new, empty folder is deliberate.
+            if (_library.Tracks.Count > 0 &&
+                string.Equals(_library.LibraryPath, Path.GetFullPath(root), StringComparison.Ordinal) &&
+                !Directory.EnumerateFileSystemEntries(root).Any())
             {
                 LastScanError = $"Library folder is empty (unmounted share?): {root}. Keeping the existing index.";
                 WiretuneLog.Warn("LibraryScan", LastScanError);

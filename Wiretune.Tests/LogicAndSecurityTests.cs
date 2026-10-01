@@ -1,4 +1,4 @@
-﻿using Wiretune.Core.Audio;
+﻿﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Xunit;
@@ -72,6 +72,17 @@ public class LogicAndSecurityTests
         Assert.False(AppPaths.IsPathUnderRoot(Path.Combine(root, "..", "secret.txt"), root));
         Assert.False(AppPaths.IsPathUnderRoot(root + "2" + Path.DirectorySeparatorChar + "x.flac", root));
         Assert.False(AppPaths.IsPathUnderRoot("", root));
+        Assert.False(AppPaths.IsPathUnderRoot("bad\0path", root));
+    }
+
+    [Fact]
+    public void SEC004b_PathContainment_WorksWhenTheLibraryIsAFilesystemRoot()
+    {
+        // A whole drive / "/" as the library used to reject every file: the root already ends in a separator.
+        var fsRoot = Path.GetPathRoot(Path.GetTempPath())!;
+
+        Assert.True(AppPaths.IsPathUnderRoot(Path.Combine(fsRoot, "music", "a.flac"), fsRoot));
+        Assert.True(AppPaths.IsPathUnderRoot(fsRoot, fsRoot));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -405,7 +416,7 @@ public class LogicAndSecurityTests
 
         var desc = engine.SignalPathDescription;
 
-        Assert.Equal("Nincs aktív lejátszás", desc);
+        Assert.Equal("No active playback", desc);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-﻿using Wiretune.Core.Audio;
+﻿﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Xunit;
@@ -202,16 +202,16 @@ public class AudioEngineTests
         await engine.PlayTrackAsync(track);
 
         // Shared mode
-        Assert.Contains("Megosztott mód", engine.SignalPathDescription);
+        Assert.Contains("Shared mode", engine.SignalPathDescription);
 
         // Exclusive mode
         await engine.SetExclusiveModeAsync(true);
-        Assert.Contains("Kizárólagos mód", engine.SignalPathDescription);
+        Assert.Contains("Exclusive mode", engine.SignalPathDescription);
 
         // Bit-perfect mode
         await engine.SetBitperfectModeAsync(true);
         Assert.Contains("Bit-perfect", engine.SignalPathDescription);
-        Assert.Contains("Unity Gain", engine.SignalPathDescription);
+        Assert.Contains("unity gain", engine.SignalPathDescription);
     }
 
     [Fact]

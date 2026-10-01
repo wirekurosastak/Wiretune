@@ -5,8 +5,19 @@ using Wiretune.Core.Models;
 
 namespace Wiretune.Core.Services;
 
-public class MetadataScanner 
+public class MetadataScanner
 {
+    /// <summary>
+    /// Placeholders stored for files without an artist / album tag. They are data (they are saved in the library and
+    /// group the untagged files together), not interface text, so they do not follow the interface language.
+    /// </summary>
+    public const string UnknownArtist = "Unknown artist";
+    public const string UnknownAlbum = "Unknown album";
+
+    /// <summary>True for the placeholder above, and for the Hungarian one that libraries scanned by older versions contain.</summary>
+    public static bool IsUnknownArtist(string? name) =>
+        string.Equals(name, UnknownArtist, StringComparison.OrdinalIgnoreCase) || name == "Ismeretlen előadó";
+
     private static readonly string[] FolderCoverNames =
     {
         "cover.jpg", "cover.jpeg", "cover.png", "folder.jpg", "folder.jpeg", "folder.png",
@@ -66,7 +77,35 @@ public class MetadataScanner
                     return ValueTask.CompletedTask;
                 }).ConfigureAwait(false);
 
+            if (results.Count < total)
+                WiretuneLog.Warn("MetadataScanner", $"{total - results.Count} of {total} audio files could not be read and were skipped (details in the debug log).");
+
             return results.ToList();
+        }, ct);
+    }
+
+    private const int MaxLyricsLength = 100_000;
+
+    /// <summary>The lyrics stored in the file's tag, or null when there are none or the file cannot be read.</summary>
+    public static Task<string?> ReadLyricsAsync(string filePath, CancellationToken ct = default)
+    {
+        return Task.Run(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!File.Exists(filePath)) return null;
+
+            try
+            {
+                using var tagFile = TagLib.File.Create(filePath);
+                var lyrics = tagFile.Tag?.Lyrics?.Trim();
+                if (string.IsNullOrEmpty(lyrics)) return null;
+                return lyrics.Length > MaxLyricsLength ? lyrics[..MaxLyricsLength] : lyrics;
+            }
+            catch (Exception ex)
+            {
+                WiretuneLog.Debug("MetadataScanner", $"Cannot read lyrics of '{filePath}': {ex.Message}");
+                return null;
+            }
         }, ct);
     }
 
@@ -135,8 +174,8 @@ public class MetadataScanner
 
             var title = Clean(tag?.Title) ?? Path.GetFileNameWithoutExtension(fullPath);
             var albumArtist = Clean(tag?.FirstAlbumArtist);
-            var artist = Clean(tag?.FirstPerformer) ?? albumArtist ?? "Ismeretlen előadó";
-            var album = Clean(tag?.Album) ?? "Ismeretlen album";
+            var artist = Clean(tag?.FirstPerformer) ?? albumArtist ?? UnknownArtist;
+            var album = Clean(tag?.Album) ?? UnknownAlbum;
 
             var streamDescription = props?.Codecs?.FirstOrDefault(c => c != null)?.Description ?? props?.Description;
             var (codec, isLossless) = AudioFileTypes.Describe(fullPath, streamDescription);

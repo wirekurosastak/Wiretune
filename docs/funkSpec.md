@@ -91,6 +91,11 @@ előfizetéses streaming szolgáltatásra hagyatkozni.
   lejátszás.
 - **Minőségjelző** (pl. "HI-RES", "LOSSLESS", codec neve) a jelenlegi
   számhoz, tooltipben a teljes technikai leírással.
+- **Dalszöveg**: a lejátszási sor nézetében (telefonon a teljes képernyős
+  lejátszó "Dalszöveg" fülén) a jelenlegi szám fájljába ágyazott
+  dalszöveg-címke jelenik meg, ha van; ha nincs, erről tájékoztató üzenet. Csak
+  a nézet megnyitásakor tölti be. Szerveres számnál a szerver `/api/lyrics`
+  végpontjáról jön.
 
 ### 3.5 Audiophile beállítások
 
@@ -136,15 +141,29 @@ Egyetlen egyesített "Beállítások" nézet, két szekcióval:
    (szerver nélküli használathoz).
 2. **Hangkimenet**: exclusive/bit-perfect kapcsolók, eszközválasztó, jelút
    kijelző.
+3. **Megjelenés**: nyelv (magyar / angol / német) és világos/sötét téma. A
+   váltás azonnal érvényesül, újraindítás nélkül, és megmarad a következő
+   indításig. Első indításkor az operációs rendszer nyelve érvényes, ha az
+   támogatott, egyébként angol.
+
+### 3.9 Telefonos felület (Android)
+
+Androidon a felület telefonra szabott: alsó navigációs sáv (Előadók, Albumok,
+Számok, Lejátszási listák, Beállítások; a Kedvencek a Lejátszási listák lapról
+érhető el), lebegő mini lejátszó, teljes képernyős lejátszó Lejátszó / Sor /
+Dalszöveg füllel, külön keresőoldal, és alulról felcsúszó lapok a lejátszási
+listák létrehozásához, törléséhez és a számok listához adásához. A rendszer
+vissza-gesztusa a legbelső nyitott réteget zárja be, és csak akkor lépteti ki az
+alkalmazást, ha már nincs mit bezárni. A funkciók azonosak az asztalival.
 
 ## 4. Nem-funkcionális követelmények
 
 | Terület | Elvárás |
 |---|---|
-| **Biztonság** | Jelszavak BCrypt-tel tárolva; JWT aláírt, saját titkos kulccsal szerverenként; fájlelérés a könyvtárgyökérre korlátozva (path traversal védelem); a fejlesztői UI-automatizálási felület alapból kikapcsolt és csak localhost-ról, böngészőn kívülről érhető el. |
+| **Biztonság** | Jelszavak BCrypt-tel tárolva (legfeljebb 72 bájt); JWT aláírt, saját titkos kulccsal szerverenként, és a fiók törlésével azonnal érvénytelen; a bejelentkezés sebességkorlátozott; a query-string token csak a stream/borító végpontokon érvényes; fájlelérés a könyvtárgyökérre korlátozva (path traversal védelem); a fejlesztői UI-automatizálási felület alapból kikapcsolt és csak localhost-ról, böngészőn kívülről érhető el. |
 | **Megbízhatóság** | Egy le nem csatolt hálózati megosztás átmeneti "üresség"-e nem törli a szerveroldali indexet; egyszerre csak egy szkennelés futhat; a szerver és a kliens(ek) külön adatbázist használnak, így egy gépen futtatva sem írják felül egymás adatait. |
 | **Teljesítmény** | Inkrementális szkennelés (csak a változott fájlok olvasódnak újra); párhuzamos metaadat-olvasás; borítóképek megjelenítési méretre dekódolva, korlátos (300 elem) gyorsítótárban; csak a látható albumkártyák töltenek be borítót. |
-| **Platform-korlátok jelzése** | A felület nem kínál fel olyan hangkimeneti módot, amit az adott platform/eszköz ténylegesen nem támogat (pl. Windows csak megosztott kimenet). |
+| **Platform-korlátok jelzése** | A felület nem kínál fel olyan hangkimeneti módot, amit az adott platform/eszköz ténylegesen nem támogat (pl. Androidon nincs kizárólagos mód). |
 | **Naplózás** | Fájlalapú napló (`WiretuneLog`), külön fájl szerver és kliens folyamatonként; a hitelesítési tokenek maszkolva kerülnek a naplóba. |
 | **Tesztelhetőség** | A lejátszási logika hardver-/külső folyamat-függetlenül tesztelhető (absztrahált audio driver); a szerver API valódi HTTP-kérésekkel, memóriában futtatva tesztelhető. |
 
@@ -198,11 +217,9 @@ Egyetlen egyesített "Beállítások" nézet, két szekcióval:
   felhasználók vagy eszközök között.
 - **Transzkódolás**: a szerver mindig az eredeti fájlformátumot streameli;
   nincs átkódolás alacsonyabb bitrátára/formátumra gyengébb hálózathoz.
-- **Exclusive/bit-perfect kimenet Windowson és Androidon**: ezeken a
-  platformokon csak megosztott (rendszerkeverős) lejátszás érhető el.
-- **Felhasználókezelő felület**: új felhasználó regisztrálására van API
-  végpont, de a kliensben nincs hozzá adminisztrációs felület (parancssorból/
-  API-hívással kell elvégezni).
+- **Exclusive/bit-perfect kimenet Androidon**: ezen a platformon csak
+  megosztott (rendszerkeverős) lejátszás érhető el. (Windowson a WASAPI
+  Exclusive elérhető, de hardver nélkül nem volt ellenőrizve.)
 - **Háttérben lejátszás / médiavezérlők Androidon**: az Android-integráció
   jelen állapotban alap lejátszást biztosít, nincs értesítési sáv-vezérlés
   vagy zárolt képernyős widget.

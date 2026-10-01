@@ -1,12 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:Wiretune.UI.Localization"
              xmlns:material="using:Material.Icons.Avalonia"
              xmlns:services="using:Wiretune.UI.Services"
              xmlns:vm="using:Wiretune.UI.ViewModels"
              xmlns:controls="using:Wiretune.UI.Controls"
              x:Class="Wiretune.UI.Controls.AlbumTileView"
              x:DataType="vm:AlbumCardViewModel"
-             x:Name="Root">
+             x:Name="Root"
+             ClipToBounds="False">
   <UserControl.Resources>
     <controls:CompactBadgeConverter x:Key="CompactBadgeConverter" />
   </UserControl.Resources>
@@ -29,7 +31,7 @@
           <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextMain}" />
           <TextBlock Text="{Binding Artist}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
           <StackPanel Orientation="Horizontal" Spacing="5">
-            <TextBlock Text="{Binding TrackCount, StringFormat='{}{0} szám'}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
+            <TextBlock Text="{loc:TFormat TrackCount, Path=TrackCount}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
             <TextBlock Text="•" FontSize="11" Foreground="{DynamicResource TextMuted}" IsVisible="{Binding Year, Converter={x:Static ObjectConverters.IsNotNull}}" />
             <TextBlock Text="{Binding Year}" FontSize="11" Foreground="{DynamicResource TextMuted}" IsVisible="{Binding Year, Converter={x:Static ObjectConverters.IsNotNull}}" />
           </StackPanel>
@@ -51,7 +53,7 @@
                   VerticalContentAlignment="Center"
                   Command="{Binding PlayCommand, ElementName=Root}"
                   CommandParameter="{Binding Album}"
-                  ToolTip.Tip="Lejátszás">
+                  ToolTip.Tip="{loc:T Play}">
             <material:MaterialIcon Kind="Play" Foreground="{DynamicResource PrimaryActionForeground}" Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
           </Button>
         </Grid>

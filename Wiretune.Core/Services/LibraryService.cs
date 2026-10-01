@@ -2,16 +2,20 @@
 using System.Text;
 using Wiretune.Core.Models;
 using Wiretune.Core.Data;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.Core.Services;
 
-public class LibraryService 
+public class LibraryService
 {
     private readonly LibraryRepository _repository;
     private readonly MetadataScanner _scanner;
     private readonly string _coverCacheDirectory;
     private readonly object _playlistLock = new();
     private readonly SemaphoreSlim _scanGate = new(1, 1);
+    // Local scans and server merges each read the snapshot, combine it with new data and replace it; one at a time,
+    // so neither can overwrite the other's result with a stale view.
+    private readonly SemaphoreSlim _commitGate = new(1, 1);
     private volatile LibrarySnapshot _snapshot = LibrarySnapshot.Empty;
     private volatile IReadOnlyList<Playlist> _playlists = Array.Empty<Playlist>();
     private volatile bool _isScanning;
@@ -37,6 +41,11 @@ public class LibraryService
         _scanner = scanner;
         _coverCacheDirectory = coverCacheDirectory ?? Path.Combine(AppPaths.GetDataDirectory(), "Covers");
     }
+
+    /// <summary>Reads a small persisted user preference (interface language, theme); null when it was never set.</summary>
+    public Task<string?> GetPreferenceAsync(string name) => _repository.GetSettingAsync("Preference." + name);
+
+    public Task SetPreferenceAsync(string name, string value) => _repository.SetSettingAsync("Preference." + name, value);
 
     public async Task InitializeAsync(CancellationToken ct = default)
     {
@@ -88,19 +97,27 @@ public class LibraryService
             LibraryPath = root;
             await _repository.SetSettingAsync("LibraryPath", root);
 
-            var existingServerTracks = _snapshot.Tracks.Where(t => !string.IsNullOrEmpty(t.StreamUrl)).ToList();
-            List<Track> toSave;
-            if (existingServerTracks.Count > 0)
+            await _commitGate.WaitAsync(CancellationToken.None);
+            try
             {
-                toSave = TrackDeduplication.MergeTracks(scanned, existingServerTracks, out var aliased);
-                await UpdatePlaylistsWithAliasesAsync(aliased);
-            }
-            else
-            {
-                toSave = scanned;
-            }
+                var existingServerTracks = _snapshot.Tracks.Where(t => !string.IsNullOrEmpty(t.StreamUrl)).ToList();
+                List<Track> toSave;
+                if (existingServerTracks.Count > 0)
+                {
+                    toSave = TrackDeduplication.MergeTracks(scanned, existingServerTracks, out var aliased);
+                    await UpdatePlaylistsWithAliasesAsync(aliased);
+                }
+                else
+                {
+                    toSave = scanned;
+                }
 
-            await ReplaceTracksCoreAsync(toSave);
+                await ReplaceTracksCoreAsync(toSave);
+            }
+            finally
+            {
+                _commitGate.Release();
+            }
             WiretuneLog.Info("LibraryService", $"Scan finished: {Tracks.Count} tracks, {Albums.Count} albums, {Artists.Count} artists.");
             return true;
         }
@@ -117,54 +134,82 @@ public class LibraryService
         }
     }
 
-    public Task ReplaceTracksAsync(IEnumerable<Track> tracks, CancellationToken ct = default) =>
-        ReplaceTracksCoreAsync(tracks.ToList());
+    public async Task ReplaceTracksAsync(IEnumerable<Track> tracks, CancellationToken ct = default)
+    {
+        var list = tracks.ToList();
+        await _commitGate.WaitAsync(CancellationToken.None);
+        try
+        {
+            await ReplaceTracksCoreAsync(list);
+        }
+        finally
+        {
+            _commitGate.Release();
+        }
+    }
 
     public async Task MergeServerTracksAsync(IEnumerable<Track> serverTracks, CancellationToken ct = default)
     {
-        var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
         var incomingServer = serverTracks.ToList();
 
-        List<Track> merged;
-        if (existingLocalTracks.Count > 0)
+        await _commitGate.WaitAsync(CancellationToken.None);
+        try
         {
-            merged = TrackDeduplication.MergeTracks(existingLocalTracks, incomingServer, out var aliased);
-            await UpdatePlaylistsWithAliasesAsync(aliased);
-        }
-        else
-        {
-            merged = incomingServer;
-        }
+            var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
 
-        await ReplaceTracksCoreAsync(merged);
+            List<Track> merged;
+            if (existingLocalTracks.Count > 0)
+            {
+                merged = TrackDeduplication.MergeTracks(existingLocalTracks, incomingServer, out var aliased);
+                await UpdatePlaylistsWithAliasesAsync(aliased);
+            }
+            else
+            {
+                merged = incomingServer;
+            }
+
+            await ReplaceTracksCoreAsync(merged);
+        }
+        finally
+        {
+            _commitGate.Release();
+        }
     }
 
     public async Task RemoveServerTracksAsync(CancellationToken ct = default)
     {
-        var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
-        await ReplaceTracksCoreAsync(existingLocalTracks);
+        await _commitGate.WaitAsync(CancellationToken.None);
+        try
+        {
+            var existingLocalTracks = _snapshot.Tracks.Where(t => string.IsNullOrEmpty(t.StreamUrl)).ToList();
+            await ReplaceTracksCoreAsync(existingLocalTracks);
+        }
+        finally
+        {
+            _commitGate.Release();
+        }
     }
 
+    /// <summary>Points playlist entries at the local copy of a track that also exists on the server.</summary>
     private async Task UpdatePlaylistsWithAliasesAsync(Dictionary<string, string> aliasedTrackIds)
     {
         if (aliasedTrackIds.Count == 0) return;
 
         foreach (var playlist in _playlists)
         {
-            bool changed = false;
-            for (int i = 0; i < playlist.TrackIds.Count; i++)
+            // Copy-on-write, like every other playlist change: readers may be enumerating TrackIds right now.
+            lock (_playlistLock)
             {
-                if (aliasedTrackIds.TryGetValue(playlist.TrackIds[i], out var localId))
-                {
-                    playlist.TrackIds[i] = localId;
-                    changed = true;
-                }
-            }
-            if (changed)
-            {
+                if (!playlist.TrackIds.Any(aliasedTrackIds.ContainsKey)) continue;
+
+                playlist.TrackIds = playlist.TrackIds
+                    .Select(id => aliasedTrackIds.GetValueOrDefault(id, id))
+                    .Distinct()
+                    .ToList();
                 playlist.ModifiedAt = DateTime.UtcNow;
-                await _repository.SavePlaylistAsync(playlist);
             }
+
+            await _repository.SavePlaylistAsync(playlist);
         }
     }
 
@@ -179,6 +224,7 @@ public class LibraryService
                 track.PlayCount = old.PlayCount;
                 track.LastPlayed = old.LastPlayed;
                 track.DateAdded = old.DateAdded;
+                track.IsPlaying = old.IsPlaying; // the list keeps highlighting the track that is still playing
             }
         }
 
@@ -212,7 +258,7 @@ public class LibraryService
         var playlist = new Playlist
         {
             Id = Guid.NewGuid().ToString("N"),
-            Name = string.IsNullOrWhiteSpace(name) ? "Új lejátszási lista" : name.Trim(),
+            Name = string.IsNullOrWhiteSpace(name) ? Localizer.Get("PlaylistNew") : name.Trim(),
             Description = description,
             CreatedAt = DateTime.UtcNow,
             ModifiedAt = DateTime.UtcNow
@@ -374,7 +420,7 @@ public class LibraryService
             var multiArtistGroups = tracks
                 .Where(t => !string.IsNullOrWhiteSpace(t.Album) &&
                             !string.IsNullOrWhiteSpace(t.FilePath) &&
-                            !t.Album.Equals("Ismeretlen album", StringComparison.OrdinalIgnoreCase) &&
+                            !t.Album.Equals(MetadataScanner.UnknownAlbum, StringComparison.OrdinalIgnoreCase) &&
                             !t.Album.Equals("Unknown Album", StringComparison.OrdinalIgnoreCase))
                 .GroupBy(t => (
                     Album: t.Album.Trim(),
@@ -522,6 +568,3 @@ public class LibraryService
         }
     }
 }
-
-
-

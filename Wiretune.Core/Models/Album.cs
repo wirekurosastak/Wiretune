@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.Core.Models;
 
@@ -17,7 +18,5 @@ public class Album
     public List<Track> Tracks { get; set; } = new();
 
     [JsonIgnore]
-    public string FormattedTotalDuration => TotalDuration.TotalHours >= 1
-        ? $"{(int)TotalDuration.TotalHours} óra {TotalDuration.Minutes} perc"
-        : $"{TotalDuration.Minutes} perc {TotalDuration.Seconds} mp";
+    public string FormattedTotalDuration => Localizer.FormatTotalDuration(TotalDuration);
 }

@@ -11,6 +11,16 @@ class Program
     {
         WiretuneLog.Initialize();
         WiretuneLog.Info("Wiretune.Desktop", "=== Starting Wiretune Desktop App ===");
+
+        // A GUI app has no console to show a crash on: make sure the log file gets the reason.
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            WiretuneLog.Error("Wiretune.Desktop", "Unhandled exception", e.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            WiretuneLog.Error("Wiretune.Desktop", "Unobserved task exception", e.Exception);
+            e.SetObserved();
+        };
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 

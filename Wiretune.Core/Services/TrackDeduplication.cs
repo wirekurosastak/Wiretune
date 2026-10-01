@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Wiretune.Core.Models;
 
 namespace Wiretune.Core.Services;
@@ -129,77 +130,45 @@ public static class TrackDeduplication
             cleanB.Equals("unknownalbum", StringComparison.OrdinalIgnoreCase))
             return true;
 
-        return string.Equals(cleanA, cleanB, StringComparison.OrdinalIgnoreCase) ||
-               cleanA.Contains(cleanB, StringComparison.OrdinalIgnoreCase) ||
-               cleanB.Contains(cleanA, StringComparison.OrdinalIgnoreCase);
+        if (string.Equals(cleanA, cleanB, StringComparison.OrdinalIgnoreCase)) return true;
+
+        // "Discovery" vs "Discovery Live 2001" is close enough, but a one- or two-letter album name inside a long one is not.
+        var (shorter, longer) = cleanA.Length <= cleanB.Length ? (cleanA, cleanB) : (cleanB, cleanA);
+        return shorter.Length >= 4 && longer.Contains(shorter, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static string CleanTitle(string? title)
-    {
-        if (string.IsNullOrWhiteSpace(title)) return string.Empty;
-        var s = title.Trim();
+    // Trailing "(2011 Remaster)" style notes that do not make a different recording. "Live", "Acoustic", "Demo",
+    // "Instrumental" ... are deliberately not listed: those are different recordings of the same song.
+    private static readonly Regex TitleNote = new(
+        @"\b(remaster(ed)?|bonus|deluxe|anniversary|stereo|mono|(single|album|radio)\s+(version|edit))\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-        while (true)
-        {
-            var openParen = s.LastIndexOf('(');
-            var closeParen = s.LastIndexOf(')');
-            if (openParen >= 0 && closeParen == s.Length - 1 && closeParen > openParen)
-            {
-                var inside = s.Substring(openParen + 1, closeParen - openParen - 1).ToLowerInvariant();
-                if (inside.Contains("remaster") || inside.Contains("bonus") || inside.Contains("deluxe") ||
-                    inside.Contains("edit") || inside.Contains("version") || inside.Contains("anniversary") ||
-                    inside.Contains("stereo") || inside.Contains("mono"))
-                {
-                    s = s.Substring(0, openParen).Trim();
-                    continue;
-                }
-            }
+    private static readonly Regex AlbumNote = new(
+        @"\b(remaster(ed)?|bonus|deluxe|edition|anniversary)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-            var openBracket = s.LastIndexOf('[');
-            var closeBracket = s.LastIndexOf(']');
-            if (openBracket >= 0 && closeBracket == s.Length - 1 && closeBracket > openBracket)
-            {
-                var inside = s.Substring(openBracket + 1, closeBracket - openBracket - 1).ToLowerInvariant();
-                if (inside.Contains("remaster") || inside.Contains("bonus") || inside.Contains("deluxe") ||
-                    inside.Contains("edit") || inside.Contains("version") || inside.Contains("anniversary") ||
-                    inside.Contains("stereo") || inside.Contains("mono"))
-                {
-                    s = s.Substring(0, openBracket).Trim();
-                    continue;
-                }
-            }
-            break;
-        }
-
-        return Normalize(s);
-    }
+    public static string CleanTitle(string? title) => Normalize(StripTrailingNotes(title, TitleNote));
 
     public static string CleanArtist(string? artist)
     {
         return Normalize(artist);
     }
 
-    public static string CleanAlbum(string? album)
+    public static string CleanAlbum(string? album) => Normalize(StripTrailingNotes(album, AlbumNote));
+
+    /// <summary>Removes trailing "(...)" or "[...]" groups whose text matches <paramref name="note"/>, repeatedly.</summary>
+    private static string StripTrailingNotes(string? text, Regex note)
     {
-        if (string.IsNullOrWhiteSpace(album)) return string.Empty;
-        var s = album.Trim();
-        while (true)
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+        var s = text.Trim();
+        while (s.Length > 2 && (s[^1] == ')' || s[^1] == ']'))
         {
-            var openParen = s.LastIndexOf('(');
-            var closeParen = s.LastIndexOf(')');
-            if (openParen >= 0 && closeParen == s.Length - 1 && closeParen > openParen)
-            {
-                var inside = s.Substring(openParen + 1, closeParen - openParen - 1).ToLowerInvariant();
-                if (inside.Contains("remaster") || inside.Contains("bonus") || inside.Contains("deluxe") ||
-                    inside.Contains("edition") || inside.Contains("anniversary"))
-                {
-                    s = s.Substring(0, openParen).Trim();
-                    continue;
-                }
-            }
-            break;
+            var open = s.LastIndexOf(s[^1] == ')' ? '(' : '[');
+            if (open <= 0 || !note.IsMatch(s.AsSpan(open + 1, s.Length - open - 2))) break;
+            s = s[..open].TrimEnd();
         }
-        return Normalize(s);
+        return s;
     }
 
     private static string Normalize(string? s)

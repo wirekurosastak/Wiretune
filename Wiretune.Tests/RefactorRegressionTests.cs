@@ -1,4 +1,4 @@
-﻿using Avalonia.Media;
+﻿﻿using Avalonia.Media;
 using Microsoft.Data.Sqlite;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
@@ -331,7 +331,7 @@ public class RefactorRegressionTests
 
         Assert.Equal(2, favoritesVm.FavoriteTracks.Count);
         Assert.False(favoritesVm.IsEmpty);
-        Assert.Equal("8 perc 0 mp", favoritesVm.TotalFavoritesDuration);
+        Assert.Equal("8 min 0 s", favoritesVm.TotalFavoritesDuration);
 
         favoritesVm.ShuffleAll();
         Assert.True(player.IsShuffle);
@@ -355,7 +355,7 @@ public class RefactorRegressionTests
         var playlistsVm = new PlaylistsViewModel(service, player);
 
         playlistsVm.SelectedPlaylist = playlist;
-        Assert.Equal("1 óra 15 perc", playlistsVm.SelectedPlaylistTotalDuration);
+        Assert.Equal("1 h 15 min", playlistsVm.SelectedPlaylistTotalDuration);
     }
 
     [Fact]
@@ -442,7 +442,7 @@ public class RefactorRegressionTests
         // Search for artist
         searchVm.UpdateQuery("The Weeknd");
         Assert.NotNull(searchVm.BestMatch);
-        Assert.Equal("ELŐADÓ", searchVm.BestMatch.TypeLabel);
+        Assert.Equal("ARTIST", searchVm.BestMatch.TypeLabel);
         Assert.Equal("#ffff6b6b", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
 
         // Search for album

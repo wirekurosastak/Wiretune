@@ -5,6 +5,7 @@ using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.UI.Controls;
 using Wiretune.UI.Services;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.UI.ViewModels;
 
@@ -28,7 +29,7 @@ public partial class AlbumsViewModel : ObservableObject
     [ObservableProperty] private Album? _selectedAlbum;
     [ObservableProperty] private Bitmap? _selectedAlbumCover;
     [ObservableProperty] private bool _isAlbumDetailOpen;
-    [ObservableProperty] private string _backButtonText = "Vissza az összes albumhoz";
+    private Func<string>? _backTextSource;
     [ObservableProperty] private AlbumSortField _sortField = AlbumSortField.Title;
     [ObservableProperty] private bool _isSortDescending;
 
@@ -44,8 +45,18 @@ public partial class AlbumsViewModel : ObservableObject
     public bool IsSortByTitle => SortField == AlbumSortField.Title;
     public bool IsSortByYear => SortField == AlbumSortField.Year;
 
+    /// <summary>Label of the back button: where it leads to, or "all albums" when the detail was opened from the album list.</summary>
+    public string BackButtonText => _backTextSource?.Invoke() is { Length: > 0 } text ? text : Localizer.Get("BackToAlbums");
+
     public string SortTitleLabel => IsSortByTitle ? $"ABC {(IsSortDescending ? "↓" : "↑")}" : "ABC";
-    public string SortYearLabel => IsSortByYear ? $"Év {(IsSortDescending ? "↓" : "↑")}" : "Év";
+    public string SortYearLabel => IsSortByYear ? $"{Localizer.Get("SortYear")} {(IsSortDescending ? "↓" : "↑")}" : Localizer.Get("SortYear");
+
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts()
+    {
+        OnPropertyChanged(nameof(BackButtonText));
+        OnPropertyChanged(nameof(SortYearLabel));
+    }
 
     partial void OnSortFieldChanged(AlbumSortField value) => OnSortChanged();
     partial void OnIsSortDescendingChanged(bool value) => OnSortChanged();
@@ -95,9 +106,17 @@ public partial class AlbumsViewModel : ObservableObject
 
         if (SelectedAlbum != null)
         {
-            var updated = _library.GetAlbum(SelectedAlbum.Id);
-            if (updated == null) CloseAlbumDetail();
-            else SelectedAlbum = updated;
+            var previous = SelectedAlbum;
+            var updated = _library.GetAlbum(previous.Id);
+            if (updated == null)
+            {
+                CloseAlbumDetail();
+            }
+            else
+            {
+                SelectedAlbum = updated;
+                if (updated.CoverArtPath != previous.CoverArtPath) LoadSelectedCover(updated);
+            }
         }
     }
 
@@ -134,13 +153,15 @@ public partial class AlbumsViewModel : ObservableObject
     [RelayCommand]
     public void OpenAlbum(object? param) => OpenAlbumWithOrigin(param, null, null, NavWaveDirection.LeftToRight);
 
-    public void OpenAlbumWithOrigin(object? param, string? backText, Action? onReturn, NavWaveDirection? waveDirection = NavWaveDirection.LeftToRight)
+    /// <param name="backTextSource">Produces the back button label; called again whenever the language changes.</param>
+    public void OpenAlbumWithOrigin(object? param, Func<string>? backTextSource, Action? onReturn, NavWaveDirection? waveDirection = NavWaveDirection.LeftToRight)
     {
         var album = Resolve(param);
         if (album == null) return;
 
         ReturnAction = onReturn;
-        BackButtonText = string.IsNullOrWhiteSpace(backText) ? "Vissza az összes albumhoz" : backText;
+        _backTextSource = backTextSource;
+        OnPropertyChanged(nameof(BackButtonText));
 
         SelectedAlbum = album;
         IsAlbumDetailOpen = true;
@@ -149,18 +170,23 @@ public partial class AlbumsViewModel : ObservableObject
         {
             OnNavWave?.Invoke(waveDirection.Value);
         }
+        LoadSelectedCover(album);
+    }
+
+    private void LoadSelectedCover(Album album) =>
         CoverArtService.LoadBitmap(album.CoverArtPath, DetailCoverDecodeWidth, bmp =>
         {
-            if (ReferenceEquals(SelectedAlbum, album)) SelectedAlbumCover = bmp;
+            // Compare by id: a library refresh replaces the Album object while the cover is still loading.
+            if (SelectedAlbum?.Id == album.Id) SelectedAlbumCover = bmp;
         });
-    }
 
     [RelayCommand]
     public void CloseAlbumDetail()
     {
         var returnAction = ReturnAction;
         ReturnAction = null;
-        BackButtonText = "Vissza az összes albumhoz";
+        _backTextSource = null;
+        OnPropertyChanged(nameof(BackButtonText));
 
         if (IsAlbumDetailOpen)
         {

@@ -1,6 +1,6 @@
 ﻿using Wiretune.Core.Audio.Devices;
 using Wiretune.Core.Audio.Drivers;
-using Wiretune.Core.Audio;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
@@ -40,24 +40,24 @@ public class WiretuneAudioEngine : IDisposable
     {
         get
         {
-            if (_currentTrack == null) return "Nincs aktív lejátszás";
+            if (_currentTrack == null) return Localizer.Get("SignalNone");
 
             var fmt = _currentTrack.Format;
-            var dev = _currentDevice?.DisplayTitle ?? "Alapértelmezett kimenet";
+            var dev = _currentDevice?.DisplayTitle ?? Localizer.Get("DefaultOutput");
             var source = fmt.IsLossless
                 ? $"{fmt.QualityLabel} ({fmt.Codec} {fmt.BitsPerSample}b/{fmt.SampleRate / 1000.0:0.#}kHz)"
                 : fmt.QualityLabel;
             var processing = _isBitperfect
-                ? "Bit-perfect (1:1 PCM, Unity Gain 0dB, Resampler KIKAPCSOLVA)"
-                : "Rendszerkeverő (megosztott kimenet)";
-            var access = _isExclusiveMode ? "Kizárólagos mód (közvetlen hardver)" : "Megosztott mód";
-            var transport = !string.IsNullOrEmpty(_currentTrack.StreamUrl) ? "Szerver stream (veszteségmentes, átkódolás nélkül)" : "Helyi fájl";
+                ? Localizer.Get("SignalProcessingBitPerfect")
+                : Localizer.Get("SignalProcessingMixer");
+            var access = Localizer.Get(_isExclusiveMode ? "SignalAccessExclusive" : "SignalAccessShared");
+            var transport = Localizer.Get(!string.IsNullOrEmpty(_currentTrack.StreamUrl) ? "SignalTransportServer" : "SignalTransportLocal");
 
-            return $"Forrás: {source}\n" +
-                   $"Átvitel: {transport}\n" +
-                   $"Feldolgozás: {processing}\n" +
-                   $"Hozzáférés: {access}\n" +
-                   $"Cél eszköz: {dev}";
+            return Localizer.Format("SignalSource", source) + "\n" +
+                   Localizer.Format("SignalTransport", transport) + "\n" +
+                   Localizer.Format("SignalProcessing", processing) + "\n" +
+                   Localizer.Format("SignalAccess", access) + "\n" +
+                   Localizer.Format("SignalTarget", dev);
         }
     }
 
@@ -100,6 +100,7 @@ public class WiretuneAudioEngine : IDisposable
             devices = new List<AudioOutputDevice>();
         }
 
+        AudioOutputDevice? device;
         lock (_deviceLock)
         {
             _availableDevices = devices;
@@ -111,11 +112,21 @@ public class WiretuneAudioEngine : IDisposable
             {
                 _currentDevice = devices.First(d => d.Id == _currentDevice.Id);
             }
+            device = _currentDevice;
         }
 
-        if (_currentDevice != null)
+        if (device != null)
         {
-            await _driver.InitializeAsync(_currentDevice, _isExclusiveMode, _isBitperfect);
+            // The first scan runs unobserved from the constructor: report a failure instead of leaving it in a faulted task.
+            try
+            {
+                await _driver.InitializeAsync(device, _isExclusiveMode, _isBitperfect);
+            }
+            catch (Exception ex)
+            {
+                WiretuneLog.Error("AudioEngine", $"Initialising output '{device.Name}' failed: {ex.Message}", ex);
+                PlaybackFailed?.Invoke(this, Localizer.Format("EngineDeviceInitFailed", device.Name, ex.Message));
+            }
         }
 
         DevicesChanged?.Invoke(this, EventArgs.Empty);
@@ -129,7 +140,7 @@ public class WiretuneAudioEngine : IDisposable
         var source = ResolveSource(track);
         if (string.IsNullOrEmpty(source))
         {
-            PlaybackFailed?.Invoke(this, $"A(z) „{track.Title}” szám nem játszható le: nincs elérhető forrás.");
+            PlaybackFailed?.Invoke(this, Localizer.Format("EngineNoSource", track.Title));
             return;
         }
 
@@ -181,7 +192,7 @@ public class WiretuneAudioEngine : IDisposable
             var exclusiveDevice = PreferredExclusiveDevice();
             if (exclusiveDevice == null)
             {
-                PlaybackFailed?.Invoke(this, "Egyik kimeneti eszköz sem támogatja a kizárólagos módot ezen a rendszeren.");
+                PlaybackFailed?.Invoke(this, Localizer.Get("EngineNoExclusive"));
                 ExclusiveModeChanged?.Invoke(this, false);
                 return;
             }
@@ -215,7 +226,7 @@ public class WiretuneAudioEngine : IDisposable
             : PreferredExclusiveDevice(requireBitperfect: true);
         if (device == null)
         {
-            PlaybackFailed?.Invoke(this, "Egyik kimeneti eszköz sem támogatja a bit-perfect lejátszást ezen a rendszeren.");
+            PlaybackFailed?.Invoke(this, Localizer.Get("EngineNoBitPerfect"));
             BitperfectChanged?.Invoke(this, false);
             return;
         }
@@ -264,21 +275,19 @@ public class WiretuneAudioEngine : IDisposable
         if (_currentDevice != null && candidates.FirstOrDefault(d => d.Id == _currentDevice.Id) is { } currentMatch)
             return currentMatch;
 
-        // 2. If current device was a shared sink (e.g. PipeWire SMSL), find matching hardware ALSA device
+        // 2. If the current device is a shared sink (e.g. a PipeWire sink), find the hardware device with the same card name
         if (_currentDevice != null)
         {
             var match = candidates.FirstOrDefault(d =>
                 (!string.IsNullOrEmpty(d.HardwareCard) && _currentDevice.Name.Contains(d.HardwareCard, StringComparison.OrdinalIgnoreCase)) ||
-                (!string.IsNullOrEmpty(_currentDevice.HardwareCard) && d.Name.Contains(_currentDevice.HardwareCard, StringComparison.OrdinalIgnoreCase)) ||
-                (_currentDevice.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase) && d.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase)));
+                (!string.IsNullOrEmpty(_currentDevice.HardwareCard) && d.Name.Contains(_currentDevice.HardwareCard, StringComparison.OrdinalIgnoreCase)));
             if (match != null) return match;
         }
 
-        // 3. Prefer USB DAC or dedicated external DAC over internal HDMI / motherboard audio
+        // 3. Prefer a USB DAC over internal HDMI / motherboard audio
         var usbDac = candidates.FirstOrDefault(d =>
             d.Name.Contains("USB", StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrEmpty(d.HardwareCard) && d.HardwareCard.Contains("USB", StringComparison.OrdinalIgnoreCase)) ||
-            d.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase));
+            (!string.IsNullOrEmpty(d.HardwareCard) && d.HardwareCard.Contains("USB", StringComparison.OrdinalIgnoreCase)));
         if (usbDac != null) return usbDac;
 
         // 4. Any direct ALSA device
@@ -325,7 +334,3 @@ public class WiretuneAudioEngine : IDisposable
         GC.SuppressFinalize(this);
     }
 }
-
-
-
-

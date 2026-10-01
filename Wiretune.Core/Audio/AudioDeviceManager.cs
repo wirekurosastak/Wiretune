@@ -2,6 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using NAudio.CoreAudioApi;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
@@ -29,7 +30,7 @@ public static class AudioDeviceManager
                 devices.Add(new AudioOutputDevice
                 {
                     Id = "default",
-                    Name = "Alapértelmezett audio kimenet",
+                    NameKey = "AudioDefaultOutput",
                     DriverType = "Default",
                     IsDefault = true,
                     IsExclusiveSupported = false,
@@ -45,115 +46,71 @@ public static class AudioDeviceManager
     {
         var list = new List<AudioOutputDevice>();
 
-        // 1. Check for PipeWire default / sinks via wpctl
-        try
+        // 1. PipeWire sinks via wpctl
+        if (RunAndCapture("wpctl", "status") is { } wpctlOutput)
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = "wpctl",
-                Arguments = "status",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var proc = Process.Start(psi);
-            if (proc != null)
-            {
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(1000);
+            bool inSinks = false;
 
-                var lines = output.Split('\n');
-                bool inSinks = false;
-
-                foreach (var line in lines)
+            foreach (var line in wpctlOutput.Split('\n'))
+            {
+                if (line.Contains("Sinks:"))
                 {
-                    if (line.Contains("Sinks:"))
-                    {
-                        inSinks = true;
-                        continue;
-                    }
-                    if (inSinks && (line.Contains("Sources:") || line.Contains("Filters:") || line.Contains("Streams:")))
-                    {
-                        break;
-                    }
+                    inSinks = true;
+                    continue;
+                }
+                if (inSinks && (line.Contains("Sources:") || line.Contains("Filters:") || line.Contains("Streams:")))
+                {
+                    break;
+                }
 
-                    if (inSinks && line.Contains('.'))
+                if (inSinks && line.Contains('.'))
+                {
+                    var match = Regex.Match(line, @"(?:(?<default>\*)\s+)?(?<id>\d+)\.\s+(?<name>[^\[]+)(?:\[vol:\s*(?<vol>[^\]]+)\])?");
+                    if (match.Success)
                     {
-                        var match = Regex.Match(line, @"(?:(?<default>\*)\s+)?(?<id>\d+)\.\s+(?<name>[^\[]+)(?:\[vol:\s*(?<vol>[^\]]+)\])?");
-                        if (match.Success)
+                        list.Add(new AudioOutputDevice
                         {
-                            var id = match.Groups["id"].Value.Trim();
-                            var name = match.Groups["name"].Value.Trim();
-                            var isDefault = match.Groups["default"].Success;
-
-                            list.Add(new AudioOutputDevice
-                            {
-                                Id = $"pw_{id}",
-                                Name = name,
-                                DriverType = "PipeWire",
-                                HardwareCard = name.Contains("SMSL") ? "SMSL USB DAC" : "PipeWire Sink",
-                                IsDefault = isDefault,
-                                IsExclusiveSupported = false,
-                                IsBitperfectSupported = false,
-                                SupportedSampleRates = new() { 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000 }
-                            });
-                        }
+                            Id = $"pw_{match.Groups["id"].Value.Trim()}",
+                            Name = match.Groups["name"].Value.Trim(),
+                            DriverType = "PipeWire",
+                            HardwareCard = "PipeWire Sink",
+                            IsDefault = match.Groups["default"].Success,
+                            IsExclusiveSupported = false,
+                            IsBitperfectSupported = false,
+                            SupportedSampleRates = new() { 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000 }
+                        });
                     }
                 }
             }
         }
-        catch
-        {
-            // wpctl not available
-        }
 
-        // 2. Check for ALSA direct hardware devices via aplay -l
-        try
+        // 2. Direct ALSA hardware devices via aplay -l
+        // Example: card 2: AUDIO [SMSL USB AUDIO], device 0: USB Audio [USB Audio]
+        if (RunAndCapture("aplay", "-l") is { } aplayOutput)
         {
-            var psi = new ProcessStartInfo
+            var matches = Regex.Matches(aplayOutput, @"card\s+(?<card>\d+):\s+(?<cardShort>[^\[]+)\[(?<cardName>[^\]]+)\],\s+device\s+(?<dev>\d+):\s+(?<devShort>[^\[]+)\[(?<fullName>[^\]]+)\]");
+            foreach (Match m in matches)
             {
-                FileName = "aplay",
-                Arguments = "-l",
-                RedirectStandardOutput = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            psi.EnvironmentVariables["LC_ALL"] = "C"; // Force English output for regex parsing
-            using var proc = Process.Start(psi);
-            if (proc != null)
-            {
-                var output = proc.StandardOutput.ReadToEnd();
-                proc.WaitForExit(1000);
+                var card = m.Groups["card"].Value;
+                var dev = m.Groups["dev"].Value;
+                var cardName = m.Groups["cardName"].Value.Trim();
+                var fullName = m.Groups["fullName"].Value.Trim();
+                var displayName = string.Equals(cardName, fullName, StringComparison.OrdinalIgnoreCase)
+                    ? $"ALSA: {cardName}"
+                    : $"ALSA: {cardName} ({fullName})";
 
-                // Example: card 2: AUDIO [SMSL USB AUDIO], device 0: USB Audio [USB Audio]
-                var matches = Regex.Matches(output, @"card\s+(?<card>\d+):\s+(?<cardShort>[^\[]+)\[(?<cardName>[^\]]+)\],\s+device\s+(?<dev>\d+):\s+(?<devShort>[^\[]+)\[(?<fullName>[^\]]+)\]");
-                foreach (Match m in matches)
+                list.Add(new AudioOutputDevice
                 {
-                    var card = m.Groups["card"].Value;
-                    var dev = m.Groups["dev"].Value;
-                    var cardName = m.Groups["cardName"].Value.Trim();
-                    var fullName = m.Groups["fullName"].Value.Trim();
-                    var displayName = string.Equals(cardName, fullName, StringComparison.OrdinalIgnoreCase)
-                        ? $"Közvetlen ALSA: {cardName}"
-                        : $"Közvetlen ALSA: {cardName} ({fullName})";
-
-                    list.Add(new AudioOutputDevice
-                    {
-                        Id = $"hw:{card},{dev}",
-                        Name = displayName,
-                        DriverType = "ALSA Direct",
-                        HardwareCard = cardName,
-                        IsDefault = false,
-                        IsExclusiveSupported = true,
-                        IsBitperfectSupported = true,
-                        SupportedSampleRates = new() { 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000 }
-                    });
-                }
+                    Id = $"hw:{card},{dev}",
+                    Name = displayName,
+                    DriverType = "ALSA Direct",
+                    HardwareCard = cardName,
+                    IsDefault = false,
+                    IsExclusiveSupported = true,
+                    IsBitperfectSupported = true,
+                    SupportedSampleRates = new() { 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000 }
+                });
             }
-        }
-        catch
-        {
-            // aplay not available
         }
 
         // If no default was detected from PipeWire, mark the first device as default
@@ -163,6 +120,42 @@ public static class AudioDeviceManager
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// Runs a short-lived query tool and returns its stdout, or null when the tool is missing, fails to start
+    /// or does not finish within <paramref name="timeoutMs"/> (a hung tool must not hang device detection).
+    /// </summary>
+    private static string? RunAndCapture(string fileName, string arguments, int timeoutMs = 3000)
+    {
+        var psi = new ProcessStartInfo(fileName, arguments)
+        {
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        psi.Environment["LC_ALL"] = "C"; // stable, English output for the regexes above
+
+        try
+        {
+            using var proc = Process.Start(psi);
+            if (proc == null) return null;
+
+            var output = proc.StandardOutput.ReadToEndAsync();
+            if (!output.Wait(timeoutMs))
+            {
+                try { proc.Kill(entireProcessTree: true); } catch { }
+                WiretuneLog.Warn("AudioDeviceManager", $"'{fileName} {arguments}' did not finish within {timeoutMs} ms.");
+                return null;
+            }
+
+            return output.Result;
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Debug("AudioDeviceManager", $"'{fileName}' is not available: {ex.Message}");
+            return null;
+        }
     }
 
     private static List<AudioOutputDevice> DetectWindowsAudioDevices()
@@ -176,7 +169,7 @@ public static class AudioDeviceManager
             string? defaultId = null;
             try
             {
-                var defaultDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                using var defaultDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
                 defaultId = defaultDevice?.ID;
             }
             catch
@@ -186,6 +179,7 @@ public static class AudioDeviceManager
 
             foreach (var endpoint in endpoints)
             {
+                using var _ = endpoint;
                 bool isDefault = endpoint.ID == defaultId;
                 list.Add(new AudioOutputDevice
                 {
@@ -216,7 +210,7 @@ public static class AudioDeviceManager
             list.Add(new AudioOutputDevice
             {
                 Id = "wasapi_default",
-                Name = "Windows alapértelmezett kimenet",
+                NameKey = "AudioWindowsDefaultOutput",
                 DriverType = "WASAPI",
                 IsDefault = true,
                 IsExclusiveSupported = true,
@@ -227,5 +221,3 @@ public static class AudioDeviceManager
         return list;
     }
 }
-
-

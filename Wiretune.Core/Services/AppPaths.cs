@@ -27,7 +27,15 @@ public static class AppPaths
         }
 
         var dir = Path.GetFullPath(string.IsNullOrEmpty(subdirectory) ? root : Path.Combine(root, subdirectory));
-        Directory.CreateDirectory(dir);
+        if (!Directory.Exists(dir))
+        {
+            // The directory holds the client's access token or the server's token-signing key, so a directory
+            // created here is private to the current user. An existing one is left as the admin set it up.
+            if (OperatingSystem.IsWindows())
+                Directory.CreateDirectory(dir);
+            else
+                Directory.CreateDirectory(dir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
         return dir;
     }
 
@@ -39,13 +47,24 @@ public static class AppPaths
     {
         if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(root)) return false;
 
-        var fullPath = Path.GetFullPath(path);
-        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        string fullPath, fullRoot;
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+            fullRoot = Path.GetFullPath(root);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+
         var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
 
-        if (string.Equals(fullPath, fullRoot, comparison)) return true;
-        return fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, comparison);
+        // A filesystem root ("/" or "C:\") already ends with a separator; any other root gets one appended.
+        var prefix = Path.EndsInDirectorySeparator(fullRoot) ? fullRoot : fullRoot + Path.DirectorySeparatorChar;
+        return string.Equals(fullPath, prefix.TrimEnd(Path.DirectorySeparatorChar), comparison) ||
+               fullPath.StartsWith(prefix, comparison);
     }
 }

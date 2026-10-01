@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json.Serialization;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.Core.Models;
 
@@ -8,7 +9,7 @@ public class Playlist : INotifyPropertyChanged
     private List<string> _trackIds = new();
 
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = "Új lejátszási lista";
+    public string Name { get; set; } = Localizer.Get("PlaylistNew");
     public string? Description { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;

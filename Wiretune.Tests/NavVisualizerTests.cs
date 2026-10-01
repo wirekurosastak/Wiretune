@@ -1,4 +1,4 @@
-﻿using Wiretune.Core.Models;
+﻿﻿using Wiretune.Core.Models;
 using Wiretune.UI.Controls;
 using Wiretune.UI.ViewModels;
 using Xunit;
@@ -190,7 +190,7 @@ public class NavVisualizerTests
         Assert.Equal(1, vm.SelectedNavigationIndex);
         Assert.True(vm.Albums.IsAlbumDetailOpen);
         Assert.Equal("A Night at the Opera", vm.Albums.SelectedAlbum?.Title);
-        Assert.Equal("Vissza: Queen", vm.Albums.BackButtonText);
+        Assert.Equal("Back to: Queen", vm.Albums.BackButtonText);
 
         // 4. Click Back on the album detail
         vm.Albums.CloseAlbumDetail();

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Wiretune.Core.Audio.Dsp;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
@@ -42,6 +43,8 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private Timer? _positionTimer;
     private Timer? _spectrumTimer;
     private Timer? _volumeRestartTimer;
+    private Timer? _mixerVolumeTimer;
+    private int _spectrumFrameBusy;
     private string? _currentSource;
     private AudioFormat? _currentFormat;
     private bool _pipewireForceRateActive;
@@ -193,53 +196,59 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         }
 
         _volume = Math.Clamp(volume, 0.0, 1.0);
-        if (TryApplyMixerVolume()) return;
 
-        // Without a controllable mixer the volume is an ffplay start argument: restart at the current position,
-        // debounced so dragging the slider does not respawn the process on every tick.
-        if (_state == PlaybackState.Playing)
+        lock (_stateLock)
         {
-            _volumeRestartTimer?.Dispose();
-            _volumeRestartTimer = new Timer(_ =>
+            if (_disposed) return;
+
+            if (HasHardwareMixer)
             {
-                lock (_stateLock)
+                // The slider fires continuously; spawning wpctl/amixer per tick would stall the caller, so only the
+                // last value of a burst is applied, off the calling (UI) thread.
+                (_mixerVolumeTimer ??= new Timer(_ => ApplyMixerVolume())).Change(60, Timeout.Infinite);
+                return;
+            }
+
+            // Without a controllable mixer the volume is an ffplay/ffmpeg start argument: restart at the current
+            // position, debounced so dragging the slider does not respawn the process on every tick.
+            if (_state == PlaybackState.Playing)
+            {
+                _volumeRestartTimer?.Dispose();
+                _volumeRestartTimer = new Timer(_ =>
                 {
-                    if (_state != PlaybackState.Playing || _currentSource == null) return;
-                    UpdatePosition();
-                    _seekOffset = _currentPosition;
-                    _playStartTime = DateTime.UtcNow;
-                    StartPlaybackProcess(_currentPosition, Interlocked.Increment(ref _playbackGeneration));
-                }
-            }, null, 400, Timeout.Infinite);
+                    lock (_stateLock)
+                    {
+                        if (_disposed || _state != PlaybackState.Playing || _currentSource == null) return;
+                        UpdatePosition();
+                        _seekOffset = _currentPosition;
+                        _playStartTime = DateTime.UtcNow;
+                        StartPlaybackProcess(_currentPosition, Interlocked.Increment(ref _playbackGeneration));
+                    }
+                }, null, 400, Timeout.Infinite);
+            }
         }
     }
 
-    private bool TryApplyMixerVolume()
+    /// <summary>True when the output device has a system mixer we can drive (PipeWire sink or ALSA card).</summary>
+    private bool HasHardwareMixer =>
+        OperatingSystem.IsLinux() && _currentDevice is { } dev && (dev.DriverType.Contains("PipeWire") || dev.Id.StartsWith("pw_") || dev.Id.StartsWith("hw:"));
+
+    private void ApplyMixerVolume()
     {
-        if (!OperatingSystem.IsLinux() || _currentDevice is not { } dev) return false;
+        if (_currentDevice is not { } dev) return;
 
-        try
+        bool ok;
+        if (dev.DriverType.Contains("PipeWire") || dev.Id.StartsWith("pw_"))
         {
-            if (dev.DriverType.Contains("PipeWire") || dev.Id.StartsWith("pw_"))
-            {
-                var volStr = _volume.ToString("0.00", CultureInfo.InvariantCulture);
-                RunQuiet("wpctl", "set-volume", dev.Id.Replace("pw_", ""), volStr);
-                return true;
-            }
-
-            if (dev.Id.StartsWith("hw:"))
-            {
-                var cardNum = dev.Id.Replace("hw:", "").Split(',')[0];
-                RunQuiet("amixer", "-q", "-c", cardNum, "sset", "PCM", $"{(int)(_volume * 100)}%");
-                return true;
-            }
+            ok = RunQuiet("wpctl", "set-volume", dev.Id.Replace("pw_", ""), _volume.ToString("0.00", CultureInfo.InvariantCulture));
         }
-        catch (Exception ex)
+        else
         {
-            WiretuneLog.Debug("FfmpegAudioDriver", $"Mixer volume change failed: {ex.Message}");
+            var cardNum = dev.Id.Replace("hw:", "").Split(',')[0];
+            ok = RunQuiet("amixer", "-q", "-c", cardNum, "sset", "PCM", $"{(int)(_volume * 100)}%");
         }
 
-        return false;
+        if (!ok) WiretuneLog.Debug("FfmpegAudioDriver", $"Mixer volume change failed for '{dev.Name}'.");
     }
 
     /// <summary>Starts playback for the current source. Must be called under <see cref="_stateLock"/>.</summary>
@@ -311,21 +320,19 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
         WiretuneLog.Info("FfmpegAudioDriver", $"Starting direct ALSA (ffmpeg | aplay) on plughw:{cardNum},{devNum} at {startPosition:mm\\:ss} for '{RedactToken(_currentSource!)}'");
 
-        Process ffmpegProc;
-        Process aplayProc;
+        Process? ffmpegProc = null;
+        Process? aplayProc = null;
         try
         {
             ffmpegProc = Process.Start(ffmpegPsi) ?? throw new InvalidOperationException("ffmpeg did not start.");
             aplayProc = Process.Start(aplayPsi) ?? throw new InvalidOperationException("aplay did not start.");
         }
-        catch (Win32Exception ex)
-        {
-            Fail($"A közvetlen ALSA lejátszó nem indítható (ffmpeg vagy aplay hiányzik): {ex.Message}");
-            return false;
-        }
         catch (Exception ex)
         {
-            Fail($"A közvetlen ALSA lejátszás nem indítható: {ex.Message}");
+            // If only ffmpeg started it would otherwise keep decoding into a pipe nobody reads.
+            TerminateProcess(ffmpegProc);
+            TerminateProcess(aplayProc);
+            Fail(Localizer.Format(ex is Win32Exception ? "DriverAlsaMissingTools" : "DriverAlsaStartFailed", ex.Message));
             return false;
         }
 
@@ -403,12 +410,12 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         }
         catch (Win32Exception)
         {
-            Fail("Az ffplay nem található. Telepítsd az FFmpeg-et, és gondoskodj róla, hogy a PATH-ban elérhető legyen.");
+            Fail(Localizer.Get("DriverFfplayMissing"));
             return false;
         }
         catch (Exception ex)
         {
-            Fail($"A lejátszó nem indítható: {ex.Message}");
+            Fail(Localizer.Format("DriverPlayerStartFailed", ex.Message));
             return false;
         }
 
@@ -449,13 +456,12 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
                     if (dev != null)
                     {
                         if ((!string.IsNullOrEmpty(dev.HardwareCard) && desc.Contains(dev.HardwareCard, StringComparison.OrdinalIgnoreCase)) ||
-                            (!string.IsNullOrEmpty(dev.Name) && desc.Contains(dev.Name, StringComparison.OrdinalIgnoreCase)) ||
-                            (dev.Name.Contains("SMSL", StringComparison.OrdinalIgnoreCase) && desc.Contains("SMSL", StringComparison.OrdinalIgnoreCase)))
+                            (!string.IsNullOrEmpty(dev.Name) && desc.Contains(dev.Name, StringComparison.OrdinalIgnoreCase)))
                         {
                             return (card, "0");
                         }
                     }
-                    else if (desc.Contains("USB", StringComparison.OrdinalIgnoreCase) || desc.Contains("SMSL", StringComparison.OrdinalIgnoreCase))
+                    else if (desc.Contains("USB", StringComparison.OrdinalIgnoreCase))
                     {
                         return (card, "0");
                     }
@@ -487,7 +493,17 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         lock (ProcessLock) ActiveProcesses.Remove(proc);
 
         int exitCode;
-        try { exitCode = proc.ExitCode; } catch { exitCode = -1; }
+        try
+        {
+            // The parameterless overload returns once the redirected stderr has been read to the end, so the
+            // error text used below is complete (Exited alone can fire before the last lines arrive).
+            proc.WaitForExit();
+            exitCode = proc.ExitCode;
+        }
+        catch
+        {
+            exitCode = -1;
+        }
 
         lock (_stateLock)
         {
@@ -495,13 +511,23 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
             StopTimers();
             _playbackProcess = null;
-            if (_decoderProcess != null)
+
+            // ffplay exits with 0 even when it could not open the source (unreachable server, expired token, missing
+            // file). Without this check such a track would count as "finished" and the queue would race through.
+            if (exitCode == 0 && !string.IsNullOrEmpty(_lastProcessError) && DateTime.UtcNow - _playStartTime < TimeSpan.FromSeconds(3))
+                exitCode = 1;
+
+            // In the ALSA pipeline aplay sees a clean end of input even when ffmpeg died early (bad URL, expired
+            // token, network drop), so the decoder's own exit code decides whether the track really finished.
+            if (_decoderProcess is { } decoder)
             {
-                var dec = _decoderProcess;
                 _decoderProcess = null;
-                lock (ProcessLock) ActiveProcesses.Remove(dec);
-                try { if (!dec.HasExited) dec.Kill(true); } catch { }
-                try { dec.Dispose(); } catch { }
+                try
+                {
+                    if (decoder.WaitForExit(500) && exitCode == 0) exitCode = decoder.ExitCode;
+                }
+                catch { }
+                TerminateProcess(decoder);
             }
 
             if (exitCode == 0)
@@ -512,15 +538,16 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             else
             {
                 Fail(string.IsNullOrEmpty(_lastProcessError)
-                    ? $"A lejátszás váratlanul leállt (kilépési kód: {exitCode})."
-                    : $"A lejátszás sikertelen: {RedactToken(_lastProcessError)}");
+                    ? Localizer.Format("DriverStoppedUnexpectedly", exitCode)
+                    : Localizer.Format("DriverPlaybackFailed", RedactToken(_lastProcessError)));
             }
         }
     }
 
     private void ConfigureOutputRouting(ProcessStartInfo psi, AudioFormat format)
     {
-        if (!OperatingSystem.IsLinux() || _currentDevice is not { } dev) return;
+        // Only a detected PipeWire sink can be addressed this way; the generic "default" entry uses ffplay's own default.
+        if (!OperatingSystem.IsLinux() || _currentDevice is not { } dev || !dev.Id.StartsWith("pw_")) return;
 
         psi.EnvironmentVariables["SDL_AUDIODRIVER"] = "pipewire";
         psi.EnvironmentVariables["PIPEWIRE_NODE"] = dev.Id.Replace("pw_", "");
@@ -571,26 +598,9 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
     private void ReleaseDeviceReservation()
     {
-        if (_reserveProcess != null)
-        {
-            try
-            {
-                lock (ProcessLock) ActiveProcesses.Remove(_reserveProcess);
-                if (!_reserveProcess.HasExited)
-                {
-                    _reserveProcess.Kill(entireProcessTree: true);
-                    _reserveProcess.WaitForExit(300);
-                }
-            }
-            catch
-            {
-            }
-            finally
-            {
-                _reserveProcess.Dispose();
-                _reserveProcess = null;
-            }
-        }
+        var reserve = _reserveProcess;
+        _reserveProcess = null;
+        TerminateProcess(reserve, 300);
     }
 
     private void ResetAudioHardwareSettings()
@@ -616,13 +626,21 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
         _spectrumTimer = new Timer(_ =>
         {
-            if (_state != PlaybackState.Playing) return;
-            var position = _seekOffset + (DateTime.UtcNow - _playStartTime);
-            Span<float> window = stackalloc float[FxSoundSpectrumEngine.FftSize];
-            var bands = _pcmCache.TryGetWindow(position, window)
-                ? _spectrumEngine.ProcessPcm(window, true)
-                : _spectrumEngine.ProcessFrame(position, true);
-            SpectrumDataAvailable?.Invoke(this, bands);
+            // Timer callbacks overlap when a frame takes longer than the period; the engine is not reentrant.
+            if (_state != PlaybackState.Playing || Interlocked.Exchange(ref _spectrumFrameBusy, 1) == 1) return;
+            try
+            {
+                var position = _seekOffset + (DateTime.UtcNow - _playStartTime);
+                Span<float> window = stackalloc float[FxSoundSpectrumEngine.FftSize];
+                var bands = _pcmCache.TryGetWindow(position, window)
+                    ? _spectrumEngine.ProcessPcm(window, true)
+                    : _spectrumEngine.ProcessFrame(position, true);
+                SpectrumDataAvailable?.Invoke(this, bands);
+            }
+            finally
+            {
+                Volatile.Write(ref _spectrumFrameBusy, 0);
+            }
         }, null, 0, 33);
     }
 
@@ -634,6 +652,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         _spectrumTimer = null;
         _volumeRestartTimer?.Dispose();
         _volumeRestartTimer = null;
+        // _mixerVolumeTimer is deliberately kept: a volume change must still reach the mixer while paused or stopped.
 
         if (!emitSilence) return;
         _spectrumEngine.Reset();
@@ -659,44 +678,35 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             _pipeCts = null;
         }
 
-        if (_decoderProcess != null)
+        var decoder = _decoderProcess;
+        var player = _playbackProcess;
+        _decoderProcess = null;
+        _playbackProcess = null;
+        TerminateProcess(decoder, 150);
+        TerminateProcess(player, 150);
+    }
+
+    /// <summary>Best-effort kill of a child process tree, with an optional short wait, then release the handle.</summary>
+    private static void TerminateProcess(Process? proc, int waitMs = 0)
+    {
+        if (proc == null) return;
+
+        lock (ProcessLock) ActiveProcesses.Remove(proc);
+        try
         {
-            var dec = _decoderProcess;
-            _decoderProcess = null;
-            lock (ProcessLock) ActiveProcesses.Remove(dec);
-            try
+            if (!proc.HasExited)
             {
-                if (!dec.HasExited)
-                {
-                    dec.Kill(true);
-                    dec.WaitForExit(150);
-                }
-            }
-            catch { }
-            finally
-            {
-                try { dec.Dispose(); } catch { }
+                proc.Kill(entireProcessTree: true);
+                if (waitMs > 0) proc.WaitForExit(waitMs);
             }
         }
-
-        if (_playbackProcess != null)
+        catch
         {
-            var proc = _playbackProcess;
-            _playbackProcess = null;
-            lock (ProcessLock) ActiveProcesses.Remove(proc);
-            try
-            {
-                if (!proc.HasExited)
-                {
-                    proc.Kill(true);
-                    proc.WaitForExit(150);
-                }
-            }
-            catch { }
-            finally
-            {
-                try { proc.Dispose(); } catch { }
-            }
+            // Already gone.
+        }
+        finally
+        {
+            try { proc.Dispose(); } catch { }
         }
     }
 
@@ -723,7 +733,11 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             var psi = new ProcessStartInfo(fileName) { CreateNoWindow = true, UseShellExecute = false };
             foreach (var a in args) psi.ArgumentList.Add(a);
             using var proc = Process.Start(psi);
-            return proc != null && proc.WaitForExit(1000) && proc.ExitCode == 0;
+            if (proc == null) return false;
+            if (proc.WaitForExit(1000)) return proc.ExitCode == 0;
+
+            try { proc.Kill(entireProcessTree: true); } catch { }
+            return false;
         }
         catch
         {
@@ -768,11 +782,10 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             Interlocked.Increment(ref _playbackGeneration);
             KillPlaybackProcess();
             StopTimers(emitSilence: false);
+            _mixerVolumeTimer?.Dispose();
+            _mixerVolumeTimer = null;
             ResetAudioHardwareSettings();
         }
         _pcmCache.Dispose();
     }
 }
-
-
-

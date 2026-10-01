@@ -1,6 +1,8 @@
 ﻿using Android.Content;
 using Android.Media;
+using Android.OS;
 using Wiretune.Core.Audio.Drivers;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 
@@ -13,6 +15,8 @@ public sealed class AndroidAudioDriver : IAudioDriver
     private MediaPlayer? _player;
     private AudioFocusRequestClass? _audioFocusRequest;
     private AudioManager? _audioManager;
+    private AudioFocusListener? _focusListener;
+    private bool _resumeOnFocusGain;
     private Timer? _positionTimer;
     private double _volume = 1.0;
     private long _generation;
@@ -52,6 +56,8 @@ public sealed class AndroidAudioDriver : IAudioDriver
                     .SetUsage(AudioUsageKind.Media)!
                     .SetContentType(AudioContentType.Music)!
                     .Build()!);
+                // Keep the CPU awake while the screen is off (needs the WAKE_LOCK permission, which the manifest declares).
+                player.SetWakeMode(global::Android.App.Application.Context, WakeLockFlags.Partial);
                 player.SetDataSource(audioSource);
                 player.SetVolume((float)_volume, (float)_volume);
 
@@ -84,7 +90,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
                     lock (_lock)
                     {
                         if (gen != _generation) return;
-                        Fail($"Playback failed (MediaPlayer error: {e.What}, extra: {e.Extra}).");
+                        Fail(Localizer.Format("DriverAndroidError", e.What.ToString(), e.Extra));
                     }
                 };
 
@@ -94,7 +100,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
             }
             catch (Exception ex)
             {
-                Fail($"Player could not be started: {ex.Message}");
+                Fail(Localizer.Format("DriverCannotStart", ex.Message));
             }
         }
         return Task.CompletedTask;
@@ -104,20 +110,31 @@ public sealed class AndroidAudioDriver : IAudioDriver
     {
         lock (_lock)
         {
-            if (_state != PlaybackState.Playing || _player == null) return Task.CompletedTask;
-            _player.Pause();
-            StopPositionTimer();
-            SetState(PlaybackState.Paused);
-            // Abandon focus while paused so other apps may play; reacquire on resume.
-            AbandonAudioFocus();
+            _resumeOnFocusGain = false;
+            PauseLocked(abandonFocus: true);
         }
         return Task.CompletedTask;
+    }
+
+    /// <param name="abandonFocus">
+    /// True when the user paused: give focus back so other apps may play. False for a transient loss (a phone call):
+    /// focus must be kept, or the system never tells us when it is free again.
+    /// </param>
+    private void PauseLocked(bool abandonFocus)
+    {
+        if (_state != PlaybackState.Playing || _player == null) return;
+
+        _player.Pause();
+        StopPositionTimer();
+        SetState(PlaybackState.Paused);
+        if (abandonFocus) AbandonAudioFocus();
     }
 
     public Task ResumeAsync()
     {
         lock (_lock)
         {
+            _resumeOnFocusGain = false;
             if (_state != PlaybackState.Paused || _player == null) return Task.CompletedTask;
             RequestAudioFocus();
             _player.Start();
@@ -146,6 +163,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
         lock (_lock)
         {
             _generation++;
+            _resumeOnFocusGain = false;
             ReleasePlayer();
             AbandonAudioFocus();
             CurrentPosition = TimeSpan.Zero;
@@ -205,7 +223,7 @@ public sealed class AndroidAudioDriver : IAudioDriver
         player.Dispose();
     }
 
-    // â”€â”€ Seek helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Seek helpers ─────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Seeks to <paramref name="position"/> using the precise API on API 26+, legacy int on older devices.</summary>
     private static void SeekPlayerTo(MediaPlayer player, TimeSpan position)
@@ -225,23 +243,23 @@ public sealed class AndroidAudioDriver : IAudioDriver
         }
     }
 
-    /// <summary>Requests transient audio focus so Wiretune can co-exist with phone calls and other apps.</summary>
+    /// <summary>Requests audio focus so Wiretune co-exists with phone calls and other players.</summary>
     private void RequestAudioFocus()
     {
         if (_audioManager == null) return;
 
+        _focusListener ??= new AudioFocusListener(this);
+
         if (OperatingSystem.IsAndroidVersionAtLeast(26))
         {
 #pragma warning disable CA1416 // All calls in this branch are guarded by the version check.
-            var attrs = new AudioAttributes.Builder()
-                .SetUsage(AudioUsageKind.Media)!
-                .SetContentType(AudioContentType.Music)!
-                .Build()!;
-
-            _audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
-                .SetAudioAttributes(attrs)!
+            _audioFocusRequest ??= new AudioFocusRequestClass.Builder(AudioFocus.Gain)
+                .SetAudioAttributes(new AudioAttributes.Builder()
+                    .SetUsage(AudioUsageKind.Media)!
+                    .SetContentType(AudioContentType.Music)!
+                    .Build()!)!
                 .SetAcceptsDelayedFocusGain(false)!
-                .SetOnAudioFocusChangeListener(new AudioFocusListener(this))!
+                .SetOnAudioFocusChangeListener(_focusListener)!
                 .Build();
 
             _audioManager.RequestAudioFocus(_audioFocusRequest);
@@ -250,12 +268,9 @@ public sealed class AndroidAudioDriver : IAudioDriver
         else
         {
             // Legacy API (deprecated in API 26 but still functional).
-#pragma warning disable CA1416
-            _audioManager.RequestAudioFocus(
-                new AudioFocusListener(this),
-                global::Android.Media.Stream.Music,
-                AudioFocus.Gain);
-#pragma warning restore CA1416
+#pragma warning disable CA1416, CA1422
+            _audioManager.RequestAudioFocus(_focusListener, global::Android.Media.Stream.Music, AudioFocus.Gain);
+#pragma warning restore CA1416, CA1422
         }
     }
 
@@ -263,18 +278,55 @@ public sealed class AndroidAudioDriver : IAudioDriver
     {
         if (_audioManager == null) return;
 
-        if (OperatingSystem.IsAndroidVersionAtLeast(26) && _audioFocusRequest != null)
+        if (OperatingSystem.IsAndroidVersionAtLeast(26))
         {
 #pragma warning disable CA1416
-            _audioManager.AbandonAudioFocusRequest(_audioFocusRequest);
-#pragma warning restore CA1416
+            if (_audioFocusRequest != null) _audioManager.AbandonAudioFocusRequest(_audioFocusRequest);
             _audioFocusRequest = null;
-        }
-        else
-        {
-#pragma warning disable CA1416
-            _audioManager.AbandonAudioFocus(new AudioFocusListener(this));
 #pragma warning restore CA1416
+        }
+        else if (_focusListener != null)
+        {
+#pragma warning disable CA1416, CA1422
+            _audioManager.AbandonAudioFocus(_focusListener);
+#pragma warning restore CA1416, CA1422
+        }
+    }
+
+    private void OnAudioFocusChanged(AudioFocus change)
+    {
+        lock (_lock)
+        {
+            switch (change)
+            {
+                case AudioFocus.Loss:
+                    // Another app took over for good (e.g. a different music player): pause and stay paused.
+                    _resumeOnFocusGain = false;
+                    PauseLocked(abandonFocus: true);
+                    break;
+                case AudioFocus.LossTransient:
+                    // Phone call, alarm: pause, and carry on when the system gives focus back.
+                    if (_state == PlaybackState.Playing)
+                    {
+                        _resumeOnFocusGain = true;
+                        PauseLocked(abandonFocus: false);
+                    }
+                    break;
+                case AudioFocus.LossTransientCanDuck:
+                    // Navigation prompt, notification sound: play quieter for a moment.
+                    _player?.SetVolume(0.2f * (float)_volume, 0.2f * (float)_volume);
+                    break;
+                case AudioFocus.Gain:
+                    _player?.SetVolume((float)_volume, (float)_volume);
+                    if (_resumeOnFocusGain && _state == PlaybackState.Paused && _player != null)
+                    {
+                        _resumeOnFocusGain = false;
+                        _player.Start();
+                        SetState(PlaybackState.Playing);
+                        StartPositionTimer();
+                    }
+                    break;
+            }
         }
     }
 
@@ -299,39 +351,20 @@ public sealed class AndroidAudioDriver : IAudioDriver
         lock (_lock)
         {
             _generation++;
+            _resumeOnFocusGain = false;
             ReleasePlayer();
             AbandonAudioFocus();
         }
     }
 
-    // â”€â”€ Inner class â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ── Inner class ─────────────────────────────────────────────────────────
 
-    /// <summary>Handles transient audio focus loss (e.g. phone call, notification beep).</summary>
+    /// <summary>Forwards audio focus changes (phone call, another player, a notification sound) to the driver.</summary>
     private sealed class AudioFocusListener : Java.Lang.Object, AudioManager.IOnAudioFocusChangeListener
     {
         private readonly AndroidAudioDriver _driver;
         internal AudioFocusListener(AndroidAudioDriver driver) => _driver = driver;
 
-        public void OnAudioFocusChange(AudioFocus focusChange)
-        {
-            switch (focusChange)
-            {
-                case AudioFocus.Loss:
-                case AudioFocus.LossTransient:
-                    // Phone call or another app grabbed focus permanently or transiently â†’ pause.
-                    _ = _driver.PauseAsync();
-                    break;
-                case AudioFocus.LossTransientCanDuck:
-                    // Notification sound â†’ lower volume temporarily.
-                    _driver._player?.SetVolume(0.2f, 0.2f);
-                    break;
-                case AudioFocus.Gain:
-                    // We got focus back after a transient loss â†’ restore volume.
-                    var vol = (float)_driver._volume;
-                    _driver._player?.SetVolume(vol, vol);
-                    break;
-            }
-        }
+        public void OnAudioFocusChange(AudioFocus focusChange) => _driver.OnAudioFocusChanged(focusChange);
     }
 }
-

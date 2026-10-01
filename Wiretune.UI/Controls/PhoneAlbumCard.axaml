@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:Wiretune.UI.Localization"
+             xmlns:material="using:Material.Icons.Avalonia"
+             xmlns:services="using:Wiretune.UI.Services"
+             xmlns:vm="using:Wiretune.UI.ViewModels"
+             x:Class="Wiretune.UI.Controls.PhoneAlbumCard"
+             x:DataType="vm:AlbumCardViewModel"
+             x:Name="Root">
+  <!-- An album in a phone grid: square cover, title and artist. Its DataContext is an AlbumCardViewModel. -->
+  <Button Classes="phone-tap"
+          Command="{Binding OpenCommand, ElementName=Root}"
+          CommandParameter="{Binding}"
+          services:ViewportLoad.Target="{Binding}">
+    <Grid RowDefinitions="Auto, *" Margin="4">
+      <Border Grid.Row="0" Height="{Binding $self.Bounds.Width}" CornerRadius="14"
+              Background="{DynamicResource Surface2}" ClipToBounds="True">
+        <Panel>
+          <material:MaterialIcon Kind="Album" Width="48" Height="48"
+                                 Foreground="{DynamicResource PurpleAccent}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+          <Image Source="{Binding CoverBitmap}" Stretch="UniformToFill"
+                 IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        </Panel>
+      </Border>
+      <StackPanel Grid.Row="1" Margin="2,8,2,0" Spacing="1">
+        <TextBlock Classes="phone-row-title" Text="{Binding Title}" FontSize="14" />
+        <TextBlock Classes="phone-row-sub" Text="{Binding Artist}" />
+      </StackPanel>
+    </Grid>
+  </Button>
+</UserControl>

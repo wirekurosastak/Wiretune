@@ -5,8 +5,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Dapper;
 using Microsoft.IdentityModel.Tokens;
-using Wiretune.Core.Models;
 using Wiretune.Core.Data;
+using Wiretune.Core.Models;
 
 namespace Wiretune.Server.Auth;
 
@@ -47,6 +47,8 @@ public class AuthService
             return $"Username must be at most {AuthRules.MaxUsernameLength} printable characters.";
         if (password.Length < AuthRules.MinPasswordLength)
             return $"Password must be at least {AuthRules.MinPasswordLength} characters.";
+        if (Encoding.UTF8.GetByteCount(password) > AuthRules.MaxPasswordBytes)
+            return $"Password must be at most {AuthRules.MaxPasswordBytes} bytes.";
         return null;
     }
 
@@ -111,6 +113,12 @@ public class AuthService
             UserParameters(user, request.Password));
 
         return inserted == 0 ? null : user;
+    }
+
+    public async Task<bool> UserExistsAsync(string userId)
+    {
+        using var conn = _db.CreateConnection();
+        return await conn.ExecuteScalarAsync<long>("SELECT EXISTS (SELECT 1 FROM users WHERE id = @userId)", new { userId }) != 0;
     }
 
     public async Task<UserInfo?> GetUserAsync(string userId)

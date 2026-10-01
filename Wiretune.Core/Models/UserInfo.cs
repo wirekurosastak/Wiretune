@@ -29,5 +29,9 @@ public record UpdateLibraryPathRequest(string NewPath);
 public static class AuthRules
 {
     public const int MinPasswordLength = 8;
+
+    /// <summary>bcrypt silently ignores everything past 72 bytes, so longer passwords are rejected instead of truncated.</summary>
+    public const int MaxPasswordBytes = 72;
+
     public const int MaxUsernameLength = 64;
 }

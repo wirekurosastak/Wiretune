@@ -1,6 +1,7 @@
 ﻿using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.UI.Services;
@@ -14,19 +15,19 @@ public partial class ServerSettingsViewModel : ObservableObject
 
     [ObservableProperty] private string _serverUrl = ServerSession.DefaultServerUrl;
     [ObservableProperty] private string _localLibraryPath = string.Empty;
-    [ObservableProperty] private bool _isServerConnected;
     [ObservableProperty] private bool _isServerReachable;
     [ObservableProperty] private bool _isConnecting;
     [ObservableProperty] private bool _isScanning;
     [ObservableProperty] private double _scanProgress;
-    [ObservableProperty] private string _statusMessage = "Készenlétben";
+    [ObservableProperty] private string _statusMessage = Localizer.Get("StatusReady");
+    private bool _statusIsIdle = true;
     [ObservableProperty] private int _totalTracksCount;
     [ObservableProperty] private int _totalAlbumsCount;
     [ObservableProperty] private int _totalArtistsCount;
     [ObservableProperty] private int _totalFavoritesCount;
     [ObservableProperty] private int _totalPlaylistsCount;
-    [ObservableProperty] private string _serverStatusBadge = "Nincs kapcsolat";
-    [ObservableProperty] private string _librarySourceText = "Nincs kiválasztott könyvtár";
+    [ObservableProperty] private string _serverStatusBadge = Localizer.Get("BadgeNoConnection");
+    [ObservableProperty] private string _librarySourceText = Localizer.Get("SourceNoneSelected");
 
     [ObservableProperty] private string _username = string.Empty;
     [ObservableProperty] private string _password = string.Empty;
@@ -42,10 +43,8 @@ public partial class ServerSettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isServerOffline;
 
     [ObservableProperty] private string _serverLibraryPath = string.Empty;
-    [ObservableProperty] private bool _isLoadingServerConfig;
     [ObservableProperty] private bool _isUpdatingServerConfig;
     [ObservableProperty] private System.Collections.ObjectModel.ObservableCollection<UserInfo> _serverUsers = new();
-    [ObservableProperty] private bool _isLoadingUsers;
     [ObservableProperty] private string _newUsername = string.Empty;
     [ObservableProperty] private string _newPassword = string.Empty;
     [ObservableProperty] private string _confirmPassword = string.Empty;
@@ -54,11 +53,13 @@ public partial class ServerSettingsViewModel : ObservableObject
     [ObservableProperty] private bool _hasUserManagementError;
 
     private string? _lastSyncedServerUrl;
+    private string? _adminDataKey;
 
-    public string PasswordHint => $"Jelszó (legalább {AuthRules.MinPasswordLength} karakter)";
-    public bool IsBusy => IsConnecting || IsAuthenticating || (IsScanning && IsServerConnected);
+    public string PasswordHint => Localizer.Format("PasswordHint", AuthRules.MinPasswordLength);
+    public bool IsBusy => IsConnecting || IsAuthenticating || (IsScanning && IsLoggedIn);
     public bool CanRescanServer => IsLoggedIn && IsAdmin && !IsScanning;
 
+    partial void OnStatusMessageChanged(string value) => _statusIsIdle = value == Localizer.Get("StatusReady");
     partial void OnIsConnectingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
     partial void OnIsAuthenticatingChanged(bool value) => OnPropertyChanged(nameof(IsBusy));
     partial void OnIsLoggedInChanged(bool value) => OnPropertyChanged(nameof(CanRescanServer));
@@ -88,6 +89,15 @@ public partial class ServerSettingsViewModel : ObservableObject
         UpdateStats();
     }
 
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts()
+    {
+        // The idle status is the one message that would otherwise stay in the previous language until something happens.
+        if (_statusIsIdle) StatusMessage = Localizer.Get("StatusReady");
+        SyncWithSession();
+        OnPropertyChanged(nameof(PasswordHint));
+    }
+
     public void SyncWithSession()
     {
         // Only overwrite the text box when the session's address actually changed, not while the user is typing.
@@ -97,7 +107,6 @@ public partial class ServerSettingsViewModel : ObservableObject
             ServerUrl = _session.ServerUrl;
         }
 
-        IsServerConnected = _session.IsLoggedIn;
         IsServerReachable = _session.IsServerReachable;
         IsServerOffline = _session.State == ServerConnectionState.Offline;
         IsConnecting = _session.State == ServerConnectionState.Connecting;
@@ -105,31 +114,37 @@ public partial class ServerSettingsViewModel : ObservableObject
         IsSetupRequired = _session.State == ServerConnectionState.SetupRequired;
         IsAdmin = _session.CurrentUser?.IsAdmin == true;
         CurrentUserName = _session.CurrentUser?.Username ?? string.Empty;
-        CurrentUserRole = IsAdmin ? "Adminisztrátor" : "Felhasználó";
+        CurrentUserRole = Localizer.Get(IsAdmin ? "RoleAdmin" : "RoleUser");
         if (!string.IsNullOrWhiteSpace(_session.StatusMessage)) StatusMessage = _session.StatusMessage;
 
         ServerStatusBadge = _session.State switch
         {
-            ServerConnectionState.Connected => IsLoggedIn ? "Csatlakoztatva" : "Online",
-            ServerConnectionState.Connecting => "Kapcsolódás...",
-            ServerConnectionState.LoginRequired => "Bejelentkezés szükséges",
-            ServerConnectionState.SetupRequired => "Beállítás szükséges",
-            ServerConnectionState.Offline => "Offline",
-            _ => "Nincs kapcsolat"
+            ServerConnectionState.Connected => Localizer.Get(IsLoggedIn ? "BadgeConnected" : "BadgeOnline"),
+            ServerConnectionState.Connecting => Localizer.Get("BadgeConnecting"),
+            ServerConnectionState.LoginRequired => Localizer.Get("BadgeLoginRequired"),
+            ServerConnectionState.SetupRequired => Localizer.Get("BadgeSetupRequired"),
+            ServerConnectionState.Offline => Localizer.Get("BadgeOffline"),
+            _ => Localizer.Get("BadgeNoConnection")
         };
 
         LibrarySourceText = _session.Source switch
         {
-            LibrarySource.Hybrid => $"Egyesített ({_session.ServerUrl} + helyi mappa)",
-            LibrarySource.Server => $"Szerver ({_session.ServerUrl})",
-            LibrarySource.Local => $"Helyi mappa ({_library.LibraryPath})",
-            _ => "Nincs aktív forrás"
+            LibrarySource.Hybrid => Localizer.Format("SourceHybrid", _session.ServerUrl),
+            LibrarySource.Server => Localizer.Format("SourceServer", _session.ServerUrl),
+            LibrarySource.Local => Localizer.Format("SourceLocal", _library.LibraryPath),
+            _ => Localizer.Get("SourceNone")
         };
 
-        if (IsLoggedIn && IsAdmin)
+        // The admin-only data is fetched once per admin login, not on every session state change.
+        var adminKey = IsLoggedIn && IsAdmin ? $"{_session.ServerUrl}|{CurrentUserName}" : null;
+        if (adminKey != _adminDataKey)
         {
-            _ = LoadServerConfigAsync();
-            _ = LoadUsersAsync();
+            _adminDataKey = adminKey;
+            if (adminKey != null)
+            {
+                _ = LoadServerConfigAsync();
+                _ = LoadUsersAsync();
+            }
         }
     }
 
@@ -161,7 +176,7 @@ public partial class ServerSettingsViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrEmpty(Password))
         {
-            ShowAuthError("Add meg a felhasználónevet és a jelszót!");
+            ShowAuthError(Localizer.Get("AuthEnterCredentials"));
             return;
         }
 
@@ -182,7 +197,7 @@ public partial class ServerSettingsViewModel : ObservableObject
 
             if (_session.State == ServerConnectionState.SetupRequired)
             {
-                ShowAuthError("A szerver még nincs beállítva: előbb hozd létre az adminisztrátori fiókot.");
+                ShowAuthError(Localizer.Get("AuthSetupFirst"));
                 return;
             }
 
@@ -208,13 +223,13 @@ public partial class ServerSettingsViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(Username) || string.IsNullOrEmpty(Password))
         {
-            ShowAuthError("Add meg az admin felhasználónevet és jelszót!");
+            ShowAuthError(Localizer.Get("AuthEnterAdminCredentials"));
             return;
         }
 
         if (Password.Length < AuthRules.MinPasswordLength)
         {
-            ShowAuthError($"A jelszónak legalább {AuthRules.MinPasswordLength} karakter hosszúnak kell lennie!");
+            ShowAuthError(Localizer.Format("PasswordTooShort", AuthRules.MinPasswordLength));
             return;
         }
 
@@ -245,12 +260,12 @@ public partial class ServerSettingsViewModel : ObservableObject
     {
         if (!_session.IsLoggedIn)
         {
-            StatusMessage = "Előbb jelentkezz be a szerverre.";
+            StatusMessage = Localizer.Get("ScanSignInFirst");
             return;
         }
 
         IsScanning = true;
-        StatusMessage = "Szerveroldali újraindexelés elindítva...";
+        StatusMessage = Localizer.Get("ReindexStarted");
         try
         {
             await _session.TriggerServerScanAsync();
@@ -263,22 +278,24 @@ public partial class ServerSettingsViewModel : ObservableObject
                 await Task.Delay(1500);
                 status = await _session.GetLibraryStatusAsync();
                 StatusMessage = status.IsScanning
-                    ? $"A szerver indexel... ({status.TrackCount} szám eddig)"
-                    : "Indexelés kész, könyvtár frissítése...";
+                    ? Localizer.Format("ReindexProgress", status.TrackCount)
+                    : Localizer.Get("ReindexFinished");
             } while (status.IsScanning && DateTime.UtcNow < deadline);
 
             await _session.RefreshLibraryAsync();
-            StatusMessage = status.LastScanError is { Length: > 0 } err
-                ? $"A szerver jelezte: {err}"
-                : $"Szerver szinkronizálva: {_library.Tracks.Count} szám elérhető.";
+            StatusMessage = _session.State != ServerConnectionState.Connected
+                ? _session.StatusMessage ?? Localizer.Get("LibraryRefreshFailed")
+                : status.LastScanError is { Length: > 0 } err
+                    ? Localizer.Format("ServerReported", err)
+                    : Localizer.Format("ServerSynced", _library.Tracks.Count);
         }
         catch (ServerRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
-            StatusMessage = "Az újraindexeléshez adminisztrátori jogosultság kell.";
+            StatusMessage = Localizer.Get("ReindexNeedsAdmin");
         }
         catch (Exception ex) when (ex is ServerRequestException or ServerUnauthorizedException)
         {
-            StatusMessage = $"Hiba az újraindexelés közben: {ex.Message}";
+            StatusMessage = Localizer.Format("ReindexError", ex.Message);
         }
         finally
         {
@@ -291,18 +308,18 @@ public partial class ServerSettingsViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(LocalLibraryPath) || !Directory.Exists(LocalLibraryPath))
         {
-            StatusMessage = "A megadott mappa nem létezik!";
+            StatusMessage = Localizer.Get("FolderMissing");
             return;
         }
 
         if (_library.IsScanning)
         {
-            StatusMessage = "Már folyamatban van egy szkennelés.";
+            StatusMessage = Localizer.Get("ScanAlreadyRunning");
             return;
         }
 
         ScanProgress = 0;
-        StatusMessage = "Zenefájlok keresése és metaadatok beolvasása...";
+        StatusMessage = Localizer.Get("ScanStarted");
         var progress = new Progress<ScanProgressReport>(r => Dispatcher.UIThread.Post(() =>
         {
             ScanProgress = r.ProgressPercentage;
@@ -318,13 +335,13 @@ public partial class ServerSettingsViewModel : ObservableObject
                 var localCount = _library.Tracks.Count(t => t.IsLocal);
                 var serverCount = _library.Tracks.Count(t => !t.IsLocal);
                 StatusMessage = serverCount > 0
-                    ? $"Könyvtár beolvasva: {localCount} helyi szám, {serverCount} szerver szám ({_library.Tracks.Count} összesen)."
-                    : $"Helyi könyvtár beolvasva: {_library.Tracks.Count} szám.";
+                    ? Localizer.Format("ScanDoneMixed", localCount, serverCount, _library.Tracks.Count)
+                    : Localizer.Format("ScanDoneLocal", _library.Tracks.Count);
             }
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Hiba a szkennelés közben: {ex.Message}";
+            StatusMessage = Localizer.Format("ScanError", ex.Message);
         }
         finally
         {
@@ -336,7 +353,6 @@ public partial class ServerSettingsViewModel : ObservableObject
     public async Task LoadServerConfigAsync()
     {
         if (!IsLoggedIn || !IsAdmin) return;
-        IsLoadingServerConfig = true;
         try
         {
             var config = await _session.GetServerConfigAsync();
@@ -344,11 +360,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Szerver beállítások betöltési hiba: {ex.Message}";
-        }
-        finally
-        {
-            IsLoadingServerConfig = false;
+            StatusMessage = Localizer.Format("ServerSettingsLoadError", ex.Message);
         }
     }
 
@@ -358,7 +370,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         if (!IsLoggedIn || !IsAdmin) return;
         if (string.IsNullOrWhiteSpace(ServerLibraryPath))
         {
-            StatusMessage = "Add meg a szerver zenemappájának elérését!";
+            StatusMessage = Localizer.Get("EnterServerFolder");
             return;
         }
 
@@ -367,11 +379,11 @@ public partial class ServerSettingsViewModel : ObservableObject
         {
             var config = await _session.UpdateServerLibraryPathAsync(ServerLibraryPath);
             ServerLibraryPath = config.LibraryPath;
-            StatusMessage = "Szerver zenemappa frissítve, indexelés elindítva!";
+            StatusMessage = Localizer.Get("ServerFolderUpdated");
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Hiba a mappa mentésekor: {ex.Message}";
+            StatusMessage = Localizer.Format("FolderSaveError", ex.Message);
         }
         finally
         {
@@ -383,7 +395,6 @@ public partial class ServerSettingsViewModel : ObservableObject
     public async Task LoadUsersAsync()
     {
         if (!IsLoggedIn || !IsAdmin) return;
-        IsLoadingUsers = true;
         ShowUserManagementError(null);
         try
         {
@@ -392,11 +403,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ShowUserManagementError($"Felhasználók betöltési hiba: {ex.Message}");
-        }
-        finally
-        {
-            IsLoadingUsers = false;
+            ShowUserManagementError(Localizer.Format("UsersLoadError", ex.Message));
         }
     }
 
@@ -406,19 +413,19 @@ public partial class ServerSettingsViewModel : ObservableObject
         if (!IsLoggedIn || !IsAdmin) return;
         if (string.IsNullOrWhiteSpace(NewUsername) || string.IsNullOrEmpty(NewPassword))
         {
-            ShowUserManagementError("Add meg a felhasználónevet és a jelszót!");
+            ShowUserManagementError(Localizer.Get("AuthEnterCredentials"));
             return;
         }
 
         if (NewPassword.Length < AuthRules.MinPasswordLength)
         {
-            ShowUserManagementError($"A jelszónak legalább {AuthRules.MinPasswordLength} karakternek kell lennie!");
+            ShowUserManagementError(Localizer.Format("PasswordTooShort", AuthRules.MinPasswordLength));
             return;
         }
 
         if (NewPassword != ConfirmPassword)
         {
-            ShowUserManagementError("A megadott jelszavak nem egyeznek!");
+            ShowUserManagementError(Localizer.Get("PasswordsDontMatch"));
             return;
         }
 
@@ -434,7 +441,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ShowUserManagementError($"Hiba a felhasználó hozzáadásakor: {ex.Message}");
+            ShowUserManagementError(Localizer.Format("UserAddError", ex.Message));
         }
         finally
         {
@@ -454,7 +461,7 @@ public partial class ServerSettingsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ShowUserManagementError($"Hiba a törlésnél: {ex.Message}");
+            ShowUserManagementError(Localizer.Format("UserDeleteError", ex.Message));
         }
     }
 

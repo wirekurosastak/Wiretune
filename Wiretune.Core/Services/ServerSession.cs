@@ -1,5 +1,6 @@
-﻿using Wiretune.Core.Models;
-using Wiretune.Core.Data;
+﻿using Wiretune.Core.Data;
+using Wiretune.Core.Localization;
+using Wiretune.Core.Models;
 
 namespace Wiretune.Core.Services;
 
@@ -33,12 +34,15 @@ public sealed class ServerSession : IDisposable
     private readonly LibraryRepository _settings;
     private readonly ServerStreamingClient _client;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private string? _statusKey;
+    private object?[] _statusArgs = [];
 
     public string ServerUrl { get; private set; } = DefaultServerUrl;
     public ServerConnectionState State { get; private set; } = ServerConnectionState.NotConfigured;
     public LibrarySource Source { get; private set; } = LibrarySource.None;
     public UserInfo? CurrentUser { get; private set; }
-    public string? StatusMessage { get; private set; }
+    /// <summary>The current status text in the active language; it follows language changes.</summary>
+    public string? StatusMessage => _statusKey == null ? null : Localizer.Format(_statusKey, _statusArgs);
     public string? AuthToken => _client.AuthToken;
 
     public bool IsLoggedIn => State == ServerConnectionState.Connected && CurrentUser != null;
@@ -52,6 +56,24 @@ public sealed class ServerSession : IDisposable
         _library = library;
         _settings = settings;
         _client = client ?? new ServerStreamingClient();
+        Localizer.Instance.LanguageChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, EventArgs e) => StateChanged?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>Lyrics of a server track; null for local tracks, when signed out, on any failure, or when there are none.</summary>
+    public async Task<string?> GetLyricsAsync(Track track, CancellationToken ct = default)
+    {
+        if (track.IsLocal || !IsLoggedIn) return null;
+        try
+        {
+            return await _client.GetLyricsAsync(ServerUrl, track.Id, ct);
+        }
+        catch (Exception ex) when (ex is ServerRequestException or ServerUnauthorizedException)
+        {
+            WiretuneLog.Debug("ServerSession", $"No lyrics for '{track.Title}': {ex.Message}");
+            return null;
+        }
     }
 
     public async Task InitializeAsync()
@@ -83,9 +105,11 @@ public sealed class ServerSession : IDisposable
         var candidate = input.Trim();
         if (!candidate.Contains("://", StringComparison.Ordinal)) candidate = "http://" + candidate;
 
+        // "user:password@host" would be stored and logged as part of the address.
         if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
-            string.IsNullOrEmpty(uri.Host))
+            string.IsNullOrEmpty(uri.Host) ||
+            !string.IsNullOrEmpty(uri.UserInfo))
         {
             return false;
         }
@@ -100,59 +124,42 @@ public sealed class ServerSession : IDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            if (serverUrl != null)
+            await GuardedAsync(async () =>
             {
-                if (!TryNormalizeServerUrl(serverUrl, out var normalized))
+                if (serverUrl != null)
                 {
-                    SetState(ServerConnectionState.Offline, $"Érvénytelen szervercím: „{serverUrl}”. Példa: http://192.168.1.10:5200");
+                    if (!TryNormalizeServerUrl(serverUrl, out var normalized))
+                    {
+                        SetState(ServerConnectionState.Offline, "SessionInvalidUrl", serverUrl);
+                        return;
+                    }
+
+                    if (!string.Equals(normalized, ServerUrl, StringComparison.OrdinalIgnoreCase))
+                    {
+                        ServerUrl = normalized;
+                        await ForgetTokenAsync(); // a token is never sent to a different server
+                    }
+                    await _settings.SetSettingAsync("ServerUrl", ServerUrl);
+                }
+
+                SetState(ServerConnectionState.Connecting, "SessionConnecting", ServerUrl);
+                WiretuneLog.Info("ServerSession", $"Connecting to '{ServerUrl}'");
+
+                if (await _client.CheckSetupRequiredAsync(ServerUrl, ct))
+                {
+                    SetState(ServerConnectionState.SetupRequired, "SessionSetupRequired");
                     return;
                 }
 
-                if (!string.Equals(normalized, ServerUrl, StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrEmpty(_client.AuthToken))
                 {
-                    ServerUrl = normalized;
-                    await ForgetTokenAsync();
+                    SetState(ServerConnectionState.LoginRequired, "SessionLoginRequired", ServerUrl);
+                    return;
                 }
-                await _settings.SetSettingAsync("ServerUrl", ServerUrl);
-            }
 
-            SetState(ServerConnectionState.Connecting, $"Kapcsolódás: {ServerUrl}...");
-            WiretuneLog.Info("ServerSession", $"Connecting to '{ServerUrl}'");
-
-            if (await _client.CheckSetupRequiredAsync(ServerUrl, ct))
-            {
-                SetState(ServerConnectionState.SetupRequired, "A szerver még nincs beállítva. Hozz létre egy adminisztrátori fiókot!");
-                return;
-            }
-
-            if (string.IsNullOrEmpty(_client.AuthToken))
-            {
-                SetState(ServerConnectionState.LoginRequired, $"A szerver ({ServerUrl}) elérhető. Jelentkezz be a folytatáshoz.");
-                return;
-            }
-
-            try
-            {
                 CurrentUser = await _client.GetCurrentUserAsync(ServerUrl, ct);
-            }
-            catch (ServerUnauthorizedException)
-            {
-                await ForgetTokenAsync();
-                SetState(ServerConnectionState.LoginRequired, "A munkamenet lejárt. Jelentkezz be újra.");
-                return;
-            }
-
-            await RefreshLibraryCoreAsync(ct);
-        }
-        catch (ServerRequestException ex)
-        {
-            WiretuneLog.Warn("ServerSession", $"Server '{ServerUrl}' unavailable: {ex.Message}");
-            SetState(ServerConnectionState.Offline, $"A szerver ({ServerUrl}) nem érhető el. {ex.Message}");
-        }
-        catch (ServerUnauthorizedException)
-        {
-            await ForgetTokenAsync();
-            SetState(ServerConnectionState.LoginRequired, "A munkamenet lejárt. Jelentkezz be újra.");
+                await RefreshLibraryCoreAsync(ct);
+            });
         }
         finally
         {
@@ -160,46 +167,88 @@ public sealed class ServerSession : IDisposable
         }
     }
 
+    /// <summary>
+    /// Runs a server operation and turns every failure into a session state the UI can show. The callers are
+    /// fire-and-forget UI commands, where an escaping exception would take the whole application down, and the
+    /// state must never be left at "Connecting".
+    /// </summary>
+    private async Task GuardedAsync(Func<Task> operation)
+    {
+        try
+        {
+            await operation();
+        }
+        catch (ServerUnauthorizedException)
+        {
+            await ForgetTokenAsync();
+            SetState(ServerConnectionState.LoginRequired, "SessionExpired");
+        }
+        catch (ServerRequestException ex)
+        {
+            WiretuneLog.Warn("ServerSession", $"Server '{ServerUrl}' unavailable: {ex.Message}");
+            SetState(ServerConnectionState.Offline, "SessionUnreachable", ServerUrl, ex.Message);
+        }
+        catch (OperationCanceledException)
+        {
+            if (State == ServerConnectionState.Connecting) SetState(ServerConnectionState.Offline, "SessionCancelled");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            WiretuneLog.Error("ServerSession", $"Unexpected failure talking to '{ServerUrl}'", ex);
+            SetState(ServerConnectionState.Offline, "SessionUnexpected", ex.Message);
+        }
+    }
+
     public Task<string?> LoginAsync(string username, string password, bool rememberMe, CancellationToken ct = default) =>
         AuthenticateAsync(() => _client.LoginAsync(ServerUrl, username.Trim(), password, rememberMe, ct), rememberMe, ct,
-            unauthorizedMessage: "Hibás felhasználónév vagy jelszó.");
+            unauthorizedMessageKey: "SessionBadCredentials");
 
     public Task<string?> SetupAdminAsync(string username, string password, CancellationToken ct = default) =>
         AuthenticateAsync(() => _client.SetupAdminAsync(ServerUrl, username.Trim(), password, ct), rememberMe: true, ct,
-            unauthorizedMessage: "A szerver elutasította a kérést.");
+            unauthorizedMessageKey: "SessionRejected");
 
     /// <summary>Returns null on success, otherwise a user-facing error message.</summary>
-    private async Task<string?> AuthenticateAsync(Func<Task<AuthResponse>> call, bool rememberMe, CancellationToken ct, string unauthorizedMessage)
+    private async Task<string?> AuthenticateAsync(Func<Task<AuthResponse>> call, bool rememberMe, CancellationToken ct, string unauthorizedMessageKey)
     {
         await _gate.WaitAsync(ct);
         try
         {
-            var auth = await call();
+            AuthResponse auth;
+            try
+            {
+                auth = await call();
+            }
+            catch (ServerUnauthorizedException)
+            {
+                return Localizer.Get(unauthorizedMessageKey);
+            }
+            catch (ServerRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                // Another client finished the first-run setup in the meantime.
+                SetState(ServerConnectionState.LoginRequired, "SessionAlreadySetUp");
+                return StatusMessage;
+            }
+            catch (ServerRequestException ex)
+            {
+                if (ex.StatusCode == null)
+                {
+                    SetState(ServerConnectionState.Offline, "SessionUnreachable", ServerUrl, ex.Message);
+                    return ex.Message;
+                }
+                return Localizer.Format("SessionRejectedWith", ex.Message);
+            }
+
             _client.AuthToken = auth.Token;
             CurrentUser = auth.User;
-            await _settings.SetSettingAsync("AuthToken", rememberMe ? auth.Token : string.Empty);
-            await RefreshLibraryCoreAsync(ct);
-            return null;
-        }
-        catch (ServerUnauthorizedException)
-        {
-            return unauthorizedMessage;
-        }
-        catch (ServerRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-        {
-            // Another client finished the first-run setup in the meantime.
-            const string message = "A szervert időközben már beállították. Jelentkezz be a meglévő fiókkal.";
-            SetState(ServerConnectionState.LoginRequired, message);
-            return message;
-        }
-        catch (ServerRequestException ex)
-        {
-            if (ex.StatusCode == null)
+            await GuardedAsync(async () =>
             {
-                SetState(ServerConnectionState.Offline, $"A szerver ({ServerUrl}) nem érhető el. {ex.Message}");
-                return ex.Message;
-            }
-            return $"A szerver elutasította a kérést: {ex.Message}";
+                await _settings.SetSettingAsync("AuthToken", rememberMe ? auth.Token : string.Empty);
+                await RefreshLibraryCoreAsync(ct);
+            });
+
+            // The credentials were accepted; if the library download then failed, the state says why.
+            return State == ServerConnectionState.Connected ? null : StatusMessage;
         }
         finally
         {
@@ -217,7 +266,7 @@ public sealed class ServerSession : IDisposable
             bool hasLocal = _library.Tracks.Any(t => string.IsNullOrEmpty(t.StreamUrl));
             Source = hasLocal ? LibrarySource.Local : LibrarySource.None;
             await _settings.SetSettingAsync("LibrarySource", Source.ToString());
-            SetState(ServerConnectionState.LoginRequired, "Kijelentkezve a szerverről.");
+            SetState(ServerConnectionState.LoginRequired, "SessionSignedOut");
         }
         finally
         {
@@ -231,16 +280,7 @@ public sealed class ServerSession : IDisposable
         await _gate.WaitAsync(ct);
         try
         {
-            await RefreshLibraryCoreAsync(ct);
-        }
-        catch (ServerRequestException ex)
-        {
-            SetState(ServerConnectionState.Offline, $"A szerver ({ServerUrl}) nem érhető el. {ex.Message}");
-        }
-        catch (ServerUnauthorizedException)
-        {
-            await ForgetTokenAsync();
-            SetState(ServerConnectionState.LoginRequired, "A munkamenet lejárt. Jelentkezz be újra.");
+            await GuardedAsync(() => RefreshLibraryCoreAsync(ct));
         }
         finally
         {
@@ -278,18 +318,17 @@ public sealed class ServerSession : IDisposable
 
         if (hasServer && State == ServerConnectionState.Connected)
         {
-            var who = CurrentUser?.Username;
-            SetState(ServerConnectionState.Connected, $"Csatlakozva: {who} ({ServerUrl}) • {_library.Tracks.Count} szám (Helyi + Szerver)");
+            SetState(ServerConnectionState.Connected, "SessionConnectedHybrid", _library.Tracks.Count, CurrentUser?.Username, ServerUrl);
         }
         else if (!hasServer)
         {
-            SetState(ServerConnectionState.NotConfigured, "Helyi könyvtár használatban.");
+            SetState(ServerConnectionState.NotConfigured, "SessionLocalInUse");
         }
     }
 
     private async Task RefreshLibraryCoreAsync(CancellationToken ct)
     {
-        SetState(ServerConnectionState.Connecting, "Könyvtár letöltése a szerverről...");
+        SetState(ServerConnectionState.Connecting, "SessionDownloading");
         var tracks = await _client.FetchTracksAsync(ServerUrl, ct);
         await _library.MergeServerTracksAsync(tracks, ct);
 
@@ -297,10 +336,8 @@ public sealed class ServerSession : IDisposable
         Source = hasLocal ? LibrarySource.Hybrid : LibrarySource.Server;
         await _settings.SetSettingAsync("LibrarySource", Source.ToString());
 
-        var who = CurrentUser?.Username;
-        var info = hasLocal ? $" • {_library.Tracks.Count} szám (Helyi + Szerver)" : $" • {_library.Tracks.Count} szám";
         WiretuneLog.Info("ServerSession", $"Loaded {tracks.Count} tracks from '{ServerUrl}'. Total library: {_library.Tracks.Count} tracks.");
-        SetState(ServerConnectionState.Connected, $"Csatlakozva: {who} ({ServerUrl}){info}");
+        SetState(ServerConnectionState.Connected, hasLocal ? "SessionConnectedHybrid" : "SessionConnected", _library.Tracks.Count, CurrentUser?.Username, ServerUrl);
     }
 
     private async Task ForgetTokenAsync()
@@ -310,15 +347,18 @@ public sealed class ServerSession : IDisposable
         await _settings.SetSettingAsync("AuthToken", string.Empty);
     }
 
-    private void SetState(ServerConnectionState state, string? message)
+    /// <param name="messageKey">Key of the status text in <see cref="Strings"/>; the text is rendered on demand so that it follows language changes.</param>
+    private void SetState(ServerConnectionState state, string? messageKey, params object?[] args)
     {
         State = state;
-        StatusMessage = message;
+        _statusKey = messageKey;
+        _statusArgs = args;
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void Dispose()
     {
+        Localizer.Instance.LanguageChanged -= OnLanguageChanged;
         _client.Dispose();
         _gate.Dispose();
     }

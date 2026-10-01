@@ -1,0 +1,293 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:material="using:Material.Icons.Avalonia">
+
+  <!-- Styles of the phone layout (AndroidMainView and the controls it is built from). Every class starts with "phone-". -->
+
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <!-- Opaque surfaces for what floats above scrolling content: the bars, the mini player and the sheets -->
+          <SolidColorBrush x:Key="PhoneBarBackground" Color="#171A20" />
+          <SolidColorBrush x:Key="PhoneSheetBackground" Color="#14171C" />
+          <SolidColorBrush x:Key="PhoneScrim" Color="#B0000000" />
+          <BoxShadows x:Key="PhoneFloatShadow">0 10 28 -6 #B0000000</BoxShadows>
+          <BoxShadows x:Key="PhoneCoverShadow">0 18 40 -12 #D0000000</BoxShadows>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="PhoneBarBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="PhoneSheetBackground" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="PhoneScrim" Color="#80000000" />
+          <BoxShadows x:Key="PhoneFloatShadow">0 8 24 -6 #40000000</BoxShadows>
+          <BoxShadows x:Key="PhoneCoverShadow">0 16 36 -12 #55000000</BoxShadows>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- A long vertical list: only the rows that are on screen exist (it scrolls with the page around it) -->
+  <Style Selector="ItemsControl.phone-list">
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <VirtualizingStackPanel />
+      </ItemsPanelTemplate>
+    </Setter>
+  </Style>
+
+  <!-- A full-width tap target that draws nothing itself: rows and tiles. Pressing tints it. -->
+  <Style Selector="Button.phone-tap">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="14" />
+  </Style>
+  <Style Selector="Button.phone-tap /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+  </Style>
+  <Style Selector="Button.phone-tap:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.phone-tap:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2}" />
+    <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
+  </Style>
+  <Style Selector="Button.phone-tap:pressed">
+    <Setter Property="RenderTransform" Value="scale(0.985)" />
+  </Style>
+
+  <!-- Round 44dp icon button (the minimum comfortable touch target) -->
+  <Style Selector="Button.phone-icon">
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.phone-icon /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
+  </Style>
+  <Style Selector="Button.phone-icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
+  </Style>
+  <Style Selector="Button.phone-icon:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2}" />
+    <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
+  </Style>
+  <Style Selector="Button.phone-icon.accent">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
+  </Style>
+  <Style Selector="Button.phone-icon.main">
+    <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
+  </Style>
+
+  <!-- Filled round play/pause button -->
+  <Style Selector="Button.phone-fab">
+    <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForeground}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.phone-fab /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForeground}" />
+    <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
+  </Style>
+  <Style Selector="Button.phone-fab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+  </Style>
+  <Style Selector="Button.phone-fab:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
+  </Style>
+
+  <!-- Bottom navigation item: an icon in a pill and a label below it -->
+  <Style Selector="Button.phone-nav">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+  </Style>
+  <Style Selector="Button.phone-nav /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
+  </Style>
+  <Style Selector="Button.phone-nav:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
+  </Style>
+  <Style Selector="Button.phone-nav:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
+  </Style>
+  <Style Selector="Button.phone-nav:pressed">
+    <Setter Property="RenderTransform" Value="scale(0.94)" />
+  </Style>
+  <Style Selector="Button.phone-nav Border.phone-nav-pill">
+    <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.2" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.phone-nav.active Border.phone-nav-pill">
+    <Setter Property="Opacity" Value="0.26" />
+  </Style>
+  <Style Selector="Button.phone-nav.active">
+    <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
+  </Style>
+  <Style Selector="Button.phone-nav material|MaterialIcon.phone-nav-icon">
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+  </Style>
+  <Style Selector="Button.phone-nav.active material|MaterialIcon.phone-nav-icon">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
+  </Style>
+
+  <!-- Player rows, cards and pills -->
+  <Style Selector="Border.phone-row">
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.phone-row.playing">
+    <Setter Property="Background" Value="{DynamicResource Surface1}" />
+  </Style>
+  <Style Selector="TextBlock.phone-row-title">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <Style Selector="TextBlock.phone-row-title.playing">
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
+  </Style>
+  <Style Selector="TextBlock.phone-row-sub">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <Style Selector="Border.phone-card">
+    <Setter Property="Background" Value="{DynamicResource Surface1}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="Padding" Value="16" />
+  </Style>
+
+  <Style Selector="TextBlock.phone-title">
+    <Setter Property="FontSize" Value="28" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <Style Selector="TextBlock.phone-section">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    <Setter Property="LetterSpacing" Value="0.8" />
+  </Style>
+
+  <!-- The full-screen player and the bottom sheets slide up and fade in -->
+  <Style Selector="Border.phone-sheet">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="RenderTransform" Value="translateY(48px)" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.22" Easing="CubicEaseOut" />
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.28" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.phone-sheet.open">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="IsHitTestVisible" Value="True" />
+    <Setter Property="RenderTransform" Value="translateY(0px)" />
+  </Style>
+
+  <!-- Language / option pills -->
+  <Style Selector="Button.phone-pill">
+    <Setter Property="Height" Value="40" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="18,0" />
+    <Setter Property="Background" Value="{DynamicResource Surface1}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontSize" Value="14" />
+  </Style>
+  <Style Selector="Button.phone-pill /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface1}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="20" />
+  </Style>
+  <Style Selector="Button.phone-pill:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface1}" />
+  </Style>
+  <Style Selector="Button.phone-pill:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Surface2}" />
+  </Style>
+  <Style Selector="Button.phone-pill.selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryAction}" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForeground}" />
+  </Style>
+  <Style Selector="Button.phone-pill.selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
+  </Style>
+
+  <!-- Full-width text fields of the sign-in form and the search bar -->
+  <Style Selector="TextBox.phone-field">
+    <Setter Property="Height" Value="52" />
+    <Setter Property="MinHeight" Value="52" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="FontSize" Value="15" />
+  </Style>
+  <!-- The placeholder of the stock template is too faint on the dark surfaces -->
+  <Style Selector="TextBox.phone-field /template/ TextBlock#PART_Watermark">
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+  <Style Selector="TextBox.phone-field /template/ Border#PART_BorderElement">
+    <Setter Property="CornerRadius" Value="14" />
+  </Style>
+
+  <!-- Thin progress line of the mini player -->
+  <Style Selector="ProgressBar.phone-progress">
+    <Setter Property="Height" Value="3" />
+    <Setter Property="MinHeight" Value="3" />
+    <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
+    <Setter Property="Background" Value="{DynamicResource Surface2}" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="ProgressBar.phone-progress /template/ Border#PART_Indicator">
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+</Styles>

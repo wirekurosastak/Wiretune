@@ -1,10 +1,13 @@
 ﻿using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using Wiretune.Core.Services;
 using Wiretune.Core.Audio.Drivers;
 using Wiretune.UI.Services;
 using Wiretune.UI.ViewModels;
 using Wiretune.UI.Views;
+using Wiretune.Core.Localization;
 
 namespace Wiretune.UI;
 
@@ -25,6 +28,15 @@ public partial class App : Application
     {
         var mainVm = MainViewModel.CreateDefault(AudioDriverFactory?.Invoke());
         MainVm = mainVm;
+
+        // A failed command (locked database, full disk, ...) must not take the whole player down:
+        // log it with its stack trace and show it in the status bar instead.
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
+            WiretuneLog.Error("App", "Unhandled exception on the UI thread", e.Exception);
+            mainVm.Player.ErrorMessage = Localizer.Format("UnexpectedError", e.Exception.Message);
+            e.Handled = true;
+        };
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {

@@ -2,11 +2,10 @@
 using System.Text.Json;
 using Dapper;
 using Wiretune.Core.Models;
-using Wiretune.Core.Data;
 
 namespace Wiretune.Core.Data;
 
-public class LibraryRepository 
+public class LibraryRepository
 {
     private readonly DatabaseManager _dbManager;
 

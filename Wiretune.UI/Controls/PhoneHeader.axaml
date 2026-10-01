@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:Wiretune.UI.Localization"
+             xmlns:material="using:Material.Icons.Avalonia"
+             xmlns:vm="using:Wiretune.UI.ViewModels"
+             x:Class="Wiretune.UI.Controls.PhoneHeader"
+             x:DataType="vm:MainViewModel"
+             x:Name="Root">
+  <!-- Title of a top-level phone page with the search and account buttons. Its DataContext is the MainViewModel. -->
+  <Grid ColumnDefinitions="*, Auto, Auto" Height="68" Margin="20,0,8,0">
+    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0">
+      <TextBlock Classes="phone-title" Text="{Binding Title, ElementName=Root}" />
+      <ContentPresenter Content="{Binding Subtitle, ElementName=Root}"
+                        TextElement.FontSize="12"
+                        TextElement.Foreground="{DynamicResource TextMuted}"
+                        IsVisible="{Binding Subtitle, ElementName=Root, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </StackPanel>
+    <Button Grid.Column="1" Classes="phone-icon main" Command="{Binding OpenSearchCommand}"
+            IsVisible="{Binding ShowSearch, ElementName=Root}"
+            AutomationProperties.Name="{loc:T SearchPlaceholderShort}">
+      <material:MaterialIcon Kind="Magnify" Width="24" Height="24" />
+    </Button>
+    <Button Grid.Column="2" Classes="phone-icon" Command="{Binding ShowLoginScreenCommand}"
+            AutomationProperties.Name="{loc:T TipAccount}">
+      <Panel>
+        <material:MaterialIcon Kind="AccountCircleOutline" Width="26" Height="26"
+                               IsVisible="{Binding !IsUserLoggedIn}" />
+        <material:MaterialIcon Kind="AccountCircle" Width="26" Height="26"
+                               Foreground="{DynamicResource PrimaryAction}"
+                               IsVisible="{Binding IsUserLoggedIn}" />
+      </Panel>
+    </Button>
+  </Grid>
+</UserControl>

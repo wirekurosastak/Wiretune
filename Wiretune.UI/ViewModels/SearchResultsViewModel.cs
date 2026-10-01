@@ -3,6 +3,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Wiretune.Core.Models;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Services;
 using Wiretune.UI.Services;
 
@@ -10,9 +11,8 @@ namespace Wiretune.UI.ViewModels;
 
 public sealed partial class SearchBestMatchViewModel : ObservableObject
 {
-    [ObservableProperty] private string _typeLabel = "TALÁLAT";
+    [ObservableProperty] private string _typeLabel = Localizer.Get("TypeMatch");
     [ObservableProperty] private IBrush _typeBrush = new SolidColorBrush(Color.Parse("#67C8E0"));
-    [ObservableProperty] private string _accentClass = "cyan";
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _subtitle = string.Empty;
     [ObservableProperty] private string _meta = string.Empty;
@@ -73,6 +73,12 @@ public sealed partial class SearchResultsViewModel : ObservableObject
         {
             if (IsSearchActive) ExecuteSearch(Query);
         });
+    }
+
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts()
+    {
+        if (IsSearchActive) ExecuteSearch(Query);
     }
 
     public void UpdateQuery(string? newQuery)
@@ -140,12 +146,11 @@ public sealed partial class SearchResultsViewModel : ObservableObject
     {
         var vm = new SearchBestMatchViewModel
         {
-            TypeLabel = "ELŐADÓ",
+            TypeLabel = Localizer.Get("TypeArtist"),
             TypeBrush = new SolidColorBrush(Color.Parse("#FF6B6B")),
-            AccentClass = "coral",
             Title = artist.Name,
-            Subtitle = "Előadó",
-            Meta = $"{artist.AlbumCount} album • {artist.TrackCount} szám",
+            Subtitle = Localizer.Get("SubtitleArtist"),
+            Meta = $"{Localizer.Format("AlbumCount", artist.AlbumCount)} • {Localizer.Format("TrackCount", artist.TrackCount)}",
             IconKind = "AccountMusic",
             CanOpen = true,
             PlayCommand = new RelayCommand(() => { if (artist.Tracks.Count > 0) _player.PlayQueue(artist.Tracks); }),
@@ -159,12 +164,11 @@ public sealed partial class SearchResultsViewModel : ObservableObject
     {
         var vm = new SearchBestMatchViewModel
         {
-            TypeLabel = "ALBUM",
+            TypeLabel = Localizer.Get("TypeAlbum"),
             TypeBrush = new SolidColorBrush(Color.Parse("#D05CE3")),
-            AccentClass = "purple",
             Title = album.Title,
             Subtitle = album.Artist,
-            Meta = album.Year.HasValue ? $"{album.Year} • {album.TrackCount} szám" : $"{album.TrackCount} szám",
+            Meta = album.Year.HasValue ? $"{album.Year} • {Localizer.Format("TrackCount", album.TrackCount)}" : Localizer.Format("TrackCount", album.TrackCount),
             IconKind = "Album",
             CanOpen = true,
             PlayCommand = new RelayCommand(() => { if (album.Tracks.Count > 0) _player.PlayQueue(album.Tracks); }),
@@ -179,9 +183,8 @@ public sealed partial class SearchResultsViewModel : ObservableObject
         var album = _library.GetAlbumForTrack(track);
         var vm = new SearchBestMatchViewModel
         {
-            TypeLabel = "SZÁM",
+            TypeLabel = Localizer.Get("TypeTrack"),
             TypeBrush = new SolidColorBrush(Color.Parse("#67C8E0")),
-            AccentClass = "cyan",
             Title = track.Title,
             Subtitle = $"{track.Artist} • {track.Album}",
             Meta = $"{track.FormattedDuration} • {track.Format.QualityLabel}",

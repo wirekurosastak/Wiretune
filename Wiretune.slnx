@@ -4,7 +4,10 @@
   <Project Path="Wiretune.Desktop/Wiretune.Desktop.csproj" DefaultStartup="true" />
   <Project Path="Wiretune.Server/Wiretune.Server.csproj" />
   <Project Path="Wiretune.Tests/Wiretune.Tests.csproj" />
-  <Project Path="Wiretune.Android/Wiretune.Android.csproj" />
+  <!-- Needs the Android workload (`dotnet workload install android`); build it explicitly instead of with the solution. -->
+  <Project Path="Wiretune.Android/Wiretune.Android.csproj">
+    <Build Project="false" />
+  </Project>
 </Solution>
 
 

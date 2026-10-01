@@ -12,7 +12,7 @@ public partial class FavoritesViewModel : ObservableObject
     private readonly PlayerViewModel _player;
 
     [ObservableProperty] private IReadOnlyList<Track> _favoriteTracks = Array.Empty<Track>();
-    [ObservableProperty] private string _totalFavoritesDuration = "0 perc";
+    [ObservableProperty] private string _totalFavoritesDuration = string.Empty;
     [ObservableProperty] private bool _isEmpty = true;
 
     public FavoritesViewModel(LibraryService library, PlayerViewModel player)
@@ -24,6 +24,9 @@ public partial class FavoritesViewModel : ObservableObject
         _library.FavoriteChanged += (_, _) => Ui.Post(RefreshFavorites);
         RefreshFavorites();
     }
+
+    /// <summary>Re-renders the texts that were computed in the previous language.</summary>
+    public void RefreshLocalizedTexts() => RefreshFavorites();
 
     public void RefreshFavorites()
     {
