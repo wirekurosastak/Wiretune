@@ -1,185 +1,109 @@
 # Wiretune
 
-Self-hosted lossless music streaming: a small ASP.NET Core server that indexes your FLAC/WAV/… collection, and
-Avalonia clients (Linux, Windows, Android) that play it — with an optional bit-perfect output mode on Linux.
-Built on .NET 10. The interface speaks Hungarian, English and German and switches language at runtime.
+Self-hosted music streaming for lossless collections. A small ASP.NET Core server indexes a music folder and
+streams it over HTTP; Avalonia clients for Linux, Windows and Android play it. The desktop clients can also play a
+local folder without any server, and can switch to an exclusive, bit-perfect output path (see
+[docs/audio.md](docs/audio.md) for exactly what that means on each platform).
 
-*Magyar leírás: [README.hu.md](README.hu.md)*
+The interface is available in Hungarian, English and German and switches language at runtime. Built on .NET 10.
 
-## Components
+## What it does
 
-```
-Wiretune.Core      Models, SQLite library, metadata scanner, audio engine and drivers (shared by server and clients)
-Wiretune.Server    ASP.NET Core minimal API: JWT auth, library scan, HTTP range streaming, cover art
-Wiretune.UI        Avalonia MVVM user interface (desktop and Android)
-Wiretune.Desktop   Desktop entry point (Linux, Windows)
-Wiretune.Android   Android entry point (needs the Android workload; not part of the solution build)
-Wiretune.Tests     xUnit tests (unit tests, in-memory server integration tests, real ffmpeg/ffplay pipeline tests)
-```
+- **Server**: scans a music folder (incrementally, on start-up, on a timer and on request), serves the library
+  as JSON, streams files with HTTP range support, and serves cover art and embedded lyrics. Accounts are
+  password-protected (bcrypt) and use JWT access tokens. See [docs/server.md](docs/server.md).
+- **Client**: browse by artist, album or song; search; play queue with shuffle and repeat; favourites; playlists;
+  lyrics from the file's tag; quality badges (codec, bit depth, sample rate); signal-path description;
+  32-band spectrum analyser (desktop). See [docs/user-guide.md](docs/user-guide.md).
+- **Library sources**: a server, a local folder (desktop only), or both at once. When both are used, tracks that
+  exist in both places appear once and the local copy is preferred.
+- **Phone layout**: on Android the same view models drive a layout of its own (bottom navigation, mini player,
+  full-screen player with queue and lyrics, search page).
 
-More detail: [docs/rendszerTerv.md](docs/rendszerTerv.md) (system design) and
-[docs/funkSpec.md](docs/funkSpec.md) (functional specification), both in Hungarian.
+Favourites, play counts and playlists are stored by each client in its own database; they are not kept on the
+server and are not shared between devices or accounts.
 
 ## Platform support
 
 | | Linux desktop | Windows desktop | Android |
-|---|:---:|:---:|:---:|
-| Playback engine | `ffplay` child process, ALSA / PipeWire routing | NAudio WASAPI (shared / exclusive) | `MediaPlayer` |
-| Bit-perfect / exclusive output | yes | yes | no |
-| Spectrum analyser | yes | yes | no |
-| Local library (no server) | yes | yes | no |
-| Server | yes | yes | – |
+|---|---|---|---|
+| Playback | `ffplay` / `ffmpeg` + `aplay` child processes | NAudio WASAPI, decoding through Media Foundation | Android `MediaPlayer` |
+| Exclusive / bit-perfect output | Yes (ALSA hardware devices) | Implemented (WASAPI exclusive mode); **not yet verified on hardware** | No |
+| Spectrum analyser | Yes | Yes | No |
+| Local music folder (no server) | Yes | Yes | No |
+| Server connection | Yes | Yes | Yes |
+| Run the server | Yes | Yes | – |
 
-On Android the same view models drive a phone layout of its own (bottom navigation, mini player, full-screen
-player with queue and lyrics, search page, playlist sheets) instead of the desktop's sidebar layout.
+The server is a plain ASP.NET Core application and runs wherever .NET 10 does. The desktop head is developed on
+Linux. The Windows and Android code paths compile with the solution (Android: with its workload) but are not
+exercised by the automated tests; the Windows driver in particular has been reviewed, not run on a DAC. Details
+and the open points are in [docs/audio.md](docs/audio.md#known-limitations).
 
-Continuous integration builds and tests on Linux only. The Windows and Android code paths are compiled there
-(Android: separately, with the workload) but are not exercised by automated tests.
+Indexed file types: FLAC, WAV, AIFF/AIF, WavPack, APE, DSF (labelled lossless); M4A (AAC, or ALAC when the stream
+says so), AAC, MP3, Ogg Vorbis and Opus. Whether a file actually plays depends on the platform's decoder: ffmpeg
+on Linux, Media Foundation on Windows (files Windows cannot decode are indexed but fail with an error message),
+the system media framework on Android.
 
 ## Requirements
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) to build; the .NET 10 runtime to run a
-  framework-dependent build.
-- Linux desktop playback and the spectrum analyser: `ffmpeg` and `ffplay` on `PATH` (`sudo apt install ffmpeg`).
-  Bit-perfect mode additionally uses `aplay` (ALSA) and `wpctl` (PipeWire) when present.
+- To build: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). To run a framework-dependent
+  build: the .NET 10 runtime.
+- Linux desktop playback needs `ffplay` and `ffmpeg` on `PATH` (for example `sudo apt install ffmpeg`).
+  Exclusive/bit-perfect output additionally uses `aplay` (ALSA); `wpctl`, `amixer` and `pw-reserve` are used
+  when present (PipeWire sink list, volume, card reservation).
 - The server needs no external tools.
 - Android head: `dotnet workload install android`.
 
-## Build, run, test
+## Quick start
 
 ```bash
 dotnet build Wiretune.slnx
-dotnet test  Wiretune.slnx
 
-dotnet run --project Wiretune.Server     # http://0.0.0.0:5200
-dotnet run --project Wiretune.Desktop    # desktop client
-dotnet build Wiretune.Android            # after installing the Android workload
+# 1. Server (listens on http://0.0.0.0:5200)
+dotnet run --project Wiretune.Server -- --Wiretune:LibraryPath=/srv/music
+
+# 2. Desktop client
+dotnet run --project Wiretune.Desktop
 ```
 
-The tests that use ffmpeg/ffplay return early when those tools are not installed. They use SDL's `dummy` audio
-driver, so nothing is played.
+In the client, enter the server address on the sign-in screen and press **Connect**. A fresh server has no
+accounts: the screen then offers **Create admin account and sign in**, and that first account is the
+administrator. There are no default credentials. To use a local folder instead, choose **Continue without a
+server (local music)**, then open **Settings**, enter the folder under *Local music folder* and press **Scan**.
 
-On first start the client asks whether to connect to a server or use a local music folder. The first account
-created on a fresh server (`POST /api/auth/setup`, done by the client's setup screen) becomes the administrator;
-there are no default credentials. Further users are added by an administrator.
+The Android project is not part of the solution build; see [docs/development.md](docs/development.md).
 
-## Languages and appearance
+## Documentation
 
-Hungarian, English and German are built in. On first start the client uses the operating system's language when
-it is one of these and English otherwise; the choice can be changed at any time in **Settings** (desktop: also
-the language button in the top bar) and applies immediately, without a restart. The language and the light/dark
-theme are remembered in the client's database (`Preference.Language`, `Preference.Theme`).
+| Document | Contents |
+|---|---|
+| [docs/user-guide.md](docs/user-guide.md) | Using the client: first start, library, playback, playlists, audio settings, phone layout |
+| [docs/server.md](docs/server.md) | Running and configuring the server: settings, data files, scanning, accounts, running as a service |
+| [docs/api.md](docs/api.md) | HTTP API reference |
+| [docs/audio.md](docs/audio.md) | Audio engine, per-platform signal path, exclusive and bit-perfect modes, known limitations |
+| [docs/architecture.md](docs/architecture.md) | Projects, data model, library synchronisation, localisation, UI structure |
+| [docs/development.md](docs/development.md) | Building, testing, Android notes, debugging, extending Wiretune |
+| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities; deployment and security notes |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | How to get a change merged |
 
-All texts live in `Wiretune.Core/Localization/Strings.cs`. To add a language, add its code to `Localizer.Languages`
-and a fourth text to every `T(...)` line; the tests fail while a key lacks a translation, uses different
-placeholders in different languages, is unused, or is referenced from code or XAML but missing.
+## Repository layout
 
-## Server configuration
-
-Settings live in `Wiretune.Server/appsettings.json` under `Wiretune` and can be overridden the usual ASP.NET Core
-way, e.g. `--Wiretune:Port=8080` or `Wiretune__Port=8080`.
-
-| Key | Default | Meaning |
-|---|---|---|
-| `Wiretune:LibraryPath` | `""` | Music folder (absolute, or relative to the application directory). If empty or missing, the user's Music folder is used and a warning is logged. A folder chosen by an administrator through the API is stored in the database and takes precedence after a restart. |
-| `Wiretune:DataDirectory` | `""` | Where the database (`wiretune-server.db`), cover cache and log (`wiretune-server.log`) live. Empty: `<user app data>/Wiretune/Server`. |
-| `Wiretune:ScanIntervalMinutes` | `30` | Interval of the incremental background rescan; `0` disables it (startup and manual scans still run). |
-| `Wiretune:Port` | `5200` | HTTP port. Ignored when `ASPNETCORE_URLS` or `--urls` is set. |
-
-Environment variables:
-
-| Variable | Applies to | Meaning |
-|---|---|---|
-| `WIRETUNE_DATA_DIR` | server, client | Root of Wiretune's data (the server uses its `Server` subfolder). |
-| `WIRETUNE_NO_ARTIST_PICTURES` | client | Set to `1` to disable artist-picture lookups (see Privacy). |
-| `WIRETUNE_UI_AUTOMATION` | desktop client | Set to `1` to start a local test-automation HTTP API on `127.0.0.1:5201`. Development only. |
-
-### Running the server as a service
-
-Publish and run it under a dedicated account, for example with systemd:
-
-```bash
-dotnet publish Wiretune.Server -c Release -o /opt/wiretune
+```
+Wiretune.Core      Models, SQLite library, metadata scanner, audio engine and drivers, localisation, server session
+Wiretune.Server    ASP.NET Core minimal API: JWT auth, library scan, range streaming, cover art, lyrics
+Wiretune.UI        Avalonia MVVM user interface (desktop layout and phone layout)
+Wiretune.Desktop   Desktop entry point (Linux, Windows)
+Wiretune.Android   Android entry point (needs the Android workload; not built with the solution)
+Wiretune.Tests     xUnit tests: unit tests, in-memory server integration tests, ffmpeg/ffplay pipeline tests
 ```
 
-```ini
-# /etc/systemd/system/wiretune.service
-[Unit]
-Description=Wiretune server
-After=network-online.target
+## Security and privacy in short
 
-[Service]
-User=wiretune
-WorkingDirectory=/opt/wiretune
-ExecStart=/usr/bin/dotnet /opt/wiretune/Wiretune.Server.dll
-Environment=Wiretune__LibraryPath=/srv/music
-Environment=WIRETUNE_DATA_DIR=/var/lib/wiretune
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-For a self-contained build that needs no installed runtime, add
-`-r linux-x64 --self-contained -p:PublishSingleFile=true` (use the runtime identifier of the target machine).
-
-### Security notes
-
-- The server speaks plain HTTP. Do not expose it to the internet as is: put it behind a reverse proxy that
-  terminates TLS (Caddy, nginx, …) or reach it over a VPN such as WireGuard/Tailscale. Behind a proxy, set
-  `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, otherwise every client shares the proxy's address and the login
-  throttling below applies to all of them together.
-- Login and setup are limited to 10 attempts per minute per client address. Passwords are hashed with bcrypt
-  and limited to 72 bytes (the bcrypt limit).
-- Tokens are JWTs valid for up to 90 days; deleting a user invalidates that user's tokens immediately. The
-  signing key is generated on first start and stored in the server database, so protect the data directory.
-- Players that cannot send headers (`ffplay`, Android `MediaPlayer`) pass the token as `?token=`. The server
-  accepts that only on `/api/stream` and `/api/cover`, never on the management endpoints. URLs of those two
-  endpoints therefore contain a credential: keep access logs of the reverse proxy private.
-- `/api/tracks` returns server-side file paths to every authenticated user.
-
-Please report vulnerabilities as described in [SECURITY.md](SECURITY.md).
-
-### Privacy
-
-The client looks up artist pictures through Deezer's public API, which sends artist names from your library to
-`api.deezer.com`. Set `WIRETUNE_NO_ARTIST_PICTURES=1` to turn that off. Nothing else leaves your network.
-
-## HTTP API (summary)
-
-| Route | Auth | Purpose |
-|---|---|---|
-| `GET /api/auth/setup-required`, `POST /api/auth/setup` | none | First-run administrator creation |
-| `POST /api/auth/login` | none | Returns a JWT |
-| `POST /api/auth/register`, `GET /api/users`, `DELETE /api/users/{id}`, `GET /api/config`, `POST /api/config/library-path` | admin | User and library-folder management |
-| `GET /api/auth/me` | user | Current account |
-| `GET /api/tracks?q=`, `/api/albums`, `/api/artists` | user | Library listings and search |
-| `GET /api/stream/{trackId}` | user | Audio with HTTP range support |
-| `GET /api/cover/{trackId}`, `/api/cover/album/{albumId}` | user | Cover art |
-| `GET /api/lyrics/{trackId}` | user | Embedded lyrics tag of a track (plain text, capped; `404` when there is none) |
-| `GET /api/library/status`, `POST /api/library/scan` | user | Scan state; request a scan |
-
-## Known limitations
-
-- Android and Windows (WASAPI) code is not covered by automated tests, and real audio hardware cannot be tested
-  in CI. The Android head (including the phone layout) is not built by CI at all, because it needs the Android
-  workload.
-- The bit-perfect path on Linux goes through ALSA's `plughw` device with 32-bit samples; whether the result is
-  truly bit-transparent depends on the sound card and driver.
-- The `?token=` mechanism and the Android cleartext-HTTP permission mean streaming should only run over a
-  network you trust, or behind TLS.
-- The desktop client keeps its access token in its local SQLite database, unencrypted. This is deliberate for
-  now: a token can be revoked by deleting the user, and a portable secret store that works on Linux, Windows and
-  Android is not part of the app yet. The data directory is created private to the user on Unix, but that is all
-  the protection there is. Uncheck "Keep me signed in" on the sign-in screen to keep the token out of the database.
-- The Windows driver opens the source off the UI thread and the Android player service outlives short pauses
-  between tracks, holds audio focus and a partial wake lock. These paths could only be reviewed, not run, in the
-  development environment.
-- Lyrics come only from the file's own tag (unsynchronised text); there is no lookup service and no synced display.
-- Tracks without an artist tag are filed under the artist `Unknown artist`; that name is stored in the library and
-  is not translated. No picture lookup is made for it.
+The server speaks plain HTTP: put it behind a TLS-terminating reverse proxy or reach it over a VPN; do not expose
+it to the internet as is. The client looks up artist pictures through Deezer's public API, which sends artist
+names from your library to `api.deezer.com`; set `WIRETUNE_NO_ARTIST_PICTURES=1` to turn that off. Nothing else
+leaves your network. Details: [SECURITY.md](SECURITY.md).
 
 ## Contributing and license
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). The repository does not contain a license file yet; until the owner adds
-one, all rights are reserved.
+See [CONTRIBUTING.md](CONTRIBUTING.md). The license is in the [LICENSE](LICENSE) file.

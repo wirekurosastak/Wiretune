@@ -5,7 +5,7 @@
     <Authors>Wiretune contributors</Authors>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-    <!-- New advisories for existing dependencies must not turn unrelated builds red; Dependabot reports them instead. -->
+    <!-- New advisories for existing dependencies must not turn unrelated builds red. -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
   </PropertyGroup>
 
