@@ -6,7 +6,7 @@ namespace Wiretune.Core.Audio.Dsp;
 /// <summary>
 /// High-performance asynchronous PCM sample cache for the currently playing audio track.
 /// Decodes the audio source (FLAC, MP3, WAV, AAC, HTTP stream) in the background into 16-bit mono 44.1 kHz PCM
-/// so the FxSound spectrum engine can analyze REAL audio frequency bands in real time.
+/// so the spectrum analyzer can analyze REAL audio frequency bands in real time.
 /// </summary>
 public sealed class AudioPcmCache : IDisposable
 {

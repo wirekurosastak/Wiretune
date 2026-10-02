@@ -7,30 +7,26 @@ using System;
 namespace Wiretune.UI.Controls;
 
 /// <summary>
-/// Authentic port of FxSound's FxVisualizer architecture supporting 32 ISO 1/3-octave frequency bands.
-/// Replicates FxSound's exact visualizer architecture:
-/// 1. High-density frequency bands (up to 32 bands covering 25 Hz - 20 kHz).
-/// 2. Outward traveling wave ripple propagation when sub-bars are configured.
-/// 3. Vertically centered symmetrical expansion (expanding symmetrically up and down from the midline).
-/// 4. Vertical symmetry gradient (bright accent color at top and bottom tips, deeper tone at horizontal center line).
-/// 5. Seamless floating display directly over the player surface with zero framing.
+/// Spectrum bars for the player: one bar per frequency band (32 by default), centred vertically and growing
+/// symmetrically up and down, with an accent gradient that is bright at the tips and softer at the centre line.
+/// The look is inspired by the visualizer in FxSound (https://github.com/fxsound2/fxsound-app).
 /// </summary>
-public class FxVisualizerControl : Control
+public class SpectrumVisualizerControl : Control
 {
     public const int DefaultNumBands = 32;
     public const int DefaultBarsPerBand = 1;
 
     public static readonly StyledProperty<float[]?> BandsProperty =
-        AvaloniaProperty.Register<FxVisualizerControl, float[]?>(nameof(Bands));
+        AvaloniaProperty.Register<SpectrumVisualizerControl, float[]?>(nameof(Bands));
 
     public static readonly StyledProperty<IBrush?> AccentBrushProperty =
-        AvaloniaProperty.Register<FxVisualizerControl, IBrush?>(nameof(AccentBrush));
+        AvaloniaProperty.Register<SpectrumVisualizerControl, IBrush?>(nameof(AccentBrush));
 
     public static readonly StyledProperty<bool> IsPlayingProperty =
-        AvaloniaProperty.Register<FxVisualizerControl, bool>(nameof(IsPlaying), defaultValue: false);
+        AvaloniaProperty.Register<SpectrumVisualizerControl, bool>(nameof(IsPlaying), defaultValue: false);
 
     public static readonly StyledProperty<int> BarsPerBandProperty =
-        AvaloniaProperty.Register<FxVisualizerControl, int>(nameof(BarsPerBand), defaultValue: DefaultBarsPerBand);
+        AvaloniaProperty.Register<SpectrumVisualizerControl, int>(nameof(BarsPerBand), defaultValue: DefaultBarsPerBand);
 
     public float[]? Bands
     {
@@ -61,18 +57,18 @@ public class FxVisualizerControl : Control
     private int _allocatedBars;
     private int _decayFramesRemaining = 0;
 
-    public FxVisualizerControl()
+    public SpectrumVisualizerControl()
     {
         _allocatedBars = DefaultNumBands * DefaultBarsPerBand;
         _bandGraph = new float[_allocatedBars];
 
         _renderTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromMilliseconds(33) // 30 FPS, matching FxSound
+            Interval = TimeSpan.FromMilliseconds(33) // 30 FPS
         };
         _renderTimer.Tick += OnRenderTick;
 
-        AffectsRender<FxVisualizerControl>(AccentBrushProperty);
+        AffectsRender<SpectrumVisualizerControl>(AccentBrushProperty);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -147,8 +143,8 @@ public class FxVisualizerControl : Control
     }
 
     /// <summary>
-    /// Implementation of FxSound's FxVisualizer::update() ripple algorithm.
-    /// Supports high-density 32 frequency bands with smooth multi-bar ripple propagation.
+    /// Feeds the incoming band levels into the bar graph. With more than one bar per band, each new level is set at the
+    /// band's centre bar and shifts outward over the following frames.
     /// </summary>
     private void UpdateGraph()
     {
@@ -180,7 +176,7 @@ public class FxVisualizerControl : Control
 
             if (barsPerBand > 1)
             {
-                // FxSound ripple propagation: Shift outward from center
+                // Shift outward from the centre
                 for (int j = 0; j < half; j++)
                 {
                     _bandGraph[i * barsPerBand + j] = _bandGraph[i * barsPerBand + j + 1];
@@ -198,7 +194,7 @@ public class FxVisualizerControl : Control
         var bounds = Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
-        // 1. FxSound calcGradient(): Vertical symmetry gradient (bright tips, deeper center)
+        // 1. Vertical symmetry gradient (bright tips, deeper centre)
         Color accentColor = Color.Parse("#67C8E0"); // fallback cyan
         if (AccentBrush is SolidColorBrush scb)
         {
@@ -224,7 +220,7 @@ public class FxVisualizerControl : Control
             }
         };
 
-        // 2. FxSound paint(): Render vertically centered symmetrical audio bars directly without background frame
+        // 2. Vertically centred, symmetrical bars, drawn without a background frame
         int totalBars = _bandGraph.Length > 0 ? _bandGraph.Length : DefaultNumBands;
         double paddingH = 2.0;
         double paddingV = 2.0;
@@ -242,7 +238,7 @@ public class FxVisualizerControl : Control
             // Minimum 2.5px height so a continuous glowing centerline bead is visible even during quiet/resting moments
             float h = (float)Math.Max(2.5, val * availableH);
             float x = (float)(paddingH + i * slotW + (slotW - barW) / 2.0);
-            float y = (float)(centerY - h / 2.0); // Exactly FxSound bounds.getHeight()/2.0f - height/2.0f
+            float y = (float)(centerY - h / 2.0); // centre the bar on the midline
 
             context.DrawRectangle(gradient, null, new RoundedRect(new Rect(x, y, barW, h), cornerRadius));
         }

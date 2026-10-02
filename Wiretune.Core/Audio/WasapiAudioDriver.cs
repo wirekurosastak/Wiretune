@@ -20,7 +20,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
     private static readonly object MfLock = new();
 
     private readonly object _stateLock = new();
-    private readonly FxSoundSpectrumEngine _spectrumEngine = new();
+    private readonly SpectrumAnalyzer _spectrumEngine = new();
 
     private WasapiOut? _wasapiOut;
     private MediaFoundationReader? _reader;
@@ -234,7 +234,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
             _wasapiOut.Pause();
             StopTimers();
             SetState(PlaybackState.Paused);
-            SpectrumDataAvailable?.Invoke(this, new float[FxSoundSpectrumEngine.NumBands]);
+            SpectrumDataAvailable?.Invoke(this, new float[SpectrumAnalyzer.NumBands]);
         }
         return Task.CompletedTask;
     }
@@ -280,7 +280,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
             StopInternal();
             _currentPosition = TimeSpan.Zero;
             SetState(PlaybackState.Stopped);
-            SpectrumDataAvailable?.Invoke(this, new float[FxSoundSpectrumEngine.NumBands]);
+            SpectrumDataAvailable?.Invoke(this, new float[SpectrumAnalyzer.NumBands]);
         }
         return Task.CompletedTask;
     }
@@ -439,9 +439,9 @@ public sealed class WasapiAudioDriver : IAudioDriver
     internal sealed class SpectrumAndVolumeWaveProvider : IWaveProvider
     {
         private readonly IWaveProvider _source;
-        private readonly FxSoundSpectrumEngine _spectrumEngine;
+        private readonly SpectrumAnalyzer _spectrumEngine;
         private readonly Action<float[]> _onSpectrumAvailable;
-        private readonly float[] _fftWindow = new float[FxSoundSpectrumEngine.FftSize];
+        private readonly float[] _fftWindow = new float[SpectrumAnalyzer.FftSize];
         private int _fftIndex;
         private readonly int _decimation;
         private int _decimationCount;
@@ -454,7 +454,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
 
         public SpectrumAndVolumeWaveProvider(
             IWaveProvider source,
-            FxSoundSpectrumEngine spectrumEngine,
+            SpectrumAnalyzer spectrumEngine,
             Action<float[]> onSpectrumAvailable)
         {
             _source = source;
@@ -578,7 +578,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
                     _fftWindow[_fftIndex++] = _decimationSum / _decimation;
                     _decimationSum = 0f;
                     _decimationCount = 0;
-                    if (_fftIndex >= FxSoundSpectrumEngine.FftSize)
+                    if (_fftIndex >= SpectrumAnalyzer.FftSize)
                     {
                         _fftIndex = 0;
                     }
@@ -588,13 +588,13 @@ public sealed class WasapiAudioDriver : IAudioDriver
 
         public void RenderSpectrum()
         {
-            float[] windowCopy = new float[FxSoundSpectrumEngine.FftSize];
+            float[] windowCopy = new float[SpectrumAnalyzer.FftSize];
             lock (_fftLock)
             {
                 int src = _fftIndex;
-                for (int i = 0; i < FxSoundSpectrumEngine.FftSize; i++)
+                for (int i = 0; i < SpectrumAnalyzer.FftSize; i++)
                 {
-                    windowCopy[i] = _fftWindow[(src + i) % FxSoundSpectrumEngine.FftSize];
+                    windowCopy[i] = _fftWindow[(src + i) % SpectrumAnalyzer.FftSize];
                 }
             }
 

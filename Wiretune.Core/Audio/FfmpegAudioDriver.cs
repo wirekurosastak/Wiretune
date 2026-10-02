@@ -23,7 +23,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private static readonly object ProcessLock = new();
 
     private readonly object _stateLock = new();
-    private readonly FxSoundSpectrumEngine _spectrumEngine = new();
+    private readonly SpectrumAnalyzer _spectrumEngine = new();
     private readonly AudioPcmCache _pcmCache = new();
 
     private Process? _playbackProcess;
@@ -631,7 +631,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             try
             {
                 var position = _seekOffset + (DateTime.UtcNow - _playStartTime);
-                Span<float> window = stackalloc float[FxSoundSpectrumEngine.FftSize];
+                Span<float> window = stackalloc float[SpectrumAnalyzer.FftSize];
                 var bands = _pcmCache.TryGetWindow(position, window)
                     ? _spectrumEngine.ProcessPcm(window, true)
                     : _spectrumEngine.ProcessFrame(position, true);
@@ -656,7 +656,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
         if (!emitSilence) return;
         _spectrumEngine.Reset();
-        SpectrumDataAvailable?.Invoke(this, new float[FxSoundSpectrumEngine.NumBands]);
+        SpectrumDataAvailable?.Invoke(this, new float[SpectrumAnalyzer.NumBands]);
     }
 
     private void UpdatePosition()

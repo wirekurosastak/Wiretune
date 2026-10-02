@@ -2429,15 +2429,15 @@
 
           <!-- Right: Visualizer, Quality, Volume -->
           <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Spacing="8" Margin="0,0,12,0">
-            <controls:FxVisualizerControl Width="130" Height="36"
-                                          VerticalAlignment="Center"
-                                          Margin="0,0,6,0"
-                                          IsVisible="{Binding !IsCompactLayout}"
-                                          Bands="{Binding Player.SpectrumBands}"
-                                          AccentBrush="{DynamicResource PrimaryAction}"
-                                          IsPlaying="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToBoolConverter}}"
-                                          BarsPerBand="1"
-                                          ToolTip.Tip="{loc:T TipSpectrum}" />
+            <controls:SpectrumVisualizerControl Width="130" Height="36"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,6,0"
+                                                IsVisible="{Binding !IsCompactLayout}"
+                                                Bands="{Binding Player.SpectrumBands}"
+                                                AccentBrush="{DynamicResource PrimaryAction}"
+                                                IsPlaying="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToBoolConverter}}"
+                                                BarsPerBand="1"
+                                                ToolTip.Tip="{loc:T TipSpectrum}" />
 
             <Panel IsVisible="{Binding !IsCompactLayout}" VerticalAlignment="Center">
               <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center"

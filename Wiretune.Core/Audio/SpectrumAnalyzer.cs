@@ -10,7 +10,7 @@
 /// mapping audio energy into 32 high-precision frequency bands with perceptual ISO loudness weighting,
 /// instant transient attack (0.88), and smooth exponential release decay (0.76).
 /// </summary>
-public sealed class FxSoundSpectrumEngine
+public sealed class SpectrumAnalyzer
 {
     public const int NumBands = 32;
     public const int FftSize = 2048;
@@ -81,12 +81,12 @@ public sealed class FxSoundSpectrumEngine
     private readonly float[] _fftImag = new float[FftSize];
     private readonly float[] _magnitude = new float[FftSize / 2];
 
-    // FxSound ballistics: instant attack on rising transients, smooth exponential decay on falling energy
+    // Ballistics: instant attack on rising transients, smooth exponential decay on falling energy
     private const float AttackRate = 0.88f;
     private const float DecayRate = 0.76f;
     private const float MinFloor = 0.04f;
 
-    public FxSoundSpectrumEngine()
+    public SpectrumAnalyzer()
     {
         // Pre-compute Hann window for 2048 samples
         for (int i = 0; i < FftSize; i++)
@@ -157,7 +157,7 @@ public sealed class FxSoundSpectrumEngine
             float target = (db + 54.0f) / 48.0f;
             target = Math.Clamp(target, MinFloor, 1.0f);
 
-            // 5. Apply FxSound ballistics
+            // 5. Apply ballistics
             if (target > _currentLevels[band])
             {
                 _currentLevels[band] += (target - _currentLevels[band]) * AttackRate;

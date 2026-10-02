@@ -3,16 +3,16 @@ using Xunit;
 
 namespace Wiretune.Tests;
 
-public class FxSoundSpectrumEngineTests
+public class SpectrumAnalyzerTests
 {
     [Fact]
     public void ProcessFrame_Returns32Bands_WithValidNormalizedLevels()
     {
-        var engine = new FxSoundSpectrumEngine();
+        var engine = new SpectrumAnalyzer();
         var bands = engine.ProcessFrame(TimeSpan.FromSeconds(1.0), true);
 
         Assert.NotNull(bands);
-        Assert.Equal(FxSoundSpectrumEngine.NumBands, bands.Length);
+        Assert.Equal(SpectrumAnalyzer.NumBands, bands.Length);
         Assert.Equal(32, bands.Length);
 
         for (int i = 0; i < bands.Length; i++)
@@ -24,7 +24,7 @@ public class FxSoundSpectrumEngineTests
     [Fact]
     public void ProcessFrame_DynamicResponseAcross32Frequencies()
     {
-        var engine = new FxSoundSpectrumEngine();
+        var engine = new SpectrumAnalyzer();
         
         // Simulate 1 second of audio frames (30 frames at ~33ms intervals)
         float maxBass = 0f;
@@ -47,7 +47,7 @@ public class FxSoundSpectrumEngineTests
     [Fact]
     public void ProcessFrame_WhenStopped_DecaysSmoothlyToMinimum()
     {
-        var engine = new FxSoundSpectrumEngine();
+        var engine = new SpectrumAnalyzer();
 
         // Run while playing to build up levels
         engine.ProcessFrame(TimeSpan.FromSeconds(0.5), true);
@@ -69,8 +69,8 @@ public class FxSoundSpectrumEngineTests
     [Fact]
     public void ProcessPcm_100HzBassTone_ActivatesBassBandsSpecifically()
     {
-        var engine = new FxSoundSpectrumEngine();
-        float[] pcm = new float[FxSoundSpectrumEngine.FftSize];
+        var engine = new SpectrumAnalyzer();
+        float[] pcm = new float[SpectrumAnalyzer.FftSize];
 
         // Synthesize pure 100 Hz tone (Bands 5 and 6 center = 95 Hz and 115 Hz)
         for (int i = 0; i < pcm.Length; i++)
@@ -95,8 +95,8 @@ public class FxSoundSpectrumEngineTests
     [Fact]
     public void ProcessPcm_1000HzMidTone_ActivatesMidBandSpecifically()
     {
-        var engine = new FxSoundSpectrumEngine();
-        float[] pcm = new float[FxSoundSpectrumEngine.FftSize];
+        var engine = new SpectrumAnalyzer();
+        float[] pcm = new float[SpectrumAnalyzer.FftSize];
 
         // Synthesize pure 1000 Hz tone (Band 17 center = 1010 Hz)
         for (int i = 0; i < pcm.Length; i++)
@@ -119,8 +119,8 @@ public class FxSoundSpectrumEngineTests
     [Fact]
     public void ProcessPcm_Silence_StaysAtRestingFloor()
     {
-        var engine = new FxSoundSpectrumEngine();
-        float[] silence = new float[FxSoundSpectrumEngine.FftSize];
+        var engine = new SpectrumAnalyzer();
+        float[] silence = new float[SpectrumAnalyzer.FftSize];
 
         var bands = engine.ProcessPcm(silence, true);
 

@@ -71,6 +71,10 @@ The Android app is built separately; see [docs/development.md](docs/development.
 The server speaks plain HTTP, so keep it on your LAN or behind a reverse proxy or VPN. [SECURITY.md](SECURITY.md)
 has the details.
 
+## Credits
+
+The look of the spectrum visualizer is inspired by the visualizer in [FxSound](https://github.com/fxsound2/fxsound-app).
+
 ## License
 
 See the [LICENSE](LICENSE) file.

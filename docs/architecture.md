@@ -115,7 +115,7 @@ albums, artists, playlists, favourites, search, audio settings, server settings)
 - `CoverArtService` decodes covers at display size into an LRU cache (300 bitmaps; 6 downloads and 2 decodes at a
   time, off the UI thread; downloads capped at 16 MiB; failed URLs retried after 2 minutes).
 - `Controls/` holds the list and grid controls tuned for scrolling large libraries on a phone and the visualisers
-  (`FxVisualizerControl`, the 32-band analyser; `NavVisualizerControl`, the animated logo).
+  (`SpectrumVisualizerControl`, the 32-band analyser; `NavVisualizerControl`, the animated logo).
 - Diagnostics: `RenderingInfo`, `FrameMonitor` and `UiFrameProbe` measure rendering, and the Android head adds
   refresh-rate and performance-hint control (`DisplayPerformance`).
 

@@ -24,7 +24,7 @@ public class WasapiWaveProviderTests
     }
 
     private static WasapiAudioDriver.SpectrumAndVolumeWaveProvider Provider(WaveFormat format, byte[] data, double volume, bool bitperfect = false) =>
-        new(new FixedSource(format, data), new FxSoundSpectrumEngine(), _ => { }) { Volume = volume, IsBitperfect = bitperfect };
+        new(new FixedSource(format, data), new SpectrumAnalyzer(), _ => { }) { Volume = volume, IsBitperfect = bitperfect };
 
     private static byte[] Read(WasapiAudioDriver.SpectrumAndVolumeWaveProvider provider, int length)
     {
@@ -92,7 +92,7 @@ public class WasapiWaveProviderTests
 
     private static int LoudestBand(int sampleRate, double toneHz)
     {
-        float[] bands = new float[FxSoundSpectrumEngine.NumBands];
+        float[] bands = new float[SpectrumAnalyzer.NumBands];
         var frames = 8192;
         var data = new byte[frames * 2];
         for (var i = 0; i < frames; i++)
@@ -102,7 +102,7 @@ public class WasapiWaveProviderTests
         }
 
         var provider = new WasapiAudioDriver.SpectrumAndVolumeWaveProvider(
-            new FixedSource(new WaveFormat(sampleRate, 16, 1), data), new FxSoundSpectrumEngine(), b => bands = b);
+            new FixedSource(new WaveFormat(sampleRate, 16, 1), data), new SpectrumAnalyzer(), b => bands = b);
         Read(provider, data.Length);
         for (var i = 0; i < 5; i++) provider.RenderSpectrum(); // let the analyser's smoothing settle
 
