@@ -5,7 +5,7 @@ namespace Wiretune.Core.Data;
 
 public class DatabaseManager
 {
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = 4;
 
     private readonly string _connectionString;
     private readonly object _schemaLock = new();
@@ -114,6 +114,53 @@ public class DatabaseManager
             if (version < 2 && !ColumnExists(connection, "tracks", "file_modified_utc"))
             {
                 Execute(connection, "ALTER TABLE tracks ADD COLUMN file_modified_utc TEXT;");
+            }
+
+            if (version < 3)
+            {
+                // Per-account data kept by the server (the player never writes these tables), and the flag that marks
+                // a playlist in the player's database as a cached copy of a server playlist.
+                if (!ColumnExists(connection, "playlists", "is_server"))
+                {
+                    Execute(connection, "ALTER TABLE playlists ADD COLUMN is_server INTEGER NOT NULL DEFAULT 0;");
+                }
+
+                Execute(connection, """
+                    CREATE TABLE IF NOT EXISTS user_favorites (
+                        user_id TEXT NOT NULL,
+                        track_id TEXT NOT NULL,
+                        added_at TEXT NOT NULL,
+                        PRIMARY KEY (user_id, track_id)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS user_plays (
+                        user_id TEXT NOT NULL,
+                        track_id TEXT NOT NULL,
+                        play_count INTEGER NOT NULL DEFAULT 0,
+                        last_played TEXT,
+                        PRIMARY KEY (user_id, track_id)
+                    );
+
+                    -- Keyed by (user, id): two accounts may hand over the same local playlist without colliding.
+                    CREATE TABLE IF NOT EXISTS user_playlists (
+                        user_id TEXT NOT NULL,
+                        id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        description TEXT,
+                        track_ids_json TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        modified_at TEXT NOT NULL,
+                        PRIMARY KEY (user_id, id)
+                    );
+                    """);
+            }
+
+            if (version < 4)
+            {
+                // Album artists that the library inferred used to be stored as if the files' tags said so. Forget the
+                // modification times of the tracks found on disk: the next scan reads their tags again instead of
+                // reusing the stored values. Tracks downloaded from a server are replaced on every refresh anyway.
+                Execute(connection, "UPDATE tracks SET file_modified_utc = NULL WHERE stream_url IS NULL;");
             }
 
             Execute(connection, $"PRAGMA user_version = {SchemaVersion};");

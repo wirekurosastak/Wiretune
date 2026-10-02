@@ -12,8 +12,8 @@ implementing `IAudioDriver` does the playing:
 | Windows | `WasapiAudioDriver` | NAudio `WasapiOut`, decoding with Media Foundation |
 | Android | `AndroidAudioDriver` | Android `MediaPlayer` |
 
-Local tracks play from their file path. Server tracks play straight from the server's `/api/stream/{id}` URL (the
-token is appended when playback starts), so nothing is downloaded first. Only Linux is a target for
+Local tracks play from their file path. Server tracks play straight from the server's `/api/stream/{id}` URL (a
+short-lived stream token, not the sign-in token, is appended when playback starts), so nothing is downloaded first. Only Linux is a target for
 `FfmpegAudioDriver`; no other non-Windows desktop is documented or tested.
 
 ## Output modes
@@ -136,6 +136,10 @@ sends the volume nowhere.
   the current track (codec, transport, processing, access, device). In bit-perfect mode it says *Bit-perfect
   requested (PCM, no gain, exclusive device access)*; it does not check what ALSA, NAudio or the device actually do
   with the stream.
+- **On Linux the progress bar runs on the clock, not on the decoder.** `FfmpegAudioDriver` computes the position
+  from the time since playback (re)started, plus the seek offset; it does not read it from `ffplay` or `aplay`. While
+  a source is slow to open or a stream stalls, the bar can run ahead of the sound for a moment. The Windows driver reads the
+  position of its file reader and the Android driver that of `MediaPlayer`.
 - **No gapless playback, no crossfade**: each track is opened when the previous one ends, leaving a short gap.
 - **Seeking on Linux restarts the player**, so seeking in a server stream opens a new HTTP request.
 - **Decoder coverage differs**: only Linux with ffmpeg plays everything that is indexed.

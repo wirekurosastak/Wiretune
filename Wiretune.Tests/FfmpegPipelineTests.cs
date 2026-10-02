@@ -7,7 +7,7 @@ namespace Wiretune.Tests;
 
 /// <summary>
 /// Runs the real ffmpeg/ffplay child-process paths against generated WAV files. ffplay is pointed at SDL's
-/// "dummy" audio driver, so nothing is played. Each test returns early on machines without ffmpeg/ffplay.
+/// "dummy" audio driver, so nothing is played. Each test is reported as skipped on machines without ffmpeg/ffplay.
 /// </summary>
 public sealed class FfmpegPipelineTests : IDisposable
 {
@@ -25,11 +25,6 @@ public sealed class FfmpegPipelineTests : IDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { }
     }
 
-    private static bool OnPath(string tool) =>
-        (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
-            .Any(dir => File.Exists(Path.Combine(dir, tool)) || File.Exists(Path.Combine(dir, tool + ".exe")));
-
     private static async Task<bool> WaitUntilAsync(Func<bool> condition, int timeoutMs = 15000)
     {
         for (var waited = 0; waited < timeoutMs; waited += 50)
@@ -40,11 +35,9 @@ public sealed class FfmpegPipelineTests : IDisposable
         return condition();
     }
 
-    [Fact]
+    [ToolFact("ffmpeg")]
     public async Task PcmCache_DecodesFiles_WhoseNamesContainQuotesAndSpaces()
     {
-        if (!OnPath("ffmpeg")) return;
-
         // A quote in the name used to break out of the hand-quoted command line.
         var path = Path.Combine(_dir, "a \"quoted\" -i name.wav");
         WavFile.Write(path, AudioPcmCache.SampleRate, seconds: 1.0);
@@ -58,11 +51,9 @@ public sealed class FfmpegPipelineTests : IDisposable
         Assert.Contains(window, sample => Math.Abs(sample) > 0.05f); // the 440 Hz test tone, not silence
     }
 
-    [Fact]
+    [ToolFact("ffmpeg")]
     public async Task PcmCache_SwitchingTracks_NeverMixesTheOldTracksSamplesIntoTheNewOne()
     {
-        if (!OnPath("ffmpeg")) return;
-
         var first = Path.Combine(_dir, "first.wav");
         var second = Path.Combine(_dir, "second.wav");
         WavFile.Write(first, AudioPcmCache.SampleRate, seconds: 5.0);
@@ -81,33 +72,36 @@ public sealed class FfmpegPipelineTests : IDisposable
         Assert.Equal(AudioPcmCache.SampleRate, cache.SampleCount);
     }
 
-    [Fact]
+    [ToolFact("ffplay", "ffmpeg")]
     public async Task Driver_PlaysAFile_AndReportsTheEndOfTheTrack()
     {
-        if (!OnPath("ffplay") || !OnPath("ffmpeg")) return;
-
         var path = Path.Combine(_dir, "short.wav");
         WavFile.Write(path, 44100, seconds: 0.5);
 
         using var driver = new FfmpegAudioDriver();
         var ended = new TaskCompletionSource();
         var failures = new List<string>();
+        var states = new List<string>();
         driver.TrackEnded += (_, _) => ended.TrySetResult();
-        driver.PlaybackFailed += (_, message) => failures.Add(message);
+        driver.PlaybackFailed += (_, message) => { lock (failures) failures.Add(message); };
+        driver.StateChanged += (_, state) => { lock (states) states.Add(state.ToString()); };
 
         await driver.InitializeAsync(new AudioOutputDevice { Id = "default", DriverType = "Default" }, exclusive: false, bitperfect: false);
         await driver.PlayAsync(path, new AudioFormat(), TimeSpan.Zero);
 
-        Assert.Equal(ended.Task, await Task.WhenAny(ended.Task, Task.Delay(15000)));
-        Assert.Empty(failures);
+        var finished = await Task.WhenAny(ended.Task, Task.Delay(15000));
+
+        // What the driver did is part of the message, so a failure on another machine can be read without a debugger.
+        string report;
+        lock (failures) lock (states) report = $"state {driver.State}; states seen [{string.Join(", ", states)}]; failures [{string.Join(" | ", failures)}]";
+        Assert.True(ReferenceEquals(finished, ended.Task), $"The end of the track was not reported within 15 s: {report}");
+        Assert.True(failures.Count == 0, $"The track was reported as failed: {report}");
         Assert.Equal(PlaybackState.Stopped, driver.State);
     }
 
-    [Fact]
+    [ToolFact("ffplay", "ffmpeg")]
     public async Task Driver_ReportsAFailure_InsteadOfSkippingAnUnplayableTrack()
     {
-        if (!OnPath("ffplay") || !OnPath("ffmpeg")) return;
-
         using var driver = new FfmpegAudioDriver();
         var failed = new TaskCompletionSource<string>();
         var ended = false;

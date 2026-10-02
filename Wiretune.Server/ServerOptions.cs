@@ -10,6 +10,12 @@ public sealed class ServerOptions
 
     public int Port { get; set; } = 5200;
 
+    /// <summary>
+    /// Code the first administrator must enter. Blank: the server makes a random one and prints it in its log at every
+    /// start for as long as no account exists.
+    /// </summary>
+    public string? SetupCode { get; set; }
+
     /// <summary>Periodic incremental rescan interval; 0 disables periodic rescans (startup and manual scans still run).</summary>
     public int ScanIntervalMinutes { get; set; } = 30;
 }

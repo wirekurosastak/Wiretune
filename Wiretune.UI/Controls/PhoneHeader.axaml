@@ -21,7 +21,7 @@
       <material:MaterialIcon Kind="Magnify" Width="24" Height="24" />
     </Button>
     <!-- Settings are behind the account button; the account and sign-in cards are the first thing on that page -->
-    <Button Grid.Column="2" Classes="phone-icon" Command="{Binding NavigateToCommand}" CommandParameter="5"
+    <Button Grid.Column="2" Classes="phone-icon" Command="{Binding NavigateToCommand}" CommandParameter="{x:Static vm:AppSection.Settings}"
             AutomationProperties.Name="{loc:T TipAccountSettings}">
       <Panel>
         <material:MaterialIcon Kind="AccountCircleOutline" Width="26" Height="26"

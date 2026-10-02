@@ -76,6 +76,7 @@ public class ExtendedIntegrationAndEdgeTests
     {
         var entries = new List<LogEntry>();
         Action<LogEntry> handler = entries.Add;
+        var previousLevel = WiretuneLog.MinimumLevel;
 
         try
         {
@@ -97,7 +98,7 @@ public class ExtendedIntegrationAndEdgeTests
         finally
         {
             WiretuneLog.OnLogEntry -= handler;
-            WiretuneLog.MinimumLevel = LogLevel.Debug; // restore
+            WiretuneLog.MinimumLevel = previousLevel;
         }
     }
 

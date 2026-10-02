@@ -1,3 +1,4 @@
+#if DEBUG
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -11,8 +12,9 @@ using Wiretune.UI.ViewModels;
 namespace Wiretune.UI.Services;
 
 /// <summary>
-/// Local HTTP endpoint for scripted UI testing. Disabled unless WIRETUNE_UI_AUTOMATION=1 is set, bound to
-/// loopback only, and sends no CORS headers, so web pages cannot drive the player from the browser.
+/// Local HTTP endpoint for scripted UI testing. Compiled into Debug builds only (a release build has no such listener at
+/// all). Even then it stays off unless WIRETUNE_UI_AUTOMATION=1 is set, is bound to loopback only, and sends no CORS
+/// headers, so web pages cannot drive the player from the browser.
 /// </summary>
 public sealed class UiAutomationServer : IDisposable
 {
@@ -102,7 +104,7 @@ public sealed class UiAutomationServer : IDisposable
                 case "/api/ui/state":
                     await WriteJson(resp, 200, await Dispatcher.UIThread.InvokeAsync(() => new
                     {
-                        NavigationIndex = _vm.SelectedNavigationIndex,
+                        Section = _vm.SelectedSection.ToString(),
                         _vm.SearchQuery,
                         _vm.StatusText,
                         _vm.IsLoginViewActive,
@@ -127,9 +129,9 @@ public sealed class UiAutomationServer : IDisposable
                     }));
                     break;
 
-                case "/api/ui/navigate" when int.TryParse(query["index"], out var idx):
-                    await Dispatcher.UIThread.InvokeAsync(() => _vm.NavigateToCommand.Execute(idx));
-                    await WriteJson(resp, 200, new { Success = true, SelectedIndex = idx });
+                case "/api/ui/navigate" when Enum.TryParse<AppSection>(query["section"], ignoreCase: true, out var section) && Enum.IsDefined(section):
+                    await Dispatcher.UIThread.InvokeAsync(() => _vm.NavigateToCommand.Execute(section));
+                    await WriteJson(resp, 200, new { Success = true, Section = section.ToString() });
                     break;
 
                 case "/api/ui/screenshot":
@@ -330,3 +332,4 @@ public sealed class UiAutomationServer : IDisposable
         _cts.Dispose();
     }
 }
+#endif

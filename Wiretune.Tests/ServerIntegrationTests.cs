@@ -20,6 +20,9 @@ public sealed class WiretuneServerFixture : WebApplicationFactory<Program>
     public string LibraryPath => Path.Combine(Root, "library");
     public string DataPath => Path.Combine(Root, "data");
 
+    /// <summary>The setup code every test server is started with; creating the first administrator needs it.</summary>
+    public const string SetupCode = "test-setup-code";
+
     /// <summary>Set before disposing to leave the files behind, e.g. to start a second server on the same data.</summary>
     public bool KeepFilesOnDispose { get; set; }
 
@@ -42,6 +45,7 @@ public sealed class WiretuneServerFixture : WebApplicationFactory<Program>
         builder.UseSetting("Wiretune:LibraryPath", LibraryPath);
         builder.UseSetting("Wiretune:DataDirectory", DataPath);
         builder.UseSetting("Wiretune:ScanIntervalMinutes", "0");
+        builder.UseSetting("Wiretune:SetupCode", SetupCode);
     }
 
     public async Task<List<Track>> WaitForTracksAsync(HttpClient client, int expected)
@@ -99,7 +103,7 @@ public class ServerIntegrationTests
     private static async Task<(HttpClient Client, AuthResponse Auth)> SetupAdminAsync(WiretuneServerFixture server)
     {
         var client = server.CreateClient();
-        var response = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", AdminPassword));
+        var response = await client.PostAsJsonAsync("/api/auth/setup", new SetupRequest("owner", AdminPassword, WiretuneServerFixture.SetupCode));
         response.EnsureSuccessStatusCode();
         var auth = (await response.Content.ReadFromJsonAsync<AuthResponse>(WiretuneServerFixture.Json))!;
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.Token);
@@ -135,11 +139,11 @@ public class ServerIntegrationTests
         using var server = new WiretuneServerFixture();
         var client = server.CreateClient();
 
-        var weak = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", "short"));
+        var weak = await client.PostAsJsonAsync("/api/auth/setup", new SetupRequest("owner", "short", WiretuneServerFixture.SetupCode));
         Assert.Equal(HttpStatusCode.BadRequest, weak.StatusCode);
 
         var attempts = await Task.WhenAll(Enumerable.Range(0, 5).Select(i =>
-            client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest($"owner{i}", AdminPassword))));
+            client.PostAsJsonAsync("/api/auth/setup", new SetupRequest($"owner{i}", AdminPassword, WiretuneServerFixture.SetupCode))));
 
         Assert.Equal(1, attempts.Count(r => r.StatusCode == HttpStatusCode.OK));
         Assert.Equal(4, attempts.Count(r => r.StatusCode == HttpStatusCode.Conflict));
@@ -291,13 +295,13 @@ public class ServerIntegrationTests
         using var server = new WiretuneServerFixture();
         var client = server.CreateClient();
 
-        var tooLong = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", new string('a', AuthRules.MaxPasswordBytes + 1)));
+        var tooLong = await client.PostAsJsonAsync("/api/auth/setup", new SetupRequest("owner", new string('a', AuthRules.MaxPasswordBytes + 1), WiretuneServerFixture.SetupCode));
         Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
 
         // 72 bytes is fine; multi-byte characters count by bytes ("é" is two bytes in UTF-8).
-        var multiByte = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", new string('é', 37)));
+        var multiByte = await client.PostAsJsonAsync("/api/auth/setup", new SetupRequest("owner", new string('é', 37), WiretuneServerFixture.SetupCode));
         Assert.Equal(HttpStatusCode.BadRequest, multiByte.StatusCode);
-        var exact = await client.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", new string('a', AuthRules.MaxPasswordBytes)));
+        var exact = await client.PostAsJsonAsync("/api/auth/setup", new SetupRequest("owner", new string('a', AuthRules.MaxPasswordBytes), WiretuneServerFixture.SetupCode));
         Assert.Equal(HttpStatusCode.OK, exact.StatusCode);
     }
 
@@ -393,7 +397,7 @@ public class ServerIntegrationTests
         Assert.Equal(ServerConnectionState.SetupRequired, session.State);
 
         // Creating the admin logs in and downloads the library (after the server's first scan).
-        Assert.Null(await session.SetupAdminAsync("owner", AdminPassword));
+        Assert.Null(await session.SetupAdminAsync("owner", AdminPassword, WiretuneServerFixture.SetupCode));
         await server.WaitForTracksAsync(AuthorizedClient(server, session.AuthToken!), 3);
         await session.RefreshLibraryAsync();
 
@@ -420,6 +424,9 @@ public class ServerIntegrationTests
         Assert.Null(await session.LoginAsync("OWNER", AdminPassword, rememberMe: true));
         Assert.True(session.IsLoggedIn);
         Assert.Equal(session.AuthToken, repo.Settings["AuthToken"]);
+
+        // The favourite belongs to the account on the server, so signing out and in again brings it back.
+        Assert.True(library.GetTrack(favorite.Id)!.IsFavorite);
 
         // A stale token is dropped on reconnect instead of looping on 401s.
         repo.Settings["AuthToken"] = "not-a-valid-token";

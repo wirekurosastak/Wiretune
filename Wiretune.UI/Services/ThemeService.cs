@@ -2,19 +2,21 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Wiretune.Core.Services;
+using Wiretune.UI.ViewModels;
 
 namespace Wiretune.UI.Services;
 
 public partial class ThemeService : ObservableObject
 {
     [ObservableProperty] private IBrush _currentAccentBrush = new SolidColorBrush(Color.Parse("#67C8E0"));
-    private int _lastIndex = 0;
+    private AppSection _lastSection = AppSection.Tracks;
 
     public ThemeService()
     {
         if (Application.Current is { } app)
         {
-            app.ActualThemeVariantChanged += (_, _) => UpdateDynamicBackground(_lastIndex);
+            app.ActualThemeVariantChanged += (_, _) => UpdateDynamicBackground(_lastSection);
         }
     }
 
@@ -29,56 +31,51 @@ public partial class ThemeService : ObservableObject
         if (Application.Current is not { } app) return;
         app.RequestedThemeVariant = light ? ThemeVariant.Light : ThemeVariant.Dark;
         OnPropertyChanged(nameof(IsLight));
-        UpdateDynamicBackground(_lastIndex);
+        UpdateDynamicBackground(_lastSection);
     }
 
-    public void UpdateDynamicBackground(int tabIndex)
+    /// <summary>The accent family a section is drawn in; the colours of each family are in App.axaml.</summary>
+    private static string AccentFamily(AppSection section) => section switch
     {
-        _lastIndex = tabIndex;
+        AppSection.Tracks or AppSection.Settings => "Cyan",
+        AppSection.Albums => "Purple",
+        AppSection.Artists or AppSection.Favorites => "Coral",
+        AppSection.Playlists => "Lime",
+        _ => "Cyan"
+    };
+
+    /// <summary>A colour of the palette in App.axaml's theme dictionaries; a missing key is logged and drawn as grey.</summary>
+    private static Color PaletteColor(Application app, ThemeVariant theme, string key)
+    {
+        if (app.TryGetResource(key, theme, out var value) && value is Color color) return color;
+
+        WiretuneLog.Warn("ThemeService", $"The palette has no colour '{key}' for the {theme} theme.");
+        return Colors.Gray;
+    }
+
+    /// <summary>
+    /// Recolours the app for a section: the accent (and its hover and pressed shades) and the tint of the window gradient.
+    /// The palette itself lives in App.axaml; this only picks from it and writes the result to the keys the styles use.
+    /// </summary>
+    public void UpdateDynamicBackground(AppSection section)
+    {
+        _lastSection = section;
         if (Application.Current is not { } app) return;
-        bool isDark = app.ActualThemeVariant == ThemeVariant.Dark;
+        var theme = app.ActualThemeVariant;
+        bool isDark = theme == ThemeVariant.Dark;
 
-        string[] darkAccents        = { "#67C8E0", "#D05CE3", "#FF6B6B", "#AEEA00", "#FF6B6B", "#67C8E0" };
-        string[] lightAccents       = { "#3A9FB8", "#A03BB5", "#D94A4A", "#7FB800", "#D94A4A", "#3A9FB8" };
-        string[] darkHoverAccents   = { "#8BE0F5", "#DF7DF0", "#FF8585", "#C2FF1A", "#FF8585", "#8BE0F5" };
-        string[] lightHoverAccents  = { "#52B3CC", "#B848CF", "#E85D5D", "#91CF05", "#E85D5D", "#52B3CC" };
-        string[] darkPressedAccents = { "#4FB0C8", "#B835CD", "#E05555", "#95CA00", "#E05555", "#4FB0C8" };
-        string[] lightPressedAccents= { "#2A8F98", "#88289E", "#B83535", "#6B9900", "#B83535", "#2A8F98" };
+        var family = AccentFamily(section);
+        var accentColor  = PaletteColor(app, theme, $"{family}AccentColor");
+        var hoverColor   = PaletteColor(app, theme, $"{family}AccentHoverColor");
+        var pressedColor = PaletteColor(app, theme, $"{family}AccentPressedColor");
+        var startColor   = PaletteColor(app, theme, $"WindowGradient{section}Color");
+        var midColor     = PaletteColor(app, theme, "WindowGradientMidColor");
 
-        string activeAccent  = isDark ? darkAccents[tabIndex % darkAccents.Length] : lightAccents[tabIndex % lightAccents.Length];
-        string activeHover   = isDark ? darkHoverAccents[tabIndex % darkHoverAccents.Length] : lightHoverAccents[tabIndex % lightHoverAccents.Length];
-        string activePressed = isDark ? darkPressedAccents[tabIndex % darkPressedAccents.Length] : lightPressedAccents[tabIndex % lightPressedAccents.Length];
-        string activeFg      = isDark ? "#FFFFFF" : "#000000";
-
-        var accentColor  = Color.Parse(activeAccent);
         var accentBrush  = new SolidColorBrush(accentColor);
-        var hoverColor   = Color.Parse(activeHover);
         var hoverBrush   = new SolidColorBrush(hoverColor);
-        var pressedColor = Color.Parse(activePressed);
         var pressedBrush = new SolidColorBrush(pressedColor);
-        var fgBrush      = new SolidColorBrush(Color.Parse(activeFg));
+        var fgBrush      = new SolidColorBrush(isDark ? Colors.White : Colors.Black);
         CurrentAccentBrush = accentBrush;
-
-        (string start, string mid) = (tabIndex, isDark) switch
-        {
-            (0, true)  => ("#051522", "#000000"), // Tracks Dark: Deep Cyan
-            (1, true)  => ("#1F0833", "#000000"), // Albums Dark: Deep Purple
-            (2, true)  => ("#2B0C0C", "#000000"), // Artists Dark: Deep Coral
-            (3, true)  => ("#142400", "#000000"), // Playlists Dark: Deep Lime
-            (4, true)  => ("#2B0C0C", "#000000"), // Favorites Dark: Deep Coral (the same as Artists)
-            (5, true)  => ("#091824", "#000000"), // Settings Dark: Deep Cyan/Slate
-            (0, false) => ("#E8F7FC", "#EEF1F5"), // Tracks Light: Soft Ice Cyan
-            (1, false) => ("#F3E9FF", "#EEF1F5"), // Albums Light: Soft Lavender
-            (2, false) => ("#FFECEC", "#EEF1F5"), // Artists Light: Soft Coral/Rose
-            (3, false) => ("#EEF9E6", "#EEF1F5"), // Playlists Light: Soft Mint/Lime
-            (4, false) => ("#FFECEC", "#EEF1F5"), // Favorites Light: Soft Coral/Rose (the same as Artists)
-            (5, false) => ("#E8F7FC", "#EEF1F5"), // Settings Light: Soft Ice Cyan
-            (_, true)  => ("#08080C", "#000000"), // Dark fallback
-            (_, false) => ("#F5F7FA", "#EEF1F5")  // Light fallback
-        };
-
-        var startColor = Color.Parse(start);
-        var midColor   = Color.Parse(mid);
 
         var windowGradient = new LinearGradientBrush
         {

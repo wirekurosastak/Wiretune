@@ -1,0 +1,129 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:Wiretune.UI.Localization"
+             xmlns:vm="using:Wiretune.UI.ViewModels"
+             xmlns:models="using:Wiretune.Core.Models"
+             xmlns:controls="using:Wiretune.UI.Controls"
+             xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="Wiretune.UI.Views.FavoritesView"
+             x:DataType="vm:MainViewModel">
+
+  <!-- The Favorites tab. Binds to MainViewModel (inherited). -->
+  <Grid Classes="page" IsVisible="{Binding SelectedSection, ConverterParameter={x:Static vm:AppSection.Favorites}, Converter={StaticResource IntEqualConverter}}"
+        RowDefinitions="Auto, *">
+    <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
+      <StackPanel Grid.Column="0" Spacing="4">
+        <TextBlock Text="{loc:T NavFavorites}" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <TextBlock Text="{loc:TFormat TrackCount, Path=Favorites.FavoriteTracks.Count}" FontSize="13" Foreground="{DynamicResource TextMuted}" />
+          <TextBlock Text="•" FontSize="13" Foreground="{DynamicResource TextMuted}" />
+          <TextBlock Text="{Binding Favorites.TotalFavoritesDuration}" FontSize="13" Foreground="{DynamicResource TextMuted}" />
+        </StackPanel>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+        <Button Classes="coral" Height="38" CornerRadius="6" Command="{Binding Favorites.PlayAllCommand}" IsEnabled="{Binding !Favorites.IsEmpty}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <material:MaterialIcon Kind="Play" Width="18" Height="18" />
+            <TextBlock Text="{loc:T Play}" FontWeight="Bold" />
+          </StackPanel>
+        </Button>
+        <Button Classes="secondary" Height="38" CornerRadius="6" Command="{Binding Favorites.ShuffleAllCommand}" IsEnabled="{Binding !Favorites.IsEmpty}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <material:MaterialIcon Kind="Shuffle" Width="18" Height="18" Foreground="{DynamicResource CoralAccent}" />
+            <TextBlock Text="{loc:T Shuffle}" FontWeight="Bold" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Grid>
+
+    <StackPanel Classes="page" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
+                IsVisible="{Binding Favorites.IsEmpty}">
+      <material:MaterialIcon Kind="HeartOutline" Width="64" Height="64" Foreground="{DynamicResource CoralAccent}" HorizontalAlignment="Center" />
+      <TextBlock Text="{loc:T EmptyFavoritesTitle}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" />
+      <TextBlock Text="{loc:T EmptyFavoritesHint}"
+                 FontSize="13" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Classes="glass coral" Padding="0" ClipToBounds="True" IsVisible="{Binding !Favorites.IsEmpty}">
+      <DataGrid ItemsSource="{Binding Favorites.FavoriteTracks}" AutoGenerateColumns="False" IsReadOnly="True"
+                CanUserSortColumns="True"
+                GridLinesVisibility="Horizontal" HorizontalScrollBarVisibility="Disabled">
+        <DataGrid.Columns>
+          <!-- Cover (Clickable to play track) -->
+          <DataGridTemplateColumn Width="50" Header="">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate DataType="models:Track">
+                <Button Classes="unstyled-cover"
+                        Classes.playing="{Binding IsPlaying}"
+                        controls:RowPressSync.SyncWithTitle="True"
+                        Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Favorites.PlayTrackCommand}"
+                        CommandParameter="{Binding}">
+                  <Border Width="32" Height="32"
+                          CornerRadius="4"
+                          Background="{DynamicResource Surface2}"
+                          ClipToBounds="True"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center">
+                    <Panel>
+                      <material:MaterialIcon Kind="MusicNote"
+                                             Foreground="{DynamicResource TextMuted}"
+                                             Width="16" Height="16"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center" />
+                      <controls:CoverImage SourcePath="{Binding CoverArtPath}"
+                                           DecodeWidth="64"
+                                           Stretch="UniformToFill" />
+
+                      <!-- Currently Playing Volume Overlay -->
+                      <Border Background="#A0000000" IsVisible="{Binding IsPlaying}">
+                        <controls:EqualizerBars IsVisible="{Binding IsPlaying}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                    </Panel>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+          <!-- Title (Clickable to play track) -->
+          <DataGridTemplateColumn Header="{loc:T ColTitle}" Width="2*" SortMemberPath="Title">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate DataType="models:Track">
+                <Button Classes="table-link title"
+                        Classes.playing="{Binding IsPlaying}"
+                        Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Favorites.PlayTrackCommand}"
+                        CommandParameter="{Binding}">
+                  <TextBlock Text="{Binding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </Button>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+
+          <!-- Artist (Clickable to open Artist page) -->
+          <DataGridTemplateColumn Header="{loc:T ColArtist}" Width="1.5*" SortMemberPath="Artist" CellTemplate="{StaticResource TrackArtistLinkCell}" />
+
+          <!-- Album (Clickable to open Album page) -->
+          <DataGridTemplateColumn Header="{loc:T ColAlbum}" Width="1.5*" SortMemberPath="Album" CellTemplate="{StaticResource TrackAlbumLinkCell}" />
+
+          <!-- Audio Format / Quality Badge -->
+          <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="185" SortMemberPath="Format.DisplayBadge" CellTemplate="{StaticResource TrackQualityCell}" />
+
+          <DataGridTextColumn Header="{loc:T ColLength}" Binding="{Binding FormattedDuration}" Width="105" SortMemberPath="Duration" />
+          <DataGridTemplateColumn Width="44" Header="" CellTemplate="{StaticResource TrackAddToPlaylistCell}" />
+          <DataGridTemplateColumn Width="44">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate DataType="models:Track">
+                <Button Classes="icon" ToolTip.Tip="{loc:T TipRemoveFromFavorites}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Favorites.RemoveFavoriteCommand}"
+                        CommandParameter="{Binding}">
+                  <material:MaterialIcon Kind="Heart" Foreground="{DynamicResource CoralAccent}" Width="18" Height="18" />
+                </Button>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
+        </DataGrid.Columns>
+      </DataGrid>
+    </Border>
+  </Grid>
+
+</UserControl>

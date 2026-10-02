@@ -39,7 +39,14 @@ public static class WiretuneLog
 
     public static event Action<LogEntry>? OnLogEntry;
 
-    public static LogLevel MinimumLevel { get; set; } = LogLevel.Debug;
+    /// <summary>
+    /// Info by default: Debug lines carry paths, server addresses and device names. <c>WIRETUNE_LOG_LEVEL</c>
+    /// (Trace, Debug, Info, Warn, Error) raises or lowers it for a troubleshooting session.
+    /// </summary>
+    public static LogLevel MinimumLevel { get; set; } =
+        Enum.TryParse<LogLevel>(Environment.GetEnvironmentVariable("WIRETUNE_LOG_LEVEL"), ignoreCase: true, out var configured)
+            ? configured
+            : LogLevel.Info;
 
     public static string LogFilePath
     {

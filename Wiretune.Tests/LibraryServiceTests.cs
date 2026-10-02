@@ -1,6 +1,7 @@
 ﻿using Wiretune.Core.Models;
 using Wiretune.Core.Data;
 using Wiretune.Core.Services;
+using Wiretune.UI.ViewModels;
 using Xunit;
 
 namespace Wiretune.Tests;
@@ -65,6 +66,18 @@ public class MockRepository : LibraryRepository
         if (tr != null) tr.PlayCount++;
         return Task.CompletedTask;
     }
+    public override Task UpdateTracksUserDataAsync(IEnumerable<Track> tracks)
+    {
+        foreach (var update in tracks)
+        {
+            var stored = Tracks.FirstOrDefault(t => t.Id == update.Id);
+            if (stored == null) continue;
+            stored.IsFavorite = update.IsFavorite;
+            stored.PlayCount = update.PlayCount;
+            stored.LastPlayed = update.LastPlayed;
+        }
+        return Task.CompletedTask;
+    }
     public override Task<List<Playlist>> GetAllPlaylistsAsync() => Task.FromResult(new List<Playlist>(Playlists));
     public override Task SavePlaylistAsync(Playlist playlist)
     {
@@ -75,6 +88,11 @@ public class MockRepository : LibraryRepository
     public override Task DeletePlaylistAsync(string playlistId)
     {
         Playlists.RemoveAll(p => p.Id == playlistId);
+        return Task.CompletedTask;
+    }
+    public override Task DeleteServerPlaylistsAsync()
+    {
+        Playlists.RemoveAll(p => p.IsServer);
         return Task.CompletedTask;
     }
     public override Task<string?> GetSettingAsync(string key, string? defaultValue = null)
@@ -180,7 +198,7 @@ public class LibraryServiceTests
     }
 
     [Fact]
-    public void MainViewModel_NavigateToCommand_AcceptsStringAndInt()
+    public void MainViewModel_NavigateToCommand_SwitchesTheSection()
     {
         var repo = new MockRepository();
         var scanner = new MetadataScanner();
@@ -188,22 +206,19 @@ public class LibraryServiceTests
         var audioEngine = TestSupport.CreateEngine();
         var vm = TestSupport.CreateMainViewModel(service, audioEngine);
 
-        // Verify initial (Artists is index 2, the first entry in the sidebar)
-        Assert.Equal(2, vm.SelectedNavigationIndex);
+        // The first entry of the sidebar is open at the start
+        Assert.Equal(AppSection.Artists, vm.SelectedSection);
 
-        // String command parameter (as passed from XAML button to Settings)
-        Assert.True(vm.NavigateToCommand.CanExecute("5"));
-        vm.NavigateToCommand.Execute("5");
-        Assert.Equal(5, vm.SelectedNavigationIndex);
+        // The section is the command parameter (XAML passes {x:Static vm:AppSection.Settings})
+        Assert.True(vm.NavigateToCommand.CanExecute(AppSection.Settings));
+        vm.NavigateToCommand.Execute(AppSection.Settings);
+        Assert.Equal(AppSection.Settings, vm.SelectedSection);
 
-        // Int command parameter (to Albums)
-        Assert.True(vm.NavigateToCommand.CanExecute(1));
-        vm.NavigateToCommand.Execute(1);
-        Assert.Equal(1, vm.SelectedNavigationIndex);
+        vm.NavigateToCommand.Execute(AppSection.Albums);
+        Assert.Equal(AppSection.Albums, vm.SelectedSection);
 
-        // Navigate to Tracks (0)
-        vm.NavigateToCommand.Execute("0");
-        Assert.Equal(0, vm.SelectedNavigationIndex);
+        vm.NavigateToCommand.Execute(AppSection.Tracks);
+        Assert.Equal(AppSection.Tracks, vm.SelectedSection);
     }
 
     [Fact]
@@ -263,14 +278,14 @@ public class LibraryServiceTests
 
         // 1. Open Artist
         vm.OpenArtistCommand.Execute(sampleArtist);
-        Assert.Equal(2, vm.SelectedNavigationIndex); // Tab 2: Artists
+        Assert.Equal(AppSection.Artists, vm.SelectedSection); // Tab 2: Artists
         Assert.True(vm.Artists.IsArtistDetailOpen);
         Assert.Equal("Miles Davis", vm.Artists.SelectedArtist?.Name);
         Assert.Equal(2, vm.Artists.SelectedArtistTracks.Count);
 
         // 2. Open Album from Artist
         vm.OpenAlbumCommand.Execute(sampleAlbum);
-        Assert.Equal(1, vm.SelectedNavigationIndex); // Tab 1: Albums
+        Assert.Equal(AppSection.Albums, vm.SelectedSection); // Tab 1: Albums
         Assert.True(vm.Albums.IsAlbumDetailOpen);
         Assert.Equal("Kind of Blue", vm.Albums.SelectedAlbum?.Title);
         Assert.Equal(2, vm.Albums.SelectedAlbum?.Tracks.Count);
@@ -291,8 +306,8 @@ public class LibraryServiceTests
         var vm = TestSupport.CreateMainViewModel(service, audioEngine);
 
         // Navigate to Settings (Tab 5)
-        vm.NavigateToCommand.Execute(5);
-        Assert.Equal(5, vm.SelectedNavigationIndex);
+        vm.NavigateToCommand.Execute(AppSection.Settings);
+        Assert.Equal(AppSection.Settings, vm.SelectedSection);
 
         // Verify Idle footer status: audio on left, library on right (no Kimenet prefix, no Wiretune brand text)
         Assert.Contains("Test USB DAC", vm.StatusText);

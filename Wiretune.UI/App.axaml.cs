@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Threading;
 using Wiretune.Core.Services;
 using Wiretune.Core.Audio.Drivers;
@@ -24,8 +25,29 @@ public partial class App : Application
         AvaloniaXamlLoader.Load(this);
     }
 
+    /// <summary>
+    /// Adds the styles only one kind of head uses: the desktop layout is built on DataGrid, the phone layout on the phone
+    /// styles. Each goes where it sat in the list of App.axaml before (the DataGrid theme right after Fluent, the phone
+    /// styles after the icon styles), so that the app's own styles after them still win.
+    /// </summary>
+    private void AddHeadStyles()
+    {
+        if (ApplicationLifetime is ISingleViewApplicationLifetime)
+        {
+            Styles.Insert(Math.Min(2, Styles.Count), Include("avares://Wiretune.UI/Styles/PhoneStyles.axaml"));
+        }
+        else
+        {
+            Styles.Insert(Math.Min(1, Styles.Count), Include("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"));
+        }
+
+        static StyleInclude Include(string source) => new(new Uri("avares://Wiretune.UI/")) { Source = new Uri(source) };
+    }
+
     public override void OnFrameworkInitializationCompleted()
     {
+        AddHeadStyles();
+
         var mainVm = MainViewModel.CreateDefault(AudioDriverFactory?.Invoke());
         MainVm = mainVm;
 
@@ -43,16 +65,21 @@ public partial class App : Application
             var mainWindow = new MainWindow { DataContext = mainVm };
             desktop.MainWindow = mainWindow;
 
+#if DEBUG
+            // A development aid: compiled into Debug builds only, so a released player has no remote-control endpoint.
             UiAutomationServer? automation = null;
             if (UiAutomationServer.IsEnabled)
             {
                 automation = new UiAutomationServer(mainWindow, mainVm);
                 automation.Start();
             }
+#endif
 
             desktop.Exit += (_, _) =>
             {
+#if DEBUG
                 automation?.Dispose();
+#endif
                 mainVm.Dispose();
             };
         }

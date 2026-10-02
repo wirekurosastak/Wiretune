@@ -17,15 +17,15 @@ public class NavVisualizerTests
     }
 
     [Theory]
-    [InlineData(2, 0)] // Artists -> Visual Row 0
-    [InlineData(1, 1)] // Albums -> Visual Row 1
-    [InlineData(0, 2)] // Songs -> Visual Row 2
-    [InlineData(4, 3)] // Favorites -> Visual Row 3
-    [InlineData(3, 4)] // Playlists -> Visual Row 4
-    [InlineData(5, 5)] // Settings -> Visual Row 5
-    public void GetNavVisualOrder_MapsSidebarOrderCorrectly(int navIndex, int expectedVisualRow)
+    [InlineData(AppSection.Artists, 0)]
+    [InlineData(AppSection.Albums, 1)]
+    [InlineData(AppSection.Tracks, 2)]
+    [InlineData(AppSection.Favorites, 3)]
+    [InlineData(AppSection.Playlists, 4)]
+    [InlineData(AppSection.Settings, 5)]
+    public void GetNavVisualOrder_MapsSidebarOrderCorrectly(AppSection section, int expectedVisualRow)
     {
-        Assert.Equal(expectedVisualRow, MainViewModel.GetNavVisualOrder(navIndex));
+        Assert.Equal(expectedVisualRow, MainViewModel.GetNavVisualOrder(section));
     }
 
     [Fact]
@@ -43,14 +43,14 @@ public class NavVisualizerTests
         };
 
         // Start at Artists (visual row 0, nav index 2)
-        vm.SelectedNavigationIndex = 2;
+        vm.SelectedSection = AppSection.Artists;
 
         // Navigate downwards to Albums (visual row 1, nav index 1)
-        vm.NavigateTo(1);
+        vm.NavigateTo(AppSection.Albums);
         Assert.Equal(NavWaveDirection.LeftToRight, lastDirection);
 
         // Navigate downwards to Songs (visual row 2, nav index 0)
-        vm.NavigateTo(0);
+        vm.NavigateTo(AppSection.Tracks);
         Assert.Equal(NavWaveDirection.LeftToRight, lastDirection);
     }
 
@@ -69,14 +69,14 @@ public class NavVisualizerTests
         };
 
         // Start at Songs (visual row 2, nav index 0)
-        vm.SelectedNavigationIndex = 0;
+        vm.SelectedSection = AppSection.Tracks;
 
         // Navigate upwards to Albums (visual row 1, nav index 1)
-        vm.NavigateTo(1);
+        vm.NavigateTo(AppSection.Albums);
         Assert.Equal(NavWaveDirection.RightToLeft, lastDirection);
 
         // Navigate upwards to Artists (visual row 0, nav index 2)
-        vm.NavigateTo(2);
+        vm.NavigateTo(AppSection.Artists);
         Assert.Equal(NavWaveDirection.RightToLeft, lastDirection);
     }
 
@@ -173,8 +173,8 @@ public class NavVisualizerTests
         var (vm, _) = CreateMainVm();
 
         // 1. Go to artists tab
-        vm.NavigateTo(2);
-        Assert.Equal(2, vm.SelectedNavigationIndex);
+        vm.NavigateTo(AppSection.Artists);
+        Assert.Equal(AppSection.Artists, vm.SelectedSection);
 
         // 2. Click on an artist
         var artist = new Artist { Id = "art_queen", Name = "Queen" };
@@ -187,7 +187,7 @@ public class NavVisualizerTests
         vm.OpenAlbum(album);
 
         // Should be looking at the album detail
-        Assert.Equal(1, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Albums, vm.SelectedSection);
         Assert.True(vm.Albums.IsAlbumDetailOpen);
         Assert.Equal("A Night at the Opera", vm.Albums.SelectedAlbum?.Title);
         Assert.Equal("Back to: Queen", vm.Albums.BackButtonText);
@@ -196,7 +196,7 @@ public class NavVisualizerTests
         vm.Albums.CloseAlbumDetail();
 
         // Must return to the artist view, NOT the general albums grid!
-        Assert.Equal(2, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Artists, vm.SelectedSection);
         Assert.True(vm.Artists.IsArtistDetailOpen);
         Assert.Equal("Queen", vm.Artists.SelectedArtist?.Name);
         Assert.False(vm.Albums.IsAlbumDetailOpen);

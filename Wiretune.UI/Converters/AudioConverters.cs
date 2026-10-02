@@ -166,24 +166,6 @@ public class NavActiveBackgroundConverter : IValueConverter
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
 }
 
-/// <summary>
-/// Used by the Android bottom nav bar: returns the active accent colour for the selected tab
-/// and the muted text colour for all other tabs so that icons and labels remain visible.
-/// </summary>
-public class NavActiveTextConverter : IValueConverter
-{
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value == null || parameter == null) return new SolidColorBrush(Color.Parse("#737373"));
-        var eq = string.Equals(value.ToString(), parameter.ToString(), StringComparison.OrdinalIgnoreCase);
-        return eq
-            ? new SolidColorBrush(Color.Parse("#67C8E0")) // CyanAccent — active tab
-            : new SolidColorBrush(Color.Parse("#737373")); // TextMuted  — inactive tab
-    }
-
-    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
-}
-
 public class BoolToAdminIconConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

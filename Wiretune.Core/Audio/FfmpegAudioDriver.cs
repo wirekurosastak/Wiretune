@@ -14,7 +14,7 @@ namespace Wiretune.Core.Audio.Drivers;
 /// Desktop playback through an ffplay child process. On Linux it routes to PipeWire nodes or raw ALSA
 /// hardware (hw:X,Y) for exclusive / bit-perfect output; elsewhere it uses the system default device.
 /// </summary>
-public sealed partial class FfmpegAudioDriver : IAudioDriver
+public sealed class FfmpegAudioDriver : IAudioDriver
 {
     private const int LinuxSigStop = 19;
     private const int LinuxSigCont = 18;
@@ -23,6 +23,12 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private static readonly object ProcessLock = new();
 
     private readonly object _stateLock = new();
+    // Commands (play, pause, seek, stop) run one after another on thread-pool threads, never on the caller's thread.
+    private readonly object _commandLock = new();
+    private Task _commands = Task.CompletedTask;
+    // Events raised while a command holds _stateLock wait here and are delivered after it is released.
+    private readonly object _eventLock = new();
+    private readonly List<Action> _pendingEvents = new();
     private readonly SpectrumAnalyzer _spectrumEngine = new();
     private readonly AudioPcmCache _pcmCache = new();
 
@@ -92,117 +98,180 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         return Task.CompletedTask;
     }
 
-    public Task PlayAsync(string audioSource, AudioFormat format, TimeSpan startPosition, CancellationToken ct = default)
-    {
-        lock (_stateLock)
+    // Starting and killing child processes takes tens to hundreds of milliseconds (kill and wait, the pw-reserve pause,
+    // loading the PCM cache) and the callers are on the UI thread, so each command runs on a thread-pool thread. The
+    // returned task completes when the command has finished; commands never overlap and keep their order.
+
+    public Task PlayAsync(string audioSource, AudioFormat format, TimeSpan startPosition, CancellationToken ct = default) =>
+        RunCommand(() =>
         {
-            var gen = Interlocked.Increment(ref _playbackGeneration);
-            KillPlaybackProcess();
-            StopTimers();
+            if (ct.IsCancellationRequested) return;
 
-            _currentSource = audioSource;
-            _currentFormat = format;
-            _seekOffset = startPosition;
-            _currentPosition = startPosition;
-
-            if (!StartPlaybackProcess(startPosition, gen)) return Task.CompletedTask;
-
-            _pcmCache.LoadTrack(audioSource);
-            SetState(PlaybackState.Playing);
-            StartTimers();
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task PauseAsync()
-    {
-        lock (_stateLock)
-        {
-            if (_state != PlaybackState.Playing) return Task.CompletedTask;
-
-            UpdatePosition();
-            StopTimers();
-
-            if (OperatingSystem.IsLinux() && _playbackProcess is { HasExited: false } proc && kill(proc.Id, LinuxSigStop) == 0)
+            lock (_stateLock)
             {
-                _processSuspended = true;
-            }
-            else
-            {
-                // No SIGSTOP (e.g. Windows): stop the process and restart from the saved position on resume.
-                Interlocked.Increment(ref _playbackGeneration);
+                var gen = Interlocked.Increment(ref _playbackGeneration);
                 KillPlaybackProcess();
+                StopTimers();
+
+                _currentSource = audioSource;
+                _currentFormat = format;
+                _seekOffset = startPosition;
+                _currentPosition = startPosition;
+
+                if (!StartPlaybackProcess(startPosition, gen)) return;
+
+                _pcmCache.LoadTrack(audioSource);
+                SetState(PlaybackState.Playing);
+                StartTimers();
             }
+        });
 
-            _seekOffset = _currentPosition;
-            SetState(PlaybackState.Paused);
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task ResumeAsync()
-    {
-        lock (_stateLock)
+    public Task PauseAsync() =>
+        RunCommand(() =>
         {
-            if (_state != PlaybackState.Paused) return Task.CompletedTask;
-
-            if (_processSuspended && _playbackProcess is { HasExited: false } proc && kill(proc.Id, LinuxSigCont) == 0)
+            lock (_stateLock)
             {
-                _processSuspended = false;
-            }
-            else if (!StartPlaybackProcess(_currentPosition, Interlocked.Increment(ref _playbackGeneration)))
-            {
-                return Task.CompletedTask;
-            }
+                if (_state != PlaybackState.Playing) return;
 
-            _seekOffset = _currentPosition;
-            _playStartTime = DateTime.UtcNow;
-            SetState(PlaybackState.Playing);
-            StartTimers();
-        }
-        return Task.CompletedTask;
-    }
+                UpdatePosition();
+                StopTimers();
+
+                if (OperatingSystem.IsLinux() && _playbackProcess is { HasExited: false } proc && kill(proc.Id, LinuxSigStop) == 0)
+                {
+                    _processSuspended = true;
+                }
+                else
+                {
+                    // No SIGSTOP (e.g. Windows): stop the process and restart from the saved position on resume.
+                    Interlocked.Increment(ref _playbackGeneration);
+                    KillPlaybackProcess();
+                }
+
+                _seekOffset = _currentPosition;
+                SetState(PlaybackState.Paused);
+            }
+        });
+
+    public Task ResumeAsync() =>
+        RunCommand(() =>
+        {
+            lock (_stateLock)
+            {
+                if (_state != PlaybackState.Paused) return;
+
+                if (_processSuspended && _playbackProcess is { HasExited: false } proc && kill(proc.Id, LinuxSigCont) == 0)
+                {
+                    _processSuspended = false;
+                }
+                else if (!StartPlaybackProcess(_currentPosition, Interlocked.Increment(ref _playbackGeneration)))
+                {
+                    return;
+                }
+
+                _seekOffset = _currentPosition;
+                _playStartTime = DateTime.UtcNow;
+                SetState(PlaybackState.Playing);
+                StartTimers();
+            }
+        });
 
     public Task SeekAsync(TimeSpan position)
     {
         if (position < TimeSpan.Zero) position = TimeSpan.Zero;
 
-        lock (_stateLock)
+        return RunCommand(() =>
         {
-            _currentPosition = position;
-            _seekOffset = position;
-            _playStartTime = DateTime.UtcNow;
-
-            if (_state == PlaybackState.Playing && _currentSource != null)
+            lock (_stateLock)
             {
-                StartPlaybackProcess(position, Interlocked.Increment(ref _playbackGeneration));
-            }
-            else if (_state == PlaybackState.Paused)
-            {
-                // A suspended process would continue from the old position; drop it so resume restarts here.
-                Interlocked.Increment(ref _playbackGeneration);
-                KillPlaybackProcess();
-            }
-        }
+                _currentPosition = position;
+                _seekOffset = position;
+                _playStartTime = DateTime.UtcNow;
 
-        PositionChanged?.Invoke(this, position);
-        return Task.CompletedTask;
+                if (_state == PlaybackState.Playing && _currentSource != null)
+                {
+                    StartPlaybackProcess(position, Interlocked.Increment(ref _playbackGeneration));
+                }
+                else if (_state == PlaybackState.Paused)
+                {
+                    // A suspended process would continue from the old position; drop it so resume restarts here.
+                    Interlocked.Increment(ref _playbackGeneration);
+                    KillPlaybackProcess();
+                }
+            }
+
+            PositionChanged?.Invoke(this, position);
+        });
     }
 
-    public Task StopAsync()
-    {
-        lock (_stateLock)
+    public Task StopAsync() =>
+        RunCommand(() =>
         {
-            Interlocked.Increment(ref _playbackGeneration);
-            KillPlaybackProcess();
-            StopTimers();
-            _pcmCache.CancelAndReset();
-            _currentPosition = TimeSpan.Zero;
-            _seekOffset = TimeSpan.Zero;
-            SetState(PlaybackState.Stopped);
-            ResetAudioHardwareSettings();
+            lock (_stateLock)
+            {
+                Interlocked.Increment(ref _playbackGeneration);
+                KillPlaybackProcess();
+                StopTimers();
+                _pcmCache.CancelAndReset();
+                _currentPosition = TimeSpan.Zero;
+                _seekOffset = TimeSpan.Zero;
+                SetState(PlaybackState.Stopped);
+                ResetAudioHardwareSettings();
+            }
+        });
+
+    /// <summary>Queues <paramref name="work"/> behind the commands before it and runs it off the caller's thread.</summary>
+    private Task RunCommand(Action work)
+    {
+        lock (_commandLock)
+        {
+            var next = _commands.ContinueWith(_ =>
+            {
+                try
+                {
+                    if (!_disposed) work();
+                }
+                finally
+                {
+                    FlushEvents();
+                }
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+
+            _commands = next;
+            return next;
         }
-        return Task.CompletedTask;
+    }
+
+    /// <summary>Queues an event to be raised once <see cref="_stateLock"/> is free: handlers never run under the lock.</summary>
+    private void Raise(Action raise)
+    {
+        lock (_stateLock) _pendingEvents.Add(raise);
+    }
+
+    /// <summary>Delivers the queued events in order. Call without holding <see cref="_stateLock"/>.</summary>
+    private void FlushEvents()
+    {
+        lock (_eventLock)
+        {
+            Action[] batch;
+            lock (_stateLock)
+            {
+                if (_pendingEvents.Count == 0) return;
+                batch = _pendingEvents.ToArray();
+                _pendingEvents.Clear();
+            }
+
+            foreach (var raise in batch)
+            {
+                try
+                {
+                    raise();
+                }
+                catch (Exception ex)
+                {
+                    WiretuneLog.Warn("FfmpegAudioDriver", $"An event handler threw: {ex.Message}");
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -264,6 +333,8 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
                 _playStartTime = DateTime.UtcNow;
                 StartPlaybackProcess(_currentPosition, Interlocked.Increment(ref _playbackGeneration));
             }
+
+            FlushEvents();
         }, null, 400, Timeout.Infinite);
     }
 
@@ -381,7 +452,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         aplayPsi.ArgumentList.Add("-D");
         aplayPsi.ArgumentList.Add($"plughw:{cardNum},{devNum}");
 
-        WiretuneLog.Info("FfmpegAudioDriver", $"Starting direct ALSA (ffmpeg | aplay) on plughw:{cardNum},{devNum} at {startPosition:mm\\:ss} for '{RedactToken(_currentSource!)}'");
+        WiretuneLog.Info("FfmpegAudioDriver", $"Starting direct ALSA (ffmpeg | aplay) on plughw:{cardNum},{devNum} at {startPosition:mm\\:ss} for '{_currentSource}'");
 
         Process? ffmpegProc = null;
         Process? aplayProc = null;
@@ -411,14 +482,8 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             ActiveProcesses.Add(aplayProc);
         }
 
-        aplayProc.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data)) _lastProcessError = e.Data.Trim();
-        };
-        ffmpegProc.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data)) _lastProcessError = e.Data.Trim();
-        };
+        aplayProc.ErrorDataReceived += (_, e) => RememberProcessError(e.Data);
+        ffmpegProc.ErrorDataReceived += (_, e) => RememberProcessError(e.Data);
 
         aplayProc.EnableRaisingEvents = true;
         aplayProc.Exited += (_, _) => OnProcessExited(aplayProc, gen);
@@ -464,7 +529,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
         ConfigureOutputRouting(psi, _currentFormat!);
 
-        WiretuneLog.Info("FfmpegAudioDriver", $"Starting ffplay at {startPosition:mm\\:ss} for '{RedactToken(_currentSource!)}'");
+        WiretuneLog.Info("FfmpegAudioDriver", $"Starting ffplay at {startPosition:mm\\:ss} for '{_currentSource}'");
 
         Process proc;
         try
@@ -488,10 +553,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         _playStartTime = DateTime.UtcNow;
         lock (ProcessLock) ActiveProcesses.Add(proc);
 
-        proc.ErrorDataReceived += (_, e) =>
-        {
-            if (!string.IsNullOrWhiteSpace(e.Data)) _lastProcessError = e.Data.Trim();
-        };
+        proc.ErrorDataReceived += (_, e) => RememberProcessError(e.Data);
         proc.EnableRaisingEvents = true;
         proc.Exited += (_, _) => OnProcessExited(proc, gen);
         proc.BeginErrorReadLine();
@@ -551,9 +613,37 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         return args;
     }
 
+    private static readonly Regex TerminalEscapes = new(@"\x1B(?:\[[0-?]*[ -/]*[@-~]|[@-Z\\-_])", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Keeps the last line a child process wrote to stderr: it becomes the message of a failure, and any such line in the
+    /// first seconds of a track counts as one. A line that is only terminal escape codes or other control characters says
+    /// nothing, so it is ignored (it would otherwise make a short track look failed with an empty message).
+    /// </summary>
+    private void RememberProcessError(string? line)
+    {
+        if (string.IsNullOrEmpty(line)) return;
+
+        var text = ReadableText(line);
+        if (text.Length == 0)
+        {
+            var escaped = string.Concat(line.Select(c => char.IsControl(c) ? $"\\x{(int)c:X2}" : c.ToString()));
+            WiretuneLog.Debug("FfmpegAudioDriver", $"Ignored a line of a playback process made only of control characters: {escaped}");
+            return;
+        }
+
+        WiretuneLog.Debug("FfmpegAudioDriver", $"A playback process wrote to stderr: {text}");
+        _lastProcessError = text;
+    }
+
+    /// <summary>The line without terminal escape codes and control characters, trimmed; empty when nothing readable is left.</summary>
+    internal static string ReadableText(string line) =>
+        new string(TerminalEscapes.Replace(line, string.Empty).Select(c => char.IsControl(c) ? ' ' : c).ToArray()).Trim();
+
     private void OnProcessExited(Process proc, long gen)
     {
         lock (ProcessLock) ActiveProcesses.Remove(proc);
+        WiretuneLog.Debug("FfmpegAudioDriver", $"A playback process ended (generation {gen}); reading what is left of its output.");
 
         int exitCode;
         try
@@ -570,8 +660,14 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
         lock (_stateLock)
         {
-            if (gen != Interlocked.Read(ref _playbackGeneration) || _state != PlaybackState.Playing) return;
+            if (gen != Interlocked.Read(ref _playbackGeneration) || _state != PlaybackState.Playing)
+            {
+                // Normal after a seek, a skip or a stop: the process that ended is not the current one.
+                WiretuneLog.Debug("FfmpegAudioDriver", $"Ignored the exit (code {exitCode}) of a replaced playback process: generation {gen}, current {Interlocked.Read(ref _playbackGeneration)}, state {_state}.");
+                return;
+            }
 
+            WiretuneLog.Debug("FfmpegAudioDriver", $"The playback process exited with code {exitCode}.");
             StopTimers();
             _playbackProcess = null;
 
@@ -596,15 +692,17 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             if (exitCode == 0)
             {
                 SetState(PlaybackState.Stopped);
-                TrackEnded?.Invoke(this, EventArgs.Empty);
+                Raise(() => TrackEnded?.Invoke(this, EventArgs.Empty));
             }
             else
             {
                 Fail(string.IsNullOrEmpty(_lastProcessError)
                     ? Localizer.Format("DriverStoppedUnexpectedly", exitCode)
-                    : Localizer.Format("DriverPlaybackFailed", RedactToken(_lastProcessError)));
+                    : Localizer.Format("DriverPlaybackFailed", WiretuneLog.Redact(_lastProcessError)));
             }
         }
+
+        FlushEvents();
     }
 
     private void ConfigureOutputRouting(ProcessStartInfo psi, AudioFormat format)
@@ -719,7 +817,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
         if (!emitSilence) return;
         _spectrumEngine.Reset();
-        SpectrumDataAvailable?.Invoke(this, new float[SpectrumAnalyzer.NumBands]);
+        Raise(() => SpectrumDataAvailable?.Invoke(this, new float[SpectrumAnalyzer.NumBands]));
     }
 
     private void UpdatePosition()
@@ -779,14 +877,15 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         StopTimers();
         ResetAudioHardwareSettings();
         SetState(PlaybackState.Error);
-        PlaybackFailed?.Invoke(this, message);
+        Raise(() => PlaybackFailed?.Invoke(this, message));
     }
 
+    /// <summary>Changes the state now and raises <see cref="StateChanged"/> once the lock is released.</summary>
     private void SetState(PlaybackState newState)
     {
         if (_state == newState) return;
         _state = newState;
-        StateChanged?.Invoke(this, newState);
+        Raise(() => StateChanged?.Invoke(this, newState));
     }
 
     private static bool RunQuiet(string fileName, params string[] args)
@@ -807,8 +906,6 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             return false;
         }
     }
-
-    private static string RedactToken(string text) => TokenRegex().Replace(text, "token=***");
 
     private static void KillAllProcesses()
     {
@@ -831,9 +928,6 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
     [DllImport("libc", SetLastError = true)]
     private static extern int kill(int pid, int sig);
-
-    [GeneratedRegex(@"token=[^&\s""']+")]
-    private static partial Regex TokenRegex();
 
     public void Dispose()
     {

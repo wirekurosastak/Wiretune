@@ -212,7 +212,8 @@ internal static class Strings
         T("ServerAddressLabel", "SZERVER CÍME", "SERVER ADDRESS", "SERVERADRESSE");
         T("ServerUnreachableHint", "A szerver nem érhető el. Ellenőrizd a címet és hogy a Wiretune.Server fut-e. Helyi zenék szerver nélkül is lejátszhatók.", "The server is unreachable. Check the address and that Wiretune.Server is running. Local music can be played without a server.", "Der Server ist nicht erreichbar. Prüfe die Adresse und ob Wiretune.Server läuft. Lokale Musik kann auch ohne Server abgespielt werden.");
         T("FirstRun", "Első indítás", "First run", "Erster Start");
-        T("FirstRunHint", "Hozd létre a szerver adminisztrátori fiókját. Később ezzel adhatsz hozzá további felhasználókat.", "Create the server's administrator account. You can use it later to add more users.", "Erstelle das Administratorkonto des Servers. Damit kannst du später weitere Benutzer hinzufügen.");
+        T("FirstRunHint", "Hozd létre a szerver adminisztrátori fiókját. Később ezzel adhatsz hozzá további felhasználókat. A beállítási kódot a szerver naplója írja ki indításkor.", "Create the server's administrator account. You can use it later to add more users. The server prints the setup code in its log when it starts.", "Erstelle das Administratorkonto des Servers. Damit kannst du später weitere Benutzer hinzufügen. Den Einrichtungscode gibt der Server beim Start in seinem Protokoll aus.");
+        T("SetupCodePlaceholder", "Beállítási kód (a szerver naplójából)", "Setup code (from the server log)", "Einrichtungscode (aus dem Server-Protokoll)");
         T("AdminUsernamePlaceholder", "Admin felhasználónév", "Admin username", "Admin-Benutzername");
         T("CreateAdminAndSignIn", "Admin fiók létrehozása és belépés", "Create admin account and sign in", "Admin-Konto erstellen und anmelden");
         T("UsernamePlaceholder", "Felhasználónév", "Username", "Benutzername");

@@ -24,22 +24,30 @@ about security; running the server is described in [docs/server.md](docs/server.
 - **No TLS.** The server speaks plain HTTP, so passwords and tokens cross the network unencrypted unless you use a
   TLS-terminating reverse proxy or a VPN. Do not expose the port directly to the internet. Proxy setup, including
   the forwarded-headers setting and its risk, is in [docs/server.md](docs/server.md#reverse-proxy-and-tls).
+- **First account.** Creating the administrator needs the **setup code** the server prints in its log at every start
+  while no account exists (or the one you set with `Wiretune:SetupCode`). Without it, whoever reached a server with an
+  empty data directory first (an unmounted volume, a wrong data path) would own it. The code is read from the log by
+  whoever runs the server; it protects only the very first account.
 - **Sign-in.** Setup and sign-in share a limit of 10 requests per minute per client address. Passwords are bcrypt
   hashes (work factor 12). There is no lockout besides that limit, no two-factor authentication, and no password
   change or reset.
 - **Tokens.** JWTs signed with HMAC-SHA256, valid 24 hours or 90 days. There is no per-token revocation; deleting
   the user ends their access immediately.
-- **Tokens in URLs.** Audio and cover requests may carry the token as `?token=` for players that cannot send headers
-  (`ffplay`, the Android player); the server accepts it only on `/api/stream` and `/api/cover`. Such URLs end up in
-  the access logs of your reverse proxy, so keep those private. With the shipped `appsettings.json` the server's own
-  console logging does not log request URLs.
+- **Tokens in URLs.** Audio and cover requests may carry a token as `?token=` for players that cannot send headers
+  (`ffplay`, the Android player); the server accepts it only on `/api/stream` and `/api/cover`. The players put a
+  **stream token** there, not the sign-in token: it is issued by `POST /api/auth/stream-token`, valid 8 hours, and
+  opens the audio and cover routes and nothing else, so a leaked stream URL cannot read or change your account. The URL
+  still ends up in the process list of the machine that plays it and in the access logs of your reverse proxy, so keep
+  those private. With the shipped `appsettings.json` the server's own console logging does not log request URLs.
 - **Signing key.** It lives in the server's database in its data directory. Whoever can read `wiretune-server.db` can
   mint valid tokens and read the password hashes, so restrict the directory to the service account. A directory the
   server creates itself is private to its user on Linux; an existing one keeps its permissions.
 - **Roles.** Administrator and user. Every signed-in user can read the whole library; there are no per-user
-  libraries or permissions.
-- **File paths are exposed.** `GET /api/tracks` returns each track's absolute server path (`filePath`) to every
-  signed-in user.
+  libraries or permissions. Favourites, play counts and playlists are per account: the server reads them only for the
+  account in the token, and an administrator has no route that reads another account's.
+- **File paths stay on the server.** The library routes send a placeholder (`server:{id}`) as `filePath`, never the
+  real path. The server's own data (favourites and playlists included) is in the database in its data directory, so
+  the same read-protection as for the signing key applies.
 - **File access.** The server only reads the music folder. Streaming and cover requests serve only files inside the
   library folder (or the server's cover cache), and request bodies are limited to 64 KiB.
 
@@ -58,7 +66,8 @@ about security; running the server is described in [docs/server.md](docs/server.
 - **Log files.** `WiretuneLog` replaces the value of every `token=` parameter with `***` before a line is written, so
   stream URLs in the log do not carry the access token. The logs still contain file paths, server addresses and
   device names: read `wiretune.log` before attaching it to a public issue.
-- **UI automation endpoint.** With `WIRETUNE_UI_AUTOMATION=1` the desktop player opens an unauthenticated control
-  interface on `127.0.0.1:5201`. It is a development aid, off by default, loopback-only and protected against
-  requests from web pages, but it can control the player and takes credentials in query parameters. Do not enable it
-  on a machine you do not fully control ([docs/development.md](docs/development.md#ui-automation-desktop-development-only)).
+- **UI automation endpoint.** Only **Debug builds** (`dotnet run`, not a Release build or a published one) contain
+  it, and only with `WIRETUNE_UI_AUTOMATION=1` does it open an unauthenticated control interface on `127.0.0.1:5201`.
+  It is loopback-only and protected against requests from web pages, but it can control the player and takes
+  credentials in query parameters. Do not enable it on a machine you do not fully control
+  ([docs/development.md](docs/development.md#ui-automation-desktop-development-only)).

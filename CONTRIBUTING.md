@@ -7,14 +7,18 @@ design is in [docs/architecture.md](docs/architecture.md). This file is what a c
 
 - **Keep it simple.** Concrete classes over interfaces with a single implementation; no new layer or helper unless at
   least two callers need it. Removing code is a fine contribution.
-- **Fix root causes** and add a test that fails without the fix. Server behaviour is best covered in
-  `ServerIntegrationTests`, logic in the other test files.
+- **Fix root causes** and add a test that fails without the fix. Server behaviour is best covered by a test that
+  hosts the real server (`WiretuneServerFixture`, see the existing `Server*Tests`), logic in the other test files.
+  A test that needs `ffmpeg` or another tool uses `[ToolFact("ffmpeg")]`, so that it shows as skipped, not passed,
+  when the tool is missing.
 - **Errors must be actionable.** Log with `WiretuneLog` (category, message, exception) and surface a message the user
   can act on; do not swallow exceptions silently.
 - **Child processes** (`ffmpeg`, `ffplay`, `aplay`, …) are started with `ArgumentList` (never a hand-quoted command
   string), have a timeout or cancellation, and are killed with their process tree on shutdown.
 - **Trust boundaries.** Validate everything that comes from the network, from file tags and from paths. Keep `?token=`
-  limited to the media endpoints and never write a token to a log.
+  limited to the media endpoints, put only a stream token in a URL, and never write a token to a log. Do not send a
+  server path to a client. Data that belongs to a person lives on the server under their account, and its routes take
+  the account from the token.
 - **Do not break the public API** (`Wiretune.Core` public types, HTTP routes and payloads) without a strong reason;
   players and servers of different versions may meet.
 - **User-visible text is never a string literal** in a view or view model; add it to `Strings.cs` (see
@@ -27,7 +31,8 @@ design is in [docs/architecture.md](docs/architecture.md). This file is what a c
 
 ## Pull requests
 
-There is no CI, so run the checks yourself:
+CI (`.github/workflows/ci.yml`) builds and tests every pull request, but it does not build Android and it cannot
+play audio, so run the checks yourself first:
 
 ```bash
 dotnet build Wiretune.slnx -c Release -p:TreatWarningsAsErrors=true

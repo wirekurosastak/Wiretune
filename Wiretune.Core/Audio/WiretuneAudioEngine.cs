@@ -21,6 +21,7 @@ public class WiretuneAudioEngine : IDisposable
     private double _volumeBeforeBitperfect = 1.0;
     private bool _isMuted;
     private string? _streamToken;
+    private Func<CancellationToken, Task<string?>>? _streamTokenProvider;
     private bool _disposed;
 
     public Track? CurrentTrack => _currentTrack;
@@ -87,6 +88,12 @@ public class WiretuneAudioEngine : IDisposable
 
     public void SetStreamAuthorization(string? bearerToken) => _streamToken = string.IsNullOrEmpty(bearerToken) ? null : bearerToken;
 
+    /// <summary>
+    /// Supplies the token appended to stream URLs. It is asked for each time a server track starts, so a long-running
+    /// player always uses a token that is still valid. Overrides <see cref="SetStreamAuthorization"/> for server tracks.
+    /// </summary>
+    public void SetStreamTokenProvider(Func<CancellationToken, Task<string?>>? provider) => _streamTokenProvider = provider;
+
     public async Task RefreshDevicesAsync()
     {
         List<AudioOutputDevice> devices;
@@ -136,6 +143,8 @@ public class WiretuneAudioEngine : IDisposable
     {
         _currentTrack = track;
         TrackChanged?.Invoke(this, track);
+
+        if (!track.IsLocal && _streamTokenProvider != null) await RefreshStreamTokenAsync(ct);
 
         var source = ResolveSource(track);
         if (string.IsNullOrEmpty(source))
@@ -307,6 +316,24 @@ public class WiretuneAudioEngine : IDisposable
         if (_currentTrack != null && State == PlaybackState.Playing && ResolveSource(_currentTrack) is { } source)
         {
             await _driver.PlayAsync(source, _currentTrack.Format, CurrentPosition);
+        }
+    }
+
+    private async Task RefreshStreamTokenAsync(CancellationToken ct)
+    {
+        try
+        {
+            var token = await _streamTokenProvider!(ct);
+            _streamToken = string.IsNullOrEmpty(token) ? null : token;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Keep the token we have: it may still be valid, and if not the server's refusal is reported by playback.
+            WiretuneLog.Warn("AudioEngine", $"Could not refresh the stream token: {ex.Message}");
         }
     }
 

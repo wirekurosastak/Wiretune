@@ -39,7 +39,7 @@ public sealed class PhoneNavigationTests : IDisposable
     public async Task Back_ClosesTheInnermostLayerFirst_AndSaysWhenThereIsNothingLeft()
     {
         var vm = await CreateAsync();
-        vm.NavigateTo(3);
+        vm.NavigateTo(AppSection.Playlists);
         ShowTrack(vm);
         vm.OpenNowPlaying();
         vm.Playlists.OpenCreateDialog();
@@ -55,9 +55,16 @@ public sealed class PhoneNavigationTests : IDisposable
         Assert.True(vm.TryNavigateBack());
         Assert.False(vm.IsSearchOpen);
 
-        vm.NavigateTo(0);
-        Assert.False(vm.TryNavigateBack()); // nothing to close: the app may leave
-        Assert.Equal(0, vm.SelectedNavigationIndex);
+        // No layer is left: back now walks the tabs the user came from (Artists, Playlists, Tracks), newest first ...
+        vm.NavigateTo(AppSection.Tracks);
+        Assert.True(vm.TryNavigateBack());
+        Assert.Equal(AppSection.Playlists, vm.SelectedSection);
+        Assert.True(vm.TryNavigateBack());
+        Assert.Equal(AppSection.Artists, vm.SelectedSection);
+
+        // ... and when that history is used up there is nothing to close: the app may leave.
+        Assert.False(vm.TryNavigateBack());
+        Assert.Equal(AppSection.Artists, vm.SelectedSection);
     }
 
     [Fact]
@@ -65,16 +72,16 @@ public sealed class PhoneNavigationTests : IDisposable
     {
         var vm = await CreateAsync();
 
-        vm.NavigateTo(1);
+        vm.NavigateTo(AppSection.Albums);
         vm.OpenAlbum(vm.Library.Albums[0]);
         Assert.True(vm.Albums.IsAlbumDetailOpen);
         Assert.True(vm.TryNavigateBack());
         Assert.False(vm.Albums.IsAlbumDetailOpen);
-        Assert.False(vm.TryNavigateBack());
+        Assert.Equal(AppSection.Albums, vm.SelectedSection); // closing the page stays on the tab
 
-        vm.NavigateTo(4);
+        vm.NavigateTo(AppSection.Favorites);
         Assert.True(vm.TryNavigateBack());
-        Assert.Equal(3, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Albums, vm.SelectedSection); // the tab the user came from
     }
 
     [Fact]
@@ -83,12 +90,12 @@ public sealed class PhoneNavigationTests : IDisposable
         // The settings are not in the bottom bar: the account button of a page header opens them.
         var vm = await CreateAsync();
 
-        vm.NavigateTo(4);
-        vm.NavigateTo(5);
-        Assert.Equal(5, vm.SelectedNavigationIndex);
+        vm.NavigateTo(AppSection.Favorites);
+        vm.NavigateTo(AppSection.Settings);
+        Assert.Equal(AppSection.Settings, vm.SelectedSection);
 
         Assert.True(vm.TryNavigateBack());
-        Assert.Equal(4, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Favorites, vm.SelectedSection);
     }
 
     [Fact]
@@ -149,7 +156,7 @@ public sealed class PhoneNavigationTests : IDisposable
         vm.OpenSearch();
         vm.SearchQuery = "opening";
 
-        vm.NavigateTo(2);
+        vm.NavigateTo(AppSection.Artists);
 
         Assert.False(vm.IsSearchOpen);
         Assert.Equal(string.Empty, vm.SearchQuery);

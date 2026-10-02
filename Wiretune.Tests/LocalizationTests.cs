@@ -253,27 +253,6 @@ public sealed partial class LocalizationTests : IDisposable
         Assert.Equal(expected, Localizer.Normalize(input));
     }
 
-    [Theory]
-    [InlineData("hu-HU", "hu")]
-    [InlineData("de-CH", "de")]
-    [InlineData("en-GB", "en")]
-    [InlineData("ja-JP", "en")]
-    [InlineData("", "en")]
-    public void DetectSystemLanguage_FollowsTheUiCulture_AndFallsBackToEnglish(string culture, string expected)
-    {
-        var original = CultureInfo.CurrentUICulture;
-        try
-        {
-            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(culture);
-
-            Assert.Equal(expected, Localizer.DetectSystemLanguage());
-        }
-        finally
-        {
-            CultureInfo.CurrentUICulture = original;
-        }
-    }
-
     [Fact]
     public void SetLanguage_NotifiesBindingsAndListeners_OnlyWhenTheLanguageChanges()
     {

@@ -139,8 +139,8 @@ public partial class ArtistsViewModel : ObservableObject
     {
         var target = artist ?? SelectedArtist;
         if (target == null || target.Tracks.Count == 0) return;
-        var shuffled = target.Tracks.OrderBy(_ => Random.Shared.Next()).ToList();
-        _player.PlayQueue(shuffled);
+        _player.IsShuffle = true;
+        _player.PlayQueue(target.Tracks);
     }
 
     [RelayCommand]

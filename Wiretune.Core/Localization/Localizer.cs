@@ -68,9 +68,6 @@ public sealed class Localizer : INotifyPropertyChanged
         return Languages.Any(l => l.Code == two) ? two : null;
     }
 
-    /// <summary>The language matching the operating system's UI language, English when that one is not supported.</summary>
-    public static string DetectSystemLanguage() => Normalize(CultureInfo.CurrentUICulture.Name) ?? English;
-
     /// <summary>The text for <paramref name="key"/> in the active language.</summary>
     public static string Get(string key) => Lookup(key, Instance._language);
 

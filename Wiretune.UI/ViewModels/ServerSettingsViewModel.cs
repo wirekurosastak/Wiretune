@@ -35,6 +35,7 @@ public partial class ServerSettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isLoggedIn;
     [ObservableProperty] private bool _isAdmin;
     [ObservableProperty] private bool _isSetupRequired;
+    [ObservableProperty] private string _setupCode = string.Empty;
     [ObservableProperty] private string _currentUserName = string.Empty;
     [ObservableProperty] private string _currentUserRole = string.Empty;
     [ObservableProperty] private string _authErrorMessage = string.Empty;
@@ -237,9 +238,13 @@ public partial class ServerSettingsViewModel : ObservableObject
         ShowAuthError(null);
         try
         {
-            var error = await _session.SetupAdminAsync(Username, Password);
+            var error = await _session.SetupAdminAsync(Username, Password, SetupCode);
             ShowAuthError(error);
-            if (error == null) Password = string.Empty;
+            if (error == null)
+            {
+                Password = string.Empty;
+                SetupCode = string.Empty;
+            }
         }
         finally
         {

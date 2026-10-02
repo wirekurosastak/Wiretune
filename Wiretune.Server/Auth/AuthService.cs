@@ -14,29 +14,29 @@ public class AuthService
 {
     public const string Issuer = "WiretuneServer";
     public const string Audience = "WiretuneClient";
+
+    /// <summary>Audience of the short-lived tokens that stream URLs carry; they open the media routes only.</summary>
+    public const string StreamAudience = "WiretuneStream";
+    public const string ScopeClaim = "wt_scope";
+    public const string StreamScope = "stream";
+
+    /// <summary>Long enough for a multi-hour track to be seeked in; the player asks for a new one well before that.</summary>
+    public static readonly TimeSpan StreamTokenLifetime = TimeSpan.FromHours(8);
     private const int BcryptWorkFactor = 12;
 
     private readonly DatabaseManager _db;
     private readonly SymmetricSecurityKey _signingKey;
     private readonly Lazy<string> _dummyHash = new(() => BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString(), BcryptWorkFactor));
 
-    public AuthService(DatabaseManager db)
+    /// <param name="signingSecret">The key tokens are signed with; the server keeps it in its database (see <see cref="GenerateSecret"/>).</param>
+    public AuthService(DatabaseManager db, string signingSecret)
     {
         _db = db;
         _db.InitializeSchema();
-        _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(LoadOrGenerateSecret()));
+        _signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingSecret));
     }
 
-    private string LoadOrGenerateSecret()
-    {
-        using var conn = _db.CreateConnection();
-        var existing = conn.QueryFirstOrDefault<string>("SELECT value FROM settings WHERE key = 'jwt_secret'");
-        if (!string.IsNullOrEmpty(existing)) return existing;
-
-        var secret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        conn.Execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('jwt_secret', @secret)", new { secret });
-        return conn.QueryFirst<string>("SELECT value FROM settings WHERE key = 'jwt_secret'");
-    }
+    public static string GenerateSecret() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
 
     public static string? ValidateCredentials(string? username, string? password)
     {
@@ -138,11 +138,44 @@ public class AuthService
         return rows.Select(r => r.ToUserInfo()).ToList();
     }
 
+    /// <summary>Deletes the account together with its favourites, play statistics and playlists.</summary>
     public async Task<bool> DeleteUserAsync(string userId)
     {
         using var conn = _db.CreateConnection();
-        var count = await conn.ExecuteAsync("DELETE FROM users WHERE id = @userId", new { userId });
+        using var transaction = conn.BeginTransaction();
+
+        var count = await conn.ExecuteAsync("DELETE FROM users WHERE id = @userId", new { userId }, transaction);
+        await conn.ExecuteAsync("DELETE FROM user_favorites WHERE user_id = @userId", new { userId }, transaction);
+        await conn.ExecuteAsync("DELETE FROM user_plays WHERE user_id = @userId", new { userId }, transaction);
+        await conn.ExecuteAsync("DELETE FROM user_playlists WHERE user_id = @userId", new { userId }, transaction);
+
+        transaction.Commit();
         return count > 0;
+    }
+
+    /// <summary>
+    /// A token for stream and cover URLs. It never carries the administrator role, and the server refuses it on every
+    /// other route, so a URL that leaks (process list, proxy log) cannot manage accounts or the library.
+    /// </summary>
+    public StreamTokenResponse CreateStreamToken(string userId, string username)
+    {
+        var expires = DateTime.UtcNow.Add(StreamTokenLifetime);
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, userId),
+            new Claim(ClaimTypes.Name, username),
+            new Claim(ClaimTypes.Role, "user"),
+            new Claim(ScopeClaim, StreamScope)
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: Issuer,
+            audience: StreamAudience,
+            claims: claims,
+            expires: expires,
+            signingCredentials: new SigningCredentials(_signingKey, SecurityAlgorithms.HmacSha256));
+
+        return new StreamTokenResponse(new JwtSecurityTokenHandler().WriteToken(token), expires);
     }
 
     public TokenValidationParameters GetValidationParameters() => new()
@@ -150,7 +183,7 @@ public class AuthService
         ValidateIssuer = true,
         ValidIssuer = Issuer,
         ValidateAudience = true,
-        ValidAudience = Audience,
+        ValidAudiences = new[] { Audience, StreamAudience },
         ValidateLifetime = true,
         IssuerSigningKey = _signingKey,
         ValidateIssuerSigningKey = true,

@@ -1,6 +1,7 @@
 ﻿﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
+using Wiretune.UI.ViewModels;
 using Xunit;
 
 namespace Wiretune.Tests;
@@ -208,16 +209,16 @@ public class LogicAndSecurityTests
     // SEC-025 — Logic Flaw: NavigateToCommand accepts out-of-range index
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public void SEC025_NavigationIndex_OutOfRange_IsIgnored()
+    public void SEC025_UnknownSection_IsIgnored()
     {
         using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var vm = TestSupport.CreateMainViewModel(service, engine);
 
-        vm.NavigateToCommand.Execute(999);
-        vm.NavigateToCommand.Execute(-1);
+        vm.NavigateToCommand.Execute((AppSection)999);
+        vm.NavigateToCommand.Execute((AppSection)(-1));
 
-        Assert.Equal(2, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Artists, vm.SelectedSection);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,9 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:conv="using:Wiretune.UI.Converters"
+             xmlns:loc="using:Wiretune.UI.Localization"
+             xmlns:vm="using:Wiretune.UI.ViewModels"
+             xmlns:models="using:Wiretune.Core.Models"
              xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="Wiretune.UI.App"
              RequestedThemeVariant="Dark">
@@ -15,9 +18,65 @@
       <conv:RepeatModeToIconConverter x:Key="RepeatModeToIconConverter" />
       <conv:IntEqualConverter x:Key="IntEqualConverter" />
       <conv:NavActiveBackgroundConverter x:Key="NavActiveBackgroundConverter" />
-      <conv:NavActiveTextConverter x:Key="NavActiveTextConverter" />
       <conv:BoolToAdminIconConverter x:Key="BoolToAdminIconConverter" />
       <conv:BoolToRoleTextConverter x:Key="BoolToRoleTextConverter" />
+
+      <!--
+        The cells of the track tables (DataGrid) that every table shows the same way; a table uses one as
+        CellTemplate="{StaticResource TrackAlbumLinkCell}". Each cell finds the MainViewModel through the view it sits in
+        ($parent[UserControl]), so it works in any view whose DataContext is the MainViewModel. Cells that differ from table
+        to table (the cover and the title play the track of their own list) stay in the views. They sit here, next to the
+        converters they use, so that the converters resolve from the same document.
+      -->
+
+      <DataTemplate x:Key="TrackArtistLinkCell" DataType="models:Track">
+        <Button Classes="table-link artist"
+                Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenArtistByNameCommand}"
+                CommandParameter="{Binding Artist}">
+          <TextBlock Text="{Binding Artist}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </Button>
+      </DataTemplate>
+
+      <DataTemplate x:Key="TrackAlbumLinkCell" DataType="models:Track">
+        <Button Classes="table-link album"
+                Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).OpenAlbumCommand}"
+                CommandParameter="{Binding}">
+          <TextBlock Text="{Binding Album}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </Button>
+      </DataTemplate>
+
+      <DataTemplate x:Key="TrackQualityCell" DataType="models:Track">
+        <Border Background="{DynamicResource TagBackground}"
+                CornerRadius="4"
+                Padding="6,2"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center">
+          <TextBlock Text="{Binding Format.DisplayBadge}"
+                     FontSize="10"
+                     FontWeight="Black"
+                     Foreground="{Binding Format, Converter={StaticResource QualityBadgeColorConverter}}" />
+        </Border>
+      </DataTemplate>
+
+      <DataTemplate x:Key="TrackFavoriteCell" DataType="models:Track">
+        <Button Classes="icon"
+                Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Tracks.ToggleFavoriteCommand}"
+                CommandParameter="{Binding}"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+          <materialIcons:MaterialIcon Kind="{Binding IsFavorite, Converter={StaticResource FavoriteIconConverter}}"
+                                      Foreground="{Binding IsFavorite, Converter={StaticResource FavoriteColorConverter}}"
+                                      Width="18" Height="18" />
+        </Button>
+      </DataTemplate>
+
+      <DataTemplate x:Key="TrackAddToPlaylistCell" DataType="models:Track">
+        <Button Classes="icon" ToolTip.Tip="{loc:T TipAddToPlaylist}"
+                Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).AddToPlaylistCommand}"
+                CommandParameter="{Binding}"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+          <materialIcons:MaterialIcon Kind="PlaylistPlus" Width="18" Height="18" />
+        </Button>
+      </DataTemplate>
 
       <!-- Slider Dimensions & Spacing to Prevent Horizontal/Vertical Clipping -->
       <GridLength x:Key="SliderPreContentMargin">0</GridLength>
@@ -70,6 +129,25 @@
           <SolidColorBrush x:Key="CyanAccent" Color="{DynamicResource CyanAccentColor}" />
           <SolidColorBrush x:Key="LimeAccent" Color="{DynamicResource LimeAccentColor}" />
 
+          <!-- Section palette. ThemeService picks from it when the section changes: Tracks and Settings use the cyan
+               family, Albums purple, Artists and Favorites coral, Playlists lime. Besides the accents above each family
+               has a hover and a pressed shade, and each section tints the window gradient (the middle stop is shared). -->
+          <Color x:Key="CyanAccentHoverColor">#8BE0F5</Color>
+          <Color x:Key="CyanAccentPressedColor">#4FB0C8</Color>
+          <Color x:Key="PurpleAccentHoverColor">#DF7DF0</Color>
+          <Color x:Key="PurpleAccentPressedColor">#B835CD</Color>
+          <Color x:Key="CoralAccentHoverColor">#FF8585</Color>
+          <Color x:Key="CoralAccentPressedColor">#E05555</Color>
+          <Color x:Key="LimeAccentHoverColor">#C2FF1A</Color>
+          <Color x:Key="LimeAccentPressedColor">#95CA00</Color>
+          <Color x:Key="WindowGradientMidColor">#000000</Color>
+          <Color x:Key="WindowGradientTracksColor">#051522</Color>
+          <Color x:Key="WindowGradientAlbumsColor">#1F0833</Color>
+          <Color x:Key="WindowGradientArtistsColor">#2B0C0C</Color>
+          <Color x:Key="WindowGradientPlaylistsColor">#142400</Color>
+          <Color x:Key="WindowGradientFavoritesColor">#2B0C0C</Color>
+          <Color x:Key="WindowGradientSettingsColor">#091824</Color>
+
           <SolidColorBrush x:Key="TextMain" Color="#FFFFFF" />
           <SolidColorBrush x:Key="TextMuted" Color="#8A8A8A" />
           <SolidColorBrush x:Key="TextDisabled" Color="#444444" />
@@ -118,6 +196,23 @@
           <SolidColorBrush x:Key="CyanAccent" Color="{DynamicResource CyanAccentColor}" />
           <SolidColorBrush x:Key="LimeAccent" Color="{DynamicResource LimeAccentColor}" />
 
+          <!-- Section palette (see the dark theme). -->
+          <Color x:Key="CyanAccentHoverColor">#52B3CC</Color>
+          <Color x:Key="CyanAccentPressedColor">#2A8F98</Color>
+          <Color x:Key="PurpleAccentHoverColor">#B848CF</Color>
+          <Color x:Key="PurpleAccentPressedColor">#88289E</Color>
+          <Color x:Key="CoralAccentHoverColor">#E85D5D</Color>
+          <Color x:Key="CoralAccentPressedColor">#B83535</Color>
+          <Color x:Key="LimeAccentHoverColor">#91CF05</Color>
+          <Color x:Key="LimeAccentPressedColor">#6B9900</Color>
+          <Color x:Key="WindowGradientMidColor">#EEF1F5</Color>
+          <Color x:Key="WindowGradientTracksColor">#E8F7FC</Color>
+          <Color x:Key="WindowGradientAlbumsColor">#F3E9FF</Color>
+          <Color x:Key="WindowGradientArtistsColor">#FFECEC</Color>
+          <Color x:Key="WindowGradientPlaylistsColor">#EEF9E6</Color>
+          <Color x:Key="WindowGradientFavoritesColor">#FFECEC</Color>
+          <Color x:Key="WindowGradientSettingsColor">#E8F7FC</Color>
+
           <SolidColorBrush x:Key="TextMain" Color="#111111" />
           <SolidColorBrush x:Key="TextMuted" Color="#888888" />
           <SolidColorBrush x:Key="TextDisabled" Color="#CCCCCC" />
@@ -150,9 +245,9 @@
 
   <Application.Styles>
     <FluentTheme />
-    <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml" />
     <materialIcons:MaterialIconStyles />
-    <StyleInclude Source="avares://Wiretune.UI/Styles/PhoneStyles.axaml" />
+    <!-- The DataGrid theme (desktop head) and Styles/PhoneStyles.axaml (phone head) are added by App.xaml.cs
+         for the head that needs them, at the place they used to have in this list. -->
 
     <!-- Smooth Transitions on All Borders -->
     <Style Selector="Border">

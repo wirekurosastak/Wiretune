@@ -96,6 +96,7 @@ public partial class PlayerViewModel : ObservableObject
         Track? track = parameter switch
         {
             Track t => t,
+            QueueItemViewModel entry => entry.Track, // a row of the queue (phone layout)
             IEnumerable<Track> list => list.FirstOrDefault(),
             _ => null
         };

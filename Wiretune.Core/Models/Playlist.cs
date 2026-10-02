@@ -14,6 +14,12 @@ public class Playlist : INotifyPropertyChanged
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime ModifiedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// True for a playlist that belongs to the signed-in server account: the server holds the original and this
+    /// player's copy is a cache that is dropped on sign-out. False for a playlist that only exists on this device.
+    /// </summary>
+    public bool IsServer { get; set; }
+
     /// <summary>Replaced (never mutated in place) by LibraryService so readers can enumerate it safely.</summary>
     public List<string> TrackIds
     {

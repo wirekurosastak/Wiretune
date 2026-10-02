@@ -8,8 +8,9 @@ names are the English texts.
 The player opens on a sign-in screen.
 
 - **With a server**: enter its address (`http://server-ip:5200`) and press **Connect**. If the server has no
-  accounts yet, you are asked to create the administrator account; otherwise sign in. **Keep me signed in** keeps
-  you signed in for 90 days instead of 24 hours. Setting up a server: [server.md](server.md).
+  accounts yet, you are asked to create the administrator account, which needs the **setup code** from the server's
+  log (whoever runs the server can read it there); otherwise sign in. **Keep me signed in** keeps you signed in for
+  90 days instead of 24 hours. Setting up a server: [server.md](server.md).
 - **Without a server** (desktop only): choose **Continue without a server**, open *Settings*, type the folder
   into *Local music folder* (there is no folder picker) and press **Scan**.
 - **Both**: a server and a local folder can be active together, see
@@ -53,9 +54,25 @@ server.
 
 ## Favourites and playlists
 
-Favourites, play counts and playlists live in the client's own database on that device. They are not stored on
-the server and do not follow you to another device or account. They refer to tracks by ID, which changes when a
-server file is moved or renamed (see [server.md](server.md#library-and-scanning)), so such entries are lost.
+For music from a server, favourites, play counts and playlists belong to **your account on the server**. They are
+stored there, not on the device, so they are the same on every device you sign in on, they survive signing out and
+in, and they survive a restart of the server. Another account on the same server has its own.
+
+- **Offline.** Without a connection the library is shown from the cache and you can still browse and read your
+  favourites and playlists, but server tracks and the playlists of the account cannot be changed until you are
+  connected again. If the server refuses a change while you are connected (it is down for a moment, or an account
+  limit is reached), a favourite star goes back to its real state; a play count or playlist edit that did not reach the
+  server is dropped and the next refresh shows what the server holds.
+- **Local music** (a folder on this computer) is not known to the server, so its favourites, play counts and
+  playlists stay on this device. A playlist is kept where it was created: a playlist made while signed in to a
+  server is a server playlist; one made without a server is a local playlist and stays on the device.
+- **Moving data from before.** The first account that signs in on a device that already holds favourites or playlists
+  for server tracks from before the server stored them receives them, once. Nothing on the server is removed or
+  lowered by it, and an account that signs in later on the same device does not get them.
+- **An older server** that does not store per-account data keeps working: favourites and playlists then stay on the
+  device, as before.
+- They refer to tracks by ID, which changes when a server file is moved or renamed (see
+  [server.md](server.md#library-and-scanning)); entries for the old IDs then no longer match anything.
 
 ## Server and local music together
 
@@ -63,8 +80,9 @@ Tracks that exist in both places are shown once, and the **local copy is preferr
 network. Two tracks count as the same song when title and artist match after ignoring case, punctuation and
 trailing notes such as *(2011 Remaster)*, *(Deluxe Edition)* or *(Radio Edit)*, and their lengths are within 5
 seconds (3.5 seconds when the album names differ). *Live*, *Acoustic* and *Demo* versions are different songs.
-Favourites, play counts and playlist entries of the server copy move to the local copy. Signing out removes the
-server tracks from the library and keeps the local ones.
+The favourite flag, play count and playlist entries of the server copy move to the local copy. Signing out removes
+the server tracks and your server playlists from the player and keeps the local music; your server data is still on
+the server and comes back when you sign in.
 
 ## Settings
 
@@ -90,5 +108,6 @@ tools. Use the desktop player for those.
 | *None of the output devices supports exclusive mode / bit-perfect playback…* | No usable ALSA hardware device on Linux. Check `aplay -l`, then press **Refresh**. |
 | Server banner says offline | Wrong address, server not running, or the network is down. Press **Reconnect**. |
 | *Your session has expired. Please sign in again.* | The token ran out or the account was deleted. |
+| Favourites or playlists look empty after signing in | The data belongs to the account you used before: sign in with that one. If the server was restarted with a fresh data directory it is gone, see [server.md](server.md#data-directory). |
 | Some files are indexed but fail on Windows | Windows decodes through Media Foundation, which does not cover every format ([audio.md](audio.md#windows)). |
 | Nothing plays and no message | Read `wiretune.log` in the client's data directory ([development.md](development.md#debugging)). |

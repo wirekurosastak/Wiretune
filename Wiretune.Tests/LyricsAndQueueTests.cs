@@ -72,13 +72,13 @@ public sealed class LyricsAndQueueTests : IDisposable
         WriteLyricsTag(Path.Combine(server.LibraryPath, "Artist A", "Album 1", "01 First.wav"), "Sing along");
 
         var anonymous = server.CreateClient();
-        var setup = await anonymous.PostAsJsonAsync("/api/auth/setup", new RegisterRequest("owner", "correct-horse-battery"));
+        var setup = await anonymous.PostAsJsonAsync("/api/auth/setup", new SetupRequest("owner", "correct-horse-battery", WiretuneServerFixture.SetupCode));
         var auth = (await setup.Content.ReadFromJsonAsync<AuthResponse>(WiretuneServerFixture.Json))!;
         var client = server.CreateClient();
         client.DefaultRequestHeaders.Authorization = new("Bearer", auth.Token);
 
         var tracks = await server.WaitForTracksAsync(client, 3);
-        var tagged = tracks.Single(t => t.FilePath.EndsWith("01 First.wav", StringComparison.Ordinal));
+        var tagged = tracks.Single(t => t.Title == "01 First"); // no title tag: the file name; the listing never shows the path
         var untagged = tracks.First(t => t.Id != tagged.Id);
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync($"/api/lyrics/{tagged.Id}")).StatusCode);

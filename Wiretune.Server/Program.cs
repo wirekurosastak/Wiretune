@@ -1,7 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Threading.RateLimiting;
-using Dapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.RateLimiting;
 using Wiretune.Core.Data;
 using Wiretune.Core.Models;
@@ -20,23 +20,26 @@ WiretuneLog.Info("Wiretune.Server", "=== Starting Wiretune.Server ===");
 
 var database = new DatabaseManager(Path.Combine(dataDirectory, "wiretune-server.db"));
 database.InitializeSchema();
+var repository = new LibraryRepository(database);
 
 // A library folder chosen through the admin API wins over the configured one, so it survives restarts.
 var paths = new ServerPaths(
-    LoadSavedLibraryRoot(database) ?? ResolveLibraryRoot(options.LibraryPath, builder.Environment.ContentRootPath),
+    await LoadSavedLibraryRootAsync(repository) ?? ResolveLibraryRoot(options.LibraryPath, builder.Environment.ContentRootPath),
     dataDirectory,
     Path.Combine(dataDirectory, "Covers"));
 WiretuneLog.Info("Wiretune.Server", $"Library: '{paths.LibraryRoot}' (exists: {Directory.Exists(paths.LibraryRoot)}), data: '{paths.DataDirectory}'");
 
 builder.Services.AddSingleton(paths);
 builder.Services.AddSingleton(database);
-builder.Services.AddSingleton<LibraryRepository, LibraryRepository>();
+builder.Services.AddSingleton(repository);
 builder.Services.AddSingleton<MetadataScanner, MetadataScanner>();
 builder.Services.AddSingleton<LibraryService>(sp => new LibraryService(
     sp.GetRequiredService<LibraryRepository>(),
     sp.GetRequiredService<MetadataScanner>(),
     paths.CoverCacheDirectory));
-builder.Services.AddSingleton<AuthService>();
+builder.Services.AddSingleton(new AuthService(database, await repository.GetOrAddSettingAsync("jwt_secret", AuthService.GenerateSecret)));
+builder.Services.AddSingleton<UserDataService>();
+builder.Services.AddSingleton(new SetupCode(options.SetupCode));
 builder.Services.AddSingleton<LibraryScanService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<LibraryScanService>());
 
@@ -53,7 +56,7 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             {
                 var path = context.Request.Path;
                 if (string.IsNullOrEmpty(context.Token) &&
-                    (path.StartsWithSegments("/api/stream") || path.StartsWithSegments("/api/cover")) &&
+                    IsMediaPath(path) &&
                     context.Request.Query.TryGetValue("token", out var token) &&
                     !string.IsNullOrEmpty(token))
                 {
@@ -64,6 +67,14 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             // Tokens live for up to 90 days: deleting an account must end its access immediately.
             OnTokenValidated = async context =>
             {
+                // A stream token (the one that ends up in stream URLs) opens the media routes and nothing else.
+                if (context.Principal?.HasClaim(AuthService.ScopeClaim, AuthService.StreamScope) == true &&
+                    !IsMediaPath(context.Request.Path))
+                {
+                    context.Fail("A stream token only opens the audio and cover routes.");
+                    return;
+                }
+
                 var userId = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
                 var auth = context.HttpContext.RequestServices.GetRequiredService<AuthService>();
                 if (userId == null || !await auth.UserExistsAsync(userId))
@@ -97,7 +108,8 @@ if (string.IsNullOrEmpty(builder.Configuration["urls"]) && string.IsNullOrEmpty(
     builder.WebHost.UseUrls($"http://0.0.0.0:{options.Port}");
 }
 
-// The API never accepts uploads; only small JSON bodies (login, setup, library path).
+// The API never accepts uploads; only small JSON bodies (login, setup, library path). The two endpoints that carry
+// track lists raise their own limit below.
 builder.WebHost.ConfigureKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = 64 * 1024);
 
 var app = builder.Build();
@@ -106,23 +118,59 @@ await app.Services.GetRequiredService<LibraryService>().InitializeAsync();
 
 app.UseResponseCompression();
 app.UseRateLimiter();
+
+// A playlist can name 20 000 tracks and a device's old data can hold far more: those two routes may read bigger bodies.
+// They are only read after authorisation (every route below needs a valid token), so this opens nothing to anonymous callers.
+app.Use(async (context, next) =>
+{
+    const long PlaylistBodyLimit = 4L * 1024 * 1024;
+    const long ImportBodyLimit = 32L * 1024 * 1024;
+
+    var path = context.Request.Path;
+    long? limit = path.StartsWithSegments("/api/me/data/import") ? ImportBodyLimit
+        : path.StartsWithSegments("/api/me/playlists") ? PlaylistBodyLimit
+        : null;
+
+    if (limit != null && context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } feature)
+        feature.MaxRequestBodySize = limit;
+
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 var library = app.Services.GetRequiredService<LibraryService>();
 var authService = app.Services.GetRequiredService<AuthService>();
+var setupCode = app.Services.GetRequiredService<SetupCode>();
+
+if (!await authService.HasAnyUsersAsync())
+{
+    WiretuneLog.Warn("Wiretune.Server",
+        $"No administrator account exists yet. Create it in the player with the setup code {setupCode.Value}");
+}
 
 // ── Auth (anonymous) ──
 
 app.MapGet("/api/auth/setup-required", async () =>
     Results.Ok(new { SetupRequired = !await authService.HasAnyUsersAsync() }));
 
-app.MapPost("/api/auth/setup", async (RegisterRequest request) =>
+app.MapPost("/api/auth/setup", async (SetupRequest request) =>
 {
     if (AuthService.ValidateCredentials(request.Username, request.Password) is { } error)
         return Results.BadRequest(new { Error = error });
 
-    var result = await authService.CreateAdminAsync(request);
+    if (await authService.HasAnyUsersAsync())
+        return Results.Conflict(new { Error = "The server is already set up. Sign in instead." });
+
+    if (!setupCode.Matches(request.SetupCode))
+    {
+        return Results.Json(
+            new { Error = "The setup code is missing or wrong. The server prints it in its log when it starts." },
+            statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    var result = await authService.CreateAdminAsync(new RegisterRequest(request.Username, request.Password));
     return result == null
         ? Results.Conflict(new { Error = "The server is already set up. Sign in instead." })
         : Results.Ok(result);
@@ -147,6 +195,14 @@ app.MapPost("/api/auth/register", async (RegisterRequest request) =>
     var user = await authService.RegisterAsync(request);
     return user == null ? Results.Conflict(new { Error = "Username already taken." }) : Results.Ok(user);
 }).RequireAuthorization("admin");
+
+// A short-lived token for stream URLs. Stream tokens themselves are refused here (see OnTokenValidated).
+app.MapPost("/api/auth/stream-token", (ClaimsPrincipal principal) =>
+{
+    var id = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+    var name = principal.FindFirstValue(ClaimTypes.Name);
+    return id == null || name == null ? Results.Unauthorized() : Results.Ok(authService.CreateStreamToken(id, name));
+}).RequireAuthorization();
 
 app.MapGet("/api/auth/me", async (ClaimsPrincipal principal) =>
 {
@@ -191,7 +247,7 @@ app.MapPost("/api/config/library-path", async (UpdateLibraryPathRequest request,
     if (!Directory.Exists(fullPath))
         return Results.BadRequest(new { Error = $"The folder does not exist: {fullPath}" });
 
-    SaveLibraryRoot(database, fullPath);
+    await repository.SetSettingAsync("library_path", fullPath);
     paths.LibraryRoot = fullPath;
     scanner.RequestScan();
     return Results.Ok(new ServerConfigInfo(paths.LibraryRoot));
@@ -215,9 +271,10 @@ api.MapPost("/library/scan", (LibraryScanService scanner) =>
     return Results.Accepted("/api/library/status", new { Message = "Scan requested." });
 }).RequireAuthorization("admin");
 
-api.MapGet("/tracks", (string? q) => Results.Ok(string.IsNullOrWhiteSpace(q) ? library.Tracks : library.Search(q).ToList()));
-api.MapGet("/albums", () => Results.Ok(library.Albums));
-api.MapGet("/artists", () => Results.Ok(library.Artists));
+api.MapGet("/tracks", (string? q) => Results.Ok(
+    (string.IsNullOrWhiteSpace(q) ? library.Tracks : library.Search(q)).Select(ServerTrackDto.From).ToList()));
+api.MapGet("/albums", () => Results.Ok(library.Albums.Select(ServerAlbumDto.From).ToList()));
+api.MapGet("/artists", () => Results.Ok(library.Artists.Select(ServerArtistDto.From).ToList()));
 
 api.MapGet("/stream/{trackId}", (string trackId) =>
 {
@@ -243,7 +300,68 @@ api.MapGet("/lyrics/{trackId}", async (string trackId, HttpContext http) =>
 api.MapGet("/cover/album/{albumId}", async (string albumId, MetadataScanner scanner, HttpContext http) =>
     await CoverResultAsync(library.GetAlbum(albumId)?.Tracks.FirstOrDefault(t => t.HasCoverArt), scanner, http));
 
+// ── The signed-in account's favourites, play counts and playlists (stored on the server, per account) ──
+
+var me = api.MapGroup("/me");
+
+me.MapGet("/data", async (ClaimsPrincipal principal, UserDataService userData) =>
+    Results.Ok(await userData.GetAsync(CurrentUserId(principal))));
+
+// One-time hand-over of what a player kept on the device before the server stored it. Union: nothing is removed or lowered.
+me.MapPost("/data/import", async (UserDataSnapshot? snapshot, ClaimsPrincipal principal, UserDataService userData) =>
+{
+    if (UserDataService.ValidateImport(snapshot) is { } error) return Results.BadRequest(new { Error = error });
+
+    var stored = await userData.ImportAsync(CurrentUserId(principal), snapshot!);
+    return Results.Ok(new { Favorites = stored.Favorites.Count, Plays = stored.Plays.Count, Playlists = stored.Playlists.Count });
+});
+
+me.MapPut("/favorites/{trackId}", (string trackId, ClaimsPrincipal principal, UserDataService userData) =>
+    FavoriteResultAsync(trackId, true, principal, userData));
+
+me.MapDelete("/favorites/{trackId}", (string trackId, ClaimsPrincipal principal, UserDataService userData) =>
+    FavoriteResultAsync(trackId, false, principal, userData));
+
+me.MapPost("/plays/{trackId}", async (string trackId, ClaimsPrincipal principal, UserDataService userData) =>
+{
+    if (UserDataRules.ValidateId(trackId) is { } error) return Results.BadRequest(new { Error = error });
+
+    var stats = await userData.RecordPlayAsync(CurrentUserId(principal), trackId);
+    return stats == null
+        ? Results.Conflict(new { Error = $"An account can keep statistics for at most {UserDataRules.MaxTrackStats} tracks." })
+        : Results.Ok(stats);
+});
+
+me.MapPut("/playlists/{playlistId}", async (string playlistId, PlaylistUpdate? update, ClaimsPrincipal principal, UserDataService userData) =>
+{
+    if (UserDataService.ValidatePlaylist(playlistId, update) is { } error) return Results.BadRequest(new { Error = error });
+
+    var saved = await userData.SavePlaylistAsync(CurrentUserId(principal), playlistId, update!);
+    return saved == null
+        ? Results.Conflict(new { Error = $"An account can have at most {UserDataRules.MaxPlaylists} playlists." })
+        : Results.Ok(saved);
+});
+
+me.MapDelete("/playlists/{playlistId}", async (string playlistId, ClaimsPrincipal principal, UserDataService userData) =>
+    await userData.DeletePlaylistAsync(CurrentUserId(principal), playlistId)
+        ? Results.Ok(new { Deleted = true })
+        : Results.NotFound(new { Error = "Playlist not found." }));
+
 app.Run();
+
+static bool IsMediaPath(PathString path) => path.StartsWithSegments("/api/stream") || path.StartsWithSegments("/api/cover");
+
+static string CurrentUserId(ClaimsPrincipal principal) =>
+    principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("The token carries no account ID.");
+
+static async Task<IResult> FavoriteResultAsync(string trackId, bool favorite, ClaimsPrincipal principal, UserDataService userData)
+{
+    if (UserDataRules.ValidateId(trackId) is { } error) return Results.BadRequest(new { Error = error });
+
+    return await userData.SetFavoriteAsync(CurrentUserId(principal), trackId, favorite)
+        ? Results.Ok(new { TrackId = trackId, IsFavorite = favorite })
+        : Results.Conflict(new { Error = $"An account can have at most {UserDataRules.MaxFavorites} favourites." });
+}
 
 async Task<IResult> CoverResultAsync(Track? track, MetadataScanner scanner, HttpContext http)
 {
@@ -262,21 +380,14 @@ async Task<IResult> CoverResultAsync(Track? track, MetadataScanner scanner, Http
     return bytes is { Length: > 0 } ? Results.Bytes(bytes, ImageFormat.GetMimeType(bytes)) : Results.NotFound();
 }
 
-static string? LoadSavedLibraryRoot(DatabaseManager db)
+static async Task<string?> LoadSavedLibraryRootAsync(LibraryRepository settings)
 {
-    using var conn = db.CreateConnection();
-    var saved = conn.QueryFirstOrDefault<string>("SELECT value FROM settings WHERE key = 'library_path'");
+    var saved = await settings.GetSettingAsync("library_path");
     if (string.IsNullOrWhiteSpace(saved)) return null;
     if (Directory.Exists(saved)) return saved;
 
     WiretuneLog.Warn("Wiretune.Server", $"Saved library path '{saved}' no longer exists; using the configured one instead.");
     return null;
-}
-
-static void SaveLibraryRoot(DatabaseManager db, string path)
-{
-    using var conn = db.CreateConnection();
-    conn.Execute("INSERT INTO settings (key, value) VALUES ('library_path', @path) ON CONFLICT(key) DO UPDATE SET value = excluded.value", new { path });
 }
 
 static string ResolveLibraryRoot(string? configured, string contentRoot)

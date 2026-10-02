@@ -29,6 +29,7 @@ public sealed class ServerStreamingClient : IDisposable
     private static readonly TimeSpan ProbeTimeout  = TimeSpan.FromSeconds(15); // initial server reachability check
     private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30); // normal API calls
     private static readonly TimeSpan LibraryTimeout = TimeSpan.FromMinutes(3);  // large library fetch
+    private static readonly TimeSpan ImportTimeout  = TimeSpan.FromMinutes(2);  // one-time hand-over of local favourites
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static string NotWiretuneMessage => Localizer.Get("ClientNotWiretune");
 
@@ -53,6 +54,10 @@ public sealed class ServerStreamingClient : IDisposable
     public static string BuildCoverUrl(string baseUrl, string trackId) =>
         $"{baseUrl.TrimEnd('/')}/api/cover/{Uri.EscapeDataString(trackId)}";
 
+    /// <summary>The cover of a whole album, so that the tracks of one album share one image (and one download).</summary>
+    public static string BuildAlbumCoverUrl(string baseUrl, string albumId) =>
+        $"{baseUrl.TrimEnd('/')}/api/cover/album/{Uri.EscapeDataString(albumId)}";
+
     public async Task<bool> CheckSetupRequiredAsync(string baseUrl, CancellationToken ct = default)
     {
         var element = await SendAsync<JsonElement>(HttpMethod.Get, baseUrl, "/api/auth/setup-required", null, false, ProbeTimeout, ct);
@@ -65,11 +70,15 @@ public sealed class ServerStreamingClient : IDisposable
         return prop.GetBoolean();
     }
 
-    public Task<AuthResponse> SetupAdminAsync(string baseUrl, string username, string password, CancellationToken ct = default) =>
-        SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/setup", new RegisterRequest(username, password), false, DefaultTimeout, ct);
+    public Task<AuthResponse> SetupAdminAsync(string baseUrl, string username, string password, string? setupCode = null, CancellationToken ct = default) =>
+        SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/setup", new SetupRequest(username, password, setupCode?.Trim()), false, DefaultTimeout, ct);
 
     public Task<AuthResponse> LoginAsync(string baseUrl, string username, string password, bool rememberMe, CancellationToken ct = default) =>
         SendAsync<AuthResponse>(HttpMethod.Post, baseUrl, "/api/auth/login", new LoginRequest(username, password, rememberMe), false, DefaultTimeout, ct);
+
+    /// <summary>A short-lived token that opens only the audio and cover routes, for use in stream URLs.</summary>
+    public Task<StreamTokenResponse> GetStreamTokenAsync(string baseUrl, CancellationToken ct = default) =>
+        SendAsync<StreamTokenResponse>(HttpMethod.Post, baseUrl, "/api/auth/stream-token", null, true, DefaultTimeout, ct);
 
     public Task<UserInfo> GetCurrentUserAsync(string baseUrl, CancellationToken ct = default) =>
         SendAsync<UserInfo>(HttpMethod.Get, baseUrl, "/api/auth/me", null, true, DefaultTimeout, ct);
@@ -95,6 +104,41 @@ public sealed class ServerStreamingClient : IDisposable
     public async Task TriggerScanAsync(string baseUrl, CancellationToken ct = default) =>
         await SendAsync<JsonElement>(HttpMethod.Post, baseUrl, "/api/library/scan", null, true, DefaultTimeout, ct);
 
+    // ── The signed-in account's favourites, play statistics and playlists ──
+
+    /// <summary>Everything the server keeps for the account. A server without per-account data answers 404.</summary>
+    public Task<UserDataSnapshot> GetUserDataAsync(string baseUrl, CancellationToken ct = default) =>
+        SendAsync<UserDataSnapshot>(HttpMethod.Get, baseUrl, "/api/me/data", null, true, DefaultTimeout, ct);
+
+    /// <summary>Adds what this device already holds to the account (union: nothing on the server is removed or lowered).</summary>
+    public async Task ImportUserDataAsync(string baseUrl, UserDataSnapshot data, CancellationToken ct = default) =>
+        await SendAsync<JsonElement>(HttpMethod.Post, baseUrl, "/api/me/data/import", data, true, ImportTimeout, ct);
+
+    public async Task SetFavoriteAsync(string baseUrl, string trackId, bool favorite, CancellationToken ct = default) =>
+        await SendAsync<JsonElement>(favorite ? HttpMethod.Put : HttpMethod.Delete, baseUrl,
+            $"/api/me/favorites/{Uri.EscapeDataString(trackId)}", null, true, DefaultTimeout, ct);
+
+    public Task<TrackPlayStats> RecordPlayAsync(string baseUrl, string trackId, CancellationToken ct = default) =>
+        SendAsync<TrackPlayStats>(HttpMethod.Post, baseUrl, $"/api/me/plays/{Uri.EscapeDataString(trackId)}", null, true, DefaultTimeout, ct);
+
+    /// <summary>Creates or replaces a playlist of the account with the given one.</summary>
+    public async Task SavePlaylistAsync(string baseUrl, Playlist playlist, CancellationToken ct = default) =>
+        await SendAsync<JsonElement>(HttpMethod.Put, baseUrl, $"/api/me/playlists/{Uri.EscapeDataString(playlist.Id)}",
+            new PlaylistUpdate(playlist.Name, playlist.Description, playlist.TrackIds.ToList()), true, DefaultTimeout, ct);
+
+    /// <summary>Deletes a playlist of the account; one the server no longer has counts as deleted.</summary>
+    public async Task DeletePlaylistAsync(string baseUrl, string playlistId, CancellationToken ct = default)
+    {
+        try
+        {
+            await SendAsync<JsonElement>(HttpMethod.Delete, baseUrl, $"/api/me/playlists/{Uri.EscapeDataString(playlistId)}", null, true, DefaultTimeout, ct);
+        }
+        catch (ServerRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            // Already gone.
+        }
+    }
+
     /// <summary>The lyrics of a server track, or null when it has none (or the server predates the endpoint).</summary>
     public async Task<string?> GetLyricsAsync(string baseUrl, string trackId, CancellationToken ct = default)
     {
@@ -109,14 +153,17 @@ public sealed class ServerStreamingClient : IDisposable
         }
     }
 
-    /// <summary>Fetches the server library. Stream and cover URLs are token-free; authorization is added at playback time.</summary>
+    /// <summary>
+    /// Fetches the server library. Stream and cover URLs are token-free; authorization is added at playback time. The
+    /// tracks of an album point to the album's cover, so each cover is downloaded and cached once, not once per track.
+    /// </summary>
     public async Task<List<Track>> FetchTracksAsync(string baseUrl, CancellationToken ct = default)
     {
         var tracks = await SendAsync<List<Track>>(HttpMethod.Get, baseUrl, "/api/tracks", null, true, LibraryTimeout, ct);
         foreach (var t in tracks)
         {
             t.StreamUrl = BuildStreamUrl(baseUrl, t.Id);
-            t.CoverArtPath = t.HasCoverArt ? BuildCoverUrl(baseUrl, t.Id) : null;
+            t.CoverArtPath = t.HasCoverArt ? BuildAlbumCoverUrl(baseUrl, t.AlbumId) : null;
         }
         return tracks;
     }

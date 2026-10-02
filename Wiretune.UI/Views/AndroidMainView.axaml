@@ -12,7 +12,7 @@
   <!--
     The phone layout: bottom navigation, a mini player above it, and a full-screen player that slides up over
     everything. All texts come from the Localizer ({loc:T ...}), so the language can be switched while it is shown.
-    Pages are switched with IsVisible (the same navigation state as the desktop layout: SelectedNavigationIndex).
+    Pages are switched with IsVisible (the same navigation state as the desktop layout: SelectedSection).
   -->
 
   <UserControl.Resources>
@@ -192,7 +192,7 @@
 
               <!-- TRACKS -->
               <Grid Classes="page" RowDefinitions="Auto, *"
-                    IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=0}">
+                    IsVisible="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Tracks}}">
                 <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavSongs}">
                   <controls:PhoneHeader.Subtitle>
                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -227,12 +227,12 @@
                 <controls:PhoneEmptyState Classes="page" Grid.Row="1" Icon="MusicNoteOff"
                                           Title="{loc:T EmptyLibraryTitle}" Hint="{loc:T EmptyLibraryHint}"
                                           ActionText="{loc:T ConnectToServer}"
-                                          ActionCommand="{Binding NavigateToCommand}" ActionParameter="5"
+                                          ActionCommand="{Binding NavigateToCommand}" ActionParameter="{x:Static vm:AppSection.Settings}"
                                           IsVisible="{Binding IsLibraryEmpty}" />
               </Grid>
 
               <!-- ALBUMS -->
-              <Panel Classes="page" IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}">
+              <Panel Classes="page" IsVisible="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Albums}}">
 
                 <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Albums.IsAlbumDetailOpen}">
                   <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavAlbums}">
@@ -256,7 +256,7 @@
                   <controls:PhoneEmptyState Classes="page" Grid.Row="2" Icon="Album"
                                             Title="{loc:T EmptyAlbumsTitle}" Hint="{loc:T EmptyConnectHint}"
                                             ActionText="{loc:T ConnectToServer}"
-                                            ActionCommand="{Binding NavigateToCommand}" ActionParameter="5"
+                                            ActionCommand="{Binding NavigateToCommand}" ActionParameter="{x:Static vm:AppSection.Settings}"
                                             IsVisible="{Binding IsLibraryEmpty}" />
                 </Grid>
 
@@ -331,7 +331,7 @@
               </Panel>
 
               <!-- ARTISTS -->
-              <Panel Classes="page" IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}">
+              <Panel Classes="page" IsVisible="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Artists}}">
 
                 <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Artists.IsArtistDetailOpen}">
                   <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavArtists}">
@@ -352,7 +352,7 @@
                   <controls:PhoneEmptyState Classes="page" Grid.Row="2" Icon="AccountMusic"
                                             Title="{loc:T EmptyArtistsTitle}" Hint="{loc:T EmptyConnectHint}"
                                             ActionText="{loc:T ConnectToServer}"
-                                            ActionCommand="{Binding NavigateToCommand}" ActionParameter="5"
+                                            ActionCommand="{Binding NavigateToCommand}" ActionParameter="{x:Static vm:AppSection.Settings}"
                                             IsVisible="{Binding IsLibraryEmpty}" />
                 </Grid>
 
@@ -427,7 +427,7 @@
               </Panel>
 
               <!-- PLAYLISTS -->
-              <Panel Classes="page" IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=3}">
+              <Panel Classes="page" IsVisible="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Playlists}}">
 
                 <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Playlists.IsPlaylistDetailOpen}">
                   <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavPlaylists}" />
@@ -545,7 +545,7 @@
 
               <!-- FAVORITES -->
               <Grid Classes="page" RowDefinitions="Auto, *"
-                    IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=4}">
+                    IsVisible="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Favorites}}">
                 <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavFavorites}">
                   <controls:PhoneHeader.Subtitle>
                     <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding !Favorites.IsEmpty}">
@@ -584,7 +584,7 @@
 
               <!-- SETTINGS -->
               <Grid Classes="page" RowDefinitions="Auto, *"
-                    IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=5}">
+                    IsVisible="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Settings}}">
                 <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavSettings}" ShowSearch="False" />
                 <ScrollViewer Grid.Row="1">
                   <StackPanel Margin="16,4,16,24" Spacing="14">
@@ -895,40 +895,40 @@
                 Padding="{Binding SafeAreaBottomOnly, ElementName=RootControl}">
           <Grid ColumnDefinitions="*, *, *, *, *" Height="68">
             <Button Grid.Column="0" Classes="phone-nav nav-artists"
-                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}"
-                    Command="{Binding NavigateToCommand}" CommandParameter="2">
+                    Classes.active="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Artists}}"
+                    Command="{Binding NavigateToCommand}" CommandParameter="{x:Static vm:AppSection.Artists}">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
                 <material:MaterialIcon Classes="phone-nav-icon" Kind="AccountMusic" Width="26" Height="26" HorizontalAlignment="Center" />
                 <TextBlock Classes="phone-nav-label" Text="{loc:T NavArtists}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
             <Button Grid.Column="1" Classes="phone-nav nav-albums"
-                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}"
-                    Command="{Binding NavigateToCommand}" CommandParameter="1">
+                    Classes.active="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Albums}}"
+                    Command="{Binding NavigateToCommand}" CommandParameter="{x:Static vm:AppSection.Albums}">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
                 <material:MaterialIcon Classes="phone-nav-icon" Kind="Album" Width="26" Height="26" HorizontalAlignment="Center" />
                 <TextBlock Classes="phone-nav-label" Text="{loc:T NavAlbums}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
             <Button Grid.Column="2" Classes="phone-nav nav-songs"
-                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=0}"
-                    Command="{Binding NavigateToCommand}" CommandParameter="0">
+                    Classes.active="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Tracks}}"
+                    Command="{Binding NavigateToCommand}" CommandParameter="{x:Static vm:AppSection.Tracks}">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
                 <material:MaterialIcon Classes="phone-nav-icon" Kind="MusicNote" Width="26" Height="26" HorizontalAlignment="Center" />
                 <TextBlock Classes="phone-nav-label" Text="{loc:T NavSongs}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
             <Button Grid.Column="3" Classes="phone-nav nav-favorites"
-                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=4}"
-                    Command="{Binding NavigateToCommand}" CommandParameter="4">
+                    Classes.active="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Favorites}}"
+                    Command="{Binding NavigateToCommand}" CommandParameter="{x:Static vm:AppSection.Favorites}">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
                 <material:MaterialIcon Classes="phone-nav-icon" Kind="Heart" Width="26" Height="26" HorizontalAlignment="Center" />
                 <TextBlock Classes="phone-nav-label" Text="{loc:T NavFavorites}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
             <Button Grid.Column="4" Classes="phone-nav nav-playlists"
-                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=3}"
-                    Command="{Binding NavigateToCommand}" CommandParameter="3">
+                    Classes.active="{Binding SelectedSection, Converter={StaticResource IntEqualConverter}, ConverterParameter={x:Static vm:AppSection.Playlists}}"
+                    Command="{Binding NavigateToCommand}" CommandParameter="{x:Static vm:AppSection.Playlists}">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
                 <material:MaterialIcon Classes="phone-nav-icon" Kind="PlaylistMusic" Width="26" Height="26" HorizontalAlignment="Center" />
                 <TextBlock Classes="phone-nav-label" Text="{loc:T NavPlaylistsShort}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -1045,6 +1045,7 @@
                         <TextBlock Text="{loc:T FirstRunHint}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                       </StackPanel>
                     </Border>
+                    <TextBox Classes="phone-field" Text="{Binding ServerSettings.SetupCode, Mode=TwoWay}" Watermark="{loc:T SetupCodePlaceholder}" />
                     <TextBox Classes="phone-field" Text="{Binding ServerSettings.Username, Mode=TwoWay}" Watermark="{loc:T AdminUsernamePlaceholder}" />
                     <TextBox Classes="phone-field" Text="{Binding ServerSettings.Password, Mode=TwoWay}" Watermark="{Binding ServerSettings.PasswordHint}" PasswordChar="•">
                       <TextBox.KeyBindings>

@@ -61,15 +61,39 @@ public class LibraryRepository
         return list;
     }
 
+    /// <summary>
+    /// Makes the table hold exactly <paramref name="tracks"/>. Rows that are gone are deleted and the others are
+    /// inserted or updated in place, and a row whose values did not change is not written at all: a rescan or a refresh
+    /// of an unchanged library leaves the database file as it is instead of rewriting every track.
+    /// </summary>
     public virtual async Task ReplaceAllTracksAsync(IEnumerable<Track> tracks)
     {
+        // The table is unique on both id and path; of tracks that share one of them the last one wins.
+        var byId = new Dictionary<string, Track>(StringComparer.Ordinal);
+        foreach (var t in tracks) byId[t.Id] = t;
+        var byPath = new Dictionary<string, Track>(StringComparer.Ordinal);
+        foreach (var t in byId.Values) byPath[t.FilePath] = t;
+        var wanted = byPath.Values.ToDictionary(t => t.Id, StringComparer.Ordinal);
+
         using var connection = _dbManager.CreateConnection();
         using var transaction = connection.BeginTransaction();
 
-        await connection.ExecuteAsync("DELETE FROM tracks", transaction: transaction);
+        // A stored row stays only if the same track is wanted at the same path. Every other row goes (and a track
+        // whose path changed is inserted again), so no insert below can run into the unique path of an old row.
+        var obsolete = new List<object>();
+        foreach (var row in await connection.QueryAsync("SELECT id, file_path FROM tracks", transaction: transaction))
+        {
+            var id = (string)row.id;
+            var path = (string)row.file_path;
+            if (!wanted.TryGetValue(id, out var track) || !string.Equals(track.FilePath, path, StringComparison.Ordinal))
+            {
+                obsolete.Add(new { Id = id });
+            }
+        }
+        if (obsolete.Count > 0) await connection.ExecuteAsync("DELETE FROM tracks WHERE id = @Id", obsolete, transaction);
 
-        const string insertSql = """
-            INSERT OR REPLACE INTO tracks (
+        const string upsertSql = """
+            INSERT INTO tracks (
                 id, title, artist, album, album_artist, track_number, track_count, disc_number,
                 year, genre, duration_seconds, file_size_bytes, file_modified_utc, file_path, stream_url,
                 has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
@@ -80,15 +104,39 @@ public class LibraryRepository
                 @HasCoverArt, @CoverArtPath, @Codec, @SampleRate, @BitsPerSample, @Channels,
                 @BitrateKbps, @IsLossless, @IsFavorite, @PlayCount, @LastPlayed, @DateAdded
             )
+            ON CONFLICT(id) DO UPDATE SET
+                title = excluded.title, artist = excluded.artist, album = excluded.album,
+                album_artist = excluded.album_artist, track_number = excluded.track_number,
+                track_count = excluded.track_count, disc_number = excluded.disc_number, year = excluded.year,
+                genre = excluded.genre, duration_seconds = excluded.duration_seconds,
+                file_size_bytes = excluded.file_size_bytes, file_modified_utc = excluded.file_modified_utc,
+                stream_url = excluded.stream_url, has_cover_art = excluded.has_cover_art,
+                cover_art_path = excluded.cover_art_path, codec = excluded.codec, sample_rate = excluded.sample_rate,
+                bits_per_sample = excluded.bits_per_sample, channels = excluded.channels,
+                bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless,
+                is_favorite = excluded.is_favorite, play_count = excluded.play_count,
+                last_played = excluded.last_played, date_added = excluded.date_added
+            WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR album IS NOT excluded.album
+               OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
+               OR track_count IS NOT excluded.track_count OR disc_number IS NOT excluded.disc_number
+               OR year IS NOT excluded.year OR genre IS NOT excluded.genre
+               OR duration_seconds IS NOT excluded.duration_seconds OR file_size_bytes IS NOT excluded.file_size_bytes
+               OR file_modified_utc IS NOT excluded.file_modified_utc OR stream_url IS NOT excluded.stream_url
+               OR has_cover_art IS NOT excluded.has_cover_art OR cover_art_path IS NOT excluded.cover_art_path
+               OR codec IS NOT excluded.codec OR sample_rate IS NOT excluded.sample_rate
+               OR bits_per_sample IS NOT excluded.bits_per_sample OR channels IS NOT excluded.channels
+               OR bitrate_kbps IS NOT excluded.bitrate_kbps OR is_lossless IS NOT excluded.is_lossless
+               OR is_favorite IS NOT excluded.is_favorite OR play_count IS NOT excluded.play_count
+               OR last_played IS NOT excluded.last_played OR date_added IS NOT excluded.date_added
             """;
 
-        var parameters = tracks.Select(t => new
+        var parameters = byPath.Values.Select(t => new
         {
             t.Id,
             t.Title,
             t.Artist,
             t.Album,
-            t.AlbumArtist,
+            AlbumArtist = t.AlbumArtistInferred ? null : t.AlbumArtist, // only what the file's tag says
             t.TrackNumber,
             t.TrackCount,
             t.DiscNumber,
@@ -113,7 +161,7 @@ public class LibraryRepository
             DateAdded = FormatDate(t.DateAdded)
         });
 
-        await connection.ExecuteAsync(insertSql, parameters, transaction);
+        await connection.ExecuteAsync(upsertSql, parameters, transaction);
         transaction.Commit();
     }
 
@@ -122,6 +170,25 @@ public class LibraryRepository
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync("UPDATE tracks SET is_favorite = @Fav WHERE id = @Id",
             new { Fav = isFavorite ? 1 : 0, Id = trackId });
+    }
+
+    /// <summary>Writes favourite, play count and last-played of the given tracks in one transaction.</summary>
+    public virtual async Task UpdateTracksUserDataAsync(IEnumerable<Track> tracks)
+    {
+        using var connection = _dbManager.CreateConnection();
+        using var transaction = connection.BeginTransaction();
+
+        await connection.ExecuteAsync(
+            "UPDATE tracks SET is_favorite = @IsFavorite, play_count = @PlayCount, last_played = @LastPlayed WHERE id = @Id",
+            tracks.Select(t => new
+            {
+                t.Id,
+                IsFavorite = t.IsFavorite ? 1 : 0,
+                t.PlayCount,
+                LastPlayed = FormatDate(t.LastPlayed)
+            }),
+            transaction);
+        transaction.Commit();
     }
 
     public virtual async Task IncrementPlayCountAsync(string trackId)
@@ -157,6 +224,7 @@ public class LibraryRepository
                 Description = (string?)r.description,
                 CreatedAt = ParseDate((string?)r.created_at) ?? DateTime.UtcNow,
                 ModifiedAt = ParseDate((string?)r.modified_at) ?? DateTime.UtcNow,
+                IsServer = Convert.ToInt32(r.is_server) == 1,
                 TrackIds = trackIds
             });
         }
@@ -167,14 +235,15 @@ public class LibraryRepository
     {
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync("""
-            INSERT OR REPLACE INTO playlists (id, name, description, track_ids_json, created_at, modified_at)
-            VALUES (@Id, @Name, @Description, @TrackIdsJson, @CreatedAt, @ModifiedAt)
+            INSERT OR REPLACE INTO playlists (id, name, description, track_ids_json, created_at, modified_at, is_server)
+            VALUES (@Id, @Name, @Description, @TrackIdsJson, @CreatedAt, @ModifiedAt, @IsServer)
             """,
             new
             {
                 playlist.Id,
                 playlist.Name,
                 playlist.Description,
+                IsServer = playlist.IsServer ? 1 : 0,
                 TrackIdsJson = JsonSerializer.Serialize(playlist.TrackIds),
                 CreatedAt = FormatDate(playlist.CreatedAt),
                 ModifiedAt = FormatDate(playlist.ModifiedAt)
@@ -185,6 +254,13 @@ public class LibraryRepository
     {
         using var connection = _dbManager.CreateConnection();
         await connection.ExecuteAsync("DELETE FROM playlists WHERE id = @Id", new { Id = playlistId });
+    }
+
+    /// <summary>Removes the cached copies of server playlists (on sign-out); playlists made on this device stay.</summary>
+    public virtual async Task DeleteServerPlaylistsAsync()
+    {
+        using var connection = _dbManager.CreateConnection();
+        await connection.ExecuteAsync("DELETE FROM playlists WHERE is_server = 1");
     }
 
     public virtual async Task<string?> GetSettingAsync(string key, string? defaultValue = null)
@@ -201,6 +277,20 @@ public class LibraryRepository
         await connection.ExecuteAsync(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (@Key, @Value)",
             new { Key = key, Value = value });
+    }
+
+    /// <summary>
+    /// Returns the stored value, first storing the one <paramref name="createValue"/> makes when there is none. If two
+    /// processes race on a new database, the value stored first wins and both return it.
+    /// </summary>
+    public async Task<string> GetOrAddSettingAsync(string key, Func<string> createValue)
+    {
+        using var connection = _dbManager.CreateConnection();
+        var existing = await connection.QueryFirstOrDefaultAsync<string>("SELECT value FROM settings WHERE key = @Key", new { Key = key });
+        if (!string.IsNullOrEmpty(existing)) return existing;
+
+        await connection.ExecuteAsync("INSERT OR IGNORE INTO settings (key, value) VALUES (@Key, @Value)", new { Key = key, Value = createValue() });
+        return await connection.QueryFirstAsync<string>("SELECT value FROM settings WHERE key = @Key", new { Key = key });
     }
 
     private static int? ToNullableInt(object? value) => value == null ? null : Convert.ToInt32(value);

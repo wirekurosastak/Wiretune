@@ -1,6 +1,7 @@
 ﻿using Wiretune.Core.Audio;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
+using Wiretune.UI.ViewModels;
 using Xunit;
 
 namespace Wiretune.Tests;
@@ -455,27 +456,27 @@ public class HappyPathTests
     // HP-046 / HP-047 — Navigation
     // ─────────────────────────────────────────────────────────────────────────
     [Fact]
-    public void HP046_NavigateToCommand_WithInt_SetsIndex()
+    public void HP046_NavigateToCommand_SetsTheSection()
     {
         using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var vm = TestSupport.CreateMainViewModel(service, engine);
 
-        vm.NavigateToCommand.Execute(1);
+        vm.NavigateToCommand.Execute(AppSection.Albums);
 
-        Assert.Equal(1, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Albums, vm.SelectedSection);
     }
 
     [Fact]
-    public void HP047_NavigateToCommand_WithStringParam_SetsIndex()
+    public void HP047_NavigateToCommand_ToSettings_SetsTheSection()
     {
         using var engine = TestSupport.CreateEngine();
         var (service, _) = CreateService();
         var vm = TestSupport.CreateMainViewModel(service, engine);
 
-        vm.NavigateToCommand.Execute("5");
+        vm.NavigateToCommand.Execute(AppSection.Settings);
 
-        Assert.Equal(5, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Settings, vm.SelectedSection);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -500,7 +501,7 @@ public class HappyPathTests
 
         vm.OpenAlbumCommand.Execute(album);
 
-        Assert.Equal(1, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Albums, vm.SelectedSection);
         Assert.True(vm.Albums.IsAlbumDetailOpen);
         Assert.Equal("Kind of Blue", vm.Albums.SelectedAlbum?.Title);
     }
@@ -543,7 +544,7 @@ public class HappyPathTests
 
         vm.OpenArtistCommand.Execute(artist);
 
-        Assert.Equal(2, vm.SelectedNavigationIndex);
+        Assert.Equal(AppSection.Artists, vm.SelectedSection);
         Assert.True(vm.Artists.IsArtistDetailOpen);
         Assert.Equal("Radiohead", vm.Artists.SelectedArtist?.Name);
         Assert.Equal(2, vm.Artists.SelectedArtistTracks.Count);

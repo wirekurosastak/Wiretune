@@ -21,7 +21,9 @@ dotnet run --project Wiretune.Desktop
 from becoming errors. The repository does not enable `TreatWarningsAsErrors`; to check that a change is
 warning-free, add `-c Release -p:TreatWarningsAsErrors=true`. Style rules are in `.editorconfig`.
 
-There is no continuous integration: nothing builds or tests a change automatically.
+**Continuous integration.** `.github/workflows/ci.yml` builds `Wiretune.Tests` and `Wiretune.Desktop` in Release,
+runs the tests with `ffmpeg` installed, and fails when `dotnet list package --vulnerable` reports a vulnerable
+package. It does not build `Wiretune.Android` (it needs the workload): build that by hand before merging a UI change.
 
 ## Android
 
@@ -43,24 +45,35 @@ Nothing that needs Android APIs (driver, service, activity) is covered by the au
 
 xUnit, run with `dotnet test Wiretune.Tests` (add `--filter "FullyQualifiedName~Name"` for a subset). They cover:
 
-- the real server hosted in memory (`ServerIntegrationTests`, `WebApplicationFactory<Program>` against a generated
-  music folder, one server per test);
+- the real server hosted in memory (`WiretuneServerFixture`, `WebApplicationFactory<Program>` against a generated
+  music folder, one server per test): sign-in and the whole client life cycle (`ServerIntegrationTests`), the
+  per-account favourites, plays, playlists, import and survival of a server restart (`ServerUserDataTests`), and the
+  hardening (setup code, stream tokens, no paths in the listing; `ServerHardeningTests`). `ServerTestHelpers` holds the shared steps;
+- the player's side of the per-account data against that server: queue, flush, hand-over, older servers
+  (`SessionUserDataTests`);
+- the repository against a real SQLite file, including the upgrade from an older schema (`LibraryRepositoryTests`);
 - library, scanner, deduplication, hybrid merging, localisation, view models and the phone's back navigation;
 - scenario suites with numbered cases (`HP-`, `NEG-`, `BVT-`, `SEC-`) for normal use, invalid input, limits and
-  security;
+  security (`HappyPathTests`, `NegativeTests`, `BoundaryValueTests`, `LogicAndSecurityTests`); `ReviewFollowUpTests`
+  pins the small fixes of the production-readiness review and the documented limits (track IDs, covers, driver commands);
 - the audio engine with `FakeAudioDriver` (`TestSupport`), the real `ffmpeg`/`ffplay` child-process paths against
   generated WAV files with SDL's `dummy` driver (`FfmpegPipelineTests`), and the Windows driver's wave provider
   (`WasapiWaveProviderTests`).
 
-`FfmpegPipelineTests` **return early, and so pass, when `ffmpeg` or `ffplay` is missing.** Not covered: the Windows
-WASAPI driver, the Android driver and service, real audio hardware, and the Avalonia visuals. Fixtures live in
-temporary directories. `Wiretune.Core` exposes its internals to `Wiretune.Tests`.
+A test that needs a command-line tool is marked `[ToolFact("ffmpeg")]`: without the tool it is reported as
+**skipped**, never as passed, so check the skipped count of a run, especially on a machine without `ffmpeg`. Name a new
+test file after the topic it covers, not after the change that made it. Not covered: the Windows WASAPI driver, the
+Android driver and service, real audio hardware, and the Avalonia visuals (the section views are only checked by
+building and running the app). Fixtures live in temporary directories. `Wiretune.Core` exposes its internals to
+`Wiretune.Tests`.
 
 ## Debugging
 
-- **Logs.** `WiretuneLog` writes `[time] [LEVEL] [category] message` lines (Debug and up) to `wiretune.log` in the
-  player's data directory or `wiretune-server.log` in the server's ([server.md](server.md#data-directory)); at 10 MiB
-  the file moves to `.1`. Every line passes through `WiretuneLog.Redact`, which replaces `token=` values with `***`;
+- **Logs.** `WiretuneLog` writes `[time] [LEVEL] [category] message` lines (Info and up by default) to `wiretune.log`
+  in the player's data directory or `wiretune-server.log` in the server's ([server.md](server.md#data-directory)); at
+  10 MiB the file moves to `.1`. Debug lines carry paths and device names, so set `WIRETUNE_LOG_LEVEL=Debug` (or
+  `Trace`; `Info`, `Warn`, `Error`) only while troubleshooting. Every line passes through `WiretuneLog.Redact`, which
+  replaces `token=` values with `***`;
   keep it that way when logging URLs. The player's data directory is `~/.config/Wiretune` on Linux,
   `%APPDATA%\Wiretune` on Windows and the app's private files folder on Android. `WIRETUNE_DATA_DIR` moves it, which
   is handy for a throw-away instance: `WIRETUNE_DATA_DIR=/tmp/wt-dev dotnet run --project Wiretune.Desktop`.
@@ -73,10 +86,13 @@ temporary directories. `Wiretune.Core` exposes its internals to `Wiretune.Tests`
 ```bash
 WIRETUNE_UI_AUTOMATION=1 dotnet run --project Wiretune.Desktop
 curl http://127.0.0.1:5201/api/ui/state
+curl 'http://127.0.0.1:5201/api/ui/navigate?section=Albums'
 curl 'http://127.0.0.1:5201/api/ui/screenshot?name=home'
 ```
 
-The variable must be exactly `1`. The endpoint listens on `127.0.0.1:5201` only and handles `GET` requests under
+The server is compiled into **Debug builds only** (`dotnet run` is one); a Release or published player contains no
+such endpoint, whatever the variable says. The variable must be exactly `1`. `section` is one of `Tracks`, `Albums`,
+`Artists`, `Playlists`, `Favorites`, `Settings`. The endpoint listens on `127.0.0.1:5201` only and handles `GET` requests under
 `/api/ui/` to navigate, search, play, seek, sign in and so on; the routes are listed in
 `Wiretune.UI/Services/UiAutomationServer.cs`. It rejects requests with an `Origin` or cross-site `Sec-Fetch-Site`
 header and any `Host` other than `127.0.0.1:5201` / `localhost:5201`. It is still an unauthenticated remote
@@ -90,10 +106,14 @@ control (`login` takes the password as a query parameter), so use it on a develo
 1. Add the route in `Wiretune.Server/Program.cs`. Routes on the `api` group there require a signed-in user; add
    `.RequireAuthorization("admin")` for admin-only ones. Validate every input and answer errors as
    `{ "error": "…" }`. Never accept `?token=` outside the media routes.
-2. Put new request or response records next to the existing ones in `Wiretune.Core/Models/UserInfo.cs`.
+2. Put new request or response records next to the existing ones in `Wiretune.Core/Models/UserInfo.cs` (per-account
+   data: `UserData.cs`). Anything that lists library content goes through a `Server*Dto` in
+   `Wiretune.Server/ServerDtos.cs` so that no server path leaves the machine. Data that belongs to one person takes the
+   account ID from the token (`CurrentUserId`), never from the URL or the body.
 3. If a player needs it, add a method to `Wiretune.Core/Services/ServerStreamingClient.cs`; failures must become a
    session state, not an exception.
-4. Add a test to `ServerIntegrationTests` (including the 401/403 cases) and update [api.md](api.md).
+4. Add a test with the other server tests (including the 401/403 cases; `WiretuneServerFixture` hosts a real server
+   and `ServerTestHelpers` signs in) and update [api.md](api.md).
 
 ### Add a file type
 
@@ -119,7 +139,10 @@ in `Strings.cs` and fill in every key; add the constant, a `Languages` entry and
 
 ### Add a view or setting
 
-View models are in `Wiretune.UI/ViewModels`, views in `Wiretune.UI/Views`, reusable parts in `Wiretune.UI/Controls`. A
-persistent player setting is a key in the `settings` table, read and written through
+View models are in `Wiretune.UI/ViewModels`, views in `Wiretune.UI/Views`, reusable parts in `Wiretune.UI/Controls`.
+A new desktop section is a new `AppSection` value, a `UserControl` in `Views/` that takes the `MainViewModel` as its
+`DataContext`, and an entry in `MainView.axaml` and in `MainViewModel.GetNavVisualOrder` (the order of the animated
+logo). Its colours are two entries (accent family and window gradient) in the theme dictionaries of
+`App.axaml`. A persistent player setting is a key in the `settings` table, read and written through
 `LibraryService`/`LibraryRepository`. State that the Android back gesture has to respect belongs in
 `MainViewModel.TryNavigateBack()`, which `PhoneNavigationTests` cover.

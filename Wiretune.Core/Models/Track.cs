@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace Wiretune.Core.Models;
@@ -16,6 +18,13 @@ public class Track : INotifyPropertyChanged
     public string Artist { get; set; } = "Unknown Artist";
     public string Album { get; set; } = "Unknown Album";
     public string? AlbumArtist { get; set; }
+
+    /// <summary>
+    /// True when <see cref="AlbumArtist"/> was filled in by the library from the other tracks of the folder rather than
+    /// read from the file's tag. Such a value is recomputed on every library build and never stored.
+    /// </summary>
+    [JsonIgnore]
+    public bool AlbumArtistInferred { get; set; }
     public int? TrackNumber { get; set; }
     public int? TrackCount { get; set; }
     public int? DiscNumber { get; set; }
@@ -59,6 +68,17 @@ public class Track : INotifyPropertyChanged
     /// <summary>The artist an album is filed under: the album artist when tagged, otherwise the track artist.</summary>
     [JsonIgnore]
     public string EffectiveAlbumArtist => string.IsNullOrWhiteSpace(AlbumArtist) ? Artist : AlbumArtist;
+
+    /// <summary>
+    /// Identifies the album the track is filed under (title and album artist, ignoring case). It is the same on every
+    /// device and on the server, so it is also the key of <c>/api/cover/album/{id}</c>.
+    /// </summary>
+    [JsonIgnore]
+    public string AlbumId => StableId($"{Album.ToUpperInvariant()}\u001f{EffectiveAlbumArtist.ToUpperInvariant()}");
+
+    /// <summary>A short ID that is the same on every machine for the same key.</summary>
+    internal static string StableId(string key) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..16];
 
     [JsonIgnore]
     public string FormattedDuration => Duration.Hours > 0

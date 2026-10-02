@@ -11,7 +11,9 @@ dotnet run --project Wiretune.Server -- --Wiretune:LibraryPath=/srv/music
 ```
 
 It listens on `http://0.0.0.0:5200`, scans the folder, and waits for the first player to create the
-administrator account. For a deployment, publish it:
+administrator account. Until that exists it prints a line like `No administrator account exists yet. Create it in the
+player with the setup code K7QP-2WXM` in its log: the player asks for that code ([Accounts](#accounts)). For a
+deployment, publish it:
 
 ```bash
 dotnet publish Wiretune.Server -c Release -o /opt/wiretune
@@ -31,6 +33,7 @@ Settings are in `Wiretune.Server/appsettings.json` under `Wiretune` and can be o
 | `Wiretune:DataDirectory` | empty | Folder for the database, cover cache and log. Empty: `~/.config/Wiretune/Server` on Linux, `%APPDATA%\Wiretune\Server` on Windows. |
 | `Wiretune:ScanIntervalMinutes` | `30` | Background rescan interval. `0` disables it (start-up and requested scans still run). |
 | `Wiretune:Port` | `5200` | HTTP port. Ignored when `--urls` or `ASPNETCORE_URLS` is set. |
+| `Wiretune:SetupCode` | empty | The code needed to create the first account. Empty: a random one is generated at every start and printed in the log for as long as no account exists. Case, spaces and dashes do not matter when it is typed. |
 
 Environment variables:
 
@@ -44,12 +47,26 @@ Environment variables:
 
 | File | Content |
 |---|---|
-| `wiretune-server.db` | SQLite database: track index, accounts, the token-signing key, and the library folder chosen through the API |
+| `wiretune-server.db` | SQLite database: track index, accounts, **each account's favourites, play counts and playlists**, the token-signing key, and the library folder chosen through the API |
+| `wiretune-server.db-wal`, `-shm` | SQLite's write-ahead log; part of the database while the server runs (see below) |
 | `Covers/` | Cover images extracted from tags; rebuilt by scanning |
 | `wiretune-server.log` | Log; moved to `.1` at 10 MiB (one backup) |
 
-Back up `wiretune-server.db` while the server is stopped. The index and covers can be rebuilt, but accounts and
-the signing key cannot: without them every user has to be created again and every player has to sign in again.
+**Everything in the database survives a restart of the server**: every change is written to disk when it is made;
+nothing is kept only in memory, and a restart only reloads the index from the database and rescans. What does *not*
+survive is a data directory that is gone or different: a container without a persistent volume, a changed
+`WIRETUNE_DATA_DIR`, a `StateDirectory` the service user cannot write. The server then starts empty, as a fresh
+installation (and asks for the setup code again), so mount the data directory on persistent storage and check the
+first log lines, which name it.
+
+The index and covers can be rebuilt by scanning. Accounts, the signing key and the per-account data cannot: without
+them every user has to be created again, every player has to sign in again, and favourites and playlists are gone.
+Back up while the server is stopped, or copy `wiretune-server.db` together with its `-wal` and `-shm` files (copying
+only the `.db` of a running server can miss the latest changes).
+
+**Upgrading** needs nothing from you: the schema version is kept in the database (`PRAGMA user_version`, currently 4)
+and an older database is upgraded in place the first time the new server starts. Back it up first all the same, and
+note that a database written by a newer server must not be opened by an older one.
 
 ## Library and scanning
 
@@ -69,25 +86,42 @@ If the index is not empty and the folder it was built from suddenly contains not
 *Library folder is empty (unmounted share?)* and the old index is kept. Pointing the server at a different, empty
 folder is deliberate and does clear the index.
 
-**Track IDs** are derived from the file's full path (lower-cased). Moving or renaming a file, or changing the
-library folder, gives its tracks new IDs, and players lose the favourites, play counts and playlist entries
-attached to the old ones.
+**Track IDs** are derived from the file's full path (lower-cased). Two limits follow:
+
+- Moving or renaming a file, or changing the library folder, gives its tracks new IDs. The favourites, play counts and
+  playlist entries of the old IDs stay in the database, but they no longer point at anything in the library, and the
+  tracks start over. There is no tool that moves them across.
+- Two files in one folder whose names differ only in case (`A.flac`, `a.flac`) get the same ID, so only one of them
+  appears in the library. Only file systems that distinguish case, such as Linux ones, allow this.
+
+Album covers are fetched per album (`/api/cover/album/{id}`), where the album is the title plus the album artist.
 
 ## Accounts
 
 - A fresh server has no accounts. The first call to `POST /api/auth/setup` (the player's sign-in screen makes it)
-  creates the administrator, works once, and answers `409` afterwards.
+  creates the administrator, works once, and answers `409` afterwards. It also needs the **setup code** from the
+  server's log (or `Wiretune:SetupCode`), and answers `403` without it: this keeps a server that accidentally starts
+  empty, because of a wrong data path or an unmounted volume, from being taken over by whoever connects first. Once an
+  account exists the code is not used again.
 - Only the administrator creates or deletes users (desktop player: *Settings → Users*), and every account created
   that way is a regular user. There is no way to promote one. An administrator cannot delete their own account.
 - **Rules**: user names up to 64 characters, no control characters, unique ignoring case; passwords at least 8
   characters and at most 72 bytes (bcrypt silently ignores the rest, so longer ones are rejected).
 - **Tokens** (JWT) last 24 hours, or 90 days with *Keep me signed in*; the setup call returns a 90-day token.
-  Deleting a user cuts off access immediately.
+  Deleting a user cuts off access immediately. Players put a separate **stream token** (8 hours, audio and covers
+  only) in stream URLs, and renew it themselves.
+- **Per-account data.** Each account has its own favourites, play counts and playlists, kept on the server and
+  therefore the same on every device the person signs in on. Deleting an account (*Settings → Users*) deletes its
+  favourites, play counts and playlists with it; an account created afterwards starts empty. The first account that signs in on a device that
+  already holds such data from before the server stored it receives it, once (it only adds; see
+  `POST /api/me/data/import` in [api.md](api.md#your-data-per-account)). Limits per account: 100,000 favourites,
+  100,000 tracks with statistics and 500 playlists (see the API page).
 - **Rate limit**: setup and sign-in together, 10 requests per minute per client address, then `429` with
   `Retry-After`.
 - **No password change or reset.** If the administrator password is lost, stop the server and delete the rows of
-  the `users` table in `wiretune-server.db`; the setup screen is offered again. Other users can be deleted and
-  created again by an administrator.
+  the `users` table in `wiretune-server.db`; the setup screen is offered again (with the setup code). Accounts are
+  new after that, so the favourites and playlists of the old ones are no longer reachable. Other users can be
+  deleted and created again by an administrator, which also starts them empty.
 
 ## Running as a service
 
@@ -135,3 +169,5 @@ make the server reachable only through the proxy (listen on loopback with `ASPNE
 | Player says the address is not a Wiretune server | The address answered, but not like a Wiretune server (wrong port, or a proxy error page). |
 | `429 Too many attempts` | More than 10 sign-in/setup requests in a minute from one address. Wait a minute; behind a proxy see above. |
 | A user has to sign in again | The account was re-created, the token expired, or the database (and with it the signing key) was replaced. |
+| The setup screen appears again, or favourites are gone after a restart | The server is using a different or empty data directory (a container without a volume, a changed path). Compare the data directory named at the top of the log with the one you expect. |
+| *The setup code is missing or wrong* | Enter the code from the server's log (`No administrator account exists yet…`), or the value of `Wiretune:SetupCode`. |

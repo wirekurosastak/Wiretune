@@ -12,18 +12,20 @@ the player can skip the system mixer, open your DAC directly over ALSA and play 
 resampling requested, volume locked at 100 %. It also runs without any server at all if you just want to play a
 folder on your own machine, and it can combine the two.
 
-No cloud, no account on somebody else's server, no telemetry. The only thing that ever talks to the internet is
-an optional artist-picture lookup, and one environment variable turns it off.
+No cloud, no account on somebody else's server, no telemetry. Your favourites, play counts and playlists live on
+your own server, per account. The only thing that ever talks to the internet is an artist-picture lookup (on by
+default; one environment variable turns it off).
 
 ## What you get
 
 - Browse by artist, album or song, search, queue with shuffle and repeat, favourites, playlists, lyrics from the
-  file's tags.
+  file's tags. For a server library, favourites, play counts and playlists are stored on the server under your
+  account, so they follow you to every device.
 - Quality badges on every track (`FLAC / 24bit / 96kHz`) and a 32-band spectrum analyser.
 - A server library and a local folder at the same time. Tracks that exist in both show up once, and the local copy
   wins.
-- A server that is one `dotnet run` away: incremental scanning, password-protected accounts, range streaming,
-  cover art.
+- A server that is one `dotnet run` away: incremental scanning, password-protected accounts, per-account
+  favourites and playlists, range streaming, cover art.
 - Hungarian, English and German, switchable at runtime.
 
 ## What works where
@@ -50,8 +52,9 @@ dotnet run --project Wiretune.Desktop                                        # t
 ```
 
 In the player, type the server's address (`http://server-ip:5200`) and press **Connect**. A fresh server asks you
-to create the first account, and that account is the administrator. No default passwords. To skip the server and
-play a local folder, choose **Continue without a server** and point *Settings* at the folder.
+to create the first account, and that account is the administrator. There are no default passwords, and creating the
+account needs the **setup code** the server prints in its log when it starts. To skip the server and play a local
+folder, choose **Continue without a server** and point *Settings* at the folder.
 
 The Android app is built separately; see [docs/development.md](docs/development.md#android).
 

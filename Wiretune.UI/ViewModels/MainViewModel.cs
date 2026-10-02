@@ -32,14 +32,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public ServerSettingsViewModel ServerSettings { get; }
     public SearchResultsViewModel Search { get; }
 
-    [ObservableProperty] private int _selectedNavigationIndex = 2;
+    [ObservableProperty] private AppSection _selectedSection = AppSection.Artists;
     [ObservableProperty] private int _waveTrigger;
     [ObservableProperty] private NavWaveDirection _lastWaveDirection = NavWaveDirection.LeftToRight;
-    private int _previousNavIndex = 2;
+    private AppSection _previousSection = AppSection.Artists;
 
     // The tabs the user came from, the latest last; the tab that is open is never in it. The phone's back gesture walks it
     // backwards (see TryNavigateBack). _isRestoringTab keeps that walk itself out of the list.
-    private readonly List<int> _tabHistory = new();
+    private readonly List<AppSection> _tabHistory = new();
     private bool _isRestoringTab;
 
     [ObservableProperty] private string _searchQuery = string.Empty;
@@ -82,6 +82,9 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Library = library;
         Session = session;
 
+        // Stream URLs carry a short-lived, media-only token that the session renews, not the login token.
+        AudioEngine.SetStreamTokenProvider(Session.GetStreamTokenAsync);
+
         Player = new PlayerViewModel(AudioEngine, Library)
         {
             LyricsProvider = (track, ct) => track.IsLocal ? MetadataScanner.ReadLyricsAsync(track.FilePath, ct) : Session.GetLyricsAsync(track, ct)
@@ -110,8 +113,6 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         Session.StateChanged += (_, _) =>
         {
-            // Apply credentials immediately so a play command issued right after login is authorised.
-            AudioEngine.SetStreamAuthorization(Session.AuthToken);
             CoverArtService.AuthToken = Session.AuthToken;
             CoverArtService.ServerUrl = Session.ServerUrl;
             Ui.Post(OnSessionStateChanged);
@@ -119,13 +120,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         UpdateAuthDisplay();
         UpdateStatusText();
-        Theme.UpdateDynamicBackground(SelectedNavigationIndex);
-        LogoTransform = $"rotate({SelectedNavigationIndex * 90}deg)";
+        Theme.UpdateDynamicBackground(SelectedSection);
+        LogoTransform = LogoTransformFor(SelectedSection);
 
         Albums.OnNavWave = TriggerNavWave;
         Artists.OnNavWave = TriggerNavWave;
         Playlists.OnNavWave = TriggerNavWave;
-        _previousNavIndex = SelectedNavigationIndex;
+        _previousSection = SelectedSection;
 
         Localizer.Instance.LanguageChanged += OnLanguageChanged;
         SyncLanguageOptions();
@@ -307,28 +308,31 @@ public partial class MainViewModel : ObservableObject, IDisposable
         WaveTrigger++;
     }
 
-    public static int GetNavVisualOrder(int navIndex) => navIndex switch
+    /// <summary>Where a section is drawn in the sidebar, counted from the top: the order the navigation wave runs in.</summary>
+    public static int GetNavVisualOrder(AppSection section) => section switch
     {
-        2 => 0, // Artists
-        1 => 1, // Albums
-        0 => 2, // Songs
-        4 => 3, // Favorites
-        3 => 4, // Playlists
-        5 => 5, // Settings
-        _ => navIndex
+        AppSection.Artists => 0,
+        AppSection.Albums => 1,
+        AppSection.Tracks => 2,
+        AppSection.Favorites => 3,
+        AppSection.Playlists => 4,
+        AppSection.Settings => 5,
+        _ => (int)section
     };
 
-    partial void OnSelectedNavigationIndexChanged(int value)
+    private static string LogoTransformFor(AppSection section) => $"rotate({(int)section * 90}deg)";
+
+    partial void OnSelectedSectionChanged(AppSection value)
     {
         Player.CloseQueue();
         Theme.UpdateDynamicBackground(value);
-        LogoTransform = $"rotate({value * 90}deg)";
+        LogoTransform = LogoTransformFor(value);
 
-        if (_previousNavIndex >= 0 && _previousNavIndex != value)
+        if (_previousSection != value)
         {
-            if (!_isRestoringTab) RememberTab(_previousNavIndex, value);
+            if (!_isRestoringTab) RememberTab(_previousSection, value);
 
-            var oldOrder = GetNavVisualOrder(_previousNavIndex);
+            var oldOrder = GetNavVisualOrder(_previousSection);
             var newOrder = GetNavVisualOrder(value);
             if (newOrder > oldOrder)
             {
@@ -339,11 +343,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
                 TriggerNavWave(NavWaveDirection.RightToLeft); // upwards
             }
         }
-        _previousNavIndex = value;
+        _previousSection = value;
     }
 
     /// <summary>Keeps <see cref="_tabHistory"/>: leaving a tab adds it, returning to a tab already in the list cuts the list back to it.</summary>
-    private void RememberTab(int from, int to)
+    private void RememberTab(AppSection from, AppSection to)
     {
         var index = _tabHistory.LastIndexOf(to);
         if (index >= 0) _tabHistory.RemoveRange(index, _tabHistory.Count - index);
@@ -427,11 +431,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         if (IsSearchOpen) { CloseSearch(); return true; }
 
-        switch (SelectedNavigationIndex)
+        switch (SelectedSection)
         {
-            case 1 when Albums.IsAlbumDetailOpen: Albums.CloseAlbumDetail(); return true;
-            case 2 when Artists.IsArtistDetailOpen: Artists.CloseArtistDetail(); return true;
-            case 3 when Playlists.IsPlaylistDetailOpen: Playlists.ClosePlaylistDetail(); return true;
+            case AppSection.Albums when Albums.IsAlbumDetailOpen: Albums.CloseAlbumDetail(); return true;
+            case AppSection.Artists when Artists.IsArtistDetailOpen: Artists.CloseArtistDetail(); return true;
+            case AppSection.Playlists when Playlists.IsPlaylistDetailOpen: Playlists.ClosePlaylistDetail(); return true;
         }
 
         // Back from a tab goes to the tab the user came from. The tab is shown as it was left (an open album stays open).
@@ -441,7 +445,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
             _tabHistory.RemoveAt(_tabHistory.Count - 1);
 
             _isRestoringTab = true;
-            try { SelectedNavigationIndex = previous; }
+            try { SelectedSection = previous; }
             finally { _isRestoringTab = false; }
             return true;
         }
@@ -450,22 +454,70 @@ public partial class MainViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void NavigateTo(object? parameter)
+    public void NavigateTo(AppSection section)
     {
-        var targetIndex = parameter switch
-        {
-            int i => i,
-            _ when int.TryParse(parameter?.ToString(), out var parsed) => parsed,
-            _ => -1
-        };
-        if (targetIndex < 0 || targetIndex > 5) return;
+        if (!Enum.IsDefined(section)) return;
 
-        if (targetIndex == 1) { Albums.ReturnAction = null; Albums.CloseAlbumDetail(); }
-        else if (targetIndex == 2) { Artists.ReturnAction = null; Artists.CloseArtistDetail(); }
+        if (section == AppSection.Albums) { Albums.ReturnAction = null; Albums.CloseAlbumDetail(); }
+        else if (section == AppSection.Artists) { Artists.ReturnAction = null; Artists.CloseArtistDetail(); }
 
         SearchQuery = string.Empty;
         IsSearchOpen = false;
-        SelectedNavigationIndex = targetIndex;
+        SelectedSection = section;
+    }
+
+    /// <summary>
+    /// What "back" does on an album or artist page opened from where the user is now: return to the search results, to the
+    /// detail page the user came from, or to the tab. <paramref name="target"/> is the section being opened; one of its own
+    /// detail pages is never the origin.
+    /// </summary>
+    private (Func<string>? BackText, Action? OnReturn) CaptureOrigin(AppSection target)
+    {
+        if (IsSearchActive)
+        {
+            var activeQuery = SearchQuery;
+            return (() => Localizer.Get("BackToSearch"), () =>
+            {
+                SearchQuery = activeQuery;
+                IsSearchActive = true;
+            });
+        }
+
+        switch (SelectedSection)
+        {
+            case AppSection.Albums when target != AppSection.Albums && Albums.IsAlbumDetailOpen && Albums.SelectedAlbum != null:
+                var returnAlbum = Albums.SelectedAlbum!;
+                return (() => Localizer.Format("BackTo", returnAlbum.Title), () =>
+                {
+                    SelectedSection = AppSection.Albums;
+                    Albums.OpenAlbumWithOrigin(returnAlbum, null, null, NavWaveDirection.RightToLeft);
+                });
+
+            case AppSection.Artists when target != AppSection.Artists && Artists.IsArtistDetailOpen && Artists.SelectedArtist != null:
+                var returnArtist = Artists.SelectedArtist!;
+                return (() => Localizer.Format("BackTo", returnArtist.Name), () =>
+                {
+                    SelectedSection = AppSection.Artists;
+                    Artists.OpenArtistWithOrigin(returnArtist, null, null, NavWaveDirection.RightToLeft);
+                });
+
+            case AppSection.Playlists when Playlists.IsPlaylistDetailOpen && Playlists.SelectedPlaylist != null:
+                var returnPlaylist = Playlists.SelectedPlaylist!;
+                return (() => Localizer.Format("BackTo", returnPlaylist.Name), () =>
+                {
+                    SelectedSection = AppSection.Playlists;
+                    Playlists.OpenPlaylist(returnPlaylist);
+                });
+
+            case AppSection.Favorites:
+                return (() => Localizer.Get("BackToFavorites"), () => SelectedSection = AppSection.Favorites);
+
+            case AppSection.Tracks:
+                return (() => Localizer.Get("BackToTracks"), () => SelectedSection = AppSection.Tracks);
+
+            default:
+                return (null, null);
+        }
     }
 
     [RelayCommand]
@@ -480,54 +532,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         };
         if (album == null) return;
 
-        Func<string>? backText = null;
-        Action? onReturn = null;
-
-        if (IsSearchActive)
-        {
-            var activeQuery = SearchQuery;
-            backText = () => Localizer.Get("BackToSearch");
-            onReturn = () =>
-            {
-                SearchQuery = activeQuery;
-                IsSearchActive = true;
-            };
-        }
-        else if (SelectedNavigationIndex == 2 && Artists.IsArtistDetailOpen && Artists.SelectedArtist != null)
-        {
-            var returnArtist = Artists.SelectedArtist;
-            backText = () => Localizer.Format("BackTo", returnArtist.Name);
-            onReturn = () =>
-            {
-                SelectedNavigationIndex = 2;
-                Artists.OpenArtistWithOrigin(returnArtist, null, null, NavWaveDirection.RightToLeft);
-            };
-        }
-        else if (SelectedNavigationIndex == 3 && Playlists.IsPlaylistDetailOpen && Playlists.SelectedPlaylist != null)
-        {
-            var returnPlaylist = Playlists.SelectedPlaylist;
-            backText = () => Localizer.Format("BackTo", returnPlaylist.Name);
-            onReturn = () =>
-            {
-                SelectedNavigationIndex = 3;
-                Playlists.OpenPlaylist(returnPlaylist);
-            };
-        }
-        else if (SelectedNavigationIndex == 4)
-        {
-            backText = () => Localizer.Get("BackToFavorites");
-            onReturn = () => SelectedNavigationIndex = 4;
-        }
-        else if (SelectedNavigationIndex == 0)
-        {
-            backText = () => Localizer.Get("BackToTracks");
-            onReturn = () => SelectedNavigationIndex = 0;
-        }
-
+        var (backText, onReturn) = CaptureOrigin(AppSection.Albums);
         Albums.OpenAlbumWithOrigin(album, backText, onReturn);
         IsNowPlayingOpen = false;
         IsSearchActive = false;
-        SelectedNavigationIndex = 1;
+        SelectedSection = AppSection.Albums;
     }
 
     [RelayCommand]
@@ -535,54 +544,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (artist == null) return;
 
-        Func<string>? backText = null;
-        Action? onReturn = null;
-
-        if (IsSearchActive)
-        {
-            var activeQuery = SearchQuery;
-            backText = () => Localizer.Get("BackToSearch");
-            onReturn = () =>
-            {
-                SearchQuery = activeQuery;
-                IsSearchActive = true;
-            };
-        }
-        else if (SelectedNavigationIndex == 1 && Albums.IsAlbumDetailOpen && Albums.SelectedAlbum != null)
-        {
-            var returnAlbum = Albums.SelectedAlbum;
-            backText = () => Localizer.Format("BackTo", returnAlbum.Title);
-            onReturn = () =>
-            {
-                SelectedNavigationIndex = 1;
-                Albums.OpenAlbumWithOrigin(returnAlbum, null, null, NavWaveDirection.RightToLeft);
-            };
-        }
-        else if (SelectedNavigationIndex == 3 && Playlists.IsPlaylistDetailOpen && Playlists.SelectedPlaylist != null)
-        {
-            var returnPlaylist = Playlists.SelectedPlaylist;
-            backText = () => Localizer.Format("BackTo", returnPlaylist.Name);
-            onReturn = () =>
-            {
-                SelectedNavigationIndex = 3;
-                Playlists.OpenPlaylist(returnPlaylist);
-            };
-        }
-        else if (SelectedNavigationIndex == 4)
-        {
-            backText = () => Localizer.Get("BackToFavorites");
-            onReturn = () => SelectedNavigationIndex = 4;
-        }
-        else if (SelectedNavigationIndex == 0)
-        {
-            backText = () => Localizer.Get("BackToTracks");
-            onReturn = () => SelectedNavigationIndex = 0;
-        }
-
+        var (backText, onReturn) = CaptureOrigin(AppSection.Artists);
         Artists.OpenArtistWithOrigin(artist, backText, onReturn);
         IsNowPlayingOpen = false;
         IsSearchActive = false;
-        SelectedNavigationIndex = 2;
+        SelectedSection = AppSection.Artists;
     }
 
     [RelayCommand]
