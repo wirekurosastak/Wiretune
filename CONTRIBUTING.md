@@ -1,4 +1,4 @@
-# Contributing to Wiretune
+# Contributing
 
 Thanks for helping out. This file is the short version of how to get a change merged.
 
