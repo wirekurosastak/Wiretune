@@ -1,109 +1,76 @@
 # Wiretune
 
-Self-hosted music streaming for lossless collections. A small ASP.NET Core server indexes a music folder and
-streams it over HTTP; Avalonia clients for Linux, Windows and Android play it. The desktop clients can also play a
-local folder without any server, and can switch to an exclusive, bit-perfect output path (see
-[docs/audio.md](docs/audio.md) for exactly what that means on each platform).
+**Your lossless collection, on your own hardware, played properly.**
 
-The interface is available in Hungarian, English and German and switches language at runtime. Built on .NET 10.
+You have a folder of FLACs. Maybe a few hundred albums ripped over the years, maybe a pile of 24/96 purchases.
+You don't want a subscription, you don't want to upload anything, and you'd like the player to get out of the
+way between the file and the DAC.
 
-## What it does
+Wiretune is two small programs. A **server** that you run at home, which indexes the folder and streams it over
+your network. A **player** for Linux, Windows and Android that browses, queues and plays it. On a Linux desktop
+the player can skip the system mixer, open your DAC directly over ALSA and play bit-perfect: no gain, no
+resampling requested, volume locked at 100 %. It also runs without any server at all if you just want to play a
+folder on your own machine, and it can combine the two.
 
-- **Server**: scans a music folder (incrementally, on start-up, on a timer and on request), serves the library
-  as JSON, streams files with HTTP range support, and serves cover art and embedded lyrics. Accounts are
-  password-protected (bcrypt) and use JWT access tokens. See [docs/server.md](docs/server.md).
-- **Client**: browse by artist, album or song; search; play queue with shuffle and repeat; favourites; playlists;
-  lyrics from the file's tag; quality badges (codec, bit depth, sample rate); signal-path description;
-  32-band spectrum analyser (desktop). See [docs/user-guide.md](docs/user-guide.md).
-- **Library sources**: a server, a local folder (desktop only), or both at once. When both are used, tracks that
-  exist in both places appear once and the local copy is preferred.
-- **Phone layout**: on Android the same view models drive a layout of its own (bottom navigation, mini player,
-  full-screen player with queue and lyrics, search page).
+No cloud, no account on somebody else's server, no telemetry. The only thing that ever talks to the internet is
+an optional artist-picture lookup, and one environment variable turns it off.
 
-Favourites, play counts and playlists are stored by each client in its own database; they are not kept on the
-server and are not shared between devices or accounts.
+## What you get
 
-## Platform support
+- Browse by artist, album or song, search, queue with shuffle and repeat, favourites, playlists, lyrics from the
+  file's tags.
+- Quality badges on every track (`FLAC / 24bit / 96kHz`) and a 32-band spectrum analyser.
+- A server library and a local folder at the same time. Tracks that exist in both show up once, and the local copy
+  wins.
+- A server that is one `dotnet run` away: incremental scanning, password-protected accounts, range streaming,
+  cover art.
+- Hungarian, English and German, switchable at runtime.
 
-| | Linux desktop | Windows desktop | Android |
+## What works where
+
+| | Linux | Windows | Android |
 |---|---|---|---|
-| Playback | `ffplay` / `ffmpeg` + `aplay` child processes | NAudio WASAPI, decoding through Media Foundation | Android `MediaPlayer` |
-| Exclusive / bit-perfect output | Yes (ALSA hardware devices) | Implemented (WASAPI exclusive mode); **not yet verified on hardware** | No |
+| Play a server library | Yes | Yes | Yes |
+| Play a local folder, no server | Yes | Yes | No |
+| Exclusive / bit-perfect output | Yes (ALSA hardware devices) | Written, **not yet tried on a DAC** | No |
 | Spectrum analyser | Yes | Yes | No |
-| Local music folder (no server) | Yes | Yes | No |
-| Server connection | Yes | Yes | Yes |
-| Run the server | Yes | Yes | – |
+| Run the server | Yes | Yes | n/a |
 
-The server is a plain ASP.NET Core application and runs wherever .NET 10 does. The desktop head is developed on
-Linux. The Windows and Android code paths compile with the solution (Android: with its workload) but are not
-exercised by the automated tests; the Windows driver in particular has been reviewed, not run on a DAC. Details
-and the open points are in [docs/audio.md](docs/audio.md#known-limitations).
-
-Indexed file types: FLAC, WAV, AIFF/AIF, WavPack, APE, DSF (labelled lossless); M4A (AAC, or ALAC when the stream
-says so), AAC, MP3, Ogg Vorbis and Opus. Whether a file actually plays depends on the platform's decoder: ffmpeg
-on Linux, Media Foundation on Windows (files Windows cannot decode are indexed but fail with an error message),
-the system media framework on Android.
-
-## Requirements
-
-- To build: the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). To run a framework-dependent
-  build: the .NET 10 runtime.
-- Linux desktop playback needs `ffplay` and `ffmpeg` on `PATH` (for example `sudo apt install ffmpeg`).
-  Exclusive/bit-perfect output additionally uses `aplay` (ALSA); `wpctl`, `amixer` and `pw-reserve` are used
-  when present (PipeWire sink list, volume, card reservation).
-- The server needs no external tools.
-- Android head: `dotnet workload install android`.
+Bit-perfect is only as good as the path behind it, and the details matter. Read
+[docs/audio.md](docs/audio.md) before relying on the word.
 
 ## Quick start
 
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0). On Linux the player also needs
+`ffmpeg` (`sudo apt install ffmpeg`), and `aplay` for exclusive mode.
+
 ```bash
-dotnet build Wiretune.slnx
-
-# 1. Server (listens on http://0.0.0.0:5200)
-dotnet run --project Wiretune.Server -- --Wiretune:LibraryPath=/srv/music
-
-# 2. Desktop client
-dotnet run --project Wiretune.Desktop
+dotnet run --project Wiretune.Server -- --Wiretune:LibraryPath=/srv/music   # the server, port 5200
+dotnet run --project Wiretune.Desktop                                        # the player
 ```
 
-In the client, enter the server address on the sign-in screen and press **Connect**. A fresh server has no
-accounts: the screen then offers **Create admin account and sign in**, and that first account is the
-administrator. There are no default credentials. To use a local folder instead, choose **Continue without a
-server (local music)**, then open **Settings**, enter the folder under *Local music folder* and press **Scan**.
+In the player, type the server's address (`http://server-ip:5200`) and press **Connect**. A fresh server asks you
+to create the first account, and that account is the administrator. No default passwords. To skip the server and
+play a local folder, choose **Continue without a server** and point *Settings* at the folder.
 
-The Android project is not part of the solution build; see [docs/development.md](docs/development.md).
+The Android app is built separately; see [docs/development.md](docs/development.md#android).
 
 ## Documentation
 
-| Document | Contents |
+| | |
 |---|---|
-| [docs/user-guide.md](docs/user-guide.md) | Using the client: first start, library, playback, playlists, audio settings, phone layout |
-| [docs/server.md](docs/server.md) | Running and configuring the server: settings, data files, scanning, accounts, running as a service |
+| [docs/user-guide.md](docs/user-guide.md) | Using the player: library rules, playback, settings, troubleshooting |
+| [docs/server.md](docs/server.md) | Running the server: configuration, accounts, scanning, running as a service |
+| [docs/audio.md](docs/audio.md) | What each output mode really does, per platform, and what is not verified |
 | [docs/api.md](docs/api.md) | HTTP API reference |
-| [docs/audio.md](docs/audio.md) | Audio engine, per-platform signal path, exclusive and bit-perfect modes, known limitations |
-| [docs/architecture.md](docs/architecture.md) | Projects, data model, library synchronisation, localisation, UI structure |
-| [docs/development.md](docs/development.md) | Building, testing, Android notes, debugging, extending Wiretune |
-| [SECURITY.md](SECURITY.md) | Reporting vulnerabilities; deployment and security notes |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to get a change merged |
+| [docs/architecture.md](docs/architecture.md) | How the code is organised |
+| [docs/development.md](docs/development.md) | Building, testing, debugging, extending |
+| [SECURITY.md](SECURITY.md) | Reporting problems, and what to know before putting the server on a network |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Getting a change merged |
 
-## Repository layout
+The server speaks plain HTTP, so keep it on your LAN or behind a reverse proxy or VPN. [SECURITY.md](SECURITY.md)
+has the details.
 
-```
-Wiretune.Core      Models, SQLite library, metadata scanner, audio engine and drivers, localisation, server session
-Wiretune.Server    ASP.NET Core minimal API: JWT auth, library scan, range streaming, cover art, lyrics
-Wiretune.UI        Avalonia MVVM user interface (desktop layout and phone layout)
-Wiretune.Desktop   Desktop entry point (Linux, Windows)
-Wiretune.Android   Android entry point (needs the Android workload; not built with the solution)
-Wiretune.Tests     xUnit tests: unit tests, in-memory server integration tests, ffmpeg/ffplay pipeline tests
-```
+## License
 
-## Security and privacy in short
-
-The server speaks plain HTTP: put it behind a TLS-terminating reverse proxy or reach it over a VPN; do not expose
-it to the internet as is. The client looks up artist pictures through Deezer's public API, which sends artist
-names from your library to `api.deezer.com`; set `WIRETUNE_NO_ARTIST_PICTURES=1` to turn that off. Nothing else
-leaves your network. Details: [SECURITY.md](SECURITY.md).
-
-## Contributing and license
-
-See [CONTRIBUTING.md](CONTRIBUTING.md). The license is in the [LICENSE](LICENSE) file.
+See the [LICENSE](LICENSE) file.
