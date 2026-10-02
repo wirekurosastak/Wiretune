@@ -1,6 +1,8 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:material="using:Material.Icons.Avalonia">
+        xmlns:material="using:Material.Icons.Avalonia"
+        xmlns:controls="using:Wiretune.UI.Controls"
+        xmlns:views="using:Wiretune.UI.Views">
 
   <!-- Styles of the phone layout (AndroidMainView and the controls it is built from). Every class starts with "phone-". -->
 
@@ -8,19 +10,37 @@
     <ResourceDictionary>
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
-          <!-- Opaque surfaces for what floats above scrolling content: the bars, the mini player and the sheets -->
-          <SolidColorBrush x:Key="PhoneBarBackground" Color="#171A20" />
-          <SolidColorBrush x:Key="PhoneSheetBackground" Color="#14171C" />
+          <!-- Opaque surfaces for what floats above scrolling content: the navigation bar, the mini player and the sheets.
+               AMOLED friendly: the navigation bar, the mini player and the sheets are pure black (those pixels are simply off). -->
+          <SolidColorBrush x:Key="PhoneNavBackground" Color="#000000" />
+          <SolidColorBrush x:Key="PhoneBarBackground" Color="#000000" />
+          <SolidColorBrush x:Key="PhoneSheetBackground" Color="#000000" />
           <SolidColorBrush x:Key="PhoneScrim" Color="#B0000000" />
           <BoxShadows x:Key="PhoneFloatShadow">0 10 28 -6 #B0000000</BoxShadows>
           <BoxShadows x:Key="PhoneCoverShadow">0 18 40 -12 #D0000000</BoxShadows>
+          <!-- The soft shadow under a cover, as a gradient ring that peaks at the cover's edge and fades outwards. A blurred
+               BoxShadow costs an offscreen blur on every frame; this is one cheap fill. It is drawn on a Border that is a
+               little bigger than the cover (see the covers in AndroidMainView). -->
+          <RadialGradientBrush x:Key="PhoneCoverGlow">
+            <GradientStop Color="#00000000" Offset="0" />
+            <GradientStop Color="#00000000" Offset="0.55" />
+            <GradientStop Color="#A0000000" Offset="0.78" />
+            <GradientStop Color="#00000000" Offset="1" />
+          </RadialGradientBrush>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="PhoneNavBackground" Color="#FFFFFF" />
           <SolidColorBrush x:Key="PhoneBarBackground" Color="#FFFFFF" />
           <SolidColorBrush x:Key="PhoneSheetBackground" Color="#FFFFFF" />
           <SolidColorBrush x:Key="PhoneScrim" Color="#80000000" />
           <BoxShadows x:Key="PhoneFloatShadow">0 8 24 -6 #40000000</BoxShadows>
           <BoxShadows x:Key="PhoneCoverShadow">0 16 36 -12 #55000000</BoxShadows>
+          <RadialGradientBrush x:Key="PhoneCoverGlow">
+            <GradientStop Color="#00000000" Offset="0" />
+            <GradientStop Color="#00000000" Offset="0.55" />
+            <GradientStop Color="#40000000" Offset="0.78" />
+            <GradientStop Color="#00000000" Offset="1" />
+          </RadialGradientBrush>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>
@@ -35,6 +55,15 @@
     </Setter>
   </Style>
 
+  <!-- Every scrolling area of the phone layout glides on after a flick on the frame clock instead of on Avalonia's
+       16 ms timer, which on Android runs at 30-50 steps per second (see SmoothFling). -->
+  <Style Selector="views|AndroidMainView ScrollViewer">
+    <Setter Property="controls:SmoothFling.IsActive" Value="True" />
+    <!-- No scroll bar: on a touch screen it is only a thin indicator that fades in and out while scrolling, and every frame
+         of a scroll moved its thumb and ran its fade animation. (Scrolling areas that set their own bar keep it.) -->
+    <Setter Property="VerticalScrollBarVisibility" Value="Hidden" />
+  </Style>
+
   <!-- A full-width tap target that draws nothing itself: rows and tiles. Pressing tints it. -->
   <Style Selector="Button.phone-tap">
     <Setter Property="Background" Value="Transparent" />
@@ -44,7 +73,7 @@
     <Setter Property="VerticalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
     <Setter Property="VerticalContentAlignment" Value="Center" />
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="CornerRadius" Value="8" />
   </Style>
   <Style Selector="Button.phone-tap /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
@@ -61,11 +90,11 @@
     <Setter Property="RenderTransform" Value="scale(0.985)" />
   </Style>
 
-  <!-- Round 44dp icon button (the minimum comfortable touch target) -->
+  <!-- 44dp icon button (the minimum comfortable touch target), rounded like the desktop buttons -->
   <Style Selector="Button.phone-icon">
     <Setter Property="Width" Value="44" />
     <Setter Property="Height" Value="44" />
-    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="CornerRadius" Value="6" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -75,7 +104,7 @@
   </Style>
   <Style Selector="Button.phone-icon /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
-    <Setter Property="CornerRadius" Value="22" />
+    <Setter Property="CornerRadius" Value="{TemplateBinding CornerRadius}" />
     <Setter Property="Foreground" Value="{TemplateBinding Foreground}" />
   </Style>
   <Style Selector="Button.phone-icon:pointerover /template/ ContentPresenter#PART_ContentPresenter">
@@ -93,7 +122,7 @@
     <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
   </Style>
 
-  <!-- Filled round play/pause button -->
+  <!-- Filled play/pause button -->
   <Style Selector="Button.phone-fab">
     <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
     <Setter Property="Foreground" Value="{DynamicResource PrimaryActionForeground}" />
@@ -114,7 +143,7 @@
     <Setter Property="Background" Value="{DynamicResource PrimaryActionPressed}" />
   </Style>
 
-  <!-- Bottom navigation item: an icon in a pill and a label below it -->
+  <!-- Bottom navigation item: an icon and a label below it -->
   <Style Selector="Button.phone-nav">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
@@ -140,31 +169,53 @@
   <Style Selector="Button.phone-nav:pressed">
     <Setter Property="RenderTransform" Value="scale(0.94)" />
   </Style>
-  <Style Selector="Button.phone-nav Border.phone-nav-pill">
-    <Setter Property="Background" Value="{DynamicResource PrimaryAction}" />
-    <Setter Property="Opacity" Value="0" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <DoubleTransition Property="Opacity" Duration="0:0:0.2" Easing="CubicEaseOut" />
-      </Transitions>
-    </Setter>
-  </Style>
-  <Style Selector="Button.phone-nav.active Border.phone-nav-pill">
-    <Setter Property="Opacity" Value="0.26" />
-  </Style>
-  <Style Selector="Button.phone-nav.active">
-    <Setter Property="Foreground" Value="{DynamicResource TextMain}" />
-  </Style>
+  <!-- Icon and label are muted; the active item takes the accent colour of its section (fixed brushes, so the item that fades out never flashes the colour of the section that fades in) -->
+  <!-- (Every rule names one control type: a selector list would resolve to their common base, which has no Foreground.) -->
   <Style Selector="Button.phone-nav material|MaterialIcon.phone-nav-icon">
     <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
   </Style>
-  <Style Selector="Button.phone-nav.active material|MaterialIcon.phone-nav-icon">
-    <Setter Property="Foreground" Value="{DynamicResource PrimaryAction}" />
+  <Style Selector="Button.phone-nav TextBlock.phone-nav-label">
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="0:0:0.18" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.phone-nav.nav-artists.active material|MaterialIcon.phone-nav-icon">
+    <Setter Property="Foreground" Value="{DynamicResource CoralAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-artists.active TextBlock.phone-nav-label">
+    <Setter Property="Foreground" Value="{DynamicResource CoralAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-albums.active material|MaterialIcon.phone-nav-icon">
+    <Setter Property="Foreground" Value="{DynamicResource PurpleAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-albums.active TextBlock.phone-nav-label">
+    <Setter Property="Foreground" Value="{DynamicResource PurpleAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-songs.active material|MaterialIcon.phone-nav-icon">
+    <Setter Property="Foreground" Value="{DynamicResource CyanAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-songs.active TextBlock.phone-nav-label">
+    <Setter Property="Foreground" Value="{DynamicResource CyanAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-favorites.active material|MaterialIcon.phone-nav-icon">
+    <Setter Property="Foreground" Value="{DynamicResource CoralAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-favorites.active TextBlock.phone-nav-label">
+    <Setter Property="Foreground" Value="{DynamicResource CoralAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-playlists.active material|MaterialIcon.phone-nav-icon">
+    <Setter Property="Foreground" Value="{DynamicResource LimeAccent}" />
+  </Style>
+  <Style Selector="Button.phone-nav.nav-playlists.active TextBlock.phone-nav-label">
+    <Setter Property="Foreground" Value="{DynamicResource LimeAccent}" />
   </Style>
 
   <!-- Player rows, cards and pills -->
   <Style Selector="Border.phone-row">
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Transitions">
       <Transitions>
@@ -194,7 +245,7 @@
     <Setter Property="Background" Value="{DynamicResource Surface1}" />
     <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="18" />
+    <Setter Property="CornerRadius" Value="10" />
     <Setter Property="Padding" Value="16" />
   </Style>
 
@@ -232,7 +283,7 @@
   <!-- Language / option pills -->
   <Style Selector="Button.phone-pill">
     <Setter Property="Height" Value="40" />
-    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="CornerRadius" Value="6" />
     <Setter Property="Padding" Value="18,0" />
     <Setter Property="Background" Value="{DynamicResource Surface1}" />
     <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
@@ -245,7 +296,7 @@
     <Setter Property="Background" Value="{DynamicResource Surface1}" />
     <Setter Property="BorderBrush" Value="{DynamicResource GlassBorder}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="CornerRadius" Value="6" />
   </Style>
   <Style Selector="Button.phone-pill:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Surface1}" />
@@ -266,7 +317,7 @@
   <Style Selector="TextBox.phone-field">
     <Setter Property="Height" Value="52" />
     <Setter Property="MinHeight" Value="52" />
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="CornerRadius" Value="6" />
     <Setter Property="Padding" Value="16,0" />
     <Setter Property="FontSize" Value="15" />
   </Style>
@@ -276,7 +327,7 @@
     <Setter Property="Opacity" Value="0.9" />
   </Style>
   <Style Selector="TextBox.phone-field /template/ Border#PART_BorderElement">
-    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="CornerRadius" Value="6" />
   </Style>
 
   <!-- Thin progress line of the mini player -->

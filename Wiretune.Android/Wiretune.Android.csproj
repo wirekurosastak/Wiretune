@@ -17,6 +17,10 @@
     <PublishTrimmed>true</PublishTrimmed>
     <TrimMode>partial</TrimMode>
     <RunAOTCompilation>true</RunAOTCompilation>
+    <!-- AOT-compile everything, not just the methods of the default start-up profile (which knows nothing about Avalonia):
+         otherwise the layout and drawing code a scrolling list runs on every frame is JIT-compiled on the phone while it
+         is being used, which shows up as stutter. The price is a longer build and a bigger APK. -->
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
     <AndroidLinkMode>SdkOnly</AndroidLinkMode>
     <!-- R8 is the modern shrinker/minifier required by the D8 DEX compiler. -->
     <AndroidLinkTool>r8</AndroidLinkTool>
@@ -24,6 +28,16 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia.Android" Version="11.2.7" />
+  </ItemGroup>
+
+  <!-- Environment variables for the Mono runtime, read before it starts: environment.txt sets the size of the garbage
+       collector's nursery. Mono collects the nursery whenever it is full, and Avalonia allocates a lot while a list
+       scrolls (measured on a phone: 10 collections per second). Every collection stops the UI thread and the render
+       thread, and on Android it also has to reconcile the Java objects the .NET objects stand for - a pause of tens of
+       milliseconds, a dropped frame or three. A bigger nursery gives the same garbage in fewer pauses. The size must be
+       a power of two; 32 MB is plenty on any phone of the last ten years (use 16m or 8m for very small devices). -->
+  <ItemGroup>
+    <AndroidEnvironment Include="environment.txt" />
   </ItemGroup>
 
   <ItemGroup>

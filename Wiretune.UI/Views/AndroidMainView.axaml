@@ -79,7 +79,7 @@
                 Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Playlists.OpenPlaylistCommand}"
                 CommandParameter="{Binding}">
           <Grid ColumnDefinitions="Auto, *, Auto" Margin="10,0,14,0">
-            <Border Width="56" Height="56" CornerRadius="12" Background="{DynamicResource Surface2}" ClipToBounds="True">
+            <Border Width="56" Height="56" CornerRadius="8" Background="{DynamicResource Surface2}" ClipToBounds="True">
               <Panel>
                 <material:MaterialIcon Kind="PlaylistMusic" Width="28" Height="28"
                                        Foreground="{DynamicResource LimeAccent}"
@@ -118,10 +118,8 @@
                          Foreground="{DynamicResource TextMuted}"
                          HorizontalAlignment="Center" VerticalAlignment="Center"
                          IsVisible="{Binding !IsCurrent}" />
-              <material:MaterialIcon Kind="VolumeHigh" Width="18" Height="18"
-                                     Foreground="{DynamicResource PrimaryAction}"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center"
-                                     IsVisible="{Binding IsCurrent}" />
+              <controls:EqualizerBars HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      IsVisible="{Binding IsCurrent}" />
               <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                 <TextBlock Classes="phone-row-title" Classes.playing="{Binding IsCurrent}" Text="{Binding Track.Title}" FontSize="14" />
                 <TextBlock Classes="phone-row-sub" Text="{Binding Track.Artist}" />
@@ -139,12 +137,12 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Panel Background="{DynamicResource WindowGradient}">
+  <Panel Classes="app-bg" Background="{DynamicResource WindowGradient}">
 
     <!-- ============================================================ -->
     <!-- APP: pages + mini player + bottom navigation                 -->
     <!-- ============================================================ -->
-    <Border Padding="{Binding SafeArea, ElementName=RootControl}">
+    <Border Padding="{Binding SafeAreaTopAndSides, ElementName=RootControl}">
      <Panel>
       <Grid RowDefinitions="*, Auto, Auto" IsVisible="{Binding !IsLoginViewActive}">
 
@@ -152,7 +150,7 @@
         <Grid Grid.Row="0" RowDefinitions="Auto, Auto, *">
 
           <!-- Server unreachable -->
-          <Border Grid.Row="0" Margin="12,8,12,0" Padding="14,10" CornerRadius="14"
+          <Border Grid.Row="0" Margin="12,8,12,0" Padding="14,10" CornerRadius="8"
                   Background="#28FF003C" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1"
                   IsVisible="{Binding IsServerOfflineBannerVisible}">
             <Grid ColumnDefinitions="Auto, *, Auto, Auto">
@@ -172,7 +170,7 @@
           </Border>
 
           <!-- Playback error -->
-          <Border Grid.Row="1" Margin="12,8,12,0" Padding="14,10" CornerRadius="14"
+          <Border Grid.Row="1" Margin="12,8,12,0" Padding="14,10" CornerRadius="8"
                   Background="#28FF003C" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1"
                   IsVisible="{Binding Player.HasError}">
             <Grid ColumnDefinitions="Auto, *, Auto">
@@ -190,12 +188,12 @@
           <Panel Grid.Row="2">
 
             <!-- ======================= PAGES ======================= -->
-            <Panel IsVisible="{Binding !IsSearchOpen}">
+            <Panel Classes="page" IsVisible="{Binding !IsSearchOpen}">
 
               <!-- TRACKS -->
-              <Grid RowDefinitions="Auto, *"
+              <Grid Classes="page" RowDefinitions="Auto, *"
                     IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=0}">
-                <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavTracks}">
+                <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavSongs}">
                   <controls:PhoneHeader.Subtitle>
                     <StackPanel Orientation="Horizontal" Spacing="6">
                       <TextBlock Text="{loc:TFormat TrackCount, Path=Tracks.TotalTracksCount}" />
@@ -207,14 +205,14 @@
                 <ScrollViewer Grid.Row="1" IsVisible="{Binding Tracks.HasTracks}">
                   <StackPanel>
                     <Grid ColumnDefinitions="*, *" Margin="16,4,16,10">
-                      <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="23" Margin="0,0,5,0"
+                      <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="6" Margin="0,0,5,0"
                               HorizontalAlignment="Stretch" Command="{Binding Tracks.PlayAllCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <material:MaterialIcon Kind="Play" Width="20" Height="20" />
                           <TextBlock Text="{loc:T Play}" FontWeight="Bold" />
                         </StackPanel>
                       </Button>
-                      <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="23" Margin="5,0,0,0"
+                      <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="6" Margin="5,0,0,0"
                               HorizontalAlignment="Stretch" Command="{Binding Tracks.ShuffleAllCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <material:MaterialIcon Kind="Shuffle" Width="20" Height="20" />
@@ -222,11 +220,11 @@
                         </StackPanel>
                       </Button>
                     </Grid>
-                    <ItemsControl Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Tracks.DisplayedTracks}"
+                    <controls:RecyclingList Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Tracks.DisplayedTracks}"
                                    ItemTemplate="{StaticResource TracksRow}" />
                   </StackPanel>
                 </ScrollViewer>
-                <controls:PhoneEmptyState Grid.Row="1" Icon="MusicNoteOff"
+                <controls:PhoneEmptyState Classes="page" Grid.Row="1" Icon="MusicNoteOff"
                                           Title="{loc:T EmptyLibraryTitle}" Hint="{loc:T EmptyLibraryHint}"
                                           ActionText="{loc:T ConnectToServer}"
                                           ActionCommand="{Binding NavigateToCommand}" ActionParameter="5"
@@ -234,9 +232,9 @@
               </Grid>
 
               <!-- ALBUMS -->
-              <Panel IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}">
+              <Panel Classes="page" IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}">
 
-                <Grid RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Albums.IsAlbumDetailOpen}">
+                <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Albums.IsAlbumDetailOpen}">
                   <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavAlbums}">
                     <controls:PhoneHeader.Subtitle>
                       <TextBlock Text="{loc:TFormat AlbumCount, Path=Albums.DisplayedAlbums.Count}" />
@@ -244,10 +242,10 @@
                   </controls:PhoneHeader>
                   <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="16,0,16,8">
                     <TextBlock Text="{loc:T SortBy}" FontSize="12" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
-                    <Button Classes="phone-pill" Classes.selected="{Binding Albums.IsSortByTitle}" Height="34" Padding="14,0"
+                    <Button Classes="phone-pill" Classes.selected="{Binding Albums.IsSortByTitle}" Height="34" MinWidth="72" Padding="14,0"
                             Command="{Binding Albums.SetSortFieldCommand}" CommandParameter="Title"
                             Content="{Binding Albums.SortTitleLabel}" />
-                    <Button Classes="phone-pill" Classes.selected="{Binding Albums.IsSortByYear}" Height="34" Padding="14,0"
+                    <Button Classes="phone-pill" Classes.selected="{Binding Albums.IsSortByYear}" Height="34" MinWidth="72" Padding="14,0"
                             Command="{Binding Albums.SetSortFieldCommand}" CommandParameter="Year"
                             Content="{Binding Albums.SortYearLabel}" />
                   </StackPanel>
@@ -255,7 +253,7 @@
                     <controls:TileGrid Margin="12,0,12,16" ItemsSource="{Binding Albums.DisplayedAlbums}"
                                        ItemTemplate="{StaticResource AlbumTile}" MinTileWidth="150" />
                   </ScrollViewer>
-                  <controls:PhoneEmptyState Grid.Row="2" Icon="Album"
+                  <controls:PhoneEmptyState Classes="page" Grid.Row="2" Icon="Album"
                                             Title="{loc:T EmptyAlbumsTitle}" Hint="{loc:T EmptyConnectHint}"
                                             ActionText="{loc:T ConnectToServer}"
                                             ActionCommand="{Binding NavigateToCommand}" ActionParameter="5"
@@ -263,9 +261,9 @@
                 </Grid>
 
                 <!-- Album detail -->
-                <Grid RowDefinitions="Auto, *" IsVisible="{Binding Albums.IsAlbumDetailOpen}">
+                <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding Albums.IsAlbumDetailOpen}">
                   <Button Grid.Row="0" Classes="phone-tap" HorizontalAlignment="Left" Height="56" Margin="8,0,16,0" Padding="4,0,16,0"
-                          CornerRadius="28" HorizontalContentAlignment="Left"
+                          CornerRadius="6" HorizontalContentAlignment="Left"
                           Command="{Binding Albums.CloseAlbumDetailCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="ArrowLeft" Width="24" Height="24" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
@@ -276,8 +274,9 @@
                   <ScrollViewer Grid.Row="1">
                     <StackPanel Spacing="0">
                       <Panel Width="220" Height="220" HorizontalAlignment="Center" Margin="0,4,0,18">
-                        <Border CornerRadius="20" Background="{DynamicResource Surface2}" BoxShadow="{DynamicResource PhoneCoverShadow}" />
-                        <Border CornerRadius="20" ClipToBounds="True">
+                        <Border Margin="-30,-14,-30,-46" Background="{DynamicResource PhoneCoverGlow}" IsHitTestVisible="False" />
+                        <Border CornerRadius="8" Background="{DynamicResource Surface2}" />
+                        <Border CornerRadius="8" ClipToBounds="True">
                           <Panel>
                             <material:MaterialIcon Kind="Album" Width="72" Height="72" Foreground="{DynamicResource PurpleAccent}"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -289,7 +288,7 @@
                       </Panel>
                       <TextBlock Text="{Binding Albums.SelectedAlbum.Title}" FontSize="22" FontWeight="Bold" TextAlignment="Center"
                                  Foreground="{DynamicResource TextMain}" TextWrapping="Wrap" Margin="24,0" />
-                      <Button Classes="phone-tap" HorizontalAlignment="Center" Margin="0,2" Padding="16,6" CornerRadius="16"
+                      <Button Classes="phone-tap" HorizontalAlignment="Center" Margin="0,2" Padding="16,6" CornerRadius="6"
                               HorizontalContentAlignment="Center"
                               Command="{Binding OpenArtistByNameCommand}" CommandParameter="{Binding Albums.SelectedAlbum.Artist}">
                         <TextBlock Text="{Binding Albums.SelectedAlbum.Artist}" FontSize="16" FontWeight="SemiBold"
@@ -309,14 +308,14 @@
                                    Foreground="{Binding Albums.SelectedAlbum.FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
                       </Border>
                       <Grid ColumnDefinitions="*, *" Margin="16,0,16,10">
-                        <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="23" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+                        <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                                 Command="{Binding Albums.PlayAlbumCommand}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Play" Width="20" Height="20" />
                             <TextBlock Text="{loc:T Play}" FontWeight="Bold" />
                           </StackPanel>
                         </Button>
-                        <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="23" Margin="5,0,0,0" HorizontalAlignment="Stretch"
+                        <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="6" Margin="5,0,0,0" HorizontalAlignment="Stretch"
                                 Command="{Binding Albums.ShuffleAlbumCommand}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Shuffle" Width="20" Height="20" />
@@ -324,7 +323,7 @@
                           </StackPanel>
                         </Button>
                       </Grid>
-                      <ItemsControl Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Albums.SelectedAlbum.Tracks}"
+                      <controls:RecyclingList Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Albums.SelectedAlbum.Tracks}"
                                      ItemTemplate="{StaticResource AlbumTrackRow}" />
                     </StackPanel>
                   </ScrollViewer>
@@ -332,19 +331,25 @@
               </Panel>
 
               <!-- ARTISTS -->
-              <Panel IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}">
+              <Panel Classes="page" IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}">
 
-                <Grid RowDefinitions="Auto, *" IsVisible="{Binding !Artists.IsArtistDetailOpen}">
+                <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Artists.IsArtistDetailOpen}">
                   <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavArtists}">
                     <controls:PhoneHeader.Subtitle>
                       <TextBlock Text="{loc:TFormat ArtistCount, Path=Artists.DisplayedArtists.Count}" />
                     </controls:PhoneHeader.Subtitle>
                   </controls:PhoneHeader>
-                  <ScrollViewer Grid.Row="1" IsVisible="{Binding !IsLibraryEmpty}">
-                    <controls:TileGrid Margin="12,4,12,16" ItemsSource="{Binding Artists.DisplayedArtists}"
+                  <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="16,0,16,8">
+                    <TextBlock Text="{loc:T SortBy}" FontSize="12" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                    <Button Classes="phone-pill selected" Height="34" MinWidth="72" Padding="14,0"
+                            Command="{Binding Artists.ToggleSortCommand}"
+                            Content="{Binding Artists.SortNameLabel}" />
+                  </StackPanel>
+                  <ScrollViewer Grid.Row="2" IsVisible="{Binding !IsLibraryEmpty}">
+                    <controls:TileGrid Margin="12,0,12,16" ItemsSource="{Binding Artists.DisplayedArtists}"
                                        ItemTemplate="{StaticResource ArtistTile}" MinTileWidth="104" />
                   </ScrollViewer>
-                  <controls:PhoneEmptyState Grid.Row="1" Icon="AccountMusic"
+                  <controls:PhoneEmptyState Classes="page" Grid.Row="2" Icon="AccountMusic"
                                             Title="{loc:T EmptyArtistsTitle}" Hint="{loc:T EmptyConnectHint}"
                                             ActionText="{loc:T ConnectToServer}"
                                             ActionCommand="{Binding NavigateToCommand}" ActionParameter="5"
@@ -352,9 +357,9 @@
                 </Grid>
 
                 <!-- Artist detail -->
-                <Grid RowDefinitions="Auto, *" IsVisible="{Binding Artists.IsArtistDetailOpen}">
+                <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding Artists.IsArtistDetailOpen}">
                   <Button Grid.Row="0" Classes="phone-tap" HorizontalAlignment="Left" Height="56" Margin="8,0,16,0" Padding="4,0,16,0"
-                          CornerRadius="28" HorizontalContentAlignment="Left"
+                          CornerRadius="6" HorizontalContentAlignment="Left"
                           Command="{Binding Artists.CloseArtistDetailCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="ArrowLeft" Width="24" Height="24" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
@@ -365,7 +370,8 @@
                   <ScrollViewer Grid.Row="1">
                     <StackPanel Spacing="0">
                       <Panel Width="160" Height="160" HorizontalAlignment="Center" Margin="0,4,0,16">
-                        <Border CornerRadius="80" Background="{DynamicResource Surface2}" BoxShadow="{DynamicResource PhoneCoverShadow}" />
+                        <Border Margin="-30,-14,-30,-46" Background="{DynamicResource PhoneCoverGlow}" IsHitTestVisible="False" />
+                        <Border CornerRadius="80" Background="{DynamicResource Surface2}" />
                         <Border CornerRadius="80" ClipToBounds="True">
                           <Panel>
                             <material:MaterialIcon Kind="AccountMusic" Width="64" Height="64" Foreground="{DynamicResource CoralAccent}"
@@ -382,14 +388,14 @@
                         <TextBlock Text="{loc:TFormat TrackCount, Path=Artists.SelectedArtist.TrackCount}" FontSize="12" Foreground="{DynamicResource TextMuted}" />
                       </StackPanel>
                       <Grid ColumnDefinitions="*, *" Margin="16,0,16,14">
-                        <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="23" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+                        <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                                 Command="{Binding Artists.PlayArtistCommand}" CommandParameter="{Binding Artists.SelectedArtist}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Play" Width="20" Height="20" />
                             <TextBlock Text="{loc:T Play}" FontWeight="Bold" />
                           </StackPanel>
                         </Button>
-                        <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="23" Margin="5,0,0,0" HorizontalAlignment="Stretch"
+                        <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="6" Margin="5,0,0,0" HorizontalAlignment="Stretch"
                                 Command="{Binding Artists.ShuffleArtistCommand}" CommandParameter="{Binding Artists.SelectedArtist}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Shuffle" Width="20" Height="20" />
@@ -413,7 +419,7 @@
                       </StackPanel>
 
                       <TextBlock Classes="phone-section" Text="{loc:T LabelTracks}" Margin="20,8,20,4" />
-                      <ItemsControl Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Artists.SelectedArtistTracks}"
+                      <controls:RecyclingList Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Artists.SelectedArtistTracks}"
                                      ItemTemplate="{StaticResource ArtistTrackRow}" />
                     </StackPanel>
                   </ScrollViewer>
@@ -421,24 +427,23 @@
               </Panel>
 
               <!-- PLAYLISTS -->
-              <Panel IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=3}">
+              <Panel Classes="page" IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=3}">
 
-                <Grid RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Playlists.IsPlaylistDetailOpen}">
+                <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding !Playlists.IsPlaylistDetailOpen}">
                   <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavPlaylists}" />
-                  <Grid Grid.Row="1" ColumnDefinitions="Auto, Auto, *" Margin="16,0,16,8">
-                    <Button Grid.Column="0" Classes="phone-pill selected" Content="{loc:T NavPlaylists}" />
-                    <Button Grid.Column="1" Classes="phone-pill" Margin="8,0,0,0"
-                            Command="{Binding NavigateToCommand}" CommandParameter="4" Content="{loc:T NavFavorites}" />
-                    <Button Grid.Column="2" Classes="phone-icon accent" HorizontalAlignment="Right"
-                            Command="{Binding Playlists.OpenCreateDialogCommand}" AutomationProperties.Name="{loc:T PlaylistNew}">
-                      <material:MaterialIcon Kind="PlaylistPlus" Width="26" Height="26" />
-                    </Button>
-                  </Grid>
+                  <Button Grid.Row="1" Classes="secondary" Height="44" CornerRadius="6" Padding="18,0" Margin="16,0,16,8" HorizontalAlignment="Left"
+                          IsVisible="{Binding Playlists.HasPlaylists}"
+                          Command="{Binding Playlists.OpenCreateDialogCommand}" AutomationProperties.Name="{loc:T PlaylistNew}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <material:MaterialIcon Kind="PlaylistPlus" Width="20" Height="20" />
+                      <TextBlock Text="{loc:T PlaylistNew}" FontWeight="SemiBold" />
+                    </StackPanel>
+                  </Button>
                   <ScrollViewer Grid.Row="2" IsVisible="{Binding Playlists.HasPlaylists}">
-                    <ItemsControl Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Playlists.DisplayedPlaylists}"
+                    <controls:RecyclingList Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Playlists.DisplayedPlaylists}"
                                    ItemTemplate="{StaticResource PlaylistRow}" />
                   </ScrollViewer>
-                  <controls:PhoneEmptyState Grid.Row="2" Icon="PlaylistMusic"
+                  <controls:PhoneEmptyState Classes="page" Grid.Row="2" Icon="PlaylistMusic"
                                             Title="{loc:T EmptyPlaylistsTitle}" Hint="{loc:T EmptyPlaylistsHint}"
                                             ActionText="{loc:T PlaylistNew}"
                                             ActionCommand="{Binding Playlists.OpenCreateDialogCommand}"
@@ -446,9 +451,9 @@
                 </Grid>
 
                 <!-- Playlist detail -->
-                <Grid RowDefinitions="Auto, *" IsVisible="{Binding Playlists.IsPlaylistDetailOpen}">
+                <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding Playlists.IsPlaylistDetailOpen}">
                   <Button Grid.Row="0" Classes="phone-tap" HorizontalAlignment="Left" Height="56" Margin="8,0,16,0" Padding="4,0,16,0"
-                          CornerRadius="28" HorizontalContentAlignment="Left"
+                          CornerRadius="6" HorizontalContentAlignment="Left"
                           Command="{Binding Playlists.ClosePlaylistDetailCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="ArrowLeft" Width="24" Height="24" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
@@ -459,8 +464,9 @@
                   <ScrollViewer Grid.Row="1">
                     <StackPanel Spacing="0">
                       <Panel Width="180" Height="180" HorizontalAlignment="Center" Margin="0,4,0,16">
-                        <Border CornerRadius="20" Background="{DynamicResource Surface2}" BoxShadow="{DynamicResource PhoneCoverShadow}" />
-                        <Border CornerRadius="20" ClipToBounds="True">
+                        <Border Margin="-30,-14,-30,-46" Background="{DynamicResource PhoneCoverGlow}" IsHitTestVisible="False" />
+                        <Border CornerRadius="8" Background="{DynamicResource Surface2}" />
+                        <Border CornerRadius="8" ClipToBounds="True">
                           <Panel>
                             <material:MaterialIcon Kind="PlaylistMusic" Width="64" Height="64" Foreground="{DynamicResource LimeAccent}"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -513,14 +519,14 @@
                       </StackPanel>
 
                       <Grid ColumnDefinitions="*, *" Margin="16,0,16,10" IsVisible="{Binding !Playlists.IsSelectedPlaylistEmpty}">
-                        <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="23" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+                        <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                                 Command="{Binding Playlists.PlayPlaylistCommand}" CommandParameter="{Binding Playlists.SelectedPlaylist}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Play" Width="20" Height="20" />
                             <TextBlock Text="{loc:T Play}" FontWeight="Bold" />
                           </StackPanel>
                         </Button>
-                        <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="23" Margin="5,0,0,0" HorizontalAlignment="Stretch"
+                        <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="6" Margin="5,0,0,0" HorizontalAlignment="Stretch"
                                 Command="{Binding Playlists.ShufflePlaylistCommand}" CommandParameter="{Binding Playlists.SelectedPlaylist}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="Shuffle" Width="20" Height="20" />
@@ -528,9 +534,9 @@
                           </StackPanel>
                         </Button>
                       </Grid>
-                      <ItemsControl Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Playlists.SelectedPlaylistTracks}"
+                      <controls:RecyclingList Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Playlists.SelectedPlaylistTracks}"
                                      ItemTemplate="{StaticResource PlaylistTrackRow}" />
-                      <controls:PhoneEmptyState Icon="PlaylistMusic" Title="{loc:T PlaylistEmptyTitle}" Hint="{loc:T PlaylistEmptyHint}"
+                      <controls:PhoneEmptyState Classes="page" Icon="PlaylistMusic" Title="{loc:T PlaylistEmptyTitle}" Hint="{loc:T PlaylistEmptyHint}"
                                                 IsVisible="{Binding Playlists.IsSelectedPlaylistEmpty}" />
                     </StackPanel>
                   </ScrollViewer>
@@ -538,7 +544,7 @@
               </Panel>
 
               <!-- FAVORITES -->
-              <Grid RowDefinitions="Auto, Auto, *"
+              <Grid Classes="page" RowDefinitions="Auto, *"
                     IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=4}">
                 <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavFavorites}">
                   <controls:PhoneHeader.Subtitle>
@@ -549,21 +555,17 @@
                     </StackPanel>
                   </controls:PhoneHeader.Subtitle>
                 </controls:PhoneHeader>
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="16,0,16,8">
-                  <Button Classes="phone-pill" Command="{Binding NavigateToCommand}" CommandParameter="3" Content="{loc:T NavPlaylists}" />
-                  <Button Classes="phone-pill selected" Content="{loc:T NavFavorites}" />
-                </StackPanel>
-                <ScrollViewer Grid.Row="2" IsVisible="{Binding !Favorites.IsEmpty}">
+                <ScrollViewer Grid.Row="1" IsVisible="{Binding !Favorites.IsEmpty}">
                   <StackPanel>
                     <Grid ColumnDefinitions="*, *" Margin="16,4,16,10">
-                      <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="23" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+                      <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                               Command="{Binding Favorites.PlayAllCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <material:MaterialIcon Kind="Play" Width="20" Height="20" />
                           <TextBlock Text="{loc:T Play}" FontWeight="Bold" />
                         </StackPanel>
                       </Button>
-                      <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="23" Margin="5,0,0,0" HorizontalAlignment="Stretch"
+                      <Button Grid.Column="1" Classes="secondary" Height="46" CornerRadius="6" Margin="5,0,0,0" HorizontalAlignment="Stretch"
                               Command="{Binding Favorites.ShuffleAllCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <material:MaterialIcon Kind="Shuffle" Width="20" Height="20" />
@@ -571,17 +573,17 @@
                         </StackPanel>
                       </Button>
                     </Grid>
-                    <ItemsControl Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Favorites.FavoriteTracks}"
+                    <controls:RecyclingList Classes="phone-list" Margin="8,0,8,16" ItemsSource="{Binding Favorites.FavoriteTracks}"
                                    ItemTemplate="{StaticResource FavoritesRow}" />
                   </StackPanel>
                 </ScrollViewer>
-                <controls:PhoneEmptyState Grid.Row="2" Icon="HeartOutline"
+                <controls:PhoneEmptyState Classes="page" Grid.Row="1" Icon="HeartOutline"
                                           Title="{loc:T EmptyFavoritesTitle}" Hint="{loc:T EmptyFavoritesHint}"
                                           IsVisible="{Binding Favorites.IsEmpty}" />
               </Grid>
 
               <!-- SETTINGS -->
-              <Grid RowDefinitions="Auto, *"
+              <Grid Classes="page" RowDefinitions="Auto, *"
                     IsVisible="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=5}">
                 <controls:PhoneHeader Grid.Row="0" Title="{loc:T NavSettings}" ShowSearch="False" />
                 <ScrollViewer Grid.Row="1">
@@ -590,7 +592,7 @@
                     <!-- Account -->
                     <Border Classes="phone-card">
                       <Panel>
-                        <StackPanel Spacing="14" IsVisible="{Binding ServerSettings.IsLoggedIn}">
+                        <StackPanel Classes="page" Spacing="14" IsVisible="{Binding ServerSettings.IsLoggedIn}">
                           <Grid ColumnDefinitions="Auto, *">
                             <Border Width="52" Height="52" CornerRadius="26" Background="{DynamicResource Surface2}" VerticalAlignment="Center">
                               <material:MaterialIcon Kind="{Binding ServerSettings.IsAdmin, Converter={StaticResource BoolToAdminIconConverter}}"
@@ -604,7 +606,7 @@
                                          Foreground="{DynamicResource LimeAccent}" />
                             </StackPanel>
                           </Grid>
-                          <Button Classes="secondary" Height="46" CornerRadius="23" HorizontalAlignment="Stretch"
+                          <Button Classes="secondary" Height="46" CornerRadius="6" HorizontalAlignment="Stretch"
                                   Command="{Binding LogoutCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                               <material:MaterialIcon Kind="Logout" Width="20" Height="20" Foreground="{DynamicResource DangerColor}" />
@@ -612,7 +614,7 @@
                             </StackPanel>
                           </Button>
                         </StackPanel>
-                        <StackPanel Spacing="12" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
+                        <StackPanel Classes="page" Spacing="12" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
                           <Grid ColumnDefinitions="Auto, *">
                             <Border Width="52" Height="52" CornerRadius="26" Background="{DynamicResource Surface2}" VerticalAlignment="Center">
                               <material:MaterialIcon Kind="AccountOutline" Width="28" Height="28" Foreground="{DynamicResource TextMuted}"
@@ -623,7 +625,7 @@
                               <TextBlock Text="{loc:T NotSignedInHint}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                             </StackPanel>
                           </Grid>
-                          <Button Classes="primary" Height="46" CornerRadius="23" HorizontalAlignment="Stretch"
+                          <Button Classes="primary" Height="46" CornerRadius="6" HorizontalAlignment="Stretch"
                                   Command="{Binding ShowLoginScreenCommand}">
                             <StackPanel Orientation="Horizontal" Spacing="8">
                               <material:MaterialIcon Kind="Login" Width="20" Height="20" />
@@ -650,7 +652,7 @@
                             <KeyBinding Gesture="Enter" Command="{Binding ServerSettings.ConnectServerCommand}" />
                           </TextBox.KeyBindings>
                         </TextBox>
-                        <Button Classes="secondary" Height="46" CornerRadius="23" HorizontalAlignment="Stretch"
+                        <Button Classes="secondary" Height="46" CornerRadius="6" HorizontalAlignment="Stretch"
                                 Command="{Binding ServerSettings.ConnectServerCommand}" IsEnabled="{Binding !ServerSettings.IsConnecting}">
                           <StackPanel Orientation="Horizontal" Spacing="8">
                             <material:MaterialIcon Kind="ServerNetwork" Width="20" Height="20" Foreground="{DynamicResource PrimaryAction}" />
@@ -722,13 +724,26 @@
                         </Grid>
                       </StackPanel>
                     </Border>
+
+                    <!-- Performance statistics: the frame graphs and counters drawn over the app (a tuning tool, off by default) -->
+                    <Border Classes="phone-card">
+                      <Grid ColumnDefinitions="*, Auto">
+                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                          <TextBlock Text="{loc:T SettingsPerformanceStats}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                          <TextBlock Text="{loc:T SettingsPerformanceStatsHint}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowPerformanceStats, Mode=TwoWay}"
+                                      OnContent="" OffContent="" MinWidth="0" Margin="12,0,0,0" VerticalAlignment="Center"
+                                      AutomationProperties.Name="{loc:T SettingsPerformanceStats}" />
+                      </Grid>
+                    </Border>
                   </StackPanel>
                 </ScrollViewer>
               </Grid>
             </Panel>
 
             <!-- ======================= SEARCH ======================= -->
-            <Grid RowDefinitions="Auto, *" IsVisible="{Binding IsSearchOpen}">
+            <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding IsSearchOpen}">
               <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Height="68" Margin="8,0,16,0">
                 <Button Grid.Column="0" Classes="phone-icon main" Command="{Binding CloseSearchCommand}"
                         AutomationProperties.Name="{loc:T Back}">
@@ -746,9 +761,9 @@
                 </TextBox>
               </Grid>
 
-              <controls:PhoneEmptyState Grid.Row="1" Icon="Magnify" Title="{loc:T Search}" Hint="{loc:T SearchSubtitle}"
+              <controls:PhoneEmptyState Classes="page" Grid.Row="1" Icon="Magnify" Title="{loc:T Search}" Hint="{loc:T SearchSubtitle}"
                                         IsVisible="{Binding !IsSearchActive}" />
-              <controls:PhoneEmptyState Grid.Row="1" Icon="MagnifyClose" Title="{loc:T NoResultsTitle}" Hint="{loc:T NoResultsHint}">
+              <controls:PhoneEmptyState Classes="page" Grid.Row="1" Icon="MagnifyClose" Title="{loc:T NoResultsTitle}" Hint="{loc:T NoResultsHint}">
                 <controls:PhoneEmptyState.IsVisible>
                   <MultiBinding Converter="{x:Static BoolConverters.And}">
                     <Binding Path="IsSearchActive" />
@@ -765,7 +780,7 @@
                     <TextBlock Classes="phone-section" Text="{loc:T BestMatch}" Margin="20,4,20,8" />
                     <Border Classes="phone-card" Margin="16,0" Padding="12">
                       <Grid ColumnDefinitions="Auto, *, Auto">
-                        <Border Width="64" Height="64" CornerRadius="12" Background="{DynamicResource Surface2}" ClipToBounds="True">
+                        <Border Width="64" Height="64" CornerRadius="8" Background="{DynamicResource Surface2}" ClipToBounds="True">
                           <Panel>
                             <material:MaterialIcon Kind="{Binding Search.BestMatch.IconKind}" Width="30" Height="30"
                                                    Foreground="{Binding Search.BestMatch.TypeBrush}"
@@ -784,7 +799,7 @@
                             <TextBlock Classes="phone-row-sub" Text="{Binding Search.BestMatch.Subtitle}" />
                           </StackPanel>
                         </Button>
-                        <Button Grid.Column="2" Classes="phone-fab" Width="44" Height="44" CornerRadius="22"
+                        <Button Grid.Column="2" Classes="phone-fab" Width="44" Height="44" CornerRadius="6"
                                 Command="{Binding Search.BestMatch.PlayCommand}" AutomationProperties.Name="{loc:T TipPlay}">
                           <material:MaterialIcon Kind="Play" Width="22" Height="22" />
                         </Button>
@@ -825,7 +840,7 @@
                   <!-- Tracks -->
                   <StackPanel IsVisible="{Binding Search.HasTracks}">
                     <TextBlock Classes="phone-section" Text="{loc:T LabelTracks}" Margin="20,14,20,4" />
-                    <ItemsControl Classes="phone-list" Margin="8,0" ItemsSource="{Binding Search.MatchingTracks}"
+                    <controls:RecyclingList Classes="phone-list" Margin="8,0" ItemsSource="{Binding Search.MatchingTracks}"
                                    ItemTemplate="{StaticResource SearchTrackRow}" />
                   </StackPanel>
                 </StackPanel>
@@ -835,15 +850,16 @@
         </Grid>
 
         <!-- Mini player -->
-        <Panel Grid.Row="1" Margin="10,4,10,8" IsVisible="{Binding Player.CurrentTrack, Converter={x:Static ObjectConverters.IsNotNull}}">
-        <!-- The shadow sits on its own layer: a shadow on the card itself hides the card's content in some renderers -->
-        <Border CornerRadius="22" Background="{DynamicResource PhoneBarBackground}" BoxShadow="{DynamicResource PhoneFloatShadow}" />
-        <Border CornerRadius="22" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1">
+        <Panel Grid.Row="1" Classes="mini-player" Margin="10,4,10,8" IsVisible="{Binding Player.CurrentTrack, Converter={x:Static ObjectConverters.IsNotNull}}">
+        <!-- No blur shadow here: a blurred shadow is drawn through an offscreen buffer on every frame, and this card is on
+             screen all the time, under every scrolling list. The border and the opaque fill separate it from the page. -->
+        <Border CornerRadius="10" Background="{DynamicResource PhoneBarBackground}" />
+        <Border CornerRadius="10" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1">
           <Grid RowDefinitions="Auto, Auto">
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto, Auto" Height="64">
-              <Button Grid.Column="0" Classes="phone-tap" CornerRadius="22" Command="{Binding OpenNowPlayingCommand}">
+              <Button Grid.Column="0" Classes="phone-tap" CornerRadius="10" Command="{Binding OpenNowPlayingCommand}">
                 <Grid ColumnDefinitions="Auto, *" Margin="8,0,4,0">
-                  <Border Width="48" Height="48" CornerRadius="12" Background="{DynamicResource Surface2}" ClipToBounds="True">
+                  <Border Width="48" Height="48" CornerRadius="8" Background="{DynamicResource Surface2}" ClipToBounds="True">
                     <Panel>
                       <material:MaterialIcon Kind="MusicNote" Width="22" Height="22" Foreground="{DynamicResource TextMuted}"
                                              HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -871,63 +887,51 @@
         </Border>
         </Panel>
 
-        <!-- Bottom navigation: artists, albums, tracks, playlists (with favorites), settings -->
-        <Border Grid.Row="2" Background="{DynamicResource PhoneBarBackground}"
-                BorderBrush="{DynamicResource GlassBorder}" BorderThickness="0,1,0,0">
+        <!-- Bottom navigation: artists, albums, songs, favorites, playlists. Settings sits behind the account button of the page headers. -->
+        <!-- The active item is shown by its icon and label taking the colour of its section (no pill) -->
+        <!-- AMOLED: pure black; the bar also covers the space under the system navigation bar (its bottom padding) -->
+        <Border Grid.Row="2" Background="{DynamicResource PhoneNavBackground}"
+                BorderBrush="{DynamicResource GlassBorder}" BorderThickness="0,1,0,0"
+                Padding="{Binding SafeAreaBottomOnly, ElementName=RootControl}">
           <Grid ColumnDefinitions="*, *, *, *, *" Height="68">
-            <Button Grid.Column="0" Classes="phone-nav"
+            <Button Grid.Column="0" Classes="phone-nav nav-artists"
                     Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}"
                     Command="{Binding NavigateToCommand}" CommandParameter="2">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
-                <Panel Width="60" Height="30">
-                  <Border Classes="phone-nav-pill" CornerRadius="15" />
-                  <material:MaterialIcon Classes="phone-nav-icon" Kind="AccountMusic" Width="24" Height="24" />
-                </Panel>
-                <TextBlock Text="{loc:T NavArtists}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <material:MaterialIcon Classes="phone-nav-icon" Kind="AccountMusic" Width="26" Height="26" HorizontalAlignment="Center" />
+                <TextBlock Classes="phone-nav-label" Text="{loc:T NavArtists}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
-            <Button Grid.Column="1" Classes="phone-nav"
+            <Button Grid.Column="1" Classes="phone-nav nav-albums"
                     Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}"
                     Command="{Binding NavigateToCommand}" CommandParameter="1">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
-                <Panel Width="60" Height="30">
-                  <Border Classes="phone-nav-pill" CornerRadius="15" />
-                  <material:MaterialIcon Classes="phone-nav-icon" Kind="Album" Width="24" Height="24" />
-                </Panel>
-                <TextBlock Text="{loc:T NavAlbums}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <material:MaterialIcon Classes="phone-nav-icon" Kind="Album" Width="26" Height="26" HorizontalAlignment="Center" />
+                <TextBlock Classes="phone-nav-label" Text="{loc:T NavAlbums}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
-            <Button Grid.Column="2" Classes="phone-nav"
+            <Button Grid.Column="2" Classes="phone-nav nav-songs"
                     Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=0}"
                     Command="{Binding NavigateToCommand}" CommandParameter="0">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
-                <Panel Width="60" Height="30">
-                  <Border Classes="phone-nav-pill" CornerRadius="15" />
-                  <material:MaterialIcon Classes="phone-nav-icon" Kind="MusicNote" Width="24" Height="24" />
-                </Panel>
-                <TextBlock Text="{loc:T NavTracks}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <material:MaterialIcon Classes="phone-nav-icon" Kind="MusicNote" Width="26" Height="26" HorizontalAlignment="Center" />
+                <TextBlock Classes="phone-nav-label" Text="{loc:T NavSongs}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
-            <Button Grid.Column="3" Classes="phone-nav"
-                    Classes.active="{Binding IsPlaylistsSectionActive}"
+            <Button Grid.Column="3" Classes="phone-nav nav-favorites"
+                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=4}"
+                    Command="{Binding NavigateToCommand}" CommandParameter="4">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <material:MaterialIcon Classes="phone-nav-icon" Kind="Heart" Width="26" Height="26" HorizontalAlignment="Center" />
+                <TextBlock Classes="phone-nav-label" Text="{loc:T NavFavorites}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Button>
+            <Button Grid.Column="4" Classes="phone-nav nav-playlists"
+                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=3}"
                     Command="{Binding NavigateToCommand}" CommandParameter="3">
               <StackPanel Spacing="3" HorizontalAlignment="Center">
-                <Panel Width="60" Height="30">
-                  <Border Classes="phone-nav-pill" CornerRadius="15" />
-                  <material:MaterialIcon Classes="phone-nav-icon" Kind="PlaylistMusic" Width="24" Height="24" />
-                </Panel>
-                <TextBlock Text="{loc:T NavPlaylistsShort}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-            </Button>
-            <Button Grid.Column="4" Classes="phone-nav"
-                    Classes.active="{Binding SelectedNavigationIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=5}"
-                    Command="{Binding NavigateToCommand}" CommandParameter="5">
-              <StackPanel Spacing="3" HorizontalAlignment="Center">
-                <Panel Width="60" Height="30">
-                  <Border Classes="phone-nav-pill" CornerRadius="15" />
-                  <material:MaterialIcon Classes="phone-nav-icon" Kind="CogOutline" Width="24" Height="24" />
-                </Panel>
-                <TextBlock Text="{loc:T NavSettings}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <material:MaterialIcon Classes="phone-nav-icon" Kind="PlaylistMusic" Width="26" Height="26" HorizontalAlignment="Center" />
+                <TextBlock Classes="phone-nav-label" Text="{loc:T NavPlaylistsShort}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis" />
               </StackPanel>
             </Button>
           </Grid>
@@ -937,7 +941,8 @@
       <!-- ============================================================ -->
       <!-- SIGN-IN / ACCOUNT                                            -->
       <!-- ============================================================ -->
-      <Grid IsVisible="{Binding IsLoginViewActive}" RowDefinitions="Auto, *">
+      <Grid Classes="page" IsVisible="{Binding IsLoginViewActive}" RowDefinitions="Auto, *"
+            Margin="{Binding SafeAreaBottomOnly, ElementName=RootControl}">
         <Grid Grid.Row="0" ColumnDefinitions="Auto, *" Height="60" Margin="8,0,16,0">
           <Button Grid.Column="0" Classes="phone-icon main" Command="{Binding ContinueOfflineCommand}"
                   IsVisible="{Binding !IsLibraryEmpty}" AutomationProperties.Name="{loc:T BackToMusic}">
@@ -977,7 +982,7 @@
             <Border Classes="phone-card" Padding="20">
               <Panel>
                 <!-- Signed in -->
-                <StackPanel Spacing="16" IsVisible="{Binding ServerSettings.IsLoggedIn}">
+                <StackPanel Classes="page" Spacing="16" IsVisible="{Binding ServerSettings.IsLoggedIn}">
                   <Grid ColumnDefinitions="Auto, *">
                     <material:MaterialIcon Kind="AccountCheck" Width="44" Height="44" Foreground="{DynamicResource LimeAccent}" VerticalAlignment="Center" />
                     <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
@@ -986,13 +991,13 @@
                     </StackPanel>
                   </Grid>
                   <TextBlock Text="{Binding ServerSettings.StatusMessage}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
-                  <Button Classes="primary" Height="48" CornerRadius="24" HorizontalAlignment="Stretch" Command="{Binding ContinueOfflineCommand}">
+                  <Button Classes="primary" Height="48" CornerRadius="6" HorizontalAlignment="Stretch" Command="{Binding ContinueOfflineCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="MusicBox" Width="20" Height="20" />
                       <TextBlock Text="{loc:T BackToMusic}" FontWeight="Bold" />
                     </StackPanel>
                   </Button>
-                  <Button Classes="secondary" Height="48" CornerRadius="24" HorizontalAlignment="Stretch" Command="{Binding LogoutCommand}">
+                  <Button Classes="secondary" Height="48" CornerRadius="6" HorizontalAlignment="Stretch" Command="{Binding LogoutCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="Logout" Width="20" Height="20" Foreground="{DynamicResource DangerColor}" />
                       <TextBlock Text="{loc:T SignOut}" FontWeight="SemiBold" />
@@ -1001,7 +1006,7 @@
                 </StackPanel>
 
                 <!-- Signed out -->
-                <StackPanel Spacing="14" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
+                <StackPanel Classes="page" Spacing="14" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
                   <StackPanel Spacing="8">
                     <TextBlock Classes="phone-section" Text="{loc:T ServerAddressLabel}" />
                     <TextBox Classes="phone-field" Text="{Binding ServerSettings.ServerUrl, Mode=TwoWay}"
@@ -1010,7 +1015,7 @@
                         <KeyBinding Gesture="Enter" Command="{Binding ServerSettings.ConnectServerCommand}" />
                       </TextBox.KeyBindings>
                     </TextBox>
-                    <Button Classes="secondary" Height="46" CornerRadius="23" HorizontalAlignment="Stretch"
+                    <Button Classes="secondary" Height="46" CornerRadius="6" HorizontalAlignment="Stretch"
                             Command="{Binding ServerSettings.ConnectServerCommand}" IsEnabled="{Binding !ServerSettings.IsConnecting}">
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <material:MaterialIcon Kind="ServerNetwork" Width="20" Height="20" Foreground="{DynamicResource CyanAccent}" />
@@ -1021,7 +1026,7 @@
                     <TextBlock Text="{Binding ServerSettings.StatusMessage}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
                   </StackPanel>
 
-                  <Border Background="#20FFB703" BorderBrush="#FFB703" BorderThickness="1" CornerRadius="12" Padding="12,10"
+                  <Border Background="#20FFB703" BorderBrush="#FFB703" BorderThickness="1" CornerRadius="8" Padding="12,10"
                           IsVisible="{Binding ServerSettings.IsServerOffline}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="ServerOff" Width="18" Height="18" Foreground="#FFB703" VerticalAlignment="Top" />
@@ -1031,7 +1036,7 @@
 
                   <!-- First run: create the administrator -->
                   <StackPanel Spacing="10" IsVisible="{Binding ServerSettings.IsSetupRequired}">
-                    <Border Background="#28FFB703" BorderBrush="#FFB703" BorderThickness="1" CornerRadius="12" Padding="14,10">
+                    <Border Background="#28FFB703" BorderBrush="#FFB703" BorderThickness="1" CornerRadius="8" Padding="14,10">
                       <StackPanel Spacing="4">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                           <material:MaterialIcon Kind="ShieldAlertOutline" Width="18" Height="18" Foreground="#FFB703" VerticalAlignment="Center" />
@@ -1046,7 +1051,7 @@
                         <KeyBinding Gesture="Enter" Command="{Binding ServerSettings.SetupAdminCommand}" />
                       </TextBox.KeyBindings>
                     </TextBox>
-                    <Button Classes="primary" Height="48" CornerRadius="24" HorizontalAlignment="Stretch"
+                    <Button Classes="primary" Height="48" CornerRadius="6" HorizontalAlignment="Stretch"
                             Command="{Binding ServerSettings.SetupAdminCommand}" IsEnabled="{Binding !ServerSettings.IsAuthenticating}">
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <material:MaterialIcon Kind="ShieldAccount" Width="20" Height="20" />
@@ -1065,7 +1070,7 @@
                     </TextBox>
                     <CheckBox IsChecked="{Binding ServerSettings.StayLoggedIn, Mode=TwoWay}" Content="{loc:T StaySignedIn}"
                               FontSize="13" Foreground="{DynamicResource TextMain}" />
-                    <Button Classes="primary" Height="48" CornerRadius="24" HorizontalAlignment="Stretch"
+                    <Button Classes="primary" Height="48" CornerRadius="6" HorizontalAlignment="Stretch"
                             Command="{Binding ServerSettings.LoginCommand}" IsEnabled="{Binding !ServerSettings.IsAuthenticating}">
                       <StackPanel Orientation="Horizontal" Spacing="8">
                         <material:MaterialIcon Kind="Login" Width="20" Height="20" />
@@ -1074,7 +1079,7 @@
                     </Button>
                   </StackPanel>
 
-                  <Border Background="#28FF003C" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1" CornerRadius="12" Padding="12,8"
+                  <Border Background="#28FF003C" BorderBrush="{DynamicResource DangerColor}" BorderThickness="1" CornerRadius="8" Padding="12,8"
                           IsVisible="{Binding ServerSettings.HasAuthError}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="AlertCircleOutline" Foreground="{DynamicResource DangerColor}" Width="16" Height="16" VerticalAlignment="Top" />
@@ -1089,7 +1094,7 @@
                     <Rectangle Grid.Column="2" Height="1" Fill="{DynamicResource GlassBorder}" VerticalAlignment="Center" />
                   </Grid>
 
-                  <Button Classes="secondary" Height="46" CornerRadius="23" HorizontalAlignment="Stretch" Command="{Binding ContinueOfflineCommand}">
+                  <Button Classes="secondary" Height="46" CornerRadius="6" HorizontalAlignment="Stretch" Command="{Binding ContinueOfflineCommand}">
                     <StackPanel Orientation="Horizontal" Spacing="8">
                       <material:MaterialIcon Kind="FolderMusicOutline" Width="20" Height="20" Foreground="{DynamicResource LimeAccent}" />
                       <TextBlock Text="{loc:T ContinueWithoutServer}" FontWeight="SemiBold" FontSize="13" />
@@ -1140,11 +1145,12 @@
         <Panel Grid.Row="2">
 
           <!-- Player: cover, title, artist, quality -->
-          <Grid RowDefinitions="*, Auto" IsVisible="{Binding NowPlayingTab, Converter={StaticResource IntEqualConverter}, ConverterParameter=0}">
+          <Grid Classes="page" RowDefinitions="*, Auto" IsVisible="{Binding NowPlayingTab, Converter={StaticResource IntEqualConverter}, ConverterParameter=0}">
             <Viewbox Grid.Row="0" Stretch="Uniform" Margin="28,8,28,12" MaxWidth="420" ClipToBounds="False">
               <Panel Width="340" Height="340">
-                <Border CornerRadius="24" Background="{DynamicResource Surface2}" BoxShadow="{DynamicResource PhoneCoverShadow}" />
-                <Border CornerRadius="24" ClipToBounds="True">
+                <Border Margin="-48,-24,-48,-72" Background="{DynamicResource PhoneCoverGlow}" IsHitTestVisible="False" />
+                <Border CornerRadius="8" Background="{DynamicResource Surface2}" />
+                <Border CornerRadius="8" ClipToBounds="True">
                   <Panel>
                     <material:MaterialIcon Kind="MusicNote" Width="96" Height="96" Foreground="{DynamicResource TextMuted}"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -1157,15 +1163,17 @@
               <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
                 <TextBlock Text="{Binding Player.NowPlayingTitle}" FontSize="22" FontWeight="Bold"
                            Foreground="{DynamicResource TextMain}" TextTrimming="CharacterEllipsis" />
-                <Button Classes="phone-tap" HorizontalAlignment="Left" Padding="0,4,12,4" CornerRadius="10"
+                <Button Classes="phone-tap" HorizontalAlignment="Left" Padding="0,4,12,4" CornerRadius="6"
                         Command="{Binding OpenArtistByNameCommand}" CommandParameter="{Binding Player.CurrentTrack.Artist}">
                   <TextBlock Text="{Binding Player.NowPlayingArtist}" FontSize="16" FontWeight="SemiBold"
                              Foreground="{DynamicResource PrimaryAction}" TextTrimming="CharacterEllipsis" />
                 </Button>
               </StackPanel>
-              <Button Grid.Column="1" Classes="phone-icon" Width="52" Height="52" CornerRadius="26"
+              <Button Grid.Column="1" Classes="phone-icon" Width="52" Height="52" CornerRadius="6"
                       Command="{Binding Player.ToggleFavoriteCurrentCommand}" AutomationProperties.Name="{loc:T TipFavorite}">
-                <material:MaterialIcon Kind="{Binding Player.CurrentTrack.IsFavorite, Converter={StaticResource FavoriteIconConverter}}"
+                <material:MaterialIcon Classes="heart-pop"
+                                       Classes.fav="{Binding Player.CurrentTrack.IsFavorite, FallbackValue=False}"
+                                       Kind="{Binding Player.CurrentTrack.IsFavorite, Converter={StaticResource FavoriteIconConverter}}"
                                        Width="28" Height="28"
                                        Foreground="{Binding Player.CurrentTrack.IsFavorite, Converter={StaticResource FavoriteColorConverter}}" />
               </Button>
@@ -1173,10 +1181,10 @@
           </Grid>
 
           <!-- Queue -->
-          <Grid RowDefinitions="Auto, *" IsVisible="{Binding NowPlayingTab, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}">
+          <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding NowPlayingTab, Converter={StaticResource IntEqualConverter}, ConverterParameter=1}">
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="20,0,8,4">
               <TextBlock Classes="phone-section" Text="{loc:T Queue}" VerticalAlignment="Center" />
-              <Button Grid.Column="1" Classes="phone-tap" Height="40" Padding="14,0" CornerRadius="20" HorizontalAlignment="Right"
+              <Button Grid.Column="1" Classes="phone-tap" Height="40" Padding="14,0" CornerRadius="6" HorizontalAlignment="Right"
                       Command="{Binding Player.ClearQueueCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <material:MaterialIcon Kind="PlaylistRemove" Width="20" Height="20" Foreground="{DynamicResource CoralAccent}" />
@@ -1185,18 +1193,18 @@
               </Button>
             </Grid>
             <ScrollViewer Grid.Row="1" x:Name="QueueScroller">
-              <ItemsControl x:Name="QueueList" Classes="phone-list" Margin="8,0,8,12" ItemsSource="{Binding Player.QueueItems}"
+              <controls:RecyclingList x:Name="QueueList" Classes="phone-list" Margin="8,0,8,12" ItemsSource="{Binding Player.QueueItems}"
                              ItemTemplate="{StaticResource QueueRow}" />
             </ScrollViewer>
           </Grid>
 
           <!-- Lyrics -->
-          <Panel IsVisible="{Binding NowPlayingTab, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}">
+          <Panel Classes="page" IsVisible="{Binding NowPlayingTab, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}">
             <ScrollViewer IsVisible="{Binding Player.HasLyrics}">
               <SelectableTextBlock Text="{Binding Player.CurrentLyrics}" FontSize="18" LineHeight="28" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextMain}" Margin="24,8,24,24" />
             </ScrollViewer>
-            <controls:PhoneEmptyState Icon="TextBoxOutline" Title="{loc:T TabLyrics}" Hint="{loc:T NoLyrics}"
+            <controls:PhoneEmptyState Classes="page" Icon="TextBoxOutline" Title="{loc:T TabLyrics}" Hint="{loc:T NoLyrics}"
                                       IsVisible="{Binding !Player.HasLyrics}" />
           </Panel>
         </Panel>
@@ -1220,16 +1228,16 @@
               <material:MaterialIcon Kind="Shuffle" Width="24" Height="24"
                                      Foreground="{Binding Player.IsShuffle, Converter={StaticResource ActiveControlBrushConverter}}" />
             </Button>
-            <Button Grid.Column="1" Classes="phone-icon main" HorizontalAlignment="Center" Width="52" Height="52" CornerRadius="26"
+            <Button Grid.Column="1" Classes="phone-icon main" HorizontalAlignment="Center" Width="52" Height="52" CornerRadius="6"
                     Command="{Binding Player.PreviousTrackCommand}" AutomationProperties.Name="{loc:T TipPrevious}">
               <material:MaterialIcon Kind="SkipPrevious" Width="34" Height="34" />
             </Button>
             <Button Grid.Column="2" Classes="phone-fab" HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Width="68" Height="68" CornerRadius="34"
+                    Width="68" Height="68" CornerRadius="6"
                     Command="{Binding Player.TogglePlayPauseCommand}" AutomationProperties.Name="{loc:T TipPlayPause}">
               <material:MaterialIcon Kind="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToIconConverter}}" Width="36" Height="36" />
             </Button>
-            <Button Grid.Column="3" Classes="phone-icon main" HorizontalAlignment="Center" Width="52" Height="52" CornerRadius="26"
+            <Button Grid.Column="3" Classes="phone-icon main" HorizontalAlignment="Center" Width="52" Height="52" CornerRadius="6"
                     Command="{Binding Player.NextTrackCommand}" AutomationProperties.Name="{loc:T TipNext}">
               <material:MaterialIcon Kind="SkipNext" Width="34" Height="34" />
             </Button>
@@ -1246,13 +1254,16 @@
     <!-- ============================================================ -->
     <!-- PLAYLIST DIALOGS (bottom sheets)                             -->
     <!-- ============================================================ -->
-    <Grid IsVisible="{Binding Playlists.IsAnyDialogOpen}">
-      <Border Background="{DynamicResource PhoneScrim}">
+    <Grid Classes="sheet-dialog" IsVisible="{Binding Playlists.IsAnyDialogOpen}">
+      <Border Classes="sheet-scrim" Background="{DynamicResource PhoneScrim}">
         <Button Classes="phone-tap" CornerRadius="0" Command="{Binding GoBackCommand}" />
       </Border>
       <Border VerticalAlignment="Bottom" Padding="{Binding SafeArea, ElementName=RootControl}">
-        <Border CornerRadius="24" Background="{DynamicResource PhoneSheetBackground}" BorderBrush="{DynamicResource GlassBorder}"
+        <Border Classes="sheet-card" CornerRadius="10" Background="{DynamicResource PhoneSheetBackground}" BorderBrush="{DynamicResource GlassBorder}"
                 BorderThickness="1" Padding="20" Margin="8">
+         <Border.RenderTransform>
+           <TranslateTransform />
+         </Border.RenderTransform>
          <Panel>
 
           <!-- New playlist -->
@@ -1267,11 +1278,11 @@
               </TextBox.KeyBindings>
             </TextBox>
             <Grid ColumnDefinitions="*, *">
-              <Button Grid.Column="0" Classes="secondary" Height="46" CornerRadius="23" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+              <Button Grid.Column="0" Classes="secondary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                       Command="{Binding Playlists.CloseCreateDialogCommand}">
                 <TextBlock Text="{loc:T Cancel}" FontWeight="SemiBold" />
               </Button>
-              <Button Grid.Column="1" Classes="lime" Height="46" CornerRadius="23" Margin="5,0,0,0" HorizontalAlignment="Stretch"
+              <Button Grid.Column="1" Classes="lime" Height="46" CornerRadius="6" Margin="5,0,0,0" HorizontalAlignment="Stretch"
                       Command="{Binding Playlists.CreatePlaylistCommand}">
                 <TextBlock Text="{loc:T Create}" FontWeight="Bold" />
               </Button>
@@ -1291,7 +1302,7 @@
               <ItemsControl ItemsSource="{Binding Playlists.Playlists}">
                 <ItemsControl.ItemTemplate>
                   <DataTemplate x:DataType="models:Playlist">
-                    <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="48" CornerRadius="14" Margin="0,0,0,6"
+                    <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left" Height="48" CornerRadius="6" Margin="0,0,0,6"
                             Command="{Binding $parent[UserControl].((vm:MainViewModel)DataContext).Playlists.AddPendingTrackToCommand}"
                             CommandParameter="{Binding}">
                       <StackPanel Orientation="Horizontal" Spacing="10">
@@ -1305,11 +1316,11 @@
               </ItemsControl>
             </ScrollViewer>
             <Grid ColumnDefinitions="*, *">
-              <Button Grid.Column="0" Classes="secondary" Height="46" CornerRadius="23" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+              <Button Grid.Column="0" Classes="secondary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                       Command="{Binding Playlists.CancelAddTrackCommand}">
                 <TextBlock Text="{loc:T Cancel}" FontWeight="SemiBold" />
               </Button>
-              <Button Grid.Column="1" Classes="lime" Height="46" CornerRadius="23" Margin="5,0,0,0" HorizontalAlignment="Stretch"
+              <Button Grid.Column="1" Classes="lime" Height="46" CornerRadius="6" Margin="5,0,0,0" HorizontalAlignment="Stretch"
                       Command="{Binding Playlists.CreatePlaylistForPendingTrackCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <material:MaterialIcon Kind="Plus" Width="18" Height="18" />
@@ -1325,11 +1336,11 @@
             <TextBlock Text="{loc:TFormat PlaylistDeleteConfirm, Path=Playlists.PlaylistPendingDelete.Name}"
                        FontSize="14" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
             <Grid ColumnDefinitions="*, *">
-              <Button Grid.Column="0" Classes="secondary" Height="46" CornerRadius="23" Margin="0,0,5,0" HorizontalAlignment="Stretch"
+              <Button Grid.Column="0" Classes="secondary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                       Command="{Binding Playlists.CancelDeletePlaylistCommand}">
                 <TextBlock Text="{loc:T Cancel}" FontWeight="SemiBold" />
               </Button>
-              <Button Grid.Column="1" Classes="coral" Height="46" CornerRadius="23" Margin="5,0,0,0" HorizontalAlignment="Stretch"
+              <Button Grid.Column="1" Classes="coral" Height="46" CornerRadius="6" Margin="5,0,0,0" HorizontalAlignment="Stretch"
                       Command="{Binding Playlists.ConfirmDeletePlaylistCommand}">
                 <TextBlock Text="{loc:T Delete}" FontWeight="Bold" />
               </Button>

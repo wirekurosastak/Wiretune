@@ -25,6 +25,11 @@ public class NavVisualizerControl : Control
     private const double WaveDurationMs = 420.0;
     private const double FrameIntervalMs = 16.0;
 
+    // While the control is not on screen (it sits on one page of the phone layout, and a page that is not shown still
+    // exists) there is nothing to animate: the timer only checks now and then whether it came into view.
+    private static readonly TimeSpan HiddenPollInterval = TimeSpan.FromMilliseconds(250);
+    private static readonly TimeSpan FrameInterval = TimeSpan.FromMilliseconds(FrameIntervalMs);
+
     public static readonly StyledProperty<int> WaveTriggerProperty =
         AvaloniaProperty.Register<NavVisualizerControl, int>(nameof(WaveTrigger));
 
@@ -95,7 +100,7 @@ public class NavVisualizerControl : Control
 
         _timer = new DispatcherTimer(DispatcherPriority.Render)
         {
-            Interval = TimeSpan.FromMilliseconds(FrameIntervalMs)
+            Interval = FrameInterval
         };
         _timer.Tick += OnTick;
     }
@@ -192,6 +197,16 @@ public class NavVisualizerControl : Control
 
     private void OnTick(object? sender, EventArgs e)
     {
+        // Not visible: do not animate and do not redraw (this used to run 60 times a second for as long as music played,
+        // wherever the user was in the app, and every tick is a frame the phone has to produce). Poll slowly instead.
+        if (!IsEffectivelyVisible)
+        {
+            if (_timer.Interval != HiddenPollInterval) _timer.Interval = HiddenPollInterval;
+            return;
+        }
+
+        if (_timer.Interval != FrameInterval) _timer.Interval = FrameInterval;
+
         float crest;
 
         if (_isWaveActive)

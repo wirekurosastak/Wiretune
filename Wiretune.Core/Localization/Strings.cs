@@ -37,6 +37,7 @@ internal static class Strings
         T("NavArtists", "Előadók", "Artists", "Künstler");
         T("NavAlbums", "Albumok", "Albums", "Alben");
         T("NavTracks", "Számok", "Tracks", "Titel");
+        T("NavSongs", "Számok", "Songs", "Titel");
         T("NavFavorites", "Kedvencek", "Favorites", "Favoriten");
         T("NavPlaylists", "Lejátszási listák", "Playlists", "Playlists");
         T("NavPlaylistsShort", "Listák", "Playlists", "Playlists");
@@ -51,6 +52,9 @@ internal static class Strings
         T("TipBitPerfect", "Bit-Perfect mód (1:1 veszteségmentes kimenet, 0 dB Unity Gain hangerőrögzítés)", "Bit-perfect mode (1:1 lossless output, volume locked at 0 dB unity gain)", "Bit-Perfect-Modus (1:1 verlustfreie Ausgabe, Lautstärke auf 0 dB Unity Gain fixiert)");
         T("TipExclusive", "Kizárólagos (Exclusive) mód (közvetlen ALSA / WASAPI DAC hozzáférés)", "Exclusive mode (direct ALSA / WASAPI DAC access)", "Exklusivmodus (direkter ALSA-/WASAPI-DAC-Zugriff)");
         T("TipAccount", "Wiretune Szerver Fiók és Bejelentkezés", "Wiretune server account and sign-in", "Wiretune-Serverkonto und Anmeldung");
+        T("TipAccountSettings", "Fiók és beállítások", "Account and settings", "Konto und Einstellungen");
+        T("SettingsPerformanceStats", "Teljesítménystatisztika", "Performance statistics", "Leistungsstatistik");
+        T("SettingsPerformanceStatsHint", "Képkocka-grafikonok és számlálók a képernyő alján, a teljesítményhangoláshoz.", "Frame graphs and counters at the bottom of the screen, for tuning performance.", "Bildraten-Diagramme und Zähler am unteren Bildschirmrand zur Leistungsabstimmung.");
         T("TipToggleTheme", "Téma váltása (Sötét / Világos)", "Switch theme (dark / light)", "Design wechseln (Dunkel / Hell)");
         T("TipMinimize", "Kis méret", "Minimize", "Minimieren");
         T("TipMaximize", "Teljes méret / Visszaállítás", "Maximize / Restore", "Maximieren / Wiederherstellen");

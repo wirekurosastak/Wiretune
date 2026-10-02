@@ -32,9 +32,22 @@ public partial class TrackRowView : UserControl
     public static readonly StyledProperty<string?> ActionLabelProperty =
         AvaloniaProperty.Register<TrackRowView, string?>(nameof(ActionLabel));
 
+    /// <summary>How many rows have been created (diagnostics: a list that recycles its rows creates few).</summary>
+    public static long Created { get; private set; }
+
+    /// <summary>How many times a row has been given a track to show (diagnostics: this is the work of a scroll).</summary>
+    public static long Bound { get; private set; }
+
     public TrackRowView()
     {
+        Created++;
         InitializeComponent();
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        Bound++;
+        base.OnDataContextChanged(e);
     }
 
     public ICommand? PlayCommand

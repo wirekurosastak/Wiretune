@@ -12,15 +12,17 @@
           Command="{Binding OpenCommand, ElementName=Root}"
           CommandParameter="{Binding}">
     <Grid RowDefinitions="Auto, *" Margin="4">
-      <Border Grid.Row="0" Height="{Binding $self.Bounds.Width}" CornerRadius="500"
-              Background="{DynamicResource Surface2}" ClipToBounds="True">
+      <controls:SquareBorder Grid.Row="0" CornerRadius="500"
+                             Background="{DynamicResource Surface2}" ClipToBounds="True">
         <Panel>
+          <controls:CoverImage x:Name="Portrait" SourcePath="{Binding PicturePath}" DecodeWidth="240" Stretch="UniformToFill" />
+          <!-- Only there until the portrait is: a hidden control costs no layout and no drawing. -->
           <material:MaterialIcon Kind="AccountMusic" Width="48" Height="48"
                                  Foreground="{DynamicResource CoralAccent}"
-                                 HorizontalAlignment="Center" VerticalAlignment="Center" />
-          <controls:CoverImage SourcePath="{Binding PicturePath}" DecodeWidth="240" Stretch="UniformToFill" />
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 IsVisible="{Binding !HasBitmap, ElementName=Portrait}" />
         </Panel>
-      </Border>
+      </controls:SquareBorder>
       <StackPanel Grid.Row="1" Margin="2,8,2,0" Spacing="1">
         <TextBlock Classes="phone-row-title" Text="{Binding Name}" FontSize="14" HorizontalAlignment="Center" />
         <TextBlock Classes="phone-row-sub" Text="{loc:TFormat TrackCount, Path=TrackCount}" HorizontalAlignment="Center" />

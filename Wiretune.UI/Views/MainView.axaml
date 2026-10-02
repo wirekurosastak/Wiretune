@@ -242,11 +242,14 @@
                 <TextBlock Text="{loc:T SectionLibrary}" Classes="group-title" Margin="8,0,0,8" IsVisible="{Binding !IsCompactLayout}" />
 
                 <!-- Előadók (Artists) -->
-                <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                <Button Classes="secondary nav-item"
+                        Classes.nav-on="{Binding SelectedNavigationIndex, ConverterParameter=2, Converter={StaticResource IntEqualConverter}}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                         Height="40" Padding="12,0"
                         Background="{Binding SelectedNavigationIndex, ConverterParameter=2, Converter={StaticResource NavActiveBackgroundConverter}}"
                         Command="{Binding NavigateToCommand}" CommandParameter="2">
                   <Grid ColumnDefinitions="Auto, *, Auto" VerticalAlignment="Center">
+                    <Border Classes="nav-bar" Grid.ColumnSpan="3" />
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                       <material:MaterialIcon Kind="AccountMusicOutline" Foreground="{DynamicResource CoralAccent}" Width="20" Height="20" />
                       <TextBlock Text="{loc:T NavArtists}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsCompactLayout}" />
@@ -258,11 +261,14 @@
                 </Button>
 
                 <!-- Albumok (Albums) -->
-                <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                <Button Classes="secondary nav-item"
+                        Classes.nav-on="{Binding SelectedNavigationIndex, ConverterParameter=1, Converter={StaticResource IntEqualConverter}}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                         Height="40" Padding="12,0"
                         Background="{Binding SelectedNavigationIndex, ConverterParameter=1, Converter={StaticResource NavActiveBackgroundConverter}}"
                         Command="{Binding NavigateToCommand}" CommandParameter="1">
                   <Grid ColumnDefinitions="Auto, *, Auto" VerticalAlignment="Center">
+                    <Border Classes="nav-bar" Grid.ColumnSpan="3" />
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                       <material:MaterialIcon Kind="Album" Foreground="{DynamicResource PurpleAccent}" Width="20" Height="20" />
                       <TextBlock Text="{loc:T NavAlbums}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsCompactLayout}" />
@@ -274,11 +280,14 @@
                 </Button>
 
                 <!-- Számok (Tracks) -->
-                <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                <Button Classes="secondary nav-item"
+                        Classes.nav-on="{Binding SelectedNavigationIndex, ConverterParameter=0, Converter={StaticResource IntEqualConverter}}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                         Height="40" Padding="12,0"
                         Background="{Binding SelectedNavigationIndex, ConverterParameter=0, Converter={StaticResource NavActiveBackgroundConverter}}"
                         Command="{Binding NavigateToCommand}" CommandParameter="0">
                   <Grid ColumnDefinitions="Auto, *, Auto" VerticalAlignment="Center">
+                    <Border Classes="nav-bar" Grid.ColumnSpan="3" />
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                       <material:MaterialIcon Kind="MusicNoteOutline" Foreground="{DynamicResource CyanAccent}" Width="20" Height="20" />
                       <TextBlock Text="{loc:T NavTracks}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsCompactLayout}" />
@@ -295,11 +304,14 @@
                 <TextBlock Text="{loc:T SectionCollection}" Classes="group-title" Margin="8,0,0,8" IsVisible="{Binding !IsCompactLayout}" />
 
                 <!-- Kedvencek (Favorites) -->
-                <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                <Button Classes="secondary nav-item"
+                        Classes.nav-on="{Binding SelectedNavigationIndex, ConverterParameter=4, Converter={StaticResource IntEqualConverter}}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                         Height="40" Padding="12,0"
                         Background="{Binding SelectedNavigationIndex, ConverterParameter=4, Converter={StaticResource NavActiveBackgroundConverter}}"
                         Command="{Binding NavigateToCommand}" CommandParameter="4">
                   <Grid ColumnDefinitions="Auto, *, Auto" VerticalAlignment="Center">
+                    <Border Classes="nav-bar" Grid.ColumnSpan="3" />
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                       <material:MaterialIcon Kind="Heart" Foreground="{DynamicResource CoralAccent}" Width="20" Height="20" />
                       <TextBlock Text="{loc:T NavFavorites}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsCompactLayout}" />
@@ -311,11 +323,14 @@
                 </Button>
 
                 <!-- Lejátszási listák (Playlists) -->
-                <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                <Button Classes="secondary nav-item"
+                        Classes.nav-on="{Binding SelectedNavigationIndex, ConverterParameter=3, Converter={StaticResource IntEqualConverter}}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
                         Height="40" Padding="12,0"
                         Background="{Binding SelectedNavigationIndex, ConverterParameter=3, Converter={StaticResource NavActiveBackgroundConverter}}"
                         Command="{Binding NavigateToCommand}" CommandParameter="3">
                   <Grid ColumnDefinitions="Auto, *, Auto" VerticalAlignment="Center">
+                    <Border Classes="nav-bar" Grid.ColumnSpan="3" />
                     <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                       <material:MaterialIcon Kind="PlaylistMusicOutline" Foreground="{DynamicResource LimeAccent}" Width="20" Height="20" />
                       <TextBlock Text="{loc:T NavPlaylists}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsCompactLayout}" />
@@ -332,14 +347,19 @@
                 <TextBlock Text="{loc:T SectionSettings}" Classes="group-title" Margin="8,0,0,8" IsVisible="{Binding !IsCompactLayout}" />
 
                 <!-- Beállítások (Audiophile & Szerver) -->
-                <Button Classes="secondary" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                <Button Classes="secondary nav-item"
+                        Classes.nav-on="{Binding SelectedNavigationIndex, ConverterParameter=5, Converter={StaticResource IntEqualConverter}}"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Height="40" Padding="12,0"
                         Background="{Binding SelectedNavigationIndex, ConverterParameter=5, Converter={StaticResource NavActiveBackgroundConverter}}"
                         Command="{Binding NavigateToCommand}" CommandParameter="5">
-                  <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                    <material:MaterialIcon Kind="CogOutline" Foreground="{DynamicResource CyanAccent}" Width="20" Height="20" />
-                    <TextBlock Text="{loc:T NavSettings}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsCompactLayout}" />
-                  </StackPanel>
+                  <Grid VerticalAlignment="Center">
+                    <Border Classes="nav-bar" />
+                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                      <material:MaterialIcon Kind="CogOutline" Foreground="{DynamicResource CyanAccent}" Width="20" Height="20" />
+                      <TextBlock Text="{loc:T NavSettings}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" IsVisible="{Binding !IsCompactLayout}" />
+                    </StackPanel>
+                  </Grid>
                 </Button>
               </StackPanel>
 
@@ -352,14 +372,14 @@
           <Panel>
 
             <!-- Standard Content Area (Visible when Queue view is not open) -->
-            <Panel IsVisible="{Binding !Player.IsQueueOpen}">
+            <Panel Classes="page" IsVisible="{Binding !Player.IsQueueOpen}">
               <!-- Standard Library Tabs (Visible when not actively searching) -->
-              <Panel IsVisible="{Binding !IsSearchActive}">
+              <Panel Classes="page" IsVisible="{Binding !IsSearchActive}">
 
               <!-- ============================================== -->
               <!-- TAB 0: TRACKS BROWSER (SZÁMOK)                 -->
               <!-- ============================================== -->
-            <Grid IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=0, Converter={StaticResource IntEqualConverter}}"
+            <Grid Classes="page" IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=0, Converter={StaticResource IntEqualConverter}}"
                   RowDefinitions="Auto, *">
               
               <!-- Tab Header / Actions -->
@@ -393,7 +413,7 @@
               <Border Grid.Row="1" Classes="glass cyan" Padding="0" ClipToBounds="True">
                 <Panel>
                   <!-- Empty Library Placeholder -->
-                  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
+                  <StackPanel Classes="page" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
                               IsVisible="{Binding IsLibraryEmpty}">
                     <material:MaterialIcon Kind="FolderMusic" Width="64" Height="64" Foreground="{DynamicResource CyanAccent}" HorizontalAlignment="Center" />
                     <StackPanel Spacing="6" HorizontalAlignment="Center">
@@ -455,10 +475,7 @@
 
                                   <!-- Currently Playing Volume Overlay -->
                                   <Border Background="#A0000000" IsVisible="{Binding IsPlaying}">
-                                    <material:MaterialIcon Kind="VolumeHigh" Width="16" Height="16"
-                                                           Foreground="{DynamicResource PrimaryAction}"
-                                                           HorizontalAlignment="Center"
-                                                           VerticalAlignment="Center" />
+                                    <controls:EqualizerBars IsVisible="{Binding IsPlaying}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                   </Border>
                                 </Panel>
                               </Border>
@@ -564,27 +581,27 @@
             <!-- ============================================== -->
             <!-- TAB 1: ALBUMS (ALBUMOK)                        -->
             <!-- ============================================== -->
-            <Grid IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=1, Converter={StaticResource IntEqualConverter}}">
+            <Grid Classes="page" IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=1, Converter={StaticResource IntEqualConverter}}">
 
               <!-- Subview 1: Albums Grid (when no album detail open) -->
-              <Grid RowDefinitions="Auto, *" IsVisible="{Binding !Albums.IsAlbumDetailOpen}">
+              <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding !Albums.IsAlbumDetailOpen}">
                 <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
                   <TextBlock Grid.Column="0" Text="{loc:T NavAlbums}" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
 
                   <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
                     <TextBlock Text="{loc:T SortBy}" FontSize="12" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByTitle}" Height="32" Padding="14,0" MinWidth="72"
+                    <Button Classes="secondary" Classes.selected="{Binding Albums.IsSortByTitle}" Height="32" Padding="14,0" MinWidth="72"
                             Command="{Binding Albums.SetSortFieldCommand}" CommandParameter="Title">
                       <TextBlock Text="{Binding Albums.SortTitleLabel}" FontWeight="SemiBold" FontSize="12" />
                     </Button>
-                    <Button Classes="secondary" Classes.active="{Binding Albums.IsSortByYear}" Height="32" Padding="14,0" MinWidth="72"
+                    <Button Classes="secondary" Classes.selected="{Binding Albums.IsSortByYear}" Height="32" Padding="14,0" MinWidth="72"
                             Command="{Binding Albums.SetSortFieldCommand}" CommandParameter="Year">
                       <TextBlock Text="{Binding Albums.SortYearLabel}" FontWeight="SemiBold" FontSize="12" />
                     </Button>
                   </StackPanel>
                 </Grid>
                 
-                <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
+                <StackPanel Classes="page" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
                             IsVisible="{Binding IsLibraryEmpty}">
                   <material:MaterialIcon Kind="Album" Width="64" Height="64" Foreground="{DynamicResource PurpleAccent}" HorizontalAlignment="Center" />
                   <TextBlock Text="{loc:T EmptyAlbumsTitle}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" />
@@ -610,7 +627,7 @@
               </Grid>
 
               <!-- Subview 2: Album Detail View (Tracklist & Controls) -->
-              <Grid RowDefinitions="Auto, Auto, *" IsVisible="{Binding Albums.IsAlbumDetailOpen}">
+              <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding Albums.IsAlbumDetailOpen}">
                 <!-- Back Button -->
                 <Button Grid.Row="0" Classes="secondary" Height="36" Padding="14,0" Margin="0,0,0,16"
                         HorizontalAlignment="Left"
@@ -700,12 +717,7 @@
                                            IsVisible="{Binding !IsPlaying}"
                                            HorizontalAlignment="Center"
                                            VerticalAlignment="Center" />
-                                <material:MaterialIcon Kind="VolumeHigh"
-                                                       Width="16" Height="16"
-                                                       Foreground="{DynamicResource PrimaryAction}"
-                                                       IsVisible="{Binding IsPlaying}"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" />
+                                <controls:EqualizerBars IsVisible="{Binding IsPlaying}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                               </Panel>
                             </Button>
                           </DataTemplate>
@@ -776,13 +788,23 @@
             <!-- ============================================== -->
             <!-- TAB 2: ARTISTS (ELŐADÓK)                       -->
             <!-- ============================================== -->
-            <Grid IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=2, Converter={StaticResource IntEqualConverter}}">
+            <Grid Classes="page" IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=2, Converter={StaticResource IntEqualConverter}}">
 
               <!-- Subview 1: All Artists Grid -->
-              <Grid RowDefinitions="Auto, *" IsVisible="{Binding !Artists.IsArtistDetailOpen}">
-                <TextBlock Grid.Row="0" Text="{loc:T NavArtists}" FontSize="26" FontWeight="Black" Margin="0,0,0,20" Foreground="{DynamicResource TextMain}" />
+              <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding !Artists.IsArtistDetailOpen}">
+                <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
+                  <TextBlock Grid.Column="0" Text="{loc:T NavArtists}" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" />
+
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Text="{loc:T SortBy}" FontSize="12" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <Button Classes="secondary selected" Height="32" Padding="14,0" MinWidth="72"
+                            Command="{Binding Artists.ToggleSortCommand}">
+                      <TextBlock Text="{Binding Artists.SortNameLabel}" FontWeight="SemiBold" FontSize="12" />
+                    </Button>
+                  </StackPanel>
+                </Grid>
                 
-                <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
+                <StackPanel Classes="page" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
                             IsVisible="{Binding IsLibraryEmpty}">
                   <material:MaterialIcon Kind="AccountMusic" Width="64" Height="64" Foreground="{DynamicResource CoralAccent}" HorizontalAlignment="Center" />
                   <TextBlock Text="{loc:T EmptyArtistsTitle}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" />
@@ -808,7 +830,7 @@
               </Grid>
 
               <!-- Subview 2: Artist Detail View (Albums & Tracks) -->
-              <Grid RowDefinitions="Auto, Auto, *" IsVisible="{Binding Artists.IsArtistDetailOpen}">
+              <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding Artists.IsArtistDetailOpen}">
                 <!-- Back Button -->
                 <Button Grid.Row="0" Classes="secondary" Height="36" Padding="14,0" Margin="0,0,0,16"
                         HorizontalAlignment="Left"
@@ -917,10 +939,7 @@
 
                                         <!-- Currently Playing Volume Overlay -->
                                         <Border Background="#A0000000" IsVisible="{Binding IsPlaying}">
-                                          <material:MaterialIcon Kind="VolumeHigh" Width="16" Height="16"
-                                                                 Foreground="{DynamicResource PrimaryAction}"
-                                                                 HorizontalAlignment="Center"
-                                                                 VerticalAlignment="Center" />
+                                          <controls:EqualizerBars IsVisible="{Binding IsPlaying}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
                                       </Panel>
                                     </Border>
@@ -1008,10 +1027,10 @@
             <!-- ============================================== -->
             <!-- TAB 3: PLAYLISTS (LEJÁTSZÁSI LISTÁK)           -->
             <!-- ============================================== -->
-            <Grid IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=3, Converter={StaticResource IntEqualConverter}}">
+            <Grid Classes="page" IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=3, Converter={StaticResource IntEqualConverter}}">
 
               <!-- Subview 1: Playlists Cards Grid (when no playlist detail open) -->
-              <Grid RowDefinitions="Auto, *" IsVisible="{Binding !Playlists.IsPlaylistDetailOpen}">
+              <Grid Classes="page" RowDefinitions="Auto, *" IsVisible="{Binding !Playlists.IsPlaylistDetailOpen}">
                 <!-- Tab Header / Actions -->
                 <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
                   <StackPanel Grid.Column="0" Spacing="4">
@@ -1026,7 +1045,7 @@
                 </Grid>
 
                 <!-- Empty state: no playlists yet -->
-                <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
+                <StackPanel Classes="page" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
                             IsVisible="{Binding !Playlists.HasPlaylists}">
                   <material:MaterialIcon Kind="PlaylistMusicOutline" Width="64" Height="64" Foreground="{DynamicResource LimeAccent}" HorizontalAlignment="Center" />
                   <StackPanel Spacing="6" HorizontalAlignment="Center">
@@ -1111,7 +1130,7 @@
               </Grid>
 
               <!-- Subview 2: Playlist Detail View (Tracklist & Controls) -->
-              <Grid RowDefinitions="Auto, Auto, *" IsVisible="{Binding Playlists.IsPlaylistDetailOpen}">
+              <Grid Classes="page" RowDefinitions="Auto, Auto, *" IsVisible="{Binding Playlists.IsPlaylistDetailOpen}">
                 <!-- Back Button -->
                 <Button Grid.Row="0" Classes="secondary" Height="36" Padding="14,0" Margin="0,0,0,16"
                         HorizontalAlignment="Left"
@@ -1388,7 +1407,7 @@
             <!-- ============================================== -->
             <!-- TAB 4: FAVORITES (KEDVENCEK)                   -->
             <!-- ============================================== -->
-            <Grid IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=4, Converter={StaticResource IntEqualConverter}}"
+            <Grid Classes="page" IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=4, Converter={StaticResource IntEqualConverter}}"
                   RowDefinitions="Auto, *">
               <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
                 <StackPanel Grid.Column="0" Spacing="4">
@@ -1415,7 +1434,7 @@
                 </StackPanel>
               </Grid>
 
-              <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
+              <StackPanel Classes="page" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12" Margin="32"
                           IsVisible="{Binding Favorites.IsEmpty}">
                 <material:MaterialIcon Kind="HeartOutline" Width="64" Height="64" Foreground="{DynamicResource CoralAccent}" HorizontalAlignment="Center" />
                 <TextBlock Text="{loc:T EmptyFavoritesTitle}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" HorizontalAlignment="Center" />
@@ -1455,10 +1474,7 @@
 
                                 <!-- Currently Playing Volume Overlay -->
                                 <Border Background="#A0000000" IsVisible="{Binding IsPlaying}">
-                                  <material:MaterialIcon Kind="VolumeHigh" Width="16" Height="16"
-                                                         Foreground="{DynamicResource PrimaryAction}"
-                                                         HorizontalAlignment="Center"
-                                                         VerticalAlignment="Center" />
+                                  <controls:EqualizerBars IsVisible="{Binding IsPlaying}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
                               </Panel>
                             </Border>
@@ -1557,7 +1573,7 @@
             <!-- ============================================== -->
             <!-- TAB 5: UNIFIED SETTINGS (SERVER & AUDIO)       -->
             <!-- ============================================== -->
-            <ScrollViewer IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=5, Converter={StaticResource IntEqualConverter}}"
+            <ScrollViewer Classes="page" IsVisible="{Binding SelectedNavigationIndex, ConverterParameter=5, Converter={StaticResource IntEqualConverter}}"
                           ClipToBounds="False">
               <StackPanel Spacing="24" Margin="4,0,12,24">
                 <StackPanel Spacing="4">
@@ -1578,7 +1594,7 @@
                         <material:MaterialIcon Grid.Column="0" Kind="AccountCircle" Width="36" Height="36"
                                                Foreground="{DynamicResource PurpleAccent}" VerticalAlignment="Center" Margin="0,0,16,0" />
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" IsVisible="{Binding ServerSettings.IsLoggedIn}">
+                        <StackPanel Classes="page" Grid.Column="1" VerticalAlignment="Center" Spacing="2" IsVisible="{Binding ServerSettings.IsLoggedIn}">
                           <TextBlock Text="{Binding ServerSettings.CurrentUserName}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
                           <TextBlock Text="{Binding ServerSettings.CurrentUserRole}"
                                      FontSize="12" Foreground="{DynamicResource LimeAccent}" />
@@ -1591,7 +1607,7 @@
                           </StackPanel>
                         </Button>
 
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
+                        <StackPanel Classes="page" Grid.Column="1" VerticalAlignment="Center" Spacing="2" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
                           <TextBlock Text="{loc:T NotSignedIn}" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
                           <TextBlock Text="{loc:T NotSignedInHint}"
                                      FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
@@ -1891,7 +1907,7 @@
             <!-- ============================================== -->
             <!-- TIDAL-STYLE UNIFIED SEARCH RESULTS VIEW        -->
             <!-- ============================================== -->
-            <Grid IsVisible="{Binding IsSearchActive}" RowDefinitions="Auto, *">
+            <Grid Classes="page" IsVisible="{Binding IsSearchActive}" RowDefinitions="Auto, *">
               
               <!-- Search Results Header -->
               <Grid Grid.Row="0" Margin="0,0,0,20">
@@ -2126,7 +2142,7 @@
           <!-- ============================================== -->
           <!-- VIEW: PLAYBACK QUEUE (LEJÁTSZÁSI SOR)          -->
           <!-- ============================================== -->
-          <Grid IsVisible="{Binding Player.IsQueueOpen}" RowDefinitions="Auto, *">
+          <Grid Classes="page" IsVisible="{Binding Player.IsQueueOpen}" RowDefinitions="Auto, *">
             <!-- View Header / Actions -->
             <Grid Grid.Row="0" ColumnDefinitions="*, Auto" Margin="0,0,0,20">
               <StackPanel Grid.Column="0" Spacing="4">
@@ -2214,10 +2230,7 @@
 
                                 <!-- Currently Playing Volume Overlay -->
                                 <Border Background="#A0000000" IsVisible="{Binding IsCurrent}">
-                                  <material:MaterialIcon Kind="VolumeHigh" Width="18" Height="18"
-                                                         Foreground="{DynamicResource PrimaryAction}"
-                                                         HorizontalAlignment="Center"
-                                                         VerticalAlignment="Center" />
+                                  <controls:EqualizerBars IsVisible="{Binding IsCurrent}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                 </Border>
 
                                 <!-- Track Number Badge (when not playing) -->
@@ -2326,7 +2339,12 @@
                     Command="{Binding Player.ToggleQueueCommand}"
                     ToolTip.Tip="{loc:T TipQueueToggle}"
                     Cursor="Hand">
-              <Border Width="52" Height="52" CornerRadius="8" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" ClipToBounds="True">
+              <Border Classes="np-cover" Classes.playing="{Binding Player.PlaybackState, Converter={StaticResource PlayStateToBoolConverter}}"
+                      Width="52" Height="52" CornerRadius="8" Background="{DynamicResource Surface2}" BorderBrush="{DynamicResource GlassBorder}" BorderThickness="1" ClipToBounds="True">
+                <!-- The cover's own transform: the "breathing" animation (Motion.axaml) scales it while a track plays -->
+                <Border.RenderTransform>
+                  <ScaleTransform />
+                </Border.RenderTransform>
                 <Panel>
                   <Image Source="{Binding Player.CoverBitmap}" Stretch="UniformToFill" IsVisible="{Binding Player.CoverBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
                   <material:MaterialIcon Kind="MusicNote" Foreground="{DynamicResource CyanAccent}" Width="26" Height="26" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Player.CoverBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
@@ -2360,7 +2378,9 @@
 
             <Button Classes="icon" Command="{Binding Player.ToggleFavoriteCurrentCommand}" VerticalAlignment="Center" ToolTip.Tip="{loc:T TipFavorite}"
                     IsVisible="{Binding Player.CurrentTrack, Converter={x:Static ObjectConverters.IsNotNull}}">
-              <material:MaterialIcon Kind="{Binding Player.CurrentTrack.IsFavorite, FallbackValue=False, Converter={StaticResource FavoriteIconConverter}}"
+              <material:MaterialIcon Classes="heart-pop"
+                                     Classes.fav="{Binding Player.CurrentTrack.IsFavorite, FallbackValue=False}"
+                                     Kind="{Binding Player.CurrentTrack.IsFavorite, FallbackValue=False, Converter={StaticResource FavoriteIconConverter}}"
                                      Foreground="{Binding Player.CurrentTrack.IsFavorite, FallbackValue=False, Converter={StaticResource FavoriteColorConverter}}"
                                      Width="18" Height="18" />
             </Button>
@@ -2488,10 +2508,10 @@
     <!-- ============================================== -->
     <!-- STARTUP / LOGIN & SERVER CONNECTION VIEW       -->
     <!-- ============================================== -->
-    <Grid IsVisible="{Binding IsLoginViewActive}"
+    <Grid Classes="login-view" IsVisible="{Binding IsLoginViewActive}"
           Background="{DynamicResource WindowGradient}">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-        <Border Classes="glass view-accent"
+        <Border Classes="glass view-accent login-card"
                 Width="500"
                 MaxWidth="{Binding $parent[ScrollViewer].Bounds.Width}"
                 CornerRadius="16"
@@ -2499,6 +2519,12 @@
                 Margin="16,24"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center">
+          <Border.RenderTransform>
+            <TransformGroup>
+              <ScaleTransform />
+              <TranslateTransform />
+            </TransformGroup>
+          </Border.RenderTransform>
           <StackPanel Spacing="20">
 
             <Grid ColumnDefinitions="*, Auto">
@@ -2525,7 +2551,7 @@
             </Grid>
 
             <!-- Logged in -->
-            <StackPanel Spacing="16" IsVisible="{Binding ServerSettings.IsLoggedIn}">
+            <StackPanel Classes="page" Spacing="16" IsVisible="{Binding ServerSettings.IsLoggedIn}">
               <Border Background="{DynamicResource Surface2}" CornerRadius="10" Padding="18">
                 <StackPanel Spacing="10">
                   <StackPanel Orientation="Horizontal" Spacing="12">
@@ -2556,7 +2582,7 @@
             </StackPanel>
 
             <!-- Not logged in -->
-            <StackPanel Spacing="16" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
+            <StackPanel Classes="page" Spacing="16" IsVisible="{Binding !ServerSettings.IsLoggedIn}">
               <StackPanel Spacing="6">
                 <TextBlock Text="{loc:T ServerAddressLabel}" Classes="group-title" Margin="2,0,0,0" />
                 <Grid ColumnDefinitions="*, Auto">
@@ -2665,10 +2691,16 @@
     <!-- ============================================== -->
     <!-- PLAYLIST DIALOGS                               -->
     <!-- ============================================== -->
-    <Panel IsVisible="{Binding Playlists.IsAnyDialogOpen}" Background="#A6000000">
+    <Panel Classes="dialog-scrim" IsVisible="{Binding Playlists.IsAnyDialogOpen}" Background="#A6000000">
 
       <!-- New playlist -->
       <Border Classes="dialog-card" Width="420" IsVisible="{Binding Playlists.IsCreateDialogOpen}">
+        <Border.RenderTransform>
+          <TransformGroup>
+            <ScaleTransform />
+            <TranslateTransform />
+          </TransformGroup>
+        </Border.RenderTransform>
         <StackPanel Spacing="16">
           <TextBlock Text="{loc:T PlaylistNew}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
           <TextBlock Text="{loc:TFormat PlaylistAlsoAddsTrack, Path=Playlists.TrackToAdd.Title}"
@@ -2693,6 +2725,12 @@
 
       <!-- Add track to playlist -->
       <Border Classes="dialog-card" Width="420" IsVisible="{Binding Playlists.IsAddToPlaylistDialogOpen}">
+        <Border.RenderTransform>
+          <TransformGroup>
+            <ScaleTransform />
+            <TranslateTransform />
+          </TransformGroup>
+        </Border.RenderTransform>
         <StackPanel Spacing="14">
           <StackPanel Spacing="4">
             <TextBlock Text="{loc:T TipAddToPlaylist}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
@@ -2733,6 +2771,12 @@
 
       <!-- Delete confirmation -->
       <Border Classes="dialog-card" Width="400" IsVisible="{Binding Playlists.IsDeleteConfirmOpen}">
+        <Border.RenderTransform>
+          <TransformGroup>
+            <ScaleTransform />
+            <TranslateTransform />
+          </TransformGroup>
+        </Border.RenderTransform>
         <StackPanel Spacing="16">
           <TextBlock Text="{loc:T PlaylistDeleteAction}" FontSize="20" FontWeight="Black" Foreground="{DynamicResource TextMain}" />
           <TextBlock Text="{loc:TFormat PlaylistDeleteConfirm, Path=Playlists.PlaylistPendingDelete.Name}"

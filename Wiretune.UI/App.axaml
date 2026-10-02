@@ -44,6 +44,9 @@
       <SolidColorBrush x:Key="TagBackground" Color="#1AFFFFFF" />
       <Color x:Key="PrimaryActionColor">#67C8E0</Color>
 
+      <!-- Accent glow shadow (default; ThemeService swaps it with the section accent) -->
+      <BoxShadows x:Key="PrimaryActionGlow">0 0 18 0 #6067C8E0</BoxShadows>
+
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="PrimaryActionForeground" Color="#FFFFFF" />
@@ -1172,5 +1175,8 @@
     </Style>
     <Style Selector="Button.unstyled-cover.playing Border">
     </Style>
+
+    <!-- Motion layer: animations and effects (hover glow, entrances, playback effects). Keep this include last. -->
+    <StyleInclude Source="avares://Wiretune.UI/Styles/Motion.axaml" />
   </Application.Styles>
 </Application>

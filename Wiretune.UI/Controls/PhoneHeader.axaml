@@ -6,7 +6,7 @@
              x:Class="Wiretune.UI.Controls.PhoneHeader"
              x:DataType="vm:MainViewModel"
              x:Name="Root">
-  <!-- Title of a top-level phone page with the search and account buttons. Its DataContext is the MainViewModel. -->
+  <!-- Title of a top-level phone page with the search and account buttons (the account button opens the settings). Its DataContext is the MainViewModel. -->
   <Grid ColumnDefinitions="*, Auto, Auto" Height="68" Margin="20,0,8,0">
     <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0">
       <TextBlock Classes="phone-title" Text="{Binding Title, ElementName=Root}" />
@@ -20,8 +20,9 @@
             AutomationProperties.Name="{loc:T SearchPlaceholderShort}">
       <material:MaterialIcon Kind="Magnify" Width="24" Height="24" />
     </Button>
-    <Button Grid.Column="2" Classes="phone-icon" Command="{Binding ShowLoginScreenCommand}"
-            AutomationProperties.Name="{loc:T TipAccount}">
+    <!-- Settings are behind the account button; the account and sign-in cards are the first thing on that page -->
+    <Button Grid.Column="2" Classes="phone-icon" Command="{Binding NavigateToCommand}" CommandParameter="5"
+            AutomationProperties.Name="{loc:T TipAccountSettings}">
       <Panel>
         <material:MaterialIcon Kind="AccountCircleOutline" Width="26" Height="26"
                                IsVisible="{Binding !IsUserLoggedIn}" />

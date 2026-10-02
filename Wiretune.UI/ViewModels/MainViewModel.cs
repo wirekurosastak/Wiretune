@@ -36,6 +36,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private int _waveTrigger;
     [ObservableProperty] private NavWaveDirection _lastWaveDirection = NavWaveDirection.LeftToRight;
     private int _previousNavIndex = 2;
+
+    // The tabs the user came from, the latest last; the tab that is open is never in it. The phone's back gesture walks it
+    // backwards (see TryNavigateBack). _isRestoringTab keeps that walk itself out of the list.
+    private readonly List<int> _tabHistory = new();
+    private bool _isRestoringTab;
+
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private bool _isSearchActive;
     [ObservableProperty] private string _statusText = Localizer.Get("StatusStarting");
@@ -56,8 +62,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isSearchOpen;
     [ObservableProperty] private int _nowPlayingTab;
 
-    /// <summary>True on the playlists page and on the favorites page, which the phone layout files under "Playlists".</summary>
-    public bool IsPlaylistsSectionActive => SelectedNavigationIndex is 3 or 4;
+    /// <summary>
+    /// Whether the phone layout draws the performance statistics (frame graphs and counters) over the app. A tuning tool: it is
+    /// off until the user turns it on in the settings, and the choice is remembered.
+    /// </summary>
+    [ObservableProperty] private bool _showPerformanceStats;
 
     /// <summary>The languages the user can pick, with the active one marked.</summary>
     public IReadOnlyList<LanguageOptionViewModel> LanguageOptions { get; } =
@@ -159,6 +168,16 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     private const string LanguagePreference = "Language";
     private const string ThemePreference = "Theme";
+    private const string PerformanceStatsPreference = "ShowPerformanceStats";
+
+    // True while the saved preferences are applied, so that applying them does not write them back.
+    private bool _isApplyingPreferences;
+
+    partial void OnShowPerformanceStatsChanged(bool value)
+    {
+        if (_isApplyingPreferences) return;
+        Ui.Forget(Library.SetPreferenceAsync(PerformanceStatsPreference, value ? "1" : "0"), "MainViewModel");
+    }
 
     /// <summary>Applies the language and theme the user picked in an earlier session.</summary>
     private async Task ApplyPreferencesAsync()
@@ -170,6 +189,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             Theme.SetTheme(string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase));
         }
+
+        var stats = await Library.GetPreferenceAsync(PerformanceStatsPreference);
+        _isApplyingPreferences = true;
+        try { ShowPerformanceStats = stats == "1"; }
+        finally { _isApplyingPreferences = false; }
     }
 
     /// <summary>Creates the production object graph (SQLite cache, ffplay or platform audio driver).</summary>
@@ -296,13 +320,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedNavigationIndexChanged(int value)
     {
-        OnPropertyChanged(nameof(IsPlaylistsSectionActive));
         Player.CloseQueue();
         Theme.UpdateDynamicBackground(value);
         LogoTransform = $"rotate({value * 90}deg)";
 
         if (_previousNavIndex >= 0 && _previousNavIndex != value)
         {
+            if (!_isRestoringTab) RememberTab(_previousNavIndex, value);
+
             var oldOrder = GetNavVisualOrder(_previousNavIndex);
             var newOrder = GetNavVisualOrder(value);
             if (newOrder > oldOrder)
@@ -315,6 +340,14 @@ public partial class MainViewModel : ObservableObject, IDisposable
             }
         }
         _previousNavIndex = value;
+    }
+
+    /// <summary>Keeps <see cref="_tabHistory"/>: leaving a tab adds it, returning to a tab already in the list cuts the list back to it.</summary>
+    private void RememberTab(int from, int to)
+    {
+        var index = _tabHistory.LastIndexOf(to);
+        if (index >= 0) _tabHistory.RemoveRange(index, _tabHistory.Count - index);
+        else _tabHistory.Add(from);
     }
 
     partial void OnSearchQueryChanged(string value)
@@ -371,15 +404,27 @@ public partial class MainViewModel : ObservableObject, IDisposable
     public void GoBack() => TryNavigateBack();
 
     /// <summary>
-    /// The phone's back gesture: closes the innermost open layer (dialog, full-screen player, search, detail page) and
-    /// says whether it did. When it returns false, there is nothing left to go back to and the app may close.
+    /// The phone's back gesture: closes the innermost open layer (dialog, full-screen player, sign-in screen, search,
+    /// detail page) and then walks back through the tabs the user has visited. It says whether it did anything; when it
+    /// returns false there is nothing left to go back to and the app may close.
     /// </summary>
     public bool TryNavigateBack()
     {
         if (Playlists.IsCreateDialogOpen) { Playlists.CloseCreateDialog(); return true; }
         if (Playlists.IsAddToPlaylistDialogOpen) { Playlists.CancelAddTrack(); return true; }
         if (Playlists.IsDeleteConfirmOpen) { Playlists.CancelDeletePlaylist(); return true; }
-        if (IsNowPlayingOpen) { IsNowPlayingOpen = false; return true; }
+
+        if (IsNowPlayingOpen)
+        {
+            // The queue and the lyrics are pages of the full-screen player: back returns to the player, then closes it.
+            if (NowPlayingTab != 0) NowPlayingTab = 0;
+            else IsNowPlayingOpen = false;
+            return true;
+        }
+
+        // The sign-in screen is shown over an empty library; leaving it to reach the (empty) app would be a dead end.
+        if (IsLoginViewActive && Library.Tracks.Count > 0) { IsLoginViewActive = false; return true; }
+
         if (IsSearchOpen) { CloseSearch(); return true; }
 
         switch (SelectedNavigationIndex)
@@ -387,11 +432,20 @@ public partial class MainViewModel : ObservableObject, IDisposable
             case 1 when Albums.IsAlbumDetailOpen: Albums.CloseAlbumDetail(); return true;
             case 2 when Artists.IsArtistDetailOpen: Artists.CloseArtistDetail(); return true;
             case 3 when Playlists.IsPlaylistDetailOpen: Playlists.ClosePlaylistDetail(); return true;
-            case 4: NavigateTo(3); return true;
         }
 
-        // The sign-in screen is shown over an empty library; leaving it to reach the (empty) app would be a dead end.
-        if (IsLoginViewActive && Library.Tracks.Count > 0) { IsLoginViewActive = false; return true; }
+        // Back from a tab goes to the tab the user came from. The tab is shown as it was left (an open album stays open).
+        if (_tabHistory.Count > 0)
+        {
+            var previous = _tabHistory[^1];
+            _tabHistory.RemoveAt(_tabHistory.Count - 1);
+
+            _isRestoringTab = true;
+            try { SelectedNavigationIndex = previous; }
+            finally { _isRestoringTab = false; }
+            return true;
+        }
+
         return false;
     }
 

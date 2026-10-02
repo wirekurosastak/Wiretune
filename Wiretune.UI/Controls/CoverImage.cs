@@ -20,6 +20,7 @@ public class CoverImage : Image
         AvaloniaProperty.Register<CoverImage, bool>(nameof(HasBitmap), false);
 
     private string? _loadedPath;
+    private IDisposable? _load;
 
     public string? SourcePath
     {
@@ -51,6 +52,19 @@ public class CoverImage : Image
         LoadImage();
     }
 
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        // A row that scrolled away no longer needs its cover: withdraw the request so it is not downloaded for nothing.
+        CancelLoad();
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void CancelLoad()
+    {
+        _load?.Dispose();
+        _load = null;
+    }
+
     private void OnSourcePathChanged()
     {
         LoadImage();
@@ -60,6 +74,9 @@ public class CoverImage : Image
     {
         var path = SourcePath;
         var width = DecodeWidth;
+
+        // The view is showing (or about to show) another cover: the one that was still being loaded is out of date.
+        CancelLoad();
 
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -78,7 +95,7 @@ public class CoverImage : Image
         Source = null;
         HasBitmap = false;
 
-        CoverArtService.LoadBitmap(path, width, bmp =>
+        _load = CoverArtService.LoadBitmap(path, width, bmp =>
         {
             if (string.Equals(SourcePath, path, StringComparison.Ordinal))
             {

@@ -23,6 +23,7 @@ public partial class ArtistsViewModel : ObservableObject
     [ObservableProperty] private IReadOnlyList<AlbumCardViewModel> _selectedArtistAlbumCards = Array.Empty<AlbumCardViewModel>();
     [ObservableProperty] private bool _hasSelectedArtistAlbums;
     [ObservableProperty] private IReadOnlyList<Track> _selectedArtistTracks = Array.Empty<Track>();
+    [ObservableProperty] private bool _isSortDescending;
 
     public ArtistsViewModel(LibraryService library, PlayerViewModel player)
     {
@@ -36,12 +37,33 @@ public partial class ArtistsViewModel : ObservableObject
     /// <summary>Label of the back button: where it leads to, or "all artists" when the detail was opened from the artist list.</summary>
     public string BackButtonText => _backTextSource?.Invoke() is { Length: > 0 } text ? text : Localizer.Get("BackToArtists");
 
+    /// <summary>Label of the sort button: the arrow shows the direction (A to Z, or Z to A).</summary>
+    public string SortNameLabel => $"ABC {(IsSortDescending ? "↓" : "↑")}";
+
     /// <summary>Re-renders the texts that were computed in the previous language.</summary>
     public void RefreshLocalizedTexts() => OnPropertyChanged(nameof(BackButtonText));
 
+    partial void OnIsSortDescendingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SortNameLabel));
+        ApplySort();
+    }
+
+    /// <summary>Artists are sorted by name only: pressing the button flips between A→Z and Z→A.</summary>
+    [RelayCommand]
+    public void ToggleSort() => IsSortDescending = !IsSortDescending;
+
+    private void ApplySort()
+    {
+        DisplayedArtists = (IsSortDescending
+                ? _library.Artists.OrderByDescending(a => a.Name, StringComparer.CurrentCultureIgnoreCase)
+                : _library.Artists.OrderBy(a => a.Name, StringComparer.CurrentCultureIgnoreCase))
+            .ToList();
+    }
+
     public void RefreshArtists()
     {
-        DisplayedArtists = _library.Artists;
+        ApplySort();
         ArtistPictureService.ResolveArtistPictures(DisplayedArtists);
 
         if (SelectedArtist != null)

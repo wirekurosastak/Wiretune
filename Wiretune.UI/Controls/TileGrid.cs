@@ -39,7 +39,12 @@ public sealed class TileGrid : Panel
     /// <summary>Rows created before the first layout has told us how much of the grid is visible.</summary>
     private const int InitialRows = 6;
 
-    private readonly Dictionary<int, Control> _rows = new();
+    /// <summary>Tiles that scrolled away, kept for the next row that needs one: a tile is the expensive part (a cover, a
+    /// button, a few texts), a row around it is nothing. Only as many as a few rows are worth.</summary>
+    private const int MaxPooledTiles = 40;
+
+    private readonly Dictionary<int, StackPanel> _rows = new();
+    private readonly Stack<ContentControl> _tilePool = new();
     private List<object?> _items = new();
     private int _columns = 1;
     private double _tileWidth;
@@ -108,8 +113,23 @@ public sealed class TileGrid : Panel
     {
         Children.Clear();
         _rows.Clear();
+        _tilePool.Clear();
         _realizedFirst = 0;
         _realizedLast = -1;
+    }
+
+    /// <summary>Takes a row off the grid and keeps its tiles for reuse.</summary>
+    private void ReleaseRow(int index)
+    {
+        if (!_rows.Remove(index, out var row)) return;
+
+        Children.Remove(row);
+        for (var i = row.Children.Count - 1; i >= 0; i--)
+        {
+            if (row.Children[i] is ContentControl tile && _tilePool.Count < MaxPooledTiles) _tilePool.Push(tile);
+        }
+
+        row.Children.Clear();
     }
 
     private void OnEffectiveViewportChanged(object? sender, EffectiveViewportChangedEventArgs e)
@@ -152,11 +172,7 @@ public sealed class TileGrid : Panel
         }
 
         var (first, last) = VisibleRows();
-        foreach (var index in _rows.Keys.Where(i => i < first || i > last).ToList())
-        {
-            Children.Remove(_rows[index]);
-            _rows.Remove(index);
-        }
+        foreach (var index in _rows.Keys.Where(i => i < first || i > last).ToList()) ReleaseRow(index);
 
         for (var index = first; index <= last; index++)
         {
@@ -181,19 +197,23 @@ public sealed class TileGrid : Panel
         return finalSize;
     }
 
-    private Control BuildRow(int index)
+    private StackPanel BuildRow(int index)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Spacing };
         var start = index * _columns;
         for (var i = start; i < Math.Min(start + _columns, _items.Count); i++)
         {
-            row.Children.Add(new ContentControl
-            {
-                Width = _tileWidth,
-                VerticalAlignment = VerticalAlignment.Top,
-                Content = _items[i],
-                ContentTemplate = ItemTemplate,
-            });
+            // A tile that scrolled away is given a new album and keeps its controls: the template only has to be built
+            // for the first screenful, scrolling afterwards just swaps the data (a row of fresh tiles costs several
+            // milliseconds on a phone - a dropped frame every few rows of a fling).
+            var tile = _tilePool.Count > 0
+                ? _tilePool.Pop()
+                : new ContentControl { VerticalAlignment = VerticalAlignment.Top };
+
+            tile.Width = _tileWidth;
+            if (!ReferenceEquals(tile.ContentTemplate, ItemTemplate)) tile.ContentTemplate = ItemTemplate;
+            tile.Content = _items[i];
+            row.Children.Add(tile);
         }
 
         return row;

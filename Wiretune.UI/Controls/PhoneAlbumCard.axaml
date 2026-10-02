@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="using:Wiretune.UI.Localization"
              xmlns:material="using:Material.Icons.Avalonia"
+             xmlns:controls="using:Wiretune.UI.Controls"
              xmlns:services="using:Wiretune.UI.Services"
              xmlns:vm="using:Wiretune.UI.ViewModels"
              x:Class="Wiretune.UI.Controls.PhoneAlbumCard"
@@ -13,8 +14,8 @@
           CommandParameter="{Binding}"
           services:ViewportLoad.Target="{Binding}">
     <Grid RowDefinitions="Auto, *" Margin="4">
-      <Border Grid.Row="0" Height="{Binding $self.Bounds.Width}" CornerRadius="14"
-              Background="{DynamicResource Surface2}" ClipToBounds="True">
+      <controls:SquareBorder Grid.Row="0" CornerRadius="8"
+                             Background="{DynamicResource Surface2}" ClipToBounds="True">
         <Panel>
           <material:MaterialIcon Kind="Album" Width="48" Height="48"
                                  Foreground="{DynamicResource PurpleAccent}"
@@ -23,7 +24,7 @@
           <Image Source="{Binding CoverBitmap}" Stretch="UniformToFill"
                  IsVisible="{Binding CoverBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
         </Panel>
-      </Border>
+      </controls:SquareBorder>
       <StackPanel Grid.Row="1" Margin="2,8,2,0" Spacing="1">
         <TextBlock Classes="phone-row-title" Text="{Binding Title}" FontSize="14" />
         <TextBlock Classes="phone-row-sub" Text="{Binding Artist}" />

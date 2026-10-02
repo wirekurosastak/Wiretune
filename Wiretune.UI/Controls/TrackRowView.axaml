@@ -16,14 +16,16 @@
               CommandParameter="{Binding}">
         <Grid ColumnDefinitions="Auto, *, Auto" Margin="8,0,4,0">
           <!-- Cover art, or the track number in album views -->
-          <Border Grid.Column="0" Width="48" Height="48" CornerRadius="10"
+          <Border Grid.Column="0" Width="48" Height="48" CornerRadius="8"
                   Background="{DynamicResource Surface2}" ClipToBounds="True"
                   IsVisible="{Binding ShowCover, ElementName=Root}">
             <Panel>
+              <controls:CoverImage x:Name="RowCover" SourcePath="{Binding CoverArtPath}" DecodeWidth="96" Stretch="UniformToFill" />
+              <!-- The placeholder is only there until the cover is: a hidden control costs no layout and no drawing. -->
               <material:MaterialIcon Kind="MusicNote" Width="22" Height="22"
                                      Foreground="{DynamicResource TextMuted}"
-                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
-              <controls:CoverImage SourcePath="{Binding CoverArtPath}" DecodeWidth="96" Stretch="UniformToFill" />
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                                     IsVisible="{Binding !HasBitmap, ElementName=RowCover}" />
             </Panel>
           </Border>
           <Panel Grid.Column="0" Width="48" Height="48"
@@ -32,10 +34,8 @@
                        Foreground="{DynamicResource TextMuted}"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        IsVisible="{Binding !IsPlaying}" />
-            <material:MaterialIcon Kind="VolumeHigh" Width="20" Height="20"
-                                   Foreground="{DynamicResource PrimaryAction}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   IsVisible="{Binding IsPlaying}" />
+            <controls:EqualizerBars HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    IsVisible="{Binding IsPlaying}" />
           </Panel>
 
           <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center" Spacing="2">

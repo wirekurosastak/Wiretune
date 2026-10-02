@@ -73,22 +73,35 @@ public sealed class PhoneNavigationTests : IDisposable
         Assert.False(vm.TryNavigateBack());
 
         vm.NavigateTo(4);
-        Assert.True(vm.IsPlaylistsSectionActive);
         Assert.True(vm.TryNavigateBack());
         Assert.Equal(3, vm.SelectedNavigationIndex);
-        Assert.True(vm.IsPlaylistsSectionActive);
     }
 
     [Fact]
-    public async Task IsPlaylistsSectionActive_CoversPlaylistsAndFavoritesOnly()
+    public async Task Back_FromSettings_ReturnsToTheTabTheUserCameFrom()
+    {
+        // The settings are not in the bottom bar: the account button of a page header opens them.
+        var vm = await CreateAsync();
+
+        vm.NavigateTo(4);
+        vm.NavigateTo(5);
+        Assert.Equal(5, vm.SelectedNavigationIndex);
+
+        Assert.True(vm.TryNavigateBack());
+        Assert.Equal(4, vm.SelectedNavigationIndex);
+    }
+
+    [Fact]
+    public async Task PerformanceStats_AreOffUntilTheUserTurnsThemOnInTheSettings()
     {
         var vm = await CreateAsync();
 
-        for (var index = 0; index <= 5; index++)
-        {
-            vm.NavigateTo(index);
-            Assert.Equal(index is 3 or 4, vm.IsPlaylistsSectionActive);
-        }
+        Assert.False(vm.ShowPerformanceStats);
+
+        var raised = new List<string?>();
+        vm.PropertyChanged += (_, e) => raised.Add(e.PropertyName);
+        vm.ShowPerformanceStats = true;
+        Assert.Contains(nameof(MainViewModel.ShowPerformanceStats), raised); // the phone layout shows the panel on this
     }
 
     // ── Search page ──────────────────────────────────────────────────────────────────────────────

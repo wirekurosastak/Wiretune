@@ -65,13 +65,13 @@ public partial class ThemeService : ObservableObject
             (1, true)  => ("#1F0833", "#000000"), // Albums Dark: Deep Purple
             (2, true)  => ("#2B0C0C", "#000000"), // Artists Dark: Deep Coral
             (3, true)  => ("#142400", "#000000"), // Playlists Dark: Deep Lime
-            (4, true)  => ("#260D12", "#000000"), // Favorites Dark: Deep Rose/Coral
+            (4, true)  => ("#2B0C0C", "#000000"), // Favorites Dark: Deep Coral (the same as Artists)
             (5, true)  => ("#091824", "#000000"), // Settings Dark: Deep Cyan/Slate
             (0, false) => ("#E8F7FC", "#EEF1F5"), // Tracks Light: Soft Ice Cyan
             (1, false) => ("#F3E9FF", "#EEF1F5"), // Albums Light: Soft Lavender
             (2, false) => ("#FFECEC", "#EEF1F5"), // Artists Light: Soft Coral/Rose
             (3, false) => ("#EEF9E6", "#EEF1F5"), // Playlists Light: Soft Mint/Lime
-            (4, false) => ("#FFF0F2", "#EEF1F5"), // Favorites Light: Soft Rose/Pink
+            (4, false) => ("#FFECEC", "#EEF1F5"), // Favorites Light: Soft Coral/Rose (the same as Artists)
             (5, false) => ("#E8F7FC", "#EEF1F5"), // Settings Light: Soft Ice Cyan
             (_, true)  => ("#08080C", "#000000"), // Dark fallback
             (_, false) => ("#F5F7FA", "#EEF1F5")  // Light fallback
@@ -92,6 +92,10 @@ public partial class ThemeService : ObservableObject
             }
         };
 
+        // The accent glow (button hover, search focus, now-playing effects) follows the section accent, like the brushes above.
+        string AccentArgb(byte alpha) => $"#{alpha:X2}{accentColor.R:X2}{accentColor.G:X2}{accentColor.B:X2}";
+        var accentGlow = BoxShadows.Parse($"0 0 18 0 {AccentArgb(isDark ? (byte)0x60 : (byte)0x48)}");
+
         if (app.Resources is Avalonia.Controls.ResourceDictionary res)
         {
             void ApplyToDictionary(Avalonia.Controls.IResourceDictionary dict)
@@ -105,6 +109,7 @@ public partial class ThemeService : ObservableObject
                 dict["SystemAccentColorBrush"]  = accentBrush;
                 dict["HighlightBrush"]          = accentBrush;
                 dict["WindowGradient"]          = windowGradient;
+                dict["PrimaryActionGlow"]       = accentGlow;
 
                 dict["SliderThumbBackground"]            = accentBrush;
                 dict["SliderThumbBackgroundPointerOver"] = hoverBrush;
