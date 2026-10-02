@@ -106,7 +106,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
             WiretuneLog.Error("WasapiAudioDriver", $"PlayAsync failed for '{audioSource}': {ex.Message}", ex);
             lock (_stateLock)
             {
-                if (gen == _generation && !_disposed) Fail(Localizer.Format("DriverCannotStart", ex.Message));
+                if (gen == _generation && !_disposed) Fail(Localizer.Format("DriverCannotStart", WiretuneLog.Redact(ex.Message)));
             }
             return;
         }
@@ -137,7 +137,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
 
                         if (e.Exception != null)
                         {
-                            Fail(Localizer.Format("DriverWasapiError", e.Exception.Message));
+                            Fail(Localizer.Format("DriverWasapiError", WiretuneLog.Redact(e.Exception.Message)));
                         }
                         else
                         {
@@ -155,7 +155,7 @@ public sealed class WasapiAudioDriver : IAudioDriver
             catch (Exception ex)
             {
                 WiretuneLog.Error("WasapiAudioDriver", $"PlayAsync failed for '{audioSource}': {ex.Message}", ex);
-                Fail(Localizer.Format("DriverCannotStart", ex.Message));
+                Fail(Localizer.Format("DriverCannotStart", WiretuneLog.Redact(ex.Message)));
             }
         }
     }

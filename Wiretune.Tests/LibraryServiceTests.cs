@@ -188,7 +188,7 @@ public class LibraryServiceTests
         var audioEngine = TestSupport.CreateEngine();
         var vm = TestSupport.CreateMainViewModel(service, audioEngine);
 
-        // Verify initial (Előadók is now index 2, first in sidebar)
+        // Verify initial (Artists is index 2, the first entry in the sidebar)
         Assert.Equal(2, vm.SelectedNavigationIndex);
 
         // String command parameter (as passed from XAML button to Settings)
@@ -196,12 +196,12 @@ public class LibraryServiceTests
         vm.NavigateToCommand.Execute("5");
         Assert.Equal(5, vm.SelectedNavigationIndex);
 
-        // Int command parameter (to Albumok)
+        // Int command parameter (to Albums)
         Assert.True(vm.NavigateToCommand.CanExecute(1));
         vm.NavigateToCommand.Execute(1);
         Assert.Equal(1, vm.SelectedNavigationIndex);
 
-        // Navigate to Számok (0)
+        // Navigate to Tracks (0)
         vm.NavigateToCommand.Execute("0");
         Assert.Equal(0, vm.SelectedNavigationIndex);
     }

@@ -60,11 +60,12 @@ temporary directories. `Wiretune.Core` exposes its internals to `Wiretune.Tests`
 
 - **Logs.** `WiretuneLog` writes `[time] [LEVEL] [category] message` lines (Debug and up) to `wiretune.log` in the
   player's data directory or `wiretune-server.log` in the server's ([server.md](server.md#data-directory)); at 10 MiB
-  the file moves to `.1`. The player's data directory is `~/.config/Wiretune` on Linux, `%APPDATA%\Wiretune` on
-  Windows and the app's private files folder on Android. `WIRETUNE_DATA_DIR` moves it, which is handy for a
-  throw-away instance: `WIRETUNE_DATA_DIR=/tmp/wt-dev dotnet run --project Wiretune.Desktop`.
+  the file moves to `.1`. Every line passes through `WiretuneLog.Redact`, which replaces `token=` values with `***`;
+  keep it that way when logging URLs. The player's data directory is `~/.config/Wiretune` on Linux,
+  `%APPDATA%\Wiretune` on Windows and the app's private files folder on Android. `WIRETUNE_DATA_DIR` moves it, which
+  is handy for a throw-away instance: `WIRETUNE_DATA_DIR=/tmp/wt-dev dotnet run --project Wiretune.Desktop`.
 - **Audio on Linux.** The log lines *Starting ffplay …* / *Starting direct ALSA (ffmpeg | aplay) …* show the exact
-  source and device (tokens are replaced by `***`); the commands in [audio.md](audio.md#linux) can be run by hand.
+  source and device; the commands in [audio.md](audio.md#linux) can be run by hand (put your own token in the URL).
 - **Server.** Run it in the foreground: ASP.NET Core's console logging is on in addition to the log file.
 
 ### UI automation (desktop, development only)

@@ -17,7 +17,7 @@
   <!-- Keep CPU awake during playback -->
   <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-  <!-- Media notification controls (Android 13+) -->
+  <!-- Lets the app show its "Playing" notification on Android 13+ -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
   <application android:label="Wiretune"

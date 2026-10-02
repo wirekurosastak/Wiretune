@@ -80,7 +80,8 @@ calls, 3 minutes for the library download) and gzip/deflate/brotli. Connecting p
 with a stored token it loads `/api/auth/me` and `/api/tracks` and merges the result. The whole track list is
 fetched on every refresh; there is no incremental sync. A token is sent only to the address it was issued for
 (changing the address forgets it), and stream URLs stored in tracks carry no credential: the engine appends
-`?token=` only when it hands a source to a player.
+`?token=` only when it hands a source to a player. `WiretuneLog` blanks `token=` values in every line, because those
+URLs end up in driver messages.
 
 `Wiretune.Server/Program.cs` wires everything: configuration, data directory, logging, `DatabaseManager`,
 `LibraryService`, `AuthService`, `LibraryScanService` (a `BackgroundService` that waits on a semaphore with the

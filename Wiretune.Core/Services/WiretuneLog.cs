@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Wiretune.Core.Services;
 
 public enum LogLevel
@@ -21,13 +23,14 @@ public record LogEntry(
     {
         // Exception.ToString() keeps the type, message, inner exceptions and stack trace.
         var exStr = Exception != null ? $" | Exception: {Exception}" : "";
-        return $"[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{Level.ToString().ToUpperInvariant(),-5}] [{Category}] {Message}{exStr}";
+        return WiretuneLog.Redact($"[{Timestamp:yyyy-MM-dd HH:mm:ss.fff}] [{Level.ToString().ToUpperInvariant(),-5}] [{Category}] {Message}{exStr}");
     }
 }
 
 public static class WiretuneLog
 {
     private const long MaxLogBytes = 10 * 1024 * 1024;
+    private static readonly Regex TokenPattern = new(@"token=[^&\s""']+", RegexOptions.CultureInvariant);
     private static readonly object _lock = new();
     private static string? _logFilePath;
     private static StreamWriter? _logWriter;
@@ -123,7 +126,7 @@ public static class WiretuneLog
     {
         if (level < MinimumLevel) return;
 
-        var entry = new LogEntry(DateTime.Now, level, category, message, ex);
+        var entry = new LogEntry(DateTime.Now, level, category, Redact(message), ex);
         var line = entry.ToString();
 
         try
@@ -158,6 +161,12 @@ public static class WiretuneLog
             // Subscriber failures must never break logging.
         }
     }
+
+    /// <summary>
+    /// Replaces the value of every <c>token=</c> query parameter with <c>***</c>. Stream URLs carry the access token
+    /// that way, and they end up in messages and exception texts from every driver, so each log line passes through here.
+    /// </summary>
+    public static string Redact(string text) => TokenPattern.Replace(text, "token=***");
 
     public static void Debug(string category, string message) => Log(LogLevel.Debug, category, message);
     public static void Info(string category, string message) => Log(LogLevel.Info, category, message);

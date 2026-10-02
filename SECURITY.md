@@ -55,9 +55,9 @@ about security; running the server is described in [docs/server.md](docs/server.
 - **Artist pictures.** The desktop player looks them up through Deezer's public API, which sends artist names from
   your library to `api.deezer.com`; results are cached in `artist_pictures.json`. Set
   `WIRETUNE_NO_ARTIST_PICTURES=1` to disable it. Nothing else leaves your network.
-- **Logs can contain credentials on Windows.** The Linux audio driver replaces `token=…` with `token=***` in its log
-  lines; the Windows driver does not, so when playing a server track fails, its log line contains the stream URL
-  with the token. Treat `wiretune.log` as sensitive and strip `token=` values before attaching it to an issue.
+- **Log files.** `WiretuneLog` replaces the value of every `token=` parameter with `***` before a line is written, so
+  stream URLs in the log do not carry the access token. The logs still contain file paths, server addresses and
+  device names: read `wiretune.log` before attaching it to a public issue.
 - **UI automation endpoint.** With `WIRETUNE_UI_AUTOMATION=1` the desktop player opens an unauthenticated control
   interface on `127.0.0.1:5201`. It is a development aid, off by default, loopback-only and protected against
   requests from web pages, but it can control the player and takes credentials in query parameters. Do not enable it

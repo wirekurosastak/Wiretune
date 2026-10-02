@@ -120,6 +120,26 @@ public class ExtendedIntegrationAndEdgeTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // WiretuneLog: stream URLs carry the access token, which must never reach the log
+    // ─────────────────────────────────────────────────────────────────────────
+    [Fact]
+    public void WiretuneLog_RedactsStreamTokens_InMessagesAndExceptions()
+    {
+        var entry = new LogEntry(
+            DateTime.Now,
+            LogLevel.Error,
+            "Test",
+            "Cannot open http://host/api/stream/t1?token=abc.def-123&x=1",
+            new InvalidOperationException("failed for 'http://host/api/stream/t1?token=abc.def-123'"));
+
+        var line = entry.ToString();
+
+        Assert.DoesNotContain("abc.def-123", line);
+        Assert.Contains("token=***&x=1", line);
+        Assert.Equal("a?token=***", WiretuneLog.Redact("a?token=secret"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // 5. ServerStreamingClient: URL Formatting
     // ─────────────────────────────────────────────────────────────────────────
     [Theory]

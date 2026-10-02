@@ -1,5 +1,6 @@
 ﻿﻿using Avalonia.Media;
 using Microsoft.Data.Sqlite;
+using Wiretune.Core.Localization;
 using Wiretune.Core.Models;
 using Wiretune.Core.Services;
 using Wiretune.Core.Data;
@@ -433,26 +434,30 @@ public class RefactorRegressionTests
         var track = TestSupport.MakeTrack("t1", "Starboy");
         track.Artist = "The Weeknd";
         track.Album = "Starboy";
-        await repo.SaveTracksBatchAsync(new[] { track });
+        var otherTrack = TestSupport.MakeTrack("t2", "Pray For Me");
+        await repo.SaveTracksBatchAsync(new[] { track, otherTrack });
         await service.InitializeAsync();
 
         var player = new PlayerViewModel(TestSupport.CreateEngine(), service);
         var searchVm = new SearchResultsViewModel(service, player, _ => { }, _ => { }, _ => { });
 
-        // Search for artist
+        // An artist name
         searchVm.UpdateQuery("The Weeknd");
         Assert.NotNull(searchVm.BestMatch);
-        Assert.Equal("ARTIST", searchVm.BestMatch.TypeLabel);
+        Assert.Equal(Localizer.Get("TypeArtist"), searchVm.BestMatch.TypeLabel);
         Assert.Equal("#ffff6b6b", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
 
-        // Search for album
+        // An album title (the track of the same name is not the best match)
         searchVm.UpdateQuery("Starboy");
         Assert.NotNull(searchVm.BestMatch);
-        // Could match album or track; verify type label matches its assigned brush color
-        if (searchVm.BestMatch.TypeLabel == "ALBUM")
-            Assert.Equal("#ffd05ce3", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
-        else if (searchVm.BestMatch.TypeLabel == "SZÁM")
-            Assert.Equal("#ff67c8e0", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
+        Assert.Equal(Localizer.Get("TypeAlbum"), searchVm.BestMatch.TypeLabel);
+        Assert.Equal("#ffd05ce3", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
+
+        // A title that is neither an artist nor an album
+        searchVm.UpdateQuery("Pray For Me");
+        Assert.NotNull(searchVm.BestMatch);
+        Assert.Equal(Localizer.Get("TypeTrack"), searchVm.BestMatch.TypeLabel);
+        Assert.Equal("#ff67c8e0", (searchVm.BestMatch.TypeBrush as ISolidColorBrush)?.Color.ToString());
     }
 }
 

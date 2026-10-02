@@ -36,6 +36,9 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private bool _isExclusive;
     private bool _isBitperfect;
     private double _volume = 1.0;
+    private bool _volumeSet;
+    private bool _mixerVolumeWorked;
+    private bool _mixerVolumeFailed;
     private PlaybackState _state = PlaybackState.Stopped;
     private TimeSpan _currentPosition = TimeSpan.Zero;
     private DateTime _playStartTime;
@@ -68,9 +71,24 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
 
     public Task InitializeAsync(AudioOutputDevice device, bool exclusive, bool bitperfect)
     {
-        _currentDevice = device;
-        _isExclusive = exclusive;
-        _isBitperfect = bitperfect;
+        lock (_stateLock)
+        {
+            if (_currentDevice?.Id != device.Id)
+            {
+                _mixerVolumeWorked = false;
+                _mixerVolumeFailed = false;
+            }
+
+            _currentDevice = device;
+            _isExclusive = exclusive;
+            _isBitperfect = bitperfect;
+
+            // The volume lives in the mixer or in the player depending on the device. A running player picks it up
+            // when the engine restarts it; a mixer has to be told, but only once the volume has been set at all, so
+            // that starting the app does not move the system volume.
+            if (_volumeSet && !_isBitperfect && UsesMixerVolume) ScheduleMixerVolume();
+        }
+
         return Task.CompletedTask;
     }
 
@@ -187,45 +205,23 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// The volume is applied in exactly one place: the device's system mixer when there is one (PipeWire sink, ALSA
+    /// card) and the player (ffplay / ffmpeg) otherwise. Doing both would apply it twice. Bit-perfect mode applies it
+    /// nowhere; the value is still remembered, so leaving the mode restores it.
+    /// </summary>
     public void SetVolume(double volume)
     {
-        if (_isBitperfect)
-        {
-            _volume = 1.0;
-            return;
-        }
-
-        _volume = Math.Clamp(volume, 0.0, 1.0);
-
         lock (_stateLock)
         {
             if (_disposed) return;
 
-            if (HasHardwareMixer)
-            {
-                // The slider fires continuously; spawning wpctl/amixer per tick would stall the caller, so only the
-                // last value of a burst is applied, off the calling (UI) thread.
-                (_mixerVolumeTimer ??= new Timer(_ => ApplyMixerVolume())).Change(60, Timeout.Infinite);
-                return;
-            }
+            _volume = Math.Clamp(volume, 0.0, 1.0);
+            _volumeSet = true;
+            if (_isBitperfect) return;
 
-            // Without a controllable mixer the volume is an ffplay/ffmpeg start argument: restart at the current
-            // position, debounced so dragging the slider does not respawn the process on every tick.
-            if (_state == PlaybackState.Playing)
-            {
-                _volumeRestartTimer?.Dispose();
-                _volumeRestartTimer = new Timer(_ =>
-                {
-                    lock (_stateLock)
-                    {
-                        if (_disposed || _state != PlaybackState.Playing || _currentSource == null) return;
-                        UpdatePosition();
-                        _seekOffset = _currentPosition;
-                        _playStartTime = DateTime.UtcNow;
-                        StartPlaybackProcess(_currentPosition, Interlocked.Increment(ref _playbackGeneration));
-                    }
-                }, null, 400, Timeout.Infinite);
-            }
+            if (UsesMixerVolume) ScheduleMixerVolume();
+            else ScheduleVolumeRestart();
         }
     }
 
@@ -233,22 +229,88 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
     private bool HasHardwareMixer =>
         OperatingSystem.IsLinux() && _currentDevice is { } dev && (dev.DriverType.Contains("PipeWire") || dev.Id.StartsWith("pw_") || dev.Id.StartsWith("hw:"));
 
+    /// <summary>
+    /// True while the system mixer carries the volume. It stops being true for a device whose mixer never accepted a
+    /// command (many USB DACs have no <c>PCM</c> control), so the slider keeps working through the player.
+    /// </summary>
+    private bool UsesMixerVolume => !_mixerVolumeFailed && HasHardwareMixer;
+
+    /// <summary>Gain the player itself applies: none when the mixer carries the volume or in bit-perfect mode.</summary>
+    private double PlayerVolume => _isBitperfect || UsesMixerVolume ? 1.0 : _volume;
+
+    /// <summary>
+    /// The slider fires continuously; spawning wpctl/amixer per tick would stall the caller, so only the last value of
+    /// a burst is applied, off the calling (UI) thread. Must be called under <see cref="_stateLock"/>.
+    /// </summary>
+    private void ScheduleMixerVolume() =>
+        (_mixerVolumeTimer ??= new Timer(_ => ApplyMixerVolume())).Change(60, Timeout.Infinite);
+
+    /// <summary>
+    /// The volume of the player is a start argument of ffplay / ffmpeg: restart at the current position, debounced so
+    /// dragging the slider does not respawn the process on every tick. Must be called under <see cref="_stateLock"/>.
+    /// </summary>
+    private void ScheduleVolumeRestart()
+    {
+        if (_state != PlaybackState.Playing) return;
+
+        _volumeRestartTimer?.Dispose();
+        _volumeRestartTimer = new Timer(_ =>
+        {
+            lock (_stateLock)
+            {
+                if (_disposed || _state != PlaybackState.Playing || _currentSource == null) return;
+                UpdatePosition();
+                _seekOffset = _currentPosition;
+                _playStartTime = DateTime.UtcNow;
+                StartPlaybackProcess(_currentPosition, Interlocked.Increment(ref _playbackGeneration));
+            }
+        }, null, 400, Timeout.Infinite);
+    }
+
     private void ApplyMixerVolume()
     {
-        if (_currentDevice is not { } dev) return;
+        AudioOutputDevice dev;
+        double volume;
+        lock (_stateLock)
+        {
+            if (_disposed || _isBitperfect || _currentDevice is not { } current) return;
+            dev = current;
+            volume = _volume;
+        }
 
         bool ok;
         if (dev.DriverType.Contains("PipeWire") || dev.Id.StartsWith("pw_"))
         {
-            ok = RunQuiet("wpctl", "set-volume", dev.Id.Replace("pw_", ""), _volume.ToString("0.00", CultureInfo.InvariantCulture));
+            ok = RunQuiet("wpctl", "set-volume", dev.Id.Replace("pw_", ""), volume.ToString("0.00", CultureInfo.InvariantCulture));
         }
         else
         {
             var cardNum = dev.Id.Replace("hw:", "").Split(',')[0];
-            ok = RunQuiet("amixer", "-q", "-c", cardNum, "sset", "PCM", $"{(int)(_volume * 100)}%");
+            ok = RunQuiet("amixer", "-q", "-c", cardNum, "sset", "PCM", $"{(int)Math.Round(volume * 100)}%");
         }
 
-        if (!ok) WiretuneLog.Debug("FfmpegAudioDriver", $"Mixer volume change failed for '{dev.Name}'.");
+        lock (_stateLock)
+        {
+            // The device may have been switched while the command ran.
+            if (_disposed || _currentDevice?.Id != dev.Id) return;
+
+            if (ok)
+            {
+                _mixerVolumeWorked = true;
+                return;
+            }
+
+            if (_mixerVolumeWorked)
+            {
+                WiretuneLog.Debug("FfmpegAudioDriver", $"Mixer volume change failed for '{dev.Name}'.");
+                return;
+            }
+
+            // The mixer has never accepted a command: hand the volume to the player instead of leaving the slider dead.
+            _mixerVolumeFailed = true;
+            WiretuneLog.Warn("FfmpegAudioDriver", $"Cannot set the system volume of '{dev.Name}'; the volume is applied by the player instead.");
+            ScheduleVolumeRestart();
+        }
     }
 
     /// <summary>Starts playback for the current source. Must be called under <see cref="_stateLock"/>.</summary>
@@ -293,10 +355,11 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
         ffmpegPsi.ArgumentList.Add("-i");
         ffmpegPsi.ArgumentList.Add(_currentSource!);
 
-        if (!_isBitperfect && _volume < 0.999)
+        var playerVolume = PlayerVolume;
+        if (playerVolume < 0.999)
         {
             ffmpegPsi.ArgumentList.Add("-af");
-            ffmpegPsi.ArgumentList.Add($"volume={_volume.ToString("0.0000", CultureInfo.InvariantCulture)}");
+            ffmpegPsi.ArgumentList.Add($"volume={playerVolume.ToString("0.0000", CultureInfo.InvariantCulture)}");
         }
 
         ffmpegPsi.ArgumentList.Add("-c:a");
@@ -396,7 +459,7 @@ public sealed partial class FfmpegAudioDriver : IAudioDriver
             RedirectStandardError = true,
             RedirectStandardOutput = false
         };
-        var volumePercent = _isBitperfect ? 100 : (int)Math.Round(_volume * 100);
+        var volumePercent = (int)Math.Round(PlayerVolume * 100);
         foreach (var arg in BuildFfplayArguments(_currentSource!, startPosition, volumePercent)) psi.ArgumentList.Add(arg);
 
         ConfigureOutputRouting(psi, _currentFormat!);

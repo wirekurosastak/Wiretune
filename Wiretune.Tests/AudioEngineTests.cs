@@ -138,7 +138,7 @@ public class AudioEngineTests
         var directAlsa = new AudioOutputDevice
         {
             Id = "hw:2,0",
-            Name = "Közvetlen ALSA: SMSL USB AUDIO",
+            Name = "Direct ALSA: SMSL USB AUDIO",
             DriverType = "ALSA Direct",
             HardwareCard = "SMSL USB AUDIO",
             IsDefault = false,
@@ -210,8 +210,9 @@ public class AudioEngineTests
 
         // Bit-perfect mode
         await engine.SetBitperfectModeAsync(true);
-        Assert.Contains("Bit-perfect", engine.SignalPathDescription);
-        Assert.Contains("unity gain", engine.SignalPathDescription);
+        Assert.Contains("Bit-perfect requested", engine.SignalPathDescription);
+        Assert.Contains("no gain", engine.SignalPathDescription);
+        Assert.DoesNotContain("resampler", engine.SignalPathDescription, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

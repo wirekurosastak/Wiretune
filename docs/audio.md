@@ -30,7 +30,8 @@ restarts the track at the current position.
 
 "Bit-perfect" describes the path Wiretune sets up: lossless decode, no gain, exclusive access, no resampling
 requested. Whether the bits reaching the DAC equal the file also depends on the driver and the hardware, and
-Wiretune does not measure it.
+Wiretune does not measure it. On Linux the mode also leaves the card's own mixer alone, so a `PCM` volume below
+100 % still attenuates the signal there; set it to 100 % yourself (for example in `alsamixer`).
 
 ## Linux
 
@@ -39,9 +40,10 @@ devices, shown as `ALSA: <card>`, ID `hw:<card>,<device>`; these support exclusi
 queried with a 3-second timeout. With neither installed, one *Default audio output* entry (shared only) is
 offered. The list is built at start-up and on **Refresh**.
 
-**Shared playback.** `ffplay -nodisp -autoexit -loglevel error [-ss <s>] -volume <0–100> <source>`; for a PipeWire
-sink the environment gets `SDL_AUDIODRIVER=pipewire` and `PIPEWIRE_NODE=<sink id>`. Seeking restarts `ffplay` at the
-new position; pausing sends `SIGSTOP` and resuming `SIGCONT`.
+**Shared playback.** `ffplay -nodisp -autoexit -loglevel error [-ss <s>] -volume <0–100> <source>` (100 whenever the
+system mixer carries the volume, see [Volume](#volume)); for a PipeWire sink the environment gets
+`SDL_AUDIODRIVER=pipewire` and `PIPEWIRE_NODE=<sink id>`. Seeking restarts `ffplay` at the new position; pausing
+sends `SIGSTOP` and resuming `SIGCONT`.
 
 **Exclusive and bit-perfect playback.** Used whenever exclusive mode is on or an ALSA hardware device is selected:
 
@@ -59,7 +61,8 @@ the stream goes to the card's ALSA `plughw` device. Beforehand, `pw-reserve -n A
 - 16- and 24-bit files are padded to 32 bits (lossless). Lossy files are decoded like any other, so for them
   "bit-perfect" only describes the output stage.
 - DSD (`.dsf`) is decoded to PCM by ffmpeg. There is no native DSD or DoP output.
-- The `volume` filter is present only in exclusive (not bit-perfect) mode with the volume below 100 %.
+- The `volume` filter is present only when the player itself applies the volume (not in bit-perfect mode, and not
+  while the card's mixer carries it, see [Volume](#volume)) and the volume is below 100 %.
 - Seeking restarts the pipeline; pausing suspends `aplay`.
 
 **Failures.** `ffplay` exits with status 0 even when it cannot open a source (unreachable server, expired token),
@@ -103,13 +106,17 @@ Android may resample. Other behaviour:
 
 | Platform | How it is applied |
 |---|---|
-| Linux, PipeWire sink | `wpctl set-volume <sink> <0.00–1.00>` |
-| Linux, ALSA card | `amixer -q -c <card> sset PCM <n>%` |
-| Linux, other output | `ffplay -volume`; moving the slider restarts playback at the current position (debounced) |
+| Linux, PipeWire sink | `wpctl set-volume <sink> <0.00–1.00>`; the player runs at 100 % |
+| Linux, ALSA card | `amixer -q -c <card> sset PCM <n>%`; no `volume` filter in ffmpeg |
+| Linux, other output | `ffplay -volume`; moving the slider restarts playback at the current position (debounced). While paused, the new level is used from the next start or seek |
 | Windows | Software gain on the PCM samples before WASAPI |
 | Android | `MediaPlayer.setVolume` |
 
-For PipeWire and ALSA the slider is applied to the mixer 60 ms after it stops moving, off the UI thread.
+On Linux the volume is applied in one place only: the mixer when there is one, the player otherwise. The mixer is
+the sink's or the card's own volume, so other applications see the change too. It is sent 60 ms after the slider stops
+moving, off the UI thread. If `wpctl` or `amixer` never accepts the command for a device (many USB DACs have no `PCM`
+control), Wiretune logs a warning and applies the volume in the player for that device instead. Bit-perfect mode
+sends the volume nowhere.
 
 ## Spectrum analyser
 
@@ -125,13 +132,10 @@ For PipeWire and ALSA the slider is applied to the mixer 60 ms after it stops mo
 
 - **Windows bit-perfect is unverified** (above). Linux exclusive/bit-perfect depends on `plughw` and the driver; it
   was reviewed and run against a dummy audio device in the tests, never measured.
-- **The signal-path readout says more than it knows.** The player describes the path of the current track (codec,
-  transport, processing, access, device). In bit-perfect mode it states *resampler OFF* and *unity gain*: that is
-  what Wiretune requests, not something it checks.
-- **Linux volume may be applied twice.** For PipeWire sinks and ALSA cards the slider goes to the system mixer, and
-  the same value is also passed to `ffplay -volume` or ffmpeg's `volume` filter when a track starts. The net
-  attenuation has not been measured and may be stronger than the slider suggests, especially from the second track
-  on. Bit-perfect mode is not affected.
+- **The signal-path readout shows what Wiretune requested, not what it measured.** The player describes the path of
+  the current track (codec, transport, processing, access, device). In bit-perfect mode it says *Bit-perfect
+  requested (PCM, no gain, exclusive device access)*; it does not check what ALSA, NAudio or the device actually do
+  with the stream.
 - **No gapless playback, no crossfade**: each track is opened when the previous one ends, leaving a short gap.
 - **Seeking on Linux restarts the player**, so seeking in a server stream opens a new HTTP request.
 - **Decoder coverage differs**: only Linux with ffmpeg plays everything that is indexed.

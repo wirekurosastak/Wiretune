@@ -49,7 +49,7 @@ internal static class Strings
         T("SearchPlaceholderShort", "Keresés...", "Search…", "Suchen …");
         T("Search", "Keresés", "Search", "Suche");
         T("TipClearSearch", "Keresés törlése", "Clear search", "Suche löschen");
-        T("TipBitPerfect", "Bit-Perfect mód (1:1 veszteségmentes kimenet, 0 dB Unity Gain hangerőrögzítés)", "Bit-perfect mode (1:1 lossless output, volume locked at 0 dB unity gain)", "Bit-Perfect-Modus (1:1 verlustfreie Ausgabe, Lautstärke auf 0 dB Unity Gain fixiert)");
+        T("TipBitPerfect", "Bit-perfect mód (a Wiretune nem erősít és nem halkít, a hangerő 100%-on rögzítve)", "Bit-perfect mode (Wiretune applies no gain, volume locked at 100%)", "Bit-Perfect-Modus (Wiretune ändert die Lautstärke nicht, Lautstärke auf 100 % fixiert)");
         T("TipExclusive", "Kizárólagos (Exclusive) mód (közvetlen ALSA / WASAPI DAC hozzáférés)", "Exclusive mode (direct ALSA / WASAPI DAC access)", "Exklusivmodus (direkter ALSA-/WASAPI-DAC-Zugriff)");
         T("TipAccount", "Wiretune Szerver Fiók és Bejelentkezés", "Wiretune server account and sign-in", "Wiretune-Serverkonto und Anmeldung");
         T("TipAccountSettings", "Fiók és beállítások", "Account and settings", "Konto und Einstellungen");
@@ -340,7 +340,7 @@ internal static class Strings
         T("SignalProcessing", "Feldolgozás: {0}", "Processing: {0}", "Verarbeitung: {0}");
         T("SignalAccess", "Hozzáférés: {0}", "Access: {0}", "Zugriff: {0}");
         T("SignalTarget", "Cél eszköz: {0}", "Target device: {0}", "Zielgerät: {0}");
-        T("SignalProcessingBitPerfect", "Bit-perfect (1:1 PCM, Unity Gain 0dB, Resampler KIKAPCSOLVA)", "Bit-perfect (1:1 PCM, unity gain 0 dB, resampler OFF)", "Bit-Perfect (1:1 PCM, Unity Gain 0 dB, Resampler AUS)");
+        T("SignalProcessingBitPerfect", "Bit-perfect kérve (PCM, erősítés nélkül, kizárólagos eszközhozzáférés)", "Bit-perfect requested (PCM, no gain, exclusive device access)", "Bit-Perfect angefordert (PCM, ohne Verstärkung, exklusiver Gerätezugriff)");
         T("SignalProcessingMixer", "Rendszerkeverő (megosztott kimenet)", "System mixer (shared output)", "Systemmixer (gemeinsame Ausgabe)");
         T("SignalAccessExclusive", "Kizárólagos mód (közvetlen hardver)", "Exclusive mode (direct hardware)", "Exklusivmodus (direkte Hardware)");
         T("SignalAccessShared", "Megosztott mód", "Shared mode", "Gemeinsamer Modus");
