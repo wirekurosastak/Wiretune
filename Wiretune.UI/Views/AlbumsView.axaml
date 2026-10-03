@@ -81,9 +81,7 @@
               <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2">
                 <TextBlock Text="{loc:T ColAlbum}" FontSize="10" FontWeight="Black" Foreground="{DynamicResource PurpleAccent}" />
               </Border>
-              <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2">
-                <TextBlock Text="{Binding Albums.SelectedAlbum.FormatBadge}" FontSize="10" FontWeight="Black" Foreground="{Binding Albums.SelectedAlbum.FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
-              </Border>
+              <controls:QualityTag Tier="{Binding Albums.SelectedAlbum.Tier}" Spec="{Binding Albums.SelectedAlbum.TagSpec}" />
             </StackPanel>
 
             <TextBlock Text="{Binding Albums.SelectedAlbum.Title}" FontSize="26" FontWeight="Black" Foreground="{DynamicResource TextMain}" TextTrimming="CharacterEllipsis" />
@@ -167,7 +165,7 @@
             </DataGridTemplateColumn>
 
             <!-- Format / Quality -->
-            <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="185" SortMemberPath="Format.DisplayBadge" CellTemplate="{StaticResource TrackQualityCell}" />
+            <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="215" SortMemberPath="Format.Tier" CellTemplate="{StaticResource TrackQualityCell}" />
 
             <!-- Duration -->
             <DataGridTextColumn Header="{loc:T ColLength}" Binding="{Binding FormattedDuration}" Width="105" SortMemberPath="Duration" />

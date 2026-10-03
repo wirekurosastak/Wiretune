@@ -250,6 +250,23 @@
             </StackPanel>
           </Border>
 
+          <TextBlock Text="{loc:T Lyrics}" Classes="group-title" />
+
+          <!-- Lyrics from the internet for tracks that have none of their own -->
+          <Border Classes="glass cyan">
+            <Grid ColumnDefinitions="*, Auto">
+              <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                <TextBlock Text="{loc:T SettingsOnlineLyrics}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                <TextBlock Text="{loc:T SettingsOnlineLyricsHint}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            OnContent="" OffContent=""
+                            VerticalAlignment="Center" Margin="12,0,0,0"
+                            IsChecked="{Binding UseOnlineLyrics, Mode=TwoWay}"
+                            AutomationProperties.Name="{loc:T SettingsOnlineLyrics}" />
+            </Grid>
+          </Border>
+
           <TextBlock Text="{loc:T SettingsAudioSection}" Classes="group-title" />
 
           <!-- Exclusive & Bit-Perfect Modes -->

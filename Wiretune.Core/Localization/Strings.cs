@@ -53,6 +53,8 @@ internal static class Strings
         T("TipExclusive", "Kizárólagos (Exclusive) mód (közvetlen ALSA / WASAPI DAC hozzáférés)", "Exclusive mode (direct ALSA / WASAPI DAC access)", "Exklusivmodus (direkter ALSA-/WASAPI-DAC-Zugriff)");
         T("TipAccount", "Wiretune Szerver Fiók és Bejelentkezés", "Wiretune server account and sign-in", "Wiretune-Serverkonto und Anmeldung");
         T("TipAccountSettings", "Fiók és beállítások", "Account and settings", "Konto und Einstellungen");
+        T("SettingsOnlineLyrics", "Dalszöveg az internetről", "Lyrics from the internet", "Liedtexte aus dem Internet");
+        T("SettingsOnlineLyricsHint", "Ha egy számnak nincs saját dalszövege, megkeressük az lrclib.net-en (ingyenes, nyílt dalszöveg-adatbázis). Csak a szám címe, előadója, albuma és hossza kerül elküldésre.", "When a track has no lyrics of its own, look them up on lrclib.net (a free, open lyrics database). Only the track's title, artist, album and length are sent.", "Hat ein Titel keinen eigenen Liedtext, wird er auf lrclib.net gesucht (eine freie, offene Liedtext-Datenbank). Gesendet werden nur Titel, Künstler, Album und Länge des Titels.");
         T("SettingsPerformanceStats", "Teljesítménystatisztika", "Performance statistics", "Leistungsstatistik");
         T("SettingsPerformanceStatsHint", "Képkocka-grafikonok és számlálók a képernyő alján, a teljesítményhangoláshoz.", "Frame graphs and counters at the bottom of the screen, for tuning performance.", "Bildraten-Diagramme und Zähler am unteren Bildschirmrand zur Leistungsabstimmung.");
         T("TipToggleTheme", "Téma váltása (Sötét / Világos)", "Switch theme (dark / light)", "Design wechseln (Dunkel / Hell)");
@@ -100,6 +102,12 @@ internal static class Strings
         T("ColArtist", "ELŐADÓ", "ARTIST", "KÜNSTLER");
         T("ColAlbum", "ALBUM", "ALBUM", "ALBUM");
         T("ColQuality", "MINŐSÉG", "QUALITY", "QUALITÄT");
+        T("QualityGold", "ARANY", "GOLD", "GOLD");
+        T("QualitySilver", "EZÜST", "SILVER", "SILBER");
+        T("QualityBronze", "BRONZ", "BRONZE", "BRONZE");
+        T("QualityGoldHint", "Hi-res: 24 bites, vagy 48 kHz feletti mintavétel", "Hi-res: 24-bit, or a sample rate above 48 kHz", "Hi-Res: 24 Bit oder Abtastrate über 48 kHz");
+        T("QualitySilverHint", "Veszteségmentes, CD-minőségű (16 bit)", "Lossless at CD quality (16-bit)", "Verlustfrei in CD-Qualität (16 Bit)");
+        T("QualityBronzeHint", "Veszteséges formátum (MP3, AAC, Ogg …)", "Lossy format (MP3, AAC, Ogg …)", "Verlustbehaftetes Format (MP3, AAC, Ogg …)");
         T("ColLength", "HOSSZ", "LENGTH", "DAUER");
         T("LabelAlbums", "ALBUMOK", "ALBUMS", "ALBEN");
         T("LabelArtists", "ELŐADÓK", "ARTISTS", "KÜNSTLER");
@@ -158,7 +166,12 @@ internal static class Strings
         T("Lyrics", "DALSZÖVEG", "LYRICS", "LIEDTEXT");
         T("TabPlayer", "Lejátszó", "Player", "Player");
         T("TabLyrics", "Dalszöveg", "Lyrics", "Liedtext");
-        T("NoLyrics", "Ehhez a számhoz nincs dalszöveg a metaadatokban.", "This track has no lyrics in its metadata.", "Für diesen Titel sind keine Liedtexte in den Metadaten vorhanden.");
+        T("NoLyrics", "Ehhez a számhoz nem találtunk dalszöveget.", "No lyrics found for this track.", "Für diesen Titel wurde kein Liedtext gefunden.");
+        T("NoLyricsInTags", "Ehhez a számhoz nincs dalszöveg a metaadatokban. Az online keresést a Beállításokban kapcsolhatod be.", "This track has no lyrics in its tags. You can turn on the online lookup in Settings.", "Für diesen Titel sind keine Liedtexte in den Metadaten vorhanden. Die Online-Suche kannst du in den Einstellungen einschalten.");
+        T("LyricsSearching", "Dalszöveg keresése…", "Looking for lyrics…", "Liedtext wird gesucht …");
+        T("LyricsLookupFailed", "A dalszövegszolgáltatás nem érhető el. Ellenőrizd a kapcsolatot, a lejátszási sor újranyitásakor újra próbáljuk.", "Couldn't reach the lyrics service. Check your connection; reopening the queue tries again.", "Der Liedtext-Dienst ist nicht erreichbar. Prüfe deine Verbindung; beim erneuten Öffnen der Warteschlange wird es noch einmal versucht.");
+        T("LyricsSource", "Forrás: {0}", "Source: {0}", "Quelle: {0}");
+        T("LyricsSourceTags", "Forrás: a szám saját metaadatai", "Source: the track's own tags", "Quelle: Metadaten des Titels");
         T("TipQueueToggle", "Lejátszási sor (kattints a megnyitáshoz / elrejtéshez)", "Queue (click to show / hide)", "Warteschlange (zum Ein-/Ausblenden klicken)");
         T("TipShuffle", "Véletlenszerű lejátszás", "Shuffle", "Zufallswiedergabe");
         T("TipPrevious", "Előző szám", "Previous track", "Vorheriger Titel");

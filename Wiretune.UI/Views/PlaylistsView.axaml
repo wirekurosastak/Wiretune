@@ -85,10 +85,8 @@
 
                     <!-- Badges & Action Buttons -->
                     <Grid Grid.Row="2" ColumnDefinitions="Auto, *, Auto" Margin="0,8,0,0">
-                      <Border Grid.Column="0" Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center"
-                              IsVisible="{Binding FormatBadge, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <TextBlock Text="{Binding FormatBadge}" FontSize="10" FontWeight="Black" Foreground="{Binding FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
-                      </Border>
+                      <controls:QualityTag Grid.Column="0" Tier="{Binding Tier}" Spec="{Binding TagSpec}" IsCompact="True"
+                                           IsVisible="{Binding FormatBadge, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                       <Button Grid.Column="2" Classes="lime"
                               Width="32" Height="32"
                               CornerRadius="6"
@@ -156,10 +154,8 @@
               <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2">
                 <TextBlock Text="{loc:T LabelPlaylist}" FontSize="10" FontWeight="Black" Foreground="{DynamicResource LimeAccent}" />
               </Border>
-              <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2"
-                      IsVisible="{Binding Playlists.SelectedPlaylist.FormatBadge, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                <TextBlock Text="{Binding Playlists.SelectedPlaylist.FormatBadge}" FontSize="10" FontWeight="Black" Foreground="{Binding Playlists.SelectedPlaylist.FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
-              </Border>
+              <controls:QualityTag Tier="{Binding Playlists.SelectedPlaylist.FormatTier}" Spec="{Binding Playlists.SelectedPlaylist.FormatSpec}"
+                                   IsVisible="{Binding Playlists.SelectedPlaylist.FormatBadge, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
             </StackPanel>
 
             <!-- Playlist Title (Click to rename) -->
@@ -309,7 +305,7 @@
               <DataGridTemplateColumn Header="{loc:T ColAlbum}" Width="1.5*" SortMemberPath="Album" CellTemplate="{StaticResource TrackAlbumLinkCell}" />
 
               <!-- Audio Format / Quality Badge -->
-              <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="185" SortMemberPath="Format.DisplayBadge" CellTemplate="{StaticResource TrackQualityCell}" />
+              <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="215" SortMemberPath="Format.Tier" CellTemplate="{StaticResource TrackQualityCell}" />
 
               <!-- Duration -->
               <DataGridTextColumn Header="{loc:T ColLength}" Binding="{Binding FormattedDuration}" Width="105" SortMemberPath="Duration" />

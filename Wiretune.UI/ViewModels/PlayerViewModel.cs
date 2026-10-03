@@ -11,6 +11,19 @@ using Wiretune.Core.Localization;
 
 namespace Wiretune.UI.ViewModels;
 
+/// <summary>Where the lyrics shown for the current track come from.</summary>
+public enum LyricsOrigin
+{
+    /// <summary>There are no lyrics.</summary>
+    None,
+
+    /// <summary>The track's own tags (the file, or the server's copy of the file's tags).</summary>
+    Tags,
+
+    /// <summary>The internet lookup (LRCLIB).</summary>
+    Online,
+}
+
 public partial class PlayerViewModel : ObservableObject
 {
     private const int CoverDecodeWidth = 640; // large enough for the full-screen phone player
@@ -30,9 +43,128 @@ public partial class PlayerViewModel : ObservableObject
     [ObservableProperty] private string? _currentLyrics;
     public bool HasLyrics => !string.IsNullOrWhiteSpace(CurrentLyrics);
 
-    /// <summary>Finds the lyrics of a track (tag of a local file, server request for a server track); set by the application.</summary>
+    // ── Time-synced lyrics ───────────────────────────────────────────────────────────────────────────
+    // Lyrics in LRC form ("[01:23.45] text") are shown line by line: the line being sung is highlighted and the panel
+    // scrolls along. The engine reports its position every 200 ms, so the current line is looked up slightly ahead
+    // of that, which makes it change on time instead of up to 200 ms late.
+    private const double LyricLeadSeconds = 0.2;
+    private IReadOnlyList<LrcLine> _lrcLines = Array.Empty<LrcLine>();
+
+    /// <summary>The lines of time-synced lyrics; empty for plain lyrics or none.</summary>
+    [ObservableProperty] private IReadOnlyList<LyricLineViewModel> _lyricLines = Array.Empty<LyricLineViewModel>();
+
+    /// <summary>Index into <see cref="LyricLines"/> of the line being sung; -1 before the first line.</summary>
+    [ObservableProperty] private int _currentLyricIndex = -1;
+
+    public bool HasSyncedLyrics => LyricLines.Count > 0;
+
+    /// <summary>Lyrics without time tags: shown as one block of text that does not follow the song.</summary>
+    public bool HasPlainLyrics => HasLyrics && !HasSyncedLyrics;
+
+    /// <summary>Plain text of the lyrics for the block view (the synced view has its own lines).</summary>
+    public string? PlainLyricsText => HasSyncedLyrics ? null : CurrentLyrics;
+
+    private void BuildLyricLines(string? lyrics)
+    {
+        _lrcLines = LrcParser.Parse(lyrics);
+        CurrentLyricIndex = -1;
+        LyricLines = _lrcLines.Count == 0
+            ? Array.Empty<LyricLineViewModel>()
+            : _lrcLines.Select(l => new LyricLineViewModel(l.Time, l.Text)).ToList();
+        OnPropertyChanged(nameof(HasSyncedLyrics));
+        OnPropertyChanged(nameof(HasPlainLyrics));
+        OnPropertyChanged(nameof(PlainLyricsText));
+
+        // The panel may open (or the lyrics arrive) in the middle of the song: start at the right line.
+        UpdateLyricPosition(TimeSpan.FromSeconds(PositionSeconds));
+    }
+
+    /// <summary>Moves the highlight to the line that is current at <paramref name="position"/>; cheap when nothing changed.</summary>
+    private void UpdateLyricPosition(TimeSpan position)
+    {
+        if (_lrcLines.Count == 0) return;
+
+        var index = LrcParser.IndexAt(_lrcLines, position + TimeSpan.FromSeconds(LyricLeadSeconds));
+        var old = CurrentLyricIndex;
+        if (index == old) return;
+
+        // Only the lines between the old and the new position can have changed (a seek may jump over many of them).
+        var lines = LyricLines;
+        for (var i = Math.Max(0, Math.Min(old, index)); i <= Math.Min(lines.Count - 1, Math.Max(old, index)); i++)
+        {
+            lines[i].IsPast = i < index;
+            lines[i].IsActive = i == index && !lines[i].IsBlank;
+        }
+        CurrentLyricIndex = index;
+    }
+
+    /// <summary>Jumps the song to the start of a lyric line (the user clicked it).</summary>
+    public void SeekToLyric(LyricLineViewModel? line)
+    {
+        if (line == null || CurrentTrack == null) return;
+        PositionSeconds = line.Time.TotalSeconds; // goes through the same debounced seek as the position slider
+    }
+
+    /// <summary>Finds the lyrics a track carries itself (tag of a local file, server request for a server track); set by the application.</summary>
     public Func<Track, CancellationToken, Task<string?>>? LyricsProvider { get; set; }
-    partial void OnCurrentLyricsChanged(string? value) => OnPropertyChanged(nameof(HasLyrics));
+
+    /// <summary>
+    /// Looks lyrics up on the internet. It is asked only for a track that has no lyrics of its own, and only while
+    /// <see cref="IsOnlineLyricsEnabled"/> is true; it throws when the lookup could not be made. Set by the application.
+    /// </summary>
+    public Func<Track, CancellationToken, Task<string?>>? OnlineLyricsProvider { get; set; }
+
+    /// <summary>Whether tracks without lyrics of their own are looked up online (the Settings switch).</summary>
+    [ObservableProperty] private bool _isOnlineLyricsEnabled = true;
+
+    /// <summary>True while the lyrics of the current track are being looked for; the panel shows a note instead of "no lyrics".</summary>
+    [ObservableProperty] private bool _isLoadingLyrics;
+
+    /// <summary>Where the lyrics on screen come from.</summary>
+    [ObservableProperty] private LyricsOrigin _lyricsOrigin;
+
+    /// <summary>True when the internet lookup could not be made (no connection, service down), as opposed to "nothing found".</summary>
+    [ObservableProperty] private bool _lyricsLookupFailed;
+
+    /// <summary>True when the panel has neither lyrics nor a search in progress, i.e. it shows <see cref="LyricsEmptyText"/>.</summary>
+    public bool ShowLyricsEmptyState => !HasLyrics && !IsLoadingLyrics;
+
+    /// <summary>Why there are no lyrics, in the active language.</summary>
+    public string LyricsEmptyText => LyricsLookupFailed
+        ? Localizer.Get("LyricsLookupFailed")
+        : IsOnlineLyricsEnabled && OnlineLyricsProvider != null ? Localizer.Get("NoLyrics") : Localizer.Get("NoLyricsInTags");
+
+    /// <summary>"Source: LRCLIB" or "Source: the track's own tags"; empty while there are no lyrics.</summary>
+    public string LyricsSourceText => LyricsOrigin switch
+    {
+        LyricsOrigin.Online => Localizer.Format("LyricsSource", OnlineLyrics.SourceName),
+        LyricsOrigin.Tags => Localizer.Get("LyricsSourceTags"),
+        _ => string.Empty,
+    };
+
+    partial void OnCurrentLyricsChanged(string? value)
+    {
+        BuildLyricLines(value);
+        OnPropertyChanged(nameof(HasLyrics));
+        OnPropertyChanged(nameof(ShowLyricsEmptyState));
+    }
+
+    partial void OnIsLoadingLyricsChanged(bool value) => OnPropertyChanged(nameof(ShowLyricsEmptyState));
+    partial void OnLyricsOriginChanged(LyricsOrigin value) => OnPropertyChanged(nameof(LyricsSourceText));
+    partial void OnLyricsLookupFailedChanged(bool value) => OnPropertyChanged(nameof(LyricsEmptyText));
+
+    partial void OnIsOnlineLyricsEnabledChanged(bool value)
+    {
+        OnPropertyChanged(nameof(LyricsEmptyText));
+
+        // Switched on while a track without lyrics is open: look for them now. Switched off while lyrics from the
+        // internet are on screen: take them away.
+        if ((value && !HasLyrics) || (!value && LyricsOrigin == LyricsOrigin.Online))
+        {
+            _lyricsTrackId = null;
+            RefreshLyrics();
+        }
+    }
     [ObservableProperty] private PlaybackState _playbackState = PlaybackState.Stopped;
     [ObservableProperty] private double _positionSeconds;
     [ObservableProperty] private double _durationSeconds;
@@ -61,13 +193,16 @@ public partial class PlayerViewModel : ObservableObject
         OnPropertyChanged(nameof(VolumeToolTip));
         OnPropertyChanged(nameof(NowPlayingTitle));
         OnPropertyChanged(nameof(NowPlayingArtist));
+        OnPropertyChanged(nameof(LyricsEmptyText));
+        OnPropertyChanged(nameof(LyricsSourceText));
     }
     [ObservableProperty] private bool _isShuffle;
     [ObservableProperty] private RepeatMode _repeatMode = RepeatMode.Off;
     [ObservableProperty] private Bitmap? _coverBitmap;
     [ObservableProperty] private string _signalPath = string.Empty;
     [ObservableProperty] private string _qualityBadge = string.Empty;
-    [ObservableProperty] private string _qualityShortBadge = string.Empty;
+    [ObservableProperty] private QualityTier _currentTier = QualityTier.Silver;
+    [ObservableProperty] private string _currentTagSpec = string.Empty;
     [ObservableProperty] private string? _errorMessage;
     [ObservableProperty] private float[] _spectrumBands = new float[32];
     [ObservableProperty] private bool _isQueueOpen;
@@ -326,38 +461,91 @@ public partial class PlayerViewModel : ObservableObject
         {
             _lyricsCts?.Cancel();
             _lyricsTrackId = null;
-            CurrentLyrics = null;
+            ClearLyrics();
             return;
         }
 
         if (_lyricsTrackId == track.Id) return; // already loaded, or loading, for this track
 
         _lyricsCts?.Cancel();
-        CurrentLyrics = null;
-        if (!IsQueueOpen || LyricsProvider == null) return; // loaded when the panel is opened
+        ClearLyrics();
+        if (!IsQueueOpen || (LyricsProvider == null && OnlineLyricsProvider == null)) return; // loaded when the panel is opened
 
         _lyricsTrackId = track.Id;
+        IsLoadingLyrics = true;
         var cts = _lyricsCts = new CancellationTokenSource();
         _ = LoadLyricsAsync(track, cts);
     }
 
+    private void ClearLyrics()
+    {
+        CurrentLyrics = null;
+        LyricsOrigin = LyricsOrigin.None;
+        LyricsLookupFailed = false;
+        IsLoadingLyrics = false;
+    }
+
+    /// <summary>
+    /// The lyrics the track carries itself come first (they are instant and belong to this very file); only when it
+    /// has none, and the user allows it, the internet is asked.
+    /// </summary>
     private async Task LoadLyricsAsync(Track track, CancellationTokenSource cts)
     {
+        var ct = cts.Token;
         string? text = null;
+        var origin = LyricsOrigin.None;
+        var failed = false;
+
         try
         {
-            text = await LyricsProvider!(track, cts.Token);
+            if (LyricsProvider != null)
+            {
+                try
+                {
+                    text = await LyricsProvider(track, ct);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    WiretuneLog.Debug("PlayerViewModel", $"Lyrics unavailable for '{track.Title}': {ex.Message}");
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                origin = LyricsOrigin.Tags;
+            }
+            else
+            {
+                text = null;
+                if (IsOnlineLyricsEnabled && OnlineLyricsProvider != null)
+                {
+                    try
+                    {
+                        text = await OnlineLyricsProvider(track, ct);
+                        if (!string.IsNullOrWhiteSpace(text)) origin = LyricsOrigin.Online;
+                        else text = null;
+                    }
+                    catch (Exception ex) when (!ct.IsCancellationRequested)
+                    {
+                        // Not reaching the service is not the same as "no lyrics exist": say so, and ask again next time.
+                        failed = true;
+                        WiretuneLog.Debug("PlayerViewModel", $"Online lyrics unavailable for '{track.Title}': {ex.Message}");
+                    }
+                }
+            }
         }
-        catch (OperationCanceledException)
+        catch (Exception) when (ct.IsCancellationRequested)
         {
-            return;
-        }
-        catch (Exception ex)
-        {
-            WiretuneLog.Debug("PlayerViewModel", $"Lyrics unavailable for '{track.Title}': {ex.Message}");
+            return; // another track (or closing the panel) took over; it owns the state now
         }
 
-        if (!cts.IsCancellationRequested && ReferenceEquals(CurrentTrack, track)) CurrentLyrics = text;
+        if (ct.IsCancellationRequested || !ReferenceEquals(CurrentTrack, track)) return;
+
+        CurrentLyrics = text;
+        LyricsOrigin = origin;
+        LyricsLookupFailed = failed;
+        IsLoadingLyrics = false;
+        if (failed) _lyricsTrackId = null; // opening the panel again tries once more
     }
 
     partial void OnCurrentTrackChanged(Track? oldValue, Track? newValue)
@@ -402,7 +590,8 @@ public partial class PlayerViewModel : ObservableObject
         DurationSeconds = track.Duration.TotalSeconds;
         FormattedDuration = track.FormattedDuration;
         QualityBadge = track.Format.DisplayBadge;
-        QualityShortBadge = track.Format.DisplayBadge;
+        CurrentTier = track.Format.Tier;
+        CurrentTagSpec = track.Format.TagSpec;
         SignalPath = _engine.SignalPathDescription;
 
         CoverArtService.LoadBitmap(track.CoverArtPath, CoverDecodeWidth, bmp =>
@@ -436,6 +625,7 @@ public partial class PlayerViewModel : ObservableObject
         {
             _isUpdatingPositionFromEngine = false;
         }
+        UpdateLyricPosition(pos);
     }
 
     public void PlayQueue(IEnumerable<Track> tracks, Track? startTrack = null)
@@ -586,6 +776,7 @@ public partial class PlayerViewModel : ObservableObject
         // The slider was moved by the user: debounce so dragging produces a single seek.
         var target = TimeSpan.FromSeconds(value);
         FormattedPosition = Format(target);
+        UpdateLyricPosition(target); // the lyrics follow the slider while it is dragged
         _isUserSeeking = true;
 
         _seekDebounceCts?.Cancel();

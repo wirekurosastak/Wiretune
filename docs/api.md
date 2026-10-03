@@ -81,7 +81,7 @@ simply stay as they are.
 | `GET /api/stream/{trackId}` | user | The audio file, with HTTP range support. `404` if the track is unknown, outside the library folder, or gone |
 | `GET /api/cover/{trackId}` | user | Cover image (`image/jpeg` or `image/png`), cached for a day. `404` when there is none |
 | `GET /api/cover/album/{albumId}` | user | Cover of the first track of the album that has one. The players use this one, so the tracks of an album share one URL and the image is downloaded once |
-| `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tag (up to 100,000 characters); `404` when there are none |
+| `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tag (up to 100,000 characters); `404` when there are none. The server has no online lookup; players fall back to LRCLIB on their own |
 
 ## Example
 

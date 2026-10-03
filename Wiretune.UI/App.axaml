@@ -4,6 +4,7 @@
              xmlns:loc="using:Wiretune.UI.Localization"
              xmlns:vm="using:Wiretune.UI.ViewModels"
              xmlns:models="using:Wiretune.Core.Models"
+             xmlns:controls="using:Wiretune.UI.Controls"
              xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="Wiretune.UI.App"
              RequestedThemeVariant="Dark">
@@ -13,7 +14,6 @@
       <conv:PlayStateToBoolConverter x:Key="PlayStateToBoolConverter" />
       <conv:FavoriteIconConverter x:Key="FavoriteIconConverter" />
       <conv:FavoriteColorConverter x:Key="FavoriteColorConverter" />
-      <conv:QualityBadgeColorConverter x:Key="QualityBadgeColorConverter" />
       <conv:ActiveControlBrushConverter x:Key="ActiveControlBrushConverter" />
       <conv:RepeatModeToIconConverter x:Key="RepeatModeToIconConverter" />
       <conv:IntEqualConverter x:Key="IntEqualConverter" />
@@ -46,16 +46,7 @@
       </DataTemplate>
 
       <DataTemplate x:Key="TrackQualityCell" DataType="models:Track">
-        <Border Background="{DynamicResource TagBackground}"
-                CornerRadius="4"
-                Padding="6,2"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Center">
-          <TextBlock Text="{Binding Format.DisplayBadge}"
-                     FontSize="10"
-                     FontWeight="Black"
-                     Foreground="{Binding Format, Converter={StaticResource QualityBadgeColorConverter}}" />
-        </Border>
+        <controls:QualityTag Tier="{Binding Format.Tier}" Spec="{Binding Format.TagSpec}" Margin="4,0" />
       </DataTemplate>
 
       <DataTemplate x:Key="TrackFavoriteCell" DataType="models:Track">

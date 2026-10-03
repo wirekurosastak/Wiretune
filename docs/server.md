@@ -80,7 +80,8 @@ M4A (ALAC when the stream says so, otherwise AAC), AAC, MP3, Ogg Vorbis and Opus
 file also *plays* depends on the player's platform ([audio.md](audio.md)). Tags are read with TagLibSharp. A missing title becomes the file name, a missing artist the album artist and then
 `Unknown artist`, a missing album `Unknown album` (not translated). Cover art is the first embedded picture
 (cached in `Covers/`), otherwise a folder image as described in the [user guide](user-guide.md#how-the-library-is-organised).
-Lyrics are read on request from the file's tag; there is no lookup service.
+Lyrics are read on request from the file's tag. The server never goes to the internet for them: a player that wants
+lyrics for a track without any asks the public LRCLIB database itself ([user guide](user-guide.md#playing-music)).
 
 If the index is not empty and the folder it was built from suddenly contains nothing, the scan is skipped with
 *Library folder is empty (unmounted share?)* and the old index is kept. Pointing the server at a different, empty

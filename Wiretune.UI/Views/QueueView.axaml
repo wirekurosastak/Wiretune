@@ -7,6 +7,39 @@
              x:Class="Wiretune.UI.Views.QueueView"
              x:DataType="vm:MainViewModel">
 
+  <UserControl.Styles>
+    <!-- One line of synced lyrics: dim until it is sung, bright and slightly larger while it is, dimmer again after.
+         The change is eased over a third of a second so the highlight glides from line to line. -->
+    <Style Selector="Border.lyric-line">
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="RenderTransform" Value="none" />
+      <Setter Property="RenderTransformOrigin" Value="0%,50%" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Transitions">
+        <Transitions>
+          <DoubleTransition Property="Opacity" Duration="0:0:0.35" Easing="CubicEaseOut" />
+          <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.35" Easing="CubicEaseOut" />
+        </Transitions>
+      </Setter>
+    </Style>
+    <Style Selector="Border.lyric-line.past">
+      <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <Style Selector="Border.lyric-line:pointerover">
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+    <Style Selector="Border.lyric-line.active">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="RenderTransform" Value="scale(1.06)" />
+    </Style>
+    <!-- An instrumental gap is only a small space, and not clickable -->
+    <Style Selector="Border.lyric-line.blank">
+      <Setter Property="MinHeight" Value="14" />
+      <Setter Property="Cursor" Value="Arrow" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+  </UserControl.Styles>
+
   <!-- The play queue, with drag and drop to reorder it. Binds to MainViewModel (inherited). -->
   <Grid Classes="page" IsVisible="{Binding Player.IsQueueOpen}" RowDefinitions="Auto, *">
     <!-- View Header / Actions -->
@@ -44,7 +77,8 @@
 
     <!-- Queue Content (Glass Panel matching other views) -->
     <Border Grid.Row="1" Classes="glass view-accent" Padding="0" ClipToBounds="True">
-      <Grid ColumnDefinitions="2*, *">
+      <!-- Queue and lyrics share the panel equally -->
+      <Grid ColumnDefinitions="*, *">
         <!-- Empty Queue Placeholder -->
         <StackPanel Grid.ColumnSpan="2" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="16" Margin="32"
                     IsVisible="{Binding !Player.QueueTracks.Count}">
@@ -115,11 +149,7 @@
                     </StackPanel>
 
                     <!-- Audio Format Badge -->
-                    <Border Grid.Column="3" Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center" Margin="0,0,12,0"
-                            IsVisible="{Binding Track.Format.DisplayBadge, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                      <TextBlock Text="{Binding Track.Format.DisplayBadge}" FontSize="10" FontWeight="Black"
-                                 Foreground="{Binding Track.Format.DisplayBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
-                    </Border>
+                    <controls:QualityTag Grid.Column="3" Tier="{Binding Track.Format.Tier}" Spec="{Binding Track.Format.TagSpec}" IsCompact="True" Margin="0,0,12,0" />
 
                     <!-- Duration -->
                     <TextBlock Grid.Column="4" Text="{Binding Track.FormattedDuration}" FontSize="12" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="0,0,12,0" />
@@ -165,17 +195,57 @@
                          Foreground="{DynamicResource TextMain}" TextTrimming="CharacterEllipsis" />
               <TextBlock Text="{Binding Player.CurrentTrack.Artist}" FontSize="12"
                          Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis" />
+              <!-- Where the lyrics came from: the track's own tags or the internet lookup -->
+              <TextBlock Text="{Binding Player.LyricsSourceText}" FontSize="11" Margin="0,4,0,0"
+                         Foreground="{DynamicResource TextMuted}" TextTrimming="CharacterEllipsis"
+                         IsVisible="{Binding Player.HasLyrics}" />
             </StackPanel>
 
-            <ScrollViewer Grid.Row="1" IsVisible="{Binding Player.HasLyrics}">
+            <!-- Plain lyrics (no time tags): one block of text that does not follow the song -->
+            <ScrollViewer Grid.Row="1" IsVisible="{Binding Player.HasPlainLyrics}">
               <SelectableTextBlock Text="{Binding Player.CurrentLyrics}" TextWrapping="Wrap"
                                    FontSize="15" LineHeight="26" Foreground="{DynamicResource TextMain}" />
             </ScrollViewer>
 
+            <!-- Time-synced lyrics: the line being sung is highlighted and the list scrolls along (QueueView.axaml.cs). -->
+            <ScrollViewer x:Name="SyncedLyricsScroll" Grid.Row="1" IsVisible="{Binding Player.HasSyncedLyrics}"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Hidden">
+              <ScrollViewer.OpacityMask>
+                <!-- Lines fade out towards the top and bottom edge instead of being cut off -->
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                  <GradientStop Color="Transparent" Offset="0" />
+                  <GradientStop Color="Black" Offset="0.1" />
+                  <GradientStop Color="Black" Offset="0.9" />
+                  <GradientStop Color="Transparent" Offset="1" />
+                </LinearGradientBrush>
+              </ScrollViewer.OpacityMask>
+              <ItemsControl x:Name="SyncedLyricsItems" ItemsSource="{Binding Player.LyricLines}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:LyricLineViewModel">
+                    <Border Classes="lyric-line" Classes.active="{Binding IsActive}" Classes.past="{Binding IsPast}"
+                            Classes.blank="{Binding IsBlank, Mode=OneTime}"
+                            Background="Transparent" Padding="0,6,16,6" Tapped="LyricLine_Tapped">
+                      <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="19" FontWeight="Bold"
+                                 LineHeight="26" Foreground="{DynamicResource TextMain}" />
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Looking for the lyrics -->
+            <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12"
+                        IsVisible="{Binding Player.IsLoadingLyrics}">
+              <ProgressBar IsIndeterminate="True" Width="120" Height="3" CornerRadius="2" Foreground="{DynamicResource CyanAccent}" />
+              <TextBlock Text="{loc:T LyricsSearching}" FontSize="13"
+                         Foreground="{DynamicResource TextMuted}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280" />
+            </StackPanel>
+
+            <!-- No lyrics (or the lookup could not be made) -->
             <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
-                        IsVisible="{Binding !Player.HasLyrics}">
+                        IsVisible="{Binding Player.ShowLyricsEmptyState}">
               <material:MaterialIcon Kind="TextBoxOutline" Width="40" Height="40" Foreground="{DynamicResource TextDisabled}" HorizontalAlignment="Center" />
-              <TextBlock Text="{loc:T NoLyrics}" FontSize="13"
+              <TextBlock Text="{Binding Player.LyricsEmptyText}" FontSize="13"
                          Foreground="{DynamicResource TextMuted}" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="280" />
             </StackPanel>
           </Grid>

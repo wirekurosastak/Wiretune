@@ -512,12 +512,8 @@
                                                 ToolTip.Tip="{loc:T TipSpectrum}" />
 
             <Panel IsVisible="{Binding !IsCompactLayout}" VerticalAlignment="Center">
-              <Border Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center"
-                      IsVisible="{Binding Player.CurrentTrack, Converter={x:Static ObjectConverters.IsNotNull}}"
-                      ToolTip.Tip="{Binding Player.QualityBadge}">
-                <TextBlock Text="{Binding Player.QualityShortBadge}" FontSize="10" FontWeight="Black"
-                           Foreground="{Binding Player.QualityShortBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
-              </Border>
+              <controls:QualityTag Tier="{Binding Player.CurrentTier}" Spec="{Binding Player.CurrentTagSpec}"
+                                   IsVisible="{Binding Player.CurrentTrack, Converter={x:Static ObjectConverters.IsNotNull}}" />
             </Panel>
 
             <Button Classes="icon" Command="{Binding Player.ToggleMuteCommand}" Width="28" Height="28" VerticalAlignment="Center"

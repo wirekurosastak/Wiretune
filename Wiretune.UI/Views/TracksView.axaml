@@ -135,7 +135,7 @@
             <DataGridTemplateColumn Header="{loc:T ColAlbum}" Width="1.5*" SortMemberPath="Album" CellTemplate="{StaticResource TrackAlbumLinkCell}" />
 
             <!-- Audio Format / Quality Badge -->
-            <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="185" SortMemberPath="Format.DisplayBadge" CellTemplate="{StaticResource TrackQualityCell}" />
+            <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="215" SortMemberPath="Format.Tier" CellTemplate="{StaticResource TrackQualityCell}" />
 
             <!-- Duration -->
             <DataGridTextColumn Header="{loc:T ColLength}" Binding="{Binding FormattedDuration}" Width="105" SortMemberPath="Duration" />

@@ -10,13 +10,12 @@
              x:Name="Root"
              ClipToBounds="False">
   <UserControl.Resources>
-    <controls:CompactBadgeConverter x:Key="CompactBadgeConverter" />
   </UserControl.Resources>
   <Button Classes="unstyled-card"
           Command="{Binding OpenCommand, ElementName=Root}"
           CommandParameter="{Binding}"
           Margin="0,6,18,12">
-    <Border Classes="metric-card purple" Width="210" Height="270" services:ViewportLoad.Target="{Binding}">
+    <Border Classes="metric-card purple" Width="210" Height="290" services:ViewportLoad.Target="{Binding}">
       <Grid RowDefinitions="150, *, Auto">
         <!-- Cover placeholder / art -->
         <Border Grid.Row="0" CornerRadius="6" Background="{DynamicResource Surface2}" ClipToBounds="True">
@@ -39,12 +38,7 @@
 
         <!-- Badge & Play Button -->
         <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,8,0,0">
-          <Border Grid.Column="0" Background="{DynamicResource TagBackground}" CornerRadius="4" Padding="6,2"
-                  HorizontalAlignment="Left" VerticalAlignment="Center">
-            <TextBlock Text="{Binding FormatBadge, Converter={StaticResource CompactBadgeConverter}}" FontSize="10" FontWeight="Black"
-                       Foreground="{Binding FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-          </Border>
+          <controls:QualityTag Grid.Column="0" Tier="{Binding Tier}" Spec="{Binding TagSpec}" IsCompact="True" />
           <Button Grid.Column="1" Classes="purple"
                   Width="32" Height="32"
                   CornerRadius="4"

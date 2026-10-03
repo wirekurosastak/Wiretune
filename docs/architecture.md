@@ -78,7 +78,7 @@ create every table through the same `DatabaseManager`; each uses the ones it nee
 `settings` keys: `LibraryPath` (folder the index was scanned from), `LibrarySource` (`None`, `Server`, `Local` or
 `Hybrid`), `ServerUrl`, `AuthToken` (only when kept signed in), `ServerUserData` (whether the server stores
 per-account data), `ServerUserDataImported` (set once the device's old local data has been handed over, or found to
-be empty: `{ServerUrl}|{UserId}` of the account that received it), `Preference.Language`, `Preference.Theme`, `Preference.ShowPerformanceStats` (player); `jwt_secret` (64
+be empty: `{ServerUrl}|{UserId}` of the account that received it), `Preference.Language`, `Preference.Theme`, `Preference.ShowPerformanceStats`, `Preference.OnlineLyrics` (player); `jwt_secret` (64
 random bytes, Base64, created on first start) and `library_path` (folder chosen through the API) (server).
 
 The data directory is resolved by `AppPaths.GetDataDirectory`: explicit setting, else `WIRETUNE_DATA_DIR`, else
@@ -175,6 +175,16 @@ albums, artists, playlists, favourites, search, audio settings, server settings)
   time, off the UI thread; downloads capped at 16 MiB; failed URLs retried after 2 minutes).
 - `Controls/` holds the list and grid controls tuned for scrolling large libraries on a phone and the visualisers
   (`SpectrumVisualizerControl`, the 32-band analyser; `NavVisualizerControl`, the animated logo).
+- **Quality tags.** `AudioFormat.Tier` (`QualityTier`: gold = hi-res, silver = lossless, bronze = lossy) and
+  `AudioFormat.TagSpec` describe one recording; `QualitySummary.Of` reduces the tracks of an album or playlist to
+  their lowest tier plus a spec or `MIXED` (`Album.Tier`/`TagSpec`, `Playlist.FormatTier`/`FormatSpec`). The
+  `QualityTag` control draws the pill (the same everywhere: tables, tiles, headers, player bar, queue) in the
+  medal's colours, which it owns so they keep their contrast in both themes; the words come from `QualityTierText`.
+- **Lyrics.** `PlayerViewModel` loads them only while the queue panel is open: first `LyricsProvider` (the file's tag,
+  or the server's `/api/lyrics`), then, when that is empty and the setting allows, `OnlineLyricsProvider`, which is
+  `OnlineLyrics.FindAsync` (Core): LRCLIB's exact-match endpoint, then its search (the same song by title, artist
+  and length within 5 s), cached per track in `<data dir>/lyrics/<hash>.json`. A failed lookup throws and is never
+  cached, which lets the panel say "could not reach" instead of "no lyrics".
 - Diagnostics: `RenderingInfo`, `FrameMonitor` and `UiFrameProbe` measure rendering, and the Android head adds
   refresh-rate and performance-hint control (`DisplayPerformance`).
 

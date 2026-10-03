@@ -51,5 +51,54 @@ public class Playlist : INotifyPropertyChanged
         }
     }
 
+    private QualityTier _formatTier = QualityTier.Silver;
+    private string _formatSpec = string.Empty;
+
+    /// <summary>The lowest <see cref="QualityTier"/> among the playlist's tracks; only meaningful while <see cref="FormatBadge"/> is not empty.</summary>
+    [JsonIgnore]
+    public QualityTier FormatTier
+    {
+        get => _formatTier;
+        set
+        {
+            if (_formatTier != value)
+            {
+                _formatTier = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormatTier)));
+            }
+        }
+    }
+
+    /// <summary>What the quality tag says after the tier word, e.g. "FLAC 24bit/96kHz", or "MIXED".</summary>
+    [JsonIgnore]
+    public string FormatSpec
+    {
+        get => _formatSpec;
+        set
+        {
+            if (_formatSpec != value)
+            {
+                _formatSpec = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormatSpec)));
+            }
+        }
+    }
+
+    /// <summary>Sets <see cref="FormatBadge"/>, <see cref="FormatTier"/> and <see cref="FormatSpec"/> from the playlist's tracks; an empty playlist has no badge.</summary>
+    public void ApplyQuality(IReadOnlyCollection<Track> tracks)
+    {
+        var summary = QualitySummary.Of(tracks.Select(t => t.Format));
+        if (summary == null)
+        {
+            FormatBadge = string.Empty;
+            FormatSpec = string.Empty;
+            return;
+        }
+
+        FormatTier = summary.Tier;
+        FormatSpec = summary.Spec;
+        FormatBadge = summary.IsMixed ? "MIXED HQ" : tracks.First().Format.DisplayBadge;
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 }

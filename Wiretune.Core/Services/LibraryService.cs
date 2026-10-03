@@ -677,22 +677,9 @@ public class LibraryService
                     var hiRes = ordered.FirstOrDefault(t => t.Format.IsHiRes);
 
                     var formats = ordered.Select(t => t.Format).ToList();
-                    var distinctSpecs = formats
-                        .Select(f => (f.BitsPerSample, f.SampleRate, f.IsLossless, f.Codec))
-                        .Distinct()
-                        .ToList();
-
-                    string badge;
                     var hasHiRes = formats.Any(f => f.IsHiRes);
-
-                    if (distinctSpecs.Count > 1)
-                    {
-                        badge = "MIXED HQ";
-                    }
-                    else
-                    {
-                        badge = formats[0].DisplayBadge;
-                    }
+                    var quality = QualitySummary.Of(formats)!; // an album always has at least one track
+                    var badge = quality.IsMixed ? "MIXED HQ" : formats[0].DisplayBadge;
 
                     return new Album
                     {
@@ -706,6 +693,8 @@ public class LibraryService
                         TotalDuration = TimeSpan.FromSeconds(ordered.Sum(t => t.Duration.TotalSeconds)),
                         IsHiRes = hasHiRes,
                         FormatBadge = badge,
+                        Tier = quality.Tier,
+                        TagSpec = quality.Spec,
                         Tracks = ordered
                     };
                 })

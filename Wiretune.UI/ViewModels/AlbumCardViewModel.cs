@@ -18,6 +18,8 @@ public partial class AlbumCardViewModel : ObservableObject, ILazyLoad
     public int TrackCount => Album.TrackCount;
     public string FormatBadge => Album.FormatBadge;
     public bool IsHiRes => Album.IsHiRes;
+    public QualityTier Tier => Album.Tier;
+    public string TagSpec => Album.TagSpec;
 
     [ObservableProperty] private Bitmap? _coverBitmap;
 

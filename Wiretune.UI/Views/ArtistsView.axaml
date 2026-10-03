@@ -101,7 +101,10 @@
 
       <!-- Artist Albums & Tracks Scrollable Content -->
       <ScrollViewer Grid.Row="2" Margin="-10,0,0,0" Padding="10,8,0,0" ClipToBounds="False">
-        <StackPanel Spacing="24">
+        <!-- Right margin 10 mirrors the ScrollViewer's left Padding 10 (Margin -10 / Padding 10 keeps the tiles' hover
+             glow from being clipped): the content is measured as wide as the scroll area, not as wide as the area
+             minus that padding, so without it the table ends 10px past the hero card. -->
+        <StackPanel Spacing="24" Margin="0,0,10,0">
 
           <!-- Section: Albums by this Artist -->
           <StackPanel Spacing="12" IsVisible="{Binding Artists.HasSelectedArtistAlbums}">
@@ -186,7 +189,7 @@
                   <!-- Album (Clickable) -->
                   <DataGridTemplateColumn Header="{loc:T ColAlbum}" Width="1.5*" SortMemberPath="Album" CellTemplate="{StaticResource TrackAlbumLinkCell}" />
 
-                  <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="185" SortMemberPath="Format.DisplayBadge" CellTemplate="{StaticResource TrackQualityCell}" />
+                  <DataGridTemplateColumn Header="{loc:T ColQuality}" Width="215" SortMemberPath="Format.Tier" CellTemplate="{StaticResource TrackQualityCell}" />
                   <DataGridTextColumn Header="{loc:T ColLength}" Binding="{Binding FormattedDuration}" Width="105" SortMemberPath="Duration" />
 
                   <!-- Favorite -->

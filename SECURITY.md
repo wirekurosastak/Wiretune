@@ -62,7 +62,13 @@ about security; running the server is described in [docs/server.md](docs/server.
   trust.
 - **Artist pictures.** The desktop player looks them up through Deezer's public API, which sends artist names from
   your library to `api.deezer.com`; results are cached in `artist_pictures.json`. Set
-  `WIRETUNE_NO_ARTIST_PICTURES=1` to disable it. Nothing else leaves your network.
+  `WIRETUNE_NO_ARTIST_PICTURES=1` to disable it.
+- **Lyrics.** For a track whose file has no lyrics, the player looks them up on LRCLIB (`lrclib.net`, a free,
+  public lyrics database) when you open the queue panel. The request carries the track's title, artist, album and
+  length, plus a `Wiretune/<version>` user agent, and comes from the player, not from the server, so a server
+  library's tags go to LRCLIB from every device that plays it. Answers are cached in the `lyrics` folder of the
+  player's data directory (named by a hash, so no tag text appears in a file name). It is on by default; switch it
+  off in Settings, or for the whole process with `WIRETUNE_NO_ONLINE_LYRICS=1`. Nothing else leaves your network.
 - **Log files.** `WiretuneLog` replaces the value of every `token=` parameter with `***` before a line is written, so
   stream URLs in the log do not carry the access token. The logs still contain file paths, server addresses and
   device names: read `wiretune.log` before attaching it to a public issue.

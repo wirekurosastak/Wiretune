@@ -13,15 +13,19 @@ resampling requested, volume locked at 100 %. It also runs without any server at
 folder on your own machine, and it can combine the two.
 
 No cloud, no account on somebody else's server, no telemetry. Your favourites, play counts and playlists live on
-your own server, per account. The only thing that ever talks to the internet is an artist-picture lookup (on by
-default; one environment variable turns it off).
+your own server, per account. The only things that ever talk to the internet are an artist-picture lookup and a
+lyrics lookup for tracks that have none (both on by default; one environment variable each turns them off, and the
+lyrics one is also a switch in Settings).
 
 ## What you get
 
 - Browse by artist, album or song, search, queue with shuffle and repeat, favourites, playlists, lyrics from the
-  file's tags. For a server library, favourites, play counts and playlists are stored on the server under your
+  file's tags or, when a track has none, from the internet ([LRCLIB](https://lrclib.net)), shown next to the queue.
+  For a server library, favourites, play counts and playlists are stored on the server under your
   account, so they follow you to every device.
-- Quality badges on every track (`FLAC / 24bit / 96kHz`) and a 32-band spectrum analyser.
+- Quality tags on every track in three tiers: **gold** for hi-res (`GOLD · FLAC 24bit/96kHz`), **silver** for
+  lossless at CD quality (`SILVER · FLAC 16bit/44.1kHz`) and **bronze** for lossy files (`BRONZE · MP3 320kbps`),
+  and a 32-band spectrum analyser.
 - A server library and a local folder at the same time. Tracks that exist in both show up once, and the local copy
   wins.
 - A server that is one `dotnet run` away: incremental scanning, password-protected accounts, per-account

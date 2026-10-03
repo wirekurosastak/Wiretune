@@ -69,20 +69,7 @@ public partial class PlaylistsViewModel : ObservableObject
         foreach (var pl in Playlists)
         {
             var tracks = _library.GetPlaylistTracks(pl);
-            if (tracks.Count == 0)
-            {
-                pl.FormatBadge = string.Empty;
-            }
-            else
-            {
-                var distinctSpecs = tracks.Select(t => t.Format)
-                    .Select(f => (f.BitsPerSample, f.SampleRate, f.IsLossless, f.Codec))
-                    .Distinct()
-                    .ToList();
-                pl.FormatBadge = distinctSpecs.Count > 1
-                    ? "MIXED HQ"
-                    : tracks[0].Format.DisplayBadge;
-            }
+            pl.ApplyQuality(tracks);
             cardList.Add(new PlaylistCardViewModel(pl, tracks));
         }
         DisplayedPlaylists = cardList;
@@ -109,23 +96,7 @@ public partial class PlaylistsViewModel : ObservableObject
         SelectedPlaylistTotalDuration = SelectedPlaylistTracks.Count == 0
             ? string.Empty
             : TracksViewModel.FormatTotal(TimeSpan.FromSeconds(SelectedPlaylistTracks.Sum(t => t.Duration.TotalSeconds)));
-        if (SelectedPlaylist != null)
-        {
-            if (SelectedPlaylistTracks.Count == 0)
-            {
-                SelectedPlaylist.FormatBadge = string.Empty;
-            }
-            else
-            {
-                var distinctSpecs = SelectedPlaylistTracks.Select(t => t.Format)
-                    .Select(f => (f.BitsPerSample, f.SampleRate, f.IsLossless, f.Codec))
-                    .Distinct()
-                    .ToList();
-                SelectedPlaylist.FormatBadge = distinctSpecs.Count > 1
-                    ? "MIXED HQ"
-                    : SelectedPlaylistTracks[0].Format.DisplayBadge;
-            }
-        }
+        SelectedPlaylist?.ApplyQuality(SelectedPlaylistTracks);
     }
 
     private static Playlist? Resolve(object? param) => param switch

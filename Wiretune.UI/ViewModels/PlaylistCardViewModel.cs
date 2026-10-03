@@ -16,6 +16,8 @@ public class PlaylistCardViewModel : ObservableObject
     public string Name => Playlist.Name;
     public int TrackCount => Playlist.TrackCount;
     public string FormatBadge => Playlist.FormatBadge;
+    public QualityTier Tier => Playlist.FormatTier;
+    public string TagSpec => Playlist.FormatSpec;
 
     public string? Cover0 { get; }
     public string? Cover1 { get; }

@@ -53,6 +53,9 @@ xUnit, run with `dotnet test Wiretune.Tests` (add `--filter "FullyQualifiedName~
   (`SessionUserDataTests`);
 - the repository against a real SQLite file, including the upgrade from an older schema (`LibraryRepositoryTests`);
 - library, scanner, deduplication, hybrid merging, localisation, view models and the phone's back navigation;
+- the quality tiers of tracks, albums and playlists and the words of the tags (`QualityTierTests`), and the online
+  lyrics lookup against a stubbed LRCLIB and a throw-away cache folder, plus how the player combines the file's
+  lyrics with it (`OnlineLyricsTests`);
 - scenario suites with numbered cases (`HP-`, `NEG-`, `BVT-`, `SEC-`) for normal use, invalid input, limits and
   security (`HappyPathTests`, `NegativeTests`, `BoundaryValueTests`, `LogicAndSecurityTests`); `ReviewFollowUpTests`
   pins the small fixes of the production-readiness review and the documented limits (track IDs, covers, driver commands);

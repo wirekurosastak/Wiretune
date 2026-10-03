@@ -52,44 +52,6 @@ public class FavoriteColorConverter : IValueConverter
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
 }
 
-public class QualityBadgeColorConverter : IValueConverter
-{
-    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        if (value is bool isHiRes)
-        {
-            return isHiRes
-                ? new SolidColorBrush(Color.Parse("#D05CE3")) // PurpleAccent
-                : new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
-        }
-        if (value is AudioFormat format)
-        {
-            if (format.IsHiRes) return new SolidColorBrush(Color.Parse("#D05CE3")); // PurpleAccent
-            if (format.IsLossless) return new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
-        }
-        if (value is string s)
-        {
-            if (s.Contains("Mixed", StringComparison.OrdinalIgnoreCase) || s.Contains("Vegyes", StringComparison.OrdinalIgnoreCase))
-                return new SolidColorBrush(Color.Parse("#FF6E6E")); // Reddish / Coral
-            if (s.Contains("24bit", StringComparison.OrdinalIgnoreCase) || s.Contains("32bit", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("HI-RES", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("96kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("88.2kHz", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("176.4kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("192kHz", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("384kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("DSD", StringComparison.OrdinalIgnoreCase))
-                return new SolidColorBrush(Color.Parse("#D05CE3")); // PurpleAccent
-            if (s.Contains("16bit", StringComparison.OrdinalIgnoreCase) || s.Contains("CD", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("44.1kHz", StringComparison.OrdinalIgnoreCase) || s.Contains("48kHz", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("FLAC", StringComparison.OrdinalIgnoreCase) || s.Contains("ALAC", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("WAV", StringComparison.OrdinalIgnoreCase))
-                return new SolidColorBrush(Color.Parse("#67C8E0")); // CyanAccent
-            return new SolidColorBrush(Color.Parse("#A0A6B0")); // TextMuted (high contrast on dark tag background)
-        }
-        return new SolidColorBrush(Color.Parse("#A0A6B0")); // TextMuted (high contrast on dark tag background)
-    }
-
-    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotImplementedException();
-}
-
 public class ActiveControlBrushConverter : IValueConverter
 {
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

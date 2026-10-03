@@ -29,9 +29,15 @@ server.
   the tracks, otherwise *Various Artists*. Files without tags land under *Unknown artist* / *Unknown album*.
 - **Artists** lists album artists only. Someone who is just a guest on other people's albums has no page of their
   own; their tracks still appear under *Tracks* and in search.
-- **Quality badges** show codec, bit depth and sample rate for lossless files (`FLAC / 24bit / 96kHz`) and codec
-  and bitrate for lossy ones (`MP3 / 320kbps`). An album with mixed formats shows `MIXED HQ`. Lossless counts as
-  hi-res above 16 bit or above 48 kHz.
+- **Quality tags** put every track in one of three tiers and show its format after the tier:
+  **gold** (`GOLD · FLAC 24bit/96kHz`) is hi-res, meaning lossless above 16 bit or above 48 kHz;
+  **silver** (`SILVER · FLAC 16bit/44.1kHz`) is lossless at CD resolution;
+  **bronze** (`BRONZE · MP3 320kbps`) is everything that is not lossless (MP3, AAC, Ogg Vorbis, Opus).
+  Hover a tag for the definition. An album or playlist is shown in its *lowest* tier, so a gold tag means every
+  track is hi-res; when its tracks are not all in the same format the tag ends in `MIXED` instead of a format
+  (`SILVER · MIXED`). Tiles in the album grid and the queue show only the file format (`GOLD · FLAC`). The tier
+  names follow the interface language (Hungarian: ARANY, EZÜST, BRONZ; German: GOLD, SILBER, BRONZE). The quality
+  column of the track tables sorts by tier.
 - **Covers** come from the file's embedded picture or from an image in the folder named `cover`, `folder` or
   `front` (`.jpg`/`.jpeg`/`.png`), or `albumart.jpg` / `artwork.jpg`. **Artist pictures** are looked up online
   (see [SECURITY.md](../SECURITY.md#clients)); until one is found the artist's first album cover is shown.
@@ -46,8 +52,19 @@ server.
 - *Shuffle* reorders the rest of the queue without interrupting the current track; switching it off restores the
   original order after the current track.
 - The **queue panel** lets you jump to an entry, drag entries to reorder them, remove them or clear the queue.
-- **Lyrics** appear next to the queue when the file's tag has them. They are plain text, not time-synchronised,
-  and there is no online lookup.
+  The lyrics of the current track sit in the right half of the same panel, which is split evenly between the two.
+- **Lyrics** are looked for when you open the queue panel (not before, so nothing is fetched for a track you never
+  look at) and follow the track while the panel stays open. The file's own lyrics tag comes first. When the track
+  has none, the player asks [LRCLIB](https://lrclib.net), a free, open lyrics database: it sends the track's title,
+  artist, album and length, and nothing else. The panel says where the text came from. Lyrics are plain text, not
+  time-synchronised (when LRCLIB only has a synchronised version, the timestamps are dropped). What was found is
+  kept in the `lyrics` folder of the player's data directory (found lyrics for good, "nothing found" for a week),
+  so a track is looked up once and works offline afterwards; the folder can be deleted at any time. If LRCLIB
+  cannot be reached the panel says so, and opening it again tries again. Tracks without a usable title and artist
+  tag are not looked up. The lookup works the same for local files and server tracks, because the *player* asks
+  LRCLIB, not the server. Turn it off with **Settings → Lyrics → Lyrics from the internet** (on the phone, the
+  same card in Settings); the environment variable `WIRETUNE_NO_ONLINE_LYRICS=1` switches it off for the whole
+  process, whatever the setting says.
 - Volume and mute are disabled in bit-perfect mode (the volume is fixed at 100 %); see [audio.md](audio.md).
 - If a track cannot be played (missing player, unreachable server, expired sign-in, unsupported format), the
   reason is shown in the player and playback stops there instead of skipping to the next track.

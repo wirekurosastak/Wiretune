@@ -303,10 +303,8 @@
                         <TextBlock Text="•" FontSize="12" Foreground="{DynamicResource TextMuted}" />
                         <TextBlock Text="{Binding Albums.SelectedAlbum.FormattedTotalDuration}" FontSize="12" Foreground="{DynamicResource TextMuted}" />
                       </StackPanel>
-                      <Border Background="{DynamicResource TagBackground}" CornerRadius="6" Padding="10,4" HorizontalAlignment="Center" Margin="0,0,0,16">
-                        <TextBlock Text="{Binding Albums.SelectedAlbum.FormatBadge}" FontSize="11" FontWeight="Black"
-                                   Foreground="{Binding Albums.SelectedAlbum.FormatBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
-                      </Border>
+                      <controls:QualityTag Tier="{Binding Albums.SelectedAlbum.Tier}" Spec="{Binding Albums.SelectedAlbum.TagSpec}"
+                                           LabelSize="11" Padding="10,3" HorizontalAlignment="Center" Margin="0,0,0,16" />
                       <Grid ColumnDefinitions="*, *" Margin="16,0,16,10">
                         <Button Grid.Column="0" Classes="primary" Height="46" CornerRadius="6" Margin="0,0,5,0" HorizontalAlignment="Stretch"
                                 Command="{Binding Albums.PlayAlbumCommand}">
@@ -735,6 +733,19 @@
                         <ToggleSwitch Grid.Column="1" IsChecked="{Binding ShowPerformanceStats, Mode=TwoWay}"
                                       OnContent="" OffContent="" MinWidth="0" Margin="12,0,0,0" VerticalAlignment="Center"
                                       AutomationProperties.Name="{loc:T SettingsPerformanceStats}" />
+                      </Grid>
+                    </Border>
+
+                    <!-- Lyrics from the internet for tracks that have none of their own -->
+                    <Border Classes="phone-card">
+                      <Grid ColumnDefinitions="*, Auto">
+                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                          <TextBlock Text="{loc:T SettingsOnlineLyrics}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource TextMain}" />
+                          <TextBlock Text="{loc:T SettingsOnlineLyricsHint}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding UseOnlineLyrics, Mode=TwoWay}"
+                                      OnContent="" OffContent="" MinWidth="0" Margin="12,0,0,0" VerticalAlignment="Center"
+                                      AutomationProperties.Name="{loc:T SettingsOnlineLyrics}" />
                       </Grid>
                     </Border>
                   </StackPanel>
@@ -1202,21 +1213,27 @@
           <!-- Lyrics -->
           <Panel Classes="page" IsVisible="{Binding NowPlayingTab, Converter={StaticResource IntEqualConverter}, ConverterParameter=2}">
             <ScrollViewer IsVisible="{Binding Player.HasLyrics}">
-              <SelectableTextBlock Text="{Binding Player.CurrentLyrics}" FontSize="18" LineHeight="28" TextWrapping="Wrap"
-                                   Foreground="{DynamicResource TextMain}" Margin="24,8,24,24" />
+              <StackPanel Margin="24,8,24,24" Spacing="16">
+                <SelectableTextBlock Text="{Binding Player.CurrentLyrics}" FontSize="18" LineHeight="28" TextWrapping="Wrap"
+                                     Foreground="{DynamicResource TextMain}" />
+                <!-- Where the lyrics came from: the track's own tags or the internet lookup -->
+                <TextBlock Text="{Binding Player.LyricsSourceText}" FontSize="12" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+              </StackPanel>
             </ScrollViewer>
-            <controls:PhoneEmptyState Classes="page" Icon="TextBoxOutline" Title="{loc:T TabLyrics}" Hint="{loc:T NoLyrics}"
-                                      IsVisible="{Binding !Player.HasLyrics}" />
+            <controls:PhoneEmptyState Classes="page" Icon="TextBoxOutline" Title="{loc:T TabLyrics}" Hint="{loc:T LyricsSearching}"
+                                      IsVisible="{Binding Player.IsLoadingLyrics}" />
+            <ProgressBar VerticalAlignment="Top" IsIndeterminate="True" Height="3" Foreground="{DynamicResource CyanAccent}"
+                         IsVisible="{Binding Player.IsLoadingLyrics}" />
+            <controls:PhoneEmptyState Classes="page" Icon="TextBoxOutline" Title="{loc:T TabLyrics}" Hint="{Binding Player.LyricsEmptyText}"
+                                      IsVisible="{Binding Player.ShowLyricsEmptyState}" />
           </Panel>
         </Panel>
 
         <!-- Progress and transport -->
         <StackPanel Grid.Row="3" Margin="20,0,20,14" Spacing="0">
-          <Border Background="{DynamicResource TagBackground}" CornerRadius="8" Padding="10,3" HorizontalAlignment="Center" Margin="0,0,0,2"
-                  IsVisible="{Binding Player.QualityBadge, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <TextBlock Text="{Binding Player.QualityBadge}" FontSize="11" FontWeight="Black"
-                       Foreground="{Binding Player.QualityShortBadge, Converter={StaticResource QualityBadgeColorConverter}}" />
-          </Border>
+          <controls:QualityTag Tier="{Binding Player.CurrentTier}" Spec="{Binding Player.CurrentTagSpec}" LabelSize="11" Padding="10,3"
+                               HorizontalAlignment="Center" Margin="0,0,0,2"
+                               IsVisible="{Binding Player.CurrentTagSpec, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <Slider Classes="seek-slider" Height="40" Minimum="0" Maximum="{Binding Player.DurationSeconds}"
                   Value="{Binding Player.PositionSeconds, Mode=TwoWay}" VerticalAlignment="Center" ClipToBounds="False" />
           <Grid ColumnDefinitions="*, *" Margin="4,-6,4,4">

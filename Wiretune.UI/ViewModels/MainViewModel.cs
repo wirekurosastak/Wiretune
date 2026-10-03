@@ -68,6 +68,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// </summary>
     [ObservableProperty] private bool _showPerformanceStats;
 
+    /// <summary>
+    /// Whether a track that has no lyrics of its own is looked up online (LRCLIB). On by default; the Settings switch
+    /// turns it off, and the choice is remembered. Only the track's title, artist, album and length are sent.
+    /// </summary>
+    [ObservableProperty] private bool _useOnlineLyrics = true;
+
     /// <summary>The languages the user can pick, with the active one marked.</summary>
     public IReadOnlyList<LanguageOptionViewModel> LanguageOptions { get; } =
         Localizer.Languages.Select(l => new LanguageOptionViewModel(l.Code, l.NativeName)).ToList();
@@ -75,20 +81,26 @@ public partial class MainViewModel : ObservableObject, IDisposable
     /// <summary>Text of the language picker's button: the active language's code, e.g. "EN".</summary>
     public string LanguageBadge => Localizer.Instance.Language.ToUpperInvariant();
 
-    public MainViewModel(WiretuneAudioEngine audioEngine, LibraryService library, ServerSession session)
+    private readonly OnlineLyrics? _onlineLyrics;
+
+    /// <param name="onlineLyrics">The internet lyrics lookup; null (as in most tests) means tracks are never looked up online.</param>
+    public MainViewModel(WiretuneAudioEngine audioEngine, LibraryService library, ServerSession session, OnlineLyrics? onlineLyrics = null)
     {
         Theme = new ThemeService();
         AudioEngine = audioEngine;
         Library = library;
         Session = session;
+        _onlineLyrics = onlineLyrics;
 
         // Stream URLs carry a short-lived, media-only token that the session renews, not the login token.
         AudioEngine.SetStreamTokenProvider(Session.GetStreamTokenAsync);
 
         Player = new PlayerViewModel(AudioEngine, Library)
         {
-            LyricsProvider = (track, ct) => track.IsLocal ? MetadataScanner.ReadLyricsAsync(track.FilePath, ct) : Session.GetLyricsAsync(track, ct)
+            LyricsProvider = (track, ct) => track.IsLocal ? MetadataScanner.ReadLyricsAsync(track.FilePath, ct) : Session.GetLyricsAsync(track, ct),
+            IsOnlineLyricsEnabled = UseOnlineLyrics,
         };
+        if (onlineLyrics != null) Player.OnlineLyricsProvider = onlineLyrics.FindAsync;
         Tracks = new TracksViewModel(Library, Player);
         Albums = new AlbumsViewModel(Library, Player);
         Artists = new ArtistsViewModel(Library, Player);
@@ -170,6 +182,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
     private const string LanguagePreference = "Language";
     private const string ThemePreference = "Theme";
     private const string PerformanceStatsPreference = "ShowPerformanceStats";
+    private const string OnlineLyricsPreference = "OnlineLyrics";
 
     // True while the saved preferences are applied, so that applying them does not write them back.
     private bool _isApplyingPreferences;
@@ -178,6 +191,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
     {
         if (_isApplyingPreferences) return;
         Ui.Forget(Library.SetPreferenceAsync(PerformanceStatsPreference, value ? "1" : "0"), "MainViewModel");
+    }
+
+    partial void OnUseOnlineLyricsChanged(bool value)
+    {
+        Player.IsOnlineLyricsEnabled = value;
+        if (_isApplyingPreferences) return;
+        Ui.Forget(Library.SetPreferenceAsync(OnlineLyricsPreference, value ? "1" : "0"), "MainViewModel");
     }
 
     /// <summary>Applies the language and theme the user picked in an earlier session.</summary>
@@ -192,8 +212,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
         }
 
         var stats = await Library.GetPreferenceAsync(PerformanceStatsPreference);
+        var onlineLyrics = await Library.GetPreferenceAsync(OnlineLyricsPreference);
         _isApplyingPreferences = true;
-        try { ShowPerformanceStats = stats == "1"; }
+        try
+        {
+            ShowPerformanceStats = stats == "1";
+            UseOnlineLyrics = onlineLyrics != "0"; // on unless the user turned it off
+        }
         finally { _isApplyingPreferences = false; }
     }
 
@@ -203,7 +228,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var repository = new LibraryRepository(new DatabaseManager());
         var library = new LibraryService(repository, new MetadataScanner());
         var session = new ServerSession(library, repository);
-        return new MainViewModel(new WiretuneAudioEngine(audioDriver), library, session);
+        return new MainViewModel(new WiretuneAudioEngine(audioDriver), library, session, OnlineLyrics.CreateDefault());
     }
 
     /// <summary>Loads the local cache, then reconnects to the server if it is the library source.</summary>
@@ -597,6 +622,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
         Localizer.Instance.LanguageChanged -= OnLanguageChanged;
         AudioEngine.Dispose();
         Session.Dispose();
+        _onlineLyrics?.Dispose();
         GC.SuppressFinalize(this);
     }
 }
