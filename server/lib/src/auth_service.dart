@@ -62,6 +62,11 @@ class AuthService {
     if (trimmed.length > AuthRules.maxUsernameLength || hasControlCharacters(trimmed)) {
       return 'Username must be at most ${AuthRules.maxUsernameLength} printable characters.';
     }
+    return validatePassword(password);
+  }
+
+  /// Null when [password] may be used, otherwise the reason.
+  static String? validatePassword(String password) {
     if (password.length < AuthRules.minPasswordLength) {
       return 'Password must be at least ${AuthRules.minPasswordLength} characters.';
     }
@@ -69,6 +74,16 @@ class AuthService {
       return 'Password must be at most ${AuthRules.maxPasswordBytes} bytes.';
     }
     return null;
+  }
+
+  /// Sets a new password when [current] is the account's present one. False when it is not (or the account is gone).
+  /// Tokens already issued stay valid until they expire; the server has no token revocation.
+  Future<bool> changePassword(String userId, String current, String replacement) async {
+    final rows = _db.connection.select('SELECT password_hash FROM users WHERE id = ?', [userId]);
+    if (rows.isEmpty || !await _verify(current, rows.first['password_hash'] as String)) return false;
+    final hash = await _hash(replacement);
+    _db.connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
+    return _db.connection.updatedRows > 0;
   }
 
   static Future<String> _hash(String password) => _hashInIsolate(password, _bcryptWorkFactor);

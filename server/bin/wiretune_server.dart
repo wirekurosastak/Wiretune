@@ -31,8 +31,11 @@ Settings can also come from appsettings.json (section "Wiretune") or environment
   final server = await WiretuneServer.start(options);
 
   final done = Completer<void>();
+  var stopping = false;
   Future<void> shutdown(ProcessSignal signal) async {
-    if (done.isCompleted) return;
+    // A second Ctrl+C while the first one is still closing must not close everything again.
+    if (stopping) return;
+    stopping = true;
     WiretuneLog.info('Server', 'Shutting down (${signal.name}).');
     await server.close();
     done.complete();

@@ -88,6 +88,14 @@ class ServerStreamingClient {
   Future<StreamTokenResponse> getStreamToken(String baseUrl) async =>
       _parse(StreamTokenResponse.fromJson, await _send('POST', baseUrl, '/api/auth/stream-token'));
 
+  /// Changes the signed-in account's password. A wrong current password is a [ServerRequestException] with status 403.
+  Future<void> changePassword(String baseUrl, String currentPassword, String newPassword) => _send(
+    'POST',
+    baseUrl,
+    '/api/auth/change-password',
+    body: {'currentPassword': currentPassword, 'newPassword': newPassword},
+  );
+
   Future<UserInfo> getCurrentUser(String baseUrl) async =>
       _parse(UserInfo.fromJson, await _send('GET', baseUrl, '/api/auth/me'));
 

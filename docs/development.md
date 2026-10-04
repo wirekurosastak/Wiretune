@@ -66,9 +66,10 @@ follows is where each platform's own code lives.
 
 - the real server, started on a free port against a generated music folder, one per test: sign-in and the whole
   client life cycle (`server_integration_test.dart`), the per-account favourites, plays, playlists, import and survival
-  of a server restart (`server_user_data_test.dart`), the hardening: setup code, stream tokens, rate limit, no paths in
-  the listing, body limits, `405`/`404` (`server_hardening_test.dart`), and a database and tokens made by the C# server
-  (`csharp_compatibility_test.dart`, fixtures in `server/test/fixtures`);
+  of a server restart (`server_user_data_test.dart`), the hardening: setup code, stream tokens, rate limit (also behind
+  a proxy), no paths in the listing, body limits, malformed paths, ranges and values, password changes, `405`/`404`
+  (`server_hardening_test.dart`), the scan loop, which a stop cancels mid-scan (`library_scan_test.dart`), and a
+  database and tokens made by the C# server (`csharp_compatibility_test.dart`, fixtures in `server/test/fixtures`);
 - the player's side of the per-account data against that server: queue, flush, hand-over, older servers
   (`session_user_data_test.dart`);
 - the repository against a real SQLite file, including the upgrade from an older schema

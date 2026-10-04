@@ -233,7 +233,9 @@ class WiretuneServer {
   }
 
   Future<Response> _dispatch(Request request) async {
-    final path = request.url.pathSegments.map(Uri.decodeComponent).toList();
+    // Already percent-decoded, and only once: an ID may itself contain "%". Shelf answers 400 to a path that does not
+    // decode before the request gets here.
+    final path = request.url.pathSegments;
     final method = request.method == 'HEAD' ? 'GET' : request.method;
 
     _Route? route;
@@ -296,7 +298,9 @@ class WiretuneServer {
   String _clientAddress(Request request) {
     if (options.forwardedHeaders) {
       final forwarded = request.headers['x-forwarded-for'];
-      if (forwarded != null && forwarded.trim().isNotEmpty) return forwarded.split(',').first.trim();
+      // The last entry is the one the nearest proxy appended; the ones before it are whatever the client sent.
+      final hops = forwarded?.split(',').map((h) => h.trim()).where((h) => h.isNotEmpty);
+      if (hops != null && hops.isNotEmpty) return hops.last;
     }
     final info = request.context['shelf.io.connection_info'];
     return info is HttpConnectionInfo ? info.remoteAddress.address : 'unknown';
@@ -323,6 +327,7 @@ class WiretuneServer {
       Access.user,
       (call) => jsonResponse(auth.createStreamToken(call.principal!.userId, call.principal!.username).toJson()),
     ),
+    _Route('POST', '/api/auth/change-password', Access.user, _changePassword, rateLimited: true),
     _Route('GET', '/api/auth/me', Access.user, (call) {
       final user = auth.getUser(call.userId);
       return user == null ? unauthorized() : jsonResponse(user.toJson());
@@ -404,13 +409,14 @@ class WiretuneServer {
 
   Future<Response> _setup(_Call call) async {
     final body = await call.jsonObject();
-    final username = body?['username'] as String?;
-    final password = body?['password'] as String?;
+    final username = body?['username'] is String ? body!['username'] as String : null;
+    final password = body?['password'] is String ? body!['password'] as String : null;
     final error = AuthService.validateCredentials(username, password);
     if (error != null) return errorResponse(400, error);
 
     if (auth.hasAnyUsers()) return errorResponse(409, 'The server is already set up. Sign in instead.');
-    if (!setupCode.matches(body?['setupCode'] as String?)) {
+    final code = body?['setupCode'];
+    if (!setupCode.matches(code is String ? code : null)) {
       return errorResponse(403, 'The setup code is missing or wrong. The server prints it in its log when it starts.');
     }
 
@@ -431,10 +437,24 @@ class WiretuneServer {
     return result == null ? unauthorized() : jsonResponse(result.toJson());
   }
 
+  Future<Response> _changePassword(_Call call) async {
+    final body = await call.jsonObject();
+    final current = body?['currentPassword'];
+    final replacement = body?['newPassword'];
+    if (current is! String || current.isEmpty || replacement is! String) {
+      return errorResponse(400, 'The current and the new password are required.');
+    }
+    final error = AuthService.validatePassword(replacement);
+    if (error != null) return errorResponse(400, error);
+    return await auth.changePassword(call.userId, current, replacement)
+        ? jsonResponse({'changed': true})
+        : errorResponse(403, 'The current password is wrong.');
+  }
+
   Future<Response> _register(_Call call) async {
     final body = await call.jsonObject();
-    final username = body?['username'] as String?;
-    final password = body?['password'] as String?;
+    final username = body?['username'] is String ? body!['username'] as String : null;
+    final password = body?['password'] is String ? body!['password'] as String : null;
     final error = AuthService.validateCredentials(username, password);
     if (error != null) return errorResponse(400, error);
     final user = await auth.register(username!, password!);

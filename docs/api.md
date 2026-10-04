@@ -25,6 +25,7 @@ on it.
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` for a missing field, `401` for wrong credentials. Rate limited |
 | `POST /api/auth/register` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, `409` if the name is taken |
 | `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`: a token for stream and cover URLs, valid 8 hours. A stream token itself is refused here |
+| `POST /api/auth/change-password` | user | Body `{ "currentPassword", "newPassword" }`. `200` `{ "changed": true }`, `400` for a password that breaks the rules, `403` when the current one is wrong. Rate-limited like sign-in. Tokens already issued stay valid until they expire |
 | `GET /api/auth/me` | user | The caller's `UserInfo` |
 | `GET /api/users` | admin | All accounts |
 | `DELETE /api/users/{userId}` | admin | Deletes an account. `400` when deleting oneself, `404` for an unknown ID |

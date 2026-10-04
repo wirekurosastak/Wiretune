@@ -150,10 +150,10 @@ not, because by then what the device shows is a copy of someone's server data. A
 `WiretuneServer.start` (`server/lib/src/server.dart`) wires the server: configuration (`ServerOptions`), data
 directory, logging, `DatabaseManager`, `LibraryService`, `AuthService`, `UserDataService`, `SetupCode`,
 `LibraryScanService` (a loop that waits for a request or the scan interval, whichever comes first, so it runs at
-start-up, on schedule and on request), the routes table ([api.md](api.md)) with each route's access level
-(anonymous, user, admin, media) and body limit, the sign-in rate limiter, and gzip for JSON answers. A method the
-route does not take answers `405`, an unknown path `404`. Library routes answer with records that carry no absolute
-paths.
+start-up, on schedule and on request; stopping the server cancels a scan that is running), the routes table
+([api.md](api.md)) with each route's access level (anonymous, user, admin, media) and body limit, the sign-in rate
+limiter, and gzip for JSON answers. A method the route does not take answers `405`, an unknown path `404`. Library
+routes answer with records that carry no absolute paths.
 
 - `UserDataService`: the favourites, play counts and playlists of each account (`user_*` tables). Every method takes
   the account ID from the validated token, so no route can address another account's rows; the limits are in
@@ -164,9 +164,10 @@ paths.
 - `AuthService`: bcrypt (work factor 12, run in an isolate so a sign-in does not stall other requests), a dummy-hash
   check for unknown users to even out timing, HMAC-SHA256 JWTs (`jwt.dart`; issuer `WiretuneServer`, audience
   `WiretuneClient`, 2 minutes clock skew, the .NET claim names so C# tokens validate), first-admin creation as one
-  atomic `INSERT … WHERE NOT EXISTS`. Every validated token is checked against the `users` table, so deleted accounts
-  lose access immediately, and `?token=` is honoured only on `/api/stream` and `/api/cover`. A **stream token** carries
-  a `scope=stream` claim and is rejected everywhere except those two routes.
+  atomic `INSERT … WHERE NOT EXISTS`, password changes that need the current password. Every validated token is
+  checked against the `users` table, so deleted accounts lose access immediately, and `?token=` is honoured only on
+  `/api/stream` and `/api/cover`. A **stream token** carries a `scope=stream` claim and is rejected everywhere except
+  those two routes.
 - Streaming answers range requests (`206`) after checking that the file lies inside the library root (by whole path
   segments, so `/music2` is not inside `/music`).
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 import 'package:wiretune_server/wiretune_server.dart';
@@ -224,5 +225,106 @@ void main() {
       ),
       isNotNull, // within the two minutes of clock skew
     );
+  });
+
+  group('malformed input and passwords', () {
+    late ServerFixture server;
+    setUp(() async => server = await ServerFixture.start());
+    tearDown(() async => server.close());
+
+    test('values of the wrong type are a 400, not a 500', () async {
+      final client = server.client();
+      final setup = await client.post('/api/auth/setup', {'username': 42, 'password': true, 'setupCode': 7});
+      expect(setup.statusCode, 400);
+
+      final (admin, _) = await setupAdmin(server);
+      final register = await admin.post('/api/auth/register', {
+        'username': ['x'],
+        'password': 1,
+      });
+      expect(register.statusCode, 400);
+    });
+
+    test('a path is decoded once, and no escape in it is a 500', () async {
+      final (admin, _) = await setupAdmin(server);
+
+      // The players encode an ID once; a "%" in it has to arrive as a "%", not be decoded a second time.
+      for (final id in ['a%41', '50%off']) {
+        final saved = await admin.put('/api/me/playlists/${Uri.encodeComponent(id)}', {'name': id});
+        expect((saved.statusCode, json(saved)['id']), (200, id));
+      }
+      expect((await admin.delete('/api/me/playlists/${Uri.encodeComponent('50%off')}')).statusCode, 200);
+
+      // "%25zz" decodes to "%zz", which is a valid name, not a broken escape.
+      expect((await server.client().get('/api/nothing%25zz')).statusCode, 404);
+      expect((await server.client().get('/api/stream/%25zz')).statusCode, 401);
+      expect((await admin.get('/api/stream/%25zz')).statusCode, 404);
+      // Escapes that are not UTF-8 never reach a route.
+      expect((await admin.get('/api/stream/%E0%A4')).statusCode, 400);
+    });
+
+    test('range numbers too large for an integer lie past the end of the file', () async {
+      final (admin, _) = await setupAdmin(server);
+      final track = (await server.waitForTracks(admin, 3)).first;
+      final length = track['fileSizeBytes'] as int;
+      const huge = '99999999999999999999999';
+
+      Future<(int, String?)> ranged(String range) async {
+        final response = await admin.send('GET', '/api/stream/${track['id']}', headers: {'Range': 'bytes=$range'});
+        await response.stream.drain<void>();
+        return (response.statusCode, response.headers['content-range']);
+      }
+
+      expect(await ranged('$huge-'), (416, 'bytes */$length'));
+      expect(await ranged('0-$huge'), (206, 'bytes 0-${length - 1}/$length'));
+      expect(await ranged('-$huge'), (206, 'bytes 0-${length - 1}/$length'));
+    });
+
+    test('behind a proxy, the address the proxy appended is the one that is limited', () async {
+      server.server.options.forwardedHeaders = true;
+      Future<int> attempt(String forwardedFor) async => (await http.post(
+        Uri.parse('${server.baseUrl}/api/auth/login'),
+        headers: {'x-forwarded-for': forwardedFor},
+      )).statusCode;
+
+      // The entries before the last are whatever the client wrote into the header, so they must not open new windows.
+      for (var i = 0; i < 10; i++) {
+        expect(await attempt('203.0.113.$i, 198.51.100.7'), 400); // no credentials: refused, but counted
+      }
+      expect(await attempt('203.0.113.99, 198.51.100.7'), 429);
+      expect(await attempt('198.51.100.8'), 400); // another client of the same proxy
+    });
+
+    test('a password changes only with the current one', () async {
+      final (admin, _) = await setupAdmin(server);
+      const replacement = 'a-brand-new-password';
+
+      final wrong = await admin.post('/api/auth/change-password', {
+        'currentPassword': 'not-it',
+        'newPassword': replacement,
+      });
+      expect(wrong.statusCode, 403);
+
+      final weak = await admin.post('/api/auth/change-password', {
+        'currentPassword': adminPassword,
+        'newPassword': 'short',
+      });
+      expect(weak.statusCode, 400);
+
+      final changed = await admin.post('/api/auth/change-password', {
+        'currentPassword': adminPassword,
+        'newPassword': replacement,
+      });
+      expect(changed.statusCode, 200);
+
+      final anonymous = await server.client().post('/api/auth/change-password', {
+        'currentPassword': replacement,
+        'newPassword': adminPassword,
+      });
+      expect(anonymous.statusCode, 401);
+
+      final (_, auth) = await login(server, 'owner', replacement);
+      expect(auth.user.username, 'owner');
+    });
   });
 }

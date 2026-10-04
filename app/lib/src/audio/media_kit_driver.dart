@@ -274,7 +274,13 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     final generation = ++_generation;
     _lastError = null;
     _setState(PlaybackState.playing);
-    await _player.open(Media(audioSource, start: startPosition > Duration.zero ? startPosition : null), play: true);
+    try {
+      await _player.open(Media(audioSource, start: startPosition > Duration.zero ? startPosition : null), play: true);
+    } catch (e) {
+      // Do not stay in "playing" when the source could not even be opened.
+      if (generation == _generation) _fail(WiretuneLog.redact('$e'));
+      return;
+    }
     if (generation != _generation) return;
     await _applyVolume();
 

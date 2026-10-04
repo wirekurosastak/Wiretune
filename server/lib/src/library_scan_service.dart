@@ -22,6 +22,7 @@ class LibraryScanService {
   final Duration? _interval;
 
   Completer<void> _trigger = Completer<void>();
+  final CancellationToken _cancellation = CancellationToken();
   bool _stopped = false;
   Future<void>? _loop;
 
@@ -35,8 +36,10 @@ class LibraryScanService {
     if (!_trigger.isCompleted) _trigger.complete();
   }
 
+  /// Ends the loop. A scan that is running stops after the files it is reading now, and the index keeps its last state.
   Future<void> stop() async {
     _stopped = true;
+    _cancellation.cancel();
     requestScan();
     await _loop;
   }
@@ -75,7 +78,7 @@ class LibraryScanService {
       }
 
       final started = DateTime.now();
-      if (await _library.scanFolder(root)) {
+      if (await _library.scanFolder(root, cancellationToken: _cancellation)) {
         lastScanCompletedUtc = DateTime.now().toUtc();
         lastScanError = null;
         final seconds = DateTime.now().difference(started).inMilliseconds / 1000;

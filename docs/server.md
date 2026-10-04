@@ -131,9 +131,13 @@ Album covers are fetched per album (`/api/cover/album/{id}`), where the album is
   signs in on a device that already holds such data from before the server stored it receives it, once (it only adds;
   see `POST /api/me/data/import` in [api.md](api.md#your-data-per-account)). Limits per account: 100,000 favourites,
   100,000 tracks with statistics and 500 playlists (see the API page).
-- **Rate limit**: setup and sign-in together, 10 requests per minute per client address, then `429` with
-  `Retry-After`.
-- **No password change or reset.** If the administrator password is lost, stop the server and delete the rows of
+- **Rate limit**: setup, sign-in and password changes together, 10 requests per minute per client address, then
+  `429` with `Retry-After`.
+- **Changing a password**: a signed-in account changes its own with `POST /api/auth/change-password`, giving the
+  current one ([api.md](api.md#authentication)); the players have no screen for it yet. Tokens issued before the
+  change stay valid until they expire (up to 90 days): to cut off a device that is still signed in, delete the
+  account.
+- **No password reset.** If the administrator password is lost, stop the server and delete the rows of
   the `users` table in `wiretune-server.db`; the setup screen is offered again (with the setup code). Accounts are
   new after that, so the favourites and playlists of the old ones are no longer reachable. Other users can be
   deleted and created again by an administrator, which also starts them empty.
@@ -163,7 +167,8 @@ WantedBy=multi-user.target
 
 `StateDirectory=wiretune` makes systemd create `/var/lib/wiretune` for the service account, and the server keeps
 its files in `/var/lib/wiretune/Server`. The `wiretune` user needs read access to the music folder and nothing
-else. `SIGTERM` (`systemctl stop`) shuts the server down cleanly.
+else. `SIGTERM` (`systemctl stop`) shuts the server down cleanly. A scan that is running then is abandoned, the index
+keeps its previous state, and the scan runs again at the next start.
 
 ## Reverse proxy and TLS
 
@@ -173,7 +178,9 @@ such as WireGuard or Tailscale. Players accept `https://` addresses.
 Behind a proxy set `WIRETUNE_FORWARDED_HEADERS=true`, otherwise every player appears with the proxy's address and
 shares one sign-in limit. That setting makes the server trust `X-Forwarded-For` from any sender, so also make the
 server reachable only through the proxy (listen on loopback with `WIRETUNE_URLS=http://127.0.0.1:5200`, or firewall
-the port).
+the port). The server takes the last address in that header, the one the proxy added; whatever a client wrote into the
+header itself comes before it and is ignored. With two proxies in a row, that last address is the outer proxy's,
+unless the inner one is set to put the client's address there (nginx's `real_ip` module, for example).
 
 ## Troubleshooting
 
@@ -183,7 +190,7 @@ the port).
 | Library is empty although the folder has music | Check extensions, hidden (dot) folders and the service account's permissions; the log reports unreadable files. |
 | *Library folder is empty (unmounted share?)* | The folder the index came from is now empty. Mount the share again. |
 | Player says the address is not a Wiretune server | The address answered, but not like a Wiretune server (wrong port, or a proxy error page). |
-| `429 Too many attempts` | More than 10 sign-in/setup requests in a minute from one address. Wait a minute; behind a proxy see above. |
+| `429 Too many attempts` | More than 10 sign-in, setup or password-change requests in a minute from one address. Wait a minute; behind a proxy see above. |
 | A user has to sign in again | The account was re-created, the token expired, or the database (and with it the signing key) was replaced. |
 | The setup screen appears again, or favourites are gone after a restart | The server is using a different or empty data directory (a container without a volume, a changed path). Compare the data directory named at the top of the log with the one you expect. |
 | *The setup code is missing or wrong* | Enter the code from the server's log (`No administrator account exists yet…`), or the value of `Wiretune:SetupCode`. |

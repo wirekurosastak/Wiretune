@@ -92,15 +92,17 @@ Future<Response> fileResponse(Request request, File file, String contentType, {M
   if (range != null && rangeAllowed) {
     final match = RegExp(r'^bytes=(\d*)-(\d*)$').firstMatch(range.trim());
     if (match != null && (match.group(1)!.isNotEmpty || match.group(2)!.isNotEmpty)) {
+      // A number too large for an int is past the end of any file.
+      int offset(String digits) => int.tryParse(digits) ?? length;
       int start, end;
       if (match.group(1)!.isEmpty) {
         // A suffix: the last N bytes.
-        final suffix = int.parse(match.group(2)!);
+        final suffix = offset(match.group(2)!);
         start = suffix >= length ? 0 : length - suffix;
         end = length - 1;
       } else {
-        start = int.parse(match.group(1)!);
-        end = match.group(2)!.isEmpty ? length - 1 : int.parse(match.group(2)!);
+        start = offset(match.group(1)!);
+        end = match.group(2)!.isEmpty ? length - 1 : offset(match.group(2)!);
         if (end >= length) end = length - 1;
       }
       if (start >= length || start > end || length == 0) {

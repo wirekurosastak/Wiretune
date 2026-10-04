@@ -28,11 +28,13 @@ about security; running the server is described in [docs/server.md](docs/server.
   while no account exists (or the one you set with `Wiretune:SetupCode`). Without it, whoever reached a server with an
   empty data directory first (an unmounted volume, a wrong data path) would own it. The code is read from the log by
   whoever runs the server; it protects only the very first account.
-- **Sign-in.** Setup and sign-in share a limit of 10 requests per minute per client address. Passwords are bcrypt
-  hashes (work factor 12). There is no lockout besides that limit, no two-factor authentication, and no password
-  change or reset.
-- **Tokens.** JWTs signed with HMAC-SHA256, valid 24 hours or 90 days. There is no per-token revocation; deleting
-  the user ends their access immediately.
+- **Sign-in.** Setup, sign-in and password changes share a limit of 10 requests per minute per client address.
+  Passwords are bcrypt hashes (work factor 12). There is no lockout besides that limit, no two-factor authentication,
+  and no password reset. An account can change its own password with the current one
+  (`POST /api/auth/change-password`; the players have no screen for it yet).
+- **Tokens.** JWTs signed with HMAC-SHA256, valid 24 hours or 90 days. There is no per-token revocation: changing a
+  password leaves the tokens issued before it valid until they expire, and only deleting the user ends their access
+  immediately.
 - **Tokens in URLs.** Audio and cover requests may carry a token as `?token=` for players that cannot send headers
   (libmpv, the TV's media player, the desktop's `ffmpeg` for the spectrum); the server accepts it only on `/api/stream`
   and `/api/cover`. The players put a
