@@ -4,8 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Spectrum bars: one per band, centred on the middle line and growing up and down, in the accent colour bright at
-/// the tips and softer at the centre. The look is inspired by the visualizer in FxSound
-/// (https://github.com/fxsound2/fxsound-app).
+/// the tips and softer at the centre.
 class SpectrumVisualizer extends StatelessWidget {
   const SpectrumVisualizer({super.key, required this.bands, required this.color, this.width = 130, this.height = 36});
 

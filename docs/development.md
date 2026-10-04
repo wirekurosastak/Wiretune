@@ -1,175 +1,140 @@
 # Development
 
-Building, testing, debugging and extending Wiretune. How the code fits together:
-[architecture.md](architecture.md). The rules a change has to follow: [CONTRIBUTING.md](../CONTRIBUTING.md).
+Testing, debugging and extending Wiretune. Building is in [building.md](building.md), the rules a change must follow
+in [CONTRIBUTING.md](../CONTRIBUTING.md), and the design in [architecture.md](architecture.md).
 
-## Build and run
+## Running it
 
-You need [Flutter](https://docs.flutter.dev/get-started/install) 3.47 or newer; it brings Dart 3.13, which is all
-the server and the core need. Each platform adds its own toolchain: [building.md](building.md) lists what to install
-and every build command. On Linux the player also needs libmpv, and `ffmpeg` for the spectrum analyser and the
-tag-reader tests.
+Flutter 3.47 or newer brings Dart 3.13, which is all the server and the core need; `flutter doctor` tells you what your
+platform still wants. On Linux that's libmpv, plus `ffmpeg` for the spectrum and the tag-reader tests.
 
 ```bash
-(cd packages/wiretune_core && dart pub get && dart test)   # the shared library
-(cd server && dart pub get && dart test)                   # the server
-(cd app && flutter pub get && flutter test)                # the player (view models and widgets, run on the host)
+# one terminal
+cd server && dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/path/to/music
 
-(cd server && dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/path/to/music)
-(cd app && flutter run -d linux)                           # or -d windows, -d macos, or a device from `flutter devices`
+# another
+cd app && flutter run -d linux          # or -d windows, -d macos, or a device from `flutter devices`
 ```
 
-`dart analyze` (the core library, the server) and `flutter analyze` (the app) must report no issues. The code is
-formatted with `dart format` at a line width of 120, which `analysis_options.yaml` sets in every package.
-
-**Continuous integration.** `.github/workflows/ci.yml` checks the formatting, analyses the three packages with
-`--fatal-infos` and runs their tests with `ffmpeg` installed; then it builds the server executable on Linux, Windows
-and macOS, release APKs, the Linux, Windows and macOS players and an unsigned iOS build. It does not build for Tizen
-(the Tizen SDK is not on GitHub's runners), runs nothing on a device, and cannot play audio: try those by hand before
-merging a change that touches them.
-
-## Build for each platform
-
-Every build command, with what each platform needs and where the result lands, is in [building.md](building.md). What
-follows is where each platform's own code lives.
-
-- **Android**: `android/app/src/main/kotlin/com/wiretune/player/MainActivity.kt` (the activity: it shares its Flutter
-  engine with the media service, and asks for the display's highest refresh rate while the screen is touched) and the
-  local plugin `packages/wiretune_platform` (TV detection, CPU and Wi-Fi locks; a plugin, so that it is also registered
-  on the engine Android Auto starts without an activity). The manifest declares the TV launcher entry and banner, the
-  media service (`MediaBrowserService`, which Android Auto browses) and `res/xml/automotive_app_desc.xml`. The
-  application ID is `com.wiretune.player`, the C# version's.
-- **iOS and macOS**: `ios/Runner/Info.plist` (background audio, local-network access, plain HTTP) and
-  `macos/Runner/*.entitlements` (not sandboxed, see the comment there). The bundle ID is `com.wiretune.player`.
-- **Linux and Windows**: the runners in `linux/runner/` and `windows/runner/` set the window's size, minimum size and
-  icon; `main.dart` hides the system title bar through window_manager, and the header draws the window buttons.
-- **Tizen**: `tizen/` is the .NET runner (`App.cs`, `tizen-manifest.xml`, profile `tv-samsung`, API 6.0). `App.cs`
-  answers the `wiretune/platform` channel: Dart reports Tizen as Linux, so this is how the app knows it is on a TV.
-  Playback goes through the TV's own media player (`TizenAudioDriver`; [audio.md](audio.md#tizen)).
-
-## What has been verified
-
-| | How far it has been tried |
-|---|---|
-| Core, server | Unit and integration tests (below), on Linux. The server binary was run against a real folder: scanning, sign-in, gzip, range requests, covers. A database and tokens made by the C# server open and validate (`csharp_compatibility_test.dart`) |
-| App logic and layouts | View-model and widget tests on the host: every section in the wide and the phone layout, light and dark, a small phone at 150 % font size, a 1080p TV; back navigation, search, the full-screen player |
-| Android | Debug and release APKs build; the merged manifest has the TV launcher, banner, media service and Android Auto entries. **Not yet run on a phone, a TV or Android Auto** |
-| Linux desktop | Built and run against a real server and library (1,288 tracks): every desktop screen compared with the C# player's own screenshots at 1280×820 and 900×700, the phone layout at phone width against the C# phone views; playback, the queue, the spectrum, MPRIS and the device list checked through the UI automation endpoint. Exclusive and bit-perfect not tried on a DAC |
-| Windows, macOS, iOS | Not yet built (need their own hosts) |
-| Tizen | The runner is generated by flutter-tizen and the dependencies resolve with it; **not yet built** (needs the Tizen SDK) or run on a TV |
-| Bit-perfect, exclusive | Not measured on any platform ([audio.md](audio.md#known-limitations)) |
+`WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux` gives you a throw-away player that leaves your real library and
+sign-in alone.
 
 ## Tests
 
-`package:test` for `packages/wiretune_core` and `server` (`dart test`, `dart test test/scanner_test.dart`, `dart test
---name pattern`), `flutter_test` for `app` (`flutter test`). They cover:
+```bash
+(cd packages/wiretune_core && dart test)
+(cd server && dart test)        # one file: dart test test/server_hardening_test.dart; by name: --name pattern
+(cd app && flutter test)
+```
 
-- the real server, started on a free port against a generated music folder, one per test: sign-in and the whole
-  client life cycle (`server_integration_test.dart`), the per-account favourites, plays, playlists, import and survival
-  of a server restart (`server_user_data_test.dart`), the hardening: setup code, stream tokens, rate limit (also behind
-  a proxy), no paths in the listing, body limits, malformed paths, ranges and values, password changes, `405`/`404`
-  (`server_hardening_test.dart`), the scan loop, which a stop cancels mid-scan (`library_scan_test.dart`), and a
-  database and tokens made by the C# server (`csharp_compatibility_test.dart`, fixtures in `server/test/fixtures`);
-- the player's side of the per-account data against that server: queue, flush, hand-over, older servers
-  (`session_user_data_test.dart`);
-- the repository against a real SQLite file, including the upgrade from an older schema
-  (`library_repository_test.dart`);
-- the tag reader against files encoded by `ffmpeg` and hand-built DSF and APE files (`tag_reader_test.dart`), the
-  scanner, track IDs and formats against values computed by the C# code (`formats_test.dart`), the library,
-  deduplication, hybrid merging, localisation, the quality tiers, the LRC parser, the online lyrics lookup against a
-  stubbed LRCLIB, the artist pictures, the spectrum analyser;
-- the audio engine with `FakeAudioDriver` (`packages/wiretune_core/lib/testing.dart`);
-- in the app: the view models, the back navigation (`navigation_test.dart`), the player (`player_test.dart`), the whole
-  interface rendered at several sizes (`app_shell_test.dart`), and every text key used and defined
-  (`localization_keys_test.dart`).
+The server tests start a real server per test, on a free port over a generated music folder, and go through sign-in,
+per-account data, restarts, the hardening (setup code, stream tokens, rate limits, odd paths and ranges, body limits)
+and a database and tokens made by the C# server. The player's side of the account data runs against that same real
+server. The core tests cover the repository on real SQLite, the tag reader on files that `ffmpeg` encodes, track IDs
+against values the C# code computed, the library, deduplication, lyrics, the spectrum and the audio engine (with
+`FakeAudioDriver`). The app tests cover the view models, back navigation, and every section in both layouts, both
+themes and several sizes.
 
-A test that needs `ffmpeg` is skipped with the reason "ffmpeg is not installed", never passed, so check the skipped
-count of a run on a machine without it. Name a new test file after the topic it covers. Not covered: the real drivers
-(libmpv, the Tizen player), the media session, Android Auto, real audio hardware, and the native shells. Fixtures live
-in temporary directories (`useTempDataDirectory()` in `packages/wiretune_core/lib/testing.dart` points the data
-directory at one).
+Tests that need `ffmpeg` are *skipped* when it's missing, not passed, so mind the skipped count. Nothing covers the
+real drivers, the media session, Android Auto, audio hardware or the native shells.
+
+## What has actually been tried
+
+| | |
+|---|---|
+| Core, server | The tests, on Linux. The server binary has run against a real folder: scanning, sign-in, gzip, ranges, covers |
+| App logic and layouts | View-model and widget tests: every section in both layouts, light and dark, a small phone at 150 % font size, a 1080p TV |
+| Linux desktop | Built and run against a real server and library (1,288 tracks), screens compared with the C# player's, and playback, the queue, the spectrum, MPRIS and the device list checked through UI automation. Exclusive and bit-perfect not tried on a DAC |
+| Android | Debug and release APKs build, with the TV, media service and Android Auto entries in the manifest. **Not yet run on a phone, a TV or in a car** |
+| Windows, macOS, iOS | Not yet built (they need their own hosts) |
+| Tizen | Dependencies resolve with flutter-tizen. **Not yet built** or run on a TV |
+| Bit-perfect, exclusive | Not measured on any platform ([audio.md](audio.md#known-limitations)) |
+
+"Not yet" means exactly that. If you have one of those devices, you can move a row.
 
 ## Debugging
 
-- **Logs.** `WiretuneLog` writes `[time] [LEVEL] [category] message` lines (Info and up by default) to `wiretune.log`
-  in the player's data directory or `wiretune-server.log` in the server's ([server.md](server.md#data-directory)); at
-  10 MiB the file moves to `.1`. Debug lines carry paths and device names, so set `WIRETUNE_LOG_LEVEL=debug` (or
-  `trace`; `info`, `warn`, `error`) only while troubleshooting. Every line passes through `WiretuneLog.redact`, which
-  replaces `token=` values with `***`; keep it that way when logging URLs. The player's data directory is
-  `~/.config/Wiretune` on Linux, `%APPDATA%\Wiretune` on Windows, `~/Library/Application Support/Wiretune` on macOS and
-  the app's private support folder on Android, iOS and Tizen. `WIRETUNE_DATA_DIR` moves it, which is handy for a
-  throw-away instance: `WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux`.
-- **Audio.** mpv's warnings and errors go to the log under `MediaKitDriver`. The devices offered are mpv's list
-  (`mpv --audio-device=help`) plus, on Linux, the ALSA hardware devices of `aplay -l`; the automation endpoint's state
-  shows the list the player built.
-- **Server.** Run it in the foreground: it prints to the console as well as to the log file.
-- **Interface.** *Settings → Performance statistics* shows Flutter's performance overlay.
+- **Logs**: `wiretune.log` in the player's data directory (`~/.config/Wiretune`, `%APPDATA%\Wiretune`,
+  `~/Library/Application Support/Wiretune`, or the app's private folder on phones and TVs), `wiretune-server.log` in
+  the server's ([server.md](server.md#data-directory)). `WIRETUNE_LOG_LEVEL=debug` adds paths and device names, so use
+  it only while you hunt something. Every line passes through `WiretuneLog.redact`, which blanks `token=` values: keep
+  it that way when you log a URL.
+- **Audio**: mpv's warnings and errors land in the log under `MediaKitDriver`. The device list is mpv's own
+  (`mpv --audio-device=help`) plus, on Linux, the ALSA hardware from `aplay -l`.
+- **Server**: run it in the foreground; it logs to the console too.
+- **Interface**: *Settings → Performance statistics* turns on Flutter's performance overlay.
 
-### UI automation (desktop, development only)
+### UI automation
+
+A local HTTP remote control for scripted UI testing, in debug builds only:
 
 ```bash
-flutter build linux --debug
+cd app && flutter build linux --debug
 WIRETUNE_UI_AUTOMATION=1 build/linux/x64/debug/bundle/wiretune
 curl http://127.0.0.1:5201/api/ui/state
 curl 'http://127.0.0.1:5201/api/ui/navigate?section=Albums'
-curl 'http://127.0.0.1:5201/api/ui/screenshot?name=albums'      # saved to the temp folder
-curl 'http://127.0.0.1:5201/api/ui/resize?width=400&height=820' # down to phone width
+curl 'http://127.0.0.1:5201/api/ui/screenshot?name=albums'        # saved to the temp folder
+curl 'http://127.0.0.1:5201/api/ui/resize?width=400&height=820'   # down to phone width
 ```
 
-The endpoint (`app/lib/src/debug/ui_automation_server.dart`) exists in **debug builds only**: a release or profile build
-contains none, whatever the variable says, and the variable must be exactly `1`. It has the C# player's routes (state,
-navigate, screenshot, resize, search, play-track, play-pause, next, prev, seek, volume, toggle-favorite, open-album,
-open-artist, connect, login, logout, continue-offline, the playlist routes) plus `toggle-queue`, and its state also
-lists the audio devices and the spectrum's peak. It listens on `127.0.0.1:5201` only and turns away requests with an
-`Origin` or a cross-site `Sec-Fetch-Site` header and any `Host` other than `127.0.0.1:5201` / `localhost:5201`. It is
-still an unauthenticated remote control (`login` takes the password as a query parameter, `logout` signs the player
-out for real), so use it on a development machine only, and with a throw-away data directory
-(`WIRETUNE_DATA_DIR`) when a script signs in or out. See [SECURITY.md](../SECURITY.md#clients).
+The rest of the routes (search, playback, sign-in, playlists…) are in `app/lib/src/debug/ui_automation_server.dart`.
+Release and profile builds contain none of it, and it only starts when the variable is exactly `1`. It listens on
+loopback only and turns away anything that looks like a web page's request, but it has no authentication (`login`
+takes the password in the query string, `logout` signs out for real), so keep it to a development machine and a
+throw-away `WIRETUNE_DATA_DIR`.
 
-## Extending Wiretune
+## Platform code
 
-### Add an HTTP endpoint
+- **Android**: `MainActivity.kt` shares its Flutter engine with the media service; TV detection and the CPU and Wi-Fi
+  locks are in `packages/wiretune_platform`. The manifest declares the TV launcher entry and banner, the media service
+  that Android Auto browses, and `automotive_app_desc.xml`. The application ID is `com.wiretune.player`, the C# app's.
+- **iOS and macOS**: `ios/Runner/Info.plist` (background audio, local network, plain HTTP) and
+  `macos/Runner/*.entitlements` (not sandboxed, and the comment there says why).
+- **Linux and Windows**: the runners set the window's size and icon; `main.dart` hides the system title bar, and the
+  header draws its own window buttons.
+- **Tizen**: `tizen/` is the .NET runner. Dart thinks Tizen is Linux, so `App.cs` answers the `wiretune/platform`
+  channel to say it's a TV.
 
-1. Add the route to the routes table in `server/lib/src/server.dart` with its access level (`Access.anonymous`,
-   `user`, `admin`, or `media` for the two routes that accept `?token=`). Validate every input and answer errors as
-   `{ "error": "…" }`. Never give a new route `Access.media`.
-2. Put new request or response records next to the existing ones in
-   `packages/wiretune_core/lib/src/models/protocol.dart`. Anything that lists library content must not carry a server
-   path (tracks go out with `filePath: server:{id}`). Data that belongs to one person takes the account ID from the
-   token (`call.principal`), never from the URL or the body.
-3. If a player needs it, add a method to `packages/wiretune_core/lib/src/services/server_client.dart`; failures must
-   become a session state, not an exception.
-4. Add a test with the other server tests (including the 401/403 cases; `server/test/support.dart` starts a real
-   server and signs in) and update [api.md](api.md).
+## Extending
 
-### Add a file type
+### An HTTP endpoint
 
-Add the extension to `AudioFileTypes` in `packages/wiretune_core/lib/src/models/audio_format.dart` (codec label,
-lossless flag, MIME type), teach `packages/wiretune_core/lib/src/metadata/tag_reader.dart` to read its tags and
-duration, and update the list in [server.md](server.md#library-and-scanning). Whether it plays is up to libmpv (FFmpeg)
-and, on Tizen, the TV.
+Add the route to the table in `server/lib/src/server.dart` with its access level (never `Access.media` for a new one),
+validate every input, and answer errors as `{ "error": "…" }`. Records go into
+`packages/wiretune_core/lib/src/models/protocol.dart`. Nothing that lists the library carries a server path, and
+per-person data takes the account from the token (`call.principal`), never from the URL or the body. If a player needs
+the route, add a method to `server_client.dart` and turn its failures into a session state. Test it next to the other
+server tests, the `401` and `403` cases included, and update [api.md](api.md).
 
-### Add or change texts and languages
+### A file type
 
-All interface text is in `packages/wiretune_core/lib/src/localization/strings.dart`, one line per key:
-`'Key': ('hu', 'en', 'de'),`. Use `context.tr('Key')` / `context.trf('Key', [args])` in widgets and
-`Localizer.get('Key')` / `Localizer.format('Key', [args])` elsewhere. A key with a `_One` suffix is used when the
-first format argument is exactly `1`. Texts composed once and kept (status lines, badges) must be rebuilt in the view
-model's `_refreshLocalizedTexts()` so they follow a language change.
+Add the extension to `AudioFileTypes` in `models/audio_format.dart`, teach `metadata/tag_reader.dart` its tags and
+duration, and add it to the list in [server.md](server.md#scanning). Whether it plays is up to libmpv, and on Tizen up
+to the TV.
 
-`packages/wiretune_core/test/localization_test.dart` fails on missing translations, placeholders that differ between
-languages and a `_One` key without a base key; `app/test/localization_keys_test.dart` fails on keys used in code that do
-not exist and on keys nothing uses.
+### Texts and languages
 
-The table is a three-language record, so **a fourth language is a code change**: extend the record type and fill in
-every key; add the constant, a `languages` entry and the case in `Localizer.lookup`; update the tests.
+All interface text lives in `packages/wiretune_core/lib/src/localization/strings.dart`, one line per key:
+`'Key': ('hu', 'en', 'de'),`. Widgets use `context.tr('Key')` and `context.trf('Key', [args])`; everything else
+`Localizer.get` and `Localizer.format`. A `_One` variant is picked when the first argument is exactly `1`. Text that's
+composed once and kept (status lines, badges) has to be rebuilt in the view model's `_refreshLocalizedTexts()`, or it
+won't follow a language change. The tests catch missing translations, mismatched placeholders, and keys that are used
+but undefined or defined but unused.
 
-### Add a view or setting
+A fourth language is a code change, because each entry is a three-language record: extend the record and fill in every
+key, add the constant, a `languages` entry and the case in `Localizer.lookup`, and update the tests.
 
-View models are in `app/lib/src/view_models`, pages in `app/lib/src/pages`, reusable parts in `app/lib/src/widgets`.
-A new section is a new `AppSection` value, a page in `pages/` registered in `pages/section_page.dart`, an entry in the
-wide layout's sidebar (and the phone's bottom navigation if it belongs there), and a place in `navVisualOrder` (the
-order of the animated logo). Its colours are an accent and a window gradient in `theme/palette.dart`. A persistent
-player setting is a key in the `settings` table, read and written through `LibraryService`/`LibraryRepository`. State
-that the back button has to respect belongs in `MainViewModel.tryNavigateBack()`, which `navigation_test.dart`
-covers.
+### A view or a setting
+
+A new section is a new `AppSection` value, a page registered in `pages/section_page.dart`, an entry in the wide
+layout's sidebar (and the phone's bottom bar, if it belongs there), a place in `navVisualOrder` (the animated logo's
+order), and an accent and gradient in `theme/palette.dart`. A persistent player setting is a key in the `settings`
+table, read and written through `LibraryService`. Anything the back button has to respect goes into
+`MainViewModel.tryNavigateBack()`.
+
+## CI
+
+`.github/workflows/ci.yml` checks the formatting, analyses all three packages with `--fatal-infos`, runs every test
+with `ffmpeg` installed, and builds the server (Linux, Windows, macOS), the APKs, the three desktop players and an
+unsigned iOS build, keeping the server executables and the APKs as artifacts. It doesn't build Tizen, runs nothing on a
+device, and can't hear a thing, so try those parts by hand.

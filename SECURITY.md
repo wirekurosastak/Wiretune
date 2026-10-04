@@ -1,83 +1,59 @@
-# Security policy
+# Security
 
-## Reporting a vulnerability
+## Reporting a problem
 
-Please do not report security problems in public issues.
+Please don't put it in a public issue. Use private vulnerability reporting (Security tab → *Report a vulnerability*)
+if it's enabled; otherwise open an issue that only asks for a private way to reach us, and send the details there.
+Include the version or commit, what happens, and how to reproduce it. We'll acknowledge it and agree on the fix with
+you before anything is disclosed. Fixes go to the latest release, or to the default branch until there is one.
 
-- If private vulnerability reporting is enabled for this repository, use it (Security tab → *Report a
-  vulnerability*).
-- Otherwise open an issue that only asks for a private way to reach the maintainers, without describing the
-  problem, and send the details there.
+## What Wiretune is built for
 
-Include the affected version or commit, a description, and steps to reproduce. The maintainers will try to
-acknowledge the report and coordinate the fix with you before it is disclosed. Only the latest release (or the
-default branch, before the first release) receives security fixes.
-
-## What Wiretune is designed for
-
-A self-hosted player for a home or otherwise private network: one administrator and a handful of people allowed to
-listen. It is not hardened for the open internet. This page is the one place that lists what it does and does not do
-about security; running the server is described in [docs/server.md](docs/server.md).
+A home network: one administrator and a handful of people who are allowed to listen. It is not hardened for the open
+internet. This page is the honest list of what it does and doesn't do about that.
 
 ## Server
 
-- **No TLS.** The server speaks plain HTTP, so passwords and tokens cross the network unencrypted unless you use a
-  TLS-terminating reverse proxy or a VPN. Do not expose the port directly to the internet. Proxy setup, including
-  the forwarded-headers setting and its risk, is in [docs/server.md](docs/server.md#reverse-proxy-and-tls).
-- **First account.** Creating the administrator needs the **setup code** the server prints in its log at every start
-  while no account exists (or the one you set with `Wiretune:SetupCode`). Without it, whoever reached a server with an
-  empty data directory first (an unmounted volume, a wrong data path) would own it. The code is read from the log by
-  whoever runs the server; it protects only the very first account.
-- **Sign-in.** Setup, sign-in and password changes share a limit of 10 requests per minute per client address.
-  Passwords are bcrypt hashes (work factor 12). There is no lockout besides that limit, no two-factor authentication,
-  and no password reset. An account can change its own password with the current one
-  (`POST /api/auth/change-password`; the players have no screen for it yet).
-- **Tokens.** JWTs signed with HMAC-SHA256, valid 24 hours or 90 days. There is no per-token revocation: changing a
-  password leaves the tokens issued before it valid until they expire, and only deleting the user ends their access
-  immediately.
-- **Tokens in URLs.** Audio and cover requests may carry a token as `?token=` for players that cannot send headers
-  (libmpv, the TV's media player, the desktop's `ffmpeg` for the spectrum); the server accepts it only on `/api/stream`
-  and `/api/cover`. The players put a
-  **stream token** there, not the sign-in token: it is issued by `POST /api/auth/stream-token`, valid 8 hours, and
-  opens the audio and cover routes and nothing else, so a leaked stream URL cannot read or change your account. The URL
-  still ends up in the process list of a desktop that runs the spectrum analyser (on `ffmpeg`'s command line) and in the
-  access logs of your reverse proxy, so keep those private. The server itself never logs a query string.
-- **Signing key.** It lives in the server's database in its data directory. Whoever can read `wiretune-server.db` can
-  mint valid tokens and read the password hashes, so restrict the directory to the service account. A directory the
-  server creates itself is private to its user on Linux; an existing one keeps its permissions.
-- **Roles.** Administrator and user. Every signed-in user can read the whole library; there are no per-user
-  libraries or permissions. Favourites, play counts and playlists are per account: the server reads them only for the
-  account in the token, and an administrator has no route that reads another account's.
-- **File paths stay on the server.** The library routes send a placeholder (`server:{id}`) as `filePath`, never the
-  real path. The server's own data (favourites and playlists included) is in the database in its data directory, so
-  the same read-protection as for the signing key applies.
-- **File access.** The server only reads the music folder. Streaming and cover requests serve only files inside the
-  library folder (or the server's cover cache), and request bodies are limited to 64 KiB (4 MiB for a playlist,
-  32 MiB for the one-time import, both only after authorisation).
+- **Plain HTTP.** Passwords and tokens cross the network unencrypted. Keep the port on your LAN, or put a TLS proxy or
+  a VPN in front ([server.md](docs/server.md#reverse-proxy-and-tls)). Never expose the port itself to the internet.
+- **The first account** needs the setup code that the server prints in its log at every start until an account exists.
+  Otherwise whoever reached a server with an empty data directory first (a wrong path, an unmounted volume) would own
+  it. The code protects that first account and nothing else.
+- **Passwords** are bcrypt hashes (cost 12). Setup, sign-in and password changes share a limit of 10 requests a minute
+  per client address. No lockout beyond that, no two-factor, no reset. An account can change its own password if it
+  knows the current one (`POST /api/auth/change-password`; the players have no screen for it yet).
+- **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. There's no revocation: a
+  password change leaves earlier tokens valid until they expire. Deleting the user locks them out at once.
+- **Tokens in URLs.** libmpv, TVs and `ffmpeg` can't send headers, so audio and cover URLs carry `?token=`. The
+  players put a **stream token** there: 8 hours, audio and covers only, useless for anything else. The server takes
+  `?token=` on `/api/stream` and `/api/cover` and nowhere else, and never logs a query string. Those URLs still end up
+  in your proxy's access log and, on a desktop running the spectrum analyser, in the process list.
+- **The database is the crown jewels.** `wiretune-server.db` holds the token-signing key and the password hashes:
+  whoever can read it can mint tokens. A data directory the server creates itself is private to its user on Linux; one
+  you created keeps the permissions you gave it.
+- **Roles**: administrator and user. Every user can read the whole library. Favourites, play counts and playlists are
+  per account, and no route, not even an administrator's, reads somebody else's.
+- **Files.** The server reads only the music folder and serves only files inside it (or its cover cache). Clients
+  never see a server path. Request bodies are capped at 64 KiB, 4 MiB for a playlist and 32 MiB for the one-time
+  import.
 
-## Clients
+## Players
 
-- **The access token is stored in plain text** in the player's local database (`wiretune.db`) when *Keep me signed
-  in* is ticked (the account created on a server's first run is always remembered). Anyone who can read that file
-  can use the token until it expires, up to 90 days. Signing out clears it. The token is sent only to the server
-  address it was issued for.
-- **Cleartext HTTP is allowed to every destination** on Android (network security configuration), iOS and macOS (App
-  Transport Security). Servers are usually addressed by LAN IP, which those settings cannot match. Use an `https://`
-  address whenever the server is not on a network you trust.
-- **Artist pictures.** The player looks them up through Deezer's public API, which sends artist names from
-  your library to `api.deezer.com`; results are cached in `artist_pictures.json`. Set
-  `WIRETUNE_NO_ARTIST_PICTURES=1` to disable it.
-- **Lyrics.** For a track whose file has no lyrics, the player looks them up on LRCLIB (`lrclib.net`, a free,
-  public lyrics database) when you open the queue panel. The request carries the track's title, artist, album and
-  length, plus a `Wiretune/1.0` user agent, and comes from the player, not from the server, so a server
-  library's tags go to LRCLIB from every device that plays it. Answers are cached in the `lyrics` folder of the
-  player's data directory (named by a hash, so no tag text appears in a file name). It is on by default; switch it
-  off in Settings, or for the whole process with `WIRETUNE_NO_ONLINE_LYRICS=1`. Nothing else leaves your network.
-- **Log files.** `WiretuneLog` replaces the value of every `token=` parameter with `***` before a line is written, so
-  stream URLs in the log do not carry the access token. The logs still contain file paths, server addresses and
-  device names: read `wiretune.log` before attaching it to a public issue.
-- **UI automation endpoint.** Only **debug builds** of the player contain it (a release build has none), and only with
-  `WIRETUNE_UI_AUTOMATION=1` does it open an unauthenticated control interface on `127.0.0.1:5201`. It is
-  loopback-only and protected against requests from web pages, but it can control the player and takes credentials in
-  query parameters. Do not enable it on a machine you do not fully control
-  ([docs/development.md](docs/development.md#ui-automation-desktop-development-only)).
+- **The sign-in token is stored in plain text** in the player's `wiretune.db` when *Keep me signed in* is ticked (the
+  account created on a server's first run is always kept). Anyone who can read that file can use it for up to 90
+  days. Signing out clears it, and a token is only ever sent to the server that issued it.
+- **Cleartext HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP,
+  which those platforms' allow-lists can't express. Use an `https://` address whenever the network isn't yours.
+- **Artist pictures** come from Deezer's public API, which therefore sees the artist names in your library. They're
+  cached in `artist_pictures.json`. `WIRETUNE_NO_ARTIST_PICTURES=1` turns the lookup off.
+- **Lyrics** for a track without any are looked up on LRCLIB when you open the queue panel: title, artist, album and
+  length, sent by the player (not the server) with a `Wiretune/1.0` user agent. Answers are cached in the `lyrics`
+  folder under hashed names. Turn it off in Settings, or for the whole process with `WIRETUNE_NO_ONLINE_LYRICS=1`.
+- **Logs** have every `token=` value blanked, but they do contain file paths, server addresses and device names. Read
+  `wiretune.log` before you attach it to a public issue.
+- **UI automation** is a debug-build-only remote control on `127.0.0.1:5201`, off unless `WIRETUNE_UI_AUTOMATION=1`.
+  It's loopback-only and turns away requests from web pages, but it has no authentication, controls the player and
+  takes credentials in the query string. Don't switch it on on a machine you don't fully control
+  ([development.md](docs/development.md#ui-automation)).
+
+Nothing else leaves your network.
