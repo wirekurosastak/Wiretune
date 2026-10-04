@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
@@ -9,11 +11,14 @@ import '../pages/now_playing_page.dart';
 import '../pages/playlists_page.dart';
 import '../pages/search_page.dart';
 import '../pages/section_page.dart';
+import '../widgets/ambient.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/common.dart';
+import '../widgets/player_controls.dart';
 
-/// The phone layout: the page (each draws its own header with the search and account buttons), the floating mini
-/// player and the bottom navigation; search and the full-screen player slide over it.
+/// The phone layout: the page (each draws its own header with the search and account buttons) over the ambient
+/// backdrop, and floating over its lower edge the glass mini player and bottom navigation, which the page scrolls
+/// under; search and the full-screen player slide over it.
 class PhoneLayout extends StatelessWidget {
   const PhoneLayout({super.key});
 
@@ -36,28 +41,42 @@ class PhoneLayout extends StatelessWidget {
           children: [
             Scaffold(
               backgroundColor: colors.palette.background,
-              body: Container(
-                decoration: BoxDecoration(gradient: colors.windowGradient),
-                child: SafeArea(
-                  bottom: false,
-                  child: Column(
-                    children: [
-                      if (vm.isSearchOpen) const _SearchBar(),
-                      if (vm.isServerOfflineBannerVisible) const _OfflineBanner(),
-                      Expanded(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 200),
-                          child: vm.isSearchOpen
-                              ? const SearchResults(key: ValueKey('search'))
-                              : KeyedSubtree(key: ValueKey(vm.selectedSection), child: sectionPage(vm.selectedSection)),
+              // The page reaches under the floating bars; the Scaffold tells it how much they cover.
+              extendBody: true,
+              body: Stack(
+                children: [
+                  const Positioned.fill(child: AmbientBackdrop(colour: 0.42)),
+                  SafeArea(
+                    bottom: false,
+                    child: Column(
+                      children: [
+                        if (vm.isSearchOpen) const _SearchBar(),
+                        if (vm.isServerOfflineBannerVisible) const _OfflineBanner(),
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOutCubic,
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: ScaleTransition(
+                                scale: Tween(begin: 0.985, end: 1.0).animate(animation),
+                                child: child,
+                              ),
+                            ),
+                            child: vm.isSearchOpen
+                                ? const SearchResults(key: ValueKey('search'))
+                                : KeyedSubtree(
+                                    key: ValueKey(vm.selectedSection),
+                                    child: sectionPage(vm.selectedSection),
+                                  ),
+                          ),
                         ),
-                      ),
-                      const _MiniPlayer(),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
-              bottomNavigationBar: const _BottomNavigation(),
+              bottomNavigationBar: const _BottomBars(),
             ),
             const PlaylistDialogsLayer(),
             Positioned.fill(
@@ -79,7 +98,78 @@ class PhoneLayout extends StatelessWidget {
   }
 }
 
-/// The five sections at the bottom; the active one takes the colour of its section (no pill), and its icon grows.
+/// The floating bars at the bottom: the mini player over the navigation, on a fade of the backdrop's colour so the
+/// page scrolling under them stays out of their way.
+class _BottomBars extends StatelessWidget {
+  const _BottomBars();
+
+  @override
+  Widget build(BuildContext context) {
+    final background = context.colors.palette.background;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [background.withValues(alpha: 0), background.withValues(alpha: 0.85)],
+        ),
+      ),
+      child: const SafeArea(
+        top: false,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [_MiniPlayer(), _BottomNavigation()]),
+      ),
+    );
+  }
+}
+
+/// A floating pane of frosted glass: what is behind it is blurred and tinted with the panel colour.
+class _Frosted extends StatelessWidget {
+  const _Frosted({required this.child, this.radius = 22, this.background});
+
+  final Widget child;
+  final double radius;
+
+  /// Painted behind the tint, inside the frost (the mini player's wash of the cover).
+  final Widget? background;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final shape = BorderRadius.circular(radius);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: shape,
+        boxShadow: [
+          BoxShadow(color: colors.palette.shadow, blurRadius: 24, spreadRadius: -6, offset: const Offset(0, 10)),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: shape,
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Stack(
+            children: [
+              if (background != null) Positioned.fill(child: background!),
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.palette.panel.withValues(alpha: colors.palette.isDark ? 0.62 : 0.7),
+                    borderRadius: shape,
+                    border: Border.all(color: colors.glassBorder),
+                  ),
+                ),
+              ),
+              child,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The five sections at the bottom, on a floating glass bar; the active one takes the colour of its section, and a
+/// pill of that colour grows behind its icon.
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation();
 
@@ -89,22 +179,18 @@ class _BottomNavigation extends StatelessWidget {
     final colors = context.colors;
     final palette = colors.palette;
     final items = [
-      (AppSection.artists, Icons.person_outline, palette.coral, 'NavArtists'),
+      (AppSection.artists, Icons.person_rounded, palette.coral, 'NavArtists'),
       (AppSection.albums, Icons.album, palette.purple, 'NavAlbums'),
-      (AppSection.tracks, Icons.music_note, palette.cyan, 'NavSongs'),
-      (AppSection.favorites, Icons.favorite, palette.coral, 'NavFavorites'),
-      (AppSection.playlists, Icons.queue_music, palette.lime, 'NavPlaylistsShort'),
+      (AppSection.tracks, Icons.music_note_rounded, palette.cyan, 'NavSongs'),
+      (AppSection.favorites, Icons.favorite_rounded, palette.coral, 'NavFavorites'),
+      (AppSection.playlists, Icons.queue_music_rounded, palette.lime, 'NavPlaylistsShort'),
     ];
-    return Container(
-      decoration: BoxDecoration(
-        // AMOLED black (white in the light theme), and it covers the space under the system's navigation bar.
-        color: palette.isDark ? Colors.black : Colors.white,
-        border: Border(top: BorderSide(color: colors.glassBorder)),
-      ),
-      child: SafeArea(
-        top: false,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+      child: _Frosted(
+        radius: 26,
         child: SizedBox(
-          height: 68,
+          height: 66,
           child: Row(
             children: [
               for (final (section, icon, color, label) in items)
@@ -146,27 +232,43 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = context.colors.textMuted;
+    const duration = Duration(milliseconds: 320);
     return Semantics(
       selected: active,
       button: true,
       child: InkResponse(
         onTap: onTap,
-        highlightShape: BoxShape.rectangle,
+        radius: 36,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedScale(
-              scale: active ? 1.12 : 1,
-              duration: const Duration(milliseconds: 340),
-              curve: Curves.easeOutBack,
-              child: Icon(icon, size: 26, color: active ? color : muted),
+            // No overshooting curve here: a shadow lerped past its end would get a negative blur.
+            AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              width: active ? 56 : 32,
+              height: 30,
+              decoration: BoxDecoration(
+                color: active ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0),
+                borderRadius: BorderRadius.circular(999),
+                boxShadow: active ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 14)] : const [],
+              ),
+              child: AnimatedScale(
+                scale: active ? 1.08 : 1,
+                duration: duration,
+                curve: Curves.easeOutBack,
+                child: Icon(icon, size: 23, color: active ? color : muted),
+              ),
             ),
             const SizedBox(height: 3),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: active ? color : muted),
+            AnimatedDefaultTextStyle(
+              duration: duration,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                color: active ? color : muted,
+              ),
+              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
@@ -214,9 +316,18 @@ class _SearchBarState extends State<_SearchBar> {
                 hintText: context.tr('SearchPlaceholder'),
                 isDense: true,
                 filled: true,
-                fillColor: colors.surface1,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                fillColor: colors.surface2,
+                prefixIcon: Icon(Icons.search_rounded, size: 20, color: colors.accent),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  borderSide: BorderSide(color: colors.glassBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  borderSide: BorderSide(color: colors.accent, width: 1.5),
+                ),
                 suffixIcon: _controller.text.isEmpty
                     ? null
                     : IconButton(
@@ -247,7 +358,11 @@ class _OfflineBanner extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
       padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
-      decoration: BoxDecoration(color: colors.danger.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: colors.danger.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(Radii.card),
+        border: Border.all(color: colors.danger.withValues(alpha: 0.45)),
+      ),
       child: Row(
         children: [
           Icon(Icons.cloud_off_rounded, color: colors.danger, size: 20),
@@ -272,8 +387,8 @@ class _OfflineBanner extends StatelessWidget {
   }
 }
 
-/// The mini player: a floating card with the cover, title and artist, play/pause and next, and the progress under it.
-/// A tap opens the full-screen player.
+/// The mini player: a floating glass card washed in the colours of the cover, with the cover, title and artist,
+/// play/pause and next, and the progress as a glowing line along its lower edge. A tap opens the full-screen player.
 class _MiniPlayer extends StatelessWidget {
   const _MiniPlayer();
 
@@ -288,110 +403,131 @@ class _MiniPlayer extends StatelessWidget {
         final track = player.currentTrack;
         if (track == null) return const SizedBox.shrink();
         return Padding(
-          padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
-          child: Material(
-            color: colors.palette.isDark ? Colors.black : Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-              side: BorderSide(color: colors.glassBorder),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  height: 64,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: vm.openNowPlaying,
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(8, 0, 4, 0),
-                            child: Row(
-                              children: [
-                                Hero(
-                                  tag: 'now-playing-cover',
-                                  child: CoverImage(path: track.coverArtPath, size: 48, radius: 8),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        player.nowPlayingTitle,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                          color: colors.textMain,
-                                        ),
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+          child: _Frosted(
+            radius: 20,
+            background: AmbientArtwork(path: track.coverArtPath, opacity: 0.9),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Stack(
+                children: [
+                  SizedBox(
+                    height: 66,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: vm.openNowPlaying,
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(9, 0, 4, 0),
+                              child: Row(
+                                children: [
+                                  Hero(
+                                    tag: 'now-playing-cover',
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(Radii.small + 2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: colors.palette.shadow,
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 1),
-                                      Text(
-                                        player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: player.hasError ? colors.danger : colors.textMuted,
-                                        ),
-                                      ),
-                                    ],
+                                      child: CoverImage(path: track.coverArtPath, size: 48, radius: Radii.small + 2),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          player.nowPlayingTitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: -0.2,
+                                            color: colors.textMain,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 1),
+                                        Text(
+                                          player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w500,
+                                            color: player.hasError ? colors.danger : colors.textMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      SizedBox.square(
-                        dimension: 44,
-                        child: IconButton(
-                          tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
-                          onPressed: player.togglePlayPause,
-                          icon: Icon(
-                            player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            size: 30,
-                            color: colors.textMain,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: SizedBox.square(
-                          dimension: 44,
+                        SizedBox.square(
+                          dimension: 46,
                           child: IconButton(
-                            tooltip: context.tr('TipNext'),
-                            onPressed: player.nextTrack,
-                            icon: Icon(Icons.skip_next_rounded, size: 26, color: colors.textMain),
+                            tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
+                            onPressed: player.togglePlayPause,
+                            icon: PlayPauseIcon(playing: player.isPlaying, size: 30, color: colors.textMain),
                           ),
                         ),
-                      ),
-                    ],
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: SizedBox.square(
+                            dimension: 46,
+                            child: IconButton(
+                              tooltip: context.tr('TipNext'),
+                              onPressed: player.nextTrack,
+                              icon: Icon(Icons.skip_next_rounded, size: 28, color: colors.textMain),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
-                  child: ValueListenableBuilder(
-                    valueListenable: player.position,
-                    builder: (context, position, _) {
-                      final total = player.duration.inMilliseconds;
-                      final fraction = total <= 0 ? 0.0 : (position.inMilliseconds / total).clamp(0.0, 1.0);
-                      return LinearProgressIndicator(
-                        value: fraction,
-                        minHeight: 3,
-                        borderRadius: BorderRadius.circular(2),
-                        backgroundColor: colors.palette.glassHighlight,
-                        color: colors.accent,
-                      );
-                    },
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 0,
+                    child: ValueListenableBuilder(
+                      valueListenable: player.position,
+                      builder: (context, position, _) {
+                        final total = player.duration.inMilliseconds;
+                        final fraction = total <= 0 ? 0.0 : (position.inMilliseconds / total).clamp(0.0, 1.0);
+                        return Container(
+                          height: 2.5,
+                          decoration: BoxDecoration(
+                            color: colors.palette.glassHighlight,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: fraction,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: colors.accentGradient,
+                                borderRadius: BorderRadius.circular(2),
+                                boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 6)],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );

@@ -6,13 +6,12 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../view_models/library_view_models.dart';
+import '../widgets/ambient.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/quality_tag.dart';
 import '../widgets/track_list.dart';
-
-const _bottomSpace = SliverToBoxAdapter(child: SizedBox(height: 24));
 
 /// What an empty library says, with the two ways to fill it: a server, or a folder of this computer.
 class EmptyLibrary extends StatelessWidget {
@@ -71,7 +70,7 @@ class TracksPage extends StatelessWidget {
               ),
             ),
             TrackSliver(tracks: tracks.displayedTracks, onPlay: tracks.playTrack),
-            _bottomSpace,
+            const PageEndSpace(),
           ],
         );
       },
@@ -114,7 +113,7 @@ class FavoritesPage extends StatelessWidget {
               ),
             ),
             TrackSliver(tracks: favorites.favoriteTracks, onPlay: favorites.playTrack, kind: TrackTableKind.favorites),
-            _bottomSpace,
+            const PageEndSpace(),
           ],
         );
       },
@@ -169,13 +168,14 @@ class BackLink extends StatelessWidget {
     }
     final narrow = MediaQuery.sizeOf(context).width < 600;
     return Padding(
-      padding: EdgeInsets.fromLTRB(narrow ? 16 : 28, narrow ? 12 : 24, narrow ? 16 : 28, 16),
+      padding: EdgeInsets.fromLTRB(narrow ? 16 : 26, narrow ? 12 : 22, narrow ? 16 : 26, 12),
       child: Align(
         alignment: Alignment.centerLeft,
         child: OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(0, 36),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.fromLTRB(12, 0, 16, 0),
+            backgroundColor: colors.palette.panel,
             textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           onPressed: onPressed,
@@ -187,21 +187,27 @@ class BackLink extends StatelessWidget {
   }
 }
 
-/// The header of a detail page: a glass card with the 120 px artwork beside the labels, the title, a line of details
-/// and the buttons (on a phone the artwork sits above, centred).
+/// The header of a detail page, over a wash of its own artwork's colours that fades into the page: the [back] button,
+/// then the large artwork beside the labels, the title, a line of details and the buttons (on a phone the artwork sits
+/// above, centred).
 class DetailHeader extends StatelessWidget {
   const DetailHeader({
     super.key,
     required this.artwork,
     required this.tags,
     required this.title,
+    this.artworkPath,
+    this.back,
     this.details = const [],
     this.actions = const [],
-    this.titleSize = 26,
     this.titleWidget,
   });
 
   final Widget artwork;
+
+  /// The picture whose colours wash the header; none leaves a glow of the accent.
+  final String? artworkPath;
+  final Widget? back;
   final List<Widget> tags;
   final String title;
 
@@ -209,30 +215,55 @@ class DetailHeader extends StatelessWidget {
   final Widget? titleWidget;
   final List<Widget> details;
   final List<Widget> actions;
-  final double titleSize;
+
+  /// The wide header's title style; a playlist's editable title uses it too.
+  static TextStyle titleStyle(BuildContext context) => TextStyle(
+    fontSize: 46,
+    height: 1.05,
+    letterSpacing: -1.6,
+    fontWeight: FontWeight.w900,
+    color: context.colors.textMain,
+  );
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final dot = Text('•', style: TextStyle(color: colors.textMuted));
-    final text = Column(
-      crossAxisAlignment: narrow ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: tags),
-        const SizedBox(height: 8),
-        titleWidget ??
-            Text(
-              title,
-              textAlign: narrow ? TextAlign.center : TextAlign.start,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.w900, color: colors.textMain),
+    final shadow = [
+      BoxShadow(color: colors.palette.shadow, blurRadius: 40, spreadRadius: -8, offset: const Offset(0, 20)),
+      BoxShadow(color: colors.accent.withValues(alpha: 0.18), blurRadius: 60, spreadRadius: -10),
+    ];
+    // The wash: the artwork's colours (or a glow of the accent), fading out towards the bottom.
+    final wash = Positioned.fill(
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (rect) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.black, Colors.black54, Colors.transparent],
+          stops: [0, 0.55, 1],
+        ).createShader(rect),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: const Alignment(-0.7, -0.8),
+                  radius: 1.2,
+                  colors: [colors.accent.withValues(alpha: 0.3), colors.accent.withValues(alpha: 0)],
+                ),
+              ),
             ),
-        if (details.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Wrap(
+            AmbientArtwork(path: artworkPath, opacity: colors.palette.isDark ? 0.6 : 0.45),
+          ],
+        ),
+      ),
+    );
+    final detailRow = details.isEmpty
+        ? null
+        : Wrap(
             spacing: 8,
             runSpacing: 4,
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -240,74 +271,97 @@ class DetailHeader extends StatelessWidget {
             children: [
               for (var i = 0; i < details.length; i++) ...[if (i > 0) dot, details[i]],
             ],
+          );
+    if (narrow) {
+      // The phone's header: the 230 px artwork with a glow, the title, the details and the quality, all centred.
+      return Stack(
+        children: [
+          wash,
+          Column(
+            children: [
+              ?back,
+              Padding(
+                padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 10),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 230,
+                      height: 230,
+                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
+                      child: artwork,
+                    ),
+                    const SizedBox(height: 20),
+                    titleWidget ??
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 24,
+                            letterSpacing: -0.6,
+                            fontWeight: FontWeight.w800,
+                            color: colors.textMain,
+                          ),
+                        ),
+                    if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
+                    if (tags.any((t) => t is! TagBadge)) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [...tags.where((t) => t is! TagBadge)],
+                      ),
+                    ],
+                    if (actions.isNotEmpty) ...[
+                      const SizedBox(height: 18),
+                      for (final action in actions) Padding(padding: const EdgeInsets.only(bottom: 10), child: action),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
-        if (actions.isNotEmpty) ...[
-          const SizedBox(height: 14),
-          Wrap(spacing: 12, runSpacing: 8, alignment: WrapAlignment.center, children: actions),
-        ],
-      ],
-    );
-    if (narrow) {
-      // The phone's header: the 220 px artwork with a glow, the title, the details and the quality, all centred.
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        child: Column(
-          children: [
-            Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.22), blurRadius: 50, spreadRadius: -4)],
-              ),
-              child: artwork,
-            ),
-            const SizedBox(height: 18),
-            titleWidget ??
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: colors.textMain),
-                ),
-            if (details.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  for (var i = 0; i < details.length; i++) ...[if (i > 0) dot, details[i]],
-                ],
-              ),
-            ],
-            if (tags.any((t) => t is! TagBadge)) ...[
-              const SizedBox(height: 12),
-              Wrap(spacing: 8, alignment: WrapAlignment.center, children: [...tags.where((t) => t is! TagBadge)]),
-            ],
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              for (final action in actions) Padding(padding: const EdgeInsets.only(bottom: 10), child: action),
-            ],
-          ],
-        ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 0, 28, 20),
-      child: GlassCard(
-        hoverColor: colors.accent,
-        child: Row(
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: tags),
+        const SizedBox(height: 12),
+        titleWidget ?? Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle(context)),
+        if (detailRow != null) ...[const SizedBox(height: 12), detailRow],
+        if (actions.isNotEmpty) ...[const SizedBox(height: 22), Wrap(spacing: 12, runSpacing: 8, children: actions)],
+      ],
+    );
+    return Stack(
+      children: [
+        wash,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SizedBox.square(dimension: 120, child: artwork),
-            const SizedBox(width: 28),
-            Expanded(child: text),
+            ?back,
+            Padding(
+              padding: EdgeInsets.fromLTRB(30, back == null ? 28 : 6, 30, 28),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    width: 210,
+                    height: 210,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
+                    child: artwork,
+                  ),
+                  const SizedBox(width: 30),
+                  Expanded(child: text),
+                ],
+              ),
+            ),
           ],
         ),
-      ),
+      ],
     );
   }
 }
@@ -318,10 +372,14 @@ class _Detail extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(text, style: TextStyle(fontSize: 13, color: context.colors.textMuted));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: context.colors.textMuted),
+  );
 }
 
-/// The sort buttons of a list page ("Sort by: ABC ↑ | Year"): the active one is filled with the accent.
+/// The sort buttons of a list page ("Sort by: ABC ↑ | Year") as one segmented pill; the active segment is filled with
+/// the accent.
 class _SortButtons extends StatelessWidget {
   const _SortButtons({required this.buttons});
 
@@ -330,36 +388,62 @@ class _SortButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    const style = TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       runSpacing: 6,
       children: [
-        Text(context.tr('SortBy'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-        const SizedBox(width: 8),
-        for (final (label, selected, onTap) in buttons)
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: selected
-                ? FilledButton(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(72, 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      textStyle: style,
-                    ),
-                    onPressed: onTap,
-                    child: Text(label),
-                  )
-                : OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(72, 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      textStyle: style,
-                    ),
-                    onPressed: onTap,
-                    child: Text(label),
-                  ),
+        Text(
+          context.tr('SortBy'),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: colors.surface1,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: colors.glassBorder),
           ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (label, selected, onTap) in buttons)
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  decoration: BoxDecoration(
+                    color: selected ? colors.accent : colors.accent.withValues(alpha: 0),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: selected ? colors.accentGlow(0.5) : const [],
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: InkWell(
+                      customBorder: const StadiumBorder(),
+                      onTap: onTap,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 64, minHeight: 30),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          child: Center(
+                            widthFactor: 1,
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: selected ? colors.onAccent : colors.textMuted,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -412,7 +496,7 @@ class AlbumsPage extends StatelessWidget {
                 );
               },
             ),
-            _bottomSpace,
+            const PageEndSpace(),
           ],
         );
       },
@@ -434,13 +518,13 @@ class AlbumDetail extends StatelessWidget {
       key: PageStorageKey('album-${album.id}'),
       slivers: [
         SliverToBoxAdapter(
-          child: BackLink(text: albums.backText, onPressed: albums.closeAlbumDetail),
-        ),
-        SliverToBoxAdapter(
           child: DetailHeader(
+            back: BackLink(text: albums.backText, onPressed: albums.closeAlbumDetail),
+            artworkPath: album.coverArtPath,
             artwork: CoverImage(
               path: album.coverArtPath,
-              radius: 8,
+              radius: Radii.card,
+              decodeWidth: 640,
               placeholderIcon: Icons.album,
               placeholderColor: colors.palette.purple,
             ),
@@ -453,7 +537,7 @@ class AlbumDetail extends StatelessWidget {
               LinkText(
                 album.artist,
                 onTap: () => vm.openArtistByName(album.artist),
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.palette.purple),
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.purple),
               ),
               if (album.year != null) _Detail('${album.year}'),
               _Detail(context.trf('TrackCount', [album.trackCount])),
@@ -470,7 +554,7 @@ class AlbumDetail extends StatelessWidget {
           ),
         ),
         TrackSliver(tracks: album.tracks, onPlay: albums.playAlbumTrack, kind: TrackTableKind.album),
-        _bottomSpace,
+        const PageEndSpace(),
       ],
     );
   }
@@ -519,7 +603,7 @@ class ArtistsPage extends StatelessWidget {
                 );
               },
             ),
-            _bottomSpace,
+            const PageEndSpace(),
           ],
         );
       },
@@ -543,10 +627,9 @@ class ArtistDetail extends StatelessWidget {
       key: PageStorageKey('artist-${artist.id}'),
       slivers: [
         SliverToBoxAdapter(
-          child: BackLink(text: artists.backText, onPressed: artists.closeArtistDetail),
-        ),
-        SliverToBoxAdapter(
           child: DetailHeader(
+            back: BackLink(text: artists.backText, onPressed: artists.closeArtistDetail),
+            artworkPath: artist.picturePath ?? albums.firstOrNull?.coverArtPath,
             artwork: CoverImage(
               path: artist.picturePath,
               circle: true,
@@ -555,7 +638,6 @@ class ArtistDetail extends StatelessWidget {
             ),
             tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
             title: artist.name,
-            titleSize: 28,
             details: [
               _Detail(context.trf('TrackCountInDatabase', [artist.trackCount])),
             ],
@@ -572,8 +654,8 @@ class ArtistDetail extends StatelessWidget {
         if (albums.isNotEmpty) ...[
           SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 28),
-              child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 0, 4, 12)),
+              padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
+              child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 10)),
             ),
           ),
           TileGridSliver(
@@ -587,12 +669,12 @@ class ArtistDetail extends StatelessWidget {
         ],
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 28),
-            child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 12)),
+            padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
+            child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
           ),
         ),
         TrackSliver(tracks: artists.selectedArtistTracks, onPlay: artists.playArtistTrack, kind: TrackTableKind.artist),
-        _bottomSpace,
+        const PageEndSpace(),
       ],
     );
   }

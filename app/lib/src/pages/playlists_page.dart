@@ -59,7 +59,7 @@ class PlaylistsPage extends StatelessWidget {
                 );
               },
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+            const PageEndSpace(),
           ],
         );
       },
@@ -103,7 +103,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                   autofocus: true,
                   maxLength: UserDataRules.maxPlaylistNameLength,
                   decoration: const InputDecoration(counterText: ''),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                   onSubmitted: (value) => playlists.confirmRenamePlaylist(value).then((_) => _name.clear()),
                 ),
               ),
@@ -136,11 +136,18 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                       playlist.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: colors.textMain),
+                      style: MediaQuery.sizeOf(context).width < 600
+                          ? TextStyle(
+                              fontSize: 24,
+                              letterSpacing: -0.6,
+                              fontWeight: FontWeight.w800,
+                              color: colors.textMain,
+                            )
+                          : DetailHeader.titleStyle(context),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Icon(Icons.edit_outlined, size: 18, color: colors.textMuted),
+                  const SizedBox(width: 10),
+                  Icon(Icons.edit_rounded, size: 20, color: colors.textMuted),
                 ],
               ),
             ),
@@ -150,11 +157,10 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
       key: PageStorageKey('playlist-${playlist.id}'),
       slivers: [
         SliverToBoxAdapter(
-          child: BackLink(text: context.tr('BackToPlaylists'), onPressed: playlists.closePlaylistDetail),
-        ),
-        SliverToBoxAdapter(
           child: DetailHeader(
-            artwork: PlaylistCover(covers: playlistCovers(tracks), radius: 8),
+            back: BackLink(text: context.tr('BackToPlaylists'), onPressed: playlists.closePlaylistDetail),
+            artworkPath: playlistCovers(tracks).firstOrNull,
+            artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
             tags: [
               TagBadge(context.tr('LabelPlaylist'), color: colors.palette.lime),
               if (playlist.formatBadge.isNotEmpty) QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec),
@@ -164,10 +170,13 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             details: [
               Text(
                 context.trf('TrackCount', [playlist.trackCount]),
-                style: TextStyle(fontSize: 13, color: colors.textMuted),
+                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
               ),
               if (playlists.selectedPlaylistTotalDuration.isNotEmpty)
-                Text(playlists.selectedPlaylistTotalDuration, style: TextStyle(fontSize: 13, color: colors.textMuted)),
+                Text(
+                  playlists.selectedPlaylistTotalDuration,
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
+                ),
             ],
             actions: [
               PlayShuffleButtons(
@@ -177,9 +186,9 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                 onShuffle: tracks.isEmpty ? null : () => playlists.shufflePlaylist(),
               ),
               OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
+                style: OutlinedButton.styleFrom(foregroundColor: colors.danger, minimumSize: const Size(0, 46)),
                 onPressed: () => playlists.requestDeletePlaylist(playlist),
-                icon: Icon(Icons.delete_outline, size: 16, color: colors.danger),
+                icon: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
                 label: Text(context.tr('PlaylistDeleteAction')),
               ),
             ],
@@ -195,7 +204,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
           )
         else
           TrackSliver(tracks: tracks, onPlay: playlists.playTrack, kind: TrackTableKind.playlist),
-        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+        const PageEndSpace(),
       ],
     );
   }

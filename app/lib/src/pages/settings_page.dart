@@ -66,11 +66,11 @@ class SettingsPage extends StatelessWidget {
             final narrow = constraints.maxWidth < 600;
             return ListView(
               key: const PageStorageKey('settings'),
-              padding: EdgeInsets.fromLTRB(0, 0, 0, 32),
+              padding: EdgeInsets.only(bottom: 32 + MediaQuery.paddingOf(context).bottom),
               children: [
                 PageHeader(title: context.tr('NavSettings'), subtitle: context.tr('SettingsSubtitle')),
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 28),
+                  padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 30),
                   child: twoColumns
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,15 +113,28 @@ class _CardTitle extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         children: [
-          Icon(icon, color: colors.accent),
-          const SizedBox(width: 12),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: colors.accent.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: colors.accent, size: 20),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                  style: TextStyle(
+                    fontSize: 16,
+                    letterSpacing: -0.2,
+                    fontWeight: FontWeight.w800,
+                    color: colors.textMain,
+                  ),
                 ),
                 if (subtitle != null) Text(subtitle!, style: TextStyle(fontSize: 12, color: colors.textMuted)),
               ],
@@ -843,11 +856,15 @@ class _LibraryStatsCard extends StatelessWidget {
     final colors = context.colors;
     Widget stat(String label, int value) => Column(
       children: [
-        Text(
-          '$value',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: colors.accent),
+        ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: colors.accentGradient.createShader,
+          child: Text('$value', style: const TextStyle(fontSize: 30, letterSpacing: -1, fontWeight: FontWeight.w900)),
         ),
-        Text(label, style: TextStyle(fontSize: 11, color: colors.textMuted)),
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: colors.textMuted),
+        ),
       ],
     );
     return GlassCard(

@@ -6,7 +6,7 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/player_view_model.dart';
 
-/// Shuffle, previous, play/pause, next, repeat.
+/// Shuffle, previous, play/pause, next, repeat. Shuffle and repeat take the accent and a dot under them while on.
 class TransportControls extends StatelessWidget {
   const TransportControls({super.key, this.large = false});
 
@@ -19,63 +19,207 @@ class TransportControls extends StatelessWidget {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        final small = large ? 26.0 : 18.0;
-        final skip = large ? 36.0 : 22.0;
-        final main = large ? 40.0 : 24.0;
-        Color toggle(bool on) => on ? colors.accent : colors.textMuted;
+        final small = large ? 26.0 : 19.0;
+        final skip = large ? 38.0 : 24.0;
+        Widget toggle(IconData icon, String tip, bool on, VoidCallback onPressed) => IconButton(
+          tooltip: context.tr(tip),
+          iconSize: small,
+          onPressed: onPressed,
+          icon: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              Icon(icon, color: on ? colors.accent : colors.textMuted),
+              Positioned(
+                bottom: -7,
+                child: AnimatedOpacity(
+                  opacity: on ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    width: 4,
+                    height: 4,
+                    decoration: BoxDecoration(color: colors.accent, shape: BoxShape.circle),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
         return Row(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            IconButton(
-              tooltip: context.tr('TipShuffle'),
-              iconSize: small,
-              onPressed: player.toggleShuffle,
-              icon: Icon(Icons.shuffle_rounded, color: toggle(player.isShuffle)),
-            ),
+            toggle(Icons.shuffle_rounded, 'TipShuffle', player.isShuffle, player.toggleShuffle),
+            SizedBox(width: large ? 8 : 4),
             IconButton(
               tooltip: context.tr('TipPrevious'),
               iconSize: skip,
               onPressed: player.previousTrack,
               icon: const Icon(Icons.skip_previous_rounded),
             ),
-            SizedBox(width: large ? 12 : 6),
-            IconButton.filled(
-              tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
-              iconSize: large ? main : 20,
-              padding: EdgeInsets.all(large ? 14 : 0),
-              style: IconButton.styleFrom(
-                backgroundColor: colors.accent,
-                foregroundColor: colors.onAccent,
-                // The desktop's play button is a 38 px square; the phone's big one stays round.
-                fixedSize: large ? null : const Size(38, 38),
-                minimumSize: large ? null : const Size(38, 38),
-                shape: large ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              ),
-              onPressed: player.togglePlayPause,
-              icon: Icon(player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
-            ),
-            SizedBox(width: large ? 12 : 6),
+            SizedBox(width: large ? 14 : 8),
+            PlayButton(size: large ? 72 : 42),
+            SizedBox(width: large ? 14 : 8),
             IconButton(
               tooltip: context.tr('TipNext'),
               iconSize: skip,
               onPressed: player.nextTrack,
               icon: const Icon(Icons.skip_next_rounded),
             ),
-            IconButton(
-              tooltip: context.tr('TipRepeat'),
-              iconSize: small,
-              onPressed: player.toggleRepeat,
-              icon: Icon(
-                player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-                color: toggle(player.repeatMode != RepeatMode.off),
-              ),
+            SizedBox(width: large ? 8 : 4),
+            toggle(
+              player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
+              'TipRepeat',
+              player.repeatMode != RepeatMode.off,
+              player.toggleRepeat,
             ),
           ],
         );
       },
     );
   }
+}
+
+/// The round play/pause button, filled with the accent's gradient: it glows (brighter while playing), grows a little
+/// under the mouse and gives under the finger, and its icon morphs between play and pause.
+class PlayButton extends StatefulWidget {
+  const PlayButton({super.key, this.size = 42});
+
+  final double size;
+
+  @override
+  State<PlayButton> createState() => _PlayButtonState();
+}
+
+class _PlayButtonState extends State<PlayButton> {
+  bool _hover = false;
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.vm.player;
+    final colors = context.colors;
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) => Tooltip(
+        message: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
+        child: AnimatedScale(
+          scale: _pressed ? 0.92 : (_hover ? 1.06 : 1),
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: colors.accentGradient,
+              boxShadow: colors.accentGlow(player.isPlaying || _hover ? 1 : 0.5),
+            ),
+            child: Material(
+              type: MaterialType.transparency,
+              shape: const CircleBorder(),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                focusColor: colors.onAccent.withValues(alpha: 0.25),
+                onTap: player.togglePlayPause,
+                onHover: (value) => setState(() => _hover = value),
+                onHighlightChanged: (value) => setState(() => _pressed = value),
+                child: SizedBox.square(
+                  dimension: widget.size,
+                  child: Center(
+                    child: PlayPauseIcon(playing: player.isPlaying, size: widget.size * 0.52, color: colors.onAccent),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The play icon, morphing into the pause icon (and back) when [playing] changes.
+class PlayPauseIcon extends StatefulWidget {
+  const PlayPauseIcon({super.key, required this.playing, this.size, this.color});
+
+  final bool playing;
+  final double? size;
+  final Color? color;
+
+  @override
+  State<PlayPauseIcon> createState() => _PlayPauseIconState();
+}
+
+class _PlayPauseIconState extends State<PlayPauseIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _morph = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+    value: widget.playing ? 1 : 0,
+  );
+
+  @override
+  void didUpdateWidget(PlayPauseIcon old) {
+    super.didUpdateWidget(old);
+    if (widget.playing != old.playing) widget.playing ? _morph.forward() : _morph.reverse();
+  }
+
+  @override
+  void dispose() {
+    _morph.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedIcon(
+    icon: AnimatedIcons.play_pause,
+    progress: CurvedAnimation(parent: _morph, curve: Curves.easeInOutCubic),
+    size: widget.size,
+    color: widget.color,
+  );
+}
+
+/// A heart, filled for a favourite; it pops when it fills.
+class HeartIcon extends StatefulWidget {
+  const HeartIcon({super.key, required this.filled, required this.color, this.size});
+
+  final bool filled;
+  final Color color;
+  final double? size;
+
+  @override
+  State<HeartIcon> createState() => _HeartIconState();
+}
+
+class _HeartIconState extends State<HeartIcon> with SingleTickerProviderStateMixin {
+  late final AnimationController _pop = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
+  late final Animation<double> _scale = TweenSequence([
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.4).chain(CurveTween(curve: Curves.easeOut)), weight: 30),
+    TweenSequenceItem(tween: Tween(begin: 1.4, end: 0.9).chain(CurveTween(curve: Curves.easeInOut)), weight: 30),
+    TweenSequenceItem(tween: Tween(begin: 0.9, end: 1.0).chain(CurveTween(curve: Curves.easeOut)), weight: 40),
+  ]).animate(_pop);
+
+  @override
+  void didUpdateWidget(HeartIcon old) {
+    super.didUpdateWidget(old);
+    if (widget.filled && !old.filled) _pop.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ScaleTransition(
+    scale: _scale,
+    child: Icon(
+      widget.filled ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+      color: widget.color,
+      size: widget.size,
+    ),
+  );
 }
 
 /// The position slider with the elapsed and total time.
@@ -98,6 +242,7 @@ class _SeekBarState extends State<SeekBar> {
     final colors = context.colors;
     final timeStyle = TextStyle(
       fontSize: 11,
+      fontWeight: FontWeight.w600,
       color: colors.textMuted,
       fontFeatures: const [FontFeature.tabularFigures()],
     );
@@ -166,7 +311,11 @@ class VolumeControl extends StatelessWidget {
             iconSize: 20,
             onPressed: player.isVolumeLocked ? null : player.toggleMute,
             icon: Icon(
-              player.isMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+              player.isMuted
+                  ? Icons.volume_off_rounded
+                  : (player.volume < 50 && !player.isVolumeLocked
+                        ? Icons.volume_down_rounded
+                        : Icons.volume_up_rounded),
               color: player.isVolumeActive ? colors.accent : colors.textMuted,
             ),
           ),
@@ -204,10 +353,7 @@ class FavoriteCurrentButton extends StatelessWidget {
           tooltip: context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
           iconSize: size,
           onPressed: player.currentTrack == null ? null : player.toggleFavoriteCurrent,
-          icon: Icon(
-            favorite ? Icons.favorite : Icons.favorite_border,
-            color: favorite ? colors.palette.coral : colors.textMuted,
-          ),
+          icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted),
         );
       },
     );

@@ -49,8 +49,9 @@ class QueueList extends StatelessWidget {
   }
 }
 
-/// A queue entry: a bordered card with the drag handle, the cover (with the entry's number, or the bouncing bars of the
-/// current track), title and artist, format, length, the arrows and the remove button.
+/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, or the bouncing bars of the
+/// current track), title and artist, format, length, the arrows and the remove button. The current entry is washed in
+/// the accent.
 class _QueueRow extends StatefulWidget {
   const _QueueRow({
     super.key,
@@ -79,7 +80,6 @@ class _QueueRowState extends State<_QueueRow> {
     final item = widget.item;
     final track = item.track;
     final current = item.isCurrent;
-    final highlighted = current || _hover;
     Widget small(IconData icon, String tip, VoidCallback? onPressed, {Color? color}) => SizedBox(
       width: 28,
       height: 28,
@@ -91,22 +91,25 @@ class _QueueRowState extends State<_QueueRow> {
         icon: Icon(icon, color: color ?? colors.textMuted),
       ),
     );
+    final radius = BorderRadius.circular(Radii.card - 2);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 4),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: Material(
-          color: current && _hover ? colors.palette.glassHighlight : (highlighted ? colors.surface2 : colors.surface1),
+          color: current
+              ? colors.accent.withValues(alpha: _hover ? 0.2 : 0.14)
+              : (_hover ? colors.surface1 : Colors.transparent),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(6),
-            side: BorderSide(color: highlighted ? colors.accent : colors.glassBorder),
+            borderRadius: radius,
+            side: BorderSide(color: current ? colors.accent.withValues(alpha: 0.45) : Colors.transparent),
           ),
           child: InkWell(
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: radius,
             onTap: () => player.playQueueTrack(item),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               child: Row(
                 children: [
                   ReorderableDragStartListener(
@@ -121,19 +124,19 @@ class _QueueRowState extends State<_QueueRow> {
                   ),
                   const SizedBox(width: 6),
                   SizedBox(
-                    width: 38,
-                    height: 38,
+                    width: 42,
+                    height: 42,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        CoverImage(path: track.coverArtPath, radius: 6, decodeWidth: 76),
+                        CoverImage(path: track.coverArtPath, radius: Radii.small, decodeWidth: 84),
                         if (current)
                           DecoratedBox(
                             decoration: BoxDecoration(
-                              color: const Color(0xA0000000),
-                              borderRadius: BorderRadius.circular(6),
+                              color: const Color(0x99000000),
+                              borderRadius: BorderRadius.circular(Radii.small),
                             ),
-                            child: const Center(child: EqualizerBars()),
+                            child: const Center(child: EqualizerBars(color: Colors.white)),
                           )
                         else
                           Align(
@@ -141,15 +144,15 @@ class _QueueRowState extends State<_QueueRow> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
                               decoration: const BoxDecoration(
-                                color: Color(0x80000000),
+                                color: Color(0x99000000),
                                 borderRadius: BorderRadius.only(
-                                  topLeft: Radius.circular(6),
-                                  bottomRight: Radius.circular(4),
+                                  topLeft: Radius.circular(Radii.small),
+                                  bottomRight: Radius.circular(6),
                                 ),
                               ),
                               child: Text(
                                 '${item.displayIndex}',
-                                style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: colors.textMuted),
+                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white),
                               ),
                             ),
                           ),
@@ -165,14 +168,18 @@ class _QueueRowState extends State<_QueueRow> {
                           track.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMain),
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: current ? colors.hover : colors.textMain,
+                          ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           track.artist,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: colors.textMuted),
+                          style: TextStyle(fontSize: 11.5, color: colors.textMuted),
                         ),
                       ],
                     ),
@@ -180,7 +187,15 @@ class _QueueRowState extends State<_QueueRow> {
                   const SizedBox(width: 12),
                   QualityTag(tier: track.format.tier, spec: track.format.tagSpec, compact: true),
                   const SizedBox(width: 12),
-                  Text(track.formattedDuration, style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                  Text(
+                    track.formattedDuration,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: colors.textMuted,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   if (widget.showMoveButtons) ...[
                     small(
@@ -440,10 +455,15 @@ class _LyricLineState extends State<_LyricLine> {
                 widget.text,
                 textAlign: widget.centered ? TextAlign.center : TextAlign.start,
                 style: TextStyle(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                  height: 26 / 19,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
+                  height: 27 / 20,
                   color: context.colors.textMain,
+                  // The line being sung glows softly in the accent.
+                  shadows: widget.active
+                      ? [Shadow(color: context.colors.accent.withValues(alpha: 0.6), blurRadius: 18)]
+                      : null,
                 ),
               ),
             ),
@@ -468,7 +488,7 @@ class QueueLyricsPanel extends StatelessWidget {
       builder: (context, _) {
         final count = player.queueItems.length;
         return Padding(
-          padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
+          padding: const EdgeInsets.fromLTRB(30, 28, 30, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -480,7 +500,13 @@ class QueueLyricsPanel extends StatelessWidget {
                       children: [
                         Text(
                           context.tr('Queue'),
-                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: colors.textMain),
+                          style: TextStyle(
+                            fontSize: 34,
+                            height: 1.1,
+                            letterSpacing: -1,
+                            fontWeight: FontWeight.w800,
+                            color: colors.textMain,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Row(
@@ -525,7 +551,7 @@ class QueueLyricsPanel extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             const Expanded(child: QueueList()),
-                            Container(width: 1, color: colors.tagBackground),
+                            Container(width: 1, color: colors.glassBorder),
                             const Expanded(
                               child: Padding(padding: EdgeInsets.fromLTRB(24, 20, 24, 0), child: LyricsView()),
                             ),

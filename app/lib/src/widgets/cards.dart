@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../localization.dart';
+import '../platform.dart';
 import '../theme/app_theme.dart';
 import 'common.dart';
 import 'cover_image.dart';
 import 'quality_tag.dart';
 
-/// Whether tiles are drawn as the desktop's framed cards (fixed size, a badge and a play button) or as the phone's
-/// plain cover-and-caption tiles. [TileGridSliver] decides it from the width and passes it down.
+/// Whether tiles are drawn as the desktop's hover tiles (a cover with a badge and a play button on it) or as the
+/// phone's plain cover-and-caption tiles. [TileGridSliver] decides it from the width and passes it down.
 class _TileStyle extends InheritedWidget {
   const _TileStyle({required this.phone, required super.child});
 
@@ -22,7 +22,7 @@ class _TileStyle extends InheritedWidget {
   bool updateShouldNotify(_TileStyle oldWidget) => phone != oldWidget.phone;
 }
 
-/// An album: cover, title, artist, track count and year, then the format and a play button.
+/// An album: cover (with its format on it), title, artist, track count and year, and a play button.
 class AlbumCard extends StatelessWidget {
   const AlbumCard({super.key, required this.album, required this.onOpen, this.onPlay});
 
@@ -34,36 +34,35 @@ class AlbumCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final purple = colors.palette.purple;
+    final cover = CoverImage(
+      path: album.coverArtPath,
+      radius: Radii.small + 2,
+      placeholderIcon: Icons.album,
+      placeholderColor: purple,
+    );
     if (_TileStyle.phoneOf(context)) {
-      return _PhoneTile(
-        onTap: onOpen,
-        cover: CoverImage(path: album.coverArtPath, radius: 8, placeholderIcon: Icons.album, placeholderColor: purple),
-        title: album.title,
-        subtitle: album.artist,
-      );
+      return _PhoneTile(onTap: onOpen, cover: cover, title: album.title, subtitle: album.artist);
     }
     final details = [
       context.trf('TrackCount', [album.trackCount]),
       if (album.year != null) '${album.year}',
     ].join('  •  ');
-    return MetricCard(
+    return _DesktopTile(
       accent: purple,
       onTap: onOpen,
-      child: _DesktopTile(
-        cover: CoverImage(path: album.coverArtPath, radius: 6, placeholderIcon: Icons.album, placeholderColor: purple),
-        lines: [
-          _line(album.title, 14, FontWeight.w700, colors.textMain),
-          _line(album.artist, 12, FontWeight.w400, colors.textMuted),
-          _line(details, 11, FontWeight.w400, colors.textMuted),
-        ],
-        badge: QualityTag(tier: album.tier, spec: album.tagSpec, compact: true),
-        play: TilePlayButton(color: purple, onPressed: onPlay, tooltip: context.tr('Play')),
-      ),
+      cover: cover,
+      lines: [
+        _line(album.title, 14, FontWeight.w700, colors.textMain),
+        _line(album.artist, 12.5, FontWeight.w500, colors.textMuted),
+        _line(details, 11, FontWeight.w500, colors.textMuted.withValues(alpha: 0.75)),
+      ],
+      badge: QualityTag(tier: album.tier, spec: album.tagSpec, compact: true),
+      play: TilePlayButton(color: purple, onPressed: onPlay, tooltip: context.tr('Play')),
     );
   }
 }
 
-/// An artist: round picture, name, track count, the "ARTIST" label and a play button.
+/// An artist: round picture, name, track count and a play button.
 class ArtistCard extends StatelessWidget {
   const ArtistCard({super.key, required this.artist, required this.onOpen, this.onPlay});
 
@@ -90,20 +89,16 @@ class ArtistCard extends StatelessWidget {
         centered: true,
       );
     }
-    return MetricCard(
+    return _DesktopTile(
       accent: coral,
       onTap: onOpen,
-      child: _DesktopTile(
-        cover: Center(
-          child: SizedBox.square(dimension: _DesktopTile.coverHeight, child: picture),
-        ),
-        lines: [
-          _line(artist.name, 14, FontWeight.w700, colors.textMain),
-          _line(context.trf('TrackCount', [artist.trackCount]), 12, FontWeight.w400, colors.textMuted),
-        ],
-        badge: TagBadge(context.tr('ColArtist'), color: coral),
-        play: TilePlayButton(color: coral, onPressed: onPlay, tooltip: context.tr('Play')),
-      ),
+      circle: true,
+      cover: picture,
+      lines: [
+        _line(artist.name, 14, FontWeight.w700, colors.textMain, center: true),
+        _line(context.trf('TrackCount', [artist.trackCount]), 12.5, FontWeight.w500, colors.textMuted, center: true),
+      ],
+      play: TilePlayButton(color: coral, onPressed: onPlay, tooltip: context.tr('Play')),
     );
   }
 }
@@ -136,7 +131,7 @@ class PlaylistCover extends StatelessWidget {
   }
 }
 
-/// A playlist: its cover collage, name, track count, the format and a play button.
+/// A playlist: its cover collage (with the format on it), name, track count and a play button.
 class PlaylistCard extends StatelessWidget {
   const PlaylistCard({super.key, required this.playlist, required this.covers, required this.onOpen, this.onPlay});
 
@@ -149,83 +144,164 @@ class PlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final lime = colors.palette.lime;
+    final cover = PlaylistCover(covers: covers, radius: Radii.small + 2);
     if (_TileStyle.phoneOf(context)) {
       return _PhoneTile(
         onTap: onOpen,
-        cover: PlaylistCover(covers: covers, radius: 8),
+        cover: cover,
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
       );
     }
-    return MetricCard(
+    return _DesktopTile(
       accent: lime,
       onTap: onOpen,
-      child: _DesktopTile(
-        cover: PlaylistCover(covers: covers),
-        lines: [
-          _line(playlist.name, 14, FontWeight.w700, colors.textMain),
-          _line(context.trf('TrackCount', [playlist.trackCount]), 12, FontWeight.w400, colors.textMuted),
+      cover: cover,
+      lines: [
+        _line(playlist.name, 14, FontWeight.w700, colors.textMain),
+        _line(context.trf('TrackCount', [playlist.trackCount]), 12.5, FontWeight.w500, colors.textMuted),
+      ],
+      badge: playlist.formatBadge.isEmpty
+          ? null
+          : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, compact: true),
+      play: TilePlayButton(
+        color: lime,
+        onPressed: playlist.trackCount > 0 ? onPlay : null,
+        tooltip: context.tr('Play'),
+      ),
+    );
+  }
+}
+
+Widget _line(String text, double size, FontWeight weight, Color color, {bool center = false}) => Text(
+  text,
+  maxLines: 1,
+  overflow: TextOverflow.ellipsis,
+  textAlign: center ? TextAlign.center : TextAlign.start,
+  style: TextStyle(fontSize: size, fontWeight: weight, color: color, letterSpacing: size >= 14 ? -0.1 : 0),
+);
+
+/// A wide screen's tile: a square cover with a soft shadow and the caption lines under it. Under the mouse, or while
+/// the remote's focus is on it or its play button, the tile lifts, its background lights up, the cover's shadow takes
+/// the [accent] and the play button rises onto the cover. On a touch screen the play button is always there.
+class _DesktopTile extends StatefulWidget {
+  const _DesktopTile({
+    required this.accent,
+    required this.onTap,
+    required this.cover,
+    required this.lines,
+    required this.play,
+    this.badge,
+    this.circle = false,
+  });
+
+  /// The space around the cover, inside the tile.
+  static const double padding = 10;
+
+  /// The space between the cover and the caption.
+  static const double captionGap = 12;
+
+  final Color accent;
+  final VoidCallback onTap;
+  final Widget cover;
+  final List<Widget> lines;
+  final Widget play;
+  final Widget? badge;
+  final bool circle;
+
+  @override
+  State<_DesktopTile> createState() => _DesktopTileState();
+}
+
+class _DesktopTileState extends State<_DesktopTile> {
+  bool _hover = false;
+  bool _focus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final active = _hover || _focus;
+    final showPlay = active || AppPlatform.current.isMobile;
+    const duration = Duration(milliseconds: 240);
+    final shape = widget.circle
+        ? const BoxDecoration(shape: BoxShape.circle)
+        : BoxDecoration(borderRadius: BorderRadius.circular(Radii.small + 2));
+    final cover = AspectRatio(
+      aspectRatio: 1,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AnimatedContainer(
+            duration: duration,
+            decoration: shape.copyWith(
+              boxShadow: [
+                BoxShadow(
+                  color: active ? widget.accent.withValues(alpha: 0.38) : colors.palette.shadow,
+                  blurRadius: active ? 26 : 16,
+                  spreadRadius: -6,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: widget.cover,
+          ),
+          if (widget.badge != null) Positioned(left: 8, top: 8, child: widget.badge!),
+          Positioned(
+            right: widget.circle ? 4 : 8,
+            bottom: widget.circle ? 4 : 8,
+            child: AnimatedSlide(
+              offset: showPlay ? Offset.zero : const Offset(0, 0.35),
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              child: AnimatedOpacity(opacity: showPlay ? 1 : 0, duration: duration, child: widget.play),
+            ),
+          ),
         ],
-        badge: playlist.formatBadge.isEmpty
-            ? const SizedBox.shrink()
-            : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, compact: true),
-        play: TilePlayButton(
-          color: lime,
-          onPressed: playlist.trackCount > 0 ? onPlay : null,
-          tooltip: context.tr('Play'),
+      ),
+    );
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (focused) => setState(() => _focus = focused),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: AnimatedContainer(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.translationValues(0, active ? -4 : 0, 0),
+          decoration: BoxDecoration(
+            color: active ? colors.surface1 : colors.surface1.withValues(alpha: 0),
+            borderRadius: BorderRadius.circular(Radii.card + 2),
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(Radii.card + 2),
+              onTap: widget.onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(_DesktopTile.padding),
+                child: Column(
+                  crossAxisAlignment: widget.circle ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+                  children: [
+                    cover,
+                    const SizedBox(height: _DesktopTile.captionGap),
+                    for (var i = 0; i < widget.lines.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 2),
+                      SizedBox(width: double.infinity, child: widget.lines[i]),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-Widget _line(String text, double size, FontWeight weight, Color color) => Text(
-  text,
-  maxLines: 1,
-  overflow: TextOverflow.ellipsis,
-  style: TextStyle(fontSize: size, fontWeight: weight, color: color),
-);
-
-/// The inside of a desktop tile: a 150 px cover, the caption lines, and a row with a badge and the play button.
-class _DesktopTile extends StatelessWidget {
-  const _DesktopTile({required this.cover, required this.lines, required this.badge, required this.play});
-
-  static const double coverHeight = 150;
-
-  final Widget cover;
-  final List<Widget> lines;
-  final Widget badge;
-  final Widget play;
-
-  @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      SizedBox(height: coverHeight, child: cover),
-      const SizedBox(height: 10),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var i = 0; i < lines.length; i++) ...[if (i > 0) const SizedBox(height: 2), lines[i]],
-          ],
-        ),
-      ),
-      const SizedBox(height: 8),
-      Row(
-        children: [
-          Flexible(
-            child: Align(alignment: Alignment.centerLeft, child: badge),
-          ),
-          const SizedBox(width: 8),
-          play,
-        ],
-      ),
-    ],
-  );
-}
-
-/// A phone tile: a square cover (or round picture) and two lines below it.
+/// A phone tile: a square cover (or round picture) with a soft shadow, and two lines below it.
 class _PhoneTile extends StatelessWidget {
   const _PhoneTile({
     required this.onTap,
@@ -249,7 +325,7 @@ class _PhoneTile extends StatelessWidget {
       type: MaterialType.transparency,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(Radii.card),
         child: Padding(
           padding: const EdgeInsets.all(4),
           child: Column(
@@ -258,7 +334,24 @@ class _PhoneTile extends StatelessWidget {
               Expanded(
                 child: Align(
                   alignment: Alignment.topCenter,
-                  child: AspectRatio(aspectRatio: 1, child: cover),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: centered ? BoxShape.circle : BoxShape.rectangle,
+                        borderRadius: centered ? null : BorderRadius.circular(Radii.small + 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.palette.shadow,
+                            blurRadius: 14,
+                            spreadRadius: -6,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: cover,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 8),
@@ -269,7 +362,12 @@ class _PhoneTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: centered ? TextAlign.center : TextAlign.start,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.1,
+                    color: colors.textMain,
+                  ),
                 ),
               ),
               const SizedBox(height: 1),
@@ -300,8 +398,8 @@ enum TileKind {
   twoLines,
 }
 
-/// Tiles as a sliver. On a wide screen they are fixed-size cards (210 px wide, 18 px apart, as many per row as fit,
-/// left-aligned); on a phone they fill the width in two or three columns.
+/// Tiles as a sliver. On a wide screen as many columns of at least 176 px as fit, stretched to fill the row; on a
+/// phone two or three columns.
 class TileGridSliver extends StatelessWidget {
   const TileGridSliver({
     super.key,
@@ -311,8 +409,8 @@ class TileGridSliver extends StatelessWidget {
     this.horizontalPadding,
   });
 
-  static const double _tileWidth = 210;
-  static const double _gap = 18;
+  static const double _minTileWidth = 176;
+  static const double _gap = 14;
 
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
@@ -338,12 +436,12 @@ class TileGridSliver extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = _lineHeight(context, 14, FontWeight.w700);
-    final second = _lineHeight(context, 12, FontWeight.w400);
-    final third = _lineHeight(context, 11, FontWeight.w400);
+    final second = _lineHeight(context, 12.5, FontWeight.w500);
+    final third = _lineHeight(context, 11, FontWeight.w500);
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final phone = PhoneChrome.isPhone(context);
-        final padding = horizontalPadding ?? (phone ? 8.0 : 28.0);
+        final padding = horizontalPadding ?? (phone ? 8.0 : 20.0);
         final available = constraints.crossAxisExtent - 2 * padding;
         final SliverGridDelegate delegate;
         if (phone) {
@@ -358,13 +456,20 @@ class TileGridSliver extends StatelessWidget {
             mainAxisSpacing: 12,
           );
         } else {
-          // The caption at the user's font size; at the default size the tiles come out 290 and 270 px tall.
+          final columns = ((available + _gap) / (_minTileWidth + _gap)).floor().clamp(1, 1000);
+          final tileWidth = (available - _gap * (columns - 1)) / columns;
+          // The square cover, then the caption at the user's font size.
           final lines = kind == TileKind.album ? title + second + third + 4 : title + second + 2;
-          final height = 16 + _DesktopTile.coverHeight + 10 + lines + 8 + 32 + 16 + 2 + 1;
-          delegate = _FixedTileDelegate(width: _tileWidth, height: height, gap: _gap);
+          const inset = 2 * _DesktopTile.padding;
+          delegate = SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            mainAxisExtent: inset + (tileWidth - inset) + _DesktopTile.captionGap + lines + 2,
+            crossAxisSpacing: _gap,
+            mainAxisSpacing: _gap,
+          );
         }
         return SliverPadding(
-          padding: EdgeInsets.fromLTRB(padding, phone ? 4 : 6, padding, 4),
+          padding: EdgeInsets.fromLTRB(padding, 4, padding, 4),
           sliver: SliverGrid(
             gridDelegate: delegate,
             delegate: SliverChildBuilderDelegate(
@@ -376,30 +481,4 @@ class TileGridSliver extends StatelessWidget {
       },
     );
   }
-}
-
-/// Fixed-size tiles in rows, left-aligned, like a wrap panel.
-class _FixedTileDelegate extends SliverGridDelegate {
-  const _FixedTileDelegate({required this.width, required this.height, required this.gap});
-
-  final double width;
-  final double height;
-  final double gap;
-
-  @override
-  SliverGridLayout getLayout(SliverConstraints constraints) {
-    final columns = ((constraints.crossAxisExtent + gap) / (width + gap)).floor().clamp(1, 1000);
-    return SliverGridRegularTileLayout(
-      crossAxisCount: columns,
-      mainAxisStride: height + gap,
-      crossAxisStride: width + gap,
-      childMainAxisExtent: height,
-      childCrossAxisExtent: width,
-      reverseCrossAxis: false,
-    );
-  }
-
-  @override
-  bool shouldRelayout(_FixedTileDelegate oldDelegate) =>
-      width != oldDelegate.width || height != oldDelegate.height || gap != oldDelegate.gap;
 }

@@ -30,7 +30,7 @@ class SearchResults extends StatelessWidget {
           builder: (context, constraints) {
             final narrow = constraints.maxWidth < 600;
             final sideBySide = constraints.maxWidth >= _sideBySideWidth;
-            final pad = EdgeInsets.symmetric(horizontal: narrow ? 16 : 28);
+            final pad = EdgeInsets.symmetric(horizontal: narrow ? 16 : 30);
             final best = search.bestMatch;
             return CustomScrollView(
               slivers: [
@@ -52,7 +52,12 @@ class SearchResults extends StatelessWidget {
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: colors.textMain),
+                          style: TextStyle(
+                            fontSize: 30,
+                            letterSpacing: -0.8,
+                            fontWeight: FontWeight.w800,
+                            color: colors.textMain,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(context.tr('SearchSubtitle'), style: TextStyle(fontSize: 13, color: colors.textMuted)),
@@ -111,9 +116,14 @@ class SearchResults extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.only(bottom: 14)),
-                                  // The table is capped at 360 px; it scrolls inside.
+                                  // The table is capped at 380 px; it scrolls inside.
                                   SizedBox(
-                                    height: (36.0 + 46 * search.matchingTracks.length + 2).clamp(0, 360),
+                                    height:
+                                        (TrackSliver.tableHeaderHeight +
+                                                6 +
+                                                TrackSliver.tableRowHeight * search.matchingTracks.length +
+                                                2)
+                                            .clamp(0, 380),
                                     child: CustomScrollView(
                                       slivers: [
                                         TrackSliver(
@@ -193,7 +203,7 @@ class SearchResults extends StatelessWidget {
                     },
                   ),
                 ],
-                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                const PageEndSpace(),
               ],
             );
           },
@@ -219,7 +229,7 @@ class _BestMatchCard extends StatelessWidget {
       BestMatchKind.track => palette.cyan,
     };
     return MetricCard(
-      accent: colors.accent,
+      accent: typeColor,
       padding: 20,
       onTap: match.canOpen ? match.open : match.play,
       child: Column(
@@ -227,8 +237,9 @@ class _BestMatchCard extends StatelessWidget {
         children: [
           CoverImage(
             path: match.coverPath,
-            size: 110,
-            radius: 8,
+            size: 116,
+            radius: Radii.card,
+            circle: match.kind == BestMatchKind.artist,
             placeholderColor: typeColor,
             placeholderIcon: switch (match.kind) {
               BestMatchKind.artist => Icons.person,
@@ -243,7 +254,7 @@ class _BestMatchCard extends StatelessWidget {
             match.title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: colors.textMain),
+            style: TextStyle(fontSize: 24, letterSpacing: -0.6, fontWeight: FontWeight.w800, color: colors.textMain),
           ),
           const SizedBox(height: 4),
           Text(
@@ -260,7 +271,7 @@ class _BestMatchCard extends StatelessWidget {
             style: TextStyle(fontSize: 11, color: colors.textMuted),
           ),
           const SizedBox(height: 18),
-          TilePlayButton(color: colors.accent, onPressed: match.play, tooltip: context.tr('Play'), size: 36),
+          TilePlayButton(color: typeColor, onPressed: match.play, tooltip: context.tr('Play'), size: 48),
         ],
       ),
     );

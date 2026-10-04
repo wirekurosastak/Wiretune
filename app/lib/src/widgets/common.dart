@@ -24,7 +24,7 @@ class PageHeader extends StatelessWidget {
     final colors = context.colors;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     return Padding(
-      padding: EdgeInsets.fromLTRB(narrow ? 16 : 28, narrow ? 12 : 24, narrow ? 16 : 28, 20),
+      padding: EdgeInsets.fromLTRB(narrow ? 16 : 30, narrow ? 14 : 28, narrow ? 16 : 30, 20),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -44,16 +44,22 @@ class PageHeader extends StatelessWidget {
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: colors.textMain),
+                      style: TextStyle(
+                        fontSize: 34,
+                        height: 1.1,
+                        letterSpacing: -1.0,
+                        fontWeight: FontWeight.w800,
+                        color: colors.textMain,
+                      ),
                     ),
                     if (subtitle != null && subtitle!.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           subtitle!,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13, color: colors.textMuted),
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
                         ),
                       ),
                   ],
@@ -68,7 +74,7 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-/// The accent-filled "Play" button and its outlined "Shuffle" partner.
+/// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner.
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({
     super.key,
@@ -85,50 +91,41 @@ class PlayShuffleButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (PhoneChrome.isPhone(context)) {
-      // The phone's two full-width buttons.
-      const size = Size(0, 46);
+    final colors = context.colors;
+    final phone = PhoneChrome.isPhone(context);
+    // The phone's two full-width buttons are a little taller.
+    final size = Size(0, phone ? 48 : 46);
+    const text = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.1);
+    const padding = EdgeInsets.symmetric(horizontal: 26);
+    final play = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: onPlay == null ? const [] : colors.accentGlow(),
+      ),
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(minimumSize: size, padding: padding, textStyle: text),
+        onPressed: onPlay,
+        icon: const Icon(Icons.play_arrow_rounded, size: 22),
+        label: Text(playLabel),
+      ),
+    );
+    final shuffle = OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(minimumSize: size, padding: padding, textStyle: text),
+      onPressed: onShuffle,
+      icon: Icon(Icons.shuffle_rounded, size: 20, color: onShuffle == null ? null : colors.accent),
+      label: Text(shuffleLabel),
+    );
+    if (phone) {
       return Row(
         children: [
-          Expanded(
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(minimumSize: size),
-              onPressed: onPlay,
-              icon: const Icon(Icons.play_arrow_rounded, size: 20),
-              label: Text(playLabel),
-            ),
-          ),
+          Expanded(child: play),
           const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(minimumSize: size),
-              onPressed: onShuffle,
-              icon: const Icon(Icons.shuffle_rounded, size: 20),
-              label: Text(shuffleLabel),
-            ),
-          ),
+          Expanded(child: shuffle),
         ],
       );
     }
-    return _wide(context);
+    return Wrap(spacing: 12, runSpacing: 8, children: [play, shuffle]);
   }
-
-  Widget _wide(BuildContext context) => Wrap(
-    spacing: 12,
-    runSpacing: 8,
-    children: [
-      FilledButton.icon(
-        onPressed: onPlay,
-        icon: const Icon(Icons.play_arrow_rounded, size: 18),
-        label: Text(playLabel),
-      ),
-      OutlinedButton.icon(
-        onPressed: onShuffle,
-        icon: Icon(Icons.shuffle_rounded, size: 18, color: context.colors.accent),
-        label: Text(shuffleLabel),
-      ),
-    ],
-  );
 }
 
 /// A message in place of a list that has nothing to show.
@@ -158,38 +155,60 @@ class EmptyState extends StatelessWidget {
     // Scrolls when a short screen (a phone held sideways, a large font) has less room than the message needs.
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32).copyWith(bottom: 32 + MediaQuery.paddingOf(context).bottom),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // The icon in an orb of the accent: a soft halo, a glass disc and a thin ring.
               Container(
-                width: 84,
-                height: 84,
-                decoration: BoxDecoration(color: colors.surface1, shape: BoxShape.circle),
-                child: Icon(icon, size: 40, color: colors.accent),
+                width: 112,
+                height: 112,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [colors.accent.withValues(alpha: 0.28), colors.accent.withValues(alpha: 0)],
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Container(
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: colors.palette.panel,
+                    border: Border.all(color: colors.accent.withValues(alpha: 0.45)),
+                    boxShadow: colors.accentGlow(0.8),
+                  ),
+                  child: Icon(icon, size: 34, color: colors.accent),
+                ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: colors.textMain),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.4,
+                  color: colors.textMain,
+                ),
               ),
               if (hint != null) ...[
                 const SizedBox(height: 8),
                 Text(
                   hint!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: colors.textMuted),
+                  style: TextStyle(fontSize: 13.5, height: 1.45, color: colors.textMuted),
                 ),
               ],
               if (actionLabel != null && onAction != null) ...[
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 FilledButton(onPressed: onAction, child: Text(actionLabel!)),
               ],
               if (actions.isNotEmpty) ...[
-                const SizedBox(height: 18),
+                const SizedBox(height: 22),
                 Wrap(spacing: 12, runSpacing: 10, alignment: WrapAlignment.center, children: actions),
               ],
             ],
@@ -200,7 +219,7 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-/// A rounded card on the glass surface.
+/// A rounded card of glass: a faint sheen from its top-left corner and a hairline edge.
 class GlassCard extends StatelessWidget {
   const GlassCard({super.key, required this.child, this.padding = const EdgeInsets.all(24), this.hoverColor});
 
@@ -213,20 +232,31 @@ class GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final card = _HoverBorder(
+    final radius = BorderRadius.circular(Radii.card + 4);
+    return _HoverBorder(
       hoverColor: hoverColor,
-      builder: (border) => Material(
-        // A Material (not a decorated box), so the ink of the tiles and buttons inside is painted on the card.
-        color: colors.surface1,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-          side: BorderSide(color: border),
+      builder: (border) => DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [colors.surface2, colors.surface1, colors.palette.glassBackground],
+            stops: const [0, 0.35, 1],
+          ),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(padding: padding, child: child),
+        // A Material, so the ink of the tiles and buttons inside is painted on the card.
+        child: Material(
+          type: MaterialType.transparency,
+          shape: RoundedRectangleBorder(
+            borderRadius: radius,
+            side: BorderSide(color: border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
-    return card;
   }
 }
 
@@ -242,9 +272,23 @@ class SectionLabel extends StatelessWidget {
     padding: padding,
     child: Text(
       text.toUpperCase(),
-      style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w900, color: context.colors.textMuted),
+      style: TextStyle(
+        fontSize: 11.5,
+        letterSpacing: 1.5,
+        fontWeight: FontWeight.w800,
+        color: context.colors.textMuted,
+      ),
     ),
   );
+}
+
+/// The space at the end of a page: a little air, and the room the phone's floating bars cover.
+class PageEndSpace extends StatelessWidget {
+  const PageEndSpace({super.key});
+
+  @override
+  Widget build(BuildContext context) =>
+      SliverToBoxAdapter(child: SizedBox(height: 28 + MediaQuery.paddingOf(context).bottom));
 }
 
 /// A text that acts as a link (artist and album names in lists).
@@ -267,7 +311,7 @@ class LinkText extends StatelessWidget {
   }
 }
 
-/// A small label on the tag background: "ARTIST", "ALBUM", "TRACK", a counter.
+/// A small pill tinted with its colour: "ARTIST", "ALBUM", "TRACK", a counter.
 class TagBadge extends StatelessWidget {
   const TagBadge(this.text, {super.key, required this.color, this.fontSize = 10});
 
@@ -277,17 +321,21 @@ class TagBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-    decoration: BoxDecoration(color: context.colors.tagBackground, borderRadius: BorderRadius.circular(4)),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
+    ),
     child: Text(
       text,
       maxLines: 1,
-      style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w900, color: color),
+      style: TextStyle(fontSize: fontSize, letterSpacing: 0.8, height: 1.4, fontWeight: FontWeight.w800, color: color),
     ),
   );
 }
 
-/// An album, artist or playlist tile: a framed card that rises a little and takes the [accent] border under the mouse.
+/// A framed glass card that rises a little, takes the [accent] edge and glows in it under the mouse.
 class MetricCard extends StatefulWidget {
   const MetricCard({super.key, required this.child, required this.accent, required this.onTap, this.padding = 16});
 
@@ -312,21 +360,18 @@ class _MetricCardState extends State<MetricCard> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOutCubic,
-        transformAlignment: Alignment.center,
-        transform: _hover
-            ? (Matrix4.translationValues(0, -5, 0)..multiply(Matrix4.diagonal3Values(1.035, 1.035, 1)))
-            : Matrix4.identity(),
+        transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
         decoration: BoxDecoration(
-          color: colors.surface1,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _hover ? widget.accent : colors.glassBorder),
+          color: _hover ? colors.surface2 : colors.surface1,
+          borderRadius: BorderRadius.circular(Radii.card + 2),
+          border: Border.all(color: _hover ? widget.accent.withValues(alpha: 0.7) : colors.glassBorder),
           boxShadow: _hover
               ? [
                   BoxShadow(
-                    color: widget.accent.withValues(alpha: 0.25),
-                    blurRadius: 40,
+                    color: widget.accent.withValues(alpha: 0.28),
+                    blurRadius: 36,
                     spreadRadius: -10,
-                    offset: const Offset(0, 20),
+                    offset: const Offset(0, 16),
                   ),
                 ]
               : const [],
@@ -334,7 +379,7 @@ class _MetricCardState extends State<MetricCard> {
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(Radii.card + 2),
             onTap: widget.onTap,
             child: Padding(padding: EdgeInsets.all(widget.padding), child: widget.child),
           ),
@@ -370,14 +415,14 @@ class _HoverBorderState extends State<_HoverBorder> {
   }
 }
 
-/// The square, accent-filled play button of a tile (32 px, 4 px corners).
+/// The round play button of a tile: filled with a gradient of [color], over a glow of it.
 class TilePlayButton extends StatelessWidget {
   const TilePlayButton({
     super.key,
     required this.color,
     required this.onPressed,
     required this.tooltip,
-    this.size = 32,
+    this.size = 44,
   });
 
   final Color color;
@@ -386,22 +431,51 @@ class TilePlayButton extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: SizedBox(
-      width: size,
-      height: size,
-      child: Material(
-        color: onPressed == null ? context.colors.surface2 : color,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: onPressed,
-          child: Icon(Icons.play_arrow_rounded, size: size * 0.55, color: context.colors.onAccent),
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: enabled ? null : colors.palette.modal,
+          gradient: enabled
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [colors.palette.hoverOf(color), color],
+                )
+              : null,
+          boxShadow: [
+            BoxShadow(
+              color: enabled ? color.withValues(alpha: 0.5) : colors.palette.shadow,
+              blurRadius: 16,
+              spreadRadius: -2,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: SizedBox.square(
+              dimension: size,
+              child: Icon(
+                Icons.play_arrow_rounded,
+                size: size * 0.58,
+                color: enabled ? colors.onAccent : colors.textMuted,
+              ),
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Marks the phone layout, whose pages draw the phone's headers and full-width buttons.
@@ -445,7 +519,12 @@ class _PhonePageHeader extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: colors.textMain),
+                        style: TextStyle(
+                          fontSize: 30,
+                          letterSpacing: -0.8,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textMain,
+                        ),
                       ),
                       if (subtitle != null && subtitle!.isNotEmpty)
                         Text(

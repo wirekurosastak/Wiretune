@@ -105,7 +105,10 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
   the tab history for the back button and Escape alike; it needs no platform API, so it's unit-tested.
 - **Big libraries** stay smooth: track lists are slivers, and covers are decoded at the size they're shown, into a 120
   MB image cache (160 MB on a TV). The token for server covers travels in a header, never in the URL.
-- **Theme**: an accent and a window gradient per section (`theme/palette.dart`), built once per section.
+- **Theme**: an accent and a window gradient per section (`theme/palette.dart`), built once per section. Over the
+  gradient the backdrop washes in the colours of the cover that's playing (`widgets/ambient.dart`): the cover is
+  decoded at 64 px and blurred once into a 96 px bitmap, so nothing is blurred per frame, and it only turns while
+  music plays (never on a TV, nor with the system's reduced motion).
 - **Lyrics** load only while they're on screen: the file's own (or the server's `/api/lyrics`), then LRCLIB if
   allowed, cached per track. A failed lookup isn't cached, so the panel can tell "couldn't reach" from "no lyrics".
 

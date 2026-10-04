@@ -4,6 +4,7 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
+import '../widgets/ambient.dart';
 import '../widgets/common.dart';
 import '../widgets/nav_visualizer.dart';
 
@@ -60,32 +61,51 @@ class _LoginPageState extends State<LoginPage> {
     final colors = context.colors;
     return ListenableBuilder(
       listenable: Listenable.merge([server, vm.player]),
-      builder: (context, _) => Container(
-        decoration: BoxDecoration(color: colors.palette.background, gradient: colors.windowGradient),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
-                child: GlassCard(
-                  hoverColor: colors.accent,
-                  padding: const EdgeInsets.fromLTRB(32, 28, 32, 28),
-                  child: AutofillGroup(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _brand(context),
-                        const SizedBox(height: 20),
-                        if (server.isLoggedIn) ..._signedIn(context) else ..._signedOut(context),
-                      ],
+      builder: (context, _) => Material(
+        color: colors.palette.background,
+        child: Stack(
+          children: [
+            const Positioned.fill(child: AmbientBackdrop()),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.palette.panel,
+                        borderRadius: BorderRadius.circular(Radii.card + 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colors.palette.shadow,
+                            blurRadius: 60,
+                            spreadRadius: -10,
+                            offset: const Offset(0, 30),
+                          ),
+                        ],
+                      ),
+                      child: GlassCard(
+                        hoverColor: colors.accent,
+                        padding: const EdgeInsets.fromLTRB(32, 28, 32, 30),
+                        child: AutofillGroup(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _brand(context),
+                              const SizedBox(height: 24),
+                              if (server.isLoggedIn) ..._signedIn(context) else ..._signedOut(context),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -109,15 +129,22 @@ class _LoginPageState extends State<LoginPage> {
                 width: 52,
                 height: 38,
               ),
-              const SizedBox(height: 8),
-              Text(
-                'WIRETUNE',
-                style: TextStyle(fontSize: 26, letterSpacing: 3, fontWeight: FontWeight.w900, color: colors.textMain),
+              const SizedBox(height: 12),
+              ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (rect) => LinearGradient(
+                  colors: [colors.textMain, colors.hover, colors.accent],
+                  stops: const [0.3, 0.75, 1],
+                ).createShader(rect),
+                child: const Text(
+                  'WIRETUNE',
+                  style: TextStyle(fontSize: 30, letterSpacing: 5, fontWeight: FontWeight.w900),
+                ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 'STREAMER & PLAYER',
-                style: TextStyle(fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: colors.accent),
+                style: TextStyle(fontSize: 10, letterSpacing: 2.4, fontWeight: FontWeight.w800, color: colors.accent),
               ),
             ],
           ),
@@ -142,7 +169,7 @@ class _LoginPageState extends State<LoginPage> {
     return [
       Container(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: colors.surface2, borderRadius: BorderRadius.circular(10)),
+        decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.card)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -206,8 +233,8 @@ class _LoginPageState extends State<LoginPage> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: _amber.withValues(alpha: 0x28 / 255),
-        border: Border.all(color: _amber),
-        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _amber.withValues(alpha: 0.6)),
+        borderRadius: BorderRadius.circular(Radii.card - 2),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -224,7 +251,7 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           Expanded(
             child: SizedBox(
-              height: 40,
+              height: 46,
               child: TextField(
                 controller: _url,
                 keyboardType: TextInputType.url,
@@ -239,8 +266,8 @@ class _LoginPageState extends State<LoginPage> {
             message: context.tr('TipCheckConnection'),
             child: OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 40),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                minimumSize: const Size(0, 46),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
               onPressed: server.isConnecting ? null : _connect,
               icon: Icon(Icons.dns_outlined, size: 16, color: colors.palette.cyan),
@@ -311,7 +338,7 @@ class _LoginPageState extends State<LoginPage> {
       ],
       const SizedBox(height: 8),
       FilledButton.icon(
-        style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+        style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
         onPressed: server.isAuthenticating ? null : _submit,
         icon: Icon(setup ? Icons.admin_panel_settings_outlined : Icons.login_rounded, size: 18),
         label: Text(context.tr(setup ? 'CreateAdminAndSignIn' : 'SignIn')),
@@ -322,8 +349,8 @@ class _LoginPageState extends State<LoginPage> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: const Color(0x28FF003C),
-            border: Border.all(color: colors.danger),
-            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: colors.danger.withValues(alpha: 0.6)),
+            borderRadius: BorderRadius.circular(Radii.card - 2),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -377,7 +404,7 @@ class _LoginPageState extends State<LoginPage> {
     String? autofill,
     VoidCallback? onSubmitted,
   }) => SizedBox(
-    height: 40,
+    height: 46,
     child: TextField(
       controller: controller,
       obscureText: obscure,

@@ -15,6 +15,7 @@ import '../pages/playlists_page.dart';
 import '../pages/queue_panel.dart';
 import '../pages/search_page.dart';
 import '../pages/section_page.dart';
+import '../widgets/ambient.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
@@ -22,9 +23,13 @@ import '../widgets/quality_tag.dart';
 import '../widgets/spectrum_visualizer.dart';
 
 /// The desktop, tablet and TV layout: the header (logo, search, the mode pills, account, language, theme and, without a
-/// system title bar, the window buttons), the sidebar, the page, the player bar and the status line.
+/// system title bar, the window buttons), then floating panels over the ambient backdrop: the sidebar, the page and the
+/// player bar, with the status line under them.
 class WideLayout extends StatelessWidget {
   const WideLayout({super.key});
+
+  /// The space between the floating panels and around them.
+  static const double gap = 10;
 
   @override
   Widget build(BuildContext context) {
@@ -36,26 +41,28 @@ class WideLayout extends StatelessWidget {
         listenable: vm,
         builder: (context, _) => Stack(
           children: [
-            Positioned.fill(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 450),
-                decoration: BoxDecoration(gradient: colors.windowGradient),
-              ),
-            ),
+            const Positioned.fill(child: AmbientBackdrop()),
             Column(
               children: [
                 const _Header(),
                 if (vm.isServerOfflineBannerVisible) const _OfflineBanner(),
                 Expanded(
-                  child: Row(
-                    children: [
-                      const _Sidebar(),
-                      Expanded(
-                        child: FocusTraversalGroup(child: _Content(vm: vm)),
-                      ),
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: gap),
+                    child: Row(
+                      children: [
+                        const _Sidebar(),
+                        const SizedBox(width: gap),
+                        Expanded(
+                          child: _Panel(
+                            child: FocusTraversalGroup(child: _Content(vm: vm)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+                const SizedBox(height: gap),
                 const _PlayerBar(),
                 const _Footer(),
               ],
@@ -65,6 +72,27 @@ class WideLayout extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A floating panel: rounded, translucent over the backdrop, with a hairline edge; what scrolls inside is clipped to it.
+class _Panel extends StatelessWidget {
+  const _Panel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final radius = BorderRadius.circular(Radii.panel);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.palette.panel,
+        borderRadius: radius,
+        border: Border.all(color: colors.glassBorder),
+      ),
+      child: ClipRRect(borderRadius: radius, child: child),
     );
   }
 }
@@ -93,8 +121,8 @@ class _Content extends StatelessWidget {
         transitionBuilder: (child, animation) => FadeTransition(
           opacity: animation,
           child: SlideTransition(
-            position: Tween(begin: const Offset(0.015, 0), end: Offset.zero).animate(animation),
-            child: child,
+            position: Tween(begin: const Offset(0, 0.012), end: Offset.zero).animate(animation),
+            child: ScaleTransition(scale: Tween(begin: 0.99, end: 1.0).animate(animation), child: child),
           ),
         ),
         child: page,
@@ -115,7 +143,7 @@ class _Header extends StatelessWidget {
     final compact = MediaQuery.sizeOf(context).width < MainViewModel.compactLayoutWidth;
     final frameless = AppPlatform.current.hasCustomWindowFrame;
     final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.fromLTRB(22, 0, 14, 0),
       child: Row(
         children: [
           Row(
@@ -134,26 +162,29 @@ class _Header extends StatelessWidget {
                 ),
               ),
               if (!compact) ...[
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'WIRETUNE',
-                      style: TextStyle(
-                        fontSize: 18,
-                        letterSpacing: 2,
-                        fontWeight: FontWeight.w900,
-                        color: colors.textMain,
+                    // The wordmark fades into the section's colour towards its end.
+                    ShaderMask(
+                      blendMode: BlendMode.srcIn,
+                      shaderCallback: (rect) => LinearGradient(
+                        colors: [colors.textMain, colors.textMain, colors.hover],
+                        stops: const [0, 0.45, 1],
+                      ).createShader(rect),
+                      child: const Text(
+                        'WIRETUNE',
+                        style: TextStyle(fontSize: 17, letterSpacing: 3.2, fontWeight: FontWeight.w900, height: 1.1),
                       ),
                     ),
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 350),
                       style: TextStyle(
-                        fontSize: 9,
-                        letterSpacing: 1.2,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 8.5,
+                        letterSpacing: 1.9,
+                        fontWeight: FontWeight.w800,
                         color: colors.accent,
                       ),
                       child: const Text('STREAMER & PLAYER'),
@@ -166,16 +197,12 @@ class _Header extends StatelessWidget {
           // The search box sits in the middle of the room the logo and the pills leave, and shrinks when it is short.
           const Expanded(child: Center(child: _SearchField())),
           _HeaderPills(compact: compact),
-          if (frameless) ...[const SizedBox(width: 8), const _WindowButtons()],
+          if (frameless) ...[const SizedBox(width: 10), const _WindowButtons()],
         ],
       ),
     );
-    return Container(
-      height: 70,
-      decoration: BoxDecoration(
-        color: colors.surface1,
-        border: Border(bottom: BorderSide(color: colors.glassBorder)),
-      ),
+    return SizedBox(
+      height: 66,
       // Without a system title bar the header is the title bar: dragging it moves the window, a double click
       // maximizes or restores it. The empty parts of the header reach the drag area behind the controls.
       child: frameless
@@ -200,11 +227,19 @@ class _SearchField extends StatefulWidget {
 
 class _SearchFieldState extends State<_SearchField> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _focus = FocusNode();
   bool _hover = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focus.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -219,29 +254,39 @@ class _SearchFieldState extends State<_SearchField> {
       );
     }
     final width = MediaQuery.sizeOf(context).width;
+    final focused = _focus.hasFocus;
+    final radius = BorderRadius.circular(999);
     OutlineInputBorder border(Color color, double thickness) => OutlineInputBorder(
-      borderRadius: BorderRadius.circular(6),
+      borderRadius: radius,
       borderSide: BorderSide(color: color, width: thickness),
     );
     return MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: width < 900 ? 280 : 380, minHeight: 38, maxHeight: 38),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        constraints: BoxConstraints(
+          maxWidth: (width < 900 ? 280 : 420) + (focused ? 40 : 0),
+          minHeight: 40,
+          maxHeight: 40,
+        ),
+        decoration: BoxDecoration(borderRadius: radius, boxShadow: focused ? colors.accentGlow(0.8) : const []),
         child: TextField(
           controller: _controller,
+          focusNode: _focus,
           onChanged: (text) => vm.searchQuery = text,
           textInputAction: TextInputAction.search,
           style: TextStyle(fontSize: 14, color: colors.textMain),
           decoration: InputDecoration(
             hintText: context.tr('SearchPlaceholder'),
             filled: true,
-            fillColor: colors.surface2,
+            fillColor: focused ? colors.palette.modal : (_hover ? colors.surface2 : colors.surface1),
             prefixIcon: Padding(
-              padding: const EdgeInsets.only(left: 14, right: 8),
-              child: Icon(Icons.search_rounded, size: 18, color: colors.textMuted),
+              padding: const EdgeInsets.only(left: 16, right: 8),
+              child: Icon(Icons.search_rounded, size: 19, color: focused ? colors.accent : colors.textMuted),
             ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 40),
+            prefixIconConstraints: const BoxConstraints(minWidth: 42),
             suffixIcon: vm.isSearchActive
                 ? IconButton(
                     tooltip: context.tr('TipClearSearch'),
@@ -252,7 +297,7 @@ class _SearchFieldState extends State<_SearchField> {
                 : null,
             contentPadding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
             border: border(colors.glassBorder, 1),
-            enabledBorder: border(_hover ? colors.accent : colors.glassBorder, 1),
+            enabledBorder: border(_hover ? colors.palette.glassHighlight : colors.glassBorder, 1),
             focusedBorder: border(colors.accent, 1.5),
           ),
         ),
@@ -261,7 +306,7 @@ class _SearchFieldState extends State<_SearchField> {
   }
 }
 
-/// A header pill: 30 px high, 4 px corners, on Surface2; an active mode is tinted with its colour.
+/// A header pill: 32 px high and fully rounded, on the glass; an active mode is tinted with its colour and glows.
 class _Pill extends StatelessWidget {
   const _Pill({required this.child, required this.onPressed, required this.tooltip, this.activeColor});
 
@@ -278,19 +323,23 @@ class _Pill extends StatelessWidget {
     final active = activeColor;
     return Tooltip(
       message: tooltip,
-      child: SizedBox(
-        height: 30,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        height: 32,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: active == null
+              ? const []
+              : [BoxShadow(color: active.withValues(alpha: 0.35), blurRadius: 14, spreadRadius: -3)],
+        ),
         child: Material(
-          color: active != null ? active.withValues(alpha: 0x25 / 255) : colors.surface2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
-            side: BorderSide(color: active ?? colors.glassBorder),
-          ),
+          color: active != null ? active.withValues(alpha: 0.16) : colors.surface1,
+          shape: StadiumBorder(side: BorderSide(color: active?.withValues(alpha: 0.7) ?? colors.glassBorder)),
           child: InkWell(
-            borderRadius: BorderRadius.circular(4),
+            customBorder: const StadiumBorder(),
             onTap: onPressed,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Center(child: child),
             ),
           ),
@@ -323,7 +372,12 @@ class _HeaderPills extends StatelessWidget {
               if (on) ...[_PulsingDot(color: color, size: 7), const SizedBox(width: 7)],
               Text(
                 label,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: on ? color : colors.textMuted),
+                style: TextStyle(
+                  fontSize: 10.5,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w800,
+                  color: on ? color : colors.textMuted,
+                ),
               ),
             ],
           ),
@@ -342,7 +396,7 @@ class _HeaderPills extends StatelessWidget {
                 player.toggleBitperfect,
                 'TipBitPerfect',
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               modePill(
                 'EXCLUSIVE',
                 player.isExclusiveMode,
@@ -350,7 +404,7 @@ class _HeaderPills extends StatelessWidget {
                 player.toggleExclusiveMode,
                 'TipExclusive',
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
             ] else
               const SizedBox(width: 16),
             _Pill(
@@ -360,19 +414,19 @@ class _HeaderPills extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    vm.isUserLoggedIn ? Icons.account_circle_outlined : Icons.key_outlined,
-                    size: 16,
+                    vm.isUserLoggedIn ? Icons.account_circle_rounded : Icons.key_rounded,
+                    size: 17,
                     color: vm.isUserLoggedIn ? colors.palette.cyan : colors.textMuted,
                   ),
                   const SizedBox(width: 6),
                   Text(
                     vm.currentUserBadge,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.textMain),
+                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: colors.textMain),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             PopupMenuButton<String>(
               tooltip: context.tr('TipLanguage'),
               onSelected: vm.changeLanguage,
@@ -392,19 +446,33 @@ class _HeaderPills extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         vm.languageBadge,
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.textMain),
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: colors.textMain),
                       ),
                     ],
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             IconButton(
               tooltip: context.tr('TipToggleTheme'),
               onPressed: vm.toggleTheme,
               iconSize: 20,
-              icon: Icon(vm.isLight ? Icons.dark_mode_outlined : Icons.light_mode_outlined, color: colors.textMain),
+              icon: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 400),
+                transitionBuilder: (child, animation) => RotationTransition(
+                  turns: Tween(
+                    begin: 0.6,
+                    end: 1.0,
+                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
+                  child: FadeTransition(opacity: animation, child: child),
+                ),
+                child: Icon(
+                  vm.isLight ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                  key: ValueKey(vm.isLight),
+                  color: vm.isLight ? colors.palette.purple : colors.palette.warning,
+                ),
+              ),
             ),
           ],
         );
@@ -496,15 +564,15 @@ class _WindowButtonState extends State<_WindowButton> {
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: Material(
-          color: red ? const Color(0xFFE03030) : (_hover ? colors.surface2 : Colors.transparent),
-          borderRadius: BorderRadius.circular(4),
+          color: red ? const Color(0xFFE5484D) : (_hover ? colors.surface2 : Colors.transparent),
+          shape: const CircleBorder(),
           child: InkWell(
-            borderRadius: BorderRadius.circular(4),
+            customBorder: const CircleBorder(),
             onTap: widget.onPressed,
             child: SizedBox(
-              width: 32,
-              height: 32,
-              child: Icon(widget.icon, size: 16, color: red ? Colors.white : colors.textMain),
+              width: 30,
+              height: 30,
+              child: Icon(widget.icon, size: 15, color: red ? Colors.white : colors.textMain),
             ),
           ),
         ),
@@ -540,7 +608,11 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
     child: Container(
       width: widget.size,
       height: widget.size,
-      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: widget.color,
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.7), blurRadius: widget.size)],
+      ),
     ),
   );
 }
@@ -553,15 +625,17 @@ class _OfflineBanner extends StatelessWidget {
     final vm = context.vm;
     final colors = context.colors;
     return Container(
+      margin: const EdgeInsets.fromLTRB(WideLayout.gap, 0, WideLayout.gap, WideLayout.gap),
       decoration: BoxDecoration(
-        color: const Color(0x28FF003C),
-        border: Border(bottom: BorderSide(color: colors.danger)),
+        color: colors.danger.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(Radii.card),
+        border: Border.all(color: colors.danger.withValues(alpha: 0.55)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
       child: Row(
         children: [
-          Icon(Icons.error_outline_rounded, color: colors.danger, size: 20),
-          const SizedBox(width: 10),
+          Icon(Icons.cloud_off_rounded, color: colors.danger, size: 20),
+          const SizedBox(width: 12),
           Expanded(
             child: Text(
               vm.serverBannerMessage,
@@ -573,8 +647,8 @@ class _OfflineBanner extends StatelessWidget {
           const SizedBox(width: 16),
           FilledButton.icon(
             style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 30),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
             onPressed: vm.retryConnectServer,
             icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -583,14 +657,14 @@ class _OfflineBanner extends StatelessWidget {
           const SizedBox(width: 10),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 30),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(0, 32),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
             onPressed: () => vm.navigateTo(AppSection.settings),
             icon: const Icon(Icons.settings_outlined, size: 16),
             label: Text(context.tr('NavSettings'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400)),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8),
           IconButton(
             tooltip: context.tr('TipDismissNotice'),
             onPressed: vm.dismissServerBanner,
@@ -614,77 +688,75 @@ class _Sidebar extends StatelessWidget {
     final colors = context.colors;
     final palette = colors.palette;
     final compact = MediaQuery.sizeOf(context).width < MainViewModel.compactLayoutWidth;
-    return Container(
-      width: compact ? 68 : 240,
-      decoration: BoxDecoration(
-        color: colors.surface1,
-        border: Border(right: BorderSide(color: colors.glassBorder)),
-      ),
-      child: ListenableBuilder(
-        listenable: Listenable.merge([vm.serverSettings, vm.player]),
-        builder: (context, _) {
-          final stats = vm.serverSettings;
-          Widget item(
-            AppSection section,
-            IconData icon,
-            Color color,
-            String label,
-            int? count, {
-            bool autofocus = false,
-          }) => _SidebarItem(
-            selected: vm.selectedSection == section && !vm.isSearchActive && !vm.player.isQueueOpen,
-            icon: icon,
-            color: color,
-            label: label,
-            count: count,
-            compact: compact,
-            autofocus: autofocus,
-            onTap: () => vm.navigateTo(section),
-          );
-          return FocusTraversalGroup(
-            child: ListView(
-              padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 16, vertical: 20),
-              children: [
-                if (!compact) _GroupTitle(context.tr('SectionLibrary')),
-                item(
-                  AppSection.artists,
-                  Icons.person_outline,
-                  palette.coral,
-                  context.tr('NavArtists'),
-                  stats.totalArtistsCount,
-                  autofocus: AppPlatform.current.isTv,
-                ),
-                item(AppSection.albums, Icons.album, palette.purple, context.tr('NavAlbums'), stats.totalAlbumsCount),
-                item(
-                  AppSection.tracks,
-                  Icons.music_note_outlined,
-                  palette.cyan,
-                  context.tr('NavTracks'),
-                  stats.totalTracksCount,
-                ),
-                const SizedBox(height: 24),
-                if (!compact) _GroupTitle(context.tr('SectionCollection')),
-                item(
-                  AppSection.favorites,
-                  Icons.favorite,
-                  palette.coral,
-                  context.tr('NavFavorites'),
-                  stats.totalFavoritesCount,
-                ),
-                item(
-                  AppSection.playlists,
-                  Icons.queue_music,
-                  palette.lime,
-                  context.tr('NavPlaylists'),
-                  stats.totalPlaylistsCount,
-                ),
-                const SizedBox(height: 24),
-                if (!compact) _GroupTitle(context.tr('SectionSettings')),
-                item(AppSection.settings, Icons.settings_outlined, palette.cyan, context.tr('NavSettings'), null),
-              ],
-            ),
-          );
-        },
+    return SizedBox(
+      width: compact ? 68 : 232,
+      child: _Panel(
+        child: ListenableBuilder(
+          listenable: Listenable.merge([vm, vm.serverSettings, vm.player]),
+          builder: (context, _) {
+            final stats = vm.serverSettings;
+            Widget item(
+              AppSection section,
+              IconData icon,
+              Color color,
+              String label,
+              int? count, {
+              bool autofocus = false,
+            }) => _SidebarItem(
+              selected: vm.selectedSection == section && !vm.isSearchActive && !vm.player.isQueueOpen,
+              icon: icon,
+              color: color,
+              label: label,
+              count: count,
+              compact: compact,
+              autofocus: autofocus,
+              onTap: () => vm.navigateTo(section),
+            );
+            return FocusTraversalGroup(
+              child: ListView(
+                padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: 18),
+                children: [
+                  if (!compact) _GroupTitle(context.tr('SectionLibrary')),
+                  item(
+                    AppSection.artists,
+                    Icons.person_rounded,
+                    palette.coral,
+                    context.tr('NavArtists'),
+                    stats.totalArtistsCount,
+                    autofocus: AppPlatform.current.isTv,
+                  ),
+                  item(AppSection.albums, Icons.album, palette.purple, context.tr('NavAlbums'), stats.totalAlbumsCount),
+                  item(
+                    AppSection.tracks,
+                    Icons.music_note_rounded,
+                    palette.cyan,
+                    context.tr('NavTracks'),
+                    stats.totalTracksCount,
+                  ),
+                  const SizedBox(height: 22),
+                  if (!compact) _GroupTitle(context.tr('SectionCollection')),
+                  item(
+                    AppSection.favorites,
+                    Icons.favorite_rounded,
+                    palette.coral,
+                    context.tr('NavFavorites'),
+                    stats.totalFavoritesCount,
+                  ),
+                  item(
+                    AppSection.playlists,
+                    Icons.queue_music_rounded,
+                    palette.lime,
+                    context.tr('NavPlaylists'),
+                    stats.totalPlaylistsCount,
+                  ),
+                  const SizedBox(height: 22),
+                  if (!compact) _GroupTitle(context.tr('SectionSettings')),
+                  item(AppSection.settings, Icons.tune_rounded, palette.cyan, context.tr('NavSettings'), null),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -697,16 +769,21 @@ class _GroupTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(8, 0, 0, 12),
+    padding: const EdgeInsets.fromLTRB(12, 0, 0, 10),
     child: Text(
       text,
-      style: TextStyle(fontSize: 12, letterSpacing: 1.2, fontWeight: FontWeight.w900, color: context.colors.textMuted),
+      style: TextStyle(
+        fontSize: 10.5,
+        letterSpacing: 1.6,
+        fontWeight: FontWeight.w800,
+        color: context.colors.textMuted,
+      ),
     ),
   );
 }
 
-/// A sidebar entry: a glass button with the section's icon, its name and a counter; the selected one has the accent
-/// bar on its left edge and a larger icon.
+/// A sidebar entry: the section's icon on a tile of its colour, its name and a counter. The selected one is washed
+/// in its colour, and its tile lights up and glows.
 class _SidebarItem extends StatefulWidget {
   const _SidebarItem({
     required this.selected,
@@ -739,16 +816,31 @@ class _SidebarItemState extends State<_SidebarItem> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final selected = widget.selected;
-    final iconScale = selected ? 1.16 : (_hover ? 1.12 : 1.0);
+    final color = widget.color;
+    const duration = Duration(milliseconds: 260);
+    final tile = AnimatedScale(
+      scale: _hover && !selected ? 1.08 : 1,
+      duration: duration,
+      curve: Curves.easeOutBack,
+      child: AnimatedContainer(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: selected ? color : color.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(9),
+          boxShadow: selected
+              ? [BoxShadow(color: color.withValues(alpha: 0.55), blurRadius: 14, spreadRadius: -2)]
+              : const [],
+        ),
+        child: Icon(widget.icon, color: selected ? colors.onAccent : color, size: 17),
+      ),
+    );
     final content = Row(
       mainAxisAlignment: widget.compact ? MainAxisAlignment.center : MainAxisAlignment.start,
       children: [
-        AnimatedScale(
-          scale: iconScale,
-          duration: const Duration(milliseconds: 320),
-          curve: Curves.easeOutBack,
-          child: Icon(widget.icon, color: widget.color, size: 20),
-        ),
+        tile,
         if (!widget.compact) ...[
           const SizedBox(width: 12),
           Expanded(
@@ -756,18 +848,24 @@ class _SidebarItemState extends State<_SidebarItem> {
               widget.label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textMain),
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                color: selected ? colors.textMain : colors.textMain.withValues(alpha: 0.85),
+              ),
             ),
           ),
           if (widget.count != null)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: colors.tagBackground, borderRadius: BorderRadius.circular(4)),
-              child: Text(
-                '${widget.count}',
-                style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: widget.color),
+            Text(
+              '${widget.count}',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: selected ? color : colors.textMuted,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
+          const SizedBox(width: 4),
         ],
       ],
     );
@@ -778,49 +876,30 @@ class _SidebarItemState extends State<_SidebarItem> {
         child: MouseRegion(
           onEnter: (_) => setState(() => _hover = true),
           onExit: (_) => setState(() => _hover = false),
-          child: Material(
-            color: _hover ? colors.palette.glassHighlight : colors.palette.glassBackground,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
-              side: BorderSide(color: _hover ? colors.palette.glassHighlight : colors.glassBorder),
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(Radii.card),
+              color: selected ? null : (_hover ? colors.surface1 : Colors.transparent),
+              gradient: selected
+                  ? LinearGradient(colors: [color.withValues(alpha: 0.24), color.withValues(alpha: 0.04)])
+                  : null,
+              border: Border.all(color: selected ? color.withValues(alpha: 0.28) : Colors.transparent),
             ),
-            child: InkWell(
-              autofocus: widget.autofocus,
-              borderRadius: BorderRadius.circular(6),
-              focusColor: widget.color.withValues(alpha: 0.30),
-              onTap: widget.onTap,
-              child: SizedBox(
-                height: 40,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Positioned.fill(
-                      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: content),
-                    ),
-                    // The accent bar of the selected section, on the button's left edge.
-                    Positioned(
-                      left: 3,
-                      top: 10,
-                      child: AnimatedOpacity(
-                        opacity: selected ? 1 : 0,
-                        duration: const Duration(milliseconds: 300),
-                        child: AnimatedScale(
-                          scale: selected ? 1 : 0.2,
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeOutBack,
-                          child: Container(
-                            width: 3,
-                            height: 20,
-                            decoration: BoxDecoration(
-                              color: colors.accent,
-                              borderRadius: BorderRadius.circular(2),
-                              boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.6), blurRadius: 8)],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                autofocus: widget.autofocus,
+                borderRadius: BorderRadius.circular(Radii.card),
+                focusColor: color.withValues(alpha: 0.30),
+                onTap: widget.onTap,
+                child: SizedBox(
+                  height: 46,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: widget.compact ? 0 : 8),
+                    child: content,
+                  ),
                 ),
               ),
             ),
@@ -833,6 +912,8 @@ class _SidebarItemState extends State<_SidebarItem> {
 
 // ── Player bar ──────────────────────────────────────────────────────────────────────────────────────
 
+/// The floating player bar: the cover and the track on the left, the transport and the seek bar in the middle, the
+/// spectrum, the quality and the volume on the right.
 class _PlayerBar extends StatelessWidget {
   const _PlayerBar();
 
@@ -844,15 +925,20 @@ class _PlayerBar extends StatelessWidget {
     final platform = AppPlatform.current;
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < MainViewModel.compactLayoutWidth;
-    // A 520 px middle, narrower when the window is (its two sides keep at least 180 px each).
-    final centerWidth = math.min(520.0, math.max(300.0, width - 64 - 2 * 280));
+    // A 540 px middle, narrower when the window is (its two sides keep at least 180 px each).
+    final centerWidth = math.min(540.0, math.max(300.0, width - 64 - 2 * 280));
     return Container(
       // The controls and the times grow with the user's font size; the bar grows with them.
       height: 80 + MediaQuery.textScalerOf(context).scale(16),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      margin: const EdgeInsets.symmetric(horizontal: WideLayout.gap),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: colors.surface1,
-        border: Border(top: BorderSide(color: colors.glassBorder)),
+        color: colors.palette.panel,
+        borderRadius: BorderRadius.circular(Radii.panel + 2),
+        border: Border.all(color: colors.glassBorder),
+        boxShadow: [
+          BoxShadow(color: colors.palette.shadow, blurRadius: 30, spreadRadius: -8, offset: const Offset(0, 12)),
+        ],
       ),
       child: ListenableBuilder(
         listenable: player,
@@ -867,7 +953,7 @@ class _PlayerBar extends StatelessWidget {
                     const SizedBox(width: 14),
                     Flexible(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 170),
+                        constraints: const BoxConstraints(maxWidth: 190),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -878,10 +964,15 @@ class _PlayerBar extends StatelessWidget {
                                 player.nowPlayingTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMain),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.1,
+                                  color: colors.textMain,
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 2),
+                            const SizedBox(height: 3),
                             if (player.hasError)
                               Tooltip(
                                 message: player.errorMessage!,
@@ -889,24 +980,25 @@ class _PlayerBar extends StatelessWidget {
                                   player.errorMessage!,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 11, color: colors.danger),
+                                  style: TextStyle(fontSize: 12, color: colors.danger),
                                 ),
                               )
                             else
                               InkWell(
+                                borderRadius: BorderRadius.circular(4),
                                 onTap: track == null ? null : () => vm.openArtistByName(track.artist),
                                 child: Text(
                                   player.nowPlayingArtist,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 11, color: colors.textMuted),
+                                  style: TextStyle(fontSize: 12, color: colors.textMuted),
                                 ),
                               ),
                           ],
                         ),
                       ),
                     ),
-                    if (track != null) const FavoriteCurrentButton(size: 18),
+                    if (track != null) ...[const SizedBox(width: 4), const FavoriteCurrentButton(size: 19)],
                   ],
                 ),
               ),
@@ -916,7 +1008,7 @@ class _PlayerBar extends StatelessWidget {
                   width: centerWidth,
                   child: const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [TransportControls(), SizedBox(height: 4), SeekBar()],
+                    children: [TransportControls(), SizedBox(height: 2), SeekBar()],
                   ),
                 ),
               ),
@@ -931,14 +1023,19 @@ class _PlayerBar extends StatelessWidget {
                     if (showTag) room -= fullTag ? 180 : 60;
                     final showSpectrum = !compact && platform.isDesktop && room >= 144;
                     return Padding(
-                      padding: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.only(right: 8),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           if (showSpectrum) ...[
                             Tooltip(
                               message: context.tr('TipSpectrum'),
-                              child: SpectrumVisualizer(bands: player.spectrum, color: colors.accent, width: 130),
+                              child: SpectrumVisualizer(
+                                bands: player.spectrum,
+                                color: colors.accent,
+                                highlight: colors.hover,
+                                width: 130,
+                              ),
                             ),
                             const SizedBox(width: 14),
                           ],
@@ -968,7 +1065,7 @@ class _PlayerBar extends StatelessWidget {
 }
 
 /// The cover of the current track, which opens and closes the queue: a dark veil with a chevron under the mouse (and
-/// while the queue is open), and a slow "breath" while a track plays.
+/// while the queue is open), and a slow "breath" and a glow of the accent while a track plays.
 class _QueueCover extends StatefulWidget {
   @override
   State<_QueueCover> createState() => _QueueCoverState();
@@ -1006,14 +1103,22 @@ class _QueueCoverState extends State<_QueueCover> with SingleTickerProviderState
         child: GestureDetector(
           onTap: player.toggleQueue,
           child: ScaleTransition(
-            scale: Tween(begin: 1.0, end: 1.06).animate(CurvedAnimation(parent: _breath, curve: Curves.easeInOut)),
-            child: Container(
-              width: 52,
-              height: 52,
+            scale: Tween(begin: 1.0, end: 1.05).animate(CurvedAnimation(parent: _breath, curve: Curves.easeInOut)),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 400),
+              width: 58,
+              height: 58,
               decoration: BoxDecoration(
                 color: colors.surface2,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: colors.glassBorder),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: player.isPlaying ? colors.accent.withValues(alpha: 0.4) : colors.palette.shadow,
+                    blurRadius: 18,
+                    spreadRadius: -4,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
@@ -1024,12 +1129,12 @@ class _QueueCoverState extends State<_QueueCover> with SingleTickerProviderState
                     opacity: _hover ? 1 : (open ? 0.85 : 0),
                     duration: const Duration(milliseconds: 180),
                     child: ColoredBox(
-                      color: const Color(0x80000000),
+                      color: const Color(0x8C000000),
                       child: AnimatedRotation(
                         turns: open ? 0.5 : 0,
                         duration: const Duration(milliseconds: 250),
                         curve: Curves.easeOutCubic,
-                        child: Icon(Icons.keyboard_arrow_up_rounded, size: 22, color: colors.accent),
+                        child: Icon(Icons.keyboard_arrow_up_rounded, size: 26, color: Colors.white),
                       ),
                     ),
                   ),
@@ -1053,56 +1158,55 @@ class _Footer extends StatelessWidget {
     final vm = context.vm;
     final colors = context.colors;
     final compact = MediaQuery.sizeOf(context).width < MainViewModel.compactLayoutWidth;
-    return Container(
+    return SizedBox(
       height: 30,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: colors.surface2,
-        border: Border(top: BorderSide(color: colors.glassBorder)),
-      ),
-      child: ListenableBuilder(
-        listenable: vm.player,
-        builder: (context, _) => Row(
-          children: [
-            if (vm.player.hasError) ...[
-              Icon(Icons.error_outline_rounded, size: 14, color: colors.danger),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  vm.player.errorMessage!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.danger),
-                ),
-              ),
-              Tooltip(
-                message: context.tr('TipDismissError'),
-                child: InkWell(
-                  onTap: vm.player.dismissError,
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: Icon(Icons.close_rounded, size: 12, color: colors.textMuted),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: ListenableBuilder(
+          listenable: vm.player,
+          builder: (context, _) => Row(
+            children: [
+              if (vm.player.hasError) ...[
+                Icon(Icons.error_outline_rounded, size: 14, color: colors.danger),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    vm.player.errorMessage!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.danger),
                   ),
                 ),
-              ),
-            ] else ...[
-              _PulsingDot(color: colors.palette.success, size: 6),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  vm.statusText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.textMuted),
+                Tooltip(
+                  message: context.tr('TipDismissError'),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: vm.player.dismissError,
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Icon(Icons.close_rounded, size: 12, color: colors.textMuted),
+                    ),
+                  ),
                 ),
-              ),
+              ] else ...[
+                _PulsingDot(color: colors.palette.success, size: 6),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    vm.statusText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.textMuted),
+                  ),
+                ),
+              ],
+              if (!compact) ...[
+                const SizedBox(width: 16),
+                Text(vm.rightFooterStatusText, style: TextStyle(fontSize: 11, color: colors.textMuted)),
+              ],
             ],
-            if (!compact) ...[
-              const SizedBox(width: 16),
-              Text(vm.rightFooterStatusText, style: TextStyle(fontSize: 11, color: colors.textMuted)),
-            ],
-          ],
+          ),
         ),
       ),
     );

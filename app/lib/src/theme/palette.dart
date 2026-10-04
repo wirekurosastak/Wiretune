@@ -3,11 +3,12 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import '../view_models/app_section.dart';
 
-/// The colours of one theme (dark or light). The section accents and window gradients follow the original palette.
+/// The colours of one theme (dark or light). Each section has an accent family and a tint for the window's backdrop.
 class Palette {
   const Palette({
     required this.isDark,
     required this.background,
+    required this.panel,
     required this.surface1,
     required this.surface2,
     required this.glassBackground,
@@ -30,10 +31,14 @@ class Palette {
     required this.gradients,
     required this.onAccent,
     required this.tagBackground,
+    required this.shadow,
   });
 
   final bool isDark;
   final Color background;
+
+  /// The floating panels (sidebar, page, player bar): translucent, so the backdrop's colours glow through.
+  final Color panel;
   final Color surface1;
   final Color surface2;
   final Color glassBackground;
@@ -63,91 +68,98 @@ class Palette {
   /// The small labels ("ARTIST", "ALBUM") and the sidebar's counters.
   final Color tagBackground;
 
+  /// The drop shadow under floating panels and covers.
+  final Color shadow;
+
   static const dark = Palette(
     isDark: true,
-    background: Color(0xFF000000),
-    surface1: Color(0x12FFFFFF),
+    background: Color(0xFF060609),
+    panel: Color(0xB80C0C12),
+    surface1: Color(0x0FFFFFFF),
     surface2: Color(0x1AFFFFFF),
-    glassBackground: Color(0x0CFFFFFF),
-    glassBorder: Color(0x1AFFFFFF),
-    glassHighlight: Color(0x2AFFFFFF),
-    textMain: Color(0xFFFFFFFF),
-    textMuted: Color(0xFF8A8A8A),
-    textDisabled: Color(0xFF444444),
-    success: Color(0xFF00FF66),
-    warning: Color(0xFFFFC800),
-    danger: Color(0xFFFF003C),
-    modal: Color(0xFF0A0A0A),
-    coral: Color(0xFFFF6B6B),
-    purple: Color(0xFFD05CE3),
-    cyan: Color(0xFF67C8E0),
-    lime: Color(0xFFAEEA00),
+    glassBackground: Color(0x0AFFFFFF),
+    glassBorder: Color(0x14FFFFFF),
+    glassHighlight: Color(0x26FFFFFF),
+    textMain: Color(0xFFF7F7FA),
+    textMuted: Color(0xFF9B9BA8),
+    textDisabled: Color(0xFF4A4A56),
+    success: Color(0xFF34F5A0),
+    warning: Color(0xFFFFC53D),
+    danger: Color(0xFFFF3B6B),
+    modal: Color(0xFF111118),
+    coral: Color(0xFFFB7185),
+    purple: Color(0xFFC084FC),
+    cyan: Color(0xFF22D3EE),
+    lime: Color(0xFFA3E635),
     hover: {
-      0xFF67C8E0: Color(0xFF8BE0F5),
-      0xFFD05CE3: Color(0xFFDF7DF0),
-      0xFFFF6B6B: Color(0xFFFF8585),
-      0xFFAEEA00: Color(0xFFC2FF1A),
+      0xFF22D3EE: Color(0xFF67E8F9),
+      0xFFC084FC: Color(0xFFD8B4FE),
+      0xFFFB7185: Color(0xFFFDA4AF),
+      0xFFA3E635: Color(0xFFBEF264),
     },
     pressed: {
-      0xFF67C8E0: Color(0xFF4FB0C8),
-      0xFFD05CE3: Color(0xFFB835CD),
-      0xFFFF6B6B: Color(0xFFE05555),
-      0xFFAEEA00: Color(0xFF95CA00),
+      0xFF22D3EE: Color(0xFF06B6D4),
+      0xFFC084FC: Color(0xFFA855F7),
+      0xFFFB7185: Color(0xFFF43F5E),
+      0xFFA3E635: Color(0xFF84CC16),
     },
-    onAccent: Color(0xFFFFFFFF),
-    tagBackground: Color(0x1AFFFFFF),
-    gradientMid: Color(0xFF000000),
+    onAccent: Color(0xFF07070B),
+    tagBackground: Color(0x14FFFFFF),
+    shadow: Color(0x99000000),
+    gradientMid: Color(0xFF060609),
     gradients: {
-      AppSection.tracks: Color(0xFF051522),
-      AppSection.albums: Color(0xFF1F0833),
-      AppSection.artists: Color(0xFF2B0C0C),
-      AppSection.playlists: Color(0xFF142400),
-      AppSection.favorites: Color(0xFF2B0C0C),
-      AppSection.settings: Color(0xFF091824),
+      AppSection.tracks: Color(0xFF052430),
+      AppSection.albums: Color(0xFF220B3A),
+      AppSection.artists: Color(0xFF2E0A16),
+      AppSection.playlists: Color(0xFF15280A),
+      AppSection.favorites: Color(0xFF2E0A16),
+      AppSection.settings: Color(0xFF0A1C2E),
     },
   );
 
   static const light = Palette(
     isDark: false,
-    background: Color(0xFFF4F6F8),
-    surface1: Color(0x1A000000),
-    surface2: Color(0x26000000),
-    glassBackground: Color(0x0D000000),
-    glassBorder: Color(0x20000000),
-    glassHighlight: Color(0x40000000),
-    textMain: Color(0xFF111111),
-    textMuted: Color(0xFF888888),
-    textDisabled: Color(0xFFCCCCCC),
-    success: Color(0xFF10893E),
-    warning: Color(0xFFD83B01),
-    danger: Color(0xFFFF003C),
+    background: Color(0xFFF2F3F7),
+    panel: Color(0xC7FFFFFF),
+    surface1: Color(0x0C000000),
+    surface2: Color(0x16000000),
+    glassBackground: Color(0x08000000),
+    glassBorder: Color(0x14000000),
+    glassHighlight: Color(0x2A000000),
+    textMain: Color(0xFF0E0E14),
+    textMuted: Color(0xFF666673),
+    textDisabled: Color(0xFFC2C2CC),
+    success: Color(0xFF0E9F6E),
+    warning: Color(0xFFD97706),
+    danger: Color(0xFFE11D48),
     modal: Color(0xFFFFFFFF),
-    coral: Color(0xFFD94A4A),
-    purple: Color(0xFFA03BB5),
-    cyan: Color(0xFF3A9FB8),
-    lime: Color(0xFF7FB800),
+    coral: Color(0xFFE11D48),
+    purple: Color(0xFF9333EA),
+    cyan: Color(0xFF0891B2),
+    lime: Color(0xFF4D7C0F),
     hover: {
-      0xFF3A9FB8: Color(0xFF52B3CC),
-      0xFFA03BB5: Color(0xFFB848CF),
-      0xFFD94A4A: Color(0xFFE85D5D),
-      0xFF7FB800: Color(0xFF91CF05),
+      0xFF0891B2: Color(0xFF06A3C8),
+      0xFF9333EA: Color(0xFFA855F7),
+      0xFFE11D48: Color(0xFFF43F5E),
+      0xFF4D7C0F: Color(0xFF65A30D),
     },
     pressed: {
-      0xFF3A9FB8: Color(0xFF2A8F98),
-      0xFFA03BB5: Color(0xFF88289E),
-      0xFFD94A4A: Color(0xFFB83535),
-      0xFF7FB800: Color(0xFF6B9900),
+      0xFF0891B2: Color(0xFF0E7490),
+      0xFF9333EA: Color(0xFF7E22CE),
+      0xFFE11D48: Color(0xFFBE123C),
+      0xFF4D7C0F: Color(0xFF3F6212),
     },
-    onAccent: Color(0xFF000000),
-    tagBackground: Color(0xFF1E232A),
-    gradientMid: Color(0xFFEEF1F5),
+    onAccent: Color(0xFFFFFFFF),
+    tagBackground: Color(0x10000000),
+    shadow: Color(0x2E1A1A33),
+    gradientMid: Color(0xFFF2F3F7),
     gradients: {
-      AppSection.tracks: Color(0xFFE8F7FC),
-      AppSection.albums: Color(0xFFF3E9FF),
-      AppSection.artists: Color(0xFFFFECEC),
-      AppSection.playlists: Color(0xFFEEF9E6),
-      AppSection.favorites: Color(0xFFFFECEC),
-      AppSection.settings: Color(0xFFE8F7FC),
+      AppSection.tracks: Color(0xFFDDF4FA),
+      AppSection.albums: Color(0xFFEDE3FF),
+      AppSection.artists: Color(0xFFFFE4E9),
+      AppSection.playlists: Color(0xFFE9F5DC),
+      AppSection.favorites: Color(0xFFFFE4E9),
+      AppSection.settings: Color(0xFFDDF0FA),
     },
   );
 
