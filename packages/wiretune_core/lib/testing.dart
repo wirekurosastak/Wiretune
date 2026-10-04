@@ -258,10 +258,9 @@ abstract final class TestSupport {
     String album = 'Album',
     double minutes = 4.0,
   }) {
-    final track = makeTrack(id, title, artist: artist, album: album, minutes: minutes);
-    track.filePath = 'server:$id';
-    track.streamUrl = 'http://server/api/stream/$id';
-    return track;
+    return makeTrack(id, title, artist: artist, album: album, minutes: minutes)
+      ..filePath = ''
+      ..streamUrl = 'http://server/api/stream/$id';
   }
 }
 

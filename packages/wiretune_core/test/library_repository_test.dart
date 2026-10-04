@@ -99,16 +99,13 @@ void main() {
     expect(count(db, 'SELECT COUNT(*) FROM audit'), 1);
   });
 
-  test('a track whose path changed is stored again, and of two tracks with one path the last wins', () async {
+  test('tracks are keyed by ID: a new path updates the row, and server tracks need no path', () async {
     final (repo, _) = await open();
-    await repo.replaceAllTracks([make('a', path: '/music/old.flac'), make('b', path: '/music/other.flac')]);
-    await repo.replaceAllTracks([make('a', path: '/music/other.flac'), make('b', path: '/music/new.flac')]);
+    await repo.replaceAllTracks([make('a', path: '/music/old.flac')]);
+    await repo.replaceAllTracks([make('a', path: '/music/new.flac'), make('s1', path: ''), make('s2', path: '')]);
     final stored = {for (final t in await repo.getAllTracks()) t.id: t};
-    expect(stored['a']!.filePath, '/music/other.flac');
-    expect(stored['b']!.filePath, '/music/new.flac');
-
-    await repo.replaceAllTracks([make('x', path: '/music/same.flac'), make('y', path: '/music/same.flac')]);
-    expect((await repo.getAllTracks()).single.id, 'y');
+    expect(stored['a']!.filePath, '/music/new.flac');
+    expect(stored.keys, containsAll(['s1', 's2']));
   });
 
   test('only what the tags say is stored as the album artist', () async {
@@ -163,46 +160,28 @@ void main() {
     expect(second, first);
     expect(calls, 1);
     expect(await repo.getSetting('secret'), first);
+
+    await repo.setSetting('blank', ''); // an empty value is no value: a signing key must never be empty
+    expect(await repo.getOrAddSetting('blank', () => 'filled'), 'filled');
   });
 
-  test('a database of an older version is upgraded in place and keeps its content', () async {
-    final (repo, db) = await open();
-    final local = make('local', path: '/music/local.flac')..fileModifiedUtc = DateTime.utc(2025);
-    final remote = make('remote', path: 'server:remote')
-      ..streamUrl = 'http://server/api/stream/remote'
-      ..fileModifiedUtc = DateTime.utc(2025);
-    await repo.replaceAllTracks([local, remote]);
-    await repo.savePlaylist(Playlist(id: 'p', name: 'Kept', trackIds: ['local']));
-
-    // Turn it back into what version 2 left: no per-account tables and no is_server column.
-    for (final sql in [
-      'DROP TABLE user_favorites',
-      'DROP TABLE user_plays',
-      'DROP TABLE user_playlists',
-      'ALTER TABLE playlists DROP COLUMN is_server',
-      'PRAGMA user_version = 2',
-    ]) {
-      db.connection.execute(sql);
-    }
+  test('a database of another schema version is refused instead of misread', () async {
+    final (_, db) = await open();
+    db.connection.execute('PRAGMA user_version = 99');
     db.close();
+    final other = DatabaseManager(dbPath());
+    opened.add(other);
+    expect(
+      other.initializeSchema,
+      throwsA(isA<IncompatibleDatabaseException>().having((e) => e.message, 'message', contains('schema 99'))),
+    );
+    expect(count(other, 'PRAGMA user_version'), 99); // left as it was
 
-    final upgraded = DatabaseManager(dbPath());
-    opened.add(upgraded);
-    upgraded.initializeSchema();
-
-    expect(count(upgraded, 'PRAGMA user_version'), 4);
-    expect(count(upgraded, 'SELECT COUNT(*) FROM user_favorites'), 0);
-    expect(count(upgraded, 'SELECT COUNT(*) FROM user_plays'), 0);
-    expect(count(upgraded, 'SELECT COUNT(*) FROM user_playlists'), 0);
-    // The tags of local files are read again by the next scan; tracks of a server are replaced on refresh.
-    expect(count(upgraded, "SELECT COUNT(*) FROM tracks WHERE file_modified_utc IS NULL AND id = 'local'"), 1);
-    expect(count(upgraded, "SELECT COUNT(*) FROM tracks WHERE file_modified_utc IS NOT NULL AND id = 'remote'"), 1);
-
-    final reopened = LibraryRepository(upgraded);
-    expect(await reopened.getAllTracks(), hasLength(2));
-    final playlist = (await reopened.getAllPlaylists()).single;
-    expect(playlist.name, 'Kept');
-    expect(playlist.isServer, isFalse);
+    // Tables without a version are somebody else's: refused as well.
+    final foreign = DatabaseManager(p.join(dir.path, 'foreign.db'));
+    opened.add(foreign);
+    foreign.connection.execute('CREATE TABLE tracks (id TEXT)');
+    expect(foreign.initializeSchema, throwsA(isA<IncompatibleDatabaseException>()));
   });
 
   test('initializing the schema twice changes nothing', () async {
@@ -213,18 +192,5 @@ void main() {
     second.initializeSchema();
     db.initializeSchema();
     expect(await repo.getAllTracks(), hasLength(1));
-  });
-
-  test('dates written by the C# version (seven fractional digits) are read', () async {
-    final (repo, db) = await open();
-    await repo.replaceAllTracks([make('a')]);
-    db.connection.execute(
-      "UPDATE tracks SET last_played = '2024-02-03T04:05:06.1234567Z', "
-      "date_added = '2024-01-01T00:00:00.0000000Z', duration_seconds = 225.1234567",
-    );
-    final stored = (await repo.getAllTracks()).single;
-    expect(stored.lastPlayed, DateTime.utc(2024, 2, 3, 4, 5, 6, 123, 456));
-    expect(stored.dateAdded, DateTime.utc(2024));
-    expect(stored.duration, const Duration(microseconds: 225123457));
   });
 }

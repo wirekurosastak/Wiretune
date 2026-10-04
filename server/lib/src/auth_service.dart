@@ -9,16 +9,14 @@ import 'jwt.dart';
 
 /// The identity a validated token carries.
 class Principal {
-  const Principal(this.userId, this.username, this.role, {this.isStreamToken = false});
+  const Principal(this.userId, this.username, {this.isAdmin = false, this.isStreamToken = false});
 
   final String userId;
   final String username;
-  final String role;
+  final bool isAdmin;
 
   /// A stream token opens the audio and cover routes and nothing else.
   final bool isStreamToken;
-
-  bool get isAdmin => role == 'admin';
 }
 
 /// Accounts, passwords (bcrypt, work factor 12) and tokens (HS256 JWTs).
@@ -27,19 +25,11 @@ class AuthService {
     _db.initializeSchema();
   }
 
-  static const String issuer = 'WiretuneServer';
-  static const String audience = 'WiretuneClient';
+  /// The audience of a sign-in token, which opens the whole API.
+  static const String audience = 'wiretune';
 
-  /// Audience of the short-lived tokens that stream URLs carry; they open the media routes only.
-  static const String streamAudience = 'WiretuneStream';
-  static const String scopeClaim = 'wt_scope';
-  static const String streamScope = 'stream';
-
-  // The claim names .NET writes for ClaimTypes.NameIdentifier, Name and Role. Tokens carry exactly these, as the C#
-  // server issued them, so a token signed by either server is valid on the other.
-  static const String nameIdClaim = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier';
-  static const String nameClaim = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name';
-  static const String roleClaim = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
+  /// The audience of a stream token: short-lived, put into audio and cover URLs, and refused everywhere else.
+  static const String streamAudience = 'wiretune-stream';
 
   /// Long enough for a multi-hour track to be seeked in; the player asks for a new one well before that.
   static const Duration streamTokenLifetime = Duration(hours: 8);
@@ -108,7 +98,7 @@ class AuthService {
     if (!await _verify(password, row['password_hash'] as String)) return null;
 
     final now = DateTime.now().toUtc();
-    _db.connection.execute('UPDATE users SET last_login = ? WHERE id = ?', [formatIsoUtc(now), row['id']]);
+    _db.connection.execute('UPDATE users SET last_login = ? WHERE id = ?', [toDbTime(now), row['id']]);
 
     final user = _toUserInfo(row).copyWith(lastLogin: now);
     final expiry = rememberMe ? const Duration(days: 90) : const Duration(hours: 24);
@@ -122,7 +112,7 @@ class AuthService {
     _db.connection.execute(
       'INSERT INTO users (id, username, password_hash, is_admin, created_at, last_login) '
       'SELECT ?1, ?2, ?3, 1, ?4, NULL WHERE NOT EXISTS (SELECT 1 FROM users)',
-      [user.id, user.username, hash, formatIsoUtc(user.createdAt)],
+      [user.id, user.username, hash, toDbTime(user.createdAt)],
     );
     if (_db.connection.updatedRows == 0) return null;
 
@@ -137,7 +127,7 @@ class AuthService {
     _db.connection.execute(
       'INSERT OR IGNORE INTO users (id, username, password_hash, is_admin, created_at, last_login) '
       'VALUES (?, ?, ?, 0, ?, NULL)',
-      [user.id, user.username, hash, formatIsoUtc(user.createdAt)],
+      [user.id, user.username, hash, toDbTime(user.createdAt)],
     );
     return _db.connection.updatedRows == 0 ? null : user;
   }
@@ -172,51 +162,40 @@ class AuthService {
   StreamTokenResponse createStreamToken(String userId, String username) {
     final expires = DateTime.now().toUtc().add(streamTokenLifetime);
     final token = _jwt.sign({
-      nameIdClaim: userId,
-      nameClaim: username,
-      roleClaim: 'user',
-      scopeClaim: streamScope,
-      'exp': expires.millisecondsSinceEpoch ~/ 1000,
-      'iss': issuer,
+      'sub': userId,
+      'name': username,
       'aud': streamAudience,
+      'exp': expires.millisecondsSinceEpoch ~/ 1000,
     });
     return StreamTokenResponse(token, expires);
   }
 
   /// The identity in [token] when it is valid; null otherwise. Does not check that the account still exists.
   Principal? validate(String token) {
-    final claims = _jwt.verify(token, issuer: issuer, audiences: {audience, streamAudience});
-    if (claims == null) return null;
-    final id = claims[nameIdClaim] ?? claims['nameid'] ?? claims['sub'];
-    final name = claims[nameClaim] ?? claims['unique_name'] ?? claims['name'];
+    final claims = _jwt.verify(token, audiences: const {audience, streamAudience});
+    final id = claims?['sub'];
+    final name = claims?['name'];
     if (id is! String || name is! String) return null;
-    final role = claims[roleClaim] ?? claims['role'];
-    return Principal(
-      id,
-      name,
-      role is String ? role : (role is List && role.contains('admin') ? 'admin' : 'user'),
-      isStreamToken: claims[scopeClaim] == streamScope,
-    );
+    return Principal(id, name, isAdmin: claims!['role'] == 'admin', isStreamToken: claims['aud'] == streamAudience);
   }
 
   static UserInfo _newUser(String username, {required bool isAdmin}) =>
       UserInfo(newId(), username.trim(), isAdmin, DateTime.now().toUtc(), null);
 
   String _generateToken(UserInfo user, Duration expiry) => _jwt.sign({
-    nameIdClaim: user.id,
-    nameClaim: user.username,
-    roleClaim: user.isAdmin ? 'admin' : 'user',
-    'exp': DateTime.now().toUtc().add(expiry).millisecondsSinceEpoch ~/ 1000,
-    'iss': issuer,
+    'sub': user.id,
+    'name': user.username,
+    'role': user.isAdmin ? 'admin' : 'user',
     'aud': audience,
+    'exp': DateTime.now().toUtc().add(expiry).millisecondsSinceEpoch ~/ 1000,
   });
 
   static UserInfo _toUserInfo(Map<String, Object?> row) => UserInfo(
     row['id'] as String,
     row['username'] as String,
     (row['is_admin'] as int) != 0,
-    parseIsoUtc(row['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-    parseIsoUtc(row['last_login']),
+    fromDbTime(row['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    fromDbTime(row['last_login']),
   );
 }
 

@@ -81,8 +81,8 @@ class Localizer {
 
   static final RegExp _placeholder = RegExp(r'\{(\d+)(?::([^}]*))?\}');
 
-  /// Fills `{n}` and `{n:format}` placeholders like .NET's string.Format: numbers with the language's decimal
-  /// separator, dates with a `yyyy MM dd HH mm ss` pattern. A placeholder without an argument stays as it is.
+  /// Fills the positional placeholders `{0}`, `{1}`… with [args]: numbers with the language's decimal separator,
+  /// dates by the pattern after a colon (`{0:yyyy-MM-dd HH:mm}`). A placeholder without an argument stays as it is.
   static String formatTemplate(String template, List<Object?> args, String language) {
     return template.replaceAllMapped(_placeholder, (m) {
       final index = int.parse(m.group(1)!);

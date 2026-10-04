@@ -18,36 +18,33 @@ runs anywhere Dart does. `wiretune_platform` is a plugin rather than activity co
 Flutter engine without an activity, and plugins still get registered there. Shared test doubles live in
 `wiretune_core/lib/testing.dart`.
 
-**It's a port** of a C#/.NET version (in the git history), and it keeps that version's database schema, HTTP API, JSON
-shapes, token format and track IDs, so old and new players and servers mix freely. `util/dotnet_format.dart` speaks
-the .NET formats this takes, and `server/test/csharp_compatibility_test.dart` holds it to a real C# database and real
-C# tokens.
-
 ## The library
 
 `LibraryService` keeps the library in memory as an immutable `LibrarySnapshot` and swaps it wholesale after every
 change, so readers never see half a library and never take a lock. One scan runs at a time, and scans and server
 merges take turns through a commit gate.
 
-- **Track IDs** are the first 32 hex digits of the SHA-256 of the lower-cased full path. Scans read in batches on 2 to
-  8 isolates and skip files whose path, size and modification time haven't changed.
+- **Track IDs** are the first 32 hex digits of the SHA-256 of the full path (lower-cased on Windows and macOS, whose
+  file systems ignore case). Scans read in batches on 2 to 8 isolates and skip files whose path, size and modification
+  time haven't changed.
 - **Albums** are keyed by title plus album artist (`Track.albumId`, shared with the server's cover route). A folder of
   tracks with one album title gets one inferred album artist, which is shown but never stored
   (`Track.albumArtistInferred`), so it can't outlive the files it came from.
 - **Hybrid**: local tracks have no `streamUrl`, server tracks do. `TrackDeduplication.mergeTracks` folds a server
   duplicate into the local copy, favourite, play count and playlist entries included.
 - **Writes are diffs**: one transaction per change, and rows that didn't change aren't touched.
-- **User data** of server tracks lives where `UserDataMode` says: `server` (a change lands locally at once and
-  `ServerSession` sends it on), `serverUnavailable` (read-only until reconnected) or `local` (no server, or one too old
-  to keep it). The player's copy is a cache that every refresh overwrites.
+- **User data** of server tracks lives on the server account. While signed in (`LibraryService.serverConnected`), a
+  change lands locally at once and `ServerSession` sends it on; while not, server tracks and server playlists are
+  read-only. The player's copy is a cache that every refresh overwrites.
 
-The services talk through synchronous `Event<T>`s: a handler has run by the time `emit` returns, as the C# events had.
+The services talk through synchronous `Event<T>`s: a handler has run by the time `emit` returns.
 
 ## Persistence
 
-SQLite in WAL mode, one synchronous connection per database. The schema version is `PRAGMA user_version` (4), and
-every start upgrades an older database in place, in one transaction. Both sides create every table and use what they
-need:
+SQLite in WAL mode, one synchronous connection per database, instants stored as microseconds since the epoch. The
+schema version is `PRAGMA user_version` (1), and a database of any other version is refused
+(`IncompatibleDatabaseException`) rather than misread. A change to the tables raises the version and adds the step that
+upgrades the previous one in place. Both sides create every table and use what they need:
 
 | Table | Used by | Holds |
 |---|---|---|
@@ -70,19 +67,18 @@ anyway.
 
 Changes to the account's data go through one ordered queue, flushed before every refresh and sign-out so that a
 download can't undo them. A favourite the server refused is put back; a failed play or playlist edit isn't retried.
-`400`, `409` and `413` mean "reachable, but no" and keep the session connected; anything else marks it offline. The
-first account to sign in on a device inherits, once, what the device held for server tracks (`/api/me/data/import`).
+`400`, `409` and `413` mean "reachable, but no" and keep the session connected; anything else marks it offline.
 
 ## Server
 
-`WiretuneServer.start` wires the options, database, library, `AuthService`, `UserDataService`, `SetupCode` and
-`LibraryScanService` to a routes table, where every route declares its access level (anonymous, user, admin, media) and
-its body limit.
+`WiretuneServer.start` wires the options (`ServerOptions`: command-line flags, each also a `WIRETUNE_*` variable),
+the database, the library, `AuthService`, `UserDataService`, `SetupCode` and `LibraryScanService` to a routes table,
+where every route declares its access level (anonymous, user, admin, media) and its body limit.
 
-- **Auth**: bcrypt (cost 12) in an isolate, a dummy hash for unknown names so the timing gives nothing away, HMAC-SHA256
-  JWTs with the .NET claim names, and first-admin creation as one atomic `INSERT … WHERE NOT EXISTS`. Every token is
-  checked against `users`, so deleting an account locks it out at once. `?token=` counts only on the media routes, and
-  a stream token is refused everywhere else.
+- **Auth**: bcrypt (cost 12) in an isolate, a dummy hash for unknown names so the timing gives nothing away,
+  HMAC-SHA256 JWTs (`sub`, `name`, `role`, and an `aud` that tells a sign-in token from a stream token), and
+  first-admin creation as one atomic `INSERT … WHERE NOT EXISTS`. Every token is checked against `users`, so deleting
+  an account locks it out at once. A stream token opens only the media routes, and it's the only kind `?token=` takes.
 - **User data**: every method takes the account from the token, so no route can reach another account's rows, and the
   limits are part of each insert's SQL, so parallel requests can't sneak past them.
 - **Scanning**: a loop that wakes for a request or the interval. Stopping the server cancels a running scan.

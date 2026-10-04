@@ -2,14 +2,13 @@
 
 The JSON API under `/api` that the players speak. It isn't versioned: if you build on it, pin a server version.
 
-- camelCase JSON, ISO 8601 dates, and durations as .NET `TimeSpan` strings (`"00:03:45.1230000"`), kept from the C#
-  server so old and new players and servers understand each other.
+- camelCase JSON, dates in ISO 8601 (UTC), durations in milliseconds.
 - Errors look like `{ "error": "message" }`; `401` and `403` come with an empty body.
-- Send `Authorization: Bearer <token>`. Only `/api/stream/…` and `/api/cover/…` also take `?token=`, for players that
-  can't send headers, and that should be a **stream token** (`POST /api/auth/stream-token`), which opens those two
-  routes and nothing else.
-- Roles are **anonymous**, **user** and **admin**. Bodies are capped at 64 KiB (a playlist 4 MiB, the import 32 MiB),
-  then `413`. Password rules, token lifetimes and the rate limit are in [server.md](server.md#accounts).
+- Send `Authorization: Bearer <token>`. Players that can't send headers may put a **stream token**
+  (`POST /api/auth/stream-token`) into the URL as `?token=` on `/api/stream/…` and `/api/cover/…`. That's the only
+  place a token is read from a URL, and the only kind of token accepted there: URLs end up in logs.
+- Roles are **anonymous**, **user** and **admin**. Bodies are capped at 64 KiB (a playlist 4 MiB), then `413`.
+  Password rules, token lifetimes and the rate limit are in [server.md](server.md#accounts).
 
 ## Authentication
 
@@ -36,26 +35,21 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanCompletedUtc", "lastScanError" }` |
 | `POST /api/library/scan` | admin | Asks for a scan: `202 { "message": "Scan requested." }`. Poll the status route |
 | `GET /api/tracks` | user | Every track; `?q=text` filters by title, artist, album, album artist or genre |
-| `GET /api/albums` | user | The server's albums, tracks nested |
-| `GET /api/artists` | user | The server's (album) artists, albums nested |
 | `GET /api/config` | admin | `{ "libraryPath" }` |
 | `POST /api/config/library-path` | admin | Body `{ "newPath" }`. Switches the music folder (kept in the database) and asks for a scan. `400` for an empty or missing folder |
 
-The players only use `/api/tracks` and build albums and artists themselves; `/api/albums` and `/api/artists` nest every
-track and can get big.
-
 A **track** has `id`, `title`, `artist`, `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `year`,
-`genre`, `duration`, `fileSizeBytes`, `fileModifiedUtc`, `hasCoverArt`, `dateAdded` and `format` (`codec`,
-`sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). `filePath` is just a
-placeholder, `server:{id}`: real paths never leave the server. Favourites and play counts aren't here, because they're
-per account: they come from `/api/me/data`.
+`genre`, `durationMs`, `fileSizeBytes`, `fileModifiedUtc`, `hasCoverArt`, `dateAdded` and `format` (`codec`,
+`sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). Files stay on the server, and so
+do their paths. Favourites and play counts are per account and come from `/api/me/data`. The players group albums and
+artists themselves.
 
 ## Your data
 
 The signed-in account's favourites, play counts and playlists. Every route here touches only the account in the token,
 and none takes a stream token. Limits: 100,000 favourites, 100,000 tracks with play counts, 500 playlists of up to
 20,000 tracks, IDs up to 128 characters, playlist names up to 200 and descriptions up to 1,000. Over a limit you get
-`409` when adding and `400` when importing.
+`409`.
 
 | Route | Role | |
 |---|---|---|
@@ -65,7 +59,6 @@ and none takes a stream token. Limits: 100,000 favourites, 100,000 tracks with p
 | `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayed" }`, `409` at the limit |
 | `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` for a rule violation, `409` at the limit |
 | `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` for an unknown ID |
-| `POST /api/me/data/import` | user | The one-time hand-over of what a player kept on the device, shaped like `GET /api/me/data`, up to 32 MiB. It only adds: favourites are added, play counts only go up, and playlists the account already has are left alone. `200` with the resulting counts, or `400` (and nothing stored) if anything is invalid |
 
 The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs simply stay.
 
@@ -85,5 +78,7 @@ TOKEN=$(curl -s http://localhost:5200/api/auth/login -H 'Content-Type: applicati
   -d '{"username":"alice","password":"correct horse battery"}' | jq -r .token)
 
 curl -s -H "Authorization: Bearer $TOKEN" 'http://localhost:5200/api/tracks?q=coltrane' | jq '.[].title'
-mpv "http://localhost:5200/api/stream/<trackId>?token=$TOKEN"
+
+STREAM=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" http://localhost:5200/api/auth/stream-token | jq -r .token)
+mpv "http://localhost:5200/api/stream/<trackId>?token=$STREAM"
 ```

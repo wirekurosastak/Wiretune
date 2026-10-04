@@ -9,7 +9,6 @@ import '../models/library_models.dart';
 import '../models/protocol.dart';
 import '../util/async_lock.dart';
 import '../util/cancellation.dart';
-import '../util/dotnet_format.dart';
 import '../util/event.dart';
 import '../util/sorting.dart';
 import '../util/text.dart';
@@ -17,18 +16,6 @@ import 'app_paths.dart';
 import 'metadata_scanner.dart';
 import 'track_deduplication.dart';
 import 'wiretune_log.dart';
-
-/// Where the favourites, play counts and playlists of server tracks are kept.
-enum UserDataMode {
-  /// On this device only: no server, or a server that predates per-account data.
-  local,
-
-  /// On the signed-in server account. Changes are saved here and sent to the server.
-  server,
-
-  /// On a server account that cannot be reached right now. Server tracks and their playlists cannot be changed.
-  serverUnavailable,
-}
 
 /// The library: every track (local and from a server), the albums and artists built from them, and the playlists. It
 /// is held in memory as an immutable snapshot that is replaced wholesale after every change, so readers need no lock.
@@ -74,17 +61,18 @@ class LibraryService {
   final Event<Playlist> playlistEdited = Event<Playlist>();
   final Event<String> playlistRemoved = Event<String>();
 
-  /// Set by the server session; decides whether changes to server tracks are kept locally or on the server.
-  UserDataMode userDataMode = UserDataMode.local;
+  /// Set by the server session while it is signed in. The favourites, play counts and playlists of server tracks live
+  /// on the server account, so they can only be changed then: a change is saved here at once and sent on.
+  bool serverConnected = false;
 
   /// Reads a small persisted user preference (interface language, theme); null when it was never set.
-  Future<String?> getPreference(String name) => _repository.getSetting('Preference.$name');
+  Future<String?> getPreference(String name) => _repository.getSetting('preference.$name');
 
-  Future<void> setPreference(String name, String value) => _repository.setSetting('Preference.$name', value);
+  Future<void> setPreference(String name, String value) => _repository.setSetting('preference.$name', value);
 
   Future<void> initialize() async {
     await _repository.initialize();
-    libraryPath = await _repository.getSetting('LibraryPath', '') ?? '';
+    libraryPath = await _repository.getSetting('library_path', '') ?? '';
 
     final storedTracks = await _repository.getAllTracks();
     final storedPlaylists = await _repository.getAllPlaylists();
@@ -144,7 +132,7 @@ class LibraryService {
         if (cancellationToken?.isCancelled ?? false) return false;
 
         libraryPath = root;
-        await _repository.setSetting('LibraryPath', root);
+        await _repository.setSetting('library_path', root);
 
         await _commitGate.synchronized(() async {
           final existingServerTracks = _snapshot.tracks.where((t) => !t.isLocal).toList();
@@ -181,11 +169,11 @@ class LibraryService {
     await _commitGate.synchronized(() => _replaceTracksCore(list));
   }
 
-  /// Replaces the server part of the library. With [userData] the signed-in account's favourites, play counts and
-  /// playlists from the server win over whatever this device cached; without it the cached values stay.
-  Future<void> mergeServerTracks(Iterable<Track> serverTracks, [UserDataSnapshot? userData]) async {
+  /// Replaces the server part of the library, with the signed-in account's favourites, play counts and playlists as
+  /// the server holds them (they replace whatever this device cached).
+  Future<void> mergeServerTracks(Iterable<Track> serverTracks, UserDataSnapshot userData) async {
     final incomingServer = serverTracks.toList();
-    if (userData != null) _applyUserData(incomingServer, userData);
+    _applyUserData(incomingServer, userData);
 
     await _commitGate.synchronized(() async {
       final existingLocalTracks = _snapshot.tracks.where((t) => t.isLocal).toList();
@@ -202,8 +190,8 @@ class LibraryService {
         _serverAliases = const {};
       }
 
-      if (userData != null) await _replaceServerPlaylists(userData.playlists);
-      await _replaceTracksCore(merged, serverOwnsUserData: userData != null);
+      await _replaceServerPlaylists(userData.playlists);
+      await _replaceTracksCore(merged, serverOwnsUserData: true);
     });
   }
 
@@ -249,63 +237,8 @@ class LibraryService {
       await _repository.savePlaylist(playlist);
     }
 
-    final serverIds = fromServer.map((pl) => pl.id).toSet();
-    // A local playlist handed over to the server (same ID) is replaced by the server's copy.
-    _playlists = _sortedPlaylists([
-      ..._playlists.where((pl) => !pl.isServer && !serverIds.contains(pl.id)),
-      ...fromServer,
-    ]);
+    _playlists = _sortedPlaylists([..._playlists.where((pl) => !pl.isServer), ...fromServer]);
     playlistsChanged.emit(null);
-  }
-
-  /// What this device holds for server tracks (favourites, play counts, playlists made while signed out), in the form
-  /// the server stores it; null when there is nothing. Used once per account to hand old local data over to the server.
-  UserDataSnapshot? collectServerTrackUserData() {
-    final serverTracks = _snapshot.tracks.where((t) => !t.isLocal).toList();
-    final serverIds = serverTracks.map((t) => t.id).toSet();
-
-    // The server turns down a whole import when one entry breaks its rules (UserDataRules), so only what it accepts is
-    // sent: valid IDs, names and descriptions cut to their limits, and no more than an account may hold.
-    final favorites = serverTracks
-        .where((t) => t.isFavorite && UserDataRules.validateId(t.id) == null)
-        .map((t) => t.id)
-        .take(UserDataRules.maxFavorites)
-        .toList();
-    final plays = serverTracks
-        .where((t) => t.playCount > 0 && UserDataRules.validateId(t.id) == null)
-        .map((t) => TrackPlayStats(t.id, t.playCount, t.lastPlayed))
-        .take(UserDataRules.maxTrackStats)
-        .toList();
-    final playlists = _playlists
-        .where((pl) => !pl.isServer && pl.trackIds.any(serverIds.contains))
-        .map(_forImport)
-        .whereType<PlaylistData>()
-        .take(UserDataRules.maxPlaylists)
-        .toList();
-
-    return favorites.length + plays.length + playlists.length == 0
-        ? null
-        : UserDataSnapshot(favorites, plays, playlists);
-  }
-
-  /// The playlist as the server accepts it, or null when it cannot be stored there at all (no name, unusable ID).
-  static PlaylistData? _forImport(Playlist playlist) {
-    if (UserDataRules.validateId(playlist.id) != null || isBlank(playlist.name)) return null;
-    final name = playlist.name.trim();
-    final description = playlist.description?.trim();
-    return PlaylistData(
-      playlist.id,
-      name.length > UserDataRules.maxPlaylistNameLength ? name.substring(0, UserDataRules.maxPlaylistNameLength) : name,
-      description != null && description.length > UserDataRules.maxPlaylistDescriptionLength
-          ? description.substring(0, UserDataRules.maxPlaylistDescriptionLength)
-          : description,
-      playlist.trackIds
-          .where((id) => UserDataRules.validateId(id) == null)
-          .take(UserDataRules.maxPlaylistTracks)
-          .toList(),
-      playlist.createdAt,
-      playlist.modifiedAt,
-    );
   }
 
   /// Points playlist entries at the local copy of a track that also exists on the server.
@@ -347,8 +280,8 @@ class LibraryService {
     libraryChanged.emit(null);
   }
 
-  /// False while the favourites, play count and playlists of this track live on a server that cannot be reached.
-  bool _canChangeUserData(Track track) => track.isLocal || userDataMode != UserDataMode.serverUnavailable;
+  /// False for a server track while the server cannot be reached: its favourite and play count live there.
+  bool _canChangeUserData(Track track) => track.isLocal || serverConnected;
 
   Future<void> toggleFavorite(String trackId) async {
     final track = getTrack(trackId);
@@ -357,7 +290,7 @@ class LibraryService {
     track.isFavorite = !track.isFavorite;
     await _repository.updateTrackFavorite(track.id, track.isFavorite);
     favoriteChanged.emit(track);
-    if (!track.isLocal && userDataMode == UserDataMode.server) favoriteToggled.emit(track);
+    if (!track.isLocal) favoriteToggled.emit(track);
   }
 
   /// Sets a favourite without telling the server, e.g. to undo a change the server did not take.
@@ -377,7 +310,7 @@ class LibraryService {
     track.playCount++;
     track.lastPlayed = DateTime.now().toUtc();
     await _repository.incrementPlayCount(track.id);
-    if (!track.isLocal && userDataMode == UserDataMode.server) playRecorded.emit(track);
+    if (!track.isLocal) playRecorded.emit(track);
   }
 
   Future<Playlist> createPlaylist(String name, [String? description]) async {
@@ -385,7 +318,7 @@ class LibraryService {
       id: newId(),
       name: isBlank(name) ? Localizer.get('PlaylistNew') : name.trim(),
       description: description,
-      isServer: userDataMode == UserDataMode.server,
+      isServer: serverConnected,
     );
 
     await _repository.savePlaylist(playlist);
@@ -411,11 +344,11 @@ class LibraryService {
     playlist.modifiedAt = DateTime.now().toUtc();
     await _repository.savePlaylist(playlist);
     playlistsChanged.emit(null);
-    if (playlist.isServer && userDataMode == UserDataMode.server) playlistEdited.emit(playlist);
+    if (playlist.isServer) playlistEdited.emit(playlist);
   }
 
   /// A playlist of the server account cannot be changed while the server cannot be reached.
-  bool _canChangePlaylist(Playlist playlist) => !playlist.isServer || userDataMode != UserDataMode.serverUnavailable;
+  bool _canChangePlaylist(Playlist playlist) => !playlist.isServer || serverConnected;
 
   Future<void> renamePlaylist(String playlistId, String newName) async {
     if (isBlank(newName)) return;
@@ -427,7 +360,7 @@ class LibraryService {
     await _repository.savePlaylist(playlist);
     _playlists = _sortedPlaylists(_playlists);
     playlistsChanged.emit(null);
-    if (playlist.isServer && userDataMode == UserDataMode.server) playlistEdited.emit(playlist);
+    if (playlist.isServer) playlistEdited.emit(playlist);
   }
 
   Future<void> deletePlaylist(String playlistId) async {
@@ -437,7 +370,7 @@ class LibraryService {
 
     await _repository.deletePlaylist(playlistId);
     playlistsChanged.emit(null);
-    if (removed.isServer && userDataMode == UserDataMode.server) playlistRemoved.emit(playlistId);
+    if (removed.isServer) playlistRemoved.emit(playlistId);
   }
 
   /// Tracks whose title, artist, album, album artist or genre contain [query] (ignoring case).
@@ -467,7 +400,7 @@ class LibraryService {
     final matchingTracks = _snapshot.tracks.where((t) => equalsIgnoreCase(t.artist, trimmed)).toList();
     if (matchingTracks.isEmpty) return null;
     return Artist(
-      id: stableId(toUpperInvariant(trimmed)),
+      id: stableId(trimmed.toLowerCase()),
       name: trimmed,
       trackCount: matchingTracks.length,
       albumCount: 0,
@@ -500,11 +433,6 @@ class LibrarySnapshot {
   static int _disc(Track t) => t.discNumber ?? 1;
   static int _number(Track t) => t.trackNumber ?? 0x7FFFFFFF;
 
-  static String _directoryOf(String filePath) {
-    if (!filePath.contains('/') && !filePath.contains('\\')) return ''; // "server:{id}" has no folder
-    return toLowerInvariant(p.dirname(filePath));
-  }
-
   static LibrarySnapshot build(Iterable<Track> source) {
     final seen = <String>{};
     final tracks = [
@@ -529,15 +457,12 @@ class LibrarySnapshot {
     String? tagged(Track t) => t.albumArtistInferred ? null : t.albumArtist;
     final inferred = <Track, String>{};
 
+    // Only files on this machine have a folder; the server already did this for its own tracks.
     final groups = <String, List<Track>>{};
     for (final t in tracks) {
-      if (isBlank(t.album) || t.filePath.trim().isEmpty) continue;
-      if (equalsIgnoreCase(t.album, MetadataScanner.unknownAlbum) || equalsIgnoreCase(t.album, 'Unknown Album')) {
-        continue;
-      }
-      final dir = _directoryOf(t.filePath);
-      if (dir.isEmpty) continue;
-      groups.putIfAbsent('${t.album.trim()}\u0000$dir', () => []).add(t);
+      if (t.filePath.isEmpty || isBlank(t.album) || equalsIgnoreCase(t.album, MetadataScanner.unknownAlbum)) continue;
+      final folder = p.dirname(t.filePath).toLowerCase();
+      groups.putIfAbsent('${t.album.trim()}\u0000$folder', () => []).add(t);
     }
 
     for (final groupTracks in groups.values) {
@@ -671,7 +596,7 @@ class LibrarySnapshot {
       );
       artists.add(
         Artist(
-          id: stableId(toUpperInvariant(name)),
+          id: stableId(name.toLowerCase()),
           name: name,
           albumCount: artistAlbums.length,
           trackCount: artistTracks.length,

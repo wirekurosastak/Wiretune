@@ -25,9 +25,9 @@ On Windows and macOS follow Flutter's own installation guide, then run `flutter 
 
 ```bash
 cd server
-dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/path/to/music   # straight from the source
-dart build cli -o build                                                    # a standalone build
-build/bundle/bin/wiretune_server --Wiretune:LibraryPath=/path/to/music     # run that build
+dart run bin/wiretune_server.dart --library /path/to/music   # straight from the source
+dart build cli -o build                                      # a standalone build
+build/bundle/bin/wiretune_server --library /path/to/music     # run that build
 ```
 
 Copy the whole `build/bundle` folder (`bin/wiretune_server`, or `.exe`, and the SQLite library in `lib/`) to the
@@ -115,11 +115,6 @@ storePassword=…
 keyAlias=wiretune
 keyPassword=…
 ```
-
-To install over the old C# app, sign with the key that signed it. That app had no signing setup of its own, so it was
-.NET's debug keystore: `~/.local/share/Xamarin/Mono for Android/debug.keystore` on Linux and macOS,
-`%LOCALAPPDATA%\Xamarin\Mono for Android\debug.keystore` on Windows, alias `androiddebugkey`, both passwords `android`.
-Otherwise uninstall the old app first; its local data goes with it, and a server library comes back after signing in.
 
 ### Android Auto without a car
 

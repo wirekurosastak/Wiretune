@@ -49,7 +49,7 @@ class _Route {
       final segment = segments[i];
       if (segment.startsWith('{') && segment.endsWith('}')) {
         params[segment.substring(1, segment.length - 1)] = path[i];
-      } else if (segment.toLowerCase() != path[i].toLowerCase()) {
+      } else if (segment != path[i]) {
         return null;
       }
     }
@@ -116,7 +116,9 @@ class WiretuneServer {
 
   static const int _defaultBodyLimit = 64 * 1024;
   static const int _playlistBodyLimit = 4 * 1024 * 1024;
-  static const int _importBodyLimit = 32 * 1024 * 1024;
+
+  /// The setting that holds the music folder an administrator chose in the player; it wins over the configured one.
+  static const String _chosenLibraryPathKey = 'chosen_library_path';
 
   final ServerOptions options;
   final ServerPaths paths;
@@ -128,18 +130,16 @@ class WiretuneServer {
   final SetupCode setupCode;
   final LibraryScanService scanner;
   final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
-  final List<HttpServer> _servers = [];
+  HttpServer? _http;
   late final List<_Route> _routes = _buildRoutes();
 
-  /// The port of the first listener (useful when started on port 0).
-  int get port => _servers.first.port;
-
-  List<HttpServer> get servers => _servers;
+  /// The port the server listens on (useful when started on port 0).
+  int get port => _http!.port;
 
   /// Opens the database and the library, then starts listening and scanning.
   static Future<WiretuneServer> start(ServerOptions options, {bool listen = true}) async {
     final dataDirectory = AppPaths.getDataDirectory(overridePath: options.dataDirectory, subdirectory: 'Server');
-    WiretuneLog.initialize(path: p.join(dataDirectory, 'wiretune-server.log'));
+    WiretuneLog.initialize(path: p.join(dataDirectory, 'wiretune-server.log'), level: options.logLevel);
     WiretuneLog.info('Server', '=== Starting the Wiretune server ===');
 
     final database = DatabaseManager(p.join(dataDirectory, 'wiretune-server.db'));
@@ -147,7 +147,7 @@ class WiretuneServer {
     final repository = LibraryRepository(database);
 
     // A library folder chosen through the admin API wins over the configured one, so it survives restarts.
-    final saved = await repository.getSetting('library_path');
+    final saved = await repository.getSetting(_chosenLibraryPathKey);
     String? savedRoot;
     if (saved != null && saved.trim().isNotEmpty) {
       if (Directory(saved).existsSync()) {
@@ -195,14 +195,11 @@ class WiretuneServer {
     }
 
     if (listen) {
-      for (final address in options.listenAddresses) {
-        final bind = address.bindAddress ?? address.host;
-        final httpServer = await shelf_io.serve(server.handler, bind, address.port, shared: true);
-        httpServer.autoCompress = false; // JSON is compressed by the handler, audio never
-        httpServer.idleTimeout = const Duration(seconds: 120);
-        server._servers.add(httpServer);
-        WiretuneLog.info('Server', 'Now listening on: http://${address.host}:${httpServer.port}');
-      }
+      final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
+      http.autoCompress = false; // JSON is compressed by the handler, audio never
+      http.idleTimeout = const Duration(seconds: 120);
+      final host = options.host.contains(':') ? '[${options.host}]' : options.host;
+      WiretuneLog.info('Server', 'Listening on http://$host:${http.port}');
     }
     scanner.start();
     return server;
@@ -210,10 +207,8 @@ class WiretuneServer {
 
   Future<void> close() async {
     await scanner.stop();
-    for (final server in _servers) {
-      await server.close(force: true);
-    }
-    _servers.clear();
+    await _http?.close(force: true);
+    _http = null;
     database.close();
   }
 
@@ -275,28 +270,30 @@ class WiretuneServer {
     return route.handler(_Call(request, params!, principal, route.bodyLimit ?? _defaultBodyLimit));
   }
 
-  /// The account behind the request's token, or null. A token in the query string counts only on media routes, and a
-  /// stream token opens nothing else. Tokens live for up to 90 days, so every one is checked against the accounts:
-  /// deleting an account ends its access immediately.
+  /// The account behind the request's token, or null. A stream token opens the media routes and nothing else, and it is
+  /// the only kind a query string may carry (URLs end up in logs). Tokens live for up to 90 days, so every one is checked
+  /// against the accounts: deleting an account ends its access immediately.
   Principal? _authenticate(Request request, bool isMediaRoute) {
     String? token;
+    var fromQuery = false;
     final header = request.headers['authorization'];
     if (header != null && header.toLowerCase().startsWith('bearer ')) {
       token = header.substring(7).trim();
     } else if (isMediaRoute) {
       token = request.url.queryParameters['token'];
+      fromQuery = true;
     }
     if (token == null || token.isEmpty) return null;
 
     final principal = auth.validate(token);
     if (principal == null) return null;
-    if (principal.isStreamToken && !isMediaRoute) return null;
+    if (principal.isStreamToken ? !isMediaRoute : fromQuery) return null;
     if (!auth.userExists(principal.userId)) return null;
     return principal;
   }
 
   String _clientAddress(Request request) {
-    if (options.forwardedHeaders) {
+    if (options.trustProxy) {
       final forwarded = request.headers['x-forwarded-for'];
       // The last entry is the one the nearest proxy appended; the ones before it are whatever the client sent.
       final hops = forwarded?.split(',').map((h) => h.trim()).where((h) => h.isNotEmpty);
@@ -335,7 +332,7 @@ class WiretuneServer {
     _Route('GET', '/api/users', Access.admin, (_) => jsonResponse(auth.getAllUsers().map((u) => u.toJson()).toList())),
     _Route('DELETE', '/api/users/{userId}', Access.admin, (call) {
       final userId = call.params['userId']!;
-      if (call.userId.toLowerCase() == userId.toLowerCase()) {
+      if (call.userId == userId) {
         return errorResponse(400, 'You cannot delete your own account.');
       }
       return auth.deleteUser(userId) ? Response.ok(null) : errorResponse(404, 'User not found.');
@@ -366,10 +363,8 @@ class WiretuneServer {
     _Route('GET', '/api/tracks', Access.user, (call) {
       final q = call.request.url.queryParameters['q'];
       final tracks = isBlank(q) ? library.tracks : library.search(q!);
-      return jsonResponse(tracks.map(trackDto).toList());
+      return jsonResponse(tracks.map((t) => t.toJson()).toList());
     }),
-    _Route('GET', '/api/albums', Access.user, (_) => jsonResponse(library.albums.map(_albumDto).toList())),
-    _Route('GET', '/api/artists', Access.user, (_) => jsonResponse(library.artists.map(_artistDto).toList())),
 
     // Media
     _Route('GET', '/api/stream/{trackId}', Access.media, _stream),
@@ -387,7 +382,6 @@ class WiretuneServer {
 
     // The signed-in account's favourites, play counts and playlists
     _Route('GET', '/api/me/data', Access.user, (call) => jsonResponse(userData.get(call.userId).toJson())),
-    _Route('POST', '/api/me/data/import', Access.user, _import, bodyLimit: _importBodyLimit),
     _Route('PUT', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, true)),
     _Route('DELETE', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, false)),
     _Route('POST', '/api/me/plays/{trackId}', Access.user, (call) {
@@ -474,7 +468,7 @@ class WiretuneServer {
     }
     if (!Directory(fullPath).existsSync()) return errorResponse(400, 'The folder does not exist: $fullPath');
 
-    await repository.setSetting('library_path', fullPath);
+    await repository.setSetting(_chosenLibraryPathKey, fullPath);
     paths.libraryRoot = fullPath;
     scanner.requestScan();
     return jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson());
@@ -515,25 +509,6 @@ class WiretuneServer {
     return lyrics == null ? notFound() : jsonResponse({'lyrics': lyrics});
   }
 
-  Future<Response> _import(_Call call) async {
-    final body = await call.jsonObject();
-    UserDataSnapshot? snapshot;
-    try {
-      snapshot = body == null ? null : UserDataSnapshot.fromJson(body);
-    } on Object {
-      return errorResponse(400, 'The data is not valid.');
-    }
-    final error = UserDataService.validateImport(snapshot);
-    if (error != null) return errorResponse(400, error);
-
-    final stored = userData.import(call.userId, snapshot!);
-    return jsonResponse({
-      'favorites': stored.favorites.length,
-      'plays': stored.plays.length,
-      'playlists': stored.playlists.length,
-    });
-  }
-
   Response _favorite(_Call call, bool favorite) {
     final trackId = call.params['trackId']!;
     final error = UserDataRules.validateId(trackId);
@@ -560,31 +535,4 @@ class WiretuneServer {
         ? errorResponse(409, 'An account can have at most ${UserDataRules.maxPlaylists} playlists.')
         : jsonResponse(saved.toJson());
   }
-
-  // ── What the library routes send ───────────────────────────────────────────────────────────────
-  // The server's own tracks carry the absolute path of each file and of the cover cache; these carry only what a player
-  // can use. filePath is a placeholder ("server:{id}"): older players key their database on it and need a unique value.
-
-  static Map<String, Object?> trackDto(Track t) => {...t.toJson(), 'filePath': 'server:${t.id}'};
-
-  static Map<String, Object?> _albumDto(Album a) => {
-    'id': a.id,
-    'title': a.title,
-    'artist': a.artist,
-    'year': a.year,
-    'genre': a.genre,
-    'trackCount': a.trackCount,
-    'totalDuration': formatTimeSpan(a.totalDuration),
-    'isHiRes': a.isHiRes,
-    'formatBadge': a.formatBadge,
-    'tracks': a.tracks.map(trackDto).toList(),
-  };
-
-  static Map<String, Object?> _artistDto(Artist a) => {
-    'id': a.id,
-    'name': a.name,
-    'albumCount': a.albumCount,
-    'trackCount': a.trackCount,
-    'albums': a.albums.map(_albumDto).toList(),
-  };
 }

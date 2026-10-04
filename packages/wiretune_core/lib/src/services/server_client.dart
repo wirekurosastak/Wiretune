@@ -34,7 +34,6 @@ class ServerStreamingClient {
   static const Duration probeTimeout = Duration(seconds: 15); // initial reachability check
   static const Duration defaultTimeout = Duration(seconds: 30); // normal API calls
   static const Duration libraryTimeout = Duration(minutes: 3); // large library fetch
-  static const Duration importTimeout = Duration(minutes: 2); // one-time hand-over of local favourites
 
   final http.Client _http;
   final bool _ownsClient;
@@ -128,13 +127,9 @@ class ServerStreamingClient {
 
   // ── The signed-in account's favourites, play statistics and playlists ──
 
-  /// Everything the server keeps for the account. A server without per-account data answers 404.
+  /// Everything the server keeps for the account: favourites, play statistics and playlists.
   Future<UserDataSnapshot> getUserData(String baseUrl) async =>
       _parse(UserDataSnapshot.fromJson, await _send('GET', baseUrl, '/api/me/data'));
-
-  /// Adds what this device already holds to the account (union: nothing on the server is removed or lowered).
-  Future<void> importUserData(String baseUrl, UserDataSnapshot data) =>
-      _send('POST', baseUrl, '/api/me/data/import', body: data.toJson(), timeout: importTimeout);
 
   Future<void> setFavorite(String baseUrl, String trackId, bool favorite) =>
       _send(favorite ? 'PUT' : 'DELETE', baseUrl, '/api/me/favorites/${Uri.encodeComponent(trackId)}');
@@ -159,7 +154,7 @@ class ServerStreamingClient {
     }
   }
 
-  /// The lyrics of a server track, or null when it has none (or the server predates the endpoint).
+  /// The lyrics of a server track, or null when it has none.
   Future<String?> getLyrics(String baseUrl, String trackId) async {
     try {
       final element = await _send('GET', baseUrl, '/api/lyrics/${Uri.encodeComponent(trackId)}');

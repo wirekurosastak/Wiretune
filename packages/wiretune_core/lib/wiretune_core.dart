@@ -25,7 +25,7 @@ export 'src/services/track_deduplication.dart';
 export 'src/services/wiretune_log.dart';
 export 'src/util/async_lock.dart';
 export 'src/util/cancellation.dart';
-export 'src/util/dotnet_format.dart';
 export 'src/util/event.dart';
 export 'src/util/sorting.dart';
 export 'src/util/text.dart';
+export 'src/util/time.dart';

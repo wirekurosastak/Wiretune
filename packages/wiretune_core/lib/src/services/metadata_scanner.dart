@@ -12,7 +12,6 @@ import '../metadata/tag_reader.dart';
 import '../models/audio_format.dart';
 import '../models/library_models.dart';
 import '../util/cancellation.dart';
-import '../util/dotnet_format.dart';
 import '../util/text.dart';
 import 'app_paths.dart';
 import 'wiretune_log.dart';
@@ -43,8 +42,7 @@ class MetadataScanner {
   static const String unknownArtist = 'Unknown artist';
   static const String unknownAlbum = 'Unknown album';
 
-  /// True for the placeholder above, and for the Hungarian one that libraries scanned by older versions contain.
-  static bool isUnknownArtist(String? name) => equalsIgnoreCase(name, unknownArtist) || name == 'Ismeretlen előadó';
+  static bool isUnknownArtist(String? name) => equalsIgnoreCase(name, unknownArtist);
 
   static const List<String> folderCoverNames = [
     'cover.jpg',
@@ -63,9 +61,9 @@ class MetadataScanner {
   static const int _maxLyricsLength = 100000;
   static const int _batchSize = 24;
 
-  /// The track ID: the first 32 hex digits of the SHA-256 of the lower-cased full path.
+  /// The track ID: the first 32 hex digits of the SHA-256 of the full path, compared as the file system compares it.
   static String computeTrackId(String filePath) =>
-      toUpperHex(sha256.convert(utf8.encode(toLowerInvariant(AppPaths.fullPath(filePath)))).bytes).substring(0, 32);
+      sha256.convert(utf8.encode(AppPaths.comparable(AppPaths.fullPath(filePath)))).toString().substring(0, 32);
 
   /// Reads one file; null when it is not a readable audio file.
   Future<Track?> readTrackMetadata(String filePath, {String? coverCacheDirectory}) =>
@@ -364,9 +362,7 @@ String? _cacheEmbeddedCover(
   if (!tags.hasPicture || cacheDirectory == null || cacheDirectory.trim().isEmpty) return null;
   try {
     Directory(cacheDirectory).createSync(recursive: true);
-    final hash = toUpperHex(
-      sha256.convert(utf8.encode('${toUpperInvariant(albumArtist)}\u001f${toUpperInvariant(album)}')).bytes,
-    ).substring(0, 16);
+    final hash = stableId('${albumArtist.toLowerCase()}\u001f${album.toLowerCase()}');
 
     for (final extension in const ['.jpg', '.png']) {
       final existing = p.join(cacheDirectory, 'cover_$hash$extension');

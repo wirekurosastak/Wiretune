@@ -72,7 +72,7 @@ void main() {
     expect(await library.scanFolder(root.path), isTrue);
     expect(library.tracks, hasLength(3));
     expect(library.libraryPath, AppPaths.fullPath(root.path));
-    expect(repo.settings['LibraryPath'], AppPaths.fullPath(root.path));
+    expect(repo.settings['library_path'], AppPaths.fullPath(root.path));
 
     final id = library.tracks.first.id;
     await library.toggleFavorite(id);

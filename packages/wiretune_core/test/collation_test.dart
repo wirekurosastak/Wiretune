@@ -1,11 +1,11 @@
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// Sorting by name, as the C# player's culture-aware comparer (ICU) sorted.
+/// Sorting by name the way people expect: ICU's root collation, ignoring case and accents.
 void main() {
   List<String> sorted(List<String> names) => [...names]..sort(compareText);
 
-  test('punctuation sorts before digits, digits before letters, as the C# player showed them', () {
+  test('punctuation sorts before digits, digits before letters', () {
     expect(
       sorted([
         'Acoustic Live',

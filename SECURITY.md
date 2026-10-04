@@ -24,8 +24,8 @@ internet. This page is the honest list of what it does and doesn't do about that
   knows the current one (`POST /api/auth/change-password`; the players have no screen for it yet).
 - **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. There's no revocation: a
   password change leaves earlier tokens valid until they expire. Deleting the user locks them out at once.
-- **Tokens in URLs.** libmpv, TVs and `ffmpeg` can't send headers, so audio and cover URLs carry `?token=`. The
-  players put a **stream token** there: 8 hours, audio and covers only, useless for anything else. The server takes
+- **Tokens in URLs.** libmpv, TVs and `ffmpeg` can't send headers, so audio and cover URLs carry `?token=`, and the
+  server takes only a **stream token** there: 8 hours, audio and covers only, useless for anything else. It reads
   `?token=` on `/api/stream` and `/api/cover` and nowhere else, and never logs a query string. Those URLs still end up
   in your proxy's access log and, on a desktop running the spectrum analyser, in the process list.
 - **The database is the crown jewels.** `wiretune-server.db` holds the token-signing key and the password hashes:
@@ -34,8 +34,7 @@ internet. This page is the honest list of what it does and doesn't do about that
 - **Roles**: administrator and user. Every user can read the whole library. Favourites, play counts and playlists are
   per account, and no route, not even an administrator's, reads somebody else's.
 - **Files.** The server reads only the music folder and serves only files inside it (or its cover cache). Clients
-  never see a server path. Request bodies are capped at 64 KiB, 4 MiB for a playlist and 32 MiB for the one-time
-  import.
+  never see a server path. Request bodies are capped at 64 KiB, 4 MiB for a playlist.
 
 ## Players
 

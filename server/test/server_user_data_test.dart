@@ -130,48 +130,6 @@ void main() {
       expect((await data(admin)).playlists, isEmpty);
     });
 
-    test('import is a union that never lowers what the server holds', () async {
-      final (admin, _) = await setupAdmin(server);
-      await admin.put('/api/me/favorites/a');
-      await admin.post('/api/me/plays/a');
-      await admin.post('/api/me/plays/a');
-      await admin.put('/api/me/playlists/pl', {
-        'name': 'Server copy',
-        'trackIds': ['a'],
-      });
-
-      final played = DateTime.utc(2026);
-      final import = UserDataSnapshot(
-        ['a', 'b'],
-        [const TrackPlayStats('a', 1, null), TrackPlayStats('c', 5, played)],
-        [
-          PlaylistData('pl', 'Device copy', null, const ['x'], played, played),
-          PlaylistData('pl-2', 'Only on the device', null, const ['b'], played, played),
-        ],
-      ).toJson();
-
-      for (var round = 0; round < 2; round++) {
-        final response = await admin.post('/api/me/data/import', import);
-        expect(response.statusCode, 200);
-        expect(json(response), {'favorites': 2, 'plays': 2, 'playlists': 2});
-
-        final stored = await data(admin);
-        expect(stored.favorites.toList()..sort(), ['a', 'b']);
-        expect(stored.plays.singleWhere((p) => p.trackId == 'a').playCount, 2); // the higher count wins
-        final c = stored.plays.singleWhere((p) => p.trackId == 'c');
-        expect((c.playCount, c.lastPlayed), (5, played));
-        expect(stored.playlists.singleWhere((p) => p.id == 'pl').name, 'Server copy');
-        expect(stored.playlists.singleWhere((p) => p.id == 'pl-2').name, 'Only on the device');
-      }
-    });
-
-    test('an import with one invalid entry stores nothing', () async {
-      final (admin, _) = await setupAdmin(server);
-      final import = UserDataSnapshot(['fine', 'x' * (UserDataRules.maxIdLength + 1)], const [], const []).toJson();
-      expect((await admin.post('/api/me/data/import', import)).statusCode, 400);
-      expect((await data(admin)).favorites, isEmpty);
-    });
-
     test('deleting an account removes its data and ends its access', () async {
       final (admin, _) = await setupAdmin(server);
       final (guest, guestInfo) = await registerGuest(server, admin);

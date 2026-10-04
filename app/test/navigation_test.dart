@@ -207,9 +207,9 @@ void main() {
 
   test('preferences are applied at start and remembered', () async {
     final repo = MockRepository()
-      ..settings['Preference.Language'] = 'de'
-      ..settings['Preference.Theme'] = 'Light'
-      ..settings['Preference.OnlineLyrics'] = '0';
+      ..settings['preference.language'] = 'de'
+      ..settings['preference.theme'] = 'light'
+      ..settings['preference.online_lyrics'] = '0';
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
     final vm = MainViewModel(TestSupport.createEngine(), library, ServerSession(library, repo));
     await vm.start();
@@ -223,9 +223,9 @@ void main() {
     vm.toggleTheme();
     vm.showPerformanceStats = true;
     await Future<void>.delayed(Duration.zero);
-    expect(repo.settings['Preference.Language'], 'hu');
-    expect(repo.settings['Preference.Theme'], 'Dark');
-    expect(repo.settings['Preference.ShowPerformanceStats'], '1');
+    expect(repo.settings['preference.language'], 'hu');
+    expect(repo.settings['preference.theme'], 'dark');
+    expect(repo.settings['preference.show_performance_stats'], '1');
     Localizer.instance.setLanguage('en');
   });
 }

@@ -95,7 +95,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
       if (mapped != null) result.add(mapped);
     }
     // mpv often lists only the sound server's outputs. The ALSA hardware devices (the ones exclusive and bit-perfect
-    // need) are added from `aplay -l`, as the C# player did, or from /proc/asound when aplay is not installed.
+    // need) are added from `aplay -l`, or from /proc/asound when aplay is not installed.
     if (Platform.isLinux && !result.any((d) => d.driverType == 'ALSA Direct')) {
       result.addAll(await _alsaHardwareDevices());
     }

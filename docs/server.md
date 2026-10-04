@@ -7,7 +7,7 @@ Going anywhere near a network you don't fully trust? Read [SECURITY.md](../SECUR
 
 ```bash
 cd server
-dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/srv/music
+dart run bin/wiretune_server.dart --library /srv/music
 ```
 
 It listens on port 5200 on every IPv4 interface, scans the folder, and waits for the first account. Until someone
@@ -18,36 +18,31 @@ No administrator account exists yet. Create it in the player with the setup code
 ```
 
 For a server that stays up, build the standalone executable ([building.md](building.md#server)) and run
-`build/bundle/bin/wiretune_server` with the same options. `--help` lists them.
+`build/bundle/bin/wiretune_server` with the same options.
 
-Coming from the C# server? Point the new one at the same data directory: accounts, favourites, playlists and even the
-old tokens carry over, so nobody has to sign in again.
+## Options
 
-## Configuration
+`--help` lists them. Every option can also be set in the environment, which suits services and containers: `--port
+8080` is `WIRETUNE_PORT=8080`, `--trust-proxy` is `WIRETUNE_TRUST_PROXY=true`. The command line wins.
 
-Settings come from `appsettings.json` (section `Wiretune`, in the working directory or next to the executable), then
-environment variables (`Wiretune__Port=8080`), then the command line (`--Wiretune:Port=8080`), and the last one wins.
-The names are the C# server's, so an old configuration still works.
-
-| Setting | Default | |
+| Option | Default | |
 |---|---|---|
-| `Wiretune:LibraryPath` | your Music folder | The music folder. Empty or missing, your Music folder is used, with a warning. A folder an administrator picks in the player is saved, and wins after a restart as long as it still exists. |
-| `Wiretune:DataDirectory` | [see below](#data-directory) | Database, cover cache and log. |
-| `Wiretune:Port` | `5200` | Ignored when `WIRETUNE_URLS` is set. |
-| `Wiretune:ScanIntervalMinutes` | `30` | Background rescans; `0` turns them off. |
-| `Wiretune:SetupCode` | random | The first account's code. Unset, it's a new one at every start. Case, spaces and dashes don't matter. |
+| `--library <folder>` | your Music folder | The music folder, absolute or relative to the working directory. A folder an administrator picks in the player is saved, and wins after a restart as long as it exists. |
+| `--data-dir <folder>` | [see below](#data-directory) | Where the database, cover cache and log live. |
+| `--host <address>` | `0.0.0.0` | Where to listen: `0.0.0.0` for every IPv4 interface, `::` for every interface, `127.0.0.1` for this machine only. |
+| `--port <number>` | `5200` | |
+| `--scan-interval <minutes>` | `30` | Background rescans; `0` turns them off. |
+| `--setup-code <code>` | random | The code that creates the first account; without it, a new one at every start. Case, spaces and dashes don't matter. |
+| `--trust-proxy` | off | Take each client's address from `X-Forwarded-For`; only behind a reverse proxy ([below](#reverse-proxy-and-tls)). |
+| `--log-level <level>` | `info` | `trace`, `debug`, `info`, `warn` or `error`. |
 
-| Environment variable | |
-|---|---|
-| `WIRETUNE_DATA_DIR` | Root of Wiretune's data; the server uses its `Server` subfolder, so it never shares a database with a player. `Wiretune:DataDirectory` wins. |
-| `WIRETUNE_URLS` (or `ASPNETCORE_URLS`, `--urls=`) | Listen addresses, separated by `;`: `http://127.0.0.1:5200` for loopback only, `http://[::]:5200` for every interface, IPv6 included. No HTTPS; that's the proxy's job. |
-| `WIRETUNE_FORWARDED_HEADERS` (or `ASPNETCORE_FORWARDEDHEADERS_ENABLED`) | `true` behind a reverse proxy ([below](#reverse-proxy-and-tls)). |
-| `WIRETUNE_LOG_LEVEL` | `trace`, `debug`, `info` (default), `warn` or `error`. |
+The server speaks plain HTTP; TLS is a proxy's job.
 
 ## Data directory
 
 `~/.config/Wiretune/Server` on Linux, `%APPDATA%\Wiretune\Server` on Windows,
-`~/Library/Application Support/Wiretune/Server` on macOS, unless you moved it. The first lines of the log name it.
+`~/Library/Application Support/Wiretune/Server` on macOS, unless `--data-dir` says otherwise. The first lines of the
+log name it.
 
 - `wiretune-server.db`, with its `-wal` and `-shm`: the index, the accounts, everyone's favourites, play counts and
   playlists, and the token-signing key.
@@ -55,20 +50,22 @@ The names are the C# server's, so an old configuration still works.
 - `wiretune-server.log`: moved to `.1` at 10 MiB.
 
 Every change is on disk the moment it's made, so a restart loses nothing. A *different* data directory loses
-everything: a container without a volume or a changed `WIRETUNE_DATA_DIR`, and the server starts fresh and asks for a
-setup code again. Keep it on persistent storage.
+everything: a container without a volume or a changed `--data-dir`, and the server starts fresh and asks for a setup
+code again. Keep it on persistent storage.
 
 **Back up the database.** A scan rebuilds the index, but nothing rebuilds the accounts, the signing key and
 everybody's playlists. Stop the server first, or copy the `.db` together with its `-wal` and `-shm` files.
 
-Upgrades take care of themselves: an older database is migrated in place on the first start. Back it up anyway, and
-once a newer server has opened it, don't go back to an older one.
+The database records its schema version, and a server only opens its own: anything else is refused with a message
+rather than misread. A release that changes the schema upgrades the database in place on its first start, and after
+that an older server won't open it, so keep a backup from before an upgrade.
 
 ## Scanning
 
-At start-up, every `ScanIntervalMinutes`, on **Reindex** and whenever the music folder changes. Scans are incremental:
-files with the same path, size and modification time aren't read again, vanished files drop out, and hidden and
-unreadable ones are skipped.
+At start-up, every `--scan-interval` minutes, on **Reindex** and whenever the music folder changes. Scans are
+incremental: files with the same path, size and modification time aren't read again, vanished files drop out, and
+hidden and unreadable ones are skipped. A music folder that doesn't exist (yet) is reported by every scan until it
+appears, so a share that mounts late is simply picked up by the next one.
 
 The extension decides what's indexed: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis and
 Opus. A file whose extension lies is recognised by its content. Missing tags fall back to the file name,
@@ -78,9 +75,8 @@ If the folder the index came from suddenly looks empty, the scan is skipped with
 share?)*: an unmounted NAS shouldn't wipe your library. Pointing the server at a new, empty folder on purpose does
 clear it.
 
-**Track IDs** come from each file's full path, lower-cased, exactly as the C# server made them. Moving or renaming a
-file gives it a new ID, and the favourites and playlist entries of the old one point at nothing. Two files in one
-folder whose names differ only in case share an ID, so only one of them shows up.
+**Track IDs** come from each file's full path. Moving or renaming a file gives it a new ID, and the favourites and
+playlist entries of the old one point at nothing.
 
 ## Accounts
 
@@ -113,11 +109,9 @@ After=network-online.target
 
 [Service]
 User=wiretune
-WorkingDirectory=/opt/wiretune
-ExecStart=/opt/wiretune/bin/wiretune_server
-Environment=Wiretune__LibraryPath=/srv/music
-Environment=WIRETUNE_DATA_DIR=/var/lib/wiretune
+ExecStart=/opt/wiretune/bin/wiretune_server --library /srv/music --data-dir /var/lib/wiretune
 StateDirectory=wiretune
+StateDirectoryMode=0700
 Restart=on-failure
 
 [Install]
@@ -131,14 +125,14 @@ sudo systemctl enable --now wiretune
 journalctl -u wiretune -f        # the setup code shows up here on the first start
 ```
 
-The server keeps its files in `/var/lib/wiretune/Server`, and the `wiretune` user needs nothing but read access to the
-music. `systemctl stop` shuts it down cleanly; a scan that's running is dropped and runs again at the next start.
+systemd creates `/var/lib/wiretune` for the service account, readable by nobody else: the database in it holds the
+password hashes and the key that signs tokens. The `wiretune` user needs nothing but read access to the music. `systemctl stop` shuts it down cleanly; a scan that's running is dropped and runs again at the next start.
 
 ## Reverse proxy and TLS
 
-The server doesn't do TLS. Put a proxy in front of it that does, or reach it over a VPN such as WireGuard or
-Tailscale; the players take `https://` addresses. With [Caddy](https://caddyserver.com), which fetches the certificate
-by itself, the whole proxy is:
+Put a proxy in front of the server that does TLS, or reach it over a VPN such as WireGuard or Tailscale; the players
+take `https://` addresses. With [Caddy](https://caddyserver.com), which fetches the certificate by itself, the whole
+proxy is:
 
 ```
 music.example.com {
@@ -146,11 +140,11 @@ music.example.com {
 }
 ```
 
-Then run the server with `WIRETUNE_URLS=http://127.0.0.1:5200`, so nothing reaches it except through the proxy, and
-`WIRETUNE_FORWARDED_HEADERS=true`, so each player gets its own sign-in limit instead of everyone sharing the proxy's.
+Then run the server with `--host 127.0.0.1`, so nothing reaches it except through the proxy, and `--trust-proxy`, so
+each player gets its own sign-in limit instead of everyone sharing the proxy's.
 
-That second setting makes the server believe `X-Forwarded-For` from anyone who can reach it, which is exactly why the
-port mustn't be reachable directly. It uses the last address in the header, the one your proxy added; anything a client
+`--trust-proxy` makes the server believe `X-Forwarded-For` from anyone who can reach it, which is exactly why the port
+mustn't be reachable directly. It uses the last address in the header, the one your proxy added; anything a client
 wrote there itself is ignored. Behind two proxies in a row, that's the outer proxy's address, unless the inner one is
 told to put the client's there (nginx's `real_ip` module, for example).
 
@@ -158,9 +152,11 @@ told to put the client's there (nginx's `real_ip` module, for example).
 
 | Symptom | Cause and fix |
 |---|---|
-| The log says the music folder doesn't exist | `Wiretune:LibraryPath` (or the folder picked in the player) is wrong, or the drive isn't mounted. |
+| The log says the music folder doesn't exist | `--library` (or the folder picked in the player) is wrong, or the drive isn't mounted yet. The next scan after it appears picks it up. |
 | The library is empty, but the folder has music | Check the extensions, hidden (dot) folders and the service account's permissions; the log lists unreadable files. |
 | *Library folder is empty (unmounted share?)* | The folder the index came from is empty now. Mount the share again. |
+| *… was made by another version of Wiretune* | The data directory holds a database this version doesn't read. Restore the matching version, or move the file away to start afresh. |
+| *Cannot listen on …: Address already in use* | Something else (another Wiretune?) holds the port. Stop it, or pick another `--port`. |
 | The player says it isn't a Wiretune server | Something answered, but not Wiretune: a wrong port, or a proxy's error page. |
 | `429 Too many attempts` | More than 10 sign-ins, setups or password changes in a minute from one address. Wait a minute, or see [above](#reverse-proxy-and-tls) if there's a proxy. |
 | Someone has to sign in again | The account was re-created, the token expired, or the database (and with it the signing key) was replaced. |

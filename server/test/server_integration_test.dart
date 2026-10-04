@@ -53,11 +53,11 @@ void main() {
     final tracks = await server.waitForTracks(client, 3);
     expect(tracks.any((t) => t['format']['sampleRate'] == 96000), isTrue);
     expect(tracks.any((t) => t['title'] == 'Outside'), isFalse);
-    expect(tracks.first['duration'], '00:00:01');
+    expect(tracks.first['durationMs'], 1000);
   });
 
   test('streaming supports ranges, the header and the query token', () async {
-    final (client, auth) = await setupAdmin(server);
+    final (client, _) = await setupAdmin(server);
     final track = (await server.waitForTracks(client, 3)).first;
 
     final partial = await client.send('GET', '/api/stream/${track['id']}', headers: {'Range': 'bytes=0-1023'});
@@ -77,7 +77,8 @@ void main() {
     );
     expect(unsatisfiable.statusCode, 416);
 
-    final viaQuery = await server.client().get('/api/stream/${track['id']}?token=${Uri.encodeComponent(auth.token)}');
+    final stream = StreamTokenResponse.fromJson(json(await client.post('/api/auth/stream-token'))).token;
+    final viaQuery = await server.client().get('/api/stream/${track['id']}?token=${Uri.encodeComponent(stream)}');
     expect(viaQuery.statusCode, 200);
     expect(viaQuery.bodyBytes.length, 44 + 44100 * 4);
 
@@ -146,15 +147,18 @@ void main() {
     final (client, auth) = await setupAdmin(server);
     final track = (await server.waitForTracks(client, 3)).first;
     final anonymous = server.client();
-    final token = Uri.encodeComponent(auth.token);
+    final issued = StreamTokenResponse.fromJson(json(await client.post('/api/auth/stream-token')));
+    final stream = Uri.encodeComponent(issued.token);
 
-    expect((await anonymous.get('/api/stream/${track['id']}?token=$token')).statusCode, 200);
-    expect((await anonymous.get('/api/cover/${track['id']}?token=$token')).statusCode, isNot(401));
+    expect((await anonymous.get('/api/stream/${track['id']}?token=$stream')).statusCode, 200);
+    expect((await anonymous.get('/api/cover/${track['id']}?token=$stream')).statusCode, isNot(401));
 
-    // A token that leaked through a URL must not be usable against the rest of the API.
-    expect((await anonymous.get('/api/tracks?token=$token')).statusCode, 401);
-    expect((await anonymous.get('/api/auth/me?token=$token')).statusCode, 401);
-    expect((await anonymous.get('/api/users?token=$token')).statusCode, 401);
+    // A token that leaked through a URL must not be usable against the rest of the API, whichever kind it is.
+    for (final token in [stream, Uri.encodeComponent(auth.token)]) {
+      for (final route in ['/api/tracks', '/api/auth/me', '/api/users']) {
+        expect((await anonymous.get('$route?token=$token')).statusCode, 401, reason: route);
+      }
+    }
   });
 
   test('sign-in is rate limited with a readable error', () async {
@@ -236,20 +240,6 @@ void main() {
     expect(audio.statusCode, 206);
     expect(audio.headers.value('content-encoding'), isNull);
     expect((await audio.fold<List<int>>([], (a, b) => a..addAll(b))).length, 1024);
-  });
-
-  test('albums and artists are grouped on the server too', () async {
-    final (client, _) = await setupAdmin(server);
-    await server.waitForTracks(client, 3);
-    final albums = json(await client.get('/api/albums')) as List;
-    final artists = json(await client.get('/api/artists')) as List;
-    // The generated files carry no tags: they all go to the "Unknown album" of the "Unknown artist".
-    expect(albums.single['title'], MetadataScanner.unknownAlbum);
-    expect(albums.single['trackCount'], 3);
-    expect(albums.single['tracks'], hasLength(3));
-    expect(albums.single['totalDuration'], '00:00:03');
-    expect(artists.single['name'], MetadataScanner.unknownArtist);
-    expect(artists.single['albums'], hasLength(1));
   });
 
   test('unknown routes are 404, known routes with another method 405', () async {

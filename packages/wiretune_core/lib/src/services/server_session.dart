@@ -15,16 +15,6 @@ enum ServerConnectionState { notConfigured, connecting, offline, setupRequired, 
 
 enum LibrarySource { none, server, local, hybrid }
 
-LibrarySource _parseSource(String? value) {
-  for (final source in LibrarySource.values) {
-    if (source.name.toLowerCase() == value?.toLowerCase()) return source;
-  }
-  return LibrarySource.none;
-}
-
-/// The stored spelling of a library source ("Hybrid"), as the C# player stored it.
-String _storeSource(LibrarySource source) => source.name[0].toUpperCase() + source.name.substring(1);
-
 /// The player's connection to a Wiretune server: server address, sign-in, copying the server's track list into the
 /// local [LibraryService], and keeping the signed-in account's favourites, play counts and playlists on the server.
 /// Every failure becomes a [state] with a message the interface can show; the commands never throw.
@@ -55,7 +45,6 @@ class ServerSession {
   // Changes to the account's data go to the server one at a time, in the order they were made.
   final Queue<Future<void> Function()> _pushQueue = Queue();
   bool _pushLoopRunning = false;
-  bool _serverHasUserData = false;
   (String token, DateTime expiresUtc)? _streamToken;
   String? _statusKey;
   List<Object?> _statusArgs = const [];
@@ -94,19 +83,17 @@ class ServerSession {
   }
 
   Future<void> initialize() async {
-    final url = await _settings.getSetting('ServerUrl', defaultServerUrl);
+    final url = await _settings.getSetting('server_url', defaultServerUrl);
     serverUrl = url != null && url.isNotEmpty ? url : defaultServerUrl;
-    source = _parseSource(await _settings.getSetting('LibrarySource'));
+    source = LibrarySource.values.asNameMap()[await _settings.getSetting('library_source')] ?? LibrarySource.none;
 
-    final token = await _settings.getSetting('AuthToken');
+    final token = await _settings.getSetting('auth_token');
     _client.authToken = token == null || token.isEmpty ? null : token;
-    _serverHasUserData = await _settings.getSetting('ServerUserData') == '1';
 
     final hasLocal = _library.tracks.any((t) => t.isLocal);
     final hasServerTracks = _library.tracks.any((t) => !t.isLocal);
     if (hasLocal && (hasServerTracks || source == LibrarySource.server || _client.authToken != null)) {
-      source = LibrarySource.hybrid;
-      await _settings.setSetting('LibrarySource', _storeSource(LibrarySource.hybrid));
+      await _setSource(LibrarySource.hybrid);
     }
 
     _setState(
@@ -155,9 +142,8 @@ class ServerSession {
         if (normalized.toLowerCase() != serverUrl.toLowerCase()) {
           serverUrl = normalized;
           await _forgetToken(); // a token is never sent to a different server
-          await _setServerHasUserData(false);
         }
-        await _settings.setSetting('ServerUrl', serverUrl);
+        await _settings.setSetting('server_url', serverUrl);
       }
 
       _setState(ServerConnectionState.connecting, 'SessionConnecting', [serverUrl]);
@@ -230,7 +216,7 @@ class ServerSession {
         _client.authToken = auth.token;
         currentUser = auth.user;
         await _guarded(() async {
-          await _settings.setSetting('AuthToken', rememberMe ? auth.token : '');
+          await _settings.setSetting('auth_token', rememberMe ? auth.token : '');
           await _refreshLibraryCore();
         });
 
@@ -245,11 +231,8 @@ class ServerSession {
 
     await _gate.synchronized(() async {
       await _forgetToken();
-      await _setServerHasUserData(false);
       await _library.removeServerTracks();
-      final hasLocal = _library.tracks.any((t) => t.isLocal);
-      source = hasLocal ? LibrarySource.local : LibrarySource.none;
-      await _settings.setSetting('LibrarySource', _storeSource(source));
+      await _setSource(_library.tracks.any((t) => t.isLocal) ? LibrarySource.local : LibrarySource.none);
       _setState(ServerConnectionState.loginRequired, 'SessionSignedOut');
     });
   }
@@ -276,8 +259,7 @@ class ServerSession {
   /// Marks the local folder as active, switching to hybrid when the server is also connected or has tracks.
   Future<void> useLocalLibrary() async {
     final hasServer = isLoggedIn || _library.tracks.any((t) => !t.isLocal);
-    source = hasServer ? LibrarySource.hybrid : LibrarySource.local;
-    await _settings.setSetting('LibrarySource', _storeSource(source));
+    await _setSource(hasServer ? LibrarySource.hybrid : LibrarySource.local);
 
     if (hasServer && state == ServerConnectionState.connected) {
       _setState(ServerConnectionState.connected, 'SessionConnectedHybrid', [
@@ -296,12 +278,11 @@ class ServerSession {
 
     _setState(ServerConnectionState.connecting, 'SessionDownloading');
     final tracks = await _client.fetchTracks(serverUrl);
-    final userData = await _loadUserData();
+    final userData = await _client.getUserData(serverUrl);
     await _library.mergeServerTracks(tracks, userData);
 
     final hasLocal = _library.tracks.any((t) => t.isLocal);
-    source = hasLocal ? LibrarySource.hybrid : LibrarySource.server;
-    await _settings.setSetting('LibrarySource', _storeSource(source));
+    await _setSource(hasLocal ? LibrarySource.hybrid : LibrarySource.server);
 
     WiretuneLog.info(
       'ServerSession',
@@ -315,11 +296,9 @@ class ServerSession {
   }
 
   /// The token for stream URLs: a short-lived one that opens only the audio and cover routes, so that the URL (which
-  /// ends up in decoder logs) never carries the sign-in token. A server older than stream tokens only knows the sign-in
-  /// token, and that is used instead. Null when signed out or when no token could be had.
+  /// ends up in decoder logs) never carries the sign-in token. Null when signed out or when no token could be had.
   Future<String?> getStreamToken() async {
-    final login = _client.authToken;
-    if (login == null || login.isEmpty) return null;
+    if ((_client.authToken ?? '').isEmpty) return null;
     if (_isFresh(_streamToken)) return _streamToken!.$1;
 
     return _streamTokenGate.synchronized(() async {
@@ -328,16 +307,8 @@ class ServerSession {
         final issued = await _client.getStreamToken(serverUrl);
         _streamToken = (issued.token, issued.expiresAt.toUtc());
       } on ServerRequestException catch (e) {
-        if (e.statusCode == 404 || e.statusCode == 405) {
-          WiretuneLog.info(
-            'ServerSession',
-            'The server does not issue stream tokens; stream URLs carry the sign-in token.',
-          );
-          _streamToken = (login, DateTime.utc(9999));
-        } else {
-          // The token we hold (if any) may still be valid for a while; otherwise playback fails with the server's answer.
-          WiretuneLog.warn('ServerSession', 'Could not get a stream token: $e');
-        }
+        // The token we hold (if any) may still be valid for a while; otherwise playback fails with the server's answer.
+        WiretuneLog.warn('ServerSession', 'Could not get a stream token: $e');
       } on ServerUnauthorizedException catch (e) {
         WiretuneLog.warn('ServerSession', 'Could not get a stream token: $e');
       }
@@ -353,7 +324,12 @@ class ServerSession {
     _streamToken = null;
     _client.authToken = null;
     currentUser = null;
-    await _settings.setSetting('AuthToken', '');
+    await _settings.setSetting('auth_token', '');
+  }
+
+  Future<void> _setSource(LibrarySource value) async {
+    source = value;
+    await _settings.setSetting('library_source', value.name);
   }
 
   /// [messageKey] is the key of the status text; the text is rendered on demand so that it follows language changes.
@@ -361,71 +337,15 @@ class ServerSession {
     state = newState;
     _statusKey = messageKey;
     _statusArgs = args;
-    _updateUserDataMode();
+    _library.serverConnected = isLoggedIn;
     stateChanged.emit(null);
   }
 
   // ── The account's favourites, play counts and playlists ──
 
-  void _updateUserDataMode() => _library.userDataMode = !_serverHasUserData
-      ? UserDataMode.local
-      : (isLoggedIn ? UserDataMode.server : UserDataMode.serverUnavailable);
-
-  Future<void> _setServerHasUserData(bool value) async {
-    _serverHasUserData = value;
-    await _settings.setSetting('ServerUserData', value ? '1' : '0');
-    _updateUserDataMode();
-  }
-
-  /// Downloads the account's data. A server that predates it answers 404: favourites then stay on this device, as
-  /// before, and null is returned. The first time an account signs in on this device, what the device already holds for
-  /// server tracks is handed over to the server first, so nothing set before the server kept it is lost.
-  Future<UserDataSnapshot?> _loadUserData() async {
-    UserDataSnapshot data;
-    try {
-      data = await _client.getUserData(serverUrl);
-    } on ServerRequestException catch (e) {
-      if (e.statusCode != 404 && e.statusCode != 405) rethrow;
-      WiretuneLog.info(
-        'ServerSession',
-        'The server keeps no per-account data; favourites and playlists stay on this device.',
-      );
-      await _setServerHasUserData(false);
-      return null;
-    }
-
-    // What the device kept before the server stored it belongs to whoever used the device then, and goes to the first
-    // account that signs in here. From then on the favourites the device shows for server tracks are a copy of an
-    // account's data, not the device's own: an account that signs in later must not receive the copy of someone else's.
-    final user = currentUser;
-    if (user != null && (await _settings.getSetting('ServerUserDataImported') ?? '').isEmpty) {
-      var handedOver = true;
-      final local = _library.collectServerTrackUserData();
-      if (local != null) {
-        WiretuneLog.info(
-          'ServerSession',
-          'Handing ${local.favorites.length} favourites, ${local.plays.length} play counts and ${local.playlists.length} playlists over to the server.',
-        );
-        try {
-          await _client.importUserData(serverUrl, local);
-          data = await _client.getUserData(serverUrl);
-        } on ServerRequestException catch (e) {
-          if (!_isRefusal(e)) rethrow;
-          // Not worth keeping the player from connecting: it asks again at the next connect.
-          handedOver = false;
-          WiretuneLog.warn('ServerSession', 'The server did not accept the data of this device: ${e.message}');
-        }
-      }
-      if (handedOver) await _settings.setSetting('ServerUserDataImported', '$serverUrl|${user.id}');
-    }
-
-    await _setServerHasUserData(true);
-    return data;
-  }
-
   /// Whether changes can be sent to the server now. Deliberately independent of [state]: a change made while connected
   /// is still sent when the session briefly shows "connecting" because of a refresh.
-  bool get _canPush => _serverHasUserData && currentUser != null && (_client.authToken ?? '').isNotEmpty;
+  bool get _canPush => currentUser != null && (_client.authToken ?? '').isNotEmpty;
 
   void _enqueue(Future<void> Function() job) {
     _pushQueue.add(job);

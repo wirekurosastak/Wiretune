@@ -1,8 +1,7 @@
-// The request and response bodies of the server's HTTP API (see docs/api.md). JSON names are camelCase, dates are
-// ISO 8601 and durations .NET TimeSpan strings, as the C# server wrote them.
+// The request and response bodies of the server's HTTP API (see docs/api.md): camelCase JSON, dates in ISO 8601.
 
-import '../util/dotnet_format.dart';
 import '../util/text.dart';
+import '../util/time.dart';
 
 class UserInfo {
   const UserInfo(this.id, this.username, this.isAdmin, this.createdAt, this.lastLogin);
@@ -217,7 +216,7 @@ class UserDataSnapshot {
   }
 }
 
-/// Limits the server enforces on per-account data (they also bound what one import may add).
+/// Limits the server enforces on per-account data.
 abstract final class UserDataRules {
   static const int maxIdLength = 128;
   static const int maxPlaylistNameLength = 200;

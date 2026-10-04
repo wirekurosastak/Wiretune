@@ -1,8 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/audio/media_kit_driver.dart';
 
-/// The ALSA hardware devices are read from `aplay -l`, as the C# player read them (mpv's own list often has only the
-/// sound server's outputs).
+/// The ALSA hardware devices are read from `aplay -l` (mpv's own list often has only the sound server's outputs).
 void main() {
   test('every playback device of aplay -l is found, with its card and device names', () {
     const output = '''

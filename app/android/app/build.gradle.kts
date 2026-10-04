@@ -17,7 +17,6 @@ android {
     }
 
     defaultConfig {
-        // The ID of the C# player, so this version installs over it as an update.
         applicationId = "com.wiretune.player"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion

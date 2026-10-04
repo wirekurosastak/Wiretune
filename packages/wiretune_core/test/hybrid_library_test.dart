@@ -21,6 +21,9 @@ Track _t(
   streamUrl: stream,
 );
 
+/// What the server holds for the signed-in account; it comes with every merge of the server's tracks.
+UserDataSnapshot _account({List<String> favorites = const []}) => UserDataSnapshot(favorites, const [], const []);
+
 void main() {
   setUpAll(useTempDataDirectory);
 
@@ -144,7 +147,7 @@ void main() {
         album: '1 (Remastered)',
         seconds: 431,
         stream: 'http://localhost:5200/api/stream/srv-jude',
-      )..isFavorite = true,
+      ),
       _t(
         'srv-letitbe',
         'Let It Be',
@@ -153,7 +156,7 @@ void main() {
         seconds: 243,
         stream: 'http://localhost:5200/api/stream/srv-letitbe',
       ),
-    ]);
+    ], _account(favorites: ['srv-jude']));
 
     expect(library.tracks, hasLength(2));
     final heyJude = library.tracks.firstWhere((t) => t.title.startsWith('Hey Jude'));
@@ -172,7 +175,7 @@ void main() {
 
     await library.mergeServerTracks([
       _t('srv-jude', 'Hey Jude', 'The Beatles', seconds: 431, stream: 'http://localhost:5200/api/stream/srv-jude'),
-    ]);
+    ], _account());
 
     final playlist = library.getPlaylist('pl-1')!;
     expect(playlist.trackIds.first, 'loc-jude');
@@ -214,7 +217,7 @@ void main() {
 
     await library.mergeServerTracks([
       _t('srv-1', 'Server Song', 'Server Artist', stream: 'http://server/api/stream/srv-1'),
-    ]);
+    ], _account());
     await session.useLocalLibrary();
     expect(session.source, LibrarySource.hybrid);
     expect(library.tracks, hasLength(2));
@@ -222,6 +225,6 @@ void main() {
     await session.logout();
     expect(session.source, LibrarySource.local);
     expect(library.tracks.single.id, 'loc-1');
-    expect(repo.settings['LibrarySource'], 'Local');
+    expect(repo.settings['library_source'], 'local');
   });
 }

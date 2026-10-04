@@ -172,7 +172,6 @@ void main() {
     final lyrics = create((_) => json('{"plainLyrics":"x"}'));
     for (final (title, artist) in [
       ('Song', 'Unknown artist'),
-      ('Song', 'Ismeretlen előadó'),
       ('Song', '   '),
       ('   ', 'Artist'),
       ('Unknown Title', 'Artist'),

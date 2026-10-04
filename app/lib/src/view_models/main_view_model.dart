@@ -483,10 +483,10 @@ class MainViewModel extends ChangeNotifier {
 
   // ── Preferences ────────────────────────────────────────────────────────────────────────────────
 
-  static const String _languagePreference = 'Language';
-  static const String _themePreference = 'Theme';
-  static const String _performanceStatsPreference = 'ShowPerformanceStats';
-  static const String _onlineLyricsPreference = 'OnlineLyrics';
+  static const String _languagePreference = 'language';
+  static const String _themePreference = 'theme';
+  static const String _performanceStatsPreference = 'show_performance_stats';
+  static const String _onlineLyricsPreference = 'online_lyrics';
 
   bool _isLight = false;
   bool _showPerformanceStats = false;
@@ -498,7 +498,7 @@ class MainViewModel extends ChangeNotifier {
 
   void setTheme({required bool light, bool persist = true}) {
     _isLight = light;
-    if (persist) _remember(library.setPreference(_themePreference, light ? 'Light' : 'Dark'));
+    if (persist) _remember(library.setPreference(_themePreference, light ? 'light' : 'dark'));
     notifyListeners();
   }
 
@@ -545,7 +545,7 @@ class MainViewModel extends ChangeNotifier {
     if (language != null) Localizer.instance.setLanguage(language);
 
     final theme = await library.getPreference(_themePreference);
-    if (theme != null) _isLight = theme.toLowerCase() == 'light';
+    if (theme != null) _isLight = theme == 'light';
 
     _showPerformanceStats = await library.getPreference(_performanceStatsPreference) == '1';
     _useOnlineLyrics = await library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off

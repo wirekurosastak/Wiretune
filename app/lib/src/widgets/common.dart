@@ -207,7 +207,7 @@ class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
 
-  /// The border's colour under the mouse (the section's accent, as in the C# player); none keeps it unchanged.
+  /// The border's colour under the mouse (the section's accent); none keeps it unchanged.
   final Color? hoverColor;
 
   @override

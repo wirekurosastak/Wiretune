@@ -1,34 +1,45 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 import 'package:wiretune_server/wiretune_server.dart';
 
-/// Starts the server: `wiretune_server --Wiretune:LibraryPath=/srv/music` (see docs/server.md for every setting).
+const String _about = 'Wiretune server: indexes a music folder and streams it to the Wiretune players.';
+
+const String _environment =
+    'Every option can also be set in the environment: --scan-interval 0 is WIRETUNE_SCAN_INTERVAL=0, --trust-proxy is\n'
+    'WIRETUNE_TRUST_PROXY=true. The command line wins.';
+
+/// Starts the server: `wiretune_server --library /srv/music` (docs/server.md has every option).
 Future<void> main(List<String> args) async {
-  if (args.contains('--help') || args.contains('-h')) {
-    stdout.writeln('''
-Wiretune server
-
-Usage: wiretune_server [--Wiretune:LibraryPath=<folder>] [--Wiretune:Port=5200] [--urls=http://0.0.0.0:5200]
-                       [--Wiretune:DataDirectory=<folder>] [--Wiretune:SetupCode=<code>]
-                       [--Wiretune:ScanIntervalMinutes=30]
-
-Settings can also come from appsettings.json (section "Wiretune") or environment variables (Wiretune__Port=8080).''');
-    return;
-  }
-
-  ServerOptions options;
+  final ServerOptions options;
   try {
-    options = ServerOptions.load(args);
-    options.listenAddresses; // validate early
+    final results = ServerOptions.parser.parse(args);
+    if (results.flag('help')) {
+      stdout.writeln('$_about\n\nUsage: wiretune_server [options]\n\n${ServerOptions.parser.usage}\n\n$_environment');
+      return;
+    }
+    options = ServerOptions.fromArgs(results);
   } on FormatException catch (e) {
-    stderr.writeln('Invalid configuration: ${e.message}');
-    exitCode = 2;
+    final hint = e is ArgParserException ? '\n\n${ServerOptions.parser.usage}' : '';
+    stderr.writeln('${e.message}$hint');
+    exitCode = 64;
     return;
   }
 
-  final server = await WiretuneServer.start(options);
+  final WiretuneServer server;
+  try {
+    server = await WiretuneServer.start(options);
+  } on IncompatibleDatabaseException catch (e) {
+    stderr.writeln(e.message);
+    exitCode = 1;
+    return;
+  } on SocketException catch (e) {
+    stderr.writeln('Cannot listen on ${options.host}:${options.port}: ${e.osError?.message ?? e.message}');
+    exitCode = 1;
+    return;
+  }
 
   final done = Completer<void>();
   var stopping = false;

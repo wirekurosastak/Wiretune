@@ -1,4 +1,4 @@
-// Text helpers that stand in for .NET's culture-aware string handling.
+// Text helpers: sorting the way people expect names to sort, folding accents, and small checks.
 
 const Map<String, String> _foldMap = {
   'á': 'a',
@@ -67,11 +67,10 @@ const Map<String, String> _foldMap = {
   'ż': 'z',
 };
 
-/// The primary sort key of [text], modelled on ICU's root collation, which .NET's culture-aware comparers use:
-/// whitespace sorts first, then punctuation and symbols (in ICU's order, with typographic variants such as `…`, `–` or
-/// `’` treated as their ASCII counterparts), then digits, then letters, case-insensitively and without accents (`Ábel`
-/// sorts with `abel`, not after `zebra`; `…I Care` before `0`). Each character becomes one code unit of the key, so
-/// keys compare with [String.compareTo].
+/// The primary sort key of [text], modelled on ICU's root collation: whitespace sorts first, then punctuation and
+/// symbols (in ICU's order, with typographic variants such as `…`, `–` or `’` treated as their ASCII counterparts),
+/// then digits, then letters, case-insensitively and without accents (`Ábel` sorts with `abel`, not after `zebra`;
+/// `…I Care` before `0`). Each character becomes one code unit of the key, so keys compare with [String.compareTo].
 String collationKey(String text) {
   final cached = _keyCache[text];
   if (cached != null) return cached;
@@ -189,10 +188,10 @@ bool startsWithIgnoreCase(String? text, String prefix) =>
 final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{Nd}]', unicode: true);
 final RegExp _control = RegExp(r'\p{Cc}', unicode: true);
 
-/// True for a letter or a decimal digit, as .NET's `char.IsLetterOrDigit`.
+/// True for a letter or a decimal digit.
 bool isLetterOrDigit(String char) => _letterOrDigit.hasMatch(char);
 
-/// True when [text] contains a control character (`char.IsControl`).
+/// True when [text] contains a control character.
 bool hasControlCharacters(String text) => _control.hasMatch(text);
 
 /// Keeps only the letters and digits of [text].

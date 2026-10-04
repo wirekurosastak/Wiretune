@@ -51,7 +51,7 @@ Start the server in one terminal:
 
 ```bash
 cd server
-dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/srv/music
+dart run bin/wiretune_server.dart --library /srv/music
 ```
 
 and the player in another:
@@ -90,13 +90,6 @@ The **player** builds from `app/`, and each desktop version only on its own syst
 | Samsung TV (Tizen) | anywhere, with [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) | `flutter-tizen build tpk --release` | `tizen/tpk/` |
 
 What to install first, signing, and getting the result onto a phone or a TV: [docs/building.md](docs/building.md).
-
-## Coming from the C# version
-
-The new server and player read the old database, accept the old tokens and keep the old track IDs. Point the new
-server at the old data directory and everything carries over; the new player finds the old one's library, sign-in and
-settings by itself. The Android app installs over the old one as an update if it's signed with the same key
-([building.md](docs/building.md#signing)).
 
 ## Documentation
 

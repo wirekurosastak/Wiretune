@@ -111,7 +111,7 @@ class SearchResults extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.only(bottom: 14)),
-                                  // The C# player capped the table at 360 px; it scrolls inside.
+                                  // The table is capped at 360 px; it scrolls inside.
                                   SizedBox(
                                     height: (36.0 + 46 * search.matchingTracks.length + 2).clamp(0, 360),
                                     child: CustomScrollView(

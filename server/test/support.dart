@@ -29,7 +29,7 @@ class ServerFixture {
   String get baseUrl => 'http://127.0.0.1:${server.port}';
 
   /// [existingRoot] reuses the folders of an earlier fixture (a restart); null creates fresh ones.
-  static Future<ServerFixture> start({String? existingRoot}) async {
+  static Future<ServerFixture> start({String? existingRoot, bool trustProxy = false}) async {
     WiretuneLog.writeToConsole = false;
     final root = existingRoot ?? Directory.systemTemp.createTempSync('wiretune_server_').path;
     if (existingRoot == null) {
@@ -45,7 +45,9 @@ class ServerFixture {
         dataDirectory: p.join(root, 'data'),
         scanIntervalMinutes: 0,
         setupCode: setupCode,
-        urls: 'http://127.0.0.1:0',
+        host: '127.0.0.1',
+        port: 0,
+        trustProxy: trustProxy,
       ),
     );
     return ServerFixture._(root, server, existingRoot == null);

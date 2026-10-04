@@ -21,9 +21,8 @@ import '../widgets/player_controls.dart';
 import '../widgets/quality_tag.dart';
 import '../widgets/spectrum_visualizer.dart';
 
-/// The desktop, tablet and TV layout, as the C# player drew it: the header (logo, search, the mode pills, account,
-/// language, theme and, without a system title bar, the window buttons), the sidebar, the page, the player bar and the
-/// status line.
+/// The desktop, tablet and TV layout: the header (logo, search, the mode pills, account, language, theme and, without a
+/// system title bar, the window buttons), the sidebar, the page, the player bar and the status line.
 class WideLayout extends StatelessWidget {
   const WideLayout({super.key});
 
@@ -845,7 +844,7 @@ class _PlayerBar extends StatelessWidget {
     final platform = AppPlatform.current;
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < MainViewModel.compactLayoutWidth;
-    // The C# player's 520 px middle, narrower when the window is (its two sides keep at least 180 px each).
+    // A 520 px middle, narrower when the window is (its two sides keep at least 180 px each).
     final centerWidth = math.min(520.0, math.max(300.0, width - 64 - 2 * 280));
     return Container(
       // The controls and the times grow with the user's font size; the bar grows with them.

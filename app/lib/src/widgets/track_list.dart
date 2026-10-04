@@ -9,7 +9,7 @@ import 'common.dart';
 import 'equalizer_bars.dart';
 import 'quality_tag.dart';
 
-/// Which list a track table shows; each has the columns and buttons the C# player gave it.
+/// Which list a track table shows; each has its own columns and buttons.
 enum TrackTableKind {
   /// The library: cover, title, artist, album, quality, length, favourite, add to playlist.
   tracks,
@@ -115,7 +115,7 @@ class _TrackSliverState extends State<TrackSliver> {
     final player = context.vm.player;
     return SliverLayoutBuilder(
       builder: (context, constraints) {
-        // The desktop layout always draws the table (as the C# player did); the phone layout draws rows.
+        // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
         final padding = widget.horizontalPadding ?? (table ? 28.0 : 8.0);
         return ListenableBuilder(

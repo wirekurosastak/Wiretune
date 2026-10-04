@@ -50,7 +50,7 @@ ThemeData buildTheme({
 }) {
   final palette = light ? Palette.light : Palette.dark;
   final accent = palette.accentFor(section);
-  // Text and icons on an accent-filled button: white in the dark theme, black in the light one (as in the C# player).
+  // Text and icons on an accent-filled button: white in the dark theme, black in the light one.
   final onAccent = palette.onAccent;
   final scheme = ColorScheme.fromSeed(seedColor: accent, brightness: light ? Brightness.light : Brightness.dark)
       .copyWith(
@@ -65,7 +65,7 @@ ThemeData buildTheme({
   final focus = accent.withValues(alpha: isTv ? 0.45 : 0.25);
   return ThemeData(
     useMaterial3: true,
-    // The C# player's font chain: Segoe UI Variable on Windows, Inter where installed, otherwise the system's sans-serif
+    // The font chain: Segoe UI Variable on Windows, Inter where installed, otherwise the system's sans-serif
     // (Noto Sans on most Linux desktops). Phones and TVs keep their own system font.
     fontFamily: desktopFonts ? 'Segoe UI Variable' : null,
     fontFamilyFallback: desktopFonts
@@ -92,7 +92,7 @@ ThemeData buildTheme({
       ),
       textStyle: const TextStyle(color: Colors.white, fontSize: 12),
     ),
-    // The C# player's sliders: a 4 px track and an 18 px thumb in the accent colour (grey when there is nothing to move).
+    // Sliders: a 4 px track and an 18 px thumb in the accent colour (grey when there is nothing to move).
     sliderTheme: SliderThemeData(
       trackHeight: 4,
       activeTrackColor: accent,
@@ -132,7 +132,7 @@ ThemeData buildTheme({
         borderSide: BorderSide(color: accent, width: 1.5),
       ),
     ),
-    // The C# player's "primary" and "secondary" buttons: 38 px high, 6 px corners, bold 13 px text.
+    // The "primary" and "secondary" buttons: 38 px high, 6 px corners, bold 13 px text.
     filledButtonTheme: FilledButtonThemeData(
       style:
           FilledButton.styleFrom(

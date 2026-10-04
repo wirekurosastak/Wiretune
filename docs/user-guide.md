@@ -63,8 +63,6 @@ server restarts. Other accounts have their own.
   server turns down is undone (a favourite star snaps back) or dropped.
 - **Local music** keeps its favourites, play counts and playlists on the device. A playlist made while signed in to a
   server is a server playlist; one made without a server stays local.
-- The first account to sign in on a device inherits, once, whatever the device kept for server tracks before the server
-  stored such things.
 - Moving or renaming a file on the server gives its track a new ID, and its old favourite and playlist entries stop
   matching ([server.md](server.md#scanning)).
 

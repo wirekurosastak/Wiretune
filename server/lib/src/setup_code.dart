@@ -5,7 +5,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 /// The secret that lets the first caller create the administrator account. Without it, whoever reaches a server that
 /// starts with an empty data directory first (an unpersisted container volume, a wrong data path) would own the server.
-/// The operator reads it from the server's log, or chooses one with `Wiretune:SetupCode`.
+/// The operator reads it from the server's log, or chooses one with `--setup-code`.
 class SetupCode {
   /// [configured] is the operator's own code; null or blank makes the server create a random one.
   SetupCode(String? configured) : value = _normalize(configured?.trim()).isEmpty ? _generate() : configured!.trim() {

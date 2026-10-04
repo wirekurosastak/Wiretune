@@ -120,7 +120,7 @@ class OnlineLyrics {
 
   /// The parsed answer, or null when LRCLIB has nothing for the request (404). Throws for any other failure.
   Future<Object?> _getJson(String path, Map<String, String> query) async {
-    // Percent-encoding throughout (a space is %20, never "+"), as the C# player sent it.
+    // Percent-encoding throughout: a space is %20, which every server reads as a space ("+" only means one in forms).
     final queryText = query.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
     final uri = Uri.parse('${_baseUrl.resolve(path)}?$queryText');
     http.StreamedResponse response;
@@ -330,7 +330,7 @@ class LyricsQuery {
     final title = cleanText(track.title);
     final artist = cleanText(track.artist);
     if (title == null || artist == null) return null;
-    if (MetadataScanner.isUnknownArtist(artist) || equalsIgnoreCase(artist, 'Unknown Artist')) return null;
+    if (MetadataScanner.isUnknownArtist(artist)) return null;
     if (equalsIgnoreCase(title, 'Unknown Title')) return null;
 
     var album = cleanText(track.album);

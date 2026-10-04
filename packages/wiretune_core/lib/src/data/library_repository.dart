@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import '../models/audio_format.dart';
 import '../models/library_models.dart';
-import '../util/dotnet_format.dart';
+import '../util/time.dart';
 import 'database_manager.dart';
 
 /// The player's (and the server's) track index, playlists and settings in SQLite.
@@ -33,9 +33,9 @@ class LibraryRepository {
           discNumber: _int(r['disc_number']),
           year: _int(r['year']),
           genre: r['genre'] as String?,
-          duration: Duration(microseconds: (((r['duration_seconds'] as num?) ?? 0) * 1000000).round()),
+          duration: Duration(milliseconds: _int(r['duration_ms']) ?? 0),
           fileSizeBytes: _int(r['file_size_bytes']) ?? 0,
-          fileModifiedUtc: parseIsoUtc(r['file_modified_utc']),
+          fileModifiedUtc: fromDbTime(r['file_modified']),
           filePath: r['file_path'] as String,
           streamUrl: r['stream_url'] as String?,
           hasCoverArt: _int(r['has_cover_art']) == 1,
@@ -50,8 +50,8 @@ class LibraryRepository {
           ),
           isFavorite: _int(r['is_favorite']) == 1,
           playCount: _int(r['play_count']) ?? 0,
-          lastPlayed: parseIsoUtc(r['last_played']),
-          dateAdded: parseIsoUtc(r['date_added']),
+          lastPlayed: fromDbTime(r['last_played']),
+          dateAdded: fromDbTime(r['date_added']),
         ),
     ];
   }
@@ -59,7 +59,7 @@ class LibraryRepository {
   static const String _upsertSql = '''
     INSERT INTO tracks (
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
-        year, genre, duration_seconds, file_size_bytes, file_modified_utc, file_path, stream_url,
+        year, genre, duration_ms, file_size_bytes, file_modified, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
         bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
@@ -68,9 +68,9 @@ class LibraryRepository {
         title = excluded.title, artist = excluded.artist, album = excluded.album,
         album_artist = excluded.album_artist, track_number = excluded.track_number,
         track_count = excluded.track_count, disc_number = excluded.disc_number, year = excluded.year,
-        genre = excluded.genre, duration_seconds = excluded.duration_seconds,
-        file_size_bytes = excluded.file_size_bytes, file_modified_utc = excluded.file_modified_utc,
-        stream_url = excluded.stream_url, has_cover_art = excluded.has_cover_art,
+        genre = excluded.genre, duration_ms = excluded.duration_ms,
+        file_size_bytes = excluded.file_size_bytes, file_modified = excluded.file_modified,
+        file_path = excluded.file_path, stream_url = excluded.stream_url, has_cover_art = excluded.has_cover_art,
         cover_art_path = excluded.cover_art_path, codec = excluded.codec, sample_rate = excluded.sample_rate,
         bits_per_sample = excluded.bits_per_sample, channels = excluded.channels,
         bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless,
@@ -80,8 +80,9 @@ class LibraryRepository {
        OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
        OR track_count IS NOT excluded.track_count OR disc_number IS NOT excluded.disc_number
        OR year IS NOT excluded.year OR genre IS NOT excluded.genre
-       OR duration_seconds IS NOT excluded.duration_seconds OR file_size_bytes IS NOT excluded.file_size_bytes
-       OR file_modified_utc IS NOT excluded.file_modified_utc OR stream_url IS NOT excluded.stream_url
+       OR duration_ms IS NOT excluded.duration_ms OR file_size_bytes IS NOT excluded.file_size_bytes
+       OR file_modified IS NOT excluded.file_modified OR file_path IS NOT excluded.file_path
+       OR stream_url IS NOT excluded.stream_url
        OR has_cover_art IS NOT excluded.has_cover_art OR cover_art_path IS NOT excluded.cover_art_path
        OR codec IS NOT excluded.codec OR sample_rate IS NOT excluded.sample_rate
        OR bits_per_sample IS NOT excluded.bits_per_sample OR channels IS NOT excluded.channels
@@ -94,26 +95,13 @@ class LibraryRepository {
   /// place, and a row whose values did not change is not written at all: a rescan or a refresh of an unchanged library
   /// leaves the database file as it is instead of rewriting every track.
   Future<void> replaceAllTracks(Iterable<Track> tracks) async {
-    // The table is unique on both id and path; of tracks that share one of them the last one wins.
-    final byId = <String, Track>{};
-    for (final t in tracks) {
-      byId[t.id] = t;
-    }
-    final byPath = <String, Track>{};
-    for (final t in byId.values) {
-      byPath[t.filePath] = t;
-    }
-    final wanted = {for (final t in byPath.values) t.id: t};
+    final wanted = {for (final t in tracks) t.id: t}; // of two tracks with one ID, the last one wins
 
     _db.transaction((db) {
-      // A stored row stays only if the same track is wanted at the same path. Every other row goes (and a track whose
-      // path changed is inserted again), so no insert below can run into the unique path of an old row.
-      final obsolete = <String>[];
-      for (final row in db.select('SELECT id, file_path FROM tracks')) {
-        final id = row['id'] as String;
-        final track = wanted[id];
-        if (track == null || track.filePath != row['file_path']) obsolete.add(id);
-      }
+      final obsolete = [
+        for (final row in db.select('SELECT id FROM tracks'))
+          if (!wanted.containsKey(row['id'])) row['id'] as String,
+      ];
       if (obsolete.isNotEmpty) {
         final delete = db.prepare('DELETE FROM tracks WHERE id = ?');
         try {
@@ -127,7 +115,7 @@ class LibraryRepository {
 
       final upsert = db.prepare(_upsertSql);
       try {
-        for (final t in byPath.values) {
+        for (final t in wanted.values) {
           upsert.execute([
             t.id,
             t.title,
@@ -139,9 +127,9 @@ class LibraryRepository {
             t.discNumber,
             t.year,
             t.genre,
-            t.duration.inMicroseconds / 1000000.0,
+            t.duration.inMilliseconds,
             t.fileSizeBytes,
-            _date(t.fileModifiedUtc),
+            toDbTime(t.fileModifiedUtc),
             t.filePath,
             t.streamUrl,
             t.hasCoverArt ? 1 : 0,
@@ -154,8 +142,8 @@ class LibraryRepository {
             t.format.isLossless ? 1 : 0,
             t.isFavorite ? 1 : 0,
             t.playCount,
-            _date(t.lastPlayed),
-            _date(t.dateAdded),
+            toDbTime(t.lastPlayed),
+            toDbTime(t.dateAdded),
           ]);
         }
       } finally {
@@ -174,7 +162,7 @@ class LibraryRepository {
       final update = db.prepare('UPDATE tracks SET is_favorite = ?, play_count = ?, last_played = ? WHERE id = ?');
       try {
         for (final t in tracks) {
-          update.execute([t.isFavorite ? 1 : 0, t.playCount, _date(t.lastPlayed), t.id]);
+          update.execute([t.isFavorite ? 1 : 0, t.playCount, toDbTime(t.lastPlayed), t.id]);
         }
       } finally {
         update.close();
@@ -184,7 +172,7 @@ class LibraryRepository {
 
   Future<void> incrementPlayCount(String trackId) async {
     _db.connection.execute('UPDATE tracks SET play_count = play_count + 1, last_played = ? WHERE id = ?', [
-      formatIsoUtc(DateTime.now()),
+      toDbTime(DateTime.now()),
       trackId,
     ]);
   }
@@ -197,8 +185,8 @@ class LibraryRepository {
           id: r['id'] as String,
           name: r['name'] as String,
           description: r['description'] as String?,
-          createdAt: parseIsoUtc(r['created_at']),
-          modifiedAt: parseIsoUtc(r['modified_at']),
+          createdAt: fromDbTime(r['created_at']),
+          modifiedAt: fromDbTime(r['modified_at']),
           isServer: _int(r['is_server']) == 1,
           trackIds: _decodeIds(r['track_ids_json'] as String?),
         ),
@@ -214,8 +202,8 @@ class LibraryRepository {
         playlist.name,
         playlist.description,
         jsonEncode(playlist.trackIds),
-        formatIsoUtc(playlist.createdAt),
-        formatIsoUtc(playlist.modifiedAt),
+        toDbTime(playlist.createdAt),
+        toDbTime(playlist.modifiedAt),
         playlist.isServer ? 1 : 0,
       ],
     );
@@ -239,21 +227,23 @@ class LibraryRepository {
     _db.connection.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
   }
 
-  /// Returns the stored value, first storing the one [createValue] makes when there is none. If two processes race on a
-  /// new database, the value stored first wins and both return it.
+  /// Returns the stored value, first storing the one [createValue] makes when there is none (or only an empty one). If
+  /// two processes race on a new database, the value stored first wins and both return it.
   Future<String> getOrAddSetting(String key, String Function() createValue) async {
     final db = _db.connection;
     final existing = db.select('SELECT value FROM settings WHERE key = ?', [key]);
     if (existing.isNotEmpty && (existing.first['value'] as String? ?? '').isNotEmpty) {
       return existing.first['value'] as String;
     }
-    db.execute('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)', [key, createValue()]);
+    db.execute(
+      'INSERT INTO settings (key, value) VALUES (?, ?) '
+      "ON CONFLICT (key) DO UPDATE SET value = excluded.value WHERE settings.value = ''",
+      [key, createValue()],
+    );
     return db.select('SELECT value FROM settings WHERE key = ?', [key]).first['value'] as String;
   }
 
   static int? _int(Object? value) => value == null ? null : (value as num).toInt();
-
-  static String? _date(DateTime? value) => value == null ? null : formatIsoUtc(value);
 
   static List<String> _decodeIds(String? json) {
     if (json == null) return [];

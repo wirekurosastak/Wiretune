@@ -11,7 +11,7 @@ import '../widgets/common.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
-  /// The content width from which the settings sit in two columns, as in the C# player.
+  /// The content width from which the settings sit in two columns.
   static const double _twoColumnWidth = 860;
 
   @override
@@ -553,8 +553,7 @@ class _UsersCardState extends State<_UsersCard> {
   }
 }
 
-/// The audio output, as the C# player laid it out: the two mode cards side by side, the output device, and the signal
-/// path.
+/// The audio output: the two mode cards side by side, the output device, and the signal path.
 class _AudioCard extends StatelessWidget {
   const _AudioCard();
 

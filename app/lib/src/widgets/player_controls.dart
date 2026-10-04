@@ -47,7 +47,7 @@ class TransportControls extends StatelessWidget {
               style: IconButton.styleFrom(
                 backgroundColor: colors.accent,
                 foregroundColor: colors.onAccent,
-                // The desktop's play button is the C# player's 38 px square; the phone's big one stays round.
+                // The desktop's play button is a 38 px square; the phone's big one stays round.
                 fixedSize: large ? null : const Size(38, 38),
                 minimumSize: large ? null : const Size(38, 38),
                 shape: large ? const CircleBorder() : RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
@@ -173,7 +173,7 @@ class VolumeControl extends StatelessWidget {
           SizedBox(
             width: sliderWidth,
             child: Slider(
-              // Grey while muted, as in the C# player.
+              // Grey while muted.
               activeColor: player.isMuted ? colors.textMuted : null,
               value: player.isVolumeLocked ? 100 : (player.isMuted ? 0 : player.volume),
               max: 100,

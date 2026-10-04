@@ -201,7 +201,7 @@ void main() {
     expect(service.albums.map((a) => a.title), ['b', 'Ébredés', 'Zulu']);
   });
 
-  test('favourites, play counts and the user-data modes', () async {
+  test('server tracks change only while signed in to the server, local ones always', () async {
     final repo = MockRepository();
     final service = _service(repo);
     final local = TestSupport.makeTrack('local', 'Local');
@@ -212,7 +212,7 @@ void main() {
     final toggled = <String>[];
     service.favoriteToggled.listen((t) => toggled.add(t.id));
 
-    service.userDataMode = UserDataMode.server;
+    service.serverConnected = true;
     await service.toggleFavorite('server');
     expect(service.getTrack('server')!.isFavorite, isTrue);
     expect(toggled, ['server']); // a change the server has to hear about
@@ -220,7 +220,7 @@ void main() {
     await service.toggleFavorite('local');
     expect(toggled, ['server']); // local tracks stay on the device
 
-    service.userDataMode = UserDataMode.serverUnavailable;
+    service.serverConnected = false;
     await service.toggleFavorite('server');
     expect(service.getTrack('server')!.isFavorite, isTrue); // cannot be changed while the server is away
     await service.recordPlay('server');
@@ -245,27 +245,5 @@ void main() {
     expect(track.isFavorite, isTrue);
     expect(track.playCount, 1);
     expect(track.dateAdded, DateTime.utc(2020));
-  });
-
-  test('collected user data for the hand-over respects the server rules', () async {
-    final repo = MockRepository();
-    final service = _service(repo);
-    final server = TestSupport.makeServerTrack('server', 'Server')
-      ..isFavorite = true
-      ..playCount = 3;
-    final local = TestSupport.makeTrack('local', 'Local')..isFavorite = true;
-    repo.saveTracks([server, local]);
-    await service.initialize();
-    expect(service.collectServerTrackUserData(), isNotNull);
-
-    final playlist = await service.createPlaylist('x' * 300);
-    await service.addTrackToPlaylist(playlist.id, 'server');
-    await service.addTrackToPlaylist(playlist.id, 'bad\u0001id');
-
-    final data = service.collectServerTrackUserData()!;
-    expect(data.favorites, ['server']); // the local favourite stays on the device
-    expect(data.plays.single.playCount, 3);
-    expect(data.playlists.single.name, hasLength(UserDataRules.maxPlaylistNameLength));
-    expect(data.playlists.single.trackIds, ['server']);
   });
 }

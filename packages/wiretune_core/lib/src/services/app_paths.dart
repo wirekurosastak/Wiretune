@@ -63,8 +63,11 @@ abstract final class AppPaths {
     return p.join(home ?? '.', 'Music');
   }
 
-  /// [path] made absolute and normalised (`..` and `.` resolved, symbolic links left alone), like .NET's GetFullPath.
+  /// [path] made absolute and normalised (`..` and `.` resolved, symbolic links left alone).
   static String fullPath(String path) => p.normalize(p.absolute(path));
+
+  /// [path] the way the file system compares it: lower-cased on Windows and macOS, which ignore case.
+  static String comparable(String path) => Platform.isWindows || Platform.isMacOS ? path.toLowerCase() : path;
 
   /// True when [path] resolves to [root] or a location inside it. Compares whole path segments, so `/music2` is not
   /// inside `/music`.
@@ -73,15 +76,10 @@ abstract final class AppPaths {
 
     String fullFile, fullRoot;
     try {
-      fullFile = fullPath(path);
-      fullRoot = fullPath(root);
+      fullFile = comparable(fullPath(path));
+      fullRoot = comparable(fullPath(root));
     } catch (_) {
       return false;
-    }
-
-    if (Platform.isWindows || Platform.isMacOS) {
-      fullFile = fullFile.toLowerCase();
-      fullRoot = fullRoot.toLowerCase();
     }
     return fullFile == fullRoot || p.isWithin(fullRoot, fullFile);
   }

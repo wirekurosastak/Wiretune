@@ -10,7 +10,7 @@ platform still wants. On Linux that's libmpv, plus `ffmpeg` for the spectrum and
 
 ```bash
 # one terminal
-cd server && dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/path/to/music
+cd server && dart run bin/wiretune_server.dart --library /path/to/music
 
 # another
 cd app && flutter run -d linux          # or -d windows, -d macos, or a device from `flutter devices`
@@ -28,11 +28,10 @@ sign-in alone.
 ```
 
 The server tests start a real server per test, on a free port over a generated music folder, and go through sign-in,
-per-account data, restarts, the hardening (setup code, stream tokens, rate limits, odd paths and ranges, body limits)
-and a database and tokens made by the C# server. The player's side of the account data runs against that same real
-server. The core tests cover the repository on real SQLite, the tag reader on files that `ffmpeg` encodes, track IDs
-against values the C# code computed, the library, deduplication, lyrics, the spectrum and the audio engine (with
-`FakeAudioDriver`). The app tests cover the view models, back navigation, and every section in both layouts, both
+per-account data, restarts, the hardening (setup code, stream tokens, rate limits, odd paths and ranges, body limits),
+the scan loop and the options. The player's side of the account data runs against that same real server. The core
+tests cover the repository on real SQLite, the tag reader on files that `ffmpeg` encodes, track IDs, the library,
+deduplication, lyrics, the spectrum and the audio engine (with `FakeAudioDriver`). The app tests cover the view models, back navigation, and every section in both layouts, both
 themes and several sizes.
 
 Tests that need `ffmpeg` are *skipped* when it's missing, not passed, so mind the skipped count. Nothing covers the
@@ -44,7 +43,7 @@ real drivers, the media session, Android Auto, audio hardware or the native shel
 |---|---|
 | Core, server | The tests, on Linux. The server binary has run against a real folder: scanning, sign-in, gzip, ranges, covers |
 | App logic and layouts | View-model and widget tests: every section in both layouts, light and dark, a small phone at 150 % font size, a 1080p TV |
-| Linux desktop | Built and run against a real server and library (1,288 tracks), screens compared with the C# player's, and playback, the queue, the spectrum, MPRIS and the device list checked through UI automation. Exclusive and bit-perfect not tried on a DAC |
+| Linux desktop | Built and run against a real server and library (1,288 tracks), every screen checked at 1280×820, 900×700 and phone width, and playback, the queue, the spectrum, MPRIS and the device list driven through UI automation. Exclusive and bit-perfect not tried on a DAC |
 | Android | Debug and release APKs build, with the TV, media service and Android Auto entries in the manifest. **Not yet run on a phone, a TV or in a car** |
 | Windows, macOS, iOS | Not yet built (they need their own hosts) |
 | Tizen | Dependencies resolve with flutter-tizen. **Not yet built** or run on a TV |
@@ -87,7 +86,7 @@ throw-away `WIRETUNE_DATA_DIR`.
 
 - **Android**: `MainActivity.kt` shares its Flutter engine with the media service; TV detection and the CPU and Wi-Fi
   locks are in `packages/wiretune_platform`. The manifest declares the TV launcher entry and banner, the media service
-  that Android Auto browses, and `automotive_app_desc.xml`. The application ID is `com.wiretune.player`, the C# app's.
+  that Android Auto browses, and `automotive_app_desc.xml`. The application ID is `com.wiretune.player`.
 - **iOS and macOS**: `ios/Runner/Info.plist` (background audio, local network, plain HTTP) and
   `macos/Runner/*.entitlements` (not sandboxed, and the comment there says why).
 - **Linux and Windows**: the runners set the window's size and icon; `main.dart` hides the system title bar, and the

@@ -4,15 +4,15 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 
 import '../localization/localizer.dart';
-import '../util/dotnet_format.dart';
+import '../util/time.dart';
 import 'audio_format.dart';
 
 /// A short ID that is the same on every machine for the same key: the first 16 hex digits of the key's SHA-256.
-String stableId(String key) => toUpperHex(sha256.convert(utf8.encode(key)).bytes).substring(0, 16);
+String stableId(String key) => sha256.convert(utf8.encode(key)).toString().substring(0, 16);
 
 final Random _random = Random.secure();
 
-/// A new random ID: 32 lower-case hex digits, like .NET's `Guid.NewGuid().ToString("N")`.
+/// A new random ID: 32 lower-case hex digits.
 String newId() {
   final buffer = StringBuffer();
   for (var i = 0; i < 16; i++) {
@@ -84,7 +84,7 @@ class Track {
 
   /// Identifies the album the track is filed under (title and album artist, ignoring case). It is the same on every
   /// device and on the server, so it is also the key of `/api/cover/album/{id}`.
-  String get albumId => stableId('${toUpperInvariant(album)}\u001f${toUpperInvariant(effectiveAlbumArtist)}');
+  String get albumId => stableId('${album.toLowerCase()}\u001f${effectiveAlbumArtist.toLowerCase()}');
 
   String get formattedDuration => formatClock(duration);
 
@@ -92,7 +92,8 @@ class Track {
 
   bool get isLocal => streamUrl == null || streamUrl!.isEmpty;
 
-  /// The track as `GET /api/tracks` lists it (see the server's DTO for which fields are left out).
+  /// The track as `GET /api/tracks` lists it. The file path, the stream URL and the per-account data stay out: the
+  /// first never leaves the server, the client builds the second, and `/api/me/data` carries the rest.
   Map<String, Object?> toJson() => {
     'id': id,
     'title': title,
@@ -104,10 +105,9 @@ class Track {
     'discNumber': discNumber,
     'year': year,
     'genre': genre,
-    'duration': formatTimeSpan(duration),
+    'durationMs': duration.inMilliseconds,
     'fileSizeBytes': fileSizeBytes,
     'fileModifiedUtc': fileModifiedUtc == null ? null : formatIsoUtc(fileModifiedUtc!),
-    'filePath': filePath,
     'hasCoverArt': hasCoverArt,
     'format': format.toJson(),
     'dateAdded': formatIsoUtc(dateAdded),
@@ -130,10 +130,9 @@ class Track {
       discNumber: integer('discNumber'),
       year: integer('year'),
       genre: json['genre'] as String?,
-      duration: parseTimeSpan(json['duration']) ?? Duration.zero,
+      duration: Duration(milliseconds: integer('durationMs') ?? 0),
       fileSizeBytes: integer('fileSizeBytes') ?? 0,
       fileModifiedUtc: parseIsoUtc(json['fileModifiedUtc']),
-      filePath: json['filePath'] as String? ?? 'server:$id',
       hasCoverArt: json['hasCoverArt'] as bool? ?? false,
       format: AudioFormat.fromJson(json['format']),
       dateAdded: parseIsoUtc(json['dateAdded']),

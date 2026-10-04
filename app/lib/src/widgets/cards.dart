@@ -300,8 +300,8 @@ enum TileKind {
   twoLines,
 }
 
-/// Tiles as a sliver. On a wide screen they are the C# player's fixed-size cards (210 px wide, 18 px apart, as many per
-/// row as fit, left-aligned); on a phone they fill the width in two or three columns.
+/// Tiles as a sliver. On a wide screen they are fixed-size cards (210 px wide, 18 px apart, as many per row as fit,
+/// left-aligned); on a phone they fill the width in two or three columns.
 class TileGridSliver extends StatelessWidget {
   const TileGridSliver({
     super.key,
@@ -358,7 +358,7 @@ class TileGridSliver extends StatelessWidget {
             mainAxisSpacing: 12,
           );
         } else {
-          // The caption at the user's font size (the C# tiles were 290 and 270 px at the default size).
+          // The caption at the user's font size; at the default size the tiles come out 290 and 270 px tall.
           final lines = kind == TileKind.album ? title + second + third + 4 : title + second + 2;
           final height = 16 + _DesktopTile.coverHeight + 10 + lines + 8 + 32 + 16 + 2 + 1;
           delegate = _FixedTileDelegate(width: _tileWidth, height: height, gap: _gap);

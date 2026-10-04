@@ -77,7 +77,7 @@ void main() {
         expect(t.streamUrl, startsWith('${server.baseUrl}/api/stream/'));
         expect(t.streamUrl, isNot(contains('token')));
       }
-      expect(d.repo.settings['AuthToken'], session.authToken);
+      expect(d.repo.settings['auth_token'], session.authToken);
 
       // A favourite survives a refresh from the server.
       final favorite = d.library.tracks.first;
@@ -88,16 +88,16 @@ void main() {
       // Signing out forgets the token.
       await session.logout();
       expect(session.state, ServerConnectionState.loginRequired);
-      expect(d.repo.settings['AuthToken'], '');
+      expect(d.repo.settings['auth_token'], '');
 
       // A stale token is dropped on reconnect instead of looping on 401s.
-      d.repo.settings['AuthToken'] = 'not-a-valid-token';
+      d.repo.settings['auth_token'] = 'not-a-valid-token';
       final restarted = ServerSession(d.library, d.repo);
       addTearDown(restarted.dispose);
       await restarted.initialize();
       await restarted.connect();
       expect(restarted.state, ServerConnectionState.loginRequired);
-      expect(d.repo.settings['AuthToken'], '');
+      expect(d.repo.settings['auth_token'], '');
     });
 
     test('a fresh server asks for setup, and setting it up signs in', () async {
@@ -116,7 +116,7 @@ void main() {
       final phone = await device('phone');
       await phone.signIn(server);
       expect(phone.library.tracks, hasLength(3));
-      expect(phone.library.userDataMode, UserDataMode.server);
+      expect(phone.library.serverConnected, isTrue);
 
       final track = phone.library.tracks.first;
       await phone.library.toggleFavorite(track.id);
@@ -162,7 +162,7 @@ void main() {
       await d.session.logout();
       expect(d.library.tracks, isEmpty);
       expect(d.library.playlists.any((pl) => pl.isServer), isFalse);
-      expect(d.library.userDataMode, UserDataMode.local);
+      expect(d.library.serverConnected, isFalse);
 
       expect(await d.session.login('owner', adminPassword, true), isNull);
       final again = d.library.getTrack(track.id)!;
@@ -184,35 +184,6 @@ void main() {
 
       expect(d.library.getTrack(track.id)!.isFavorite, isTrue);
       expect((await serverData(admin)).favorites, [track.id]);
-    });
-
-    test('what the device kept before the server stored it is handed over once', () async {
-      final d = await device('old');
-      final cached = (await server.waitForTracks(admin, 3)).map((json) {
-        final t = Track.fromJson(json);
-        t.streamUrl = ServerStreamingClient.buildStreamUrl(server.baseUrl, t.id);
-        return t;
-      }).toList();
-      await d.library.mergeServerTracks(cached);
-      await d.library.toggleFavorite(cached[1].id);
-      final oldPlaylist = await d.library.createPlaylist('Old list');
-      await d.library.addTrackToPlaylist(oldPlaylist.id, cached[1].id);
-      expect(oldPlaylist.isServer, isFalse);
-
-      await d.signIn(server);
-
-      final data = await serverData(admin);
-      expect(data.favorites, [cached[1].id]);
-      expect(data.playlists.single.name, 'Old list');
-      expect(d.library.getTrack(cached[1].id)!.isFavorite, isTrue);
-      expect(d.library.playlists.single.isServer, isTrue); // the device now shows the server's copy
-
-      // Handed over once: a favourite removed afterwards stays removed instead of being re-imported on the next sign-in.
-      await d.library.toggleFavorite(cached[1].id);
-      await d.session.flushUserData();
-      await d.session.logout();
-      expect(await d.session.login('owner', adminPassword, true), isNull);
-      expect(d.library.getTrack(cached[1].id)!.isFavorite, isFalse);
     });
 
     test('another account signing in later does not inherit what the device showed for the first', () async {
@@ -283,6 +254,7 @@ void main() {
 
     http.Response respond(Object value, [int status = 200]) =>
         http.Response(jsonEncode(value), status, headers: {'content-type': 'application/json'});
+    final empty = const UserDataSnapshot([], [], []).toJson();
 
     Future<(ServerSession, LibraryService, List<String>)> scripted(
       http.Response? Function(http.Request request) more,
@@ -295,6 +267,7 @@ void main() {
           '/api/auth/login' => respond(auth.toJson()),
           '/api/auth/me' => respond(auth.user.toJson()),
           '/api/tracks' => respond([TestSupport.makeTrack('s1', 'Server song').toJson()]),
+          '/api/me/data' => respond(empty),
           _ => more(request) ?? http.Response('', 404),
         };
       });
@@ -308,13 +281,9 @@ void main() {
       return (session, library, requests);
     }
 
-    final empty = const UserDataSnapshot([], [], []).toJson();
-
     test('a server that refuses a change can be reached, so the session stays connected', () async {
       final (session, library, _) = await scripted(
         (request) => switch (request.url.path) {
-          '/api/me/data' => respond(empty),
-          '/api/me/data/import' => respond({}),
           final path when path.startsWith('/api/me/playlists/') => respond({
             'error': 'An account can have at most 500 playlists.',
           }, 409),
@@ -326,37 +295,18 @@ void main() {
       await library.createPlaylist('One too many');
       await session.flushUserData();
       expect(session.state, ServerConnectionState.connected);
-      expect(library.userDataMode, UserDataMode.server);
-    });
-
-    test('a server without per-account data leaves favourites on the device, as before', () async {
-      final (session, library, requests) = await scripted((_) => null); // 404 for /api/me/*
-      addTearDown(session.dispose);
-      expect(library.userDataMode, UserDataMode.local);
-
-      await library.toggleFavorite('s1');
-      await session.flushUserData();
-      expect(library.getTrack('s1')!.isFavorite, isTrue);
-      expect(requests.any((r) => r.contains('/api/me/favorites')), isFalse);
-    });
-
-    test('a server without stream tokens gets the sign-in token in stream URLs', () async {
-      final (session, _, _) = await scripted((_) => null);
-      addTearDown(session.dispose);
-      expect(await session.getStreamToken(), 't0ken');
+      expect(library.serverConnected, isTrue);
     });
 
     test('a favourite the server refuses is shown as what it really is', () async {
       final (session, library, _) = await scripted(
         (request) => switch (request.url.path) {
-          '/api/me/data' => respond(empty),
-          '/api/me/data/import' => respond({}),
           '/api/me/favorites/s1' => respond({'error': 'Database is locked.'}, 500),
           _ => null,
         },
       );
       addTearDown(session.dispose);
-      expect(library.userDataMode, UserDataMode.server);
+      expect(library.serverConnected, isTrue);
 
       await library.toggleFavorite('s1');
       await session.flushUserData();
@@ -374,9 +324,9 @@ void main() {
         return http.StreamedResponse(Stream<List<int>>.error(const SocketException('Connection reset by peer')), 200);
       });
       final repo = MockRepository()
-        ..settings['ServerUrl'] = 'http://wiretune.test'
-        ..settings['LibrarySource'] = 'Server'
-        ..settings['AuthToken'] = 'stored';
+        ..settings['server_url'] = 'http://wiretune.test'
+        ..settings['library_source'] = 'server'
+        ..settings['auth_token'] = 'stored';
       final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
       await library.initialize();
       final session = ServerSession(library, repo, ServerStreamingClient(client));
@@ -390,7 +340,7 @@ void main() {
   });
 
   test("while the server cannot be reached its tracks cannot be changed, but local ones can", () async {
-    final repo = MockRepository()..settings['ServerUserData'] = '1';
+    final repo = MockRepository();
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
     await library.initialize();
     await library.replaceTracks([
@@ -405,7 +355,7 @@ void main() {
     );
     addTearDown(session.dispose);
     await session.initialize();
-    expect(library.userDataMode, UserDataMode.serverUnavailable);
+    expect(library.serverConnected, isFalse);
 
     await library.toggleFavorite('s1');
     await library.recordPlay('s1');

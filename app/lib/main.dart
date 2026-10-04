@@ -22,8 +22,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final platform = await AppPlatform.detect();
 
-  // A desktop keeps its data where the C# player did (so an existing library and sign-in carry over); the others use
-  // the app's private support folder.
+  // A desktop keeps its data in the user's application data folder (AppPaths); the others in the app's private support
+  // folder.
   if (!platform.isDesktop) AppPaths.platformDataRoot = (await getApplicationSupportDirectory()).path;
   WiretuneLog.initialize();
 
@@ -102,8 +102,8 @@ Future<void> main() async {
   if (UiAutomationServer.isEnabled) unawaited(UiAutomationServer(vm).start());
 }
 
-/// The desktop window, as the C# player had it: on Linux and Windows without the system's title bar (the header is the
-/// title bar, with its own window buttons) and maximized; on macOS with the usual title bar and traffic lights.
+/// The desktop window: on Linux and Windows without the system's title bar (the header is the title bar, with its own
+/// window buttons) and maximized; on macOS with the usual title bar and traffic lights.
 Future<void> _prepareWindow(AppPlatform platform) async {
   await windowManager.ensureInitialized();
   await windowManager.waitUntilReadyToShow(
