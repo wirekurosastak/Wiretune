@@ -1,0 +1,19 @@
+name: wiretune_core
+description: >-
+  The shared part of Wiretune: models, the SQLite library index, the tag reader and scanner, the library service,
+  the server protocol and session, localisation and the audio engine. Used by the server and by every player.
+publish_to: none
+version: 1.0.0
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  crypto: ^3.0.7
+  http: ^1.6.0
+  path: ^1.9.1
+  sqlite3: ^3.7.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.0

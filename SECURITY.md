@@ -34,11 +34,12 @@ about security; running the server is described in [docs/server.md](docs/server.
 - **Tokens.** JWTs signed with HMAC-SHA256, valid 24 hours or 90 days. There is no per-token revocation; deleting
   the user ends their access immediately.
 - **Tokens in URLs.** Audio and cover requests may carry a token as `?token=` for players that cannot send headers
-  (`ffplay`, the Android player); the server accepts it only on `/api/stream` and `/api/cover`. The players put a
+  (libmpv, the TV's media player, the desktop's `ffmpeg` for the spectrum); the server accepts it only on `/api/stream`
+  and `/api/cover`. The players put a
   **stream token** there, not the sign-in token: it is issued by `POST /api/auth/stream-token`, valid 8 hours, and
   opens the audio and cover routes and nothing else, so a leaked stream URL cannot read or change your account. The URL
-  still ends up in the process list of the machine that plays it and in the access logs of your reverse proxy, so keep
-  those private. With the shipped `appsettings.json` the server's own console logging does not log request URLs.
+  still ends up in the process list of a desktop that runs the spectrum analyser (on `ffmpeg`'s command line) and in the
+  access logs of your reverse proxy, so keep those private. The server itself never logs a query string.
 - **Signing key.** It lives in the server's database in its data directory. Whoever can read `wiretune-server.db` can
   mint valid tokens and read the password hashes, so restrict the directory to the service account. A directory the
   server creates itself is private to its user on Linux; an existing one keeps its permissions.
@@ -49,7 +50,8 @@ about security; running the server is described in [docs/server.md](docs/server.
   real path. The server's own data (favourites and playlists included) is in the database in its data directory, so
   the same read-protection as for the signing key applies.
 - **File access.** The server only reads the music folder. Streaming and cover requests serve only files inside the
-  library folder (or the server's cover cache), and request bodies are limited to 64 KiB.
+  library folder (or the server's cover cache), and request bodies are limited to 64 KiB (4 MiB for a playlist,
+  32 MiB for the one-time import, both only after authorisation).
 
 ## Clients
 
@@ -57,23 +59,23 @@ about security; running the server is described in [docs/server.md](docs/server.
   in* is ticked (the account created on a server's first run is always remembered). Anyone who can read that file
   can use the token until it expires, up to 90 days. Signing out clears it. The token is sent only to the server
   address it was issued for.
-- **Android allows cleartext HTTP to every destination.** Servers are usually addressed by LAN IP, which Android's
-  network security configuration cannot match. Use an `https://` address whenever the server is not on a network you
-  trust.
-- **Artist pictures.** The desktop player looks them up through Deezer's public API, which sends artist names from
+- **Cleartext HTTP is allowed to every destination** on Android (network security configuration), iOS and macOS (App
+  Transport Security). Servers are usually addressed by LAN IP, which those settings cannot match. Use an `https://`
+  address whenever the server is not on a network you trust.
+- **Artist pictures.** The player looks them up through Deezer's public API, which sends artist names from
   your library to `api.deezer.com`; results are cached in `artist_pictures.json`. Set
   `WIRETUNE_NO_ARTIST_PICTURES=1` to disable it.
 - **Lyrics.** For a track whose file has no lyrics, the player looks them up on LRCLIB (`lrclib.net`, a free,
   public lyrics database) when you open the queue panel. The request carries the track's title, artist, album and
-  length, plus a `Wiretune/<version>` user agent, and comes from the player, not from the server, so a server
+  length, plus a `Wiretune/1.0` user agent, and comes from the player, not from the server, so a server
   library's tags go to LRCLIB from every device that plays it. Answers are cached in the `lyrics` folder of the
   player's data directory (named by a hash, so no tag text appears in a file name). It is on by default; switch it
   off in Settings, or for the whole process with `WIRETUNE_NO_ONLINE_LYRICS=1`. Nothing else leaves your network.
 - **Log files.** `WiretuneLog` replaces the value of every `token=` parameter with `***` before a line is written, so
   stream URLs in the log do not carry the access token. The logs still contain file paths, server addresses and
   device names: read `wiretune.log` before attaching it to a public issue.
-- **UI automation endpoint.** Only **Debug builds** (`dotnet run`, not a Release build or a published one) contain
-  it, and only with `WIRETUNE_UI_AUTOMATION=1` does it open an unauthenticated control interface on `127.0.0.1:5201`.
-  It is loopback-only and protected against requests from web pages, but it can control the player and takes
-  credentials in query parameters. Do not enable it on a machine you do not fully control
+- **UI automation endpoint.** Only **debug builds** of the player contain it (a release build has none), and only with
+  `WIRETUNE_UI_AUTOMATION=1` does it open an unauthenticated control interface on `127.0.0.1:5201`. It is
+  loopback-only and protected against requests from web pages, but it can control the player and takes credentials in
+  query parameters. Do not enable it on a machine you do not fully control
   ([docs/development.md](docs/development.md#ui-automation-desktop-development-only)).

@@ -1,0 +1,570 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+import 'package:shelf/shelf.dart';
+import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:wiretune_core/wiretune_core.dart';
+
+import 'auth_service.dart';
+import 'config.dart';
+import 'http_utils.dart';
+import 'library_scan_service.dart';
+import 'setup_code.dart';
+import 'user_data_service.dart';
+
+/// Who may call a route.
+enum Access {
+  /// Anyone.
+  anonymous,
+
+  /// Any signed-in account (never a stream token).
+  user,
+
+  /// An administrator.
+  admin,
+
+  /// Any signed-in account, also with a stream token, also as `?token=` (audio and covers).
+  media,
+}
+
+typedef _Handler = FutureOr<Response> Function(_Call call);
+
+class _Route {
+  _Route(this.method, String pattern, this.access, this.handler, {this.rateLimited = false, this.bodyLimit})
+    : segments = pattern.split('/').where((s) => s.isNotEmpty).toList();
+
+  final String method;
+  final List<String> segments;
+  final Access access;
+  final _Handler handler;
+  final bool rateLimited;
+  final int? bodyLimit;
+
+  /// The path parameters when [path] matches, null otherwise.
+  Map<String, String>? match(List<String> path) {
+    if (path.length != segments.length) return null;
+    final params = <String, String>{};
+    for (var i = 0; i < segments.length; i++) {
+      final segment = segments[i];
+      if (segment.startsWith('{') && segment.endsWith('}')) {
+        params[segment.substring(1, segment.length - 1)] = path[i];
+      } else if (segment.toLowerCase() != path[i].toLowerCase()) {
+        return null;
+      }
+    }
+    return params;
+  }
+}
+
+/// One request on its way through a route.
+class _Call {
+  _Call(this.request, this.params, this.principal, this.bodyLimit);
+
+  final Request request;
+  final Map<String, String> params;
+  final Principal? principal;
+  final int bodyLimit;
+
+  String get userId => principal!.userId;
+
+  Future<Map<Object?, Object?>?> jsonObject() async {
+    final body = await readJsonBody(request, bodyLimit);
+    if (body == null) return null;
+    if (body is! Map) throw const FormatException('Expected a JSON object.');
+    return body;
+  }
+}
+
+/// Fixed-window rate limit per client address: [limit] requests per [window].
+class _RateLimiter {
+  _RateLimiter(this.limit, this.window);
+
+  final int limit;
+  final Duration window;
+  final Map<String, (DateTime start, int count)> _windows = {};
+
+  /// Null when the request may proceed, otherwise how long the caller has to wait.
+  Duration? acquire(String key) {
+    final now = DateTime.now();
+    if (_windows.length > 10000) _windows.removeWhere((_, w) => now.difference(w.$1) >= window);
+    final current = _windows[key];
+    if (current == null || now.difference(current.$1) >= window) {
+      _windows[key] = (now, 1);
+      return null;
+    }
+    if (current.$2 >= limit) return window - now.difference(current.$1);
+    _windows[key] = (current.$1, current.$2 + 1);
+    return null;
+  }
+}
+
+/// The Wiretune server: the library index of one music folder, accounts, per-account data and the HTTP API
+/// (docs/api.md).
+class WiretuneServer {
+  WiretuneServer._(
+    this.options,
+    this.paths,
+    this.database,
+    this.repository,
+    this.library,
+    this.auth,
+    this.userData,
+    this.setupCode,
+    this.scanner,
+  );
+
+  static const int _defaultBodyLimit = 64 * 1024;
+  static const int _playlistBodyLimit = 4 * 1024 * 1024;
+  static const int _importBodyLimit = 32 * 1024 * 1024;
+
+  final ServerOptions options;
+  final ServerPaths paths;
+  final DatabaseManager database;
+  final LibraryRepository repository;
+  final LibraryService library;
+  final AuthService auth;
+  final UserDataService userData;
+  final SetupCode setupCode;
+  final LibraryScanService scanner;
+  final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
+  final List<HttpServer> _servers = [];
+  late final List<_Route> _routes = _buildRoutes();
+
+  /// The port of the first listener (useful when started on port 0).
+  int get port => _servers.first.port;
+
+  List<HttpServer> get servers => _servers;
+
+  /// Opens the database and the library, then starts listening and scanning.
+  static Future<WiretuneServer> start(ServerOptions options, {bool listen = true}) async {
+    final dataDirectory = AppPaths.getDataDirectory(overridePath: options.dataDirectory, subdirectory: 'Server');
+    WiretuneLog.initialize(path: p.join(dataDirectory, 'wiretune-server.log'));
+    WiretuneLog.info('Server', '=== Starting the Wiretune server ===');
+
+    final database = DatabaseManager(p.join(dataDirectory, 'wiretune-server.db'));
+    database.initializeSchema();
+    final repository = LibraryRepository(database);
+
+    // A library folder chosen through the admin API wins over the configured one, so it survives restarts.
+    final saved = await repository.getSetting('library_path');
+    String? savedRoot;
+    if (saved != null && saved.trim().isNotEmpty) {
+      if (Directory(saved).existsSync()) {
+        savedRoot = saved;
+      } else {
+        WiretuneLog.warn('Server', "Saved library path '$saved' no longer exists; using the configured one instead.");
+      }
+    }
+    final paths = ServerPaths(
+      savedRoot ?? options.resolveLibraryRoot(),
+      dataDirectory,
+      p.join(dataDirectory, 'Covers'),
+    );
+    WiretuneLog.info(
+      'Server',
+      "Library: '${paths.libraryRoot}' (exists: ${Directory(paths.libraryRoot).existsSync()}), data: '${paths.dataDirectory}'",
+    );
+
+    final library = LibraryService(repository, MetadataScanner(), coverCacheDirectory: paths.coverCacheDirectory);
+    await library.initialize();
+    final auth = AuthService(database, await repository.getOrAddSetting('jwt_secret', AuthService.generateSecret));
+    final scanner = LibraryScanService(
+      library,
+      paths,
+      interval: options.scanIntervalMinutes > 0 ? Duration(minutes: options.scanIntervalMinutes) : null,
+    );
+
+    final server = WiretuneServer._(
+      options,
+      paths,
+      database,
+      repository,
+      library,
+      auth,
+      UserDataService(database),
+      SetupCode(options.setupCode),
+      scanner,
+    );
+
+    if (!auth.hasAnyUsers()) {
+      WiretuneLog.warn(
+        'Server',
+        'No administrator account exists yet. Create it in the player with the setup code ${server.setupCode.value}',
+      );
+    }
+
+    if (listen) {
+      for (final address in options.listenAddresses) {
+        final bind = address.bindAddress ?? address.host;
+        final httpServer = await shelf_io.serve(server.handler, bind, address.port, shared: true);
+        httpServer.autoCompress = false; // JSON is compressed by the handler, audio never
+        httpServer.idleTimeout = const Duration(seconds: 120);
+        server._servers.add(httpServer);
+        WiretuneLog.info('Server', 'Now listening on: http://${address.host}:${httpServer.port}');
+      }
+    }
+    scanner.start();
+    return server;
+  }
+
+  Future<void> close() async {
+    await scanner.stop();
+    for (final server in _servers) {
+      await server.close(force: true);
+    }
+    _servers.clear();
+    database.close();
+  }
+
+  /// The whole HTTP API as a shelf handler.
+  Future<Response> handler(Request request) async {
+    try {
+      final response = await _dispatch(request);
+      return await compressJson(request, response);
+    } on BodyTooLargeException {
+      return errorResponse(413, 'The request body is too large.');
+    } on FormatException catch (e) {
+      return errorResponse(400, 'The request body is not valid JSON: ${e.message}');
+    } catch (e, s) {
+      WiretuneLog.error('Server', 'Unhandled error on ${request.method} /${request.url.path}: $e', e, s);
+      return errorResponse(500, 'An internal error occurred.');
+    }
+  }
+
+  Future<Response> _dispatch(Request request) async {
+    final path = request.url.pathSegments.map(Uri.decodeComponent).toList();
+    final method = request.method == 'HEAD' ? 'GET' : request.method;
+
+    _Route? route;
+    Map<String, String>? params;
+    var pathMatched = false;
+    for (final candidate in _routes) {
+      final match = candidate.match(path);
+      if (match == null) continue;
+      pathMatched = true;
+      if (candidate.method == method) {
+        route = candidate;
+        params = match;
+        break;
+      }
+    }
+    if (route == null) return pathMatched ? Response(405) : notFound();
+    if (request.method == 'HEAD' && route.access != Access.media) return Response(405);
+
+    Principal? principal;
+    if (route.access != Access.anonymous) {
+      principal = _authenticate(request, route.access == Access.media);
+      if (principal == null) return unauthorized();
+      if (route.access == Access.admin && !principal.isAdmin) return forbidden();
+    }
+
+    if (route.rateLimited) {
+      final wait = _authLimiter.acquire(_clientAddress(request));
+      if (wait != null) {
+        return jsonResponse(
+          {'error': 'Too many attempts. Try again in a minute.'},
+          status: 429,
+          headers: {'retry-after': '${(wait.inMilliseconds / 1000).ceil()}'},
+        );
+      }
+    }
+
+    return route.handler(_Call(request, params!, principal, route.bodyLimit ?? _defaultBodyLimit));
+  }
+
+  /// The account behind the request's token, or null. A token in the query string counts only on media routes, and a
+  /// stream token opens nothing else. Tokens live for up to 90 days, so every one is checked against the accounts:
+  /// deleting an account ends its access immediately.
+  Principal? _authenticate(Request request, bool isMediaRoute) {
+    String? token;
+    final header = request.headers['authorization'];
+    if (header != null && header.toLowerCase().startsWith('bearer ')) {
+      token = header.substring(7).trim();
+    } else if (isMediaRoute) {
+      token = request.url.queryParameters['token'];
+    }
+    if (token == null || token.isEmpty) return null;
+
+    final principal = auth.validate(token);
+    if (principal == null) return null;
+    if (principal.isStreamToken && !isMediaRoute) return null;
+    if (!auth.userExists(principal.userId)) return null;
+    return principal;
+  }
+
+  String _clientAddress(Request request) {
+    if (options.forwardedHeaders) {
+      final forwarded = request.headers['x-forwarded-for'];
+      if (forwarded != null && forwarded.trim().isNotEmpty) return forwarded.split(',').first.trim();
+    }
+    final info = request.context['shelf.io.connection_info'];
+    return info is HttpConnectionInfo ? info.remoteAddress.address : 'unknown';
+  }
+
+  // ── Routes ─────────────────────────────────────────────────────────────────────────────────────
+
+  List<_Route> _buildRoutes() => [
+    // Authentication (anonymous)
+    _Route(
+      'GET',
+      '/api/auth/setup-required',
+      Access.anonymous,
+      (_) => jsonResponse({'setupRequired': !auth.hasAnyUsers()}),
+    ),
+    _Route('POST', '/api/auth/setup', Access.anonymous, _setup, rateLimited: true),
+    _Route('POST', '/api/auth/login', Access.anonymous, _login, rateLimited: true),
+
+    // Authentication (signed in)
+    _Route('POST', '/api/auth/register', Access.admin, _register),
+    _Route(
+      'POST',
+      '/api/auth/stream-token',
+      Access.user,
+      (call) => jsonResponse(auth.createStreamToken(call.principal!.userId, call.principal!.username).toJson()),
+    ),
+    _Route('GET', '/api/auth/me', Access.user, (call) {
+      final user = auth.getUser(call.userId);
+      return user == null ? unauthorized() : jsonResponse(user.toJson());
+    }),
+    _Route('GET', '/api/users', Access.admin, (_) => jsonResponse(auth.getAllUsers().map((u) => u.toJson()).toList())),
+    _Route('DELETE', '/api/users/{userId}', Access.admin, (call) {
+      final userId = call.params['userId']!;
+      if (call.userId.toLowerCase() == userId.toLowerCase()) {
+        return errorResponse(400, 'You cannot delete your own account.');
+      }
+      return auth.deleteUser(userId) ? Response.ok(null) : errorResponse(404, 'User not found.');
+    }),
+    _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson())),
+    _Route('POST', '/api/config/library-path', Access.admin, _updateLibraryPath),
+
+    // Library
+    _Route(
+      'GET',
+      '/api/library/status',
+      Access.user,
+      (_) => jsonResponse(
+        ServerLibraryStatus(
+          library.tracks.length,
+          library.albums.length,
+          library.artists.length,
+          library.isScanning,
+          scanner.lastScanCompletedUtc,
+          scanner.lastScanError,
+        ).toJson(),
+      ),
+    ),
+    _Route('POST', '/api/library/scan', Access.admin, (_) {
+      scanner.requestScan();
+      return jsonResponse({'message': 'Scan requested.'}, status: 202, headers: {'location': '/api/library/status'});
+    }),
+    _Route('GET', '/api/tracks', Access.user, (call) {
+      final q = call.request.url.queryParameters['q'];
+      final tracks = isBlank(q) ? library.tracks : library.search(q!);
+      return jsonResponse(tracks.map(trackDto).toList());
+    }),
+    _Route('GET', '/api/albums', Access.user, (_) => jsonResponse(library.albums.map(_albumDto).toList())),
+    _Route('GET', '/api/artists', Access.user, (_) => jsonResponse(library.artists.map(_artistDto).toList())),
+
+    // Media
+    _Route('GET', '/api/stream/{trackId}', Access.media, _stream),
+    _Route('GET', '/api/cover/album/{albumId}', Access.media, (call) {
+      final album = library.getAlbum(call.params['albumId']!);
+      return _cover(call.request, album?.tracks.where((t) => t.hasCoverArt).firstOrNull);
+    }),
+    _Route(
+      'GET',
+      '/api/cover/{trackId}',
+      Access.media,
+      (call) => _cover(call.request, library.getTrack(call.params['trackId']!)),
+    ),
+    _Route('GET', '/api/lyrics/{trackId}', Access.user, _lyrics),
+
+    // The signed-in account's favourites, play counts and playlists
+    _Route('GET', '/api/me/data', Access.user, (call) => jsonResponse(userData.get(call.userId).toJson())),
+    _Route('POST', '/api/me/data/import', Access.user, _import, bodyLimit: _importBodyLimit),
+    _Route('PUT', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, true)),
+    _Route('DELETE', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, false)),
+    _Route('POST', '/api/me/plays/{trackId}', Access.user, (call) {
+      final trackId = call.params['trackId']!;
+      final error = UserDataRules.validateId(trackId);
+      if (error != null) return errorResponse(400, error);
+      final stats = userData.recordPlay(call.userId, trackId);
+      return stats == null
+          ? errorResponse(409, 'An account can keep statistics for at most ${UserDataRules.maxTrackStats} tracks.')
+          : jsonResponse(stats.toJson());
+    }),
+    _Route('PUT', '/api/me/playlists/{playlistId}', Access.user, _savePlaylist, bodyLimit: _playlistBodyLimit),
+    _Route('DELETE', '/api/me/playlists/{playlistId}', Access.user, (call) {
+      return userData.deletePlaylist(call.userId, call.params['playlistId']!)
+          ? jsonResponse({'deleted': true})
+          : errorResponse(404, 'Playlist not found.');
+    }),
+  ];
+
+  Future<Response> _setup(_Call call) async {
+    final body = await call.jsonObject();
+    final username = body?['username'] as String?;
+    final password = body?['password'] as String?;
+    final error = AuthService.validateCredentials(username, password);
+    if (error != null) return errorResponse(400, error);
+
+    if (auth.hasAnyUsers()) return errorResponse(409, 'The server is already set up. Sign in instead.');
+    if (!setupCode.matches(body?['setupCode'] as String?)) {
+      return errorResponse(403, 'The setup code is missing or wrong. The server prints it in its log when it starts.');
+    }
+
+    final result = await auth.createAdmin(username!, password!);
+    return result == null
+        ? errorResponse(409, 'The server is already set up. Sign in instead.')
+        : jsonResponse(result.toJson());
+  }
+
+  Future<Response> _login(_Call call) async {
+    final body = await call.jsonObject();
+    final username = body?['username'];
+    final password = body?['password'];
+    if (username is! String || username.trim().isEmpty || password is! String || password.isEmpty) {
+      return errorResponse(400, 'Username and password are required.');
+    }
+    final result = await auth.login(username, password, rememberMe: body?['rememberMe'] == true);
+    return result == null ? unauthorized() : jsonResponse(result.toJson());
+  }
+
+  Future<Response> _register(_Call call) async {
+    final body = await call.jsonObject();
+    final username = body?['username'] as String?;
+    final password = body?['password'] as String?;
+    final error = AuthService.validateCredentials(username, password);
+    if (error != null) return errorResponse(400, error);
+    final user = await auth.register(username!, password!);
+    return user == null ? errorResponse(409, 'Username already taken.') : jsonResponse(user.toJson());
+  }
+
+  Future<Response> _updateLibraryPath(_Call call) async {
+    final body = await call.jsonObject();
+    final newPath = body?['newPath'];
+    if (newPath is! String || newPath.trim().isEmpty) return errorResponse(400, 'The folder path must not be empty.');
+
+    String fullPath;
+    try {
+      fullPath = AppPaths.fullPath(newPath);
+    } catch (_) {
+      return errorResponse(400, 'The folder path is not valid.');
+    }
+    if (!Directory(fullPath).existsSync()) return errorResponse(400, 'The folder does not exist: $fullPath');
+
+    await repository.setSetting('library_path', fullPath);
+    paths.libraryRoot = fullPath;
+    scanner.requestScan();
+    return jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson());
+  }
+
+  Future<Response> _stream(_Call call) async {
+    final track = library.getTrack(call.params['trackId']!);
+    if (track == null ||
+        !AppPaths.isPathUnderRoot(track.filePath, paths.libraryRoot) ||
+        !File(track.filePath).existsSync()) {
+      return errorResponse(404, 'Track not found.');
+    }
+    return fileResponse(call.request, File(track.filePath), AudioFileTypes.mimeType(track.filePath));
+  }
+
+  Future<Response> _cover(Request request, Track? track) async {
+    if (track == null || !AppPaths.isPathUnderRoot(track.filePath, paths.libraryRoot)) return notFound();
+    const cache = {'cache-control': 'private, max-age=86400'};
+
+    final coverPath = track.coverArtPath;
+    if (coverPath != null &&
+        coverPath.isNotEmpty &&
+        File(coverPath).existsSync() &&
+        (AppPaths.isPathUnderRoot(coverPath, paths.coverCacheDirectory) ||
+            AppPaths.isPathUnderRoot(coverPath, paths.libraryRoot))) {
+      return fileResponse(request, File(coverPath), ImageFormat.mimeTypeFromPath(coverPath), headers: cache);
+    }
+
+    final bytes = File(track.filePath).existsSync() ? await MetadataScanner().extractCoverArt(track.filePath) : null;
+    if (bytes == null || bytes.isEmpty) return notFound();
+    return Response.ok(bytes, headers: {...cache, 'content-type': ImageFormat.mimeType(bytes)});
+  }
+
+  Future<Response> _lyrics(_Call call) async {
+    final track = library.getTrack(call.params['trackId']!);
+    if (track == null || !AppPaths.isPathUnderRoot(track.filePath, paths.libraryRoot)) return notFound();
+    final lyrics = await MetadataScanner.readLyrics(track.filePath);
+    return lyrics == null ? notFound() : jsonResponse({'lyrics': lyrics});
+  }
+
+  Future<Response> _import(_Call call) async {
+    final body = await call.jsonObject();
+    UserDataSnapshot? snapshot;
+    try {
+      snapshot = body == null ? null : UserDataSnapshot.fromJson(body);
+    } on Object {
+      return errorResponse(400, 'The data is not valid.');
+    }
+    final error = UserDataService.validateImport(snapshot);
+    if (error != null) return errorResponse(400, error);
+
+    final stored = userData.import(call.userId, snapshot!);
+    return jsonResponse({
+      'favorites': stored.favorites.length,
+      'plays': stored.plays.length,
+      'playlists': stored.playlists.length,
+    });
+  }
+
+  Response _favorite(_Call call, bool favorite) {
+    final trackId = call.params['trackId']!;
+    final error = UserDataRules.validateId(trackId);
+    if (error != null) return errorResponse(400, error);
+    return userData.setFavorite(call.userId, trackId, favorite)
+        ? jsonResponse({'trackId': trackId, 'isFavorite': favorite})
+        : errorResponse(409, 'An account can have at most ${UserDataRules.maxFavorites} favourites.');
+  }
+
+  Future<Response> _savePlaylist(_Call call) async {
+    final playlistId = call.params['playlistId']!;
+    final body = await call.jsonObject();
+    PlaylistUpdate? update;
+    try {
+      update = body == null ? null : PlaylistUpdate.fromJson(body);
+    } on Object {
+      return errorResponse(400, 'The playlist is not valid.');
+    }
+    final error = UserDataService.validatePlaylist(playlistId, update);
+    if (error != null) return errorResponse(400, error);
+
+    final saved = userData.savePlaylist(call.userId, playlistId, update!);
+    return saved == null
+        ? errorResponse(409, 'An account can have at most ${UserDataRules.maxPlaylists} playlists.')
+        : jsonResponse(saved.toJson());
+  }
+
+  // ── What the library routes send ───────────────────────────────────────────────────────────────
+  // The server's own tracks carry the absolute path of each file and of the cover cache; these carry only what a player
+  // can use. filePath is a placeholder ("server:{id}"): older players key their database on it and need a unique value.
+
+  static Map<String, Object?> trackDto(Track t) => {...t.toJson(), 'filePath': 'server:${t.id}'};
+
+  static Map<String, Object?> _albumDto(Album a) => {
+    'id': a.id,
+    'title': a.title,
+    'artist': a.artist,
+    'year': a.year,
+    'genre': a.genre,
+    'trackCount': a.trackCount,
+    'totalDuration': formatTimeSpan(a.totalDuration),
+    'isHiRes': a.isHiRes,
+    'formatBadge': a.formatBadge,
+    'tracks': a.tracks.map(trackDto).toList(),
+  };
+
+  static Map<String, Object?> _artistDto(Artist a) => {
+    'id': a.id,
+    'name': a.name,
+    'albumCount': a.albumCount,
+    'trackCount': a.trackCount,
+    'albums': a.albums.map(_albumDto).toList(),
+  };
+}

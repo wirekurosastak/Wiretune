@@ -1,0 +1,56 @@
+name: wiretune
+description: "Wiretune: your lossless collection, on your own hardware, played properly."
+publish_to: 'none'
+version: 2.0.0+2
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  audio_service: ^0.18.19
+  audio_service_mpris: ^0.2.1
+  audio_session: ^0.2.4
+  audioplayers_platform_interface: ^7.2.0
+  audioplayers_tizen: ^3.1.9
+  file_picker: ^13.1.0
+  http: ^1.6.0
+  media_kit: ^1.2.6
+  media_kit_libs_audio: ^1.0.7
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  path_provider_tizen: ^2.3.3
+  rxdart: ^0.28.0
+  window_manager: ^0.5.2
+  wiretune_core:
+    path: ../packages/wiretune_core
+  wiretune_platform:
+    path: ../packages/wiretune_platform
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+
+# `dart run flutter_launcher_icons` regenerates the icons of every platform from the logo. On Android the whole logo is the
+# adaptive icon's background layer (its dark edge is what the launcher's mask trims; the W stays inside the safe zone).
+flutter_launcher_icons:
+  image_path: assets/wiretune.png
+  android: true
+  adaptive_icon_background: assets/wiretune.png
+  adaptive_icon_foreground: tool/icons/transparent.png
+  min_sdk_android: 24
+  ios: true
+  remove_alpha_ios: true
+  macos:
+    generate: true
+  windows:
+    generate: true
+    icon_size: 256

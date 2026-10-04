@@ -1,0 +1,387 @@
+import 'package:flutter/material.dart';
+import 'package:wiretune_core/wiretune_core.dart';
+
+import '../app_scope.dart';
+import '../localization.dart';
+import '../theme/app_theme.dart';
+import '../view_models/library_view_models.dart';
+import '../widgets/cards.dart';
+import '../widgets/common.dart';
+import '../widgets/quality_tag.dart';
+import '../widgets/track_list.dart';
+import 'library_pages.dart';
+
+class PlaylistsPage extends StatelessWidget {
+  const PlaylistsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final playlists = context.vm.playlists;
+    return ListenableBuilder(
+      listenable: playlists,
+      builder: (context, _) {
+        final selected = playlists.selectedPlaylist;
+        if (playlists.isPlaylistDetailOpen && selected != null) return PlaylistDetail(playlist: selected);
+        if (!playlists.hasPlaylists) {
+          return EmptyState(
+            icon: Icons.queue_music,
+            title: context.tr('EmptyPlaylistsTitle'),
+            hint: context.tr('EmptyPlaylistsHint'),
+            actionLabel: context.tr('PlaylistNew'),
+            onAction: playlists.openCreateDialog,
+          );
+        }
+        return CustomScrollView(
+          key: const PageStorageKey('playlists'),
+          slivers: [
+            SliverToBoxAdapter(
+              child: PageHeader(
+                title: context.tr('NavPlaylists'),
+                actions: [
+                  FilledButton.icon(
+                    onPressed: playlists.openCreateDialog,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: Text(context.tr('PlaylistNew')),
+                  ),
+                ],
+              ),
+            ),
+            TileGridSliver(
+              kind: TileKind.twoLines,
+              itemCount: playlists.playlists.length,
+              itemBuilder: (context, index) {
+                final playlist = playlists.playlists[index];
+                return PlaylistCard(
+                  playlist: playlist,
+                  covers: playlistCovers(playlists.tracksOf(playlist)),
+                  onOpen: () => playlists.openPlaylist(playlist),
+                  onPlay: () => playlists.playPlaylist(playlist),
+                );
+              },
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 24)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class PlaylistDetail extends StatefulWidget {
+  const PlaylistDetail({super.key, required this.playlist});
+
+  final Playlist playlist;
+
+  @override
+  State<PlaylistDetail> createState() => _PlaylistDetailState();
+}
+
+class _PlaylistDetailState extends State<PlaylistDetail> {
+  final TextEditingController _name = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playlists = context.vm.playlists;
+    final playlist = widget.playlist;
+    final colors = context.colors;
+    final tracks = playlists.selectedPlaylistTracks;
+
+    final title = playlists.isEditingName
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 240, maxWidth: 400),
+                child: TextField(
+                  controller: _name..text = _name.text.isEmpty ? playlists.editingPlaylistName : _name.text,
+                  autofocus: true,
+                  maxLength: UserDataRules.maxPlaylistNameLength,
+                  decoration: const InputDecoration(counterText: ''),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  onSubmitted: (value) => playlists.confirmRenamePlaylist(value).then((_) => _name.clear()),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: context.tr('Save'),
+                icon: Icon(Icons.check_rounded, color: colors.accent),
+                onPressed: () => playlists.confirmRenamePlaylist(_name.text).then((_) => _name.clear()),
+              ),
+              IconButton(
+                tooltip: context.tr('Cancel'),
+                icon: const Icon(Icons.close_rounded),
+                onPressed: () {
+                  _name.clear();
+                  playlists.cancelRename();
+                },
+              ),
+            ],
+          )
+        : Tooltip(
+            message: context.tr('Rename'),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(4),
+              onTap: playlists.startRename,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      playlist.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: colors.textMain),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(Icons.edit_outlined, size: 18, color: colors.textMuted),
+                ],
+              ),
+            ),
+          );
+
+    return CustomScrollView(
+      key: PageStorageKey('playlist-${playlist.id}'),
+      slivers: [
+        SliverToBoxAdapter(
+          child: BackLink(text: context.tr('BackToPlaylists'), onPressed: playlists.closePlaylistDetail),
+        ),
+        SliverToBoxAdapter(
+          child: DetailHeader(
+            artwork: PlaylistCover(covers: playlistCovers(tracks), radius: 8),
+            tags: [
+              TagBadge(context.tr('LabelPlaylist'), color: colors.palette.lime),
+              if (playlist.formatBadge.isNotEmpty) QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec),
+            ],
+            title: playlist.name,
+            titleWidget: title,
+            details: [
+              Text(
+                context.trf('TrackCount', [playlist.trackCount]),
+                style: TextStyle(fontSize: 13, color: colors.textMuted),
+              ),
+              if (playlists.selectedPlaylistTotalDuration.isNotEmpty)
+                Text(playlists.selectedPlaylistTotalDuration, style: TextStyle(fontSize: 13, color: colors.textMuted)),
+            ],
+            actions: [
+              PlayShuffleButtons(
+                playLabel: context.tr('Play'),
+                shuffleLabel: context.tr('Shuffle'),
+                onPlay: tracks.isEmpty ? null : () => playlists.playPlaylist(),
+                onShuffle: tracks.isEmpty ? null : () => playlists.shufflePlaylist(),
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
+                onPressed: () => playlists.requestDeletePlaylist(playlist),
+                icon: Icon(Icons.delete_outline, size: 16, color: colors.danger),
+                label: Text(context.tr('PlaylistDeleteAction')),
+              ),
+            ],
+          ),
+        ),
+        if (tracks.isEmpty)
+          SliverToBoxAdapter(
+            child: EmptyState(
+              icon: Icons.playlist_add,
+              title: context.tr('PlaylistEmptyTitle'),
+              hint: context.tr('PlaylistEmptyHint'),
+            ),
+          )
+        else
+          TrackSliver(tracks: tracks, onPlay: playlists.playTrack, kind: TrackTableKind.playlist),
+        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+      ],
+    );
+  }
+}
+
+/// The playlist dialogs (new playlist, add to playlist, delete), shown over the page while the view model says so.
+class PlaylistDialogsLayer extends StatefulWidget {
+  const PlaylistDialogsLayer({super.key});
+
+  @override
+  State<PlaylistDialogsLayer> createState() => _PlaylistDialogsLayerState();
+}
+
+class _PlaylistDialogsLayerState extends State<PlaylistDialogsLayer> {
+  final TextEditingController _name = TextEditingController();
+  bool _wasCreateOpen = false;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playlists = context.vm.playlists;
+    return ListenableBuilder(
+      listenable: playlists,
+      builder: (context, _) {
+        if (playlists.isCreateDialogOpen && !_wasCreateOpen) _name.text = playlists.newPlaylistName;
+        _wasCreateOpen = playlists.isCreateDialogOpen;
+        if (!playlists.isAnyDialogOpen) return const SizedBox.shrink();
+
+        final Widget dialog;
+        if (playlists.isCreateDialogOpen) {
+          dialog = _DialogCard(
+            title: context.tr('PlaylistNew'),
+            onClose: playlists.closeCreateDialog,
+            subtitle: playlists.trackToAdd == null
+                ? null
+                : context.trf('PlaylistAlsoAddsTrack', [playlists.trackToAdd!.title]),
+            content: TextField(
+              controller: _name,
+              autofocus: true,
+              maxLength: UserDataRules.maxPlaylistNameLength,
+              decoration: InputDecoration(hintText: context.tr('PlaylistNamePlaceholder'), counterText: ''),
+              onSubmitted: (value) => playlists.createPlaylist(value),
+            ),
+            actions: [
+              TextButton(onPressed: playlists.closeCreateDialog, child: Text(context.tr('Cancel'))),
+              FilledButton(onPressed: () => playlists.createPlaylist(_name.text), child: Text(context.tr('Create'))),
+            ],
+          );
+        } else if (playlists.isAddToPlaylistDialogOpen) {
+          final track = playlists.trackToAdd;
+          dialog = _DialogCard(
+            title: context.tr('TipAddToPlaylist'),
+            subtitle: track == null ? null : '${track.title} • ${track.artist}',
+            onClose: playlists.cancelAddTrack,
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  if (!playlists.hasPlaylists)
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Text(
+                        context.tr('NoPlaylistsCreateOne'),
+                        style: TextStyle(color: context.colors.textMuted),
+                      ),
+                    ),
+                  for (final playlist in playlists.playlists)
+                    ListTile(
+                      leading: const Icon(Icons.queue_music),
+                      title: Text(playlist.name),
+                      subtitle: Text(context.trf('TrackCount', [playlist.trackCount])),
+                      onTap: () => playlists.addPendingTrackTo(playlist),
+                    ),
+                  ListTile(
+                    leading: Icon(Icons.add_rounded, color: context.colors.accent),
+                    title: Text(context.tr('PlaylistNew'), style: TextStyle(color: context.colors.accent)),
+                    onTap: playlists.createPlaylistForPendingTrack,
+                  ),
+                ],
+              ),
+            ),
+            actions: [TextButton(onPressed: playlists.cancelAddTrack, child: Text(context.tr('Cancel')))],
+          );
+        } else {
+          final playlist = playlists.playlistPendingDelete;
+          dialog = _DialogCard(
+            title: context.tr('PlaylistDeleteAction'),
+            onClose: playlists.cancelDeletePlaylist,
+            content: Text(context.trf('PlaylistDeleteConfirm', [playlist?.name ?? ''])),
+            actions: [
+              TextButton(onPressed: playlists.cancelDeletePlaylist, child: Text(context.tr('Cancel'))),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: context.colors.danger, foregroundColor: Colors.white),
+                onPressed: playlists.confirmDeletePlaylist,
+                child: Text(context.tr('Delete')),
+              ),
+            ],
+          );
+        }
+
+        return Stack(
+          children: [
+            ModalBarrier(color: Colors.black54, dismissible: true, onDismiss: () => context.vm.tryNavigateBack()),
+            Center(child: dialog),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DialogCard extends StatelessWidget {
+  const _DialogCard({
+    required this.title,
+    this.subtitle,
+    required this.content,
+    required this.actions,
+    required this.onClose,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget content;
+  final List<Widget> actions;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Material(
+          color: colors.palette.modal,
+          borderRadius: BorderRadius.circular(18),
+          elevation: 12,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+            child: FocusScope(
+              autofocus: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: colors.textMain),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: context.tr('Close'),
+                        onPressed: onClose,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  if (subtitle != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(subtitle!, style: TextStyle(fontSize: 13, color: colors.textMuted)),
+                    ),
+                  const SizedBox(height: 8),
+                  content,
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      for (final action in actions) Padding(padding: const EdgeInsets.only(left: 8), child: action),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

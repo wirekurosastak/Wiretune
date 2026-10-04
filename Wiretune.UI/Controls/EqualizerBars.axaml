@@ -1,7 +1,0 @@
-<Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!--
-    Intentionally empty. The equalizer bars are drawn in code now (EqualizerBars.axaml.cs): a UserControl with its own
-    animation styles in every track row made scrolling the phone's lists stutter. This file can be deleted.
-  -->
-</Styles>

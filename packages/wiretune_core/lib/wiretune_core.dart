@@ -1,0 +1,31 @@
+/// The shared part of Wiretune, used by the server and by every player.
+library;
+
+export 'src/audio/audio_driver.dart';
+export 'src/audio/audio_engine.dart';
+export 'src/audio/pcm_cache.dart';
+export 'src/audio/spectrum_analyzer.dart';
+export 'src/data/database_manager.dart';
+export 'src/data/library_repository.dart';
+export 'src/localization/localizer.dart';
+export 'src/localization/strings.dart' show allStrings;
+export 'src/metadata/tag_reader.dart';
+export 'src/models/audio_format.dart';
+export 'src/models/library_models.dart';
+export 'src/models/protocol.dart';
+export 'src/services/app_paths.dart';
+export 'src/services/artist_picture_service.dart';
+export 'src/services/library_service.dart';
+export 'src/services/lrc_parser.dart';
+export 'src/services/metadata_scanner.dart';
+export 'src/services/online_lyrics.dart';
+export 'src/services/server_client.dart';
+export 'src/services/server_session.dart';
+export 'src/services/track_deduplication.dart';
+export 'src/services/wiretune_log.dart';
+export 'src/util/async_lock.dart';
+export 'src/util/cancellation.dart';
+export 'src/util/dotnet_format.dart';
+export 'src/util/event.dart';
+export 'src/util/sorting.dart';
+export 'src/util/text.dart';

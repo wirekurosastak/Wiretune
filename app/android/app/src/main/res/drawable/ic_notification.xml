@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status bar and Android Auto icon: the sound bars of the logo, as a white silhouette. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M3,10.5a1,1 0,0 1,2 0v3a1,1 0,0 1,-2 0z M7,7a1,1 0,0 1,2 0v10a1,1 0,0 1,-2 0z M11,3.5a1,1 0,0 1,2 0v17a1,1 0,0 1,-2 0z M15,7a1,1 0,0 1,2 0v10a1,1 0,0 1,-2 0z M19,10.5a1,1 0,0 1,2 0v3a1,1 0,0 1,-2 0z" />
+</vector>

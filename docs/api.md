@@ -5,12 +5,14 @@ on it.
 
 ## Conventions
 
-- JSON names are camelCase. Dates are ISO 8601; durations are .NET `TimeSpan` strings (`"00:03:45.1230000"`).
+- JSON names are camelCase. Dates are ISO 8601; durations are .NET `TimeSpan` strings (`"00:03:45.1230000"`),
+  kept from the C# server so that players and servers of both versions understand each other.
 - API errors look like `{ "error": "message" }`. `401` and `403` have an empty body.
 - Send `Authorization: Bearer <token>`. Only `/api/stream/…` and `/api/cover/…` also accept `?token=<token>`
   (for players that cannot set headers); everywhere else the query token is rejected. For those URLs use a **stream
   token** (`POST /api/auth/stream-token`): it opens the two media routes and nothing else.
-- Roles: **anonymous**, **user** (any account), **admin**. Request bodies are limited to 64 KiB.
+- Roles: **anonymous**, **user** (any account), **admin**. Request bodies are limited to 64 KiB, except a playlist
+  (4 MiB) and the one-time import (32 MiB); a bigger body is answered with `413`.
 - Credential rules, token lifetimes and the sign-in rate limit (`429` with `Retry-After`) are described in
   [server.md](server.md#accounts).
 
@@ -90,5 +92,5 @@ TOKEN=$(curl -s http://localhost:5200/api/auth/login -H 'Content-Type: applicati
   -d '{"username":"alice","password":"correct horse battery"}' | jq -r .token)
 
 curl -s -H "Authorization: Bearer $TOKEN" 'http://localhost:5200/api/tracks?q=coltrane' | jq '.[].title'
-ffplay -nodisp "http://localhost:5200/api/stream/<trackId>?token=$TOKEN"
+mpv "http://localhost:5200/api/stream/<trackId>?token=$TOKEN"
 ```

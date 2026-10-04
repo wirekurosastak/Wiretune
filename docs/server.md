@@ -1,38 +1,47 @@
 # Running the server
 
-`Wiretune.Server` indexes one music folder and serves it to Wiretune players. It is an ordinary ASP.NET Core
-application: it only reads the music folder, keeps its own SQLite database, and speaks HTTP ([api.md](api.md)).
-Read [SECURITY.md](../SECURITY.md) before putting it on a network you do not fully trust.
+The Wiretune server indexes one music folder and serves it to Wiretune players. It is a single Dart program: it only
+reads the music folder, keeps its own SQLite database, and speaks HTTP ([api.md](api.md)). Read
+[SECURITY.md](../SECURITY.md) before putting it on a network you do not fully trust.
 
 ## Starting it
 
 ```bash
-dotnet run --project Wiretune.Server -- --Wiretune:LibraryPath=/srv/music
+cd server
+dart pub get
+dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/srv/music
 ```
 
 It listens on `http://0.0.0.0:5200`, scans the folder, and waits for the first player to create the
 administrator account. Until that exists it prints a line like `No administrator account exists yet. Create it in the
-player with the setup code K7QP-2WXM` in its log: the player asks for that code ([Accounts](#accounts)). For a
-deployment, publish it:
+player with the setup code K7QP-2WXM` in its log: the player asks for that code ([Accounts](#accounts)).
+`--help` lists the options. For a deployment, build a native executable:
 
 ```bash
-dotnet publish Wiretune.Server -c Release -o /opt/wiretune
-dotnet /opt/wiretune/Wiretune.Server.dll
+dart build cli -o build
+build/bundle/bin/wiretune_server --Wiretune:LibraryPath=/srv/music
 ```
 
-Add `-r <runtime-id> --self-contained` to publish a build that needs no installed .NET runtime.
+Copy the whole `build/bundle` folder (the executable and `lib/libsqlite3.so`, or `.dll`/`.dylib`); it needs no Dart
+installation. Build on the operating system and architecture you deploy to.
+
+**Coming from the C# server**: point the new one at the same data directory (it is the same folder by default on
+Linux and Windows). It opens the database as it is, keeps every account, favourite and playlist, and accepts the
+tokens the old server issued, so players stay signed in. Copy `appsettings.json` next to the executable or into the
+working directory if you changed it.
 
 ## Configuration
 
-Settings are in `Wiretune.Server/appsettings.json` under `Wiretune` and can be overridden on the command line
-(`--Wiretune:Port=8080`) or by environment variable (`Wiretune__Port=8080`).
+Settings are read from `appsettings.json` under `Wiretune` (in the working directory, else next to the executable),
+then from environment variables (`Wiretune__Port=8080`), then from the command line (`--Wiretune:Port=8080` or
+`--Wiretune:Port 8080`); a later source wins. The names are the C# server's, so existing configurations keep working.
 
 | Key | Default | Meaning |
 |---|---|---|
 | `Wiretune:LibraryPath` | empty | Music folder, absolute or relative to the server's working directory. If empty or missing, the user's Music folder is tried and a warning is logged. A folder an administrator chose through the API or the player is stored in the database and takes precedence after a restart, as long as it still exists. |
-| `Wiretune:DataDirectory` | empty | Folder for the database, cover cache and log. Empty: `~/.config/Wiretune/Server` on Linux, `%APPDATA%\Wiretune\Server` on Windows. |
+| `Wiretune:DataDirectory` | empty | Folder for the database, cover cache and log. Empty: `~/.config/Wiretune/Server` on Linux, `%APPDATA%\Wiretune\Server` on Windows, `~/Library/Application Support/Wiretune/Server` on macOS. |
 | `Wiretune:ScanIntervalMinutes` | `30` | Background rescan interval. `0` disables it (start-up and requested scans still run). |
-| `Wiretune:Port` | `5200` | HTTP port. Ignored when `--urls` or `ASPNETCORE_URLS` is set. |
+| `Wiretune:Port` | `5200` | HTTP port on every interface. Ignored when listen addresses are given (below). |
 | `Wiretune:SetupCode` | empty | The code needed to create the first account. Empty: a random one is generated at every start and printed in the log for as long as no account exists. Case, spaces and dashes do not matter when it is typed. |
 
 Environment variables:
@@ -40,8 +49,9 @@ Environment variables:
 | Variable | Meaning |
 |---|---|
 | `WIRETUNE_DATA_DIR` | Root of Wiretune's data. The server uses its `Server` subfolder (a desktop player on the same machine uses the root, so they never share a database). `Wiretune:DataDirectory` wins when set. |
-| `ASPNETCORE_URLS` | Standard listen addresses, e.g. `http://127.0.0.1:5200` for loopback only. |
-| `ASPNETCORE_FORWARDEDHEADERS_ENABLED` | `true` behind a reverse proxy, see [below](#reverse-proxy-and-tls). |
+| `WIRETUNE_URLS` (or `ASPNETCORE_URLS`, or `--urls=`) | Listen addresses, separated by `;`: `http://127.0.0.1:5200` for loopback only, `http://*:5200` or `http://[::]:5200` for every interface. HTTPS is refused: put a reverse proxy in front. |
+| `WIRETUNE_FORWARDED_HEADERS` (or `ASPNETCORE_FORWARDEDHEADERS_ENABLED`) | `true` behind a reverse proxy, see [below](#reverse-proxy-and-tls). |
+| `WIRETUNE_LOG_LEVEL` | `trace`, `debug`, `info` (default), `warn` or `error`. |
 
 ## Data directory
 
@@ -76,18 +86,22 @@ incremental: a file with the same path, size and modification time is not read a
 out of the index; hidden and system files (on Linux, names starting with a dot) and unreadable files are skipped.
 
 What is indexed is decided by the extension: FLAC, WAV, AIFF/AIF, WavPack, APE and DSF (all labelled lossless),
-M4A (ALAC when the stream says so, otherwise AAC), AAC, MP3, Ogg Vorbis and Opus (`AudioFileTypes.cs`). Whether a
-file also *plays* depends on the player's platform ([audio.md](audio.md)). Tags are read with TagLibSharp. A missing title becomes the file name, a missing artist the album artist and then
-`Unknown artist`, a missing album `Unknown album` (not translated). Cover art is the first embedded picture
-(cached in `Covers/`), otherwise a folder image as described in the [user guide](user-guide.md#how-the-library-is-organised).
-Lyrics are read on request from the file's tag. The server never goes to the internet for them: a player that wants
-lyrics for a track without any asks the public LRCLIB database itself ([user guide](user-guide.md#playing-music)).
+M4A (ALAC when the stream says so, otherwise AAC), AAC, MP3, Ogg Vorbis and Opus (`AudioFileTypes` in
+`packages/wiretune_core/lib/src/models/audio_format.dart`). Whether a file also *plays* depends on the player's platform
+([audio.md](audio.md)). Tags are read by Wiretune's own reader (ID3v1/v2, Vorbis comments, MP4 atoms, APEv2, RIFF and
+AIFF chunks); a file whose extension lies is recognised by its content. A missing title becomes the file name, a
+missing artist the album artist and then `Unknown artist`, a missing album `Unknown album` (not translated). Cover art
+is the first embedded picture (cached in `Covers/`), otherwise a folder image as described in the
+[user guide](user-guide.md#how-the-library-is-organised). Lyrics are read on request from the file's tag. The server
+never goes to the internet for them: a player that wants lyrics for a track without any asks the public LRCLIB
+database itself ([user guide](user-guide.md#playing-music)).
 
 If the index is not empty and the folder it was built from suddenly contains nothing, the scan is skipped with
 *Library folder is empty (unmounted share?)* and the old index is kept. Pointing the server at a different, empty
 folder is deliberate and does clear the index.
 
-**Track IDs** are derived from the file's full path (lower-cased). Two limits follow:
+**Track IDs** are derived from the file's full path (lower-cased), exactly as the C# server derived them. Two limits
+follow:
 
 - Moving or renaming a file, or changing the library folder, gives its tracks new IDs. The favourites, play counts and
   playlist entries of the old IDs stay in the database, but they no longer point at anything in the library, and the
@@ -113,9 +127,9 @@ Album covers are fetched per album (`/api/cover/album/{id}`), where the album is
   only) in stream URLs, and renew it themselves.
 - **Per-account data.** Each account has its own favourites, play counts and playlists, kept on the server and
   therefore the same on every device the person signs in on. Deleting an account (*Settings → Users*) deletes its
-  favourites, play counts and playlists with it; an account created afterwards starts empty. The first account that signs in on a device that
-  already holds such data from before the server stored it receives it, once (it only adds; see
-  `POST /api/me/data/import` in [api.md](api.md#your-data-per-account)). Limits per account: 100,000 favourites,
+  favourites, play counts and playlists with it; an account created afterwards starts empty. The first account that
+  signs in on a device that already holds such data from before the server stored it receives it, once (it only adds;
+  see `POST /api/me/data/import` in [api.md](api.md#your-data-per-account)). Limits per account: 100,000 favourites,
   100,000 tracks with statistics and 500 playlists (see the API page).
 - **Rate limit**: setup and sign-in together, 10 requests per minute per client address, then `429` with
   `Retry-After`.
@@ -126,7 +140,7 @@ Album covers are fetched per album (`/api/cover/album/{id}`), where the album is
 
 ## Running as a service
 
-A systemd unit for a published build:
+A systemd unit for a built bundle in `/opt/wiretune`:
 
 ```ini
 # /etc/systemd/system/wiretune.service
@@ -137,7 +151,7 @@ After=network-online.target
 [Service]
 User=wiretune
 WorkingDirectory=/opt/wiretune
-ExecStart=/usr/bin/dotnet /opt/wiretune/Wiretune.Server.dll
+ExecStart=/opt/wiretune/bin/wiretune_server
 Environment=Wiretune__LibraryPath=/srv/music
 Environment=WIRETUNE_DATA_DIR=/var/lib/wiretune
 StateDirectory=wiretune
@@ -149,16 +163,17 @@ WantedBy=multi-user.target
 
 `StateDirectory=wiretune` makes systemd create `/var/lib/wiretune` for the service account, and the server keeps
 its files in `/var/lib/wiretune/Server`. The `wiretune` user needs read access to the music folder and nothing
-else.
+else. `SIGTERM` (`systemctl stop`) shuts the server down cleanly.
 
 ## Reverse proxy and TLS
 
 The server does not terminate TLS. Put a reverse proxy that does (Caddy, nginx, …) in front of it, or use a VPN
 such as WireGuard or Tailscale. Players accept `https://` addresses.
 
-Behind a proxy set `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`, otherwise every player appears with the proxy's
-address and shares one sign-in limit. That setting makes the server trust `X-Forwarded-*` from any sender, so also
-make the server reachable only through the proxy (listen on loopback with `ASPNETCORE_URLS`, or firewall the port).
+Behind a proxy set `WIRETUNE_FORWARDED_HEADERS=true`, otherwise every player appears with the proxy's address and
+shares one sign-in limit. That setting makes the server trust `X-Forwarded-For` from any sender, so also make the
+server reachable only through the proxy (listen on loopback with `WIRETUNE_URLS=http://127.0.0.1:5200`, or firewall
+the port).
 
 ## Troubleshooting
 
@@ -172,3 +187,4 @@ make the server reachable only through the proxy (listen on loopback with `ASPNE
 | A user has to sign in again | The account was re-created, the token expired, or the database (and with it the signing key) was replaced. |
 | The setup screen appears again, or favourites are gone after a restart | The server is using a different or empty data directory (a container without a volume, a changed path). Compare the data directory named at the top of the log with the one you expect. |
 | *The setup code is missing or wrong* | Enter the code from the server's log (`No administrator account exists yet…`), or the value of `Wiretune:SetupCode`. |
+| `Failed to load dynamic library … sqlite3` | The executable was copied without `lib/` from the bundle. Copy the whole bundle. |

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The notification icon is only named from Dart (audio_service's androidNotificationIcon); keep it from the resource
+     shrinker. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_notification,@drawable/tv_banner" />

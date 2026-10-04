@@ -1,43 +1,65 @@
-## Build results
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
-x64/
-x86/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-bld/
-[Bb]in/
-[Oo]bj/
-[Ll]og/
-[Ll]ogs/
+# Wiretune
+#
+# This file covers the whole repository. The Flutter platform folders (app/android, app/ios, app/linux, app/macos,
+# app/windows, app/tizen) also keep the .gitignore files `flutter create` made for them; leave those in place, the
+# tooling regenerates and relies on them.
 
-## Visual Studio cache / Rider / VSCode
-.vs/
-.idea/
-.vscode/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
+## Dart and Flutter
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+build/
+coverage/
+.flutter-plugins
+.flutter-plugins-dependencies
+.widget_preview/
+migrate_working_dir/
+**/doc/api/
+*.iml
+*.ipr
+*.iws
+# Symbol and size files from `flutter build --split-debug-info` / `--analyze-size`.
+app.*.symbols
+app.*.map.json
 
-## User specific database / caches
-*.db-shm
-*.db-wal
-Covers/
-cache/
+# pubspec.lock is committed for what is run (app/, server/) and left out for the libraries (packages/*).
+/packages/*/pubspec.lock
 
-## Test, publish and packaging output
-TestResults/
-publish/
-artifacts/
+## Built packages copied out of build/
 *.apk
 *.aab
+*.ipa
+*.tpk
+*.msix
 
-## Runtime data and OS clutter
+## Signing keys and secrets: never commit these
+key.properties
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+.env
+.env.*
+
+## Data a player or a server writes when it is run from the repository
 *.db
+*.db-wal
+*.db-shm
 *.log
-*.lnk
+# The database the C# server made, which server/test/csharp_compatibility_test.dart opens.
+!/server/test/fixtures/*.db
+
+## Editors and IDEs
+.idea/
+.vscode/
+.vs/
+.history/
+.atom/
+*.swp
+*~
+
+## Operating systems
 .DS_Store
 Thumbs.db
+desktop.ini

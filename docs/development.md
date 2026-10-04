@@ -5,147 +5,170 @@ Building, testing, debugging and extending Wiretune. How the code fits together:
 
 ## Build and run
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) (`global.json` pins `10.0.100` and
-allows newer feature bands). On Linux also `ffmpeg`, and `aplay` for the exclusive modes
-([audio.md](audio.md#linux)).
+You need [Flutter](https://docs.flutter.dev/get-started/install) 3.47 or newer; it brings Dart 3.13, which is all
+the server and the core need. Each platform adds its own toolchain: [building.md](building.md) lists what to install
+and every build command. On Linux the player also needs libmpv, and `ffmpeg` for the spectrum analyser and the
+tag-reader tests.
 
 ```bash
-dotnet build Wiretune.slnx        # everything except Android
-dotnet test Wiretune.slnx
-dotnet run --project Wiretune.Server -- --Wiretune:LibraryPath=/path/to/music
-dotnet run --project Wiretune.Desktop
+(cd packages/wiretune_core && dart pub get && dart test)   # the shared library
+(cd server && dart pub get && dart test)                   # the server
+(cd app && flutter pub get && flutter test)                # the player (view models and widgets, run on the host)
+
+(cd server && dart run bin/wiretune_server.dart --Wiretune:LibraryPath=/path/to/music)
+(cd app && flutter run -d linux)                           # or -d windows, -d macos, or a device from `flutter devices`
 ```
 
-`Wiretune.slnx` lists the Android project but does not build it with the solution, because it needs a workload.
-`Directory.Build.props` sets product metadata and deterministic builds and keeps NuGet advisories (`NU1901`–`NU1904`)
-from becoming errors. The repository does not enable `TreatWarningsAsErrors`; to check that a change is
-warning-free, add `-c Release -p:TreatWarningsAsErrors=true`. Style rules are in `.editorconfig`.
+`dart analyze` (the core library, the server) and `flutter analyze` (the app) must report no issues. The code is
+formatted with `dart format` at a line width of 120, which `analysis_options.yaml` sets in every package.
 
-**Continuous integration.** `.github/workflows/ci.yml` builds `Wiretune.Tests` and `Wiretune.Desktop` in Release,
-runs the tests with `ffmpeg` installed, and fails when `dotnet list package --vulnerable` reports a vulnerable
-package. It does not build `Wiretune.Android` (it needs the workload): build that by hand before merging a UI change.
+**Continuous integration.** `.github/workflows/ci.yml` checks the formatting, analyses the three packages with
+`--fatal-infos` and runs their tests with `ffmpeg` installed; then it builds the server executable on Linux, Windows
+and macOS, release APKs, the Linux, Windows and macOS players and an unsigned iOS build. It does not build for Tizen
+(the Tizen SDK is not on GitHub's runners), runs nothing on a device, and cannot play audio: try those by hand before
+merging a change that touches them.
 
-## Android
+## Build for each platform
 
-```bash
-dotnet workload install android       # once
-dotnet build Wiretune.Android         # Debug
-dotnet build Wiretune.Android -t:Run  # build, install and start on a connected device or emulator
-```
+Every build command, with what each platform needs and where the result lands, is in [building.md](building.md). What
+follows is where each platform's own code lives.
 
-Notes from `Wiretune.Android.csproj`: minimum API 21, application ID `com.wiretune.player`. **Release builds** turn on
-IL trimming, full AOT (profiled AOT is off on purpose, so layout and drawing code is not JIT-compiled on the phone)
-and the R8 shrinker: expect a long build and a bigger APK. `environment.txt` sets
-`MONO_GC_PARAMS=nursery-size=32m` for fewer garbage-collection pauses while lists scroll; the csproj comment explains
-why. There is no signing configuration in the repository.
+- **Android**: `android/app/src/main/kotlin/com/wiretune/player/MainActivity.kt` (the activity: it shares its Flutter
+  engine with the media service, and asks for the display's highest refresh rate while the screen is touched) and the
+  local plugin `packages/wiretune_platform` (TV detection, CPU and Wi-Fi locks; a plugin, so that it is also registered
+  on the engine Android Auto starts without an activity). The manifest declares the TV launcher entry and banner, the
+  media service (`MediaBrowserService`, which Android Auto browses) and `res/xml/automotive_app_desc.xml`. The
+  application ID is `com.wiretune.player`, the C# version's.
+- **iOS and macOS**: `ios/Runner/Info.plist` (background audio, local-network access, plain HTTP) and
+  `macos/Runner/*.entitlements` (not sandboxed, see the comment there). The bundle ID is `com.wiretune.player`.
+- **Linux and Windows**: the runners in `linux/runner/` and `windows/runner/` set the window's size, minimum size and
+  icon; `main.dart` hides the system title bar through window_manager, and the header draws the window buttons.
+- **Tizen**: `tizen/` is the .NET runner (`App.cs`, `tizen-manifest.xml`, profile `tv-samsung`, API 6.0). `App.cs`
+  answers the `wiretune/platform` channel: Dart reports Tizen as Linux, so this is how the app knows it is on a TV.
+  Playback goes through the TV's own media player (`TizenAudioDriver`; [audio.md](audio.md#tizen)).
 
-Nothing that needs Android APIs (driver, service, activity) is covered by the automated tests; try it on a device.
+## What has been verified
+
+| | How far it has been tried |
+|---|---|
+| Core, server | Unit and integration tests (below), on Linux. The server binary was run against a real folder: scanning, sign-in, gzip, range requests, covers. A database and tokens made by the C# server open and validate (`csharp_compatibility_test.dart`) |
+| App logic and layouts | View-model and widget tests on the host: every section in the wide and the phone layout, light and dark, a small phone at 150 % font size, a 1080p TV; back navigation, search, the full-screen player |
+| Android | Debug and release APKs build; the merged manifest has the TV launcher, banner, media service and Android Auto entries. **Not yet run on a phone, a TV or Android Auto** |
+| Linux desktop | Built and run against a real server and library (1,288 tracks): every desktop screen compared with the C# player's own screenshots at 1280×820 and 900×700, the phone layout at phone width against the C# phone views; playback, the queue, the spectrum, MPRIS and the device list checked through the UI automation endpoint. Exclusive and bit-perfect not tried on a DAC |
+| Windows, macOS, iOS | Not yet built (need their own hosts) |
+| Tizen | The runner is generated by flutter-tizen and the dependencies resolve with it; **not yet built** (needs the Tizen SDK) or run on a TV |
+| Bit-perfect, exclusive | Not measured on any platform ([audio.md](audio.md#known-limitations)) |
 
 ## Tests
 
-xUnit, run with `dotnet test Wiretune.Tests` (add `--filter "FullyQualifiedName~Name"` for a subset). They cover:
+`package:test` for `packages/wiretune_core` and `server` (`dart test`, `dart test test/scanner_test.dart`, `dart test
+--name pattern`), `flutter_test` for `app` (`flutter test`). They cover:
 
-- the real server hosted in memory (`WiretuneServerFixture`, `WebApplicationFactory<Program>` against a generated
-  music folder, one server per test): sign-in and the whole client life cycle (`ServerIntegrationTests`), the
-  per-account favourites, plays, playlists, import and survival of a server restart (`ServerUserDataTests`), and the
-  hardening (setup code, stream tokens, no paths in the listing; `ServerHardeningTests`). `ServerTestHelpers` holds the shared steps;
+- the real server, started on a free port against a generated music folder, one per test: sign-in and the whole
+  client life cycle (`server_integration_test.dart`), the per-account favourites, plays, playlists, import and survival
+  of a server restart (`server_user_data_test.dart`), the hardening: setup code, stream tokens, rate limit, no paths in
+  the listing, body limits, `405`/`404` (`server_hardening_test.dart`), and a database and tokens made by the C# server
+  (`csharp_compatibility_test.dart`, fixtures in `server/test/fixtures`);
 - the player's side of the per-account data against that server: queue, flush, hand-over, older servers
-  (`SessionUserDataTests`);
-- the repository against a real SQLite file, including the upgrade from an older schema (`LibraryRepositoryTests`);
-- library, scanner, deduplication, hybrid merging, localisation, view models and the phone's back navigation;
-- the quality tiers of tracks, albums and playlists and the words of the tags (`QualityTierTests`), and the online
-  lyrics lookup against a stubbed LRCLIB and a throw-away cache folder, plus how the player combines the file's
-  lyrics with it (`OnlineLyricsTests`);
-- scenario suites with numbered cases (`HP-`, `NEG-`, `BVT-`, `SEC-`) for normal use, invalid input, limits and
-  security (`HappyPathTests`, `NegativeTests`, `BoundaryValueTests`, `LogicAndSecurityTests`); `ReviewFollowUpTests`
-  pins the small fixes of the production-readiness review and the documented limits (track IDs, covers, driver commands);
-- the audio engine with `FakeAudioDriver` (`TestSupport`), the real `ffmpeg`/`ffplay` child-process paths against
-  generated WAV files with SDL's `dummy` driver (`FfmpegPipelineTests`), and the Windows driver's wave provider
-  (`WasapiWaveProviderTests`).
+  (`session_user_data_test.dart`);
+- the repository against a real SQLite file, including the upgrade from an older schema
+  (`library_repository_test.dart`);
+- the tag reader against files encoded by `ffmpeg` and hand-built DSF and APE files (`tag_reader_test.dart`), the
+  scanner, track IDs and formats against values computed by the C# code (`formats_test.dart`), the library,
+  deduplication, hybrid merging, localisation, the quality tiers, the LRC parser, the online lyrics lookup against a
+  stubbed LRCLIB, the artist pictures, the spectrum analyser;
+- the audio engine with `FakeAudioDriver` (`packages/wiretune_core/lib/testing.dart`);
+- in the app: the view models, the back navigation (`navigation_test.dart`), the player (`player_test.dart`), the whole
+  interface rendered at several sizes (`app_shell_test.dart`), and every text key used and defined
+  (`localization_keys_test.dart`).
 
-A test that needs a command-line tool is marked `[ToolFact("ffmpeg")]`: without the tool it is reported as
-**skipped**, never as passed, so check the skipped count of a run, especially on a machine without `ffmpeg`. Name a new
-test file after the topic it covers, not after the change that made it. Not covered: the Windows WASAPI driver, the
-Android driver and service, real audio hardware, and the Avalonia visuals (the section views are only checked by
-building and running the app). Fixtures live in temporary directories. `Wiretune.Core` exposes its internals to
-`Wiretune.Tests`.
+A test that needs `ffmpeg` is skipped with the reason "ffmpeg is not installed", never passed, so check the skipped
+count of a run on a machine without it. Name a new test file after the topic it covers. Not covered: the real drivers
+(libmpv, the Tizen player), the media session, Android Auto, real audio hardware, and the native shells. Fixtures live
+in temporary directories (`useTempDataDirectory()` in `packages/wiretune_core/lib/testing.dart` points the data
+directory at one).
 
 ## Debugging
 
 - **Logs.** `WiretuneLog` writes `[time] [LEVEL] [category] message` lines (Info and up by default) to `wiretune.log`
   in the player's data directory or `wiretune-server.log` in the server's ([server.md](server.md#data-directory)); at
-  10 MiB the file moves to `.1`. Debug lines carry paths and device names, so set `WIRETUNE_LOG_LEVEL=Debug` (or
-  `Trace`; `Info`, `Warn`, `Error`) only while troubleshooting. Every line passes through `WiretuneLog.Redact`, which
-  replaces `token=` values with `***`;
-  keep it that way when logging URLs. The player's data directory is `~/.config/Wiretune` on Linux,
-  `%APPDATA%\Wiretune` on Windows and the app's private files folder on Android. `WIRETUNE_DATA_DIR` moves it, which
-  is handy for a throw-away instance: `WIRETUNE_DATA_DIR=/tmp/wt-dev dotnet run --project Wiretune.Desktop`.
-- **Audio on Linux.** The log lines *Starting ffplay …* / *Starting direct ALSA (ffmpeg | aplay) …* show the exact
-  source and device; the commands in [audio.md](audio.md#linux) can be run by hand (put your own token in the URL).
-- **Server.** Run it in the foreground: ASP.NET Core's console logging is on in addition to the log file.
+  10 MiB the file moves to `.1`. Debug lines carry paths and device names, so set `WIRETUNE_LOG_LEVEL=debug` (or
+  `trace`; `info`, `warn`, `error`) only while troubleshooting. Every line passes through `WiretuneLog.redact`, which
+  replaces `token=` values with `***`; keep it that way when logging URLs. The player's data directory is
+  `~/.config/Wiretune` on Linux, `%APPDATA%\Wiretune` on Windows, `~/Library/Application Support/Wiretune` on macOS and
+  the app's private support folder on Android, iOS and Tizen. `WIRETUNE_DATA_DIR` moves it, which is handy for a
+  throw-away instance: `WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux`.
+- **Audio.** mpv's warnings and errors go to the log under `MediaKitDriver`. The devices offered are mpv's list
+  (`mpv --audio-device=help`) plus, on Linux, the ALSA hardware devices of `aplay -l`; the automation endpoint's state
+  shows the list the player built.
+- **Server.** Run it in the foreground: it prints to the console as well as to the log file.
+- **Interface.** *Settings → Performance statistics* shows Flutter's performance overlay.
 
 ### UI automation (desktop, development only)
 
 ```bash
-WIRETUNE_UI_AUTOMATION=1 dotnet run --project Wiretune.Desktop
+flutter build linux --debug
+WIRETUNE_UI_AUTOMATION=1 build/linux/x64/debug/bundle/wiretune
 curl http://127.0.0.1:5201/api/ui/state
 curl 'http://127.0.0.1:5201/api/ui/navigate?section=Albums'
-curl 'http://127.0.0.1:5201/api/ui/screenshot?name=home'
+curl 'http://127.0.0.1:5201/api/ui/screenshot?name=albums'      # saved to the temp folder
+curl 'http://127.0.0.1:5201/api/ui/resize?width=400&height=820' # down to phone width
 ```
 
-The server is compiled into **Debug builds only** (`dotnet run` is one); a Release or published player contains no
-such endpoint, whatever the variable says. The variable must be exactly `1`. `section` is one of `Tracks`, `Albums`,
-`Artists`, `Playlists`, `Favorites`, `Settings`. The endpoint listens on `127.0.0.1:5201` only and handles `GET` requests under
-`/api/ui/` to navigate, search, play, seek, sign in and so on; the routes are listed in
-`Wiretune.UI/Services/UiAutomationServer.cs`. It rejects requests with an `Origin` or cross-site `Sec-Fetch-Site`
-header and any `Host` other than `127.0.0.1:5201` / `localhost:5201`. It is still an unauthenticated remote
-control (`login` takes the password as a query parameter), so use it on a development machine only. See
-[SECURITY.md](../SECURITY.md#clients).
+The endpoint (`app/lib/src/debug/ui_automation_server.dart`) exists in **debug builds only**: a release or profile build
+contains none, whatever the variable says, and the variable must be exactly `1`. It has the C# player's routes (state,
+navigate, screenshot, resize, search, play-track, play-pause, next, prev, seek, volume, toggle-favorite, open-album,
+open-artist, connect, login, logout, continue-offline, the playlist routes) plus `toggle-queue`, and its state also
+lists the audio devices and the spectrum's peak. It listens on `127.0.0.1:5201` only and turns away requests with an
+`Origin` or a cross-site `Sec-Fetch-Site` header and any `Host` other than `127.0.0.1:5201` / `localhost:5201`. It is
+still an unauthenticated remote control (`login` takes the password as a query parameter, `logout` signs the player
+out for real), so use it on a development machine only, and with a throw-away data directory
+(`WIRETUNE_DATA_DIR`) when a script signs in or out. See [SECURITY.md](../SECURITY.md#clients).
 
 ## Extending Wiretune
 
 ### Add an HTTP endpoint
 
-1. Add the route in `Wiretune.Server/Program.cs`. Routes on the `api` group there require a signed-in user; add
-   `.RequireAuthorization("admin")` for admin-only ones. Validate every input and answer errors as
-   `{ "error": "…" }`. Never accept `?token=` outside the media routes.
-2. Put new request or response records next to the existing ones in `Wiretune.Core/Models/UserInfo.cs` (per-account
-   data: `UserData.cs`). Anything that lists library content goes through a `Server*Dto` in
-   `Wiretune.Server/ServerDtos.cs` so that no server path leaves the machine. Data that belongs to one person takes the
-   account ID from the token (`CurrentUserId`), never from the URL or the body.
-3. If a player needs it, add a method to `Wiretune.Core/Services/ServerStreamingClient.cs`; failures must become a
-   session state, not an exception.
-4. Add a test with the other server tests (including the 401/403 cases; `WiretuneServerFixture` hosts a real server
-   and `ServerTestHelpers` signs in) and update [api.md](api.md).
+1. Add the route to the routes table in `server/lib/src/server.dart` with its access level (`Access.anonymous`,
+   `user`, `admin`, or `media` for the two routes that accept `?token=`). Validate every input and answer errors as
+   `{ "error": "…" }`. Never give a new route `Access.media`.
+2. Put new request or response records next to the existing ones in
+   `packages/wiretune_core/lib/src/models/protocol.dart`. Anything that lists library content must not carry a server
+   path (tracks go out with `filePath: server:{id}`). Data that belongs to one person takes the account ID from the
+   token (`call.principal`), never from the URL or the body.
+3. If a player needs it, add a method to `packages/wiretune_core/lib/src/services/server_client.dart`; failures must
+   become a session state, not an exception.
+4. Add a test with the other server tests (including the 401/403 cases; `server/test/support.dart` starts a real
+   server and signs in) and update [api.md](api.md).
 
 ### Add a file type
 
-Add the extension to `Wiretune.Core/Models/AudioFileTypes.cs` (codec label, lossless flag, MIME type) and the list in
-[server.md](server.md#library-and-scanning). Wiretune cannot make a platform decode it: check ffmpeg, Media
-Foundation and Android's framework ([audio.md](audio.md)).
+Add the extension to `AudioFileTypes` in `packages/wiretune_core/lib/src/models/audio_format.dart` (codec label,
+lossless flag, MIME type), teach `packages/wiretune_core/lib/src/metadata/tag_reader.dart` to read its tags and
+duration, and update the list in [server.md](server.md#library-and-scanning). Whether it plays is up to libmpv (FFmpeg)
+and, on Tizen, the TV.
 
 ### Add or change texts and languages
 
-All interface text is in `Wiretune.Core/Localization/Strings.cs`, one line per key: `T("Key", "hu", "en", "de");`.
-Use `{loc:T Key}` (`{loc:TFormat Key}` with `{0}` placeholders) in XAML and `Localizer.Get("Key")` /
-`Localizer.Format("Key", args)` in code. A key with a `_One` suffix is used when the first format argument is exactly
-`1`. Texts composed once and kept (status lines, badges) must be rebuilt in the view model's
-`RefreshLocalizedTexts()` so they follow a language change.
+All interface text is in `packages/wiretune_core/lib/src/localization/strings.dart`, one line per key:
+`'Key': ('hu', 'en', 'de'),`. Use `context.tr('Key')` / `context.trf('Key', [args])` in widgets and
+`Localizer.get('Key')` / `Localizer.format('Key', [args])` elsewhere. A key with a `_One` suffix is used when the
+first format argument is exactly `1`. Texts composed once and kept (status lines, badges) must be rebuilt in the view
+model's `_refreshLocalizedTexts()` so they follow a language change.
 
-`LocalizationTests` fail on empty or untidy texts, placeholders that differ between languages, keys used in code or
-XAML that do not exist, unused keys, a `_One` key without a base key, and German or Hungarian texts that are mostly
-identical to English.
+`packages/wiretune_core/test/localization_test.dart` fails on missing translations, placeholders that differ between
+languages and a `_One` key without a base key; `app/test/localization_keys_test.dart` fails on keys used in code that do
+not exist and on keys nothing uses.
 
-The dictionary is a three-language tuple, so **a fourth language is a code change**: extend the tuple type and `T(...)`
-in `Strings.cs` and fill in every key; add the constant, a `Languages` entry and the cases in `Lookup` and
-`CultureFor` in `Localizer.cs`; update `LocalizationTests`.
+The table is a three-language record, so **a fourth language is a code change**: extend the record type and fill in
+every key; add the constant, a `languages` entry and the case in `Localizer.lookup`; update the tests.
 
 ### Add a view or setting
 
-View models are in `Wiretune.UI/ViewModels`, views in `Wiretune.UI/Views`, reusable parts in `Wiretune.UI/Controls`.
-A new desktop section is a new `AppSection` value, a `UserControl` in `Views/` that takes the `MainViewModel` as its
-`DataContext`, and an entry in `MainView.axaml` and in `MainViewModel.GetNavVisualOrder` (the order of the animated
-logo). Its colours are two entries (accent family and window gradient) in the theme dictionaries of
-`App.axaml`. A persistent player setting is a key in the `settings` table, read and written through
-`LibraryService`/`LibraryRepository`. State that the Android back gesture has to respect belongs in
-`MainViewModel.TryNavigateBack()`, which `PhoneNavigationTests` cover.
+View models are in `app/lib/src/view_models`, pages in `app/lib/src/pages`, reusable parts in `app/lib/src/widgets`.
+A new section is a new `AppSection` value, a page in `pages/` registered in `pages/section_page.dart`, an entry in the
+wide layout's sidebar (and the phone's bottom navigation if it belongs there), and a place in `navVisualOrder` (the
+order of the animated logo). Its colours are an accent and a window gradient in `theme/palette.dart`. A persistent
+player setting is a key in the `settings` table, read and written through `LibraryService`/`LibraryRepository`. State
+that the back button has to respect belongs in `MainViewModel.tryNavigateBack()`, which `navigation_test.dart`
+covers.
