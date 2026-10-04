@@ -96,7 +96,8 @@ sign in again.
 | Symptom | What's going on |
 |---|---|
 | *None of the output devices supports exclusive mode…* | No device can do it. On Linux there's no ALSA hardware device (check `aplay -l`); press **Refresh** once there is. |
-| Exclusive playback on Linux fails with *device busy* | PipeWire holds the card. Install `pw-reserve` (in PipeWire's tools) so Wiretune can ask for it. |
+| Exclusive playback on Linux fails with *device busy* | Something holds the card that doesn't hand it over on request: another player on the same `hw:` device, or a sound server without device reservation. Close it, or pick another output. |
+| A card stays silent and missing after an older Wiretune was closed in exclusive mode | Earlier builds left a `pw-reserve` helper holding the card. Stop it with `pkill -f 'pw-reserve.*Wiretune'` and the sound server takes the card back. |
 | No spectrum on the desktop | `ffmpeg` isn't on the `PATH`. |
 | The Linux player won't start, missing `libmpv` | Install it: `libmpv2` on Debian and Ubuntu, `mpv-libs` on Fedora. |
 | The banner says the server is offline | Wrong address, server not running, or no network. Press **Reconnect**. |

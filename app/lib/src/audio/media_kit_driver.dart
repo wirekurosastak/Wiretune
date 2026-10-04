@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
 import 'package:wiretune_core/wiretune_core.dart';
 
+import 'device_reservation.dart';
+
 /// Plays through libmpv (media_kit), which decodes with FFmpeg: FLAC, ALAC, APE, WavPack, DSD, Opus and the rest play
 /// the same on every platform.
 ///
@@ -41,8 +43,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   final Float32List _window = Float32List(SpectrumAnalyzer.fftSize);
   Timer? _spectrumTimer;
   Timer? _startCheck;
-  Process? _reservation;
-  String? _reservedCard;
+  AlsaCardReservation? _reservation;
 
   PlaybackState _state = PlaybackState.stopped;
   AudioOutputDevice? _device;
@@ -232,28 +233,18 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     await _applyVolume();
   }
 
-  /// On Linux an ALSA hardware device is usually held by PipeWire; `pw-reserve` asks it to let go for as long as
-  /// Wiretune uses the card.
+  /// On Linux an ALSA hardware device is usually held by the sound server (PipeWire, PulseAudio); the reservation asks
+  /// it to let go for as long as Wiretune uses the card, and the card goes back to it however Wiretune ends.
   Future<void> _reserveCard(AudioOutputDevice device) async {
-    final card = device.id.startsWith('alsa/hw:') ? device.hardwareCard : null;
-    if (card == _reservedCard) return;
-    _reservation?.kill();
+    final card = Platform.isLinux && device.id.startsWith('alsa/hw:') ? _cardIndex(device.hardwareCard) : null;
+    if (card == _reservation?.card) return;
+    await _reservation?.release();
     _reservation = null;
-    _reservedCard = null;
-    if (card == null || !Platform.isLinux) return;
+    if (card == null) return;
 
-    final index = _cardIndex(card);
-    if (index == null) return;
-    try {
-      _reservation = await Process.start('pw-reserve', ['-n', 'Audio$index', '-a', 'Wiretune', '-p', '10', '-r']);
-      _reservedCard = card;
-      unawaited(_reservation!.stdout.drain<void>());
-      unawaited(_reservation!.stderr.drain<void>());
-      // Give PipeWire a moment to release the device before mpv opens it.
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-    } on ProcessException {
-      WiretuneLog.debug('MediaKitDriver', 'pw-reserve is not available; the card may be busy if PipeWire holds it.');
-    }
+    _reservation = await AlsaCardReservation.acquire(card);
+    // Give the sound server a moment to close the device before mpv opens it.
+    if (_reservation != null) await Future<void>.delayed(const Duration(milliseconds: 300));
   }
 
   /// The index of the ALSA card with the given short name, from /proc/asound/cards (" 2 [AUDIO  ]: ...").
@@ -425,8 +416,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
       await subscription.cancel();
     }
     _pcm.dispose();
-    _reservation?.kill();
     await _player.dispose();
+    await _reservation?.release();
   }
 
   /// The output's current device and modes, for diagnostics.

@@ -48,8 +48,7 @@ tar -czf wiretune-linux-x64.tar.gz -C build/linux/x64/release bundle    # to tak
 ```
 
 The computer that runs the player needs libmpv (`mpv-libs` on Fedora, `libmpv2` on Debian and Ubuntu, `mpv` on Arch),
-plus `ffmpeg` for the spectrum and `pw-reserve` (part of PipeWire) for exclusive mode if you want them
-([audio.md](audio.md#desktop)).
+plus `ffmpeg` for the spectrum if you want it ([audio.md](audio.md#desktop)).
 
 Moved or renamed the repository? CMake remembers the old path, and the build stops with *The current CMakeCache.txt
 directory … is different*. Delete `app/build/linux` (or run `flutter clean`) and build again.

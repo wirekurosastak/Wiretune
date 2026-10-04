@@ -19,8 +19,9 @@ class NowPlayingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
+    // Only the tab: the parts below are const, so a rebuild here passes them by, and each follows the player itself.
     return ListenableBuilder(
-      listenable: Listenable.merge([vm, vm.player]),
+      listenable: vm,
       builder: (context, _) {
         final tab = vm.nowPlayingTab;
         // The three tabs as one segmented glass pill; the selected segment is filled with the accent.
@@ -143,7 +144,10 @@ class _PlayerTab extends StatelessWidget {
   const _PlayerTab();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm.player, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final vm = context.vm;
     final player = vm.player;
     final colors = context.colors;
@@ -238,7 +242,10 @@ class _QueueTab extends StatelessWidget {
   const _QueueTab();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm.player, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final player = context.vm.player;
     final colors = context.colors;
     return Column(
@@ -281,11 +288,14 @@ class _LyricsTab extends StatelessWidget {
   const _LyricsTab();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm.player, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final player = context.vm.player;
     final colors = context.colors;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -310,7 +320,10 @@ class _Transport extends StatelessWidget {
   const _Transport();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm.player, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final player = context.vm.player;
     final colors = context.colors;
     Color toggle(bool on) => on ? colors.hover : colors.textMuted;

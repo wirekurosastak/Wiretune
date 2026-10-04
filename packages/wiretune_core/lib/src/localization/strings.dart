@@ -323,9 +323,9 @@ const Map<String, (String, String, String)> allStrings = {
   'Connection': ('Kapcsolat', 'Connection', 'Verbindung'),
   'ServerUrlPlaceholder': ('http://szerver-ip:5200', 'http://server-ip:5200', 'http://server-ip:5200'),
   'ServerFolderLabel': (
-    'SZERVER ZENEMAPPA (ADMIN)',
-    'SERVER MUSIC FOLDER (ADMIN)',
-    'MUSIKORDNER AUF DEM SERVER (ADMIN)',
+    'Zenemappa a szerveren (admin)',
+    'Server music folder (admin)',
+    'Musikordner auf dem Server (Admin)',
   ),
   'ServerFolderPlaceholder': (
     '/eleresi/ut/a/szerveren/zenek',
@@ -333,7 +333,7 @@ const Map<String, (String, String, String)> allStrings = {
     '/pfad/auf/dem/server/musik',
   ),
   'SaveFolder': ('Mappa mentése', 'Save folder', 'Ordner speichern'),
-  'LocalFolderLabel': ('HELYI ZENEMAPPA', 'LOCAL MUSIC FOLDER', 'LOKALER MUSIKORDNER'),
+  'LocalFolderLabel': ('Helyi zenemappa', 'Local music folder', 'Lokaler Musikordner'),
   'LocalFolderPlaceholder': ('/eleresi/ut/zenek', '/path/to/music', '/pfad/zur/musik'),
   'Scan': ('Beolvasás', 'Scan', 'Einlesen'),
   'Reindex': ('Újraindexelés', 'Reindex', 'Neu indizieren'),

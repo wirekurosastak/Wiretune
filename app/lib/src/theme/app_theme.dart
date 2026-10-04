@@ -89,6 +89,9 @@ ThemeData buildTheme({
     borderRadius: BorderRadius.circular(12),
     borderSide: BorderSide(color: color, width: width),
   );
+  final textTheme = Typography.material2021(platform: TargetPlatform.android).englishLike
+      .merge(light ? Typography.blackMountainView : Typography.whiteMountainView)
+      .apply(bodyColor: palette.textMain, displayColor: palette.textMain);
   return ThemeData(
     useMaterial3: true,
     // The font chain: Segoe UI Variable on Windows, Inter where installed, otherwise the system's sans-serif
@@ -106,9 +109,8 @@ ThemeData buildTheme({
     splashFactory: InkSparkle.splashFactory,
     visualDensity: isTv ? VisualDensity.comfortable : VisualDensity.standard,
     dividerColor: palette.glassBorder,
-    textTheme: Typography.material2021(platform: TargetPlatform.android).englishLike
-        .merge(light ? Typography.blackMountainView : Typography.whiteMountainView)
-        .apply(bodyColor: palette.textMain, displayColor: palette.textMain),
+    // Text fields write in bodyLarge: 15 px, a step above the 13–14 px of the text around them, not two.
+    textTheme: textTheme.copyWith(bodyLarge: textTheme.bodyLarge!.copyWith(fontSize: 15)),
     iconTheme: IconThemeData(color: palette.textMain),
     tooltipTheme: TooltipThemeData(
       waitDuration: const Duration(milliseconds: 500),

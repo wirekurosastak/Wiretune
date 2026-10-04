@@ -221,10 +221,12 @@ class EmptyState extends StatelessWidget {
 
 /// A rounded card of glass: a faint sheen from its top-left corner and a hairline edge.
 class GlassCard extends StatelessWidget {
-  const GlassCard({super.key, required this.child, this.padding = const EdgeInsets.all(24), this.hoverColor});
+  const GlassCard({super.key, required this.child, this.padding, this.hoverColor});
 
   final Widget child;
-  final EdgeInsets padding;
+
+  /// The space inside the card: 24 px, 18 on a phone, unless given.
+  final EdgeInsets? padding;
 
   /// The border's colour under the mouse (the section's accent); none keeps it unchanged.
   final Color? hoverColor;
@@ -253,7 +255,7 @@ class GlassCard extends StatelessWidget {
             side: BorderSide(color: border),
           ),
           clipBehavior: Clip.antiAlias,
-          child: Padding(padding: padding, child: child),
+          child: Padding(padding: padding ?? EdgeInsets.all(PhoneChrome.isPhone(context) ? 18 : 24), child: child),
         ),
       ),
     );

@@ -22,7 +22,7 @@ class SettingsPage extends StatelessWidget {
       builder: (context, _) {
         final server = vm.serverSettings;
         final left = <Widget>[
-          SectionLabel(context.tr('SettingsServerSection'), padding: const EdgeInsets.fromLTRB(4, 0, 4, 16)),
+          SectionLabel(context.tr('SettingsServerSection'), padding: const EdgeInsets.fromLTRB(4, 8, 4, 16)),
           const _AccountCard(),
           const SizedBox(height: 16),
           const _ServerCard(),
@@ -164,6 +164,41 @@ class _StatusLine extends StatelessWidget {
   }
 }
 
+/// A text field with its buttons, which take the field's height: side by side while the field keeps room for a path
+/// next to them, otherwise under the field, at its right end.
+class _FieldRow extends StatelessWidget {
+  const _FieldRow({required this.field, required this.actions});
+
+  final Widget field;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // About 140 px per button, and at least 280 for the field.
+      if (constraints.maxWidth < 280 + 140 * actions.length) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            field,
+            const SizedBox(height: 10),
+            Wrap(alignment: WrapAlignment.end, spacing: 10, runSpacing: 8, children: actions),
+          ],
+        );
+      }
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: field),
+            for (final action in actions) ...[const SizedBox(width: 10), action],
+          ],
+        ),
+      );
+    },
+  );
+}
+
 class _AccountCard extends StatelessWidget {
   const _AccountCard();
 
@@ -289,21 +324,18 @@ class _ServerCardState extends State<_ServerCard> {
               ),
             ),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _url,
-                  keyboardType: TextInputType.url,
-                  decoration: InputDecoration(
-                    hintText: context.tr('ServerUrlPlaceholder'),
-                    prefixIcon: const Icon(Icons.link_rounded, size: 18),
-                  ),
-                  onChanged: (v) => server.serverUrl = v,
-                  onSubmitted: (_) => server.connectServer(),
-                ),
+          _FieldRow(
+            field: TextField(
+              controller: _url,
+              keyboardType: TextInputType.url,
+              decoration: InputDecoration(
+                hintText: context.tr('ServerUrlPlaceholder'),
+                prefixIcon: const Icon(Icons.link_rounded, size: 18),
               ),
-              const SizedBox(width: 10),
+              onChanged: (v) => server.serverUrl = v,
+              onSubmitted: (_) => server.connectServer(),
+            ),
+            actions: [
               Tooltip(
                 message: context.tr('TipCheckConnection'),
                 child: FilledButton(
@@ -353,19 +385,18 @@ class _LocalFolderCardState extends State<_LocalFolderCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardTitle(icon: Icons.folder_open_rounded, title: context.tr('LocalFolderLabel')),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _path,
-                  decoration: InputDecoration(hintText: context.tr('LocalFolderPlaceholder')),
-                  onChanged: (v) => server.localLibraryPath = v,
-                  onSubmitted: (_) => server.startScanFolder(),
-                ),
+          _FieldRow(
+            field: TextField(
+              controller: _path,
+              decoration: InputDecoration(
+                hintText: context.tr('LocalFolderPlaceholder'),
+                prefixIcon: const Icon(Icons.folder_outlined, size: 18),
               ),
-              const SizedBox(width: 10),
+              onChanged: (v) => server.localLibraryPath = v,
+              onSubmitted: (_) => server.startScanFolder(),
+            ),
+            actions: [
               OutlinedButton(onPressed: () => _browse(server), child: Text(context.tr('Browse'))),
-              const SizedBox(width: 10),
               FilledButton.icon(
                 onPressed: server.isScanning ? null : server.startScanFolder,
                 icon: const Icon(Icons.manage_search_rounded),
@@ -412,28 +443,25 @@ class _AdminCardState extends State<_AdminCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardTitle(
-            icon: Icons.admin_panel_settings_outlined,
-            title: context.tr('ServerFolderLabel'),
-            trailing: Tooltip(
-              message: context.tr('TipReindex'),
-              child: OutlinedButton.icon(
-                onPressed: server.canRescanServer ? server.rescanServer : null,
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(context.tr('Reindex')),
+          _CardTitle(icon: Icons.admin_panel_settings_outlined, title: context.tr('ServerFolderLabel')),
+          _FieldRow(
+            field: TextField(
+              controller: _folder,
+              decoration: InputDecoration(
+                hintText: context.tr('ServerFolderPlaceholder'),
+                prefixIcon: const Icon(Icons.folder_outlined, size: 18),
               ),
+              onChanged: (v) => server.serverLibraryPath = v,
             ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _folder,
-                  decoration: InputDecoration(hintText: context.tr('ServerFolderPlaceholder')),
-                  onChanged: (v) => server.serverLibraryPath = v,
+            actions: [
+              Tooltip(
+                message: context.tr('TipReindex'),
+                child: OutlinedButton.icon(
+                  onPressed: server.canRescanServer ? server.rescanServer : null,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: Text(context.tr('Reindex')),
                 ),
               ),
-              const SizedBox(width: 10),
               FilledButton(
                 onPressed: server.isUpdatingServerConfig ? null : server.updateServerLibraryPath,
                 child: Text(context.tr('SaveFolder')),
@@ -484,7 +512,6 @@ class _UsersCardState extends State<_UsersCard> {
   Widget build(BuildContext context) {
     final server = context.vm.serverSettings;
     final colors = context.colors;
-    final narrow = MediaQuery.sizeOf(context).width < 700;
     final fields = [
       TextField(
         controller: _username,
@@ -521,44 +548,76 @@ class _UsersCardState extends State<_UsersCard> {
             style: TextStyle(fontWeight: FontWeight.w700, color: colors.textMain),
           ),
           const SizedBox(height: 8),
-          if (narrow)
-            Column(
-              children: [for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 8), child: f)],
-            )
-          else
-            Row(
-              children: [
-                for (final f in fields)
-                  Expanded(
-                    child: Padding(padding: const EdgeInsets.only(right: 8), child: f),
-                  ),
-              ],
-            ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: server.isAddingUser ? null : () => _add(server),
-              icon: const Icon(Icons.person_add_alt_1_rounded),
-              label: Text(context.tr('Add')),
-            ),
+          // In a row with the button where each field still shows its hint, otherwise one under the other.
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final add = FilledButton.icon(
+                onPressed: server.isAddingUser ? null : () => _add(server),
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: Text(context.tr('Add')),
+              );
+              if (constraints.maxWidth < 760) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 10), child: f),
+                    Align(alignment: Alignment.centerRight, child: add),
+                  ],
+                );
+              }
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final f in fields) ...[Expanded(child: f), const SizedBox(width: 10)],
+                    add,
+                  ],
+                ),
+              );
+            },
           ),
           _StatusLine(server.userManagementErrorMessage, isError: true),
           SectionLabel(context.tr('RegisteredUsers'), padding: const EdgeInsets.fromLTRB(0, 16, 0, 4)),
           for (final user in server.serverUsers)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline),
-              title: Text(user.username),
-              subtitle: Text(
-                '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • ${context.trf('CreatedAt', [user.createdAt])}',
-              ),
-              trailing: user.username == server.currentUserName
-                  ? null
-                  : IconButton(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: colors.accent.withValues(alpha: 0.14),
+                    child: Icon(
+                      user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
+                      size: 18,
+                      color: colors.accent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.username,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
+                        ),
+                        Text(
+                          '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • '
+                          '${context.trf('CreatedAt', [user.createdAt])}',
+                          style: TextStyle(fontSize: 12, color: colors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (user.username != server.currentUserName)
+                    IconButton(
                       tooltip: context.tr('TipDeleteUser'),
                       icon: Icon(Icons.delete_outline, color: colors.danger),
                       onPressed: () => server.deleteUser(user.id),
                     ),
+                ],
+              ),
             ),
         ],
       ),
@@ -592,21 +651,16 @@ class _AudioCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: color),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(description, style: TextStyle(fontSize: 11, color: colors.textMuted)),
-                  ],
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color),
                 ),
               ),
               Switch(value: value, activeTrackColor: color, onChanged: available ? onChanged : null),
             ],
           ),
+          const SizedBox(height: 4),
+          Text(description, style: TextStyle(fontSize: 12, height: 1.35, color: colors.textMuted)),
           if (!available) ...[
             const SizedBox(height: 8),
             Text(context.tr('ExclusiveUnavailable'), style: TextStyle(fontSize: 10, color: palette.warning)),
@@ -635,7 +689,7 @@ class _AudioCard extends StatelessWidget {
               audio.setBitperfect,
               palette.purple,
             );
-            if (constraints.maxWidth < 420) {
+            if (constraints.maxWidth < 440) {
               return Column(children: [exclusive, const SizedBox(height: 12), bitperfect]);
             }
             return IntrinsicHeight(
@@ -671,7 +725,7 @@ class _AudioCard extends StatelessWidget {
                     ),
                     onPressed: audio.refreshDevices,
                     icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: Text(context.tr('Refresh'), style: const TextStyle(fontWeight: FontWeight.w400)),
+                    label: Text(context.tr('Refresh')),
                   ),
                 ],
               ),
@@ -729,7 +783,7 @@ class _AudioCard extends StatelessWidget {
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: colors.surface2, borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small + 2)),
                 child: Text(
                   audio.signalPath,
                   style: TextStyle(
@@ -811,7 +865,7 @@ class _AppearanceCard extends StatelessWidget {
                 ),
                 onPressed: vm.toggleTheme,
                 icon: Icon(vm.isLight ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 16),
-                label: Text(context.tr('Theme'), style: const TextStyle(fontWeight: FontWeight.w400)),
+                label: Text(context.tr('Theme')),
               ),
             ],
           ),

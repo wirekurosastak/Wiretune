@@ -142,64 +142,78 @@ class _Header extends StatelessWidget {
     final colors = context.colors;
     final compact = MediaQuery.sizeOf(context).width < MainViewModel.compactLayoutWidth;
     final frameless = AppPlatform.current.hasCustomWindowFrame;
-    final content = Padding(
-      padding: const EdgeInsets.fromLTRB(22, 0, 14, 0),
-      child: Row(
-        children: [
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListenableBuilder(
-                listenable: vm.player,
-                builder: (context, _) => Tooltip(
-                  message: 'Wiretune Streamer Visualizer',
-                  child: NavVisualizer(
-                    waveTrigger: vm.waveTrigger,
-                    direction: vm.lastWaveDirection,
-                    color: colors.accent,
-                    isPlaying: vm.player.isPlaying,
+    final content = CustomMultiChildLayout(
+      delegate: _HeaderLayout(),
+      children: [
+        LayoutId(
+          id: _HeaderSlot.brand,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 22),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListenableBuilder(
+                  listenable: vm.player,
+                  builder: (context, _) => Tooltip(
+                    message: 'Wiretune Streamer Visualizer',
+                    child: NavVisualizer(
+                      waveTrigger: vm.waveTrigger,
+                      direction: vm.lastWaveDirection,
+                      color: colors.accent,
+                      isPlaying: vm.player.isPlaying,
+                    ),
                   ),
                 ),
-              ),
-              if (!compact) ...[
-                const SizedBox(width: 14),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // The wordmark fades into the section's colour towards its end.
-                    ShaderMask(
-                      blendMode: BlendMode.srcIn,
-                      shaderCallback: (rect) => LinearGradient(
-                        colors: [colors.textMain, colors.textMain, colors.hover],
-                        stops: const [0, 0.45, 1],
-                      ).createShader(rect),
-                      child: const Text(
-                        'WIRETUNE',
-                        style: TextStyle(fontSize: 17, letterSpacing: 3.2, fontWeight: FontWeight.w900, height: 1.1),
+                if (!compact) ...[
+                  const SizedBox(width: 14),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // The wordmark fades into the section's colour towards its end.
+                      ShaderMask(
+                        blendMode: BlendMode.srcIn,
+                        shaderCallback: (rect) => LinearGradient(
+                          colors: [colors.textMain, colors.textMain, colors.hover],
+                          stops: const [0, 0.45, 1],
+                        ).createShader(rect),
+                        child: const Text(
+                          'WIRETUNE',
+                          style: TextStyle(fontSize: 17, letterSpacing: 3.2, fontWeight: FontWeight.w900, height: 1.1),
+                        ),
                       ),
-                    ),
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 350),
-                      style: TextStyle(
-                        fontSize: 8.5,
-                        letterSpacing: 1.9,
-                        fontWeight: FontWeight.w800,
-                        color: colors.accent,
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 350),
+                        style: TextStyle(
+                          fontSize: 8.5,
+                          letterSpacing: 1.9,
+                          fontWeight: FontWeight.w800,
+                          color: colors.accent,
+                        ),
+                        child: const Text('STREAMER & PLAYER'),
                       ),
-                      child: const Text('STREAMER & PLAYER'),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-          // The search box sits in the middle of the room the logo and the pills leave, and shrinks when it is short.
-          const Expanded(child: Center(child: _SearchField())),
-          _HeaderPills(compact: compact),
-          if (frameless) ...[const SizedBox(width: 10), const _WindowButtons()],
-        ],
-      ),
+        ),
+        LayoutId(id: _HeaderSlot.search, child: const _SearchField()),
+        LayoutId(
+          id: _HeaderSlot.actions,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _HeaderPills(compact: compact),
+                if (frameless) ...[const SizedBox(width: 10), const _WindowButtons()],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
     return SizedBox(
       height: 66,
@@ -216,6 +230,38 @@ class _Header extends StatelessWidget {
           : content,
     );
   }
+}
+
+enum _HeaderSlot { brand, search, actions }
+
+/// The header's layout: the brand on the left, the buttons on the right, and the search box in the middle of the window
+/// (not of the room between them), as wide as it can be there. Only when that leaves it narrower than [_minCentred]
+/// does it move aside into the room between them.
+class _HeaderLayout extends MultiChildLayoutDelegate {
+  static const double _gap = 16;
+  static const double _minCentred = 220;
+
+  @override
+  void performLayout(Size size) {
+    final loose = BoxConstraints.loose(size);
+    final brand = layoutChild(_HeaderSlot.brand, loose);
+    final actions = layoutChild(_HeaderSlot.actions, loose);
+    positionChild(_HeaderSlot.brand, Offset(0, (size.height - brand.height) / 2));
+    positionChild(_HeaderSlot.actions, Offset(size.width - actions.width, (size.height - actions.height) / 2));
+
+    final left = brand.width + _gap;
+    final right = size.width - actions.width - _gap;
+    final half = size.width / 2;
+    // The widest box centred on the window that clears both sides.
+    final centred = 2 * math.min<double>(half - left, right - half);
+    final room = centred >= _minCentred ? centred : math.max(0.0, right - left);
+    final search = layoutChild(_HeaderSlot.search, BoxConstraints(maxWidth: room, maxHeight: size.height));
+    final x = ((size.width - search.width) / 2).clamp(left, math.max(left, right - search.width)).toDouble();
+    positionChild(_HeaderSlot.search, Offset(x, (size.height - search.height) / 2));
+  }
+
+  @override
+  bool shouldRelayout(_HeaderLayout oldDelegate) => false;
 }
 
 class _SearchField extends StatefulWidget {
@@ -369,7 +415,16 @@ class _HeaderPills extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (on) ...[_PulsingDot(color: color, size: 7), const SizedBox(width: 7)],
+              // A status light, dim while the mode is off: the pill keeps its width, so nothing beside it moves.
+              if (on)
+                _PulsingDot(color: color, size: 7)
+              else
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(color: colors.textMuted.withValues(alpha: 0.35), shape: BoxShape.circle),
+                ),
+              const SizedBox(width: 7),
               Text(
                 label,
                 style: TextStyle(

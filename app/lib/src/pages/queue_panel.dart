@@ -430,6 +430,9 @@ class _LyricLine extends StatefulWidget {
 }
 
 class _LyricLineState extends State<_LyricLine> {
+  /// How much larger the line being sung is drawn.
+  static const double _activeScale = 1.06;
+
   bool _hover = false;
 
   @override
@@ -442,28 +445,35 @@ class _LyricLineState extends State<_LyricLine> {
       child: GestureDetector(
         onTap: widget.onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 6, 16, 6),
+          // Room at the sides for the glow of the line being sung.
+          padding: EdgeInsets.fromLTRB(widget.centered ? 10 : 0, 6, widget.centered ? 10 : 16, 6),
           child: AnimatedOpacity(
             opacity: opacity,
             duration: const Duration(milliseconds: 330),
             child: AnimatedScale(
-              scale: widget.active ? 1.06 : 1,
+              scale: widget.active ? _activeScale : 1,
               alignment: widget.centered ? Alignment.center : Alignment.centerLeft,
               duration: const Duration(milliseconds: 330),
               curve: Curves.easeOutCubic,
-              child: Text(
-                widget.text,
-                textAlign: widget.centered ? TextAlign.center : TextAlign.start,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.3,
-                  height: 27 / 20,
-                  color: context.colors.textMain,
-                  // The line being sung glows softly in the accent.
-                  shadows: widget.active
-                      ? [Shadow(color: context.colors.accent.withValues(alpha: 0.6), blurRadius: 18)]
-                      : null,
+              // Every line is laid out narrower by the scale, so the one being sung still fits the width when it grows,
+              // and it wraps the same way whether it is being sung or not.
+              child: FractionallySizedBox(
+                widthFactor: 1 / _activeScale,
+                alignment: widget.centered ? Alignment.center : Alignment.centerLeft,
+                child: Text(
+                  widget.text,
+                  textAlign: widget.centered ? TextAlign.center : TextAlign.start,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    height: 27 / 20,
+                    color: context.colors.textMain,
+                    // The line being sung glows softly in the accent.
+                    shadows: widget.active
+                        ? [Shadow(color: context.colors.accent.withValues(alpha: 0.6), blurRadius: 18)]
+                        : null,
+                  ),
                 ),
               ),
             ),

@@ -8,6 +8,7 @@ import 'package:wiretune/src/pages/now_playing_page.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
+import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -115,6 +116,76 @@ void main() {
     await tester.binding.handlePopRoute();
     await settle(tester);
     expect(vm.isNowPlayingOpen, isFalse);
+  });
+
+  testWidgets('a skip in the full-screen player shows the next track\'s title and cover', (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    final tracks = vm.library.tracks.take(2).toList();
+    for (final track in tracks) {
+      track.coverArtPath = '/covers/${track.id}.jpg';
+    }
+    final page = find.byType(NowPlayingPage);
+    Finder onPage(Finder finder) => find.descendant(of: page, matching: finder);
+    String? coverOnPage() => tester
+        .widget<CoverImage>(onPage(find.descendant(of: find.byType(Hero), matching: find.byType(CoverImage))))
+        .path;
+
+    vm.player.playQueue(tracks, tracks.first);
+    vm.openNowPlaying();
+    await settle(tester);
+    expect(onPage(find.text(tracks.first.title)), findsOneWidget);
+    expect(coverOnPage(), tracks.first.coverArtPath);
+
+    vm.player.nextTrack();
+    await settle(tester);
+
+    expect(onPage(find.text(tracks.last.title)), findsOneWidget);
+    expect(onPage(find.text(tracks.first.title)), findsNothing);
+    expect(coverOnPage(), tracks.last.coverArtPath);
+  });
+
+  testWidgets('the search box is centred on the window, and stays put when a mode lights up', (tester) async {
+    // The test font draws every letter as a full square, so the header needs a wider window than real text does.
+    final vm = await pumpApp(tester, const Size(1920, 1000));
+    final search = find.byType(TextField).first;
+    expect(tester.getCenter(search).dx, closeTo(960, 0.5));
+    final before = tester.getRect(search);
+
+    await tester.runAsync(vm.player.toggleExclusiveMode);
+    await settle(tester);
+
+    expect(vm.player.isExclusiveMode, isTrue);
+    expect(tester.getRect(search), before);
+  });
+
+  testWidgets('on a phone the lyric being sung, drawn larger, still fits the width', (tester) async {
+    tester.view.physicalSize = const Size(360, 740);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final driver = FakeAudioDriver();
+    final vm = (await tester.runAsync(() async {
+      final library = createLibrary([TestSupport.makeTrack('1', 'Song')]);
+      await library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(driver));
+    }))!;
+    const line = "(La, la, la) I'm caught up in the rapture of love, nothing else can compare";
+    vm.player.lyricsProvider = (_, _) async => '[00:00.50]$line\n[00:30.00]When I feel the magic of you';
+    await tester.pumpWidget(WiretuneApp(vm: vm));
+
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    vm.nowPlayingTab = 2;
+    await tester.runAsync(() async {
+      await waitUntil(() => vm.player.hasSyncedLyrics);
+      await driver.seek(const Duration(seconds: 1));
+    });
+    await settle(tester);
+
+    expect(vm.player.currentLyricIndex.value, 0);
+    final list = tester.getRect(find.descendant(of: find.byType(NowPlayingPage), matching: find.byType(ListView)));
+    final sung = tester.getRect(find.text(line));
+    expect(sung.left, greaterThanOrEqualTo(list.left));
+    expect(sung.right, lessThanOrEqualTo(list.right));
   });
 
   testWidgets('the phone search page opens from the page header and back closes it', (tester) async {
