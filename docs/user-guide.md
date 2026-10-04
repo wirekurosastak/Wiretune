@@ -31,8 +31,12 @@ header or in *Settings → Appearance*. If the server can't be reached at start-
 - **Artists** lists album artists only. A guest on other people's albums gets no page, but their tracks are still in
   *Tracks* and in search.
 - **Quality tags**: **gold** is hi-res (lossless above 16 bit or 48 kHz), **silver** is lossless at CD resolution,
-  **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. Hover or
-  long-press a tag for the details.
+  **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The track
+  lists (on a wide screen) and the player show the whole tag (`FLAC 24bit/96kHz`); the covers and the queue show the
+  resolution (`24bit/96kHz`, `320kbps`), and a narrow queue leaves it out. Hover or long-press a tag for the details.
+- **Sorting and filtering**: albums sort by title, year or quality (best first, an album counting as its weakest
+  track). When the files carry genre tags, a genre filter narrows the albums and the artists to those with a track of
+  that genre.
 - **Covers** are the file's embedded picture, else a `cover`, `folder` or `front` image (`.jpg`, `.jpeg`, `.png`),
   `albumart.jpg` or `artwork.jpg` in its folder. **Artist pictures** are looked up online
   ([SECURITY.md](../SECURITY.md#players)); until one turns up, the artist's first album cover stands in.

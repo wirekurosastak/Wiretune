@@ -371,14 +371,15 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
     onPressed: () => vm.addToPlaylist(track),
   );
   return switch (kind) {
+    // The heart first and "add to playlist" after it, as in every other list.
     TrackTableKind.favorites when !phone => [
-      add,
       _IconCell(
         width: size,
         tooltip: context.tr('TipRemoveFromFavorites'),
         icon: Icon(Icons.favorite_rounded, color: colors.palette.coral, size: 18),
         onPressed: () => vm.favorites.removeFavorite(track),
       ),
+      add,
     ],
     TrackTableKind.playlist => [
       favorite,

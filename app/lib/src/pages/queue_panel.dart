@@ -71,6 +71,9 @@ class _QueueRow extends StatefulWidget {
 }
 
 class _QueueRowState extends State<_QueueRow> {
+  /// The row width from which the quality tag fits beside a title of about 160 px.
+  static const double _tagRowWidth = 480;
+
   bool _hover = false;
 
   @override
@@ -108,116 +111,121 @@ class _QueueRowState extends State<_QueueRow> {
           child: InkWell(
             borderRadius: radius,
             onTap: () => player.playQueueTrack(item),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              child: Row(
-                children: [
-                  ReorderableDragStartListener(
-                    index: widget.index,
-                    child: Tooltip(
-                      message: context.tr('TipDragToReorder'),
-                      child: SizedBox(
-                        width: 20,
-                        child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
+            child: LayoutBuilder(
+              builder: (context, constraints) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                child: Row(
+                  children: [
+                    ReorderableDragStartListener(
+                      index: widget.index,
+                      child: Tooltip(
+                        message: context.tr('TipDragToReorder'),
+                        child: SizedBox(
+                          width: 20,
+                          child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  SizedBox(
-                    width: 42,
-                    height: 42,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CoverImage(path: track.coverArtPath, radius: Radii.small, decodeWidth: 84),
-                        if (current)
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: const Color(0x99000000),
-                              borderRadius: BorderRadius.circular(Radii.small),
-                            ),
-                            child: const Center(child: EqualizerBars(color: Colors.white)),
-                          )
-                        else
-                          Align(
-                            alignment: Alignment.topLeft,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-                              decoration: const BoxDecoration(
-                                color: Color(0x99000000),
-                                borderRadius: BorderRadius.only(
-                                  topLeft: Radius.circular(Radii.small),
-                                  bottomRight: Radius.circular(6),
+                    const SizedBox(width: 6),
+                    SizedBox(
+                      width: 42,
+                      height: 42,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CoverImage(path: track.coverArtPath, radius: Radii.small, decodeWidth: 84),
+                          if (current)
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: const Color(0x99000000),
+                                borderRadius: BorderRadius.circular(Radii.small),
+                              ),
+                              child: const Center(child: EqualizerBars(color: Colors.white)),
+                            )
+                          else
+                            Align(
+                              alignment: Alignment.topLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                                decoration: const BoxDecoration(
+                                  color: Color(0x99000000),
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(Radii.small),
+                                    bottomRight: Radius.circular(6),
+                                  ),
+                                ),
+                                child: Text(
+                                  '${item.displayIndex}',
+                                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white),
                                 ),
                               ),
-                              child: Text(
-                                '${item.displayIndex}',
-                                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white),
-                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            track.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                              color: current ? colors.hover : colors.textMain,
                             ),
                           ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: current ? colors.hover : colors.textMain,
+                          const SizedBox(height: 2),
+                          Text(
+                            track.artist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 11.5, color: colors.textMuted),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          track.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11.5, color: colors.textMuted),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  QualityTag(tier: track.format.tier, spec: track.format.tagSpec, compact: true),
-                  const SizedBox(width: 12),
-                  Text(
-                    track.formattedDuration,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: colors.textMuted,
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                    // A narrow row (a phone's, a narrow window's) leaves the tag out: the title keeps the room.
+                    if (constraints.maxWidth >= _tagRowWidth) ...[
+                      const SizedBox(width: 12),
+                      QualityTag(tier: track.format.tier, spec: track.format.tagSpec, compact: true),
+                    ],
+                    const SizedBox(width: 12),
+                    Text(
+                      track.formattedDuration,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: colors.textMuted,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  if (widget.showMoveButtons) ...[
+                    const SizedBox(width: 12),
+                    if (widget.showMoveButtons) ...[
+                      small(
+                        Icons.keyboard_arrow_up_rounded,
+                        'TipMoveUp',
+                        item.index > 0 ? () => player.moveQueueTrackUp(item) : null,
+                      ),
+                      const SizedBox(width: 4),
+                      small(
+                        Icons.keyboard_arrow_down_rounded,
+                        'TipMoveDown',
+                        item.index < widget.itemCount - 1 ? () => player.moveQueueTrackDown(item) : null,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
                     small(
-                      Icons.keyboard_arrow_up_rounded,
-                      'TipMoveUp',
-                      item.index > 0 ? () => player.moveQueueTrackUp(item) : null,
+                      Icons.close_rounded,
+                      'TipRemoveFromQueue',
+                      () => player.removeQueueTrack(track),
+                      color: colors.danger,
                     ),
-                    const SizedBox(width: 4),
-                    small(
-                      Icons.keyboard_arrow_down_rounded,
-                      'TipMoveDown',
-                      item.index < widget.itemCount - 1 ? () => player.moveQueueTrackDown(item) : null,
-                    ),
-                    const SizedBox(width: 8),
                   ],
-                  small(
-                    Icons.close_rounded,
-                    'TipRemoveFromQueue',
-                    () => player.removeQueueTrack(track),
-                    color: colors.danger,
-                  ),
-                ],
+                ),
               ),
             ),
           ),

@@ -15,7 +15,7 @@ class QualityTag extends StatelessWidget {
   /// The text after the tier word, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty shows the tier word alone.
   final String? spec;
 
-  /// For small tiles: only the first word of [spec] (the file format).
+  /// For tiles, the queue and a narrow player bar: the resolution without the file format (`24bit/96kHz`).
   final bool compact;
   final double fontSize;
 

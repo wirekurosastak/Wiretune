@@ -40,8 +40,9 @@ class AlbumCard extends StatelessWidget {
       placeholderIcon: Icons.album,
       placeholderColor: purple,
     );
+    final badge = QualityTag(tier: album.tier, spec: album.tagSpec, compact: true);
     if (_TileStyle.phoneOf(context)) {
-      return _PhoneTile(onTap: onOpen, cover: cover, title: album.title, subtitle: album.artist);
+      return _PhoneTile(onTap: onOpen, cover: cover, badge: badge, title: album.title, subtitle: album.artist);
     }
     final details = [
       context.trf('TrackCount', [album.trackCount]),
@@ -56,7 +57,7 @@ class AlbumCard extends StatelessWidget {
         _line(album.artist, 12.5, FontWeight.w500, colors.textMuted),
         _line(details, 11, FontWeight.w500, colors.textMuted.withValues(alpha: 0.75)),
       ],
-      badge: QualityTag(tier: album.tier, spec: album.tagSpec, compact: true),
+      badge: badge,
       play: TilePlayButton(color: purple, onPressed: onPlay, tooltip: context.tr('Play')),
     );
   }
@@ -145,10 +146,14 @@ class PlaylistCard extends StatelessWidget {
     final colors = context.colors;
     final lime = colors.palette.lime;
     final cover = PlaylistCover(covers: covers, radius: Radii.small + 2);
+    final badge = playlist.formatBadge.isEmpty
+        ? null
+        : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, compact: true);
     if (_TileStyle.phoneOf(context)) {
       return _PhoneTile(
         onTap: onOpen,
         cover: cover,
+        badge: badge,
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
       );
@@ -161,9 +166,7 @@ class PlaylistCard extends StatelessWidget {
         _line(playlist.name, 14, FontWeight.w700, colors.textMain),
         _line(context.trf('TrackCount', [playlist.trackCount]), 12.5, FontWeight.w500, colors.textMuted),
       ],
-      badge: playlist.formatBadge.isEmpty
-          ? null
-          : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, compact: true),
+      badge: badge,
       play: TilePlayButton(
         color: lime,
         onPressed: playlist.trackCount > 0 ? onPlay : null,
@@ -301,18 +304,20 @@ class _DesktopTileState extends State<_DesktopTile> {
   }
 }
 
-/// A phone tile: a square cover (or round picture) with a soft shadow, and two lines below it.
+/// A phone tile: a square cover (or round picture) with a soft shadow and the [badge] on it, and two lines below it.
 class _PhoneTile extends StatelessWidget {
   const _PhoneTile({
     required this.onTap,
     required this.cover,
     required this.title,
     required this.subtitle,
+    this.badge,
     this.centered = false,
   });
 
   final VoidCallback onTap;
   final Widget cover;
+  final Widget? badge;
   final String title;
   final String subtitle;
   final bool centered;
@@ -349,7 +354,15 @@ class _PhoneTile extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: cover,
+                      child: badge == null
+                          ? cover
+                          : Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                cover,
+                                Positioned(left: 6, top: 6, child: badge!),
+                              ],
+                            ),
                     ),
                   ),
                 ),

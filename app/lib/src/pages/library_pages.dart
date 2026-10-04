@@ -397,42 +397,46 @@ class _SortButtons extends StatelessWidget {
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted),
         ),
         const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            color: colors.surface1,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: colors.glassBorder),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (final (label, selected, onTap) in buttons)
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  decoration: BoxDecoration(
-                    color: selected ? colors.accent : colors.accent.withValues(alpha: 0),
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: selected ? colors.accentGlow(0.5) : const [],
-                  ),
-                  child: Material(
-                    type: MaterialType.transparency,
-                    child: InkWell(
-                      customBorder: const StadiumBorder(),
-                      onTap: onTap,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(minWidth: 64, minHeight: 30),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          child: Center(
-                            widthFactor: 1,
-                            child: Text(
-                              label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: selected ? colors.onAccent : colors.textMuted,
+        // On a line too short for every segment (a phone with a large font) the pill shrinks rather than overflow.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Container(
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              color: colors.surface1,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: colors.glassBorder),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (label, selected, onTap) in buttons)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    decoration: BoxDecoration(
+                      color: selected ? colors.accent : colors.accent.withValues(alpha: 0),
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: selected ? colors.accentGlow(0.5) : const [],
+                    ),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        customBorder: const StadiumBorder(),
+                        onTap: onTap,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 64, minHeight: 30),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            child: Center(
+                              widthFactor: 1,
+                              child: Text(
+                                label,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: selected ? colors.onAccent : colors.textMuted,
+                                ),
                               ),
                             ),
                           ),
@@ -440,11 +444,71 @@ class _SortButtons extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The genre filter of a list page: a pill naming the chosen genre (or "All genres"), opening a menu of the library's
+/// genres.
+class _GenreFilter extends StatelessWidget {
+  const _GenreFilter({required this.genres, required this.selected, required this.onSelected});
+
+  final List<String> genres;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final active = selected != null;
+    final color = active ? colors.accent : colors.textMuted;
+    return PopupMenuButton<String>(
+      tooltip: context.tr('Genre'),
+      position: PopupMenuPosition.under,
+      // The menu's "all" entry has the empty string as its value: a null would read as "closed without a choice".
+      onSelected: (value) => onSelected(value.isEmpty ? null : value),
+      itemBuilder: (context) => [
+        CheckedPopupMenuItem(value: '', checked: !active, child: Text(context.tr('AllGenres'))),
+        const PopupMenuDivider(),
+        for (final genre in genres)
+          CheckedPopupMenuItem(value: genre, checked: equalsIgnoreCase(genre, selected), child: Text(genre)),
+      ],
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.filter_list_rounded, size: 16, color: color),
+            const SizedBox(width: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 180),
+              child: Text(
+                selected ?? context.tr('AllGenres'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: active ? colors.accent : colors.textMain,
+                ),
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.expand_more_rounded, size: 18, color: color),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -476,10 +540,17 @@ class AlbumsPage extends StatelessWidget {
               child: PageHeader(
                 title: context.tr('NavAlbums'),
                 actions: [
+                  if (albums.genres.isNotEmpty)
+                    _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
                   _SortButtons(
                     buttons: [
                       (albums.sortTitleLabel, albums.isSortByTitle, () => albums.setSortField(AlbumSortField.title)),
                       (albums.sortYearLabel, albums.isSortByYear, () => albums.setSortField(AlbumSortField.year)),
+                      (
+                        albums.sortQualityLabel,
+                        albums.isSortByQuality,
+                        () => albums.setSortField(AlbumSortField.quality),
+                      ),
                     ],
                   ),
                 ],
@@ -587,6 +658,8 @@ class ArtistsPage extends StatelessWidget {
               child: PageHeader(
                 title: context.tr('NavArtists'),
                 actions: [
+                  if (artists.genres.isNotEmpty)
+                    _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
                   _SortButtons(buttons: [(artists.sortNameLabel, true, artists.toggleSort)]),
                 ],
               ),

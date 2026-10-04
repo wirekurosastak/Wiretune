@@ -26,16 +26,13 @@ enum QualityTier {
   });
 
   /// The text of the tag: just [spec] (`FLAC 24bit/96kHz`); the tier itself is told by the colour of the tag. With
-  /// [compact] only the first word of the spec, the file format, is kept (`FLAC`). Without a spec the tier word stands
-  /// alone rather than leaving an empty pill.
+  /// [compact] the file format is left off and the resolution kept (`24bit/96kHz`, `320kbps`). Without a spec the tier
+  /// word stands alone rather than leaving an empty pill.
   String tagText(String? spec, {bool compact = false}) {
     if (spec == null || spec.trim().isEmpty) return word;
-    var text = spec.trim();
-    if (compact) {
-      final space = text.indexOf(' ');
-      if (space > 0) text = text.substring(0, space);
-    }
-    return text;
+    final text = spec.trim();
+    final space = text.indexOf(' ');
+    return compact && space > 0 ? text.substring(space + 1).trim() : text;
   }
 }
 

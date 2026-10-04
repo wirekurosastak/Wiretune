@@ -1070,13 +1070,16 @@ class _PlayerBar extends StatelessWidget {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // Spectrum, quality and volume, as many as fit: the volume first, then the tag, then the spectrum.
+                    // Spectrum, quality and volume, as many as fit: the volume first, then the full quality tag (the
+                    // short one when the full one doesn't fit), then the spectrum in what is left, down to 80 px.
+                    final scale = MediaQuery.textScalerOf(context).scale(1);
                     final volume = platform.isDesktop && constraints.maxWidth >= 12 + 36 + 8 + 95;
                     var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0);
-                    final showTag = !compact && track != null && room >= 60;
-                    final fullTag = showTag && room >= 180 + 144;
-                    if (showTag) room -= fullTag ? 180 : 60;
-                    final showSpectrum = !compact && platform.isDesktop && room >= 144;
+                    final showTag = !compact && track != null && room >= 90 * scale;
+                    final fullTag = showTag && room >= 125 * scale;
+                    if (showTag) room -= (fullTag ? 125 : 90) * scale + 8;
+                    final spectrumWidth = math.min(130.0, room - 14);
+                    final showSpectrum = !compact && platform.isDesktop && spectrumWidth >= 80;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Row(
@@ -1089,7 +1092,7 @@ class _PlayerBar extends StatelessWidget {
                                 bands: player.spectrum,
                                 color: colors.accent,
                                 highlight: colors.hover,
-                                width: 130,
+                                width: spectrumWidth,
                               ),
                             ),
                             const SizedBox(width: 14),

@@ -54,7 +54,21 @@ class TracksViewModel extends ChangeNotifier {
   }
 }
 
-enum AlbumSortField { title, year }
+enum AlbumSortField { title, year, quality }
+
+/// Whether any of [tracks] is tagged with [genre], in any capitalisation.
+bool hasGenre(Iterable<Track> tracks, String genre) => tracks.any((t) => equalsIgnoreCase(t.genre, genre));
+
+/// Orders formats from the weakest to the best: by tier, then by bit depth and sample rate (lossless) or bitrate and
+/// sample rate (lossy).
+int compareFormatQuality(AudioFormat a, AudioFormat b) {
+  final byTier = a.tier.index.compareTo(b.tier.index);
+  if (byTier != 0) return byTier;
+  final byDepth = a.isLossless && b.isLossless
+      ? a.bitsPerSample.compareTo(b.bitsPerSample)
+      : a.bitrateKbps.compareTo(b.bitrateKbps);
+  return byDepth != 0 ? byDepth : a.sampleRate.compareTo(b.sampleRate);
+}
 
 /// A detail page that remembers where "back" leads.
 mixin DetailOrigin on ChangeNotifier {
@@ -100,31 +114,51 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   AlbumSortField sortField = AlbumSortField.title;
   bool isSortDescending = false;
 
+  /// The library's genres, for the filter; empty when no track has one.
+  List<String> genres = const [];
+
+  /// The genre the list is narrowed to; null shows every album.
+  String? genre;
+
   bool get isSortByTitle => sortField == AlbumSortField.title;
   bool get isSortByYear => sortField == AlbumSortField.year;
+  bool get isSortByQuality => sortField == AlbumSortField.quality;
 
   String get backText => backButtonText('BackToAlbums');
 
   String get sortTitleLabel => isSortByTitle ? 'ABC ${isSortDescending ? '↓' : '↑'}' : 'ABC';
   String get sortYearLabel =>
       isSortByYear ? '${Localizer.get('SortYear')} ${isSortDescending ? '↓' : '↑'}' : Localizer.get('SortYear');
+  String get sortQualityLabel => isSortByQuality
+      ? '${Localizer.get('SortQuality')} ${isSortDescending ? '↓' : '↑'}'
+      : Localizer.get('SortQuality');
 
   void refreshLocalizedTexts() => notifyListeners();
 
-  /// The active field flips its direction; the other one is switched to with its natural default (A→Z for titles,
-  /// newest first for years).
+  /// The active field flips its direction; another one is switched to with its natural default (A→Z for titles,
+  /// newest first for years, best first for quality).
   void setSortField(AlbumSortField field) {
     if (field == sortField) {
       isSortDescending = !isSortDescending;
     } else {
-      isSortDescending = field == AlbumSortField.year;
+      isSortDescending = field != AlbumSortField.title;
       sortField = field;
     }
     _applySort();
     notifyListeners();
   }
 
+  /// Narrows the list to the albums with a track of [value]; null shows them all again.
+  void setGenre(String? value) {
+    genre = value;
+    _applySort();
+    notifyListeners();
+  }
+
   void refreshAlbums() {
+    genres = _library.genres;
+    // A genre that is no longer in the library would leave an empty list behind.
+    if (genre != null && !genres.any((g) => equalsIgnoreCase(g, genre))) genre = null;
     _applySort();
     final previous = selectedAlbum;
     if (previous != null) {
@@ -139,16 +173,39 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   }
 
   void _applySort() {
-    final albums = List<Album>.of(_library.albums);
-    if (sortField == AlbumSortField.year) {
-      // Albums without a year always go last, in either direction.
-      sortStable(albums, (a, b) {
-        if ((a.year == null) != (b.year == null)) return a.year == null ? 1 : -1;
-        final byYear = isSortDescending ? (b.year ?? 0).compareTo(a.year ?? 0) : (a.year ?? 0).compareTo(b.year ?? 0);
-        return byYear != 0 ? byYear : compareText(a.title, b.title);
-      });
-    } else {
-      sortStable(albums, (a, b) => isSortDescending ? compareText(b.title, a.title) : compareText(a.title, b.title));
+    final wanted = genre;
+    final albums = [
+      for (final album in _library.albums)
+        if (wanted == null || hasGenre(album.tracks, wanted)) album,
+    ];
+    switch (sortField) {
+      case AlbumSortField.year:
+        // Albums without a year always go last, in either direction.
+        sortStable(albums, (a, b) {
+          if ((a.year == null) != (b.year == null)) return a.year == null ? 1 : -1;
+          final byYear = isSortDescending ? (b.year ?? 0).compareTo(a.year ?? 0) : (a.year ?? 0).compareTo(b.year ?? 0);
+          return byYear != 0 ? byYear : compareText(a.title, b.title);
+        });
+      case AlbumSortField.quality:
+        // An album is as good as its weakest track (the tier on its tag says the same); one without tracks ranks last.
+        final weakest = <Album, AudioFormat?>{
+          for (final album in albums)
+            album: album.tracks.isEmpty
+                ? null
+                : album.tracks.map((t) => t.format).reduce((w, f) => compareFormatQuality(f, w) < 0 ? f : w),
+        };
+        int compare(Album a, Album b) {
+          final (fa, fb) = (weakest[a], weakest[b]);
+          if (fa == null || fb == null) return (fa == null ? 0 : 1) - (fb == null ? 0 : 1);
+          return compareFormatQuality(fa, fb);
+        }
+
+        sortStable(albums, (a, b) {
+          final byQuality = compare(a, b);
+          return byQuality != 0 ? (isSortDescending ? -byQuality : byQuality) : compareText(a.title, b.title);
+        });
+      case AlbumSortField.title:
+        sortStable(albums, (a, b) => isSortDescending ? compareText(b.title, a.title) : compareText(a.title, b.title));
     }
     displayedAlbums = albums;
   }
@@ -226,6 +283,12 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   List<Track> selectedArtistTracks = const [];
   bool isSortDescending = false;
 
+  /// The library's genres, for the filter; empty when no track has one.
+  List<String> genres = const [];
+
+  /// The genre the list is narrowed to; null shows every artist.
+  String? genre;
+
   bool get hasSelectedArtistAlbums => selectedArtistAlbums.isNotEmpty;
 
   String get backText => backButtonText('BackToArtists');
@@ -241,15 +304,29 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     notifyListeners();
   }
 
+  /// Narrows the list to the artists with a track of [value]; null shows them all again.
+  void setGenre(String? value) {
+    genre = value;
+    _applySort();
+    notifyListeners();
+  }
+
   void _applySort() {
-    final artists = List<Artist>.of(_library.artists);
+    final wanted = genre;
+    final artists = [
+      for (final artist in _library.artists)
+        if (wanted == null || hasGenre(artist.tracks, wanted)) artist,
+    ];
     sortStable(artists, (a, b) => isSortDescending ? compareText(b.name, a.name) : compareText(a.name, b.name));
     displayedArtists = artists;
   }
 
   void refreshArtists() {
+    genres = _library.genres;
+    // A genre that is no longer in the library would leave an empty list behind.
+    if (genre != null && !genres.any((g) => equalsIgnoreCase(g, genre))) genre = null;
     _applySort();
-    _pictures.resolveArtistPictures(displayedArtists);
+    _pictures.resolveArtistPictures(_library.artists);
     final previous = selectedArtist;
     if (previous != null) {
       final updated = _library.getArtist(previous.id);

@@ -40,10 +40,11 @@ void main() {
     expect(_lossy(320).tagSpec, 'MP3 320kbps');
   });
 
-  test('tag text is just the spec; compact keeps only the file format', () {
+  test('tag text is just the spec; compact keeps only the resolution', () {
     expect(QualityTier.gold.tagText('FLAC 24bit/96kHz'), 'FLAC 24bit/96kHz');
     expect(QualityTier.bronze.tagText('MP3 320kbps'), 'MP3 320kbps');
-    expect(QualityTier.gold.tagText('FLAC 24bit/96kHz', compact: true), 'FLAC');
+    expect(QualityTier.gold.tagText('FLAC 24bit/96kHz', compact: true), '24bit/96kHz');
+    expect(QualityTier.bronze.tagText('MP3 320kbps', compact: true), '320kbps');
     expect(QualityTier.silver.tagText(QualitySummary.mixedSpec, compact: true), 'MIXED');
   });
 

@@ -5,10 +5,13 @@ import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/layouts/phone_layout.dart';
 import 'package:wiretune/src/layouts/wide_layout.dart';
 import 'package:wiretune/src/pages/now_playing_page.dart';
+import 'package:wiretune/src/pages/queue_panel.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
+import 'package:wiretune/src/widgets/quality_tag.dart';
+import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -186,6 +189,35 @@ void main() {
     final sung = tester.getRect(find.text(line));
     expect(sung.left, greaterThanOrEqualTo(list.left));
     expect(sung.right, lessThanOrEqualTo(list.right));
+  });
+
+  testWidgets('in the favourites the heart comes before "add to playlist", as in every other list', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    await tester.runAsync(() => vm.library.toggleFavorite(vm.library.tracks.first.id));
+    vm.navigateTo(AppSection.favorites);
+    await settle(tester);
+
+    Finder inList(IconData icon) => find.descendant(of: find.byType(TrackSliver), matching: find.byIcon(icon));
+    expect(
+      tester.getCenter(inList(Icons.favorite_rounded)).dx,
+      lessThan(tester.getCenter(inList(Icons.playlist_add_rounded)).dx),
+    );
+  });
+
+  testWidgets('a phone shows albums with their resolution on the cover, and a queue without quality tags', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    expect(find.text('16bit/44.1kHz'), findsWidgets); // the test tracks are FLAC 16bit/44.1kHz
+
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    vm.nowPlayingTab = 1;
+    await settle(tester);
+    expect(find.byType(QueueList), findsOneWidget);
+    expect(find.descendant(of: find.byType(QueueList), matching: find.byType(QualityTag)), findsNothing);
   });
 
   testWidgets('the phone search page opens from the page header and back closes it', (tester) async {
