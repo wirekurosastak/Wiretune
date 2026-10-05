@@ -1,0 +1,252 @@
+name: Release
+
+# A tag v<version> (the version: line of app/pubspec.yaml, e.g. v2.0.0) builds everything that ships, signed where the
+# secrets allow, and leaves it in a draft GitHub release to read over and publish. docs/building.md#releases lists the
+# secrets.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: 3.47.6
+  DART_VERSION: 3.13.5
+
+jobs:
+  version:
+    name: Tag matches the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          version=$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+[[:space:]]*$/\1/p' app/pubspec.yaml)
+          tizen=$(sed -nE 's/.*<manifest [^>]* version="([^"]+)".*/\1/p' app/tizen/tizen-manifest.xml)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "The tag $GITHUB_REF_NAME is not v$version (app/pubspec.yaml)."; exit 1; }
+          [ "$tizen" = "$version" ] || { echo "app/tizen/tizen-manifest.xml says $tizen, app/pubspec.yaml $version."; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  server:
+    name: Server (${{ matrix.name }})
+    needs: version
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, name: linux-x64 }
+          - { os: ubuntu-24.04-arm, name: linux-arm64 }
+          - { os: windows-latest, name: windows-x64 }
+          - { os: macos-latest, name: macos-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_VERSION }}
+      - run: dart tool/build.dart server
+      - name: Archive
+        shell: bash
+        run: |
+          name=wiretune-server-${{ needs.version.outputs.version }}-${{ matrix.name }}
+          mkdir -p out && mv dist/server "dist/$name"
+          if [ "$RUNNER_OS" = Windows ]; then (cd dist && 7z a -tzip "../out/$name.zip" "$name"); else tar -czf "out/$name.tar.gz" -C dist "$name"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-server-${{ matrix.name }}
+          path: out/*
+
+  docker:
+    name: Server image (${{ matrix.arch }})
+    needs: version
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, arch: amd64 }
+          - { os: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          image=ghcr.io/${GITHUB_REPOSITORY,,}-server:${{ needs.version.outputs.version }}-${{ matrix.arch }}
+          docker build -f server/Dockerfile --build-arg DART_VERSION="$DART_VERSION" -t "$image" .
+          docker push "$image"
+
+  docker-manifest:
+    name: Server image (both processors)
+    needs: [version, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - run: |
+          image=ghcr.io/${GITHUB_REPOSITORY,,}-server
+          version=${{ needs.version.outputs.version }}
+          docker buildx imagetools create -t "$image:$version" -t "$image:latest" "$image:$version-amd64" "$image:$version-arm64"
+
+  linux:
+    name: Linux player
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev
+      - run: dart tool/build.dart linux
+      - run: |
+          name=wiretune-${{ needs.version.outputs.version }}-linux-x64
+          mkdir -p out && mv dist/linux "dist/$name" && tar -czf "out/$name.tar.gz" -C dist "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: out/*
+
+  windows:
+    name: Windows player
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: choco install innosetup --no-progress -y
+      - run: dart tool/build.dart windows-installer
+      - name: Portable zip
+        shell: bash
+        run: |
+          name=wiretune-${{ needs.version.outputs.version }}-windows-x64-portable
+          mkdir -p out && mv dist/windows "dist/$name" && (cd dist && 7z a -tzip "../out/$name.zip" "$name")
+          mv dist/windows-installer/*.exe out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: out/*
+
+  macos:
+    name: macOS player
+    needs: version
+    runs-on: macos-latest
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+      NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+      NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # Without the secrets the app keeps the build's ad-hoc signature (docs/building.md#macos-player).
+      - name: Signing certificate
+        if: env.MACOS_CERTIFICATE != ''
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(openssl rand -hex 16)
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
+          # The keychains already searched stay in the list, one word each.
+          # shellcheck disable=SC2046
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/certificate.p12"
+          identity=$(security find-identity -v -p codesigning "$keychain" | sed -nE 's/.*"(Developer ID Application: [^"]+)".*/\1/p' | head -1)
+          [ -n "$identity" ] || { echo "The certificate holds no Developer ID Application identity."; exit 1; }
+          echo "WIRETUNE_MACOS_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+      - name: Notarisation credentials
+        if: env.MACOS_CERTIFICATE != '' && env.NOTARY_APPLE_ID != ''
+        run: |
+          xcrun notarytool store-credentials wiretune --apple-id "$NOTARY_APPLE_ID" --team-id "$NOTARY_TEAM_ID" --password "$NOTARY_PASSWORD"
+          echo "WIRETUNE_NOTARY_PROFILE=wiretune" >> "$GITHUB_ENV"
+      - run: dart tool/build.dart macos
+      - run: mkdir -p out && mv dist/macos/Wiretune.dmg "out/Wiretune-${{ needs.version.outputs.version }}-macos.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: out/*
+
+  android:
+    name: Android player
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # A release is never signed with the debug key: without the secrets this job fails, and so does the release.
+      - name: Signing key
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          [ -n "$ANDROID_KEYSTORE" ] || { echo "The ANDROID_KEYSTORE_BASE64 secret is missing (docs/building.md#releases)."; exit 1; }
+          echo "$ANDROID_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/upload.jks" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > app/android/key.properties
+      - run: dart tool/build.dart android appbundle
+      - run: |
+          version=${{ needs.version.outputs.version }}
+          mkdir -p out
+          for f in dist/android/*; do mv "$f" "out/wiretune-$version-$(basename "$f" | sed 's/^app-//')"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-android
+          path: out/*
+
+  publish:
+    name: Draft release
+    needs: [version, server, docker-manifest, linux, windows, macos, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: out
+          merge-multiple: true
+      - run: (cd out && sha256sum -- * > SHA256SUMS.txt && ls -l)
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          name: Wiretune ${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          files: out/*

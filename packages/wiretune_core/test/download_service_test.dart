@@ -87,11 +87,10 @@ final List<int> pngBytes = base64.decode(
 
 List<int> audio(int seed, [int length = 50000]) => List<int>.generate(length, (i) => (i * 31 + seed) & 0xff);
 
-/// One player: its database, library, server session and downloads.
+/// One player: its library, server session and downloads, over a database of its own (or [start]'s `repo`).
 class Player {
-  Player._(this.repo, this.library, this.session, this.downloads);
+  Player._(this.library, this.session, this.downloads);
 
-  final MockRepository repo;
   final LibraryService library;
   final ServerSession session;
   final DownloadService downloads;
@@ -109,7 +108,7 @@ class Player {
     await library.initialize();
     await session.initialize();
     await downloads.initialize();
-    return Player._(repo, library, session, downloads);
+    return Player._(library, session, downloads);
   }
 
   Future<void> signIn() async {

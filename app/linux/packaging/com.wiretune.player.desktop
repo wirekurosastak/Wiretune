@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Wiretune
+GenericName=Music Player
+Comment=Your lossless collection, on your own hardware, played properly
+Exec=@EXEC@
+Icon=com.wiretune.player
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;flac;lossless;hi-res;audiophile;
+StartupNotify=true

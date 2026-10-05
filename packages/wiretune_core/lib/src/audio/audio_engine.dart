@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../localization/localizer.dart';
-import '../models/audio_format.dart';
 import '../models/library_models.dart';
 import '../services/wiretune_log.dart';
 import '../util/event.dart';
@@ -75,11 +74,7 @@ class WiretuneAudioEngine {
     final track = _currentTrack;
     if (track == null) return Localizer.get('SignalNone');
 
-    final fmt = track.format;
     final device = _currentDevice?.displayTitle ?? Localizer.get('DefaultOutput');
-    final source = fmt.isLossless
-        ? '${fmt.qualityLabel} (${fmt.codec} ${fmt.bitsPerSample}b/${AudioFormat.khz(fmt.sampleRate)}kHz)'
-        : fmt.qualityLabel;
     final processing = Localizer.get(_isBitperfect ? 'SignalProcessingBitPerfect' : 'SignalProcessingMixer');
     final access = Localizer.get(_isExclusiveMode ? 'SignalAccessExclusive' : 'SignalAccessShared');
     final transport = Localizer.get(
@@ -89,7 +84,7 @@ class WiretuneAudioEngine {
     );
 
     return [
-      Localizer.format('SignalSource', [source]),
+      Localizer.format('SignalSource', [track.format.tagSpec]),
       Localizer.format('SignalTransport', [transport]),
       Localizer.format('SignalProcessing', [processing]),
       Localizer.format('SignalAccess', [access]),
@@ -147,7 +142,7 @@ class WiretuneAudioEngine {
       return;
     }
 
-    WiretuneLog.info('AudioEngine', "PlayTrack: '${track.artist} - ${track.title}' (${track.format.qualityLabel})");
+    WiretuneLog.info('AudioEngine', "PlayTrack: '${track.artist} - ${track.title}' (${track.format.tagSpec})");
     await _driver.play(source, track.format, start);
   }
 

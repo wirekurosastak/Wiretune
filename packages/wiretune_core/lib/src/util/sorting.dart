@@ -1,5 +1,5 @@
 /// Sorts [list] in place, keeping the order of elements that compare equal (Dart's `List.sort` does not promise that;
-/// the library's orderings, like LINQ's, rely on it).
+/// the library's orderings, which sort by one key after another, rely on it).
 void sortStable<T>(List<T> list, int Function(T a, T b) compare) {
   if (list.length < 2) return;
   final buffer = List<T>.of(list);

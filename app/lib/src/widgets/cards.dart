@@ -8,20 +8,6 @@ import 'common.dart';
 import 'cover_image.dart';
 import 'quality_tag.dart';
 
-/// Whether tiles are drawn as the desktop's hover tiles (a cover with a badge and a play button on it) or as the
-/// phone's plain cover-and-caption tiles. [TileGridSliver] decides it from the width and passes it down.
-class _TileStyle extends InheritedWidget {
-  const _TileStyle({required this.phone, required super.child});
-
-  final bool phone;
-
-  static bool phoneOf(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_TileStyle>()?.phone ?? PhoneChrome.isPhone(context);
-
-  @override
-  bool updateShouldNotify(_TileStyle oldWidget) => phone != oldWidget.phone;
-}
-
 /// An album: cover (with its format on it), title, artist, track count and year, and a play button.
 class AlbumCard extends StatelessWidget {
   const AlbumCard({super.key, required this.album, required this.onOpen, this.onPlay});
@@ -279,7 +265,8 @@ class PlaylistCover extends StatelessWidget {
   }
 }
 
-/// A playlist: its cover collage (with the format on it), name, track count and a play button.
+/// A playlist: its cover collage (with the format on it), name, track count and a play button; on a phone a plain
+/// cover-and-caption tile.
 class PlaylistCard extends StatelessWidget {
   const PlaylistCard({super.key, required this.playlist, required this.covers, required this.onOpen, this.onPlay});
 
@@ -296,7 +283,7 @@ class PlaylistCard extends StatelessWidget {
     final badge = playlist.formatSpec.isEmpty
         ? null
         : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, compact: true);
-    if (_TileStyle.phoneOf(context)) {
+    if (PhoneChrome.isPhone(context)) {
       return _PhoneTile(
         onTap: onOpen,
         cover: cover,
@@ -549,13 +536,7 @@ enum TileKind {
 /// Tiles as a sliver. On a wide screen as many columns of at least 176 px as fit, stretched to fill the row; on a
 /// phone two or three columns.
 class TileGridSliver extends StatelessWidget {
-  const TileGridSliver({
-    super.key,
-    required this.itemCount,
-    required this.itemBuilder,
-    this.kind = TileKind.album,
-    this.horizontalPadding,
-  });
+  const TileGridSliver({super.key, required this.itemCount, required this.itemBuilder, this.kind = TileKind.album});
 
   static const double _minTileWidth = 176;
   static const double _gap = 14;
@@ -563,7 +544,6 @@ class TileGridSliver extends StatelessWidget {
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
   final TileKind kind;
-  final double? horizontalPadding;
 
   /// The height of one line of text at [size] in the font the app uses, at the user's font size.
   static double _lineHeight(BuildContext context, double size, FontWeight weight) {
@@ -589,7 +569,7 @@ class TileGridSliver extends StatelessWidget {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final phone = PhoneChrome.isPhone(context);
-        final padding = horizontalPadding ?? (phone ? 8.0 : 20.0);
+        final padding = phone ? 8.0 : 20.0;
         final available = constraints.crossAxisExtent - 2 * padding;
         final SliverGridDelegate delegate;
         if (phone) {
@@ -620,10 +600,7 @@ class TileGridSliver extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(padding, 4, padding, 4),
           sliver: SliverGrid(
             gridDelegate: delegate,
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _TileStyle(phone: phone, child: itemBuilder(context, index)),
-              childCount: itemCount,
-            ),
+            delegate: SliverChildBuilderDelegate(itemBuilder, childCount: itemCount),
           ),
         );
       },

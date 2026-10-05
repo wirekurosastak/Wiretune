@@ -44,7 +44,7 @@ void main() {
 
     test('removing the playing track with repeat-all wraps around to the first', () {
       final (player, tracks, _) = createQueue(startAt: 3);
-      player.repeatMode = RepeatMode.all;
+      player.setRepeatMode(RepeatMode.all);
       player.removeQueueTrack(tracks[3]);
       expect(player.currentQueueIndex, 0);
     });
@@ -102,7 +102,7 @@ void main() {
       expect(player.currentTrack, isNull);
 
       final (wrapping, wrapTracks, _) = createQueue(startAt: 3);
-      wrapping.repeatMode = RepeatMode.all;
+      wrapping.setRepeatMode(RepeatMode.all);
       wrapping.nextTrack();
       expect(wrapping.currentTrack, wrapTracks[0]);
     });
@@ -124,7 +124,7 @@ void main() {
       driver.simulateTrackEnded();
       expect(player.currentTrack, tracks[1]);
 
-      player.repeatMode = RepeatMode.one;
+      player.setRepeatMode(RepeatMode.one);
       final calls = driver.playCalls;
       driver.simulateTrackEnded();
       expect(player.currentTrack, tracks[1]);
@@ -223,12 +223,12 @@ void main() {
           ..lyricsProvider = own
           ..onlineLyricsProvider = online;
 
-    Future<String?> nothing(Track track, CancellationToken ct) async => null;
+    Future<String?> nothing(Track track) async => null;
 
     test('are loaded only while the panel is open, and follow the track', () async {
       final requested = <String>[];
       final player = createPlayer(
-        own: (track, ct) async {
+        own: (track) async {
           requested.add(track.id);
           return 'Lyrics of ${track.id}';
         },
@@ -258,8 +258,8 @@ void main() {
     test('own lyrics are used without asking the internet', () async {
       var asked = 0;
       final player = createPlayer(
-        own: (_, _) async => 'From the tag',
-        online: (_, _) async {
+        own: (_) async => 'From the tag',
+        online: (_) async {
           asked++;
           return 'From the internet';
         },
@@ -274,7 +274,7 @@ void main() {
     });
 
     test('a track without lyrics is looked up online and the source is credited', () async {
-      final player = createPlayer(own: nothing, online: (_, _) async => 'From the internet');
+      final player = createPlayer(own: nothing, online: (_) async => 'From the internet');
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(await waitUntil(() => player.hasLyrics), isTrue);
@@ -288,7 +288,7 @@ void main() {
       var asked = 0;
       final player = createPlayer(
         own: nothing,
-        online: (_, _) async {
+        online: (_) async {
           asked++;
           return 'x';
         },
@@ -319,7 +319,7 @@ void main() {
 
     test('while looking the panel shows a note, not the empty message', () async {
       final pending = Completer<String?>();
-      final player = createPlayer(own: nothing, online: (_, _) => pending.future);
+      final player = createPlayer(own: nothing, online: (_) => pending.future);
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(player.isLoadingLyrics, isTrue);
@@ -333,7 +333,7 @@ void main() {
       var asked = 0;
       final player = createPlayer(
         own: nothing,
-        online: (_, _) async {
+        online: (_) async {
           asked++;
           throw const LyricsLookupException('offline');
         },
@@ -351,32 +351,28 @@ void main() {
     });
 
     test('a failing own provider does not stop the internet lookup', () async {
-      final player = createPlayer(
-        own: (_, _) async => throw StateError('disk on fire'),
-        online: (_, _) async => 'Online',
-      );
+      final player = createPlayer(own: (_) async => throw StateError('disk on fire'), online: (_) async => 'Online');
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(await waitUntil(() => player.hasLyrics), isTrue);
       expect(player.lyricsOrigin, LyricsOrigin.online);
     });
 
-    test('a slow lookup for a track that is no longer playing is ignored, and cancelled', () async {
+    test('a slow lookup for a track that is no longer playing is ignored', () async {
       final slow = Completer<String?>();
-      CancellationToken? firstToken;
+      var asked = false;
       final player = createPlayer(
         own: nothing,
-        online: (track, ct) {
+        online: (track) {
           if (track.id != 't1') return Future.value('Lyrics of t2');
-          firstToken = ct;
+          asked = true;
           return slow.future;
         },
       );
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => firstToken != null), isTrue);
+      expect(await waitUntil(() => asked), isTrue);
       player.currentTrack = TestSupport.makeTrack('t2', 'Two');
-      expect(firstToken!.isCancelled, isTrue);
       expect(await waitUntil(() => player.plainLyricsText == 'Lyrics of t2'), isTrue);
 
       slow.complete('Lyrics of t1 (late)');
@@ -388,7 +384,7 @@ void main() {
     test('time-synced lyrics highlight the line at the position', () async {
       final driver = FakeAudioDriver();
       final player = PlayerViewModel(TestSupport.createEngine(driver), createLibrary())
-        ..lyricsProvider = ((_, _) async => '[00:01.00]One\n[00:05.00]Two\n[00:09.00]Three');
+        ..lyricsProvider = ((_) async => '[00:01.00]One\n[00:05.00]Two\n[00:09.00]Three');
       player.isQueueOpen = true;
       player.playQueue([TestSupport.makeTrack('t1', 'Song')]);
       expect(await waitUntil(() => player.hasSyncedLyrics), isTrue);

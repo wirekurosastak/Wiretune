@@ -55,17 +55,6 @@ class RemoteDevice {
   /// What it plays, and when that arrived here (the position counts on from then while it plays).
   RemotePlayback? playback;
   DateTime? playbackReceivedAt;
-
-  /// Its position now: the one it last told, moved on by the time since while it plays.
-  Duration positionAt(DateTime now) {
-    final state = playback;
-    if (state == null) return Duration.zero;
-    final received = playbackReceivedAt;
-    var position = state.position;
-    if (state.playing && received != null) position += now.difference(received);
-    final length = state.track?.duration ?? Duration.zero;
-    return length > Duration.zero && position > length ? length : position;
-  }
 }
 
 /// What a player plays, and how, as it tells the other players of the account.

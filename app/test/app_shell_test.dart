@@ -205,7 +205,7 @@ void main() {
       return createMainViewModel(library, TestSupport.createEngine(driver));
     }))!;
     const line = "(La, la, la) I'm caught up in the rapture of love, nothing else can compare";
-    vm.player.lyricsProvider = (_, _) async => '[00:00.50]$line\n[00:30.00]When I feel the magic of you';
+    vm.player.lyricsProvider = (_) async => '[00:00.50]$line\n[00:30.00]When I feel the magic of you';
     await tester.pumpWidget(WiretuneApp(vm: vm));
 
     vm.player.playQueue(vm.library.tracks);

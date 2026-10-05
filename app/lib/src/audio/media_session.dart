@@ -330,13 +330,7 @@ class WiretuneMediaSession extends BaseAudioHandler {
   Future<void> playFromSearch(String query, [Map<String, dynamic>? extras]) async {
     final library = _vm.library;
     final q = query.trim().toLowerCase();
-    if (q.isEmpty) {
-      if (library.tracks.isNotEmpty) {
-        _vm.player.setShuffle(true);
-        _vm.player.playQueue(library.tracks);
-      }
-      return;
-    }
+    if (q.isEmpty) return _vm.player.shuffleQueue(library.tracks);
     final artist = library.artists.where((a) => a.name.toLowerCase() == q).firstOrNull;
     if (artist != null) return _vm.player.playQueue(artist.tracks);
     final album = library.albums.where((a) => a.title.toLowerCase() == q).firstOrNull;

@@ -4,7 +4,7 @@ import 'package:path/path.dart' as p;
 
 import 'app_paths.dart';
 
-enum LogLevel { trace, debug, info, warn, error }
+enum LogLevel { debug, info, warn, error }
 
 /// The log of the player or the server: `[time] [LEVEL] [category] message` lines on the console and in a file that is
 /// moved to `.1` at 10 MiB. Every line passes through [redact], because stream URLs carry tokens.
@@ -17,8 +17,8 @@ abstract final class WiretuneLog {
   static int _bytesWritten = 0;
   static bool _initAttempted = false;
 
-  /// Info by default: Debug lines carry paths, server addresses and device names. `WIRETUNE_LOG_LEVEL` (Trace, Debug,
-  /// Info, Warn, Error) raises or lowers it for a troubleshooting session.
+  /// Info by default: Debug lines carry paths, server addresses and device names. `WIRETUNE_LOG_LEVEL` (debug, info,
+  /// warn, error) raises or lowers it for a troubleshooting session.
   static LogLevel minimumLevel = _levelFromEnvironment() ?? LogLevel.info;
 
   /// Whether lines are also printed to the console (the Flutter app turns it off in release builds).
@@ -138,7 +138,6 @@ abstract final class WiretuneLog {
   /// Replaces the value of every `token=` query parameter with `***`.
   static String redact(String text) => text.replaceAll(_tokenPattern, 'token=***');
 
-  static void trace(String category, String message) => log(LogLevel.trace, category, message);
   static void debug(String category, String message) => log(LogLevel.debug, category, message);
   static void info(String category, String message) => log(LogLevel.info, category, message);
   static void warn(String category, String message) => log(LogLevel.warn, category, message);

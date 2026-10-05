@@ -46,7 +46,7 @@ class MainViewModel extends ChangeNotifier {
       ..lyricsProvider = _ownLyrics
       ..isOnlineLyricsEnabled = _useOnlineLyrics
       ..attachRemote(this.remote);
-    if (onlineLyrics != null) player.onlineLyricsProvider = (track, ct) => onlineLyrics.find(track);
+    if (onlineLyrics != null) player.onlineLyricsProvider = onlineLyrics.find;
 
     tracks = TracksViewModel(library, player);
     albums = AlbumsViewModel(library, player)..onNavWave = triggerNavWave;
@@ -563,7 +563,7 @@ class MainViewModel extends ChangeNotifier {
   );
 
   /// The lyrics a track carries: a local file's tags, a downloaded copy's, or the server's copy of them.
-  Future<String?> _ownLyrics(Track track, CancellationToken ct) async {
+  Future<String?> _ownLyrics(Track track) async {
     if (track.isLocal) return track.filePath.isEmpty ? null : MetadataScanner.readLyrics(track.filePath);
     final copy = downloadService.localCopy(track);
     return copy != null ? MetadataScanner.readLyrics(copy) : session.getLyrics(track);

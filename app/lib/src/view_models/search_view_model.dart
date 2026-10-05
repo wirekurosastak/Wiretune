@@ -13,7 +13,6 @@ class BestMatch {
     required this.subtitle,
     required this.meta,
     required this.coverPath,
-    required this.canOpen,
     required this.play,
     required this.open,
   });
@@ -23,8 +22,9 @@ class BestMatch {
   final String subtitle;
   final String meta;
   final String? coverPath;
-  final bool canOpen;
   final void Function() play;
+
+  /// What a tap on the card does: an artist or an album opens, a track plays.
   final void Function() open;
 
   String get typeLabel => Localizer.get(switch (kind) {
@@ -124,7 +124,6 @@ class SearchViewModel extends ChangeNotifier {
     meta:
         '${Localizer.format('AlbumCount', [artist.albumCount])} • ${Localizer.format('TrackCount', [artist.trackCount])}',
     coverPath: artist.picturePath,
-    canOpen: true,
     play: () {
       if (artist.tracks.isNotEmpty) _player.playQueue(artist.tracks);
     },
@@ -139,7 +138,6 @@ class SearchViewModel extends ChangeNotifier {
         ? '${album.year} • ${Localizer.format('TrackCount', [album.trackCount])}'
         : Localizer.format('TrackCount', [album.trackCount]),
     coverPath: album.coverArtPath,
-    canOpen: true,
     play: () {
       if (album.tracks.isNotEmpty) _player.playQueue(album.tracks);
     },
@@ -147,22 +145,15 @@ class SearchViewModel extends ChangeNotifier {
   );
 
   BestMatch _trackMatch(Track track) {
-    final album = _library.getAlbumForTrack(track);
+    void play() => _player.playQueue([track], track);
     return BestMatch(
       kind: BestMatchKind.track,
       title: track.title,
       subtitle: '${track.artist} • ${track.album}',
-      meta: '${track.formattedDuration} • ${track.format.qualityLabel}',
+      meta: '${track.formattedDuration} • ${track.format.tagSpec}',
       coverPath: track.coverArtPath,
-      canOpen: false,
-      play: () => _player.playQueue([track], track),
-      open: () {
-        if (album != null) {
-          _openAlbum(album);
-        } else {
-          _player.playQueue([track], track);
-        }
-      },
+      play: play,
+      open: play,
     );
   }
 

@@ -146,7 +146,9 @@ class _QueueRowState extends State<_QueueRow> {
                                 color: const Color(0x99000000),
                                 borderRadius: BorderRadius.circular(Radii.small),
                               ),
-                              child: const Center(child: EqualizerBars(color: Colors.white)),
+                              child: Center(
+                                child: EqualizerBars(playing: player.isPlaying, color: Colors.white),
+                              ),
                             )
                           else
                             Align(

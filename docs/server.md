@@ -34,7 +34,7 @@ For a server that stays up, build the standalone executable with `dart tool/buil
 | `--scan-interval <minutes>` | `30` | Background rescans; `0` turns them off. |
 | `--setup-code <code>` | random | The code that creates the first account; without it, a new one at every start. Case, spaces and dashes don't matter. |
 | `--trust-proxy` | off | Take each client's address from `X-Forwarded-For`; only behind a reverse proxy ([below](#reverse-proxy-and-tls)). |
-| `--log-level <level>` | `info` | `trace`, `debug`, `info`, `warn` or `error`. |
+| `--log-level <level>` | `info` | `debug`, `info`, `warn` or `error`. |
 
 The server speaks plain HTTP; TLS is a proxy's job.
 

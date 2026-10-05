@@ -141,7 +141,7 @@ class WiretuneServer {
   int get port => _http!.port;
 
   /// Opens the database and the library, then starts listening and scanning.
-  static Future<WiretuneServer> start(ServerOptions options, {bool listen = true}) async {
+  static Future<WiretuneServer> start(ServerOptions options) async {
     final dataDirectory = AppPaths.getDataDirectory(overridePath: options.dataDirectory, subdirectory: 'Server');
     WiretuneLog.initialize(path: p.join(dataDirectory, 'wiretune-server.log'), level: options.logLevel);
     WiretuneLog.info('Server', '=== Starting the Wiretune server ===');
@@ -198,13 +198,11 @@ class WiretuneServer {
       );
     }
 
-    if (listen) {
-      final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
-      http.autoCompress = false; // JSON is compressed by the handler, audio never
-      http.idleTimeout = const Duration(seconds: 120);
-      final host = options.host.contains(':') ? '[${options.host}]' : options.host;
-      WiretuneLog.info('Server', 'Listening on http://$host:${http.port}');
-    }
+    final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
+    http.autoCompress = false; // JSON is compressed by the handler, audio never
+    http.idleTimeout = const Duration(seconds: 120);
+    final host = options.host.contains(':') ? '[${options.host}]' : options.host;
+    WiretuneLog.info('Server', 'Listening on http://$host:${http.port}');
     scanner.start();
     return server;
   }

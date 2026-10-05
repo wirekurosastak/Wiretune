@@ -48,8 +48,6 @@ key.properties
 *.db-wal
 *.db-shm
 *.log
-# The database the C# server made, which server/test/csharp_compatibility_test.dart opens.
-!/server/test/fixtures/*.db
 
 ## Editors and IDEs
 .idea/

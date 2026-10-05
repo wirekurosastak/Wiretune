@@ -129,8 +129,9 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
   decoded at 64 px and blurred once into a 96 px bitmap, so nothing is blurred per frame, and it turns only on a
   desktop while music plays (not with the system's reduced motion).
 - **Battery**: on a phone or tablet (`AppPlatform.isMobile`) nothing animates on its own: the backdrop doesn't turn,
-  the logo and the player's cover don't breathe, and the progress follows `PlayerViewModel.elapsedSeconds`, so music
-  that plays on draws a frame a second; controlling another device, the position is counted on at that same pace.
+  the logo and the player's cover don't breathe, the bars beside the playing track don't bounce, and the progress
+  follows `PlayerViewModel.elapsedSeconds`, so music that plays on draws a frame a second; controlling another device,
+  the position is counted on at that same pace.
   `WiretuneMediaSession` publishes changes, never a position that keeps pace: the system moves its own progress on from
   the last one.
 - **Lyrics** load only while they're on screen: the file's own (or the server's `/api/lyrics`), then LRCLIB if

@@ -9,9 +9,7 @@ import '../view_models/player_view_model.dart';
 
 /// Shuffle, previous, play/pause, next, repeat. Shuffle and repeat take the accent and a dot under them while on.
 class TransportControls extends StatelessWidget {
-  const TransportControls({super.key, this.large = false});
-
-  final bool large;
+  const TransportControls({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +18,8 @@ class TransportControls extends StatelessWidget {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        final small = large ? 26.0 : 19.0;
-        final skip = large ? 38.0 : 24.0;
+        const small = 19.0;
+        const skip = 24.0;
         Widget toggle(IconData icon, String tip, bool on, VoidCallback onPressed) => IconButton(
           tooltip: context.tr(tip),
           iconSize: small,
@@ -51,23 +49,23 @@ class TransportControls extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             toggle(Icons.shuffle_rounded, 'TipShuffle', player.isShuffle, player.toggleShuffle),
-            SizedBox(width: large ? 8 : 4),
+            const SizedBox(width: 4),
             IconButton(
               tooltip: context.tr('TipPrevious'),
               iconSize: skip,
               onPressed: player.previousTrack,
               icon: const Icon(Icons.skip_previous_rounded),
             ),
-            SizedBox(width: large ? 14 : 8),
-            PlayButton(size: large ? 72 : 42),
-            SizedBox(width: large ? 14 : 8),
+            const SizedBox(width: 8),
+            const PlayButton(),
+            const SizedBox(width: 8),
             IconButton(
               tooltip: context.tr('TipNext'),
               iconSize: skip,
               onPressed: player.nextTrack,
               icon: const Icon(Icons.skip_next_rounded),
             ),
-            SizedBox(width: large ? 8 : 4),
+            const SizedBox(width: 4),
             toggle(
               player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
               'TipRepeat',
@@ -321,7 +319,7 @@ class VolumeControl extends StatelessWidget {
                   : (player.volume < 50 && !player.isVolumeLocked
                         ? Icons.volume_down_rounded
                         : Icons.volume_up_rounded),
-              color: player.isVolumeActive ? colors.accent : colors.textMuted,
+              color: player.isVolumeDisabledOrMuted ? colors.textMuted : colors.accent,
             ),
           ),
           SizedBox(

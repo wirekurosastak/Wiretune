@@ -3,16 +3,19 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../platform.dart';
 import '../theme/app_theme.dart';
 
-/// The four bouncing bars that mark the track that is playing (14 px tall, in the accent colour). Each bar moves on its
-/// own period, so together they never repeat in step.
+/// The four bars that mark the track the player is on (14 px tall, in the accent colour). While it plays ([playing])
+/// they bounce, each bar on its own period, so together they never repeat in step. Paused, and always on a phone or
+/// tablet, they stand still: nothing animates on its own there, as every frame costs battery.
 class EqualizerBars extends StatefulWidget {
-  const EqualizerBars({super.key, this.height = 14, this.color});
+  const EqualizerBars({super.key, required this.playing, this.color});
 
-  final double height;
+  final bool playing;
   final Color? color;
 
+  static const double _height = 14;
   static const int _barCount = 4;
   static const double _barWidth = 2.5;
   static const double _barGap = 2;
@@ -22,9 +25,29 @@ class EqualizerBars extends StatefulWidget {
 }
 
 class _EqualizerBarsState extends State<EqualizerBars> with SingleTickerProviderStateMixin {
-  late final Ticker _ticker = createTicker((_) => _time.value = DateTime.now().millisecondsSinceEpoch / 1000.0)
-    ..start();
+  late final Ticker _ticker = createTicker((_) => _time.value = DateTime.now().millisecondsSinceEpoch / 1000.0);
   final ValueNotifier<double> _time = ValueNotifier(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _animate();
+  }
+
+  @override
+  void didUpdateWidget(EqualizerBars old) {
+    super.didUpdateWidget(old);
+    _animate();
+  }
+
+  void _animate() {
+    final bounce = widget.playing && !AppPlatform.current.isMobile;
+    if (bounce && !_ticker.isActive) {
+      _ticker.start();
+    } else if (!bounce && _ticker.isActive) {
+      _ticker.stop();
+    }
+  }
 
   @override
   void dispose() {
@@ -38,7 +61,7 @@ class _EqualizerBarsState extends State<EqualizerBars> with SingleTickerProvider
     child: CustomPaint(
       size: Size(
         EqualizerBars._barCount * EqualizerBars._barWidth + (EqualizerBars._barCount - 1) * EqualizerBars._barGap,
-        widget.height,
+        EqualizerBars._height,
       ),
       painter: _BarsPainter(_time, widget.color ?? context.colors.accent),
     ),

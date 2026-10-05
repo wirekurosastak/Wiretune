@@ -6,12 +6,9 @@ import 'package:wiretune_core/wiretune_core.dart';
 /// Plays on Tizen TVs through the platform's media player (the Tizen implementation of audioplayers). The TV decides
 /// the output; there is no device choice and no exclusive mode, and what decodes depends on the TV's firmware.
 class TizenAudioDriver with AudioDriverEvents implements AudioDriver {
-  TizenAudioDriver({AudioplayersPlatformInterface? platform})
-    : _platform = platform ?? AudioplayersPlatformInterface.instance;
-
   static const String _playerId = 'wiretune-player';
 
-  final AudioplayersPlatformInterface _platform;
+  final AudioplayersPlatformInterface _platform = AudioplayersPlatformInterface.instance;
   Future<void>? _created;
   StreamSubscription<AudioEvent>? _events;
   Timer? _positionTimer;

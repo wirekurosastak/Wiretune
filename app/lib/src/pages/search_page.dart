@@ -218,7 +218,7 @@ class _BestMatchCard extends StatelessWidget {
     return MetricCard(
       accent: typeColor,
       padding: 20,
-      onTap: match.canOpen ? match.open : match.play,
+      onTap: match.open,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

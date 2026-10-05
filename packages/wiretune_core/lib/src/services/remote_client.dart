@@ -85,7 +85,6 @@ class RemoteClient {
 
   String get deviceId => _deviceId;
   String get deviceName => _deviceName;
-  DeviceKind get deviceKind => _deviceKind;
   bool get isEnabled => _enabled;
   bool get isConnected => _channel != null;
 

@@ -8,12 +8,11 @@ import 'devices.dart';
 
 /// A page's title block: a big title, a line of details, and the page's actions.
 class PageHeader extends StatelessWidget {
-  const PageHeader({super.key, required this.title, this.subtitle, this.actions = const [], this.leading});
+  const PageHeader({super.key, required this.title, this.subtitle, this.actions = const []});
 
   final String title;
   final String? subtitle;
   final List<Widget> actions;
-  final Widget? leading;
 
   @override
   Widget build(BuildContext context) {
@@ -32,40 +31,32 @@ class PageHeader extends StatelessWidget {
         spacing: 16,
         runSpacing: 12,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (leading != null) ...[leading!, const SizedBox(width: 12)],
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 34,
-                        height: 1.1,
-                        letterSpacing: -1.0,
-                        fontWeight: FontWeight.w800,
-                        color: colors.textMain,
-                      ),
-                    ),
-                    if (subtitle != null && subtitle!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          subtitle!,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
-                        ),
-                      ),
-                  ],
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 34,
+                  height: 1.1,
+                  letterSpacing: -1.0,
+                  fontWeight: FontWeight.w800,
+                  color: colors.textMain,
                 ),
               ),
+              if (subtitle != null && subtitle!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    subtitle!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
+                  ),
+                ),
             ],
           ),
           if (actions.isNotEmpty) Wrap(spacing: 10, runSpacing: 8, children: actions),
@@ -135,21 +126,11 @@ class PlayShuffleButtons extends StatelessWidget {
 
 /// A message in place of a list that has nothing to show.
 class EmptyState extends StatelessWidget {
-  const EmptyState({
-    super.key,
-    required this.icon,
-    required this.title,
-    this.hint,
-    this.actionLabel,
-    this.onAction,
-    this.actions = const [],
-  });
+  const EmptyState({super.key, required this.icon, required this.title, this.hint, this.actions = const []});
 
   final IconData icon;
   final String title;
   final String? hint;
-  final String? actionLabel;
-  final VoidCallback? onAction;
 
   /// Buttons under the message, side by side (wrapping on a narrow screen).
   final List<Widget> actions;
@@ -207,10 +188,6 @@ class EmptyState extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13.5, height: 1.45, color: colors.textMuted),
                 ),
-              ],
-              if (actionLabel != null && onAction != null) ...[
-                const SizedBox(height: 22),
-                FilledButton(onPressed: onAction, child: Text(actionLabel!)),
               ],
               if (actions.isNotEmpty) ...[
                 const SizedBox(height: 22),
@@ -320,11 +297,10 @@ class LinkText extends StatelessWidget {
 
 /// A small pill tinted with its colour: "ARTIST", "ALBUM", "TRACK", a counter.
 class TagBadge extends StatelessWidget {
-  const TagBadge(this.text, {super.key, required this.color, this.fontSize = 10});
+  const TagBadge(this.text, {super.key, required this.color});
 
   final String text;
   final Color color;
-  final double fontSize;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -337,7 +313,7 @@ class TagBadge extends StatelessWidget {
     child: Text(
       text,
       maxLines: 1,
-      style: TextStyle(fontSize: fontSize, letterSpacing: 0.8, height: 1.4, fontWeight: FontWeight.w800, color: color),
+      style: TextStyle(fontSize: 10, letterSpacing: 0.8, height: 1.4, fontWeight: FontWeight.w800, color: color),
     ),
   );
 }

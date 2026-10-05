@@ -65,17 +65,6 @@ class AudioFormat {
       ? '${codec.toUpperCase()} ${bitrateKbps}kbps'
       : '${codec.toUpperCase()} ${bitsPerSample}bit/${khz(sampleRate)}kHz';
 
-  String get qualityLabel {
-    if (!isLossless) return '${codec.toUpperCase()} • $bitrateKbps kbps';
-    if (sampleRate >= 192000 && bitsPerSample >= 24) return 'Ultra Hi-Res Studio Master (192kHz/24b)';
-    if (sampleRate >= 96000 && bitsPerSample >= 24) return 'Hi-Res Studio Master (96kHz/24b)';
-    if (sampleRate >= 88200 && bitsPerSample >= 24) return 'Hi-Res Audio (88.2kHz/24b)';
-    if (sampleRate == 48000 && bitsPerSample >= 24) return 'Enhanced Studio (48kHz/24b)';
-    if (sampleRate == 44100 && bitsPerSample >= 24) return 'Hi-Res 24-bit Lossless (44.1kHz/24b)';
-    if (sampleRate == 44100 && bitsPerSample == 16) return 'CD Quality Lossless (16-bit / 44.1 kHz)';
-    return '$bitsPerSample-bit / ${khz(sampleRate)} kHz';
-  }
-
   /// A sample rate in kHz with at most one decimal: `44.1`, `96`, `2822.4`.
   static String khz(int sampleRate) {
     final text = (sampleRate / 1000.0).toStringAsFixed(1);

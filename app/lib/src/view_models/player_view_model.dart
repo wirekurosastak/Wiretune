@@ -44,7 +44,7 @@ class QueueItem {
   int get displayIndex => index + 1;
 }
 
-typedef LyricsProvider = Future<String?> Function(Track track, CancellationToken ct);
+typedef LyricsProvider = Future<String?> Function(Track track);
 
 /// The player: the queue, shuffle and repeat, the transport, volume and modes, and the lyrics of the current track.
 ///
@@ -165,7 +165,6 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isMuted => isRemote ? (_remoteState?.muted ?? false) : _muted;
   bool get isShuffle => isRemote ? (_remoteState?.shuffle ?? false) : _shuffle;
   RepeatMode get repeatMode => isRemote ? (_remoteState?.repeat ?? RepeatMode.off) : _repeat;
-  set repeatMode(RepeatMode value) => setRepeatMode(value);
 
   bool isExclusiveMode = false;
   bool isBitperfect = false;
@@ -181,7 +180,6 @@ class PlayerViewModel extends ChangeNotifier {
   /// Bit-perfect pins the volume at 100 % (also on the device being controlled).
   bool get isVolumeLocked => isRemote ? (_remoteState?.volumeLocked ?? false) : isBitperfect;
   bool get isVolumeDisabledOrMuted => isMuted || isVolumeLocked;
-  bool get isVolumeActive => !isMuted && !isVolumeLocked;
   String get volumeToolTip =>
       Localizer.get(isMuted ? 'VolumeUnmute' : (isVolumeLocked ? 'VolumeLocked' : 'VolumeMute'));
 
@@ -339,6 +337,13 @@ class PlayerViewModel extends ChangeNotifier {
     }
     _playQueueInternal(tracks, startTrack);
     notifyListeners();
+  }
+
+  /// Switches shuffle on and plays [tracks] from a random one: the "Shuffle" button of a list.
+  void shuffleQueue(List<Track> tracks) {
+    if (tracks.isEmpty) return;
+    setShuffle(true);
+    playQueue(tracks);
   }
 
   void _playQueueInternal(Iterable<Track> tracks, Track? startTrack, {Duration start = Duration.zero}) {
@@ -536,8 +541,6 @@ class PlayerViewModel extends ChangeNotifier {
       }
     });
   }
-
-  set positionSeconds(double seconds) => seekTo(Duration(microseconds: (seconds * 1e6).round()));
 
   void setVolume(double value) {
     final level = value.clamp(0.0, 100.0);
@@ -1125,7 +1128,7 @@ class PlayerViewModel extends ChangeNotifier {
     final own = lyricsProvider;
     if (own != null) {
       try {
-        text = await own(track, ct);
+        text = await own(track);
       } catch (e) {
         if (!ct.isCancelled) WiretuneLog.debug('PlayerViewModel', "Lyrics unavailable for '${track.title}': $e");
       }
@@ -1139,7 +1142,7 @@ class PlayerViewModel extends ChangeNotifier {
       final online = onlineLyricsProvider;
       if (_isOnlineLyricsEnabled && online != null) {
         try {
-          text = await online(track, ct);
+          text = await online(track);
           if (text != null && text.trim().isNotEmpty) {
             origin = LyricsOrigin.online;
           } else {

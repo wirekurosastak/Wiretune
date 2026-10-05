@@ -1,0 +1,10 @@
+# The server image (server/Dockerfile) needs server/ and packages/wiretune_core/ only.
+*
+!server/
+!packages/wiretune_core/
+**/.dart_tool/
+**/build/
+**/*.db
+**/*.db-wal
+**/*.db-shm
+**/*.log

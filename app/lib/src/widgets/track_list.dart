@@ -44,14 +44,12 @@ class TrackSliver extends StatefulWidget {
     required this.tracks,
     required this.onPlay,
     this.kind = TrackTableKind.tracks,
-    this.sortable = true,
     this.horizontalPadding,
   });
 
   final List<Track> tracks;
   final void Function(Track track) onPlay;
   final TrackTableKind kind;
-  final bool sortable;
   final double? horizontalPadding;
 
   /// The heights of the wide table's header and of its rows.
@@ -188,7 +186,7 @@ class _TrackSliverState extends State<TrackSliver> {
           ],
         ),
       );
-      final content = widget.sortable && column != null
+      final content = column != null
           ? InkWell(borderRadius: BorderRadius.circular(Radii.small), onTap: () => _sortBy(column), child: text)
           : text;
       final sized = SizedBox(height: TrackSliver.tableHeaderHeight - 8, child: content);
@@ -245,7 +243,7 @@ class _TableRowState extends State<_TableRow> {
     final Widget lead;
     if (state._leadIsNumber) {
       lead = playing
-          ? const EqualizerBars()
+          ? EqualizerBars(playing: vm.player.isPlaying)
           : _hover
           ? Icon(Icons.play_arrow_rounded, size: 22, color: colors.textMain)
           : Text(
@@ -539,7 +537,7 @@ class _Cover extends StatelessWidget {
             decoration: BoxDecoration(color: const Color(0x99000000), borderRadius: BorderRadius.circular(radius)),
             child: Center(
               child: playing
-                  ? const EqualizerBars(color: Colors.white)
+                  ? EqualizerBars(playing: context.vm.player.isPlaying, color: Colors.white)
                   : const Icon(Icons.play_arrow_rounded, size: 22, color: Colors.white),
             ),
           ),
@@ -627,7 +625,7 @@ class _PhoneRow extends StatelessWidget {
                   height: 48,
                   child: Center(
                     child: playing
-                        ? const EqualizerBars()
+                        ? EqualizerBars(playing: context.vm.player.isPlaying)
                         : Text(
                             track.displayTrackNumber,
                             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.textMuted),

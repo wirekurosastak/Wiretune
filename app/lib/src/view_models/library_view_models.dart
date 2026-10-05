@@ -37,11 +37,7 @@ class TracksViewModel extends ChangeNotifier {
     if (displayedTracks.isNotEmpty) _player.playQueue(displayedTracks);
   }
 
-  void shuffleAll() {
-    if (displayedTracks.isEmpty) return;
-    _player.setShuffle(true);
-    _player.playQueue(displayedTracks);
-  }
+  void shuffleAll() => _player.shuffleQueue(displayedTracks);
 
   @override
   void dispose() {
@@ -242,12 +238,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
     if (track != null && selectedAlbum != null) _player.playQueue(selectedAlbum!.tracks, track);
   }
 
-  void shuffleAlbum([Album? album]) {
-    final target = album ?? selectedAlbum;
-    if (target == null || target.tracks.isEmpty) return;
-    _player.setShuffle(true);
-    _player.playQueue(target.tracks);
-  }
+  void shuffleAlbum() => _player.shuffleQueue(selectedAlbum?.tracks ?? const []);
 
   @override
   void dispose() {
@@ -258,8 +249,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
 
 /// The Artists section: the artist grid and one artist's page.
 class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
-  ArtistsViewModel(this._library, this._player, {ArtistPictureService? pictures})
-    : _pictures = pictures ?? ArtistPictureService.instance {
+  ArtistsViewModel(this._library, this._player) {
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) => refreshArtists()),
       _pictures.pictureResolved.listen((_) => notifyListeners()),
@@ -269,7 +259,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
 
   final LibraryService _library;
   final PlayerViewModel _player;
-  final ArtistPictureService _pictures;
+  final ArtistPictureService _pictures = ArtistPictureService.instance;
   final List<void Function()> _unsubscribers = [];
 
   List<Artist> displayedArtists = const [];
@@ -378,12 +368,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     _player.playQueue(target.tracks);
   }
 
-  void shuffleArtist([Artist? artist]) {
-    final target = artist ?? selectedArtist;
-    if (target == null || target.tracks.isEmpty) return;
-    _player.setShuffle(true);
-    _player.playQueue(target.tracks);
-  }
+  void shuffleArtist() => _player.shuffleQueue(selectedArtist?.tracks ?? const []);
 
   void playArtistTrack(Track? track) {
     if (track != null && selectedArtist != null) _player.playQueue(selectedArtist!.tracks, track);
@@ -432,11 +417,7 @@ class FavoritesViewModel extends ChangeNotifier {
     if (favoriteTracks.isNotEmpty) _player.playQueue(favoriteTracks);
   }
 
-  void shuffleAll() {
-    if (favoriteTracks.isEmpty) return;
-    _player.setShuffle(true);
-    _player.playQueue(favoriteTracks);
-  }
+  void shuffleAll() => _player.shuffleQueue(favoriteTracks);
 
   Future<void> removeFavorite(Track? track) async {
     if (track == null) return;
@@ -659,14 +640,7 @@ class PlaylistsViewModel extends ChangeNotifier {
     if (tracks.isNotEmpty) _player.playQueue(tracks);
   }
 
-  void shufflePlaylist([Playlist? playlist]) {
-    final target = playlist ?? selectedPlaylist;
-    if (target == null) return;
-    final tracks = _library.getPlaylistTracks(target);
-    if (tracks.isEmpty) return;
-    _player.setShuffle(true);
-    _player.playQueue(tracks);
-  }
+  void shufflePlaylist() => _player.shuffleQueue(selectedPlaylistTracks);
 
   void playTrack(Track? track) {
     if (track != null) _player.playQueue(selectedPlaylistTracks, track);

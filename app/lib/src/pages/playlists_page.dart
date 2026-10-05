@@ -28,8 +28,7 @@ class PlaylistsPage extends StatelessWidget {
             icon: Icons.queue_music,
             title: context.tr('EmptyPlaylistsTitle'),
             hint: context.tr('EmptyPlaylistsHint'),
-            actionLabel: context.tr('PlaylistNew'),
-            onAction: playlists.openCreateDialog,
+            actions: [FilledButton(onPressed: playlists.openCreateDialog, child: Text(context.tr('PlaylistNew')))],
           );
         }
         return CustomScrollView(

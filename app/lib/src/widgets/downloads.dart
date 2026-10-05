@@ -46,7 +46,7 @@ class DownloadListButton extends StatelessWidget {
                 SizedBox.square(
                   dimension: dimension,
                   child: CircularProgressIndicator(
-                    value: total == 0 ? 0 : done / total,
+                    value: done / total,
                     strokeWidth: 2.5,
                     color: colors.accent,
                     backgroundColor: colors.glassBorder,

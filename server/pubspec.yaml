@@ -14,7 +14,6 @@ dependencies:
   crypto: ^3.0.7
   path: ^1.9.1
   shelf: ^1.4.2
-  sqlite3: ^3.7.0
   wiretune_core:
     path: ../packages/wiretune_core
 

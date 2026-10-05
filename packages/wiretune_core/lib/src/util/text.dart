@@ -172,13 +172,13 @@ int compareText(String a, String b) {
   return secondary != 0 ? secondary : a.compareTo(b);
 }
 
-/// Case-insensitive equality ("OrdinalIgnoreCase").
+/// Whether [a] and [b] are equal, ignoring case.
 bool equalsIgnoreCase(String? a, String? b) {
   if (a == null || b == null) return a == b;
   return a.length == b.length && a.toLowerCase() == b.toLowerCase();
 }
 
-/// Case-insensitive containment ("Contains(..., OrdinalIgnoreCase)").
+/// Whether [text] contains [part], ignoring case.
 bool containsIgnoreCase(String? text, String part) => text != null && text.toLowerCase().contains(part.toLowerCase());
 
 final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{Nd}]', unicode: true);

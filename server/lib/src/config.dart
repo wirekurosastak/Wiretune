@@ -57,7 +57,7 @@ class ServerOptions {
       help: 'The code for creating the first account. Default: a random one.',
     )
     ..addFlag('trust-proxy', negatable: false, help: 'Take the client address from X-Forwarded-For (behind a proxy).')
-    ..addOption('log-level', valueHelp: 'level', defaultsTo: 'info', help: 'trace, debug, info, warn or error.')
+    ..addOption('log-level', valueHelp: 'level', defaultsTo: 'info', help: 'debug, info, warn or error.')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.');
 
   /// Reads the options from [results], falling back to the `WIRETUNE_*` variables of [environment]. Throws
@@ -91,9 +91,7 @@ class ServerOptions {
       trustProxy: results.flag('trust-proxy') || const {'1', 'true', 'yes'}.contains(fromEnv('trust-proxy')),
       logLevel:
           LogLevel.values.asNameMap()[level.toLowerCase()] ??
-          (throw FormatException(
-            '--log-level (WIRETUNE_LOG_LEVEL) must be trace, debug, info, warn or error, not "$level".',
-          )),
+          (throw FormatException('--log-level (WIRETUNE_LOG_LEVEL) must be debug, info, warn or error, not "$level".')),
     );
   }
 
