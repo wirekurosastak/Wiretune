@@ -17,6 +17,7 @@ import '../pages/search_page.dart';
 import '../pages/section_page.dart';
 import '../widgets/ambient.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/devices.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/quality_tag.dart';
@@ -437,8 +438,9 @@ class _HeaderPills extends StatelessWidget {
             ],
           ),
         );
-        // The mode pills exist where the modes do: on a desktop, outside the compact layout.
-        final modes = !compact && AppPlatform.current.isDesktop;
+        // The mode pills exist where the modes do: on a desktop, outside the compact layout, and not while the player
+        // shows another device (the modes are this one's).
+        final modes = !compact && AppPlatform.current.isDesktop && !player.isRemote;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1059,6 +1061,7 @@ class _PlayerBar extends StatelessWidget {
                                   style: TextStyle(fontSize: 12, color: colors.textMuted),
                                 ),
                               ),
+                            if (player.isRemote) ...[const SizedBox(height: 3), const PlayingOnLabel(fontSize: 11)],
                           ],
                         ),
                       ),
@@ -1083,8 +1086,10 @@ class _PlayerBar extends StatelessWidget {
                     // Spectrum, quality and volume, as many as fit: the volume first, then the full quality tag (the
                     // short one when the full one doesn't fit), then the spectrum in what is left, down to 80 px.
                     final scale = MediaQuery.textScalerOf(context).scale(1);
+                    // The devices button (while there are other devices to reach) takes its place first.
+                    final devices = player.canReachDevices || player.isRemote;
                     final volume = platform.isDesktop && constraints.maxWidth >= 12 + 36 + 8 + 95;
-                    var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0);
+                    var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0);
                     final showTag = !compact && track != null && room >= 90 * scale;
                     final fullTag = showTag && room >= 125 * scale;
                     if (showTag) room -= (fullTag ? 125 : 90) * scale + 8;
@@ -1117,6 +1122,7 @@ class _PlayerBar extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                           ],
+                          if (devices) const DevicesButton(iconSize: 19, dimension: 40),
                           if (volume) const VolumeControl(sliderWidth: 95),
                         ],
                       ),

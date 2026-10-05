@@ -182,6 +182,30 @@ void main() {
     expect(library.getPlaylistTracks(playlist).single.id, 'loc-jude');
   });
 
+  test('another device names a matched track by its server ID, and this one finds its local file by it', () async {
+    final repo = MockRepository();
+    final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    repo.saveTracks([
+      _t('loc-jude', 'Hey Jude', 'The Beatles', seconds: 431, path: '/music/hey_jude.flac'),
+      _t('loc-only', 'Demo', 'Me', seconds: 100, path: '/music/demo.flac'),
+    ]);
+    await library.initialize();
+    await library.mergeServerTracks([
+      _t('srv-jude', 'Hey Jude', 'The Beatles', seconds: 431, stream: 'http://localhost:5200/api/stream/srv-jude'),
+      _t('srv-help', 'Help!', 'The Beatles', seconds: 140, stream: 'http://localhost:5200/api/stream/srv-help'),
+    ], _account());
+
+    final jude = library.getTrack('loc-jude')!;
+    expect(library.sharedId(jude), 'srv-jude');
+    expect(library.sharedId(library.getTrack('srv-help')!), 'srv-help');
+    expect(library.sharedId(library.getTrack('loc-only')!), 'loc-only');
+    expect(library.resolveTracks(['srv-help', 'srv-jude', 'unknown', 'loc-only']).map((t) => t.id), [
+      'srv-help',
+      'loc-jude',
+      'loc-only',
+    ]);
+  });
+
   test('server playlists keep the server IDs and still resolve to the local copy', () async {
     final repo = MockRepository();
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
@@ -200,6 +224,30 @@ void main() {
     expect(playlist.isServer, isTrue);
     expect(playlist.trackIds, ['srv-jude']);
     expect(library.getPlaylistTracks(playlist).single.id, 'loc-jude');
+  });
+
+  test('another device names a matched track by its server ID, and this one finds its local file by it', () async {
+    final repo = MockRepository();
+    final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    repo.saveTracks([
+      _t('loc-jude', 'Hey Jude', 'The Beatles', seconds: 431, path: '/music/hey_jude.flac'),
+      _t('loc-only', 'Demo', 'Me', seconds: 100, path: '/music/demo.flac'),
+    ]);
+    await library.initialize();
+    await library.mergeServerTracks([
+      _t('srv-jude', 'Hey Jude', 'The Beatles', seconds: 431, stream: 'http://localhost:5200/api/stream/srv-jude'),
+      _t('srv-help', 'Help!', 'The Beatles', seconds: 140, stream: 'http://localhost:5200/api/stream/srv-help'),
+    ], _account());
+
+    final jude = library.getTrack('loc-jude')!;
+    expect(library.sharedId(jude), 'srv-jude');
+    expect(library.sharedId(library.getTrack('srv-help')!), 'srv-help');
+    expect(library.sharedId(library.getTrack('loc-only')!), 'loc-only');
+    expect(library.resolveTracks(['srv-help', 'srv-jude', 'unknown', 'loc-only']).map((t) => t.id), [
+      'srv-help',
+      'loc-jude',
+      'loc-only',
+    ]);
   });
 
   test('the session moves between local, hybrid and back on sign-out', () async {

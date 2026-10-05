@@ -4,6 +4,7 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
+import 'devices.dart';
 
 /// A page's title block: a big title, a line of details, and the page's actions.
 class PageHeader extends StatelessWidget {
@@ -74,7 +75,8 @@ class PageHeader extends StatelessWidget {
   }
 }
 
-/// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner.
+/// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner, and after them [trailing] (a list's
+/// download button).
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({
     super.key,
@@ -82,12 +84,14 @@ class PlayShuffleButtons extends StatelessWidget {
     required this.shuffleLabel,
     this.onPlay,
     this.onShuffle,
+    this.trailing,
   });
 
   final String playLabel;
   final String shuffleLabel;
   final VoidCallback? onPlay;
   final VoidCallback? onShuffle;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -121,10 +125,11 @@ class PlayShuffleButtons extends StatelessWidget {
           Expanded(child: play),
           const SizedBox(width: 10),
           Expanded(child: shuffle),
+          if (trailing != null) ...[const SizedBox(width: 10), trailing!],
         ],
       );
     }
-    return Wrap(spacing: 12, runSpacing: 8, children: [play, shuffle]);
+    return Wrap(spacing: 12, runSpacing: 8, children: [play, shuffle, ?trailing]);
   }
 }
 
@@ -538,6 +543,8 @@ class _PhonePageHeader extends StatelessWidget {
                     ],
                   ),
                 ),
+                // The way to another device also while nothing plays here (no mini player then).
+                const DevicesButton(dimension: 44, iconSize: 23),
                 if (vm.selectedSection != AppSection.settings)
                   SizedBox.square(
                     dimension: 44,

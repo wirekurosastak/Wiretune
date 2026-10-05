@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'app_section.dart';
+import 'downloads_view_model.dart';
 import 'library_view_models.dart';
 import 'player_view_model.dart';
 import 'search_view_model.dart';
@@ -11,10 +12,14 @@ import 'settings_view_models.dart';
 
 /// What the device the app runs on can do; decided once at start-up.
 class DeviceCapabilities {
-  const DeviceCapabilities({this.supportsLocalFolder = false});
+  const DeviceCapabilities({this.supportsLocalFolder = false, this.kind = DeviceKind.desktop, this.name = ''});
 
   /// Scanning a folder of the device's own (desktop).
   final bool supportsLocalFolder;
+
+  /// What the other players of the account see this one as, and the name it has until the user gives it another.
+  final DeviceKind kind;
+  final String name;
 }
 
 /// The whole app's state: the services, one view model per area, the navigation and the status lines. The wide and
@@ -26,14 +31,21 @@ class MainViewModel extends ChangeNotifier {
     this.session, {
     OnlineLyrics? onlineLyrics,
     this.capabilities = const DeviceCapabilities(),
-  }) : _onlineLyrics = onlineLyrics {
-    // Stream URLs carry a short-lived, media-only token that the session renews, not the sign-in token.
-    audioEngine.setStreamTokenProvider(session.getStreamToken);
+    DownloadService? downloadService,
+    RemoteClient? remote,
+  }) : _onlineLyrics = onlineLyrics,
+       downloadService = downloadService ?? DownloadService(library, session),
+       remote = remote ?? RemoteClient(session) {
+    // Stream URLs carry a short-lived, media-only token that the session renews, not the sign-in token; a server track
+    // that was downloaded plays from its copy.
+    audioEngine
+      ..setStreamTokenProvider(session.getStreamToken)
+      ..setOfflineCopyProvider(this.downloadService.localCopy);
 
     player = PlayerViewModel(audioEngine, library)
-      ..lyricsProvider = ((track, ct) =>
-          track.isLocal ? MetadataScanner.readLyrics(track.filePath) : session.getLyrics(track))
-      ..isOnlineLyricsEnabled = _useOnlineLyrics;
+      ..lyricsProvider = _ownLyrics
+      ..isOnlineLyricsEnabled = _useOnlineLyrics
+      ..attachRemote(this.remote);
     if (onlineLyrics != null) player.onlineLyricsProvider = (track, ct) => onlineLyrics.find(track);
 
     tracks = TracksViewModel(library, player);
@@ -41,6 +53,7 @@ class MainViewModel extends ChangeNotifier {
     artists = ArtistsViewModel(library, player)..onNavWave = triggerNavWave;
     playlists = PlaylistsViewModel(library, player)..onNavWave = triggerNavWave;
     favorites = FavoritesViewModel(library, player);
+    downloads = DownloadsViewModel(this.downloadService);
     audioSettings = AudioSettingsViewModel(audioEngine);
     serverSettings = ServerSettingsViewModel(library, session, supportsLocalFolder: capabilities.supportsLocalFolder);
     search = SearchViewModel(library, player, openAlbum, openArtist);
@@ -71,6 +84,8 @@ class MainViewModel extends ChangeNotifier {
   final WiretuneAudioEngine audioEngine;
   final LibraryService library;
   final ServerSession session;
+  final DownloadService downloadService;
+  final RemoteClient remote;
   final DeviceCapabilities capabilities;
   final OnlineLyrics? _onlineLyrics;
   final List<void Function()> _unsubscribers = [];
@@ -82,6 +97,7 @@ class MainViewModel extends ChangeNotifier {
   late final ArtistsViewModel artists;
   late final PlaylistsViewModel playlists;
   late final FavoritesViewModel favorites;
+  late final DownloadsViewModel downloads;
   late final AudioSettingsViewModel audioSettings;
   late final ServerSettingsViewModel serverSettings;
   late final SearchViewModel search;
@@ -410,8 +426,11 @@ class MainViewModel extends ChangeNotifier {
 
   void showLoginScreen() => isLoginViewActive = true;
 
+  /// Signs out, and removes the downloads: they are copies of the account's server.
   Future<void> logout() async {
+    player.releaseRemote();
     await serverSettings.logout();
+    await downloadService.removeAll();
     _updateAuthDisplay();
     isLoginViewActive = library.tracks.isEmpty;
     notifyListeners();
@@ -482,6 +501,9 @@ class MainViewModel extends ChangeNotifier {
   static const String _themePreference = 'theme';
   static const String _performanceStatsPreference = 'show_performance_stats';
   static const String _onlineLyricsPreference = 'online_lyrics';
+  static const String _remoteIdPreference = 'remote_device_id';
+  static const String _remoteNamePreference = 'remote_device_name';
+  static const String _remoteEnabledPreference = 'remote_enabled';
 
   bool _isLight = false;
   bool _showPerformanceStats = false;
@@ -514,6 +536,39 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Whether the account's other players see this one and may control it (and it them); on by default.
+  bool get isRemoteEnabled => remote.isEnabled;
+  set isRemoteEnabled(bool value) {
+    if (!value) player.releaseRemote();
+    _configureRemote(enabled: value);
+    _remember(library.setPreference(_remoteEnabledPreference, value ? '1' : '0'));
+    notifyListeners();
+  }
+
+  /// The name the other players show for this one.
+  String get deviceName => remote.deviceName;
+  set deviceName(String value) {
+    final name = RemoteRules.cleanName(value);
+    if (name == remote.deviceName) return;
+    _configureRemote(name: name);
+    _remember(library.setPreference(_remoteNamePreference, name));
+    notifyListeners();
+  }
+
+  void _configureRemote({String? id, String? name, bool? enabled}) => remote.configure(
+    id: id ?? remote.deviceId,
+    name: name ?? remote.deviceName,
+    kind: capabilities.kind,
+    enabled: enabled ?? remote.isEnabled,
+  );
+
+  /// The lyrics a track carries: a local file's tags, a downloaded copy's, or the server's copy of them.
+  Future<String?> _ownLyrics(Track track, CancellationToken ct) async {
+    if (track.isLocal) return track.filePath.isEmpty ? null : MetadataScanner.readLyrics(track.filePath);
+    final copy = downloadService.localCopy(track);
+    return copy != null ? MetadataScanner.readLyrics(copy) : session.getLyrics(track);
+  }
+
   String get language => Localizer.instance.language;
 
   /// Text of the language picker's button: the active language's code, e.g. "EN".
@@ -542,6 +597,18 @@ class MainViewModel extends ChangeNotifier {
     _showPerformanceStats = await library.getPreference(_performanceStatsPreference) == '1';
     _useOnlineLyrics = await library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     player.isOnlineLyricsEnabled = _useOnlineLyrics;
+
+    // A lasting ID of its own, so the others know it again after a restart; it connects once signed in.
+    var id = await library.getPreference(_remoteIdPreference);
+    if (id == null || id.isEmpty) {
+      id = newId();
+      await library.setPreference(_remoteIdPreference, id);
+    }
+    _configureRemote(
+      id: id,
+      name: await library.getPreference(_remoteNamePreference) ?? capabilities.name,
+      enabled: await library.getPreference(_remoteEnabledPreference) != '0',
+    );
   }
 
   void _refreshLocalizedTexts() {
@@ -566,6 +633,7 @@ class MainViewModel extends ChangeNotifier {
       await library.initialize();
       await _applyPreferences();
       await session.initialize();
+      await downloadService.initialize();
       serverSettings.syncWithSession();
     } catch (e, s) {
       WiretuneLog.error('MainViewModel', 'Start-up failed: $e', e, s);
@@ -606,10 +674,13 @@ class MainViewModel extends ChangeNotifier {
     artists.dispose();
     playlists.dispose();
     favorites.dispose();
+    downloads.dispose();
     audioSettings.dispose();
     serverSettings.dispose();
     search.dispose();
     unawaited(audioEngine.dispose());
+    remote.dispose();
+    downloadService.dispose();
     session.dispose();
     _onlineLyrics?.close();
     super.dispose();

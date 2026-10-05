@@ -6,6 +6,7 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ambient.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/devices.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/quality_tag.dart';
 import 'queue_panel.dart';
@@ -80,18 +81,23 @@ class NowPlayingPage extends StatelessWidget {
                               ),
                             ),
                             Expanded(
-                              child: Text(
-                                context.tr('NowPlaying').toUpperCase(),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  letterSpacing: 2,
-                                  fontWeight: FontWeight.w800,
-                                  color: colors.textMain.withValues(alpha: 0.75),
-                                ),
+                              child: ListenableBuilder(
+                                listenable: vm.player,
+                                builder: (context, _) => vm.player.isRemote
+                                    ? const Center(child: PlayingOnLabel(fontSize: 12))
+                                    : Text(
+                                        context.tr('NowPlaying').toUpperCase(),
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          letterSpacing: 2,
+                                          fontWeight: FontWeight.w800,
+                                          color: colors.textMain.withValues(alpha: 0.75),
+                                        ),
+                                      ),
                               ),
                             ),
-                            const SizedBox(width: 44),
+                            const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
                           ],
                         ),
                       ),
@@ -278,15 +284,18 @@ class _QueueTab extends StatelessWidget {
                   ),
                 ),
               ),
-              TextButton.icon(
-                style: TextButton.styleFrom(foregroundColor: colors.palette.coral, minimumSize: const Size(0, 40)),
-                onPressed: player.queueItems.isEmpty ? null : player.clearQueue,
-                icon: const Icon(Icons.playlist_remove_rounded, size: 20),
-                label: Text(
-                  context.tr('ClearQueue'),
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-              ),
+              if (player.canEditQueue)
+                TextButton.icon(
+                  style: TextButton.styleFrom(foregroundColor: colors.palette.coral, minimumSize: const Size(0, 40)),
+                  onPressed: player.queueItems.isEmpty ? null : player.clearQueue,
+                  icon: const Icon(Icons.playlist_remove_rounded, size: 20),
+                  label: Text(
+                    context.tr('ClearQueue'),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                )
+              else
+                const SizedBox(height: 40),
             ],
           ),
         ),

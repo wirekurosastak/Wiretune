@@ -8,8 +8,17 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 export 'package:wiretune_core/testing.dart';
 
-MainViewModel createMainViewModel(LibraryService library, [WiretuneAudioEngine? engine]) =>
-    MainViewModel(engine ?? TestSupport.createEngine(), library, ServerSession(library, MockRepository()));
+MainViewModel createMainViewModel(
+  LibraryService library, [
+  WiretuneAudioEngine? engine,
+  ServerSession? session,
+  RemoteClient? remote,
+]) => MainViewModel(
+  engine ?? TestSupport.createEngine(),
+  library,
+  session ?? ServerSession(library, MockRepository()),
+  remote: remote,
+);
 
 LibraryService createLibrary([List<Track> tracks = const []]) {
   final repo = MockRepository()..saveTracks(tracks);

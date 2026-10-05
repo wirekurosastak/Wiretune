@@ -43,6 +43,7 @@ class WiretuneAudioEngine {
   bool _isMuted = false;
   String? _streamToken;
   Future<String?> Function()? _streamTokenProvider;
+  String? Function(Track track)? _offlineCopy;
   bool _disposed = false;
 
   final Event<PlaybackState> stateChanged = Event<PlaybackState>();
@@ -81,7 +82,11 @@ class WiretuneAudioEngine {
         : fmt.qualityLabel;
     final processing = Localizer.get(_isBitperfect ? 'SignalProcessingBitPerfect' : 'SignalProcessingMixer');
     final access = Localizer.get(_isExclusiveMode ? 'SignalAccessExclusive' : 'SignalAccessShared');
-    final transport = Localizer.get(track.isLocal ? 'SignalTransportLocal' : 'SignalTransportServer');
+    final transport = Localizer.get(
+      track.isLocal
+          ? 'SignalTransportLocal'
+          : (_offlineCopy?.call(track) != null ? 'SignalTransportDownloaded' : 'SignalTransportServer'),
+    );
 
     return [
       Localizer.format('SignalSource', [source]),
@@ -95,6 +100,9 @@ class WiretuneAudioEngine {
   /// Supplies the token appended to stream URLs. It is asked for each time a server track starts, so a long-running
   /// player always uses a token that is still valid.
   void setStreamTokenProvider(Future<String?> Function()? provider) => _streamTokenProvider = provider;
+
+  /// Supplies the path of a downloaded copy of a server track: a track that has one plays from it, without the server.
+  void setOfflineCopyProvider(String? Function(Track track)? provider) => _offlineCopy = provider;
 
   Future<void> refreshDevices() async {
     List<AudioOutputDevice> devices;
@@ -123,11 +131,15 @@ class WiretuneAudioEngine {
     devicesChanged.emit(null);
   }
 
-  Future<void> playTrack(Track track) async {
+  /// Starts [track], at [start] (another device handing its playback over continues where it was).
+  Future<void> playTrack(Track track, {Duration start = Duration.zero}) async {
     _currentTrack = track;
     trackChanged.emit(track);
 
-    if (!track.isLocal && _streamTokenProvider != null) await _refreshStreamToken();
+    // A downloaded copy needs no token, and must not wait for a server that may be out of reach.
+    if (!track.isLocal && _streamTokenProvider != null && _offlineCopy?.call(track) == null) {
+      await _refreshStreamToken();
+    }
 
     final source = resolveSource(track);
     if (source == null || source.isEmpty) {
@@ -136,7 +148,7 @@ class WiretuneAudioEngine {
     }
 
     WiretuneLog.info('AudioEngine', "PlayTrack: '${track.artist} - ${track.title}' (${track.format.qualityLabel})");
-    await _driver.play(source, track.format, Duration.zero);
+    await _driver.play(source, track.format, start);
   }
 
   Future<void> pause() => _driver.pause();
@@ -297,10 +309,13 @@ class WiretuneAudioEngine {
     }
   }
 
-  /// The file path of a local track, or the stream URL of a server track with the stream token appended.
+  /// The file path of a local track; for a server track the downloaded copy, or else the stream URL with the stream
+  /// token appended.
   String? resolveSource(Track track) {
     final url = track.streamUrl;
     if (url == null || url.isEmpty) return track.filePath.isEmpty ? null : track.filePath;
+    final copy = _offlineCopy?.call(track);
+    if (copy != null) return copy;
     final token = _streamToken;
     if (token == null) return url;
     return '$url${url.contains('?') ? '&' : '?'}token=${Uri.encodeQueryComponent(token)}';

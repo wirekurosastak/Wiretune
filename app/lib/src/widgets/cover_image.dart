@@ -4,13 +4,19 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Where covers may be requested with the sign-in token: only the Wiretune server's own address ever sees it.
+/// Where covers may be requested with the sign-in token: only the Wiretune server's own address ever sees it. A cover
+/// that was downloaded (with an album, a playlist ...) comes from its copy.
 abstract final class CoverArt {
   static String? serverUrl;
   static String? authToken;
 
+  /// The downloaded copy of the cover at a URL, if there is one.
+  static String? Function(String url)? localCopy;
+
   static ImageProvider? provider(String? pathOrUrl, {int? decodeWidth}) {
     if (pathOrUrl == null || pathOrUrl.trim().isEmpty) return null;
+    final copy = localCopy?.call(pathOrUrl);
+    if (copy != null) pathOrUrl = copy;
     ImageProvider image;
     if (pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
       final server = serverUrl;

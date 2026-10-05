@@ -14,6 +14,7 @@ import '../pages/section_page.dart';
 import '../widgets/ambient.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/common.dart';
+import '../widgets/devices.dart';
 import '../widgets/player_controls.dart';
 
 /// The phone layout: the page (each draws its own header with the search and account buttons) over the ambient
@@ -448,16 +449,19 @@ class _MiniPlayer extends StatelessWidget {
                                           ),
                                         ),
                                         const SizedBox(height: 1),
-                                        Text(
-                                          player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w500,
-                                            color: player.hasError ? colors.danger : colors.textMuted,
+                                        if (player.isRemote && !player.hasError)
+                                          const PlayingOnLabel(fontSize: 12.5)
+                                        else
+                                          Text(
+                                            player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w500,
+                                              color: player.hasError ? colors.danger : colors.textMuted,
+                                            ),
                                           ),
-                                        ),
                                       ],
                                     ),
                                   ),
@@ -466,6 +470,7 @@ class _MiniPlayer extends StatelessWidget {
                             ),
                           ),
                         ),
+                        const DevicesButton(),
                         SizedBox.square(
                           dimension: 46,
                           child: IconButton(

@@ -10,6 +10,7 @@ import '../widgets/ambient.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/downloads.dart';
 import '../widgets/quality_tag.dart';
 import '../widgets/track_list.dart';
 
@@ -108,6 +109,11 @@ class FavoritesPage extends StatelessWidget {
                     shuffleLabel: context.tr('Shuffle'),
                     onPlay: favorites.playAll,
                     onShuffle: favorites.shuffleAll,
+                    trailing: DownloadListButton.forTracks(
+                      favorites.favoriteTracks,
+                      isPinned: () => context.vm.downloads.areFavoritesPinned,
+                      onPressed: context.vm.downloads.toggleFavorites,
+                    ),
                   ),
                 ],
               ),
@@ -616,6 +622,11 @@ class AlbumDetail extends StatelessWidget {
                 shuffleLabel: context.tr('Shuffle'),
                 onPlay: () => albums.playAlbum(),
                 onShuffle: () => albums.shuffleAlbum(),
+                trailing: DownloadListButton.forTracks(
+                  album.tracks,
+                  isPinned: () => vm.downloads.isAlbumPinned(album),
+                  onPressed: () => vm.downloads.toggleAlbum(album),
+                ),
               ),
             ],
           ),

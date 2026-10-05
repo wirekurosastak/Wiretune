@@ -44,6 +44,7 @@ native shells.
 |---|---|
 | Core, server | The tests, on Linux. The server binary has run against a real folder: scanning, sign-in, gzip, ranges, covers |
 | App logic and layouts | View-model and widget tests: every section in both layouts, light and dark, a small phone at 150 % font size, a 1080p TV |
+| Downloads, remote control | Against the real server in the tests: copies byte for byte, played with the server switched off, and two players of one account over real WebSockets. The player's side in view-model and widget tests. **Not yet tried between two real devices** |
 | Linux desktop | Built and run against a real server and library (1,288 tracks), every screen checked at 1280×820, 900×700 and phone width, and playback, the queue, the spectrum, MPRIS and the device list driven through UI automation. Exclusive and bit-perfect not tried on a DAC |
 | Android | Debug and release APKs build, with the TV, media service and Android Auto entries in the manifest. **Not yet run on a phone, a TV or in a car** |
 | Windows, macOS, iOS | Not yet built (they need their own hosts) |

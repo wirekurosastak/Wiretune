@@ -743,6 +743,7 @@ const Map<String, (String, String, String)> allStrings = {
     'Server-Stream (verlustfrei, ohne Transcodierung)',
   ),
   'SignalTransportLocal': ('Helyi fájl', 'Local file', 'Lokale Datei'),
+  'SignalTransportDownloaded': ('Letöltött másolat', 'Downloaded copy', 'Heruntergeladene Kopie'),
   'EngineDeviceInitFailed': (
     'A(z) „{0}” kimenet inicializálása sikertelen: {1}',
     'Initializing the output “{0}” failed: {1}',
@@ -768,5 +769,123 @@ const Map<String, (String, String, String)> allStrings = {
     'A lejátszás nem indítható: {0}',
     'Playback cannot start: {0}',
     'Die Wiedergabe kann nicht gestartet werden: {0}',
+  ),
+
+  // ── Downloads ───────────────────────────────────────────────────────────────────────────────────────
+  'Downloads': ('Letöltések', 'Downloads', 'Downloads'),
+  'DownloadsHint': (
+    'A megjelölt számok, albumok, listák és a kedvencek ezen az eszközön is megvannak: szerver nélkül is szólnak.',
+    'The tracks, albums, playlists and favourites you mark are kept on this device: they play without the server.',
+    'Markierte Titel, Alben, Playlists und Favoriten bleiben auf diesem Gerät: Sie spielen auch ohne Server.',
+  ),
+  'DownloadsSize': ('{0} {1} ezen az eszközön', '{0} {1} on this device', '{0} {1} auf diesem Gerät'),
+  'DownloadsProgress': (
+    'Letöltés: „{0}” ({1}%) • {2}. / {3}',
+    'Downloading “{0}” ({1}%) • {2} of {3}',
+    'Lade „{0}“ herunter ({1} %) • {2} von {3}',
+  ),
+  'DownloadsWaiting': (
+    '{0} szám vár a szerverre.',
+    '{0} tracks are waiting for the server.',
+    '{0} Titel warten auf den Server.',
+  ),
+  'DownloadsWaiting_One': (
+    '{0} szám vár a szerverre.',
+    '{0} track is waiting for the server.',
+    '{0} Titel wartet auf den Server.',
+  ),
+  'DownloadsUpToDate': (
+    'Mind a(z) {0} szám letöltve, naprakészen.',
+    'All {0} tracks are downloaded and up to date.',
+    'Alle {0} Titel sind heruntergeladen und aktuell.',
+  ),
+  'DownloadsUpToDate_One': (
+    '{0} szám letöltve, naprakészen.',
+    '{0} track is downloaded and up to date.',
+    '{0} Titel ist heruntergeladen und aktuell.',
+  ),
+  'DownloadsNone': (
+    'Még nincs letöltés. A letöltés gomb az albumoknál, a listáknál, a kedvenceknél és minden szám mellett ott van.',
+    'Nothing is downloaded yet. There is a download button on every album, playlist and the favourites, and beside each track.',
+    'Noch nichts heruntergeladen. Alben, Playlists und Favoriten haben eine Download-Schaltfläche, ebenso jeder Titel.',
+  ),
+  'DownloadsRemoveAll': ('Összes letöltés törlése', 'Remove all downloads', 'Alle Downloads entfernen'),
+  'DownloadsRemoveConfirm': ('Igen, mind törlődjön', 'Yes, remove them all', 'Ja, alle entfernen'),
+  'DownloadsListProgress': (
+    '{0} / {1} letöltve – kattints az eltávolításhoz',
+    '{0} of {1} downloaded – click to remove',
+    '{0} von {1} heruntergeladen – zum Entfernen klicken',
+  ),
+  'TipDownload': ('Letöltés erre az eszközre', 'Download to this device', 'Auf dieses Gerät herunterladen'),
+  'TipRemoveDownload': ('Letöltés eltávolítása', 'Remove the download', 'Download entfernen'),
+  'TipDownloadedWithList': (
+    'Egy albummal, listával vagy a kedvencekkel együtt letöltve',
+    'Downloaded with an album, a playlist or the favourites',
+    'Mit einem Album, einer Playlist oder den Favoriten heruntergeladen',
+  ),
+  'TipMore': ('Továbbiak', 'More', 'Mehr'),
+  'GoToAlbum': ('Ugrás az albumra', 'Go to album', 'Zum Album'),
+  'GoToArtist': ('Ugrás az előadóra', 'Go to artist', 'Zum Künstler'),
+  'DownloadsFailed': ('Egy letöltés sikertelen: {0}', 'A download failed: {0}', 'Ein Download ist fehlgeschlagen: {0}'),
+  'DownloadsDiskError': (
+    'Egy letöltés nem menthető: {0}',
+    'A download could not be saved: {0}',
+    'Ein Download konnte nicht gespeichert werden: {0}',
+  ),
+  'DownloadsSignInAgain': (
+    'A szerver nem fogadta el a bejelentkezést. Jelentkezz be újra, és a letöltések folytatódnak.',
+    'The server did not accept the sign-in. Sign in again and the downloads carry on.',
+    'Der Server hat die Anmeldung nicht angenommen. Melde dich erneut an, dann geht es mit den Downloads weiter.',
+  ),
+
+  // ── Remote control ──────────────────────────────────────────────────────────────────────────────────
+  'RemoteControl': ('Távvezérlés', 'Remote control', 'Fernsteuerung'),
+  'RemoteControlHint': (
+    'Az ugyanabba a fiókba bejelentkezett eszközeid látják, mi szól itt, és vezérelhetik – ez pedig őket.',
+    'Your other devices signed in to the same account see what plays here and can control it, and this one them.',
+    'Deine anderen Geräte mit demselben Konto sehen, was hier läuft, und können es steuern – und dieses sie.',
+  ),
+  'DeviceNameLabel': ('Az eszköz neve', 'This device’s name', 'Name dieses Geräts'),
+  'RemoteStatusConnected': (
+    'Kapcsolódva: {0} másik eszköz elérhető.',
+    'Connected: {0} other devices online.',
+    'Verbunden: {0} andere Geräte online.',
+  ),
+  'RemoteStatusConnected_One': (
+    'Kapcsolódva: {0} másik eszköz elérhető.',
+    'Connected: {0} other device online.',
+    'Verbunden: {0} anderes Gerät online.',
+  ),
+  'RemoteStatusConnecting': ('Kapcsolódás a szerverhez…', 'Connecting to the server…', 'Verbinde mit dem Server …'),
+  'RemoteStatusOff': (
+    'Kikapcsolva: a többi eszközöd nem látja ezt.',
+    'Off: your other devices do not see this one.',
+    'Aus: Deine anderen Geräte sehen dieses nicht.',
+  ),
+  'TipDevices': ('Lejátszás másik eszközön', 'Play on another device', 'Auf einem anderen Gerät abspielen'),
+  'DevicesTitle': ('Lejátszás itt', 'Play on', 'Wiedergabe auf'),
+  'DevicesThisDevice': ('Ez az eszköz', 'This device', 'Dieses Gerät'),
+  'DevicesNone': (
+    'Nincs más eszköz online. Nyisd meg a Wiretune-t egy másik gépen, telefonon vagy tévén, ugyanazzal a fiókkal.',
+    'No other device is online. Open Wiretune on another computer, phone or TV signed in to the same account.',
+    'Kein anderes Gerät ist online. Öffne Wiretune auf einem anderen Computer, Telefon oder Fernseher mit demselben Konto.',
+  ),
+  'DeviceKindDesktop': ('Számítógép', 'Computer', 'Computer'),
+  'DeviceKindPhone': ('Telefon', 'Phone', 'Telefon'),
+  'DeviceKindTablet': ('Táblagép', 'Tablet', 'Tablet'),
+  'DeviceKindTv': ('Tévé', 'TV', 'Fernseher'),
+  'DeviceIdle': ('Nem játszik semmit', 'Not playing', 'Spielt nichts'),
+  'DevicePaused': ('Szünetel: {0}', 'Paused: {0}', 'Pausiert: {0}'),
+  'PlayingOn': ('Lejátszás itt: {0}', 'Playing on {0}', 'Wiedergabe auf {0}'),
+  'RemoteAnotherDevice': ('A másik eszköz', 'The other device', 'Das andere Gerät'),
+  'RemoteDeviceGone': (
+    '{0} már nem érhető el, újra ez az eszköz szól.',
+    '{0} can no longer be reached: back to this device.',
+    '{0} ist nicht mehr erreichbar: zurück zu diesem Gerät.',
+  ),
+  'RemoteDeviceUnreachable': (
+    '{0} most nem érhető el.',
+    '{0} cannot be reached right now.',
+    '{0} ist gerade nicht erreichbar.',
   ),
 };

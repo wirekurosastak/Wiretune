@@ -47,6 +47,11 @@ class QueueItem {
 typedef LyricsProvider = Future<String?> Function(Track track, CancellationToken ct);
 
 /// The player: the queue, shuffle and repeat, the transport, volume and modes, and the lyrics of the current track.
+///
+/// With [attachRemote] it also takes part in remote control: the account's other players see what plays here and can
+/// control it, and [selectDevice] turns this one into the remote control of another. While it is, the state the
+/// interface reads (track, position, queue, volume, shuffle, repeat) is the other device's, and the commands go there;
+/// this device's own playback carries on underneath, untouched.
 class PlayerViewModel extends ChangeNotifier {
   PlayerViewModel(this._engine, this._library) {
     isExclusiveMode = _engine.isExclusiveMode;
@@ -54,14 +59,14 @@ class PlayerViewModel extends ChangeNotifier {
 
     _subscriptions.addAll([
       _engine.stateChanged.listen((state) {
-        playbackState = state;
+        _state = state;
         if (state == PlaybackState.playing) errorMessage = null;
         if (state != PlaybackState.playing) spectrum.value = Float32List(32);
         notifyListeners();
       }),
       // The player keeps the Track instance it started with; a favourite toggled elsewhere changes the library's one.
       _library.favoriteChanged.listen((changed) {
-        final current = currentTrack;
+        final current = _currentTrack;
         if (current != null && current.id == changed.id && !identical(current, changed)) {
           current.isFavorite = changed.isFavorite;
         }
@@ -73,12 +78,14 @@ class PlayerViewModel extends ChangeNotifier {
       }),
       _engine.trackEnded.listen((_) => _onTrackEnded()),
       _engine.positionChanged.listen((position) {
-        if (!_isUserSeeking) _setPosition(position);
+        _localPosition = position;
+        if (!_isUserSeeking && !isRemote) _setPosition(position);
+        _publishIfDrifted(position);
       }),
       _engine.trackChanged.listen(_onEngineTrackChanged),
       _engine.bitperfectChanged.listen((value) {
         isBitperfect = value;
-        volume = value ? 100 : (_engine.volume * 100).roundToDouble();
+        _volume = value ? 100 : (_engine.volume * 100).roundToDouble();
         signalPath = _engine.signalPathDescription;
         notifyListeners();
       }),
@@ -88,7 +95,7 @@ class PlayerViewModel extends ChangeNotifier {
         notifyListeners();
       }),
       _engine.spectrumDataAvailable.listen((bands) {
-        if (playbackState == PlaybackState.playing) spectrum.value = bands;
+        if (_state == PlaybackState.playing && !isRemote) spectrum.value = bands;
       }),
     ]);
   }
@@ -106,11 +113,39 @@ class PlayerViewModel extends ChangeNotifier {
   String? _lyricsTrackId;
 
   // ── State ──────────────────────────────────────────────────────────────────────────────────────
+  // This device's own playback; the public getters show the other device's instead while this one controls it.
 
   Track? _currentTrack;
-  Track? get currentTrack => _currentTrack;
+  PlaybackState _state = PlaybackState.stopped;
 
-  PlaybackState playbackState = PlaybackState.stopped;
+  /// This device's own position (the one shown is another device's while it controls one), and where the track being
+  /// started begins.
+  Duration _localPosition = Duration.zero;
+  Duration _startAt = Duration.zero;
+  double _volume = 100;
+  bool _muted = false;
+  bool _shuffle = false;
+  RepeatMode _repeat = RepeatMode.off;
+  List<Track> _queueTracks = const [];
+  List<QueueItem> _queueItems = const [];
+  int _queueVersion = 0;
+
+  /// The track that is playing (on the device being controlled).
+  Track? get currentTrack => isRemote ? _remoteTrack : _currentTrack;
+
+  /// Shows [value] as this device's current track without playing it.
+  set currentTrack(Track? value) {
+    if (identical(_currentTrack, value)) return;
+    _currentTrack = value;
+    _showCurrentTrack();
+  }
+
+  PlaybackState get playbackState {
+    if (!isRemote) return _state;
+    final remote = _remoteState;
+    if (remote == null || remote.track == null) return PlaybackState.stopped;
+    return remote.playing ? PlaybackState.playing : PlaybackState.paused;
+  }
 
   /// The playback position; updated several times a second, so it has its own notifier.
   final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
@@ -123,35 +158,38 @@ class PlayerViewModel extends ChangeNotifier {
   final ValueNotifier<Float32List> spectrum = ValueNotifier(Float32List(32));
 
   double get positionSeconds => position.value.inMicroseconds / 1e6;
-  Duration get duration => _currentTrack?.duration ?? Duration.zero;
+  Duration get duration => currentTrack?.duration ?? Duration.zero;
   double get durationSeconds => duration.inMicroseconds / 1e6;
 
-  double volume = 100;
-  bool isMuted = false;
+  double get volume => isRemote ? (_remoteVolume ?? _remoteState?.volume ?? 100) : _volume;
+  bool get isMuted => isRemote ? (_remoteState?.muted ?? false) : _muted;
+  bool get isShuffle => isRemote ? (_remoteState?.shuffle ?? false) : _shuffle;
+  RepeatMode get repeatMode => isRemote ? (_remoteState?.repeat ?? RepeatMode.off) : _repeat;
+  set repeatMode(RepeatMode value) => setRepeatMode(value);
+
   bool isExclusiveMode = false;
   bool isBitperfect = false;
-  bool isShuffle = false;
-  RepeatMode repeatMode = RepeatMode.off;
   String signalPath = '';
-  QualityTier currentTier = QualityTier.silver;
-  String currentTagSpec = '';
   String? errorMessage;
+
+  QualityTier get currentTier => currentTrack?.format.tier ?? QualityTier.silver;
+  String get currentTagSpec => currentTrack?.format.tagSpec ?? '';
 
   bool get hasError => errorMessage != null && errorMessage!.isNotEmpty;
   bool get isPlaying => playbackState == PlaybackState.playing;
 
-  /// Bit-perfect pins the volume at 100 %.
-  bool get isVolumeLocked => isBitperfect;
+  /// Bit-perfect pins the volume at 100 % (also on the device being controlled).
+  bool get isVolumeLocked => isRemote ? (_remoteState?.volumeLocked ?? false) : isBitperfect;
   bool get isVolumeDisabledOrMuted => isMuted || isVolumeLocked;
   bool get isVolumeActive => !isMuted && !isVolumeLocked;
   String get volumeToolTip =>
       Localizer.get(isMuted ? 'VolumeUnmute' : (isVolumeLocked ? 'VolumeLocked' : 'VolumeMute'));
 
   /// Title of the current track, or a hint when nothing is loaded.
-  String get nowPlayingTitle => _currentTrack?.title ?? Localizer.get('NothingPlaying');
+  String get nowPlayingTitle => currentTrack?.title ?? Localizer.get('NothingPlaying');
 
   /// Artist of the current track, or a hint when nothing is loaded.
-  String get nowPlayingArtist => _currentTrack?.artist ?? Localizer.get('ChooseMusic');
+  String get nowPlayingArtist => currentTrack?.artist ?? Localizer.get('ChooseMusic');
 
   // ── Queue ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -169,9 +207,12 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<Track> queueTracks = const [];
-  List<QueueItem> queueItems = const [];
-  int currentQueueIndex = -1;
+  List<Track> get queueTracks => isRemote ? [for (final item in _remoteQueue) item.track] : _queueTracks;
+  List<QueueItem> get queueItems => isRemote ? _remoteQueue : _queueItems;
+  int get currentQueueIndex => isRemote ? _remoteQueue.indexWhere((item) => item.isCurrent) : _queueIndex;
+
+  /// The queue can be reordered and edited (not the one of another device).
+  bool get canEditQueue => !isRemote;
 
   void toggleQueue() => isQueueOpen = !isQueueOpen;
 
@@ -179,6 +220,15 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// Plays a track of the queue; a track that is not queued yet starts the library.
   void playQueueTrack(Track track) {
+    if (isRemote) {
+      final item = _remoteQueue.where((item) => identical(item.track, track)).firstOrNull;
+      _sendRemote(
+        item != null
+            ? RemoteCommand(RemoteAction.playIndex, index: item.index)
+            : RemoteCommand(RemoteAction.playTracks, trackIds: [_library.sharedId(track)]),
+      );
+      return;
+    }
     final index = _playbackQueue.indexOf(track);
     if (index >= 0) {
       _playAt(index);
@@ -188,13 +238,14 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void moveQueueTrack(int oldIndex, int newIndex) {
+    if (!canEditQueue) return;
     if (oldIndex < 0 || oldIndex >= _playbackQueue.length) return;
     if (newIndex < 0 || newIndex >= _playbackQueue.length) return;
     if (oldIndex == newIndex) return;
 
     final track = _playbackQueue.removeAt(oldIndex);
     _playbackQueue.insert(newIndex, track);
-    if (!isShuffle) {
+    if (!_shuffle) {
       _originalQueue
         ..clear()
         ..addAll(_playbackQueue);
@@ -226,7 +277,7 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void removeQueueTrack(Track? track) {
-    if (track == null) return;
+    if (track == null || !canEditQueue) return;
     final index = _playbackQueue.indexOf(track);
     if (index < 0) return;
 
@@ -239,7 +290,7 @@ class PlayerViewModel extends ChangeNotifier {
       _queueIndex = index - 1;
       _updateQueueState();
       if (_playbackQueue.isNotEmpty) {
-        nextTrack();
+        _nextTrackLocal();
       } else {
         _runSafe(_engine.stop);
       }
@@ -253,6 +304,7 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void clearQueue() {
+    if (!canEditQueue) return;
     final current =
         _currentTrack ?? (_queueIndex >= 0 && _queueIndex < _playbackQueue.length ? _playbackQueue[_queueIndex] : null);
     _playbackQueue.clear();
@@ -269,53 +321,99 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void _updateQueueState() {
-    queueTracks = List.unmodifiable(_playbackQueue);
-    currentQueueIndex = _queueIndex;
-    queueItems = [for (var i = 0; i < _playbackQueue.length; i++) QueueItem(_playbackQueue[i], i, i == _queueIndex)];
+    _queueVersion++;
+    _queueTracks = List.unmodifiable(_playbackQueue);
+    _queueItems = [for (var i = 0; i < _playbackQueue.length; i++) QueueItem(_playbackQueue[i], i, i == _queueIndex)];
   }
 
   /// Replaces the queue with [tracks] and starts [startTrack] (the first track, or a random one when shuffling).
   void playQueue(Iterable<Track> tracks, [Track? startTrack]) {
+    if (isRemote) {
+      final list = tracks.toList();
+      if (list.isEmpty) return;
+      final start = startTrack == null ? -1 : list.indexOf(startTrack);
+      final (ids, index) = _window(list, math.max(0, start));
+      // No start track: the device picks one, as it would itself (a random one while it shuffles).
+      _sendRemote(RemoteCommand(RemoteAction.playTracks, trackIds: ids, index: start < 0 ? -1 : index));
+      return;
+    }
     _playQueueInternal(tracks, startTrack);
     notifyListeners();
   }
 
-  void _playQueueInternal(Iterable<Track> tracks, Track? startTrack) {
+  void _playQueueInternal(Iterable<Track> tracks, Track? startTrack, {Duration start = Duration.zero}) {
     final list = tracks.toList();
     if (list.isEmpty) return;
     _originalQueue
       ..clear()
       ..addAll(list);
 
-    final start = startTrack != null && _originalQueue.contains(startTrack) ? startTrack : null;
+    final first = startTrack != null && _originalQueue.contains(startTrack) ? startTrack : null;
     _playbackQueue.clear();
-    if (isShuffle) {
-      final first = start ?? _originalQueue[_random.nextInt(_originalQueue.length)];
+    if (_shuffle) {
+      final lead = first ?? _originalQueue[_random.nextInt(_originalQueue.length)];
       _playbackQueue
-        ..add(first)
-        ..addAll(_originalQueue.where((t) => !identical(t, first)).toList()..shuffle(_random));
-      _playAt(0);
+        ..add(lead)
+        ..addAll(_originalQueue.where((t) => !identical(t, lead)).toList()..shuffle(_random));
+      _playAt(0, start: start);
     } else {
       _playbackQueue.addAll(_originalQueue);
-      _playAt(start != null ? _playbackQueue.indexOf(start) : 0);
+      _playAt(first != null ? _playbackQueue.indexOf(first) : 0, start: start);
     }
     _updateQueueState();
   }
 
-  void _playAt(int index) {
+  void _playAt(int index, {Duration start = Duration.zero}) {
     if (index < 0 || index >= _playbackQueue.length) return;
     _queueIndex = index;
     _updateQueueState();
     errorMessage = null;
     final track = _playbackQueue[index];
-    _runSafe(() => _engine.playTrack(track));
+    _startAt = start;
+    _runSafe(() => _engine.playTrack(track, start: start));
     notifyListeners();
   }
 
   // ── Transport ──────────────────────────────────────────────────────────────────────────────────
+  // Each command goes to the device being controlled, or runs here; what another device asks of this one runs here.
 
-  Future<void> togglePlayPause() async {
-    switch (playbackState) {
+  Future<void> togglePlayPause() =>
+      isRemote ? _sendRemote(const RemoteCommand(RemoteAction.toggle)) : _togglePlayPauseLocal();
+
+  Future<void> play() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.play)) : _playLocal();
+
+  Future<void> pause() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.pause)) : _pauseLocal();
+
+  Future<void> stop() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.stop)) : _runSafe(_engine.stop);
+
+  void nextTrack() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.next)) : _nextTrackLocal();
+
+  /// Restarts the current track when more than three seconds have played, otherwise goes to the previous one.
+  void previousTrack() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.previous)) : _previousTrackLocal();
+
+  void toggleShuffle() => setShuffle(!isShuffle);
+
+  /// Reorders the rest of the running queue without interrupting the current track.
+  void setShuffle(bool value) =>
+      isRemote ? _sendRemote(RemoteCommand(RemoteAction.shuffle, on: value)) : _setShuffleLocal(value);
+
+  void toggleRepeat() => setRepeatMode(switch (repeatMode) {
+    RepeatMode.off => RepeatMode.all,
+    RepeatMode.all => RepeatMode.one,
+    RepeatMode.one => RepeatMode.off,
+  });
+
+  void setRepeatMode(RepeatMode mode) {
+    if (isRemote) {
+      _sendRemote(RemoteCommand(RemoteAction.repeat, repeat: mode));
+      return;
+    }
+    _repeat = mode;
+    notifyListeners();
+  }
+
+  Future<void> _togglePlayPauseLocal() async {
+    switch (_state) {
       case PlaybackState.playing:
         await _engine.pause();
       case PlaybackState.paused:
@@ -324,28 +422,28 @@ class PlayerViewModel extends ChangeNotifier {
         if (_queueIndex >= 0 && _queueIndex < _playbackQueue.length) {
           _playAt(_queueIndex);
         } else if (_currentTrack != null) {
-          playQueue([_currentTrack!], _currentTrack);
+          _playQueueInternal([_currentTrack!], _currentTrack);
+          notifyListeners();
         } else if (_library.tracks.isNotEmpty) {
-          playQueue(_library.tracks);
+          _playQueueInternal(_library.tracks, null);
+          notifyListeners();
         }
     }
   }
 
-  Future<void> play() async {
-    if (playbackState != PlaybackState.playing) await togglePlayPause();
+  Future<void> _playLocal() async {
+    if (_state != PlaybackState.playing) await _togglePlayPauseLocal();
   }
 
-  Future<void> pause() async {
-    if (playbackState == PlaybackState.playing) await _engine.pause();
+  Future<void> _pauseLocal() async {
+    if (_state == PlaybackState.playing) await _engine.pause();
   }
 
-  Future<void> stop() => _runSafe(_engine.stop);
-
-  void nextTrack() {
+  void _nextTrackLocal() {
     if (_playbackQueue.isEmpty) return;
     if (_queueIndex + 1 < _playbackQueue.length) {
       _playAt(_queueIndex + 1);
-    } else if (repeatMode == RepeatMode.all) {
+    } else if (_repeat == RepeatMode.all) {
       _playAt(0);
     } else {
       _queueIndex = _playbackQueue.length; // past the end: nothing is current any more
@@ -355,24 +453,22 @@ class PlayerViewModel extends ChangeNotifier {
     }
   }
 
-  /// Restarts the current track when more than three seconds have played, otherwise goes to the previous one.
-  void previousTrack() {
+  void _previousTrackLocal() {
     if (_playbackQueue.isEmpty) return;
-    if (positionSeconds > 3.0) {
+    // The position shown is this device's own, except while it controls another one.
+    final at = isRemote ? _localPosition : position.value;
+    if (at > const Duration(seconds: 3)) {
       _runSafe(() => _engine.seek(Duration.zero));
       return;
     }
     var previous = _queueIndex - 1;
-    if (previous < 0) previous = repeatMode == RepeatMode.all ? _playbackQueue.length - 1 : 0;
+    if (previous < 0) previous = _repeat == RepeatMode.all ? _playbackQueue.length - 1 : 0;
     _playAt(math.min(previous, _playbackQueue.length - 1));
   }
 
-  void toggleShuffle() => setShuffle(!isShuffle);
-
-  /// Reorders the rest of the running queue without interrupting the current track.
-  void setShuffle(bool value) {
-    if (isShuffle == value) return;
-    isShuffle = value;
+  void _setShuffleLocal(bool value) {
+    if (_shuffle == value) return;
+    _shuffle = value;
     if (_playbackQueue.length >= 2 && _queueIndex >= 0 && _queueIndex < _playbackQueue.length) {
       final current = _playbackQueue[_queueIndex];
       final rest = value
@@ -388,17 +484,8 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleRepeat() {
-    repeatMode = switch (repeatMode) {
-      RepeatMode.off => RepeatMode.all,
-      RepeatMode.all => RepeatMode.one,
-      RepeatMode.one => RepeatMode.off,
-    };
-    notifyListeners();
-  }
-
   Future<void> toggleFavoriteCurrent() async {
-    final current = _currentTrack;
+    final current = currentTrack;
     if (current == null) return;
     await _library.toggleFavorite(current.id);
     // A server refresh replaces the library's Track objects while the player keeps the one it started playing: mirror
@@ -426,13 +513,20 @@ class PlayerViewModel extends ChangeNotifier {
   /// The user moved the position slider: the display follows at once, the seek itself is debounced so that dragging
   /// produces a single seek.
   void seekTo(Duration target) {
-    if (_currentTrack == null) return;
+    if (currentTrack == null) return;
     if (target < Duration.zero) target = Duration.zero;
     _setPosition(target);
     _isUserSeeking = true;
 
     _seekDebounce?.cancel();
     _seekDebounce = Timer(const Duration(milliseconds: 200), () async {
+      if (isRemote) {
+        _isUserSeeking = false;
+        // Shown at once; the device's own state confirms it a moment later.
+        _remoteBase = (target, DateTime.now());
+        await _sendRemote(RemoteCommand(RemoteAction.seek, position: target));
+        return;
+      }
       try {
         await _engine.seek(target);
       } catch (e) {
@@ -446,30 +540,57 @@ class PlayerViewModel extends ChangeNotifier {
   set positionSeconds(double seconds) => seekTo(Duration(microseconds: (seconds * 1e6).round()));
 
   void setVolume(double value) {
-    volume = value.clamp(0, 100);
-    if (!isBitperfect) _engine.setVolume(volume / 100.0);
+    final level = value.clamp(0.0, 100.0);
+    if (isRemote) {
+      // The slider follows the finger; the device hears of it at most every 100 ms, and the last value always.
+      _remoteVolume = level;
+      _remoteVolumeAt = DateTime.now();
+      _remoteVolumeTimer ??= Timer(const Duration(milliseconds: 100), () {
+        _remoteVolumeTimer = null;
+        final latest = _remoteVolume;
+        if (latest != null) _sendRemote(RemoteCommand(RemoteAction.volume, volume: latest));
+      });
+      notifyListeners();
+      return;
+    }
+    _setVolumeLocal(level);
+  }
+
+  void _setVolumeLocal(double value) {
+    _volume = value.clamp(0, 100);
+    if (!isBitperfect) _engine.setVolume(_volume / 100.0);
     notifyListeners();
   }
 
   void toggleMute() {
-    if (isBitperfect) return;
-    isMuted = !isMuted;
-    _engine.setMuted(isMuted);
+    if (isRemote) {
+      if (!isVolumeLocked) _sendRemote(RemoteCommand(RemoteAction.mute, on: !isMuted));
+      return;
+    }
+    _setMutedLocal(!_muted);
+  }
+
+  void _setMutedLocal(bool muted) {
+    if (isBitperfect || _muted == muted) return;
+    _muted = muted;
+    _engine.setMuted(_muted);
     notifyListeners();
   }
 
   // ── Engine callbacks ───────────────────────────────────────────────────────────────────────────
 
   void _onEngineTrackChanged(Track? track) {
-    _seekDebounce?.cancel();
-    _seekDebounce = null;
-    _isUserSeeking = false;
+    if (!isRemote) {
+      _seekDebounce?.cancel();
+      _seekDebounce = null;
+      _isUserSeeking = false;
+    }
 
+    _localPosition = track == null ? Duration.zero : _startAt;
+    _startAt = Duration.zero;
     currentTrack = track;
-    _setPosition(Duration.zero);
+    if (!isRemote) _setPosition(_localPosition);
     if (track != null) {
-      currentTier = track.format.tier;
-      currentTagSpec = track.format.tagSpec;
       signalPath = _engine.signalPathDescription;
       // Bookkeeping only: no error banner when it fails.
       unawaited(
@@ -481,30 +602,11 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  set currentTrack(Track? value) {
-    final old = _currentTrack;
-    if (identical(old, value)) return;
-    _currentTrack = value;
-    if (old != null) {
-      old.isPlaying = false;
-      final inLibrary = _library.getTrack(old.id);
-      if (inLibrary != null && !identical(inLibrary, old)) inLibrary.isPlaying = false;
-    }
-    if (value != null) {
-      value.isPlaying = true;
-      final inLibrary = _library.getTrack(value.id);
-      if (inLibrary != null && !identical(inLibrary, value)) inLibrary.isPlaying = true;
-    }
-    _lyricsTrackId = null;
-    _refreshLyrics();
-    notifyListeners();
-  }
-
   void _onTrackEnded() {
-    if (repeatMode == RepeatMode.one && _queueIndex >= 0 && _queueIndex < _playbackQueue.length) {
+    if (_repeat == RepeatMode.one && _queueIndex >= 0 && _queueIndex < _playbackQueue.length) {
       _playAt(_queueIndex);
-    } else if (_queueIndex < _playbackQueue.length - 1 || repeatMode == RepeatMode.all) {
-      nextTrack();
+    } else if (_queueIndex < _playbackQueue.length - 1 || _repeat == RepeatMode.all) {
+      _nextTrackLocal();
     }
   }
 
@@ -512,6 +614,385 @@ class PlayerViewModel extends ChangeNotifier {
     position.value = value;
     elapsedSeconds.value = value.inSeconds;
     _updateLyricPosition(value);
+  }
+
+  /// The track shown changed: the lists highlight the new one, and its lyrics are looked for.
+  void _showCurrentTrack() {
+    final shown = currentTrack;
+    final old = _marked;
+    if (!identical(old, shown)) {
+      _marked = shown;
+      if (old != null) {
+        old.isPlaying = false;
+        final inLibrary = _library.getTrack(old.id);
+        if (inLibrary != null && !identical(inLibrary, old)) inLibrary.isPlaying = false;
+      }
+      if (shown != null) {
+        shown.isPlaying = true;
+        final inLibrary = _library.getTrack(shown.id);
+        if (inLibrary != null && !identical(inLibrary, shown)) inLibrary.isPlaying = true;
+      }
+    }
+    if (_lyricsTrackId != shown?.id) {
+      _lyricsTrackId = null;
+      _refreshLyrics();
+    }
+    notifyListeners();
+  }
+
+  Track? _marked;
+
+  // ── Other devices (remote control) ─────────────────────────────────────────────────────────────
+
+  /// How long the device being controlled may be out of sight (a dropped connection) before control returns here.
+  /// Tests shorten it.
+  static Duration remoteGrace = const Duration(seconds: 15);
+
+  RemoteClient? _remote;
+  String? _remoteId;
+  String _remoteName = '';
+  DeviceKind _remoteKind = DeviceKind.desktop;
+  RemotePlayback? _remoteState;
+  (Duration, DateTime)? _remoteBase;
+  Track? _remoteTrack;
+  List<QueueItem> _remoteQueue = const [];
+  Timer? _remoteTicker;
+  Timer? _remoteLost;
+  double? _remoteVolume;
+  DateTime? _remoteVolumeAt;
+  Timer? _remoteVolumeTimer;
+
+  // What this device last told the others, so that it tells them only of changes.
+  Object? _published;
+  (Duration, DateTime, bool)? _publishedPosition;
+
+  /// Joins the account's other players: they see what plays here and can control it, and this player can control them.
+  void attachRemote(RemoteClient remote) {
+    _remote = remote;
+    _subscriptions.addAll([
+      remote.devicesChanged.listen((_) => _onDevicesChanged()),
+      remote.commandReceived.listen((received) => _execute(received.$2)),
+    ]);
+    _publish();
+  }
+
+  /// This player controls another device.
+  bool get isRemote => _remoteId != null;
+
+  /// The other players of the account that are online.
+  List<RemoteDevice> get otherDevices => _remote?.devices ?? const [];
+
+  /// Whether other devices can be reached (connected to the server's remote control).
+  bool get canReachDevices => _remote?.isConnected ?? false;
+
+  /// The device being controlled, null for this one.
+  String? get remoteDeviceId => _remoteId;
+  String get remoteDeviceName => _remoteName;
+  DeviceKind get remoteDeviceKind => _remoteKind;
+
+  /// Plays on another player of the account, or (null) on this one again. Music that is playing moves along: started
+  /// here, it continues there where it was (and stops here); playing there, it continues here when control comes back.
+  void selectDevice(String? deviceId) {
+    if (deviceId == _remoteId) return;
+    final remote = _remote;
+    if (remote == null) return;
+    final from = _remoteId;
+    final fromState = _remoteState;
+    final fromPosition = _remotePosition();
+
+    if (deviceId == null) {
+      _leaveRemote();
+      if (from != null && fromState != null && fromState.playing) {
+        final tracks = _library.resolveTracks(fromState.queue);
+        if (tracks.isNotEmpty) {
+          remote.send(from, const RemoteCommand(RemoteAction.pause));
+          final current = fromState.track == null ? null : _library.resolveTracks([fromState.track!.id]).firstOrNull;
+          final found = current != null && tracks.contains(current);
+          _playQueueInternal(tracks, found ? current : null, start: found ? fromPosition : Duration.zero);
+        }
+      }
+      notifyListeners();
+      return;
+    }
+
+    if (remote.device(deviceId) == null) return;
+    // What plays (here, or on the device controlled so far) goes along to the new one.
+    if (from != null && fromState != null && fromState.playing) {
+      final tracks = _library.resolveTracks(fromState.queue);
+      final index = fromState.track == null ? -1 : tracks.indexWhere((t) => t.id == fromState.track!.id);
+      if (tracks.isNotEmpty) {
+        final (ids, start) = _window(tracks, math.max(0, index));
+        remote.send(
+          deviceId,
+          RemoteCommand(RemoteAction.playTracks, trackIds: ids, index: start, position: fromPosition),
+        );
+        remote.send(from, const RemoteCommand(RemoteAction.pause));
+      }
+    } else if (from == null && _state == PlaybackState.playing && _queueIndex >= 0) {
+      final (ids, start) = _window(_playbackQueue, _queueIndex);
+      remote.send(
+        deviceId,
+        RemoteCommand(RemoteAction.playTracks, trackIds: ids, index: start, position: _localPosition),
+      );
+      unawaited(_engine.pause());
+    }
+    _enterRemote(deviceId);
+  }
+
+  /// Stops controlling another device, leaving its music as it is (signing out, remote control switched off).
+  void releaseRemote() {
+    if (!isRemote) return;
+    _leaveRemote();
+    notifyListeners();
+  }
+
+  /// At most [RemoteRules.maxQueueLength] IDs of [tracks] around [index], and [index] within them.
+  (List<String>, int) _window(List<Track> tracks, int index) {
+    if (tracks.isEmpty) return (const [], -1);
+    const max = RemoteRules.maxQueueLength;
+    final first = tracks.length <= max ? 0 : (index - 100).clamp(0, tracks.length - max);
+    final ids = [for (final track in tracks.skip(first).take(max)) _library.sharedId(track)];
+    return (ids, (index - first).clamp(0, ids.length - 1));
+  }
+
+  void _enterRemote(String deviceId) {
+    _remoteId = deviceId;
+    _remoteState = null;
+    _remoteBase = null;
+    _remoteTrack = null;
+    _remoteQueue = const [];
+    _remoteVolume = null;
+    _seekDebounce?.cancel();
+    _isUserSeeking = false;
+    spectrum.value = Float32List(32);
+    final device = _remote?.device(deviceId);
+    _remoteName = device?.name ?? '';
+    _remoteKind = device?.kind ?? DeviceKind.desktop;
+    final playback = device?.playback;
+    if (playback != null) {
+      _applyRemote(playback, device!.playbackReceivedAt ?? DateTime.now());
+    } else {
+      _setPosition(Duration.zero);
+      _showCurrentTrack();
+    }
+  }
+
+  void _leaveRemote() {
+    _remoteId = null;
+    _remoteState = null;
+    _remoteBase = null;
+    _remoteTrack = null;
+    _remoteQueue = const [];
+    _remoteVolume = null;
+    _remoteTicker?.cancel();
+    _remoteTicker = null;
+    _remoteLost?.cancel();
+    _remoteLost = null;
+    _remoteVolumeTimer?.cancel();
+    _remoteVolumeTimer = null;
+    _seekDebounce?.cancel();
+    _isUserSeeking = false;
+    _setPosition(_currentTrack == null ? Duration.zero : _localPosition);
+    _showCurrentTrack();
+  }
+
+  void _onDevicesChanged() {
+    final id = _remoteId;
+    if (id != null) {
+      final device = _remote?.device(id);
+      if (device == null) {
+        // Out of sight: a dropped connection comes back within moments; a device that was switched off does not.
+        _remoteTicker?.cancel();
+        _remoteTicker = null;
+        _remoteLost ??= Timer(remoteGrace, () {
+          final name = _remoteName;
+          _leaveRemote();
+          showError(Localizer.format('RemoteDeviceGone', [name.isEmpty ? Localizer.get('RemoteAnotherDevice') : name]));
+        });
+      } else {
+        _remoteLost?.cancel();
+        _remoteLost = null;
+        _remoteName = device.name;
+        _remoteKind = device.kind;
+        final playback = device.playback;
+        if (playback != null && !identical(playback, _remoteState)) {
+          _applyRemote(playback, device.playbackReceivedAt ?? DateTime.now());
+        }
+      }
+    }
+    notifyListeners();
+  }
+
+  /// Shows what the device being controlled plays: its track (this library's copy of it when there is one, for the
+  /// cover and the lyrics), its queue as far as this library knows the tracks, and its position, counted on here.
+  void _applyRemote(RemotePlayback playback, DateTime receivedAt) {
+    _remoteState = playback;
+    _remoteBase = (playback.position, receivedAt);
+    final volumeEdited = _remoteVolumeAt;
+    if (volumeEdited == null || DateTime.now().difference(volumeEdited) > const Duration(seconds: 1)) {
+      _remoteVolume = null; // the device's own value again, once the slider has rested
+    }
+
+    // This library's copy of the track when it has one (its cover, its lyrics, its heart); else the device's own
+    // description of it, kept while it stays the same track, with the cover of the album here if there is one.
+    final told = playback.track;
+    final previous = _remoteTrack;
+    final Track? shown = told == null
+        ? null
+        : (_library.resolveTracks([told.id]).firstOrNull ??
+              (previous != null && previous.id == told.id
+                  ? previous
+                  : (told..coverArtPath = _library.getAlbum(told.albumId)?.coverArtPath)));
+    final trackChanged = shown?.id != _remoteTrack?.id;
+    _remoteTrack = shown;
+
+    final known = <QueueItem>[];
+    for (var i = 0; i < playback.queue.length; i++) {
+      final track = _library.resolveTracks([playback.queue[i]]).firstOrNull;
+      if (track != null) known.add(QueueItem(track, i, i == playback.queueIndex));
+    }
+    _remoteQueue = known;
+
+    if (!_isUserSeeking) _setPosition(_remotePosition());
+    _remoteTicker?.cancel();
+    _remoteTicker = playback.playing
+        ? Timer.periodic(const Duration(seconds: 1), (_) {
+            if (!_isUserSeeking) _setPosition(_remotePosition());
+          })
+        : null;
+    if (trackChanged) {
+      _showCurrentTrack();
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// The position of the device being controlled: the one it told, counted on since while it plays.
+  Duration _remotePosition() {
+    final base = _remoteBase;
+    final state = _remoteState;
+    if (base == null || state == null) return Duration.zero;
+    var at = base.$1;
+    if (state.playing) at += DateTime.now().difference(base.$2);
+    final length = _remoteTrack?.duration ?? Duration.zero;
+    return length > Duration.zero && at > length ? length : at;
+  }
+
+  Future<void> _sendRemote(RemoteCommand command) async {
+    final id = _remoteId;
+    if (id == null) return;
+    if (!(_remote?.send(id, command) ?? false)) {
+      showError(
+        Localizer.format('RemoteDeviceUnreachable', [
+          _remoteName.isEmpty ? Localizer.get('RemoteAnotherDevice') : _remoteName,
+        ]),
+      );
+    }
+  }
+
+  /// A command from another device of the account, for this one's own player.
+  void _execute(RemoteCommand command) {
+    switch (command.action) {
+      case RemoteAction.play:
+        unawaited(_playLocal());
+      case RemoteAction.pause:
+        unawaited(_pauseLocal());
+      case RemoteAction.toggle:
+        unawaited(_togglePlayPauseLocal());
+      case RemoteAction.stop:
+        unawaited(_runSafe(_engine.stop));
+      case RemoteAction.next:
+        _nextTrackLocal();
+      case RemoteAction.previous:
+        _previousTrackLocal();
+      case RemoteAction.seek:
+        if (_currentTrack != null) _runSafe(() => _engine.seek(command.position));
+      case RemoteAction.volume:
+        _setVolumeLocal(command.volume);
+      case RemoteAction.mute:
+        _setMutedLocal(command.on);
+      case RemoteAction.shuffle:
+        _setShuffleLocal(command.on);
+      case RemoteAction.repeat:
+        _repeat = command.repeat;
+        notifyListeners();
+      case RemoteAction.playTracks:
+        // Music from another device: it plays here now, and this player shows it. The track it was on starts where it
+        // was; one this library lacks gives way to the next one it has, from its beginning.
+        final tracks = _library.resolveTracks(command.trackIds);
+        if (tracks.isEmpty) return;
+        final index = command.index;
+        final wanted = index < 0 ? null : _library.resolveTracks([command.trackIds[index]]).firstOrNull;
+        final start =
+            wanted ?? (index < 0 ? null : _library.resolveTracks(command.trackIds.skip(index + 1)).firstOrNull);
+        if (isRemote) _leaveRemote();
+        _playQueueInternal(tracks, start, start: wanted != null ? command.position : Duration.zero);
+        notifyListeners();
+      case RemoteAction.playIndex:
+        if (command.index < _playbackQueue.length) _playAt(command.index);
+    }
+  }
+
+  /// Tells the other devices about this one's playback when something they show changed.
+  void _publish() {
+    final remote = _remote;
+    if (remote == null) return;
+    final track = _currentTrack;
+    final playing = _state == PlaybackState.playing;
+    final signature = (
+      track == null ? null : _library.sharedId(track),
+      playing,
+      _state == PlaybackState.stopped,
+      _volume,
+      _muted,
+      isBitperfect,
+      _shuffle,
+      _repeat,
+      _queueVersion,
+    );
+    if (signature == _published) return;
+    _published = signature;
+    _publishNow(remote);
+  }
+
+  /// A position that is not where the others count it to be (a seek, a stall) is told; one that keeps pace is not.
+  void _publishIfDrifted(Duration at) {
+    final remote = _remote;
+    final told = _publishedPosition;
+    if (remote == null || told == null) return;
+    final (toldPosition, toldAt, toldPlaying) = told;
+    final expected = toldPlaying ? toldPosition + DateTime.now().difference(toldAt) : toldPosition;
+    if ((at - expected).abs() > const Duration(seconds: 2)) _publishNow(remote);
+  }
+
+  void _publishNow(RemoteClient remote) {
+    final track = _currentTrack;
+    final playing = _state == PlaybackState.playing;
+    final at = track == null ? Duration.zero : _localPosition;
+    final (queue, index) = _queueIndex >= 0 && _queueIndex < _playbackQueue.length
+        ? _window(_playbackQueue, _queueIndex)
+        : (<String>[], -1);
+    _publishedPosition = (at, DateTime.now(), playing);
+    remote.publish(
+      RemotePlayback(
+        track: track == null ? null : Track.fromJson({...track.toJson(), 'id': _library.sharedId(track)}),
+        playing: playing,
+        position: at,
+        volume: _volume,
+        muted: _muted,
+        volumeLocked: isBitperfect,
+        shuffle: _shuffle,
+        repeat: _repeat,
+        queue: queue,
+        queueIndex: index,
+      ),
+    );
+  }
+
+  @override
+  void notifyListeners() {
+    _publish();
+    super.notifyListeners();
   }
 
   // ── Lyrics ─────────────────────────────────────────────────────────────────────────────────────
@@ -602,13 +1083,13 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// Jumps the song to the start of a lyric line (the user tapped it).
   void seekToLyric(LyricLine? line) {
-    if (line == null || _currentTrack == null) return;
+    if (line == null || currentTrack == null) return;
     seekTo(line.time);
   }
 
   /// Loads the lyrics of the current track, but only while the panel that shows them is open.
   void _refreshLyrics() {
-    final track = _currentTrack;
+    final track = currentTrack;
     if (track == null) {
       _lyricsToken?.cancel();
       _lyricsTrackId = null;
@@ -674,7 +1155,7 @@ class PlayerViewModel extends ChangeNotifier {
       }
     }
 
-    if (ct.isCancelled || !identical(_currentTrack, track)) return;
+    if (ct.isCancelled || !identical(currentTrack, track)) return;
     _setLyrics(text);
     lyricsOrigin = origin;
     lyricsLookupFailed = failed;
@@ -706,6 +1187,9 @@ class PlayerViewModel extends ChangeNotifier {
     }
     _seekDebounce?.cancel();
     _lyricsToken?.cancel();
+    _remoteTicker?.cancel();
+    _remoteLost?.cancel();
+    _remoteVolumeTimer?.cancel();
     position.dispose();
     elapsedSeconds.dispose();
     spectrum.dispose();

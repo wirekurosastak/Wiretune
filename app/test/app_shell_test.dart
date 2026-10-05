@@ -13,6 +13,7 @@ import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/widgets/ambient.dart';
+import 'package:wiretune/src/widgets/common.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/quality_tag.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
@@ -39,11 +40,22 @@ void main() {
     return createMainViewModel(library);
   }
 
-  Future<MainViewModel> pumpApp(WidgetTester tester, Size size) async {
+  // A local album beside a server's, as a player signed in to a server has them: only the server's can be downloaded.
+  Future<MainViewModel> createWithServer() async {
+    final library = createLibrary([
+      TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 1),
+      TestSupport.makeServerTrack('s1', 'Giant Steps', artist: 'John Coltrane', album: 'Giant Steps'),
+      TestSupport.makeServerTrack('s2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps')..trackNumber = 2,
+    ]);
+    await library.initialize();
+    return createMainViewModel(library);
+  }
+
+  Future<MainViewModel> pumpApp(WidgetTester tester, Size size, [Future<MainViewModel> Function()? build]) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    final vm = await tester.runAsync(create);
+    final vm = await tester.runAsync(build ?? create);
     await tester.pumpWidget(WiretuneApp(vm: vm!));
     await tester.pump(const Duration(milliseconds: 400));
     return vm;
@@ -343,16 +355,20 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     for (final (size, tv) in const [(Size(360, 640), false), (Size(960, 540), true)]) {
       AppPlatform.forTesting(tv: tv);
-      final vm = await pumpApp(tester, size);
+      // A server's album too: its download button stands beside Play and Shuffle.
+      final vm = await pumpApp(tester, size, createWithServer);
+      await tester.runAsync(() => vm.library.setFavorite('s1', true)); // not signed in: as the server told it
       vm.player.currentTrack = vm.library.tracks.first;
       for (final section in AppSection.values) {
         vm.navigateTo(section);
         await settle(tester);
         expect(tester.takeException(), isNull, reason: '$section at $size');
       }
-      vm.openAlbum(vm.library.albums.first);
-      await settle(tester);
-      expect(tester.takeException(), isNull, reason: 'album detail at $size');
+      for (final album in vm.library.albums) {
+        vm.openAlbum(album);
+        await settle(tester);
+        expect(tester.takeException(), isNull, reason: '${album.title} at $size');
+      }
       vm.openArtist(vm.library.artists.first);
       await settle(tester);
       expect(tester.takeException(), isNull, reason: 'artist detail at $size');
@@ -425,6 +441,173 @@ void main() {
         }
       }
     });
+  });
+
+  testWidgets('a server album, a server track and the favourites download; a local album has nothing to', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), createWithServer);
+    final downloads = vm.downloads;
+    final header = find.byType(DetailHeader);
+    Finder inHeader(String tooltip) => find.descendant(of: header, matching: find.byTooltip(tooltip));
+    Finder inRows(String tooltip) => find.descendant(of: find.byType(TrackSliver), matching: find.byTooltip(tooltip));
+
+    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+    await settle(tester);
+    expect(inHeader('Download to this device'), findsNothing);
+    expect(tester.widget<PlayShuffleButtons>(find.byType(PlayShuffleButtons)).trailing, isNull, reason: 'no button');
+    expect(inRows('Download to this device'), findsNothing);
+
+    final album = vm.library.albums.firstWhere((a) => a.title == 'Giant Steps');
+    vm.openAlbum(album);
+    await settle(tester);
+    await tester.tap(inHeader('Download to this device'));
+    await settle(tester);
+    expect(downloads.isAlbumPinned(album), isTrue);
+    // On its way: the arrow in progress inside a ring that fills as the tracks arrive (none yet, out of two).
+    expect(find.descendant(of: header, matching: find.byIcon(Icons.downloading_rounded)), findsOneWidget);
+    final ring = tester.widget<CircularProgressIndicator>(
+      find.descendant(of: header, matching: find.byType(CircularProgressIndicator)),
+    );
+    expect(ring.value, 0);
+    // The album keeps its tracks: their own buttons cannot let them go.
+    final keptByAlbum = inRows('Downloaded with an album, a playlist or the favourites');
+    expect(keptByAlbum, findsNWidgets(2));
+    await tester.tap(keptByAlbum.first, warnIfMissed: false);
+    await settle(tester);
+    expect(album.tracks.map(downloads.isTrackPinned), [false, false]);
+    expect(album.tracks.map(downloads.stateOf), everyElement(DownloadState.queued));
+    await tester.tap(inHeader('0 of 2 downloaded – click to remove'));
+    await settle(tester);
+    expect(downloads.isAlbumPinned(album), isFalse);
+
+    // One track, from its row.
+    await tester.tap(inRows('Download to this device').first);
+    await settle(tester);
+    expect(downloads.isTrackPinned(vm.library.getTrack('s1')!), isTrue);
+    expect(inRows('Remove the download'), findsOneWidget);
+
+    // The favourites, from their page.
+    await tester.runAsync(() => vm.library.setFavorite('s2', true)); // not signed in: as the server told it
+    vm.navigateTo(AppSection.favorites);
+    await settle(tester);
+    await tester.tap(
+      find.descendant(of: find.byType(PlayShuffleButtons), matching: find.byTooltip('Download to this device')),
+    );
+    await settle(tester);
+    expect(downloads.areFavoritesPinned, isTrue);
+  });
+
+  testWidgets("on a phone a track's menu downloads it, and the row shows that it is kept", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860), createWithServer);
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    Finder menuOf(String title) => find.descendant(
+      of: find.ancestor(of: find.text(title), matching: find.byType(InkWell)).first,
+      matching: find.byIcon(Icons.more_vert_rounded),
+    );
+
+    // A local file has nothing to download.
+    await tester.tap(menuOf('So What'));
+    await settle(tester);
+    expect(find.text('Go to album'), findsOneWidget);
+    expect(find.text('Download to this device'), findsNothing);
+    await tester.tapAt(const Offset(10, 10)); // closes the menu
+    await settle(tester);
+
+    expect(
+      find.descendant(of: find.byType(TrackSliver), matching: find.byIcon(Icons.downloading_rounded)),
+      findsNothing,
+    );
+    await tester.tap(menuOf('Giant Steps'));
+    await settle(tester);
+    expect(find.text('Add to playlist'), findsOneWidget);
+    await tester.tap(find.text('Download to this device'));
+    await settle(tester);
+    expect(vm.downloads.isTrackPinned(vm.library.getTrack('s1')!), isTrue);
+    // Waiting for its turn (the downloads have not started in this test): the arrow in progress beside the artist.
+    expect(
+      find.descendant(of: find.byType(TrackSliver), matching: find.byIcon(Icons.downloading_rounded)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('another device of the account can be chosen from the phone, which then shows what plays there', (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'android');
+    tester.view.physicalSize = const Size(400, 860);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final hub = FakeRemoteHub();
+    final vm = (await tester.runAsync(() async {
+      final vm = await createWithServer();
+      final session = await signedInSession(vm.library);
+      final remote = RemoteClient(session, connector: hub.connect);
+      final withRemote = createMainViewModel(vm.library, null, session, remote);
+      remote.configure(id: 'phone', name: '', kind: DeviceKind.phone, enabled: true);
+      await waitUntil(() => remote.isConnected);
+      return withRemote;
+    }))!;
+    await tester.pumpWidget(WiretuneApp(vm: vm));
+    await settle(tester);
+    // Online, but nobody else is: the button is there, and its menu says what to do.
+    await tester.tap(find.byTooltip('Play on another device'));
+    await settle(tester);
+    expect(find.textContaining('No other device is online'), findsOneWidget);
+    await tester.tapAt(const Offset(10, 10));
+    await settle(tester);
+
+    await tester.runAsync(() async {
+      hub.devices([('desk', 'Desk', DeviceKind.desktop)]);
+      hub.state('desk', RemotePlayback(track: vm.library.tracks.first, playing: true, queue: ['1'], queueIndex: 0));
+      await pumpEventQueue();
+    });
+    await settle(tester);
+    await tester.tap(find.byTooltip('Play on another device'));
+    await settle(tester);
+    expect(find.text('This device'), findsOneWidget);
+    expect(find.text('So What • Miles Davis'), findsOneWidget);
+    await tester.tap(find.ancestor(of: find.text('Desk'), matching: find.byType(CheckedPopupMenuItem<String>)));
+    await settle(tester);
+
+    expect(vm.player.isRemote, isTrue);
+    expect(find.text('Playing on Desk'), findsOneWidget); // in the mini player, in place of the artist
+    expect(find.text('So What'), findsWidgets);
+    await tester.tap(find.byTooltip('Pause'));
+    await settle(tester);
+    expect(hub.commandsTo('desk'), [
+      {'action': 'toggle'},
+    ]);
+    vm.dispose();
+  });
+
+  testWidgets('signed in, the settings show the downloads and remote control', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    expect(find.text('Remote control'), findsNothing); // signed out: nothing to control
+
+    // An app keeps its view model for life: a signed-in one is another app.
+    await tester.pumpWidget(const SizedBox());
+    final session = (await tester.runAsync(() => signedInSession(vm.library)))!;
+    final signedIn = createMainViewModel(vm.library, null, session)..navigateTo(AppSection.settings);
+    await tester.pumpWidget(WiretuneApp(vm: signedIn));
+    await settle(tester);
+    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.textContaining('Nothing is downloaded yet'), findsOneWidget);
+    expect(find.text('Remote control'), findsOneWidget);
+    final toggle = find.descendant(
+      of: find.ancestor(of: find.text('Remote control'), matching: find.byType(Row)).first,
+      matching: find.byType(Switch),
+    );
+    expect(tester.widget<Switch>(toggle).value, isFalse, reason: 'the start-up turns it on; this test never started');
+    await tester.ensureVisible(toggle);
+    await settle(tester);
+    await tester.tap(toggle);
+    await settle(tester);
+    expect(signedIn.isRemoteEnabled, isTrue);
+    signedIn.dispose();
   });
 
   testWidgets('the sign-in page covers the app while it is active', (tester) async {

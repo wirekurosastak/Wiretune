@@ -6,7 +6,8 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 - Errors look like `{ "error": "message" }`; `401` and `403` come with an empty body.
 - Send `Authorization: Bearer <token>`. Players that can't send headers may put a **stream token**
   (`POST /api/auth/stream-token`) into the URL as `?token=` on `/api/stream/…` and `/api/cover/…`. That's the only
-  place a token is read from a URL, and the only kind of token accepted there: URLs end up in logs.
+  place a token is read from a URL, and the only kind of token accepted there: URLs end up in logs. The players
+  download with the sign-in token in the header.
 - Roles are **anonymous**, **user** and **admin**. Bodies are capped at 64 KiB (a playlist 4 MiB), then `413`.
   Password rules, token lifetimes and the rate limit are in [server.md](server.md#accounts).
 
@@ -70,6 +71,39 @@ The server doesn't check that a track ID exists: libraries get rescanned and mov
 | `GET /api/cover/{trackId}` | user | The cover (`image/jpeg` or `image/png`), cacheable for a day. `404` when there is none |
 | `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one. The players use this one, so an album's tracks share one URL and one download |
 | `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` when there are none. The server never looks online; the players ask LRCLIB themselves |
+
+## Remote control
+
+`GET /api/remote` (user, with the sign-in token in the header: never a stream token, never `?token=`) upgrades to a
+WebSocket. Through it the players of one account see each other and send each other commands. The server passes the
+messages on between the players of that account and nowhere else, and keeps none of them. A plain `GET` gets `426`, a
+request from a web page (one with an `Origin` header) `403`, and an account that already holds 40 connections `429`.
+
+Every message is a JSON object with a `type`, sent as text, at most 64 K characters.
+
+| Message | Sent by | |
+|---|---|---|
+| `{ "type": "hello", "device": { "id", "name", "kind" } }` | player | First, within 10 seconds. `id` is the player's own lasting ID (up to 128 characters), `name` up to 64 (empty is fine), `kind` one of `desktop`, `phone`, `tablet`, `tv`. Saying hello again renames the device |
+| `{ "type": "state", "state" }` | player | What it plays (below). The others get it, and so do players that connect later |
+| `{ "type": "command", "to", "command" }` | player | For another player of the account, by its ID; one that isn't online is ignored |
+| `{ "type": "devices", "devices": [{ "id", "name", "kind" }] }` | server | The account's other players that are online, every time that changes |
+| `{ "type": "state", "device", "state" }` | server | Another player's state |
+| `{ "type": "command", "from", "command" }` | server | A command for this player |
+
+A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
+"queueIndex" }`: the track as `/api/tracks` lists it (or `null`), the position when the state was sent (the others
+count on from there while it plays), the volume from 0 to 100, `repeat` as `off`, `all` or `one`, and up to 1,000
+track IDs of the queue with the current one's index (or -1). Tracks from the server go by the server's IDs, so the other
+players find them in their own library.
+
+A **command** has an `action`: `play`, `pause`, `toggle`, `stop`, `next`, `previous`, `seek` (with `positionMs`),
+`volume` (`volume`), `mute` and `shuffle` (`on`), `repeat` (`repeat`), `playTracks` (`trackIds`, the `index` to start
+at or -1 for the player's own choice, and `positionMs` there) or `playIndex` (`index` in its queue). A player checks
+what it gets and ignores a command it doesn't understand.
+
+The server closes a connection with `4000` when the same device connects again, `4001` beyond 20 devices on one
+account, `4401` when the token expires or the account is deleted, `1008` for a message it doesn't accept (or more than
+200 in 10 seconds), and `1009` for one that is too long. Both sides ping every 25 seconds.
 
 ## Example
 

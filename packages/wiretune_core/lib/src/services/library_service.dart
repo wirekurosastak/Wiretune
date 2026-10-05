@@ -410,11 +410,30 @@ class LibraryService {
 
   Playlist? getPlaylist(String playlistId) => _playlists.where((pl) => pl.id == playlistId).firstOrNull;
 
-  List<Track> getPlaylistTracks(Playlist playlist) {
+  List<Track> getPlaylistTracks(Playlist playlist) => resolveTracks(playlist.trackIds);
+
+  /// The tracks with these IDs, in their order; a server ID also finds the local file it was matched to. Unknown IDs
+  /// are left out.
+  List<Track> resolveTracks(Iterable<String> trackIds) {
     final byId = _snapshot.trackById;
     final aliases = _serverAliases;
-    return [for (final id in playlist.trackIds) ?(byId[id] ?? byId[aliases[id]])];
+    return [for (final id in trackIds) ?(byId[id] ?? byId[aliases[id]])];
   }
+
+  /// The ID the other devices of the account know [track] by: the server's, also for a local file that was matched to
+  /// a server track; the track's own ID for a file only this device has.
+  String sharedId(Track track) {
+    if (!track.isLocal) return track.id;
+    final aliases = _serverAliases;
+    if (!identical(aliases, _sharedIdsSource)) {
+      _sharedIdsSource = aliases;
+      _sharedIds = {for (final MapEntry(key: serverId, value: localId) in aliases.entries) localId: serverId};
+    }
+    return _sharedIds[track.id] ?? track.id;
+  }
+
+  Map<String, String> _sharedIdsSource = const {};
+  Map<String, String> _sharedIds = const {};
 }
 
 /// Immutable view of the library; replaced wholesale so readers never need a lock or a copy.

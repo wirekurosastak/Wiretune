@@ -144,6 +144,10 @@ music.example.com {
 Then run the server with `--host 127.0.0.1`, so nothing reaches it except through the proxy, and `--trust-proxy`, so
 each player gets its own sign-in limit instead of everyone sharing the proxy's.
 
+Remote control between the players is a WebSocket (`/api/remote`). Caddy passes WebSockets on by itself; nginx needs
+`proxy_http_version 1.1;`, `proxy_set_header Upgrade $http_upgrade;` and `proxy_set_header Connection "upgrade";` in
+its `location`. Both ends ping every 25 seconds, so idle timeouts of a minute or more don't cut it.
+
 `--trust-proxy` makes the server believe `X-Forwarded-For` from anyone who can reach it, which is exactly why the port
 mustn't be reachable directly. It uses the last address in the header, the one your proxy added; anything a client
 wrote there itself is ignored. Behind two proxies in a row, that's the outer proxy's address, unless the inner one is

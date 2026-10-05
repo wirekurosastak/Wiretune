@@ -5,15 +5,15 @@ import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../platform.dart';
-import '../view_models/player_view_model.dart';
 
 /// The phone's side of playing music: the audio focus (a call pauses, a navigation prompt ducks, unplugged headphones
-/// pause), and on Android a CPU and Wi-Fi lock while playing, so a stream keeps flowing with the screen off.
+/// pause), and on Android a CPU and Wi-Fi lock while playing, so a stream keeps flowing with the screen off. All of it
+/// is about the sound this phone makes: music it plays on another device (remote control) goes on through a call.
 abstract final class MobileAudio {
   static const MethodChannel _power = MethodChannel('wiretune/power');
   static const double _duckLevel = 0.2;
 
-  static Future<void> attach(WiretuneAudioEngine engine, PlayerViewModel player) async {
+  static Future<void> attach(WiretuneAudioEngine engine) async {
     final session = await AudioSession.instance;
     await session.configure(const AudioSessionConfiguration.music());
 
@@ -43,7 +43,7 @@ abstract final class MobileAudio {
           case AudioInterruptionType.pause || AudioInterruptionType.unknown:
             resumeAfterInterruption =
                 engine.state == PlaybackState.playing && event.type == AudioInterruptionType.pause;
-            await player.pause();
+            if (engine.state == PlaybackState.playing) await engine.pause();
         }
       } else {
         if (ducked) {
@@ -52,11 +52,13 @@ abstract final class MobileAudio {
         }
         if (resumeAfterInterruption) {
           resumeAfterInterruption = false;
-          await player.play();
+          if (engine.state == PlaybackState.paused) await engine.resume();
         }
       }
     });
 
-    session.becomingNoisyEventStream.listen((_) => unawaited(player.pause()));
+    session.becomingNoisyEventStream.listen((_) {
+      if (engine.state == PlaybackState.playing) unawaited(engine.pause());
+    });
   }
 }

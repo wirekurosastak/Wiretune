@@ -1,10 +1,16 @@
 /// Test doubles shared by the tests of the core, the server and the app: an in-memory repository, an audio driver
-/// that plays nothing, sample tracks and a WAV writer. Not used by any shipped code.
+/// that plays nothing, a signed-in session, a remote-control hub, sample tracks and a WAV writer. Not used by any
+/// shipped code.
 library;
 
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 
 import 'wiretune_core.dart';
 
@@ -288,4 +294,81 @@ bool hasTool(String tool) {
   } catch (_) {
     return false;
   }
+}
+
+/// A session signed in to a server that answers just enough for that: no tracks of its own unless [tracks] are given,
+/// an account with nothing in it. Its token is "sign-in-token"; [serverUrl] is the address the session believes in.
+Future<ServerSession> signedInSession(
+  LibraryService library, {
+  List<Track> tracks = const [],
+  String serverUrl = 'http://server:5200',
+}) async {
+  final user = UserInfo('user-1', 'owner', true, DateTime.utc(2026), null);
+  final client = MockClient((request) async {
+    final body = switch (request.url.path) {
+      '/api/auth/setup-required' => {'setupRequired': false},
+      '/api/auth/login' => AuthResponse('sign-in-token', user, DateTime.utc(2099)).toJson(),
+      '/api/auth/me' => user.toJson(),
+      '/api/tracks' => [for (final t in tracks) t.toJson()],
+      '/api/me/data' => const UserDataSnapshot([], [], []).toJson(),
+      _ => <String, Object?>{},
+    };
+    return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+  });
+  final session = ServerSession(library, MockRepository(), ServerStreamingClient(client));
+  await session.initialize();
+  await session.connect(serverUrl);
+  final error = await session.login('owner', 'password', false);
+  if (error != null) throw StateError('signing in failed: $error');
+  return session;
+}
+
+/// The server's remote-control hub as one player sees it: what the player sent, and messages for it. Pass [connect] as
+/// the [RemoteClient]'s connector.
+class FakeRemoteHub {
+  final List<Map<String, Object?>> sent = [];
+  StreamController<Object?>? _incoming;
+  int connections = 0;
+
+  Future<RemoteChannel> connect(Uri uri, String token) async {
+    connections++;
+    final incoming = _incoming = StreamController<Object?>();
+    return RemoteChannel(
+      messages: incoming.stream,
+      send: (text) => sent.add((jsonDecode(text) as Map).cast<String, Object?>()),
+      close: () => incoming.close(),
+      closeCode: () => null,
+    );
+  }
+
+  /// Hands the player a message, as the server would.
+  void deliver(Map<String, Object?> message) => _incoming!.add(jsonEncode(message));
+
+  /// Hands the player a frame as it is, which a real server would never send.
+  void deliverRaw(Object? frame) => _incoming!.add(frame);
+
+  /// The other devices of the account that are online: (id, name, kind).
+  void devices(List<(String, String, DeviceKind)> devices) => deliver({
+    'type': 'devices',
+    'devices': [
+      for (final (id, name, kind) in devices) {'id': id, 'name': name, 'kind': kind.name},
+    ],
+  });
+
+  void state(String device, RemotePlayback playback) =>
+      deliver({'type': 'state', 'device': device, 'state': playback.toJson()});
+
+  void command(String from, RemoteCommand command) =>
+      deliver({'type': 'command', 'from': from, 'command': command.toJson()});
+
+  /// Ends the connection the way a network failure does.
+  Future<void> drop() => _incoming!.close();
+
+  Iterable<Map<String, Object?>> ofType(String type) => sent.where((m) => m['type'] == type);
+
+  /// The command objects sent to [device], in order.
+  List<Object?> commandsTo(String device) => [
+    for (final m in ofType('command'))
+      if (m['to'] == device) m['command'],
+  ];
 }

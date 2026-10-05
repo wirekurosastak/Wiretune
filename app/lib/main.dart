@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -52,12 +53,18 @@ Future<void> main() async {
     library,
     session,
     onlineLyrics: OnlineLyrics.createDefault(),
-    capabilities: DeviceCapabilities(supportsLocalFolder: platform.supportsLocalFolder),
+    capabilities: DeviceCapabilities(
+      supportsLocalFolder: platform.supportsLocalFolder,
+      kind: _deviceKind(platform),
+      // A computer goes by its host name; a phone's is "localhost", so it goes by "Phone" until it is given a name.
+      name: platform.isDesktop ? Platform.localHostname : '',
+    ),
   );
   vm.onServerCredentialsChanged = (serverUrl, token) {
     CoverArt.serverUrl = serverUrl.isEmpty ? null : serverUrl;
     CoverArt.authToken = token;
   };
+  CoverArt.localCopy = vm.downloadService.localCover;
 
   // A failed command (locked database, full disk, ...) must not take the whole player down: log it with its stack
   // trace and show it in the player's error line instead. The line is updated after the frame that is being built,
@@ -80,7 +87,7 @@ Future<void> main() async {
 
   if (platform.isAndroid || platform.isIOS) {
     try {
-      await MobileAudio.attach(vm.audioEngine, vm.player);
+      await MobileAudio.attach(vm.audioEngine);
     } catch (e, s) {
       WiretuneLog.error('App', 'Audio session set-up failed', e, s);
     }
@@ -96,6 +103,16 @@ Future<void> main() async {
   runApp(WiretuneApp(vm: vm));
   unawaited(vm.start());
   if (UiAutomationServer.isEnabled) unawaited(UiAutomationServer(vm).start());
+}
+
+/// What the account's other players see this one as. A phone or a tablet tells by its screen: a tablet's shorter side
+/// is at least 600 points.
+DeviceKind _deviceKind(AppPlatform platform) {
+  if (platform.isTv) return DeviceKind.tv;
+  if (!platform.isMobile) return DeviceKind.desktop;
+  final view = PlatformDispatcher.instance.views.firstOrNull;
+  final shortest = view == null ? 0 : view.physicalSize.shortestSide / view.devicePixelRatio;
+  return shortest >= 600 ? DeviceKind.tablet : DeviceKind.phone;
 }
 
 /// The desktop window: on Linux and Windows without the system's title bar (the header is the title bar, with its own

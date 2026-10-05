@@ -35,12 +35,20 @@ internet. This page is the honest list of what it does and doesn't do about that
   per account, and no route, not even an administrator's, reads somebody else's.
 - **Files.** The server reads only the music folder and serves only files inside it (or its cover cache). Clients
   never see a server path. Request bodies are capped at 64 KiB, 4 MiB for a playlist.
+- **Remote control** (`/api/remote`) passes messages between the players of one account and nowhere else, takes the
+  account from the sign-in token in the header (never a stream token, never the URL), turns away requests from web
+  pages, and ends a connection when its token expires or the account is deleted. Whoever holds an account's token can
+  control that account's players. A message is read whole before its 64 K limit is checked, so a signed-in account can
+  make the server hold one large message in memory: another reason the server is for people you trust.
 
 ## Players
 
 - **The sign-in token is stored in plain text** in the player's `wiretune.db` when *Keep me signed in* is ticked (the
   account created on a server's first run is always kept). Anyone who can read that file can use it for up to 90
   days. Signing out clears it, and a token is only ever sent to the server that issued it.
+- **Downloads** are plain copies of the server's files in the `Downloads` folder of the player's data directory,
+  readable by whoever can read that folder. Their names are hashes, never a server's IDs or paths. Signing out deletes
+  them.
 - **Cleartext HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP,
   which those platforms' allow-lists can't express. Use an `https://` address whenever the network isn't yours.
 - **Artist pictures** come from Deezer's public API, which therefore sees the artist names in your library. They're

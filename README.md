@@ -21,6 +21,9 @@ pictures and lyrics for tracks that have none, and you can turn both off ([SECUR
 - A quality tag on every track, **gold** for hi-res, **silver** for CD-quality lossless, **bronze** for lossy, and a
   32-band spectrum analyser on the desktop.
 - Favourites, play counts and playlists kept on your server, per account, so they follow you from device to device.
+- Downloads for offline listening (a track, an album, a playlist or your favourites), kept in step with the server.
+- Remote control between your devices: see and steer what the desktop plays from your phone, or move the music from
+  one to the other.
 - One decoder everywhere but Tizen (FFmpeg, inside libmpv): FLAC, ALAC, WAV, AIFF, APE, WavPack, DSD, MP3, AAC, Vorbis,
   Opus.
 - Lock-screen controls on phones, Android Auto in the car, a remote-friendly TV layout, MPRIS on Linux, and the

@@ -71,6 +71,38 @@ server restarts. Other accounts have their own.
 - Moving or renaming a file on the server gives its track a new ID, and its old favourite and playlist entries stop
   matching ([server.md](server.md#scanning)).
 
+## Downloads
+
+Music from a server can stay on the device, to play without the server or the network: a single track (its download
+button in a track list, or *⋮ → Download to this device* on a phone), an album, a playlist or all your favourites (the
+button beside *Play* and *Shuffle*).
+
+- What you marked stays in step: a track added to a downloaded playlist, or a new favourite, is downloaded; one taken
+  off is deleted. A file that changed on the server (new tags) is fetched again, and the old copy plays until then.
+- Downloads run one track at a time while you're signed in and the app is running (in the background too, as long as
+  the system lets it run); one that was cut short continues where it stopped. A track shows the arrow in progress
+  while it waits or arrives and a tick once it's here; a list's button fills its ring as its tracks arrive.
+- A track kept because its album, a playlist or the favourites are can only be let go with them.
+- **Settings → Downloads** shows how much room they take and removes them all. Signing out removes them too.
+- There's no "Wi-Fi only" switch yet: downloads use whatever network the device is on, mobile data included.
+
+## Playing on another device
+
+Every player signed in to the same account on the same server sees the others. The cast button (in the player bar,
+the mini player, the full-screen player and a phone's page headers) lists them with what each one plays; it lights up
+when another device plays while this one is idle. Pick one, and this player becomes its remote: you see what plays
+there, and play, pause, skip, seek, shuffle, repeat, the volume and whatever you start from your library go there.
+Music that was playing here moves along, and stops here; picking *This device* again brings what plays there back.
+
+- Its queue is shown as far as your library knows the tracks, and isn't edited from here. Its exclusive and
+  bit-perfect modes are its own.
+- A call or unplugged headphones pause the phone's own sound, never the other device's. The notification and the lock
+  screen control the device being controlled.
+- If the other device drops off the network, this one waits 15 seconds for it, then takes control back and says so.
+- **Settings → Remote control** turns it off (the other devices then don't see this one) or gives the device a name.
+- It runs through the server: both need this version, and a reverse proxy has to pass WebSockets on
+  ([server.md](server.md#reverse-proxy-and-tls)).
+
 ## Server and local music together
 
 A song that's in both places shows up once, and the **local copy wins**, so it plays without the network. Two tracks
@@ -81,8 +113,8 @@ sign in again.
 
 ## Settings
 
-- **Server & library**: your account, the server's address, the local folder and **Scan** (desktop). Administrators
-  also get **Reindex**, the server's music folder and **Users**.
+- **Server & library**: your account, the server's address, **Downloads**, **Remote control**, the local folder and
+  **Scan** (desktop). Administrators also get **Reindex**, the server's music folder and **Users**.
 - **Audio** (desktop): *Exclusive*, *Bit-perfect* and *Output device*. The switches stay grey when no device can do
   them.
 - **Appearance**: language, theme, and *Performance statistics* (Flutter's frame graphs).
@@ -109,4 +141,7 @@ sign in again.
 | Favourites or playlists are empty after signing in | They belong to the account you used before. Or the server started with a fresh data directory ([server.md](server.md#data-directory)). |
 | An iPhone can't reach a server on the LAN | Allow *Local Network* for Wiretune under *Settings → Privacy & Security*. |
 | A format plays everywhere but on the Tizen TV | The TV's player can't decode it ([audio.md](audio.md#tizen)). |
+| No cast button | You aren't signed in, remote control is off in *Settings*, the server is older than the player, or a proxy doesn't pass WebSockets on ([server.md](server.md#reverse-proxy-and-tls)). |
+| Another device doesn't show up | It's signed in to another account or another server, or its remote control is off. |
+| Downloads wait and wait | They only run while you're signed in to the server; *Settings → Downloads* says what they're doing. |
 | Nothing plays, and nothing says why | Read `wiretune.log` in the player's data directory ([development.md](development.md#debugging)). |

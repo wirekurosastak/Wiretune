@@ -7,6 +7,7 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/settings_view_models.dart';
 import '../widgets/common.dart';
+import '../widgets/devices.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -18,7 +19,7 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     return ListenableBuilder(
-      listenable: Listenable.merge([vm, vm.serverSettings, vm.audioSettings]),
+      listenable: Listenable.merge([vm, vm.serverSettings, vm.audioSettings, vm.downloads.states]),
       builder: (context, _) {
         final server = vm.serverSettings;
         final left = <Widget>[
@@ -26,6 +27,8 @@ class SettingsPage extends StatelessWidget {
           const _AccountCard(),
           const SizedBox(height: 16),
           const _ServerCard(),
+          if (server.isLoggedIn || vm.downloads.hasAnything) ...[const SizedBox(height: 16), const _DownloadsCard()],
+          if (server.isLoggedIn) ...[const SizedBox(height: 16), const _RemoteCard()],
           if (server.supportsLocalFolder) ...[const SizedBox(height: 16), const _LocalFolderCard()],
           if (server.isLoggedIn && server.isAdmin) ...[
             const SizedBox(height: 16),
@@ -350,6 +353,138 @@ class _ServerCardState extends State<_ServerCard> {
           _StatusLine(server.statusMessage, isError: server.isServerOffline),
         ],
       ),
+    );
+  }
+}
+
+/// What is downloaded, how much room it takes, what is being downloaded now, and a way to remove it all (after a
+/// second tap: it can be gigabytes).
+class _DownloadsCard extends StatefulWidget {
+  const _DownloadsCard();
+
+  @override
+  State<_DownloadsCard> createState() => _DownloadsCardState();
+}
+
+class _DownloadsCardState extends State<_DownloadsCard> {
+  bool _confirming = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final downloads = context.vm.downloads;
+    final colors = context.colors;
+    return ListenableBuilder(
+      listenable: downloads,
+      builder: (context, _) => GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardTitle(
+              icon: Icons.download_for_offline_outlined,
+              title: context.tr('Downloads'),
+              subtitle: context.tr('DownloadsHint'),
+            ),
+            Text(
+              downloads.sizeText,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textMain),
+            ),
+            _StatusLine(downloads.statusText, isError: downloads.hasError),
+            if (downloads.hasAnything) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 10,
+                runSpacing: 8,
+                children: _confirming
+                    ? [
+                        OutlinedButton(
+                          onPressed: () => setState(() => _confirming = false),
+                          child: Text(context.tr('Cancel')),
+                        ),
+                        FilledButton.icon(
+                          style: FilledButton.styleFrom(backgroundColor: colors.danger),
+                          onPressed: () async {
+                            setState(() => _confirming = false);
+                            await downloads.removeAll();
+                          },
+                          icon: const Icon(Icons.delete_forever_rounded),
+                          label: Text(context.tr('DownloadsRemoveConfirm')),
+                        ),
+                      ]
+                    : [
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
+                          onPressed: () => setState(() => _confirming = true),
+                          icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
+                          label: Text(context.tr('DownloadsRemoveAll')),
+                        ),
+                      ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Remote control: whether the account's other players see this one, and the name they show it by.
+class _RemoteCard extends StatefulWidget {
+  const _RemoteCard();
+
+  @override
+  State<_RemoteCard> createState() => _RemoteCardState();
+}
+
+class _RemoteCardState extends State<_RemoteCard> {
+  late final TextEditingController _name = TextEditingController(text: context.vm.deviceName);
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final player = vm.player;
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final others = player.otherDevices.length;
+        final status = !vm.isRemoteEnabled
+            ? context.tr('RemoteStatusOff')
+            : (player.canReachDevices
+                  ? context.trf('RemoteStatusConnected', [others])
+                  : context.tr('RemoteStatusConnecting'));
+        return GlassCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardTitle(
+                icon: Icons.cast_rounded,
+                title: context.tr('RemoteControl'),
+                subtitle: context.tr('RemoteControlHint'),
+                trailing: Switch(value: vm.isRemoteEnabled, onChanged: (value) => vm.isRemoteEnabled = value),
+              ),
+              TextField(
+                controller: _name,
+                enabled: vm.isRemoteEnabled,
+                maxLength: RemoteRules.maxDeviceNameLength,
+                decoration: InputDecoration(
+                  counterText: '',
+                  labelText: context.tr('DeviceNameLabel'),
+                  hintText: deviceLabel(context, '', vm.capabilities.kind),
+                  prefixIcon: Icon(deviceIcon(vm.capabilities.kind), size: 18),
+                ),
+                onChanged: (value) => vm.deviceName = value,
+              ),
+              _StatusLine(status),
+            ],
+          ),
+        );
+      },
     );
   }
 }

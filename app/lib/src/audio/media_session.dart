@@ -127,10 +127,13 @@ class WiretuneMediaSession extends BaseAudioHandler {
     }
   }
 
-  /// A cover the system can load by itself: a file, or a server URL carrying the media-only stream token.
+  /// A cover the system can load by itself: a file (a downloaded one too), or a server URL carrying the media-only
+  /// stream token.
   Uri? _art(String? path) {
     if (path == null || path.isEmpty) return null;
     if (path.startsWith('http://') || path.startsWith('https://')) {
+      final copy = _vm.downloadService.localCover(path);
+      if (copy != null) return Uri.file(copy);
       final token = _streamToken;
       final isOwnServer = path.startsWith(_vm.session.serverUrl);
       if (!isOwnServer || token == null) return isOwnServer ? null : Uri.parse(path);
@@ -180,14 +183,11 @@ class WiretuneMediaSession extends BaseAudioHandler {
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
-    final wanted = switch (repeatMode) {
+    _vm.player.setRepeatMode(switch (repeatMode) {
       AudioServiceRepeatMode.none => RepeatMode.off,
       AudioServiceRepeatMode.one => RepeatMode.one,
       _ => RepeatMode.all,
-    };
-    while (_vm.player.repeatMode != wanted) {
-      _vm.player.toggleRepeat();
-    }
+    });
   }
 
   @override

@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
+import '../widgets/downloads.dart';
 import '../widgets/quality_tag.dart';
 import '../widgets/track_list.dart';
 import 'library_pages.dart';
@@ -184,6 +185,11 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                 shuffleLabel: context.tr('Shuffle'),
                 onPlay: tracks.isEmpty ? null : () => playlists.playPlaylist(),
                 onShuffle: tracks.isEmpty ? null : () => playlists.shufflePlaylist(),
+                trailing: DownloadListButton.forTracks(
+                  tracks,
+                  isPinned: () => context.vm.downloads.isPlaylistPinned(playlist),
+                  onPressed: () => context.vm.downloads.togglePlaylist(playlist),
+                ),
               ),
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(foregroundColor: colors.danger, minimumSize: const Size(0, 46)),

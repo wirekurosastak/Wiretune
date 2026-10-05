@@ -6,16 +6,18 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import 'cover_image.dart';
 import 'common.dart';
+import 'downloads.dart';
 import 'equalizer_bars.dart';
 import 'player_controls.dart';
 import 'quality_tag.dart';
 
-/// Which list a track table shows; each has its own columns and buttons.
+/// Which list a track table shows; each has its own columns and buttons. Every table ends in the download button of a
+/// server track; a phone row has the favourite and a menu with the rest.
 enum TrackTableKind {
   /// The library: cover, title, artist, album, quality, length, favourite, add to playlist.
   tracks,
 
-  /// Favourites: the same, ending in a filled heart that removes the track from the favourites.
+  /// Favourites: the same, the heart a filled one that removes the track from the favourites.
   favorites,
 
   /// An album: track number, title, quality, length, favourite, add to playlist.
@@ -34,8 +36,8 @@ enum TrackTableKind {
 enum _Column { title, artist, album, quality, length }
 
 /// A list of tracks as slivers: on a wide screen a table (a header row with sortable columns over rounded rows that
-/// light up under the mouse), on a phone rows of cover, title and two buttons. The track that is playing is washed in
-/// the accent and marked by bouncing bars.
+/// light up under the mouse), on a phone rows of cover, title, the favourite and a menu. The track that is playing is
+/// washed in the accent and marked by bouncing bars; a downloaded one carries a tick.
 class TrackSliver extends StatefulWidget {
   const TrackSliver({
     super.key,
@@ -117,14 +119,16 @@ class _TrackSliverState extends State<TrackSliver> {
 
   @override
   Widget build(BuildContext context) {
-    final player = context.vm.player;
+    final vm = context.vm;
+    // The rows follow the player (the playing track) and the downloads (their states, not their every byte).
+    final listenable = Listenable.merge([vm.player, vm.downloads.states]);
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
         final padding = widget.horizontalPadding ?? (table ? 20.0 : 8.0);
         return ListenableBuilder(
-          listenable: player,
+          listenable: listenable,
           builder: (context, _) {
             final tracks = _tracks;
             final list = SliverFixedExtentList(
@@ -205,7 +209,7 @@ class _TrackSliverState extends State<TrackSliver> {
           if (_showAlbum) cell(context.tr('ColAlbum'), _Column.album, flex: albumFlex),
           if (_showQuality) cell(context.tr('ColQuality'), _Column.quality, width: 215),
           cell(context.tr('ColLength'), _Column.length, width: 90),
-          const SizedBox(width: 88),
+          const SizedBox(width: 3 * 44),
         ],
       ),
     );
@@ -349,7 +353,8 @@ class _TableRowState extends State<_TableRow> {
   }
 }
 
-/// The buttons at the end of a row, per kind of list.
+/// The buttons at the end of a row, per kind of list: on a phone the favourite and the menu, in the table the
+/// favourite, the list's own button and the download.
 List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {bool phone = false}) {
   final vm = context.vm;
   final colors = context.colors;
@@ -364,15 +369,32 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
     ),
     onPressed: () => vm.library.toggleFavorite(track.id),
   );
+  if (phone) return [favorite, _TrackMenu(track: track, kind: kind, width: size)];
+
   final add = _IconCell(
     width: size,
     tooltip: context.tr('TipAddToPlaylist'),
-    icon: Icon(Icons.playlist_add_rounded, color: colors.textMuted, size: phone ? 22 : 18),
+    icon: Icon(Icons.playlist_add_rounded, color: colors.textMuted, size: 18),
     onPressed: () => vm.addToPlaylist(track),
   );
+  final downloads = vm.downloads;
+  final state = downloads.stateOf(track);
+  final download = !downloads.canDownload(track)
+      ? SizedBox(width: size)
+      : _IconCell(
+          width: size,
+          tooltip: downloadTip(context, track),
+          icon: Icon(
+            downloadIcon(state) ?? Icons.download_rounded,
+            color: state == DownloadState.none ? colors.textMuted : colors.accent,
+            size: 18,
+          ),
+          // Kept because its album, playlist or the favourites are: those buttons let it go.
+          onPressed: downloads.isPinnedByList(track) ? null : () => downloads.toggleTrack(track),
+        );
   return switch (kind) {
     // The heart first and "add to playlist" after it, as in every other list.
-    TrackTableKind.favorites when !phone => [
+    TrackTableKind.favorites => [
       _IconCell(
         width: size,
         tooltip: context.tr('TipRemoveFromFavorites'),
@@ -380,18 +402,90 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
         onPressed: () => vm.favorites.removeFavorite(track),
       ),
       add,
+      download,
     ],
     TrackTableKind.playlist => [
       favorite,
       _IconCell(
         width: size,
         tooltip: context.tr('TipRemoveFromPlaylist'),
-        icon: Icon(Icons.playlist_remove_rounded, color: colors.danger, size: phone ? 22 : 18),
+        icon: Icon(Icons.playlist_remove_rounded, color: colors.danger, size: 18),
         onPressed: () => vm.playlists.removeTrackFromSelected(track),
       ),
+      download,
     ],
-    _ => [favorite, add],
+    _ => [favorite, add, download],
   };
+}
+
+enum _TrackAction { addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist }
+
+/// A phone row's menu: what the table has as buttons (a playlist, the download), and the way to the album and the
+/// artist.
+class _TrackMenu extends StatelessWidget {
+  const _TrackMenu({required this.track, required this.kind, required this.width});
+
+  final Track track;
+  final TrackTableKind kind;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final colors = context.colors;
+    final downloads = vm.downloads;
+    PopupMenuItem<_TrackAction> item(_TrackAction action, IconData icon, String text, {Color? color, bool? enabled}) =>
+        PopupMenuItem(
+          value: action,
+          enabled: enabled ?? true,
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color ?? colors.textMuted),
+              const SizedBox(width: 14),
+              Flexible(
+                child: Text(text, style: TextStyle(color: color)),
+              ),
+            ],
+          ),
+        );
+    return SizedBox(
+      width: width,
+      child: Center(
+        child: PopupMenuButton<_TrackAction>(
+          tooltip: context.tr('TipMore'),
+          icon: Icon(Icons.more_vert_rounded, color: colors.textMuted, size: 22),
+          onSelected: (action) => switch (action) {
+            _TrackAction.addToPlaylist => vm.addToPlaylist(track),
+            _TrackAction.removeFromPlaylist => vm.playlists.removeTrackFromSelected(track),
+            _TrackAction.download => downloads.toggleTrack(track),
+            _TrackAction.openAlbum => vm.openAlbumOfTrack(track),
+            _TrackAction.openArtist => vm.openArtistByName(track.artist),
+          },
+          itemBuilder: (context) => [
+            item(_TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
+            if (kind == TrackTableKind.playlist)
+              item(
+                _TrackAction.removeFromPlaylist,
+                Icons.playlist_remove_rounded,
+                context.tr('TipRemoveFromPlaylist'),
+                color: colors.danger,
+              ),
+            if (downloads.canDownload(track))
+              item(
+                _TrackAction.download,
+                downloadIcon(downloads.stateOf(track)) ?? Icons.download_rounded,
+                downloadTip(context, track),
+                enabled: !downloads.isPinnedByList(track),
+              ),
+            if (kind != TrackTableKind.album)
+              item(_TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
+            if (kind != TrackTableKind.artist)
+              item(_TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _IconCell extends StatelessWidget {
@@ -400,7 +494,9 @@ class _IconCell extends StatelessWidget {
   final double width;
   final String tooltip;
   final Widget icon;
-  final VoidCallback onPressed;
+
+  /// Null shows the button disabled (its tooltip says why).
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -557,11 +653,21 @@ class _PhoneRow extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    Row(
+                      children: [
+                        if (downloadIcon(context.vm.downloads.stateOf(track)) case final icon?) ...[
+                          Icon(icon, size: 14, color: colors.accent),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: colors.textMuted),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

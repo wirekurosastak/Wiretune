@@ -9,7 +9,7 @@ import 'jwt.dart';
 
 /// The identity a validated token carries.
 class Principal {
-  const Principal(this.userId, this.username, {this.isAdmin = false, this.isStreamToken = false});
+  const Principal(this.userId, this.username, {this.isAdmin = false, this.isStreamToken = false, this.expiresAt});
 
   final String userId;
   final String username;
@@ -17,6 +17,9 @@ class Principal {
 
   /// A stream token opens the audio and cover routes and nothing else.
   final bool isStreamToken;
+
+  /// When the token runs out: a connection that outlives a request (remote control) ends then.
+  final DateTime? expiresAt;
 }
 
 /// Accounts, passwords (bcrypt, work factor 12) and tokens (HS256 JWTs).
@@ -172,7 +175,14 @@ class AuthService {
     final id = claims?['sub'];
     final name = claims?['name'];
     if (id is! String || name is! String) return null;
-    return Principal(id, name, isAdmin: claims!['role'] == 'admin', isStreamToken: claims['aud'] == streamAudience);
+    final expires = claims!['exp'];
+    return Principal(
+      id,
+      name,
+      isAdmin: claims['role'] == 'admin',
+      isStreamToken: claims['aud'] == streamAudience,
+      expiresAt: expires is int ? DateTime.fromMillisecondsSinceEpoch(expires * 1000, isUtc: true) : null,
+    );
   }
 
   static UserInfo _newUser(String username, {required bool isAdmin}) =>

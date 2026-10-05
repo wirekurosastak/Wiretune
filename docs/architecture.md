@@ -70,6 +70,21 @@ Changes to the account's data go through one ordered queue, flushed before every
 download can't undo them. A favourite the server refused is put back; a failed play or playlist edit isn't retried.
 `400`, `409` and `413` mean "reachable, but no" and keep the session connected; anything else marks it offline.
 
+**Downloads** (`DownloadService`): what the user marked (tracks, albums, playlists, the favourites) is a preference,
+and the tracks it covers are worked out again from the library after every change, so a playlist that grows grows on
+the device too. One file at a time comes from `/api/stream` with the sign-in token in the header, into `Downloads/` in
+the data directory, and an interrupted one continues with a range request. A copy is named by hashes of the track's ID
+and of the server's size and modification time: no ID a server sends becomes a path, and a copy of a file that has
+since changed is recognised by its name and replaced once the new one is there. The engine plays a copy instead of the
+stream (and asks for no stream token, which might hang without a server); covers and lyrics come from copies too.
+
+**Remote control** (`RemoteClient`): while signed in, one WebSocket to `/api/remote`, reconnected with a growing pause
+and given up on a refusal until the sign-in changes. `PlayerViewModel` tells the others its state at every change and
+at a position jump (never as a track plays on), carries out their commands on its own player, and in remote mode shows
+another device instead: its track (this library's copy, for the cover and lyrics), its queue as far as the library
+knows it, and its position counted on once a second; every command then goes there, and this device's playback carries
+on underneath, untouched.
+
 ## Server
 
 `WiretuneServer.start` wires the options (`ServerOptions`: command-line flags, each also a `WIRETUNE_*` variable),
@@ -85,6 +100,9 @@ where every route declares its access level (anonymous, user, admin, media) and 
 - **Scanning**: a loop that wakes for a request or the interval. Stopping the server cancels a running scan.
 - **Streaming** checks that the file lies inside the library root by whole path segments (`/music2` isn't inside
   `/music`) before it serves a byte.
+- **Remote control**: `/api/remote` upgrades by hand to `dart:io`'s `WebSocket`, and `RemoteHub` keeps each account's
+  connections, passes states and commands between them only, and stores nothing. A connection ends when its token
+  expires or its account is deleted.
 
 ## Audio
 
@@ -112,8 +130,9 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
   desktop while music plays (not with the system's reduced motion).
 - **Battery**: on a phone or tablet (`AppPlatform.isMobile`) nothing animates on its own: the backdrop doesn't turn,
   the logo and the player's cover don't breathe, and the progress follows `PlayerViewModel.elapsedSeconds`, so music
-  that plays on draws a frame a second. `WiretuneMediaSession` publishes changes, never a position that keeps pace: the
-  system moves its own progress on from the last one.
+  that plays on draws a frame a second; controlling another device, the position is counted on at that same pace.
+  `WiretuneMediaSession` publishes changes, never a position that keeps pace: the system moves its own progress on from
+  the last one.
 - **Lyrics** load only while they're on screen: the file's own (or the server's `/api/lyrics`), then LRCLIB if
   allowed, cached per track. A failed lookup isn't cached, so the panel can tell "couldn't reach" from "no lyrics".
 

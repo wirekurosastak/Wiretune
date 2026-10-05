@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -10,6 +12,7 @@ import 'auth_service.dart';
 import 'config.dart';
 import 'http_utils.dart';
 import 'library_scan_service.dart';
+import 'remote_hub.dart';
 import 'setup_code.dart';
 import 'user_data_service.dart';
 
@@ -129,6 +132,7 @@ class WiretuneServer {
   final UserDataService userData;
   final SetupCode setupCode;
   final LibraryScanService scanner;
+  final RemoteHub remote = RemoteHub();
   final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
   HttpServer? _http;
   late final List<_Route> _routes = _buildRoutes();
@@ -207,6 +211,7 @@ class WiretuneServer {
 
   Future<void> close() async {
     await scanner.stop();
+    await remote.close(); // their sockets left the HTTP server when they were upgraded
     await _http?.close(force: true);
     _http = null;
     database.close();
@@ -217,6 +222,8 @@ class WiretuneServer {
     try {
       final response = await _dispatch(request);
       return await compressJson(request, response);
+    } on HijackException {
+      rethrow; // a WebSocket took the connection over (remote control)
     } on BodyTooLargeException {
       return errorResponse(413, 'The request body is too large.');
     } on FormatException catch (e) {
@@ -335,7 +342,9 @@ class WiretuneServer {
       if (call.userId == userId) {
         return errorResponse(400, 'You cannot delete your own account.');
       }
-      return auth.deleteUser(userId) ? Response.ok(null) : errorResponse(404, 'User not found.');
+      if (!auth.deleteUser(userId)) return errorResponse(404, 'User not found.');
+      remote.disconnectAccount(userId);
+      return Response.ok(null);
     }),
     _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson())),
     _Route('POST', '/api/config/library-path', Access.admin, _updateLibraryPath),
@@ -379,6 +388,9 @@ class WiretuneServer {
       (call) => _cover(call.request, library.getTrack(call.params['trackId']!)),
     ),
     _Route('GET', '/api/lyrics/{trackId}', Access.user, _lyrics),
+
+    // Remote control: a WebSocket per player
+    _Route('GET', '/api/remote', Access.user, _remote),
 
     // The signed-in account's favourites, play counts and playlists
     _Route('GET', '/api/me/data', Access.user, (call) => jsonResponse(userData.get(call.userId).toJson())),
@@ -501,6 +513,44 @@ class WiretuneServer {
     if (bytes == null || bytes.isEmpty) return notFound();
     return Response.ok(bytes, headers: {...cache, 'content-type': ImageFormat.mimeType(bytes)});
   }
+
+  /// Upgrades the request to a WebSocket and hands it to the hub. The sign-in token comes in the header like on every
+  /// other route (never in the URL), and a request from a web page (which carries an `Origin`) is turned away: no page
+  /// has business controlling the players, and a browser lets any page open a WebSocket to any address.
+  Response _remote(_Call call) {
+    final request = call.request;
+    final headers = request.headers;
+    final connection = headers['connection']?.toLowerCase().split(',').map((t) => t.trim()) ?? const [];
+    if (headers['upgrade']?.toLowerCase() != 'websocket' || !connection.contains('upgrade')) {
+      return jsonResponse(
+        {'error': 'This route speaks WebSocket only.'},
+        status: 426,
+        headers: {'upgrade': 'websocket', 'connection': 'Upgrade'},
+      );
+    }
+    if (headers.containsKey('origin')) return forbidden();
+    final key = headers['sec-websocket-key'];
+    if (key == null || key.trim().isEmpty || headers['sec-websocket-version'] != '13') {
+      return errorResponse(400, 'This is not a valid WebSocket handshake.');
+    }
+
+    final principal = call.principal!;
+    if (!remote.canJoin(principal.userId)) return errorResponse(429, 'Too many connections for this account.');
+    request.hijack((channel) {
+      final socket = channel.sink as Socket;
+      final accept = base64.encode(sha1.convert(utf8.encode('${key.trim()}$_webSocketGuid')).bytes);
+      socket.add(
+        utf8.encode(
+          'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n'
+          'Sec-WebSocket-Accept: $accept\r\n\r\n',
+        ),
+      );
+      remote.join(WebSocket.fromUpgradedSocket(socket, serverSide: true), principal);
+    });
+  }
+
+  /// RFC 6455's constant for the handshake's accept key.
+  static const String _webSocketGuid = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
   Future<Response> _lyrics(_Call call) async {
     final track = library.getTrack(call.params['trackId']!);
