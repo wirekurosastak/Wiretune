@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5,6 +8,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import '../about.dart';
 import '../models/library_models.dart';
 import '../util/event.dart';
 import 'app_paths.dart';
@@ -131,7 +135,7 @@ class ArtistPictureService {
     try {
       final uri = Uri.https('api.deezer.com', '/search/artist', {'q': artistName, 'limit': '1'});
       final response = await client
-          .get(uri, headers: {'User-Agent': 'Wiretune/1.0 (Audiophile Music Player)'})
+          .get(uri, headers: {'User-Agent': WiretuneInfo.userAgent})
           .timeout(const Duration(seconds: 10));
       if (response.statusCode < 200 || response.statusCode > 299) {
         // Rate limiting or an outage says nothing about the artist: remember nothing, back off instead.

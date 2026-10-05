@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import '../util/sorting.dart';
 
 /// One line of time-synced lyrics: the text and the moment it starts being sung.

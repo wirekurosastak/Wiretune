@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// Sorts [list] in place, keeping the order of elements that compare equal (Dart's `List.sort` does not promise that;
 /// the library's orderings, which sort by one key after another, rely on it).
 void sortStable<T>(List<T> list, int Function(T a, T b) compare) {

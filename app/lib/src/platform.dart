@@ -1,7 +1,11 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:wiretune_core/wiretune_core.dart';
 
 /// Which kind of device the app runs on; decided once at start-up by [AppPlatform.detect].
 class AppPlatform {
@@ -52,6 +56,19 @@ class AppPlatform {
     if (system == 'linux') tizen = await _ask('isTizen');
     if (tizen || system == 'android') tv = await _ask('isTelevision');
     return current = AppPlatform._(system, tizen, tv);
+  }
+
+  /// Keeps [folder] (created if need be) and everything in it out of the device's backups, on iOS (the runner's
+  /// AppDelegate answers); elsewhere nothing happens. The app's support folder is backed up to iCloud by default, and
+  /// Apple's storage guidelines keep what can be downloaded again out of it.
+  Future<void> excludeFromBackup(String folder) async {
+    if (!isIOS) return;
+    try {
+      await Directory(folder).create(recursive: true);
+      await _channel.invokeMethod<void>('excludeFromBackup', folder);
+    } catch (e, s) {
+      WiretuneLog.error('Platform', 'Could not keep $folder out of backups', e, s);
+    }
   }
 
   static String get _hostSystem => kIsWeb ? 'web' : Platform.operatingSystem;

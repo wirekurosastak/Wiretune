@@ -30,6 +30,10 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Formatting
         run: dart format --output none --set-exit-if-changed packages server app/lib app/test tool
+      - name: License headers
+        run: |
+          missing=$(git ls-files '*.dart' '*.kt' '*.cs' | xargs grep -L 'SPDX-License-Identifier: AGPL-3.0-only' || true)
+          [ -z "$missing" ] || { echo "These files lack the license header (CONTRIBUTING.md):"; echo "$missing"; exit 1; }
       - name: Build script
         run: dart analyze --fatal-infos tool
       - name: Core

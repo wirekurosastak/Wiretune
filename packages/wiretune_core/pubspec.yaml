@@ -3,7 +3,7 @@ description: >-
   The shared part of Wiretune: models, the SQLite library index, the tag reader and scanner, the library service,
   the server protocol and session, localisation and the audio engine. Used by the server and by every player.
 publish_to: none
-version: 1.0.0
+version: 1.0.2026+1
 
 environment:
   sdk: ^3.10.0

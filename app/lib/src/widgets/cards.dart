@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -382,7 +385,7 @@ class _DesktopTileState extends State<_DesktopTile> {
             ),
             child: widget.cover,
           ),
-          if (widget.badge != null) Positioned(left: 8, top: 8, child: widget.badge!),
+          if (widget.badge != null) Positioned(left: 8, bottom: 8, child: widget.badge!),
           Positioned(
             right: widget.circle ? 4 : 8,
             bottom: widget.circle ? 4 : 8,
@@ -484,7 +487,7 @@ class _PhoneTile extends StatelessWidget {
                               fit: StackFit.expand,
                               children: [
                                 cover,
-                                Positioned(left: 6, top: 6, child: badge!),
+                                Positioned(left: 6, bottom: 6, child: badge!),
                               ],
                             ),
                     ),

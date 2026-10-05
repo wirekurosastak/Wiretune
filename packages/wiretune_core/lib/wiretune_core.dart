@@ -1,6 +1,10 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// The shared part of Wiretune, used by the server and by every player.
 library;
 
+export 'src/about.dart';
 export 'src/audio/audio_driver.dart';
 export 'src/audio/audio_engine.dart';
 export 'src/audio/pcm_cache.dart';

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Builds Wiretune for release and puts what ships into dist/, one folder per target:
 //
 //   dart tool/build.dart server linux android

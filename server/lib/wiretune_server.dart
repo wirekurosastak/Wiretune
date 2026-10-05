@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// The Wiretune server as a library: the tests host it in-process, `bin/wiretune_server.dart` runs it.
 library;
 

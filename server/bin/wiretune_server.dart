@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'dart:async';
 import 'dart:io';
 
@@ -5,7 +8,10 @@ import 'package:args/args.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 import 'package:wiretune_server/wiretune_server.dart';
 
-const String _about = 'Wiretune server: indexes a music folder and streams it to the Wiretune players.';
+const String _about =
+    'Wiretune server ${WiretuneInfo.version}: indexes a music folder and streams it to the Wiretune players.\n'
+    '${WiretuneInfo.copyright}. Free software under the GNU AGPL v3 (with the terms in NOTICE.md), with no warranty.\n'
+    'Source: ${WiretuneInfo.sourceUrl}';
 
 const String _environment =
     'Every option can also be set in the environment: --scan-interval 0 is WIRETUNE_SCAN_INTERVAL=0, --trust-proxy is\n'
@@ -18,6 +24,10 @@ Future<void> main(List<String> args) async {
     final results = ServerOptions.parser.parse(args);
     if (results.flag('help')) {
       stdout.writeln('$_about\n\nUsage: wiretune_server [options]\n\n${ServerOptions.parser.usage}\n\n$_environment');
+      return;
+    }
+    if (results.flag('version')) {
+      stdout.writeln(WiretuneInfo.version);
       return;
     }
     options = ServerOptions.fromArgs(results);

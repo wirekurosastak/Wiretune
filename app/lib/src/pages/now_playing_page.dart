@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -197,7 +200,7 @@ class _PlayerTab extends StatelessWidget {
                           if (player.currentTagSpec.isNotEmpty)
                             Positioned(
                               left: 14,
-                              top: 14,
+                              bottom: 14,
                               child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 12),
                             ),
                         ],

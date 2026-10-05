@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// The top-level pages of the app: the sidebar entries of the wide layout and the bottom bar of the phone layout. The
 /// order of the values is the order they were added in, not the order they are drawn in (see [navVisualOrder]).
 enum AppSection { tracks, albums, artists, playlists, favorites, settings }

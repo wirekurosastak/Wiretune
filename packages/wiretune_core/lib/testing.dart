@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /// Test doubles shared by the tests of the core, the server and the app: an in-memory repository, an audio driver
 /// that plays nothing, a signed-in session, a remote-control hub, sample tracks and a WAV writer. Not used by any
 /// shipped code.

@@ -3,7 +3,7 @@ description: >-
   The Wiretune server: indexes one music folder and serves it to Wiretune players over HTTP, with accounts and
   per-account favourites, play counts and playlists.
 publish_to: none
-version: 1.0.0
+version: 1.0.2026+1
 
 environment:
   sdk: ^3.10.0

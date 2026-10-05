@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,6 +9,7 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import '../about.dart';
 import '../models/library_models.dart';
 import '../util/text.dart';
 import 'app_paths.dart';
@@ -126,7 +130,7 @@ class OnlineLyrics {
     http.StreamedResponse response;
     try {
       final request = http.Request('GET', uri)
-        ..headers['User-Agent'] = 'Wiretune/1.0 (audiophile music player)'
+        ..headers['User-Agent'] = WiretuneInfo.userAgent
         ..headers['Accept'] = 'application/json';
       response = await _http.send(request).timeout(_timeout);
     } on TimeoutException {

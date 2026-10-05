@@ -25,7 +25,8 @@ android {
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
         // flag during build.
         versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        // 1.0.2026.1, as Wiretune writes its version everywhere: pubspec.yaml's 1.0.2026+1 is the name and the code.
+        versionName = "${flutter.versionName}.${flutter.versionCode}"
     }
 
     // A release is signed with the key that android/key.properties names (storeFile, storePassword, keyAlias,

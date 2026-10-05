@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -280,7 +283,7 @@ class DetailHeader extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               artwork,
-              Positioned(left: 10, top: 10, child: badge),
+              Positioned(left: 10, bottom: 10, child: badge),
             ],
           );
     final detailRow = details.isEmpty

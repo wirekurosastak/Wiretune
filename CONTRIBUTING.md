@@ -28,6 +28,15 @@ what a change has to look like.
   drag-only). `app_shell_test.dart` renders every section at several sizes; extend it when you add a page.
 - **Back navigation** state goes in `MainViewModel.tryNavigateBack()`, where it's unit-tested. Anything that needs a
   platform API (the media session, Android Auto, the native shells) has to be tried on a device or an emulator.
+- **License.** Every Dart, Kotlin and C# file starts with these two lines (CI checks it):
+
+  ```dart
+  // Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+  // SPDX-License-Identifier: AGPL-3.0-only
+  ```
+
+  What you contribute is licensed the same way ([NOTICE.md](NOTICE.md)); opening a pull request says you have the
+  right to contribute it on those terms.
 - **Docs tell the truth.** Unverified or known to be missing? Say so, the way
   [audio.md](docs/audio.md#known-limitations) does.
 
@@ -42,6 +51,7 @@ dart analyze --fatal-infos tool
 (cd packages/wiretune_core && dart analyze --fatal-infos && dart test)
 (cd server && dart analyze --fatal-infos && dart test)
 (cd app && flutter analyze --fatal-infos && flutter test)
+git ls-files '*.dart' '*.kt' '*.cs' | xargs grep -L 'SPDX-License-Identifier: AGPL-3.0-only'   # must print nothing
 ```
 
 One logical change per pull request. Say what was wrong, why the fix is right, and what you couldn't test (a platform,

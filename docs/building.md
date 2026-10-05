@@ -203,7 +203,7 @@ hooks:
 
 | | |
 |---|---|
-| Version | `version:` in `app/pubspec.yaml` (`2.0.0+2`: the name, then the build number, which is Android's version code), or `--build-name 2.0.1 --build-number 3` on a `flutter build` of your own |
+| Version | One for everything, `1.0.2026.1`: `WiretuneInfo.version` in `packages/wiretune_core/lib/src/about.dart`, the `version:` of every `pubspec.yaml` (`1.0.2026+1`: the name, then the build number, which is Android's version code) and `app/tizen/tizen-manifest.xml` (`1.0.2026`). A test fails when they disagree. Android and Windows show all four numbers; iOS and macOS, which allow three, show `1.0.2026 (1)` |
 | App icons | `cd app && dart run flutter_launcher_icons` regenerates them from `app/assets/wiretune.png` |
 | A clean slate | Delete `dist/`, run `flutter clean` in `app/`, and delete the `build/` and `.dart_tool/` of the server and the core |
 | Builds from CI | Every CI run (each pull request, each push to `main`) builds through `tool/build.dart` and keeps `dist/server` and the APKs as artifacts on its *Actions* page |

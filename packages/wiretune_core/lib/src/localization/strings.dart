@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Every translatable text: key -> (Hungarian, English, German). Keys are grouped by the screen or component that shows
 // them. Rules the tests enforce: every key has all three texts, a key's placeholders ({0}, {1}, ...) are the same in every
 // language, and every key used in code exists here. A key with a "_One" variant is used instead when the first format
@@ -313,6 +316,15 @@ const Map<String, (String, String, String)> allStrings = {
     'AUDIOAUSGABE & AUDIOPHILE EINSTELLUNGEN',
   ),
   'SettingsAppearanceSection': ('MEGJELENÉS', 'APPEARANCE', 'DARSTELLUNG'),
+  'SettingsAboutSection': ('NÉVJEGY', 'ABOUT', 'ÜBER'),
+  'AboutVersion': ('{0} verzió', 'Version {0}', 'Version {0}'),
+  'AboutLicense': (
+    'Szabad szoftver a GNU Affero General Public License 3. verziója szerint, a forráskód NOTICE.md fájljában álló további feltételekkel. Semmilyen garancia nem jár hozzá.',
+    'Free software under the GNU Affero General Public License, version 3, with the additional terms in NOTICE.md of its source code. It comes with no warranty.',
+    'Freie Software unter der GNU Affero General Public License, Version 3, mit den zusätzlichen Bedingungen in NOTICE.md des Quellcodes. Ohne jegliche Gewährleistung.',
+  ),
+  'AboutSource': ('Forráskód', 'Source code', 'Quellcode'),
+  'AboutLicenses': ('Licencek', 'Licenses', 'Lizenzen'),
   'SettingsLanguageHint': (
     'A felület nyelve. A választás megmarad a következő indításig is.',
     'The language of the interface. Your choice is remembered.',

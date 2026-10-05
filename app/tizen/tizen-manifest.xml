@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest package="com.wiretune.player" version="2.0.0" api-version="6.0" xmlns="http://tizen.org/ns/packages">
+<manifest package="com.wiretune.player" version="1.0.2026" api-version="6.0" xmlns="http://tizen.org/ns/packages">
     <!-- Samsung TVs (Tizen 6.0, 2021 models, and later). For the emulator or another Tizen device use "common". -->
     <profile name="tv-samsung"/>
     <ui-application appid="com.wiretune.player" exec="Runner.dll" type="dotnet" multiple="false" nodisplay="false" taskmanage="true">

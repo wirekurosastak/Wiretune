@@ -48,13 +48,13 @@ internet. This page is the honest list of what it does and doesn't do about that
   days. Signing out clears it, and a token is only ever sent to the server that issued it.
 - **Downloads** are plain copies of the server's files in the `Downloads` folder of the player's data directory,
   readable by whoever can read that folder. Their names are hashes, never a server's IDs or paths. Signing out deletes
-  them.
+  them. On iOS they're kept out of iCloud and computer backups.
 - **Cleartext HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP,
   which those platforms' allow-lists can't express. Use an `https://` address whenever the network isn't yours.
 - **Artist pictures** come from Deezer's public API, which therefore sees the artist names in your library. They're
   cached in `artist_pictures.json`. `WIRETUNE_NO_ARTIST_PICTURES=1` turns the lookup off.
 - **Lyrics** for a track without any are looked up on LRCLIB when you open the queue panel: title, artist, album and
-  length, sent by the player (not the server) with a `Wiretune/1.0` user agent. Answers are cached in the `lyrics`
+  length, sent by the player (not the server) with a `Wiretune/<version>` user agent. Answers are cached in the `lyrics`
   folder under hashed names. Turn it off in Settings, or for the whole process with `WIRETUNE_NO_ONLINE_LYRICS=1`.
 - **Logs** have every `token=` value blanked, but they do contain file paths, server addresses and device names. Read
   `wiretune.log` before you attach it to a public issue.

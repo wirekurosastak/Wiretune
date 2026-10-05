@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -62,6 +65,8 @@ class SettingsPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const _LibraryStatsCard(),
+          SectionLabel(context.tr('SettingsAboutSection'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 16)),
+          const _AboutCard(),
         ];
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -1034,6 +1039,60 @@ class _SwitchCard extends StatelessWidget {
       trailing: Switch(value: value, onChanged: onChanged),
     ),
   );
+}
+
+/// The version, the copyright, the license and where the source is: the GNU AGPL's "Appropriate Legal Notices". A version
+/// of Wiretune that someone else modifies has to keep showing them, and to say that it is based on Wiretune (NOTICE.md).
+class _AboutCard extends StatelessWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final text = TextStyle(fontSize: 12.5, height: 1.45, color: colors.textMuted);
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _CardTitle(
+            icon: Icons.info_outline_rounded,
+            title: 'Wiretune',
+            subtitle: context.trf('AboutVersion', [WiretuneInfo.version]),
+          ),
+          Text(WiretuneInfo.copyright, style: text),
+          const SizedBox(height: 4),
+          Text(context.tr('AboutLicense'), style: text),
+          const SizedBox(height: 4),
+          // Selectable, so that it can be copied (the app opens no browser).
+          SelectableText.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: '${context.tr('AboutSource')}: '),
+                TextSpan(
+                  text: WiretuneInfo.sourceUrl,
+                  style: TextStyle(color: colors.accent),
+                ),
+              ],
+            ),
+            style: text,
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () => showLicensePage(
+              context: context,
+              applicationName: 'Wiretune',
+              applicationVersion: WiretuneInfo.version,
+              applicationLegalese:
+                  '${WiretuneInfo.copyright}\n${context.tr('AboutLicense')}\n'
+                  '${context.tr('AboutSource')}: ${WiretuneInfo.sourceUrl}',
+            ),
+            icon: Icon(Icons.description_outlined, size: 18, color: colors.accent),
+            label: Text(context.tr('AboutLicenses')),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _LibraryStatsCard extends StatelessWidget {

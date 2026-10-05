@@ -1,7 +1,7 @@
 name: wiretune_platform
 description: Wiretune's own Android code, as a plugin so that it is registered on every Flutter engine of the app.
 publish_to: none
-version: 1.0.0
+version: 1.0.2026+1
 
 environment:
   sdk: ^3.10.0

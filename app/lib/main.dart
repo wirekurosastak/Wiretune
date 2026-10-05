@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
@@ -65,6 +68,7 @@ Future<void> main() async {
     CoverArt.authToken = token;
   };
   CoverArt.localCopy = vm.downloadService.localCover;
+  unawaited(platform.excludeFromBackup(vm.downloadService.directory));
 
   // A failed command (locked database, full disk, ...) must not take the whole player down: log it with its stack
   // trace and show it in the player's error line instead. The line is updated after the frame that is being built,

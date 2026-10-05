@@ -32,9 +32,10 @@ header or in *Settings → Appearance*. If the server can't be reached at start-
   *Tracks* and in search.
 - **Quality tags**: **gold** is hi-res (lossless above 16 bit or 48 kHz), **silver** is lossless at CD resolution,
   **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The whole tag
-  (`FLAC 24bit/96kHz`) sits on the cover of the full-screen player, of an album and of a playlist, and in the track
-  lists and the player bar of a wide screen; the album and playlist tiles, a phone's album list and the queue show the
-  resolution (`24bit/96kHz`, `320kbps`), and a narrow queue leaves it out. Hover or long-press a tag for the details.
+  (`FLAC 24bit/96kHz`) sits in the bottom-left corner of the cover of the full-screen player, of an album and of a
+  playlist, and in the track lists and the player bar of a wide screen; the album and playlist tiles (in the same
+  corner), a phone's album list and the queue show the resolution (`24bit/96kHz`, `320kbps`), and a narrow queue leaves
+  it out. Hover or long-press a tag for the details.
 - **Sorting and filtering**: albums sort by title, year or quality (best first, an album counting as its weakest
   track). When the files carry genre tags, a genre filter narrows the albums and the artists to those with a track of
   that genre.
@@ -118,6 +119,8 @@ sign in again.
 - **Audio** (desktop): *Exclusive*, *Bit-perfect* and *Output device*. The switches stay grey when no device can do
   them.
 - **Appearance**: language, theme, and *Performance statistics* (Flutter's frame graphs).
+- **About**: the version, the license, where the source code is, and the licenses of the libraries Wiretune is built
+  from.
 
 ## Phones, TVs and the car
 

@@ -891,14 +891,14 @@ packages:
       path: "../packages/wiretune_core"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.0.2026+1"
   wiretune_platform:
     dependency: "direct main"
     description:
       path: "../packages/wiretune_platform"
       relative: true
     source: path
-    version: "1.0.0"
+    version: "1.0.2026+1"
   xdg_directories:
     dependency: transitive
     description:

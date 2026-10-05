@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -144,7 +147,8 @@ class WiretuneServer {
   static Future<WiretuneServer> start(ServerOptions options) async {
     final dataDirectory = AppPaths.getDataDirectory(overridePath: options.dataDirectory, subdirectory: 'Server');
     WiretuneLog.initialize(path: p.join(dataDirectory, 'wiretune-server.log'), level: options.logLevel);
-    WiretuneLog.info('Server', '=== Starting the Wiretune server ===');
+    WiretuneLog.info('Server', '=== Starting the Wiretune server ${WiretuneInfo.version} ===');
+    WiretuneLog.info('Server', '${WiretuneInfo.copyright}. GNU AGPL v3, source: ${WiretuneInfo.sourceUrl}');
 
     final database = DatabaseManager(p.join(dataDirectory, 'wiretune-server.db'));
     database.initializeSchema();

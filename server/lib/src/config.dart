@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import 'dart:io';
 
 import 'package:args/args.dart';
@@ -58,6 +61,7 @@ class ServerOptions {
     )
     ..addFlag('trust-proxy', negatable: false, help: 'Take the client address from X-Forwarded-For (behind a proxy).')
     ..addOption('log-level', valueHelp: 'level', defaultsTo: 'info', help: 'debug, info, warn or error.')
+    ..addFlag('version', negatable: false, help: 'Show the version.')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.');
 
   /// Reads the options from [results], falling back to the `WIRETUNE_*` variables of [environment]. Throws

@@ -1,3 +1,6 @@
+// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // The request and response bodies of the server's HTTP API (see docs/api.md): camelCase JSON, dates in ISO 8601.
 
 import '../util/text.dart';
