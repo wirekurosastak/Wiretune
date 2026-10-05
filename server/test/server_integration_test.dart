@@ -151,7 +151,7 @@ void main() {
     final stream = Uri.encodeComponent(issued.token);
 
     expect((await anonymous.get('/api/stream/${track['id']}?token=$stream')).statusCode, 200);
-    expect((await anonymous.get('/api/cover/${track['id']}?token=$stream')).statusCode, isNot(401));
+    expect((await anonymous.get('/api/cover/${track['id']}?token=$stream')).statusCode, 404); // let in; no cover
 
     // A token that leaked through a URL must not be usable against the rest of the API, whichever kind it is.
     for (final token in [stream, Uri.encodeComponent(auth.token)]) {

@@ -3,11 +3,12 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../platform.dart';
 import '../view_models/app_section.dart';
 
-/// Wiretune's animated logo: eight bars that breathe while music plays, and a wave that sweeps across them (and
-/// recolours them in the section's accent) whenever the user navigates: left to right going down or in, right to left
-/// going up or back.
+/// Wiretune's animated logo: eight bars that breathe while music plays (not on a phone or tablet), and a wave that sweeps
+/// across them (and recolours them in the section's accent) whenever the user navigates: left to right going down or
+/// in, right to left going up or back.
 class NavVisualizer extends StatefulWidget {
   const NavVisualizer({
     super.key,
@@ -45,6 +46,8 @@ class _NavVisualizerState extends State<NavVisualizer> with SingleTickerProvider
   double _pulse = 0;
   Duration _last = Duration.zero;
 
+  bool get _breathing => widget.isPlaying && !AppPlatform.current.isMobile;
+
   @override
   void didUpdateWidget(NavVisualizer old) {
     super.didUpdateWidget(old);
@@ -69,7 +72,7 @@ class _NavVisualizerState extends State<NavVisualizer> with SingleTickerProvider
 
   void _ensureTicking() {
     final mismatch = _current.any((c) => c != widget.color);
-    if ((_waveActive || widget.isPlaying || mismatch) && !_ticker.isActive) {
+    if ((_waveActive || _breathing || mismatch) && !_ticker.isActive) {
       _last = Duration.zero;
       _ticker.start();
     }
@@ -89,11 +92,11 @@ class _NavVisualizerState extends State<NavVisualizer> with SingleTickerProvider
       }
       crest = _activeDirection == NavWaveDirection.leftToRight ? -1.5 + _waveProgress * 10 : 8.5 - _waveProgress * 10;
     }
-    if (widget.isPlaying) _pulse = (_pulse + 0.08 * step) % (math.pi * 2);
+    if (_breathing) _pulse = (_pulse + 0.08 * step) % (math.pi * 2);
 
     var moving = false;
     for (var i = 0; i < _bands; i++) {
-      final rest = widget.isPlaying
+      final rest = _breathing
           ? (_baseHeights[i] * (0.82 + 0.18 * math.sin(_pulse + i * 0.7)) * 0.45).clamp(0.12, 0.60)
           : (_baseHeights[i] * 0.30).clamp(0.12, 0.40);
       var target = rest;
@@ -128,7 +131,7 @@ class _NavVisualizerState extends State<NavVisualizer> with SingleTickerProvider
 
     setState(() {});
     final mismatch = _current.any((c) => c != widget.color);
-    if (!_waveActive && !widget.isPlaying && !moving && !mismatch) _ticker.stop();
+    if (!_waveActive && !_breathing && !moving && !mismatch) _ticker.stop();
   }
 
   @override

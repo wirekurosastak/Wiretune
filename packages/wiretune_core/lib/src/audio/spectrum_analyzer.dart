@@ -15,42 +15,6 @@ class SpectrumAnalyzer {
   static const int numBands = 32;
   static const int fftSize = 2048;
 
-  /// Centre frequencies of the bands (35 Hz to 16 kHz).
-  static const List<double> bandCenterFrequencies = [
-    35,
-    43,
-    52,
-    64,
-    78,
-    95,
-    115,
-    140,
-    170,
-    210,
-    255,
-    310,
-    380,
-    460,
-    560,
-    680,
-    830,
-    1010,
-    1230,
-    1500,
-    1830,
-    2230,
-    2720,
-    3310,
-    4030,
-    4900,
-    6000,
-    7300,
-    8900,
-    10800,
-    13200,
-    16000,
-  ];
-
   /// FFT bins of each band at 44.1 kHz (21.533 Hz per bin).
   static const List<(int, int)> _bandBinRanges = [
     (1, 2),
@@ -174,48 +138,6 @@ class SpectrumAnalyzer {
       final target = ((db + 54.0) / 48.0).clamp(_minFloor, 1.0);
       _applyBallistics(band, target);
       result[band] = _currentLevels[band];
-    }
-    return result;
-  }
-
-  /// A stand-in animation when no PCM is available: beats derived from the playback position.
-  Float32List processFrame(Duration playbackPosition, {required bool isPlaying}) {
-    final result = Float32List(numBands);
-    if (!isPlaying) {
-      for (var i = 0; i < numBands; i++) {
-        _currentLevels[i] = math.max(_minFloor, _currentLevels[i] * 0.70);
-        result[i] = _currentLevels[i];
-      }
-      return result;
-    }
-
-    final t = playbackPosition.inMicroseconds / 1e6;
-    double pulse(double phase, double exponent) => math.max(0.0, math.pow(1.0 - phase, exponent).toDouble());
-    final kick = pulse((t * 2.066) % 1.0, 3.2);
-    final sub = pulse((t * 4.133) % 1.0, 4.0) * 0.45;
-    final snare = pulse((t * 1.033 + 0.5) % 1.0, 3.6);
-    final hihat = pulse((t * 8.266) % 1.0, 2.2);
-    final wave1 = math.sin(t * 1.9 + 0.3) * 0.35 + 0.45;
-    final wave2 = math.cos(t * 2.8 + 1.2) * 0.30 + 0.45;
-    final wave3 = math.sin(t * 3.6 + 2.1) * 0.25 + 0.45;
-
-    for (var i = 0; i < numBands; i++) {
-      var target = 0.08;
-      if (i <= 5) {
-        target += kick * 0.88 + sub * 0.60;
-      } else if (i <= 8) {
-        target += kick * 0.60 + (math.sin(t * 4.2 + i * 0.3) * 0.20 + 0.20);
-      } else if (i <= 14) {
-        target += snare * 0.40 + wave1 * 0.40;
-      } else if (i <= 21) {
-        target += snare * 0.55 + wave2 * 0.40;
-      } else if (i <= 26) {
-        target += hihat * 0.50 + snare * 0.35 + wave3 * 0.30;
-      } else {
-        target += hihat * 0.80 + (math.sin(t * 7.4 + i * 0.2) * 0.15 + 0.15);
-      }
-      _applyBallistics(i, target.clamp(_minFloor, 0.98));
-      result[i] = _currentLevels[i];
     }
     return result;
   }

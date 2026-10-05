@@ -62,13 +62,11 @@ Future<Response> compressJson(Request request, Response response) async {
   );
 }
 
-String _httpDate(DateTime time) => HttpDate.format(time.toUtc());
-
 /// Serves [file] with HTTP range support (a single `bytes=` range; anything else gets the whole file).
 Future<Response> fileResponse(Request request, File file, String contentType, {Map<String, String>? headers}) async {
   final stat = await file.stat();
   final length = stat.size;
-  final lastModified = _httpDate(stat.modified);
+  final lastModified = HttpDate.format(stat.modified);
   final base = <String, String>{
     'content-type': contentType,
     'accept-ranges': 'bytes',

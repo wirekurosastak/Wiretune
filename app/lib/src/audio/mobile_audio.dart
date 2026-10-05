@@ -9,9 +9,7 @@ import '../view_models/player_view_model.dart';
 
 /// The phone's side of playing music: the audio focus (a call pauses, a navigation prompt ducks, unplugged headphones
 /// pause), and on Android a CPU and Wi-Fi lock while playing, so a stream keeps flowing with the screen off.
-class MobileAudio {
-  MobileAudio._();
-
+abstract final class MobileAudio {
   static const MethodChannel _power = MethodChannel('wiretune/power');
   static const double _duckLevel = 0.2;
 

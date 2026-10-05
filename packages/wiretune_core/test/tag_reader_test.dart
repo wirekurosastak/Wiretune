@@ -238,6 +238,21 @@ void main() {
     });
   });
 
+  test(
+    'FLAC: STREAMINFO, and of two Vorbis comment fields for one tag the one that ranks first, whatever the order',
+    () {
+      final file = path('built.flac');
+      File(file).writeAsBytesSync(
+        _buildFlac(['TRACKTOTAL=20', 'ENSEMBLE=The Orchestra', 'TRACKNUMBER=3/12', 'ALBUMARTIST=The Conductor']),
+      );
+      final tags = TagReader.read(file)!;
+      expect(tags.albumArtist, 'The Conductor'); // ALBUMARTIST outranks ENSEMBLE
+      expect((tags.track, tags.trackCount), (3, 12)); // TRACKNUMBER's own total outranks TRACKTOTAL
+      expect((tags.sampleRate, tags.bitsPerSample, tags.channels), (44100, 16, 2));
+      expect(tags.duration, const Duration(seconds: 2));
+    },
+  );
+
   test('DSF: the DSD and fmt chunks and the ID3 tag at the metadata offset', () {
     final file = path('built.dsf');
     File(file).writeAsBytesSync(_buildDsf());
@@ -312,6 +327,33 @@ List<int> _id3v23(Map<String, String> frames) {
 }
 
 List<int> _u32be(int v) => [(v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF];
+
+/// A FLAC file: STREAMINFO (44.1 kHz, 16 bit, stereo, two seconds), a Vorbis comment with [comments], and some "audio".
+Uint8List _buildFlac(List<String> comments) {
+  const sampleRate = 44100, channels = 2, bits = 16, samples = 2 * sampleRate;
+  const packed = sampleRate << 44 | (channels - 1) << 41 | (bits - 1) << 36 | samples;
+  final info = [...List.filled(10, 0), ..._u32be(packed >> 32), ..._u32be(packed & 0xFFFFFFFF), ...List.filled(16, 0)];
+  final vendor = utf8.encode('wiretune test');
+  final comment = BytesBuilder()
+    ..add(_u32le(vendor.length))
+    ..add(vendor)
+    ..add(_u32le(comments.length));
+  for (final entry in comments.map(utf8.encode)) {
+    comment
+      ..add(_u32le(entry.length))
+      ..add(entry);
+  }
+  List<int> header(int type, int length, {bool last = false}) => [(last ? 0x80 : 0) | type, ..._u32be(length).skip(1)];
+  return (BytesBuilder()
+        ..add(ascii.encode('fLaC'))
+        ..add(header(0, info.length))
+        ..add(info)
+        ..add(header(4, comment.length, last: true))
+        ..add(comment.takeBytes())
+        ..add(List.filled(4096, 0)))
+      .takeBytes();
+}
+
 List<int> _u16le(int v) => [v & 0xFF, (v >> 8) & 0xFF];
 List<int> _u32le(int v) => [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF];
 List<int> _u64le(int v) => [..._u32le(v & 0xFFFFFFFF), ..._u32le(v >> 32)];

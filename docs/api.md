@@ -60,7 +60,7 @@ and none takes a stream token. Limits: 100,000 favourites, 100,000 tracks with p
 | `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` for a rule violation, `409` at the limit |
 | `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` for an unknown ID |
 
-The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs simply stay.
+The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs stay.
 
 ## Media
 

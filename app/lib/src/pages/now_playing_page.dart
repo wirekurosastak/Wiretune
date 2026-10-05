@@ -10,8 +10,8 @@ import '../widgets/player_controls.dart';
 import '../widgets/quality_tag.dart';
 import 'queue_panel.dart';
 
-/// The phone's full-screen player, over the colours of the cover: the cover, the queue or the lyrics on top (three
-/// tabs), and the quality, the seek bar and the transport below, whatever the tab.
+/// The phone's full-screen player, over the colours of the cover: the cover (with its quality tag), the queue or the
+/// lyrics on top (three tabs), and the seek bar and the transport below, whatever the tab.
 class NowPlayingPage extends StatelessWidget {
   const NowPlayingPage({super.key});
 
@@ -180,9 +180,21 @@ class _PlayerTab extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Hero(
-                        tag: 'now-playing-cover',
-                        child: CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Hero(
+                            tag: 'now-playing-cover',
+                            child: CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
+                          ),
+                          // On the cover, as on the album tiles.
+                          if (player.currentTagSpec.isNotEmpty)
+                            Positioned(
+                              left: 14,
+                              top: 14,
+                              child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 12),
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -315,7 +327,7 @@ class _LyricsTab extends StatelessWidget {
   }
 }
 
-/// The quality, the seek bar with its times, and the five transport buttons with the big square play button.
+/// The seek bar with its times, and the five transport buttons with the big square play button.
 class _Transport extends StatelessWidget {
   const _Transport();
 
@@ -341,11 +353,6 @@ class _Transport extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (player.currentTagSpec.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 11),
-            ),
           const SeekBar(timesBelow: true),
           SizedBox(
             height: 84,

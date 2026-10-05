@@ -1,14 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/layouts/phone_layout.dart';
 import 'package:wiretune/src/layouts/wide_layout.dart';
+import 'package:wiretune/src/pages/library_pages.dart';
 import 'package:wiretune/src/pages/now_playing_page.dart';
 import 'package:wiretune/src/pages/queue_panel.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
+import 'package:wiretune/src/widgets/ambient.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/quality_tag.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
@@ -51,6 +55,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 120));
     }
   }
+
+  // Covers are read from disk and decoded for real, in steps that each need the real event loop: until [shown] finds
+  // the result. Then the transitions run out.
+  Future<void> loadCovers(WidgetTester tester, Finder shown) async {
+    for (var i = 0; i < 40 && shown.evaluate().isEmpty; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      await tester.pump();
+    }
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump(); // what the ends of the transitions set off
+  }
+
+  // The colours of the playing cover in the backdrop of [page].
+  Finder washOf(Finder page) => find.descendant(
+    of: find.descendant(of: page, matching: find.byType(AmbientBackdrop)),
+    matching: find.byType(RawImage),
+  );
 
   testWidgets('a desktop window gets the wide layout, and the sidebar navigates', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
@@ -204,9 +225,69 @@ void main() {
     );
   });
 
-  testWidgets('a phone shows albums with their resolution on the cover, and a queue without quality tags', (
-    tester,
-  ) async {
+  testWidgets('a phone lists albums and artists as rows, and a row opens its page', (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    // Rows: one under the other, not tiles side by side.
+    void expectRows(String first, String second) {
+      final (a, b) = (tester.getTopLeft(find.text(first)), tester.getTopLeft(find.text(second)));
+      expect(a.dx, b.dx);
+      expect(a.dy, isNot(b.dy));
+    }
+
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    expectRows('Kind of Blue', 'Random Access Memories');
+    // The resolution leads the album's second line (the test tracks are FLAC 16bit/44.1kHz).
+    final tag = tester.getRect(find.text('16bit/44.1kHz').first);
+    final artist = tester.getRect(find.text('Miles Davis').first);
+    expect((tag.center.dy - artist.center.dy).abs(), lessThan(2));
+    expect(tag.right, lessThan(artist.left));
+    await tester.tap(find.text('Kind of Blue'));
+    await settle(tester);
+    expect(vm.albums.selectedAlbum?.title, 'Kind of Blue');
+
+    vm.navigateTo(AppSection.artists);
+    await settle(tester);
+    expectRows('Daft Punk', 'Miles Davis');
+    expect(find.text('1 album  •  2 tracks'), findsOneWidget);
+    await tester.tap(find.text('Miles Davis'));
+    await settle(tester);
+    expect(vm.artists.selectedArtist?.name, 'Miles Davis');
+  });
+
+  testWidgets('the quality tag sits on the cover: the full-screen player, an album, a playlist', (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    void expectOnCover(Finder page, Finder cover) {
+      final tag = find.descendant(of: page, matching: find.byType(QualityTag));
+      expect(tag, findsOneWidget); // and nowhere else on the page
+      final (on, under) = (tester.getRect(tag), tester.getRect(cover));
+      expect(under.intersect(on), on, reason: '$on lies inside $under');
+    }
+
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    await settle(tester);
+    final player = find.byType(NowPlayingPage);
+    expectOnCover(player, find.descendant(of: player, matching: find.byType(CoverImage)));
+    vm.closeNowPlaying();
+
+    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+    await settle(tester);
+    final header = find.byType(DetailHeader);
+    expectOnCover(header, find.descendant(of: header, matching: find.byType(CoverImage)));
+
+    final playlist = (await tester.runAsync(() async {
+      final created = await vm.library.createPlaylist('Mix');
+      await vm.library.addTrackToPlaylist(created.id, vm.library.tracks.first.id);
+      return vm.library.getPlaylist(created.id);
+    }))!;
+    vm.navigateTo(AppSection.playlists);
+    vm.playlists.openPlaylist(playlist);
+    await settle(tester);
+    expectOnCover(header, find.descendant(of: header, matching: find.byType(CoverImage)));
+  });
+
+  testWidgets('a phone shows the resolution on its album rows, and a queue without quality tags', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.albums);
     await settle(tester);
@@ -287,8 +368,68 @@ void main() {
     }
   });
 
+  group('on a phone, while music plays', () {
+    // Each frame costs battery there: nothing may keep drawing frames on its own for as long as the music lasts.
+    Future<(MainViewModel, FakeAudioDriver)> playWithCover(WidgetTester tester) async {
+      AppPlatform.forTesting(system: 'android');
+      tester.view.physicalSize = const Size(400, 860);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final driver = FakeAudioDriver();
+      final vm = (await tester.runAsync(() async {
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue'),
+          TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2),
+        ]);
+        await library.initialize();
+        return createMainViewModel(library, TestSupport.createEngine(driver));
+      }))!;
+      // The backdrop only has something to move once a cover is there.
+      final cover = writeCover(Directory.systemTemp.createTempSync('wiretune_cover_'));
+      for (final track in vm.library.tracks) {
+        track.coverArtPath = cover;
+      }
+      await tester.pumpWidget(WiretuneApp(vm: vm));
+      vm.player.playQueue(vm.library.tracks);
+      await loadCovers(tester, washOf(find.byType(PhoneLayout)));
+      expect(vm.player.isPlaying, isTrue);
+      expect(washOf(find.byType(PhoneLayout)), findsWidgets); // so there is something that could move
+      return (vm, driver);
+    }
+
+    testWidgets('nothing animates on its own, in the library or the full-screen player', (tester) async {
+      final (vm, _) = await playWithCover(tester);
+      expect(tester.binding.transientCallbackCount, 0);
+
+      vm.openNowPlaying();
+      await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
+      expect(washOf(find.byType(NowPlayingPage)), findsWidgets);
+      expect(tester.binding.transientCallbackCount, 0);
+    });
+
+    testWidgets('the progress is drawn once a second, not at every position update', (tester) async {
+      final (vm, driver) = await playWithCover(tester);
+      for (final page in ['library', 'full-screen player']) {
+        if (page != 'library') {
+          vm.openNowPlaying();
+          await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
+        }
+        expect(tester.binding.hasScheduledFrame, isFalse, reason: '$page, before'); // everything has come to rest
+        final second = vm.player.position.value.inSeconds + 1;
+        driver.positionChanged.emit(Duration(seconds: second, milliseconds: 100)); // a new second: drawn
+        expect(tester.binding.hasScheduledFrame, isTrue, reason: page);
+        await tester.pump();
+        for (final ms in [250, 400, 550, 700, 850]) {
+          driver.positionChanged.emit(Duration(seconds: second, milliseconds: ms)); // the rest of it: not
+          expect(tester.binding.hasScheduledFrame, isFalse, reason: '$page, $ms ms');
+        }
+      }
+    });
+  });
+
   testWidgets('the sign-in page covers the app while it is active', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
+    expect(find.text(Localizer.get('Connect')), findsNothing);
     vm.showLoginScreen();
     await settle(tester);
     expect(find.text(Localizer.get('Connect')), findsWidgets);

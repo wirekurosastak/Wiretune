@@ -48,10 +48,9 @@ An ALSA `hw:` device is exclusive by nature: it bypasses the sound server, and n
 **Linux and PipeWire.** PipeWire normally holds the card, so before opening a `hw:` device Wiretune claims it in the
 device reservation protocol: it takes the D-Bus name `org.freedesktop.ReserveDevice1.Audio<card>` (priority 10), and
 WirePlumber lets go of the card. The name belongs to the player's own bus connection, so PipeWire gets the card back as
-soon as Wiretune lets go of it or ends in any way: closed, crashed or killed. (In earlier builds a `pw-reserve` helper
-held the claim, and it outlived a player closed in exclusive mode, leaving the card silent until it was stopped.) Tried
-with WirePlumber; PulseAudio follows the same protocol but hasn't been tried. When the bus can't be reached, or the
-card's holder won't let go, the card may be busy and playback fails with mpv's message. Three things to know:
+soon as Wiretune lets go of it or ends in any way: closed, crashed or killed. Tried with WirePlumber; PulseAudio follows
+the same protocol but hasn't been tried. When the bus can't be reached, or the card's holder won't let go, the card may
+be busy and playback fails with mpv's message. Three things to know:
 
 - If a `hw:` device can't take the file's sample format or rate, mpv converts it in its own chain. Wiretune doesn't
   notice, so the switch says bit-perfect when it isn't. `WIRETUNE_LOG_LEVEL=debug` shows the format mpv chose.

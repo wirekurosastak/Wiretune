@@ -28,19 +28,16 @@ class UiAutomationServer {
 
   final MainViewModel _vm;
   final int port;
-  HttpServer? _server;
 
   Future<void> start() async {
     try {
-      final server = _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
       server.listen(_handle);
       WiretuneLog.info('UiAutomation', 'UI automation server started on http://127.0.0.1:$port/');
     } catch (e) {
       WiretuneLog.warn('UiAutomation', 'Could not start UI automation server on port $port: $e');
     }
   }
-
-  Future<void> stop() async => _server?.close(force: true);
 
   Future<void> _handle(HttpRequest request) async {
     final headers = request.headers;

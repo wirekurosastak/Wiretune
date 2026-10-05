@@ -39,7 +39,13 @@ void main() {
     expect(theirs.playlists, isEmpty);
 
     // The same playlist ID in another account is a different playlist.
-    await guest.put('/api/me/playlists/pl-1', {'name': 'Mine', 'description': null, 'trackIds': <String>[]});
+    final theirsSaved = await guest.put('/api/me/playlists/pl-1', {
+      'name': 'Mine',
+      'description': null,
+      'trackIds': <String>[],
+    });
+    expect(theirsSaved.statusCode, 200);
+    expect((await data(guest)).playlists.single.name, 'Mine');
     expect((await data(admin)).playlists.single.name, 'Road trip');
 
     await first.close();
@@ -139,6 +145,11 @@ void main() {
         'name': 'Mine',
         'trackIds': ['t1'],
       });
+      // The data is there before the deletion, so that its absence afterwards is the deletion's doing.
+      final before = server.server.userData.get(guestInfo.id);
+      expect(before.favorites, ['t1']);
+      expect(before.plays.single.playCount, 1);
+      expect(before.playlists.single.trackIds, ['t1']);
 
       expect((await admin.delete('/api/users/${guestInfo.id}')).statusCode, 200);
 

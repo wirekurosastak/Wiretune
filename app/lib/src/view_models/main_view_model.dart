@@ -11,15 +11,10 @@ import 'settings_view_models.dart';
 
 /// What the device the app runs on can do; decided once at start-up.
 class DeviceCapabilities {
-  const DeviceCapabilities({this.supportsLocalFolder = false, this.isTv = false, this.isDesktop = false});
+  const DeviceCapabilities({this.supportsLocalFolder = false});
 
   /// Scanning a folder of the device's own (desktop).
   final bool supportsLocalFolder;
-
-  /// A television (Android TV, Tizen): the wide layout, steered with a remote.
-  final bool isTv;
-
-  final bool isDesktop;
 }
 
 /// The whole app's state: the services, one view model per area, the navigation and the status lines. The wide and
@@ -48,7 +43,7 @@ class MainViewModel extends ChangeNotifier {
     favorites = FavoritesViewModel(library, player);
     audioSettings = AudioSettingsViewModel(audioEngine);
     serverSettings = ServerSettingsViewModel(library, session, supportsLocalFolder: capabilities.supportsLocalFolder);
-    search = SearchViewModel(library, player, (q) => searchQuery = q, openAlbum, openArtist);
+    search = SearchViewModel(library, player, openAlbum, openArtist);
 
     // The full-screen player has nothing to show once nothing is loaded.
     player.addListener(() {
@@ -518,9 +513,6 @@ class MainViewModel extends ChangeNotifier {
     _remember(library.setPreference(_onlineLyricsPreference, value ? '1' : '0'));
     notifyListeners();
   }
-
-  /// The languages the user can pick.
-  List<LanguageInfo> get languages => Localizer.languages;
 
   String get language => Localizer.instance.language;
 

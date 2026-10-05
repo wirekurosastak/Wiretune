@@ -69,27 +69,24 @@ Only want to play a folder on this computer? Choose **Continue without a server*
 
 ## Building
 
-The **server** builds on Linux, Windows or macOS, for the system it's built on:
+`tool/build.dart` makes the release build of every target you name and puts what ships into `dist/`:
 
 ```bash
-cd server
-dart build cli -o build
+dart tool/build.dart server linux android
 ```
 
-That gives you `server/build/bundle/`. Copy the whole folder: the executable loads SQLite from the `lib/` next to it.
+| Target | Builds on | You get |
+|---|---|---|
+| `server` | Linux, Windows or macOS, for that system | `dist/server/`: `bin/wiretune_server` and the SQLite library in `lib/` |
+| `linux` | Linux | `dist/linux/`: `wiretune` with its `lib/` and `data/` |
+| `windows` | Windows | `dist/windows/`: `wiretune.exe` with its DLLs and `data/` |
+| `macos` | macOS | `dist/macos/Wiretune.app` |
+| `android` (phone, tablet, TV, Auto) | anywhere | `dist/android/`: one APK per processor type |
+| `ios` | macOS, with a signing team set in Xcode | `dist/ios/`: the `.ipa` |
+| `tizen` (Samsung TV) | anywhere, with [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) | `dist/tizen/`: the `.tpk` |
 
-The **player** builds from `app/`, and each desktop version only on its own system:
-
-| Target | Build on | Run in `app/` | You get, in `app/build/` |
-|---|---|---|---|
-| Linux | Linux | `flutter build linux --release` | `linux/x64/release/bundle/` |
-| Windows | Windows | `flutter build windows --release` | `windows\x64\runner\Release\` |
-| macOS | macOS | `flutter build macos --release` | `macos/Build/Products/Release/Wiretune.app` |
-| Android, Android TV, Android Auto | anywhere | `flutter build apk --release --split-per-abi` | `app/outputs/flutter-apk/` |
-| iPhone, iPad | macOS, with a signing team set in Xcode | `flutter build ipa --release` | `ios/ipa/` |
-| Samsung TV (Tizen) | anywhere, with [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) | `flutter-tizen build tpk --release` | `tizen/tpk/` |
-
-What to install first, signing, and getting the result onto a phone or a TV: [docs/building.md](docs/building.md).
+Copy a folder as a whole: the executables load their libraries from next to them. What to install first, signing, and
+getting the result onto a phone or a TV: [docs/building.md](docs/building.md).
 
 ## Documentation
 

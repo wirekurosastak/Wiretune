@@ -14,8 +14,6 @@ class LibraryRepository {
   /// Opened on first use, so a test double that overrides every method never creates a database.
   DatabaseManager get _db => _dbManager ??= DatabaseManager();
 
-  DatabaseManager get database => _db;
-
   Future<void> initialize() async => _db.initializeSchema();
 
   Future<List<Track>> getAllTracks() async {
@@ -156,20 +154,6 @@ class LibraryRepository {
     _db.connection.execute('UPDATE tracks SET is_favorite = ? WHERE id = ?', [isFavorite ? 1 : 0, trackId]);
   }
 
-  /// Writes favourite, play count and last-played of the given tracks in one transaction.
-  Future<void> updateTracksUserData(Iterable<Track> tracks) async {
-    _db.transaction((db) {
-      final update = db.prepare('UPDATE tracks SET is_favorite = ?, play_count = ?, last_played = ? WHERE id = ?');
-      try {
-        for (final t in tracks) {
-          update.execute([t.isFavorite ? 1 : 0, t.playCount, toDbTime(t.lastPlayed), t.id]);
-        }
-      } finally {
-        update.close();
-      }
-    });
-  }
-
   Future<void> incrementPlayCount(String trackId) async {
     _db.connection.execute('UPDATE tracks SET play_count = play_count + 1, last_played = ? WHERE id = ?', [
       toDbTime(DateTime.now()),
@@ -188,7 +172,7 @@ class LibraryRepository {
           createdAt: fromDbTime(r['created_at']),
           modifiedAt: fromDbTime(r['modified_at']),
           isServer: _int(r['is_server']) == 1,
-          trackIds: _decodeIds(r['track_ids_json'] as String?),
+          trackIds: decodeTrackIds(r['track_ids_json']),
         ),
     ];
   }
@@ -244,14 +228,4 @@ class LibraryRepository {
   }
 
   static int? _int(Object? value) => value == null ? null : (value as num).toInt();
-
-  static List<String> _decodeIds(String? json) {
-    if (json == null) return [];
-    try {
-      final decoded = jsonDecode(json);
-      return decoded is List ? decoded.whereType<String>().toList() : [];
-    } on FormatException {
-      return [];
-    }
-  }
 }

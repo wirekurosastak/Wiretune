@@ -121,22 +121,6 @@ void main() {
     expect(stored['b']!.albumArtist, isNull);
   });
 
-  test('user data of several tracks is written in one call', () async {
-    final (repo, _) = await open();
-    await repo.replaceAllTracks([make('a'), make('b')]);
-    final played = DateTime.utc(2026, 3, 4, 5, 6, 7);
-    await repo.updateTracksUserData([
-      Track(id: 'a', isFavorite: true, playCount: 7, lastPlayed: played),
-      Track(id: 'missing', isFavorite: true, playCount: 1),
-    ]);
-
-    final stored = {for (final t in await repo.getAllTracks()) t.id: t};
-    expect(stored['a']!.isFavorite, isTrue);
-    expect(stored['a']!.playCount, 7);
-    expect(stored['a']!.lastPlayed, played);
-    expect(stored['b']!.isFavorite, isFalse);
-  });
-
   test('server playlists are marked, and only they are removed on sign-out', () async {
     final (repo, _) = await open();
     await repo.savePlaylist(Playlist(id: 'mine', name: 'Mine', trackIds: ['a']));

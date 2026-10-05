@@ -47,9 +47,6 @@ class ServerStreamingClient {
   static String buildStreamUrl(String baseUrl, String trackId) =>
       '${_base(baseUrl)}/api/stream/${Uri.encodeComponent(trackId)}';
 
-  static String buildCoverUrl(String baseUrl, String trackId) =>
-      '${_base(baseUrl)}/api/cover/${Uri.encodeComponent(trackId)}';
-
   /// The cover of a whole album, so that the tracks of one album share one image (and one download).
   static String buildAlbumCoverUrl(String baseUrl, String albumId) =>
       '${_base(baseUrl)}/api/cover/album/${Uri.encodeComponent(albumId)}';
@@ -86,14 +83,6 @@ class ServerStreamingClient {
   /// A short-lived token that opens only the audio and cover routes, for use in stream URLs.
   Future<StreamTokenResponse> getStreamToken(String baseUrl) async =>
       _parse(StreamTokenResponse.fromJson, await _send('POST', baseUrl, '/api/auth/stream-token'));
-
-  /// Changes the signed-in account's password. A wrong current password is a [ServerRequestException] with status 403.
-  Future<void> changePassword(String baseUrl, String currentPassword, String newPassword) => _send(
-    'POST',
-    baseUrl,
-    '/api/auth/change-password',
-    body: {'currentPassword': currentPassword, 'newPassword': newPassword},
-  );
 
   Future<UserInfo> getCurrentUser(String baseUrl) async =>
       _parse(UserInfo.fromJson, await _send('GET', baseUrl, '/api/auth/me'));

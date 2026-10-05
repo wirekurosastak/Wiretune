@@ -4,13 +4,10 @@ import 'byte_source.dart';
 
 /// Where an embedded picture lies in its file, so that it can be read only when it is needed.
 class PictureLocation {
-  const PictureLocation(this.offset, this.length, {this.type = 3});
+  const PictureLocation(this.offset, this.length);
 
   final int offset;
   final int length;
-
-  /// The ID3/FLAC picture type; 3 is the front cover.
-  final int type;
 }
 
 /// What the tag reader found in one file: the tags, the stream properties and the first embedded picture.

@@ -5,9 +5,12 @@ import 'package:flutter/services.dart';
 
 /// Which kind of device the app runs on; decided once at start-up by [AppPlatform.detect].
 class AppPlatform {
-  AppPlatform._(this.isTizen, this.isTv);
+  AppPlatform._(this._system, this.isTizen, this.isTv);
 
   static late AppPlatform current;
+
+  /// The operating system as `Platform.operatingSystem` names it: android, ios, linux, macos or windows.
+  final String _system;
 
   /// Samsung's Tizen (TVs). Dart reports it as Linux; the Tizen runner (tizen/App.cs) answers `isTizen`.
   final bool isTizen;
@@ -15,16 +18,20 @@ class AppPlatform {
   /// A television: Android TV or a Tizen TV. Steered with a remote, always in the wide layout.
   final bool isTv;
 
-  bool get isAndroid => !kIsWeb && Platform.isAndroid;
-  bool get isIOS => !kIsWeb && Platform.isIOS;
-  bool get isMacOS => !kIsWeb && Platform.isMacOS;
-  bool get isWindows => !kIsWeb && Platform.isWindows;
-  bool get isLinuxDesktop => !kIsWeb && Platform.isLinux && !isTizen;
+  bool get isAndroid => _system == 'android';
+  bool get isIOS => _system == 'ios';
+  bool get isMacOS => _system == 'macos';
+  bool get isWindows => _system == 'windows';
+  bool get isLinuxDesktop => _system == 'linux' && !isTizen;
 
   bool get isDesktop => isLinuxDesktop || isWindows || isMacOS;
 
   /// The window has no system title bar; the app's header moves it and carries the window buttons.
   bool get hasCustomWindowFrame => isLinuxDesktop || isWindows;
+
+  /// A phone or tablet: steered by touch and running on its battery. Nothing animates there on its own (the backdrop's
+  /// drift, the breathing logo and cover, the status light): every frame costs battery, and such an animation draws
+  /// them for as long as the music lasts.
   bool get isMobile => (isAndroid && !isTv) || isIOS;
 
   /// The players that can scan a folder of the device's own; the others play from a server.
@@ -39,12 +46,15 @@ class AppPlatform {
   /// Asks the native side: the Android plugin and the Tizen runner answer on `wiretune/platform`; a desktop has no
   /// handler, which reads as "no".
   static Future<AppPlatform> detect() async {
+    final system = _hostSystem;
     var tizen = false;
     var tv = false;
-    if (!kIsWeb && Platform.isLinux) tizen = await _ask('isTizen');
-    if (tizen || (!kIsWeb && Platform.isAndroid)) tv = await _ask('isTelevision');
-    return current = AppPlatform._(tizen, tv);
+    if (system == 'linux') tizen = await _ask('isTizen');
+    if (tizen || system == 'android') tv = await _ask('isTelevision');
+    return current = AppPlatform._(system, tizen, tv);
   }
+
+  static String get _hostSystem => kIsWeb ? 'web' : Platform.operatingSystem;
 
   static Future<bool> _ask(String method) async {
     try {
@@ -56,6 +66,8 @@ class AppPlatform {
     }
   }
 
-  /// For tests and previews.
-  static AppPlatform forTesting({bool tizen = false, bool tv = false}) => current = AppPlatform._(tizen, tv);
+  /// For tests and previews: [system] stands in for the operating system (`android`, `ios`, …); null keeps this
+  /// machine's.
+  static AppPlatform forTesting({String? system, bool tizen = false, bool tv = false}) =>
+      current = AppPlatform._(system ?? _hostSystem, tizen, tv);
 }

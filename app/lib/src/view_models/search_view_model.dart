@@ -36,7 +36,7 @@ class BestMatch {
 
 /// The search results: up to 25 tracks, 12 albums and 12 artists, and a best match.
 class SearchViewModel extends ChangeNotifier {
-  SearchViewModel(this._library, this._player, this._setSearchQuery, this._openAlbum, this._openArtist) {
+  SearchViewModel(this._library, this._player, this._openAlbum, this._openArtist) {
     _unsubscribe = _library.libraryChanged.listen((_) {
       if (isSearchActive) _execute(query);
     });
@@ -47,7 +47,6 @@ class SearchViewModel extends ChangeNotifier {
 
   final LibraryService _library;
   final PlayerViewModel _player;
-  final void Function(String query) _setSearchQuery;
   final void Function(Album album) _openAlbum;
   final void Function(Artist artist) _openArtist;
   late final void Function() _unsubscribe;
@@ -178,8 +177,6 @@ class SearchViewModel extends ChangeNotifier {
   void openArtist(Artist? artist) {
     if (artist != null) _openArtist(artist);
   }
-
-  void clearSearch() => _setSearchQuery('');
 
   @override
   void dispose() {

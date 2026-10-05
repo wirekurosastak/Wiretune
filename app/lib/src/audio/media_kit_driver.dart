@@ -46,16 +46,11 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   AlsaCardReservation? _reservation;
 
   PlaybackState _state = PlaybackState.stopped;
-  AudioOutputDevice? _device;
-  bool _exclusive = false;
   bool _bitperfect = false;
   double _volume = 1.0;
   int _generation = 0;
   String? _lastError;
   DateTime _lastPositionEvent = DateTime.fromMillisecondsSinceEpoch(0);
-
-  @override
-  String get driverName => 'libmpv (media_kit)';
 
   @override
   PlaybackState get state => _state;
@@ -212,8 +207,6 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
 
   @override
   Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect}) async {
-    _device = device;
-    _exclusive = exclusive;
     _bitperfect = bitperfect;
     final native = _player.platform;
     if (native is! NativePlayer) return;
@@ -387,12 +380,12 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   void _startSpectrum() {
     _spectrumTimer?.cancel();
     _spectrumTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
-      final playing = _state == PlaybackState.playing && _player.state.playing;
-      if (playing && _pcm.tryGetWindow(_player.state.position, _window)) {
-        spectrumDataAvailable.emit(_analyzer.processPcm(_window, isPlaying: true));
-      } else {
-        spectrumDataAvailable.emit(_analyzer.processPcm(_window, isPlaying: false));
-      }
+      // Without decoded audio for the position the bars fall, as they do when playback stops.
+      final live =
+          _state == PlaybackState.playing &&
+          _player.state.playing &&
+          _pcm.tryGetWindow(_player.state.position, _window);
+      spectrumDataAvailable.emit(_analyzer.processPcm(_window, isPlaying: live));
     });
   }
 
@@ -419,8 +412,4 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     await _player.dispose();
     await _reservation?.release();
   }
-
-  /// The output's current device and modes, for diagnostics.
-  @override
-  String toString() => 'MediaKitAudioDriver(device: ${_device?.id}, exclusive: $_exclusive, bitperfect: $_bitperfect)';
 }

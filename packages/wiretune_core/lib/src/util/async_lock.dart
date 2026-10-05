@@ -26,10 +26,4 @@ class AsyncLock {
 
     return previous.then((_) => run());
   }
-
-  /// Runs [action] only when nobody holds the lock; returns null without running it otherwise.
-  Future<T?> tryRun<T>(Future<T> Function() action) async {
-    if (isLocked) return null;
-    return synchronized(action);
-  }
 }

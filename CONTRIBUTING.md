@@ -37,7 +37,8 @@ CI analyses, tests and builds everything but Tizen, but it runs nothing on a dev
 checks yourself first:
 
 ```bash
-dart format packages server app/lib app/test            # CI fails on anything this would change
+dart format packages server app/lib app/test tool       # CI fails on anything this would change
+dart analyze --fatal-infos tool
 (cd packages/wiretune_core && dart analyze --fatal-infos && dart test)
 (cd server && dart analyze --fatal-infos && dart test)
 (cd app && flutter analyze --fatal-infos && flutter test)

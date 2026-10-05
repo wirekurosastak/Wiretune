@@ -26,11 +26,10 @@ const List<List<int>> _mpeg2Bitrates = [
 ];
 
 class _MpegFrame {
-  _MpegFrame(this.version, this.layer, this.bitrate, this.sampleRate, this.channels, this.length, this.samples);
+  _MpegFrame(this.version, this.bitrate, this.sampleRate, this.channels, this.length, this.samples);
 
   /// 1 for MPEG-1, 2 for MPEG-2, 25 for MPEG-2.5.
   final int version;
-  final int layer;
   final int bitrate;
   final int sampleRate;
   final int channels;
@@ -62,7 +61,7 @@ _MpegFrame? _parseMpegHeader(Uint8List b, int o) {
       ? (12 * bitrate * 1000 ~/ sampleRate + padding) * 4
       : (samples ~/ 8) * bitrate * 1000 ~/ sampleRate + padding;
   if (length < 4) return null;
-  return _MpegFrame(version, layer, bitrate, sampleRate, channels, length, samples);
+  return _MpegFrame(version, bitrate, sampleRate, channels, length, samples);
 }
 
 /// MP3 (and MP2): the first frame and its Xing/Info or VBRI header for length and bitrate; ID3v2, APE and ID3v1 tags.

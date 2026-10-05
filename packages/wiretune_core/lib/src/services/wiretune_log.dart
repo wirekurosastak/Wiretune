@@ -6,30 +6,6 @@ import 'app_paths.dart';
 
 enum LogLevel { trace, debug, info, warn, error }
 
-/// One log line.
-class LogEntry {
-  LogEntry(this.timestamp, this.level, this.category, this.message, [this.error, this.stackTrace]);
-
-  final DateTime timestamp;
-  final LogLevel level;
-  final String category;
-  final String message;
-  final Object? error;
-  final StackTrace? stackTrace;
-
-  @override
-  String toString() {
-    final t = timestamp;
-    String two(int v) => v.toString().padLeft(2, '0');
-    final stamp =
-        '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}:${two(t.minute)}:${two(t.second)}'
-        '.${t.millisecond.toString().padLeft(3, '0')}';
-    final level = this.level.name.toUpperCase().padRight(5);
-    final errorText = error == null ? '' : ' | Exception: $error${stackTrace == null ? '' : '\n$stackTrace'}';
-    return WiretuneLog.redact('[$stamp] [$level] [$category] $message$errorText');
-  }
-}
-
 /// The log of the player or the server: `[time] [LEVEL] [category] message` lines on the console and in a file that is
 /// moved to `.1` at 10 MiB. Every line passes through [redact], because stream URLs carry tokens.
 abstract final class WiretuneLog {
@@ -47,15 +23,6 @@ abstract final class WiretuneLog {
 
   /// Whether lines are also printed to the console (the Flutter app turns it off in release builds).
   static bool writeToConsole = true;
-
-  static final List<void Function(LogEntry)> _subscribers = [];
-
-  static void Function() onLogEntry(void Function(LogEntry) subscriber) {
-    _subscribers.add(subscriber);
-    return () => _subscribers.remove(subscriber);
-  }
-
-  static String get logFilePath => _logFilePath ??= _defaultLogPath();
 
   /// The settings a background isolate needs to log like this one (isolates do not share static state).
   static (String?, LogLevel, bool) get isolateSettings => (_logFilePath, minimumLevel, writeToConsole);
@@ -133,8 +100,7 @@ abstract final class WiretuneLog {
   static void log(LogLevel level, String category, String message, [Object? error, StackTrace? stackTrace]) {
     if (level.index < minimumLevel.index) return;
 
-    final entry = LogEntry(DateTime.now(), level, category, redact(message), error, stackTrace);
-    final line = entry.toString();
+    final line = _format(DateTime.now(), level, category, message, error, stackTrace);
 
     if (writeToConsole) {
       try {
@@ -150,14 +116,23 @@ abstract final class WiretuneLog {
 
     if (!_initAttempted) initialize();
     _writeLine(line);
+  }
 
-    for (final subscriber in List.of(_subscribers)) {
-      try {
-        subscriber(entry);
-      } catch (_) {
-        // Subscriber failures must never break logging.
-      }
-    }
+  /// `[time] [LEVEL] [category] message`, with the error and its stack trace, and every token blanked.
+  static String _format(
+    DateTime time,
+    LogLevel level,
+    String category,
+    String message,
+    Object? error,
+    StackTrace? stackTrace,
+  ) {
+    String two(int v) => v.toString().padLeft(2, '0');
+    final stamp =
+        '${time.year}-${two(time.month)}-${two(time.day)} ${two(time.hour)}:${two(time.minute)}:${two(time.second)}'
+        '.${time.millisecond.toString().padLeft(3, '0')}';
+    final errorText = error == null ? '' : ' | Exception: $error${stackTrace == null ? '' : '\n$stackTrace'}';
+    return redact('[$stamp] [${level.name.toUpperCase().padRight(5)}] [$category] $message$errorText');
   }
 
   /// Replaces the value of every `token=` query parameter with `***`.
@@ -176,14 +151,5 @@ abstract final class WiretuneLog {
     } catch (_) {
       return p.join(Directory.systemTemp.path, 'wiretune.log');
     }
-  }
-
-  /// Closes the file; the next line opens it again. For tests that delete the data directory.
-  static void close() {
-    try {
-      _file?.closeSync();
-    } catch (_) {}
-    _file = null;
-    _initAttempted = false;
   }
 }

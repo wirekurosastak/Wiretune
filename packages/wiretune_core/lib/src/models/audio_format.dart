@@ -59,10 +59,6 @@ class AudioFormat {
   /// Gold for hi-res, silver for lossless at CD resolution, bronze for anything that is not lossless.
   QualityTier get tier => isHiRes ? QualityTier.gold : (isLossless ? QualityTier.silver : QualityTier.bronze);
 
-  String get displayBadge => !isLossless
-      ? '${codec.toUpperCase()} / ${bitrateKbps}kbps'
-      : '${codec.toUpperCase()} / ${bitsPerSample}bit / ${khz(sampleRate)}kHz';
-
   /// The text that follows the tier word in a quality tag: `FLAC 24bit/96kHz` for lossless files, `MP3 320kbps` for
   /// lossy ones.
   String get tagSpec => !isLossless
@@ -124,7 +120,7 @@ class AudioFormat {
 /// The quality tag of a group of tracks (an album or a playlist): the tier the group is shown in and the short text
 /// that follows the tier word, for example `FLAC 24bit/96kHz` or `MIXED`.
 class QualitySummary {
-  const QualitySummary(this.tier, this.spec, this.isMixed);
+  const QualitySummary(this.tier, this.spec);
 
   /// What the tag says when the tracks are in different formats.
   static const String mixedSpec = 'MIXED';
@@ -134,9 +130,6 @@ class QualitySummary {
 
   /// The format of the tracks when they all share one, [mixedSpec] otherwise.
   final String spec;
-
-  /// True when the tracks do not all share one format.
-  final bool isMixed;
 
   /// Summarises [formats], or returns null when there are none (an empty playlist has no tag). Two lossy files count
   /// as the same format only when their bitrate matches too.
@@ -153,7 +146,7 @@ class QualitySummary {
       }
     }
     if (first == null) return null;
-    return QualitySummary(lowest, mixed ? mixedSpec : first.tagSpec, mixed);
+    return QualitySummary(lowest, mixed ? mixedSpec : first.tagSpec);
   }
 
   static bool _sameSpec(AudioFormat a, AudioFormat b) =>
@@ -180,8 +173,6 @@ abstract final class AudioFileTypes {
     '.ogg': ('VORBIS', false, 'audio/ogg'),
     '.opus': ('OPUS', false, 'audio/ogg'),
   };
-
-  static Iterable<String> get supportedExtensions => _types.keys;
 
   static String _extension(String path) => p.extension(path).toLowerCase();
 

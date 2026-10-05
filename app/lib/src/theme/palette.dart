@@ -30,7 +30,6 @@ class Palette {
     required this.gradientMid,
     required this.gradients,
     required this.onAccent,
-    required this.tagBackground,
     required this.shadow,
   });
 
@@ -64,9 +63,6 @@ class Palette {
 
   /// Text and icons on an accent-filled surface.
   final Color onAccent;
-
-  /// The small labels ("ARTIST", "ALBUM") and the sidebar's counters.
-  final Color tagBackground;
 
   /// The drop shadow under floating panels and covers.
   final Color shadow;
@@ -104,7 +100,6 @@ class Palette {
       0xFFA3E635: Color(0xFF84CC16),
     },
     onAccent: Color(0xFF07070B),
-    tagBackground: Color(0x14FFFFFF),
     shadow: Color(0x99000000),
     gradientMid: Color(0xFF060609),
     gradients: {
@@ -150,7 +145,6 @@ class Palette {
       0xFF4D7C0F: Color(0xFF3F6212),
     },
     onAccent: Color(0xFFFFFFFF),
-    tagBackground: Color(0x10000000),
     shadow: Color(0x2E1A1A33),
     gradientMid: Color(0xFFF2F3F7),
     gradients: {

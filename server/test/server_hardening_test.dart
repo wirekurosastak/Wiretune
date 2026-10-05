@@ -80,7 +80,7 @@ void main() {
       final media = server.client();
       final token = Uri.encodeComponent(issued.token);
       expect((await media.get('/api/stream/${track['id']}?token=$token')).statusCode, 200);
-      expect((await media.get('/api/cover/${track['id']}?token=$token')).statusCode, isNot(401));
+      expect((await media.get('/api/cover/${track['id']}?token=$token')).statusCode, 404); // let in; no cover
 
       // Not on the management API (even as a header), and not to mint more tokens.
       media.token = issued.token;
@@ -293,6 +293,8 @@ void main() {
         'newPassword': replacement,
       });
       expect(changed.statusCode, 200);
+      final old = await server.client().post('/api/auth/login', {'username': 'owner', 'password': adminPassword});
+      expect(old.statusCode, 401);
 
       final anonymous = await server.client().post('/api/auth/change-password', {
         'currentPassword': replacement,

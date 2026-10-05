@@ -43,10 +43,6 @@ class TracksViewModel extends ChangeNotifier {
     _player.playQueue(displayedTracks);
   }
 
-  Future<void> toggleFavorite(Track? track) async {
-    if (track != null) await _library.toggleFavorite(track.id);
-  }
-
   @override
   void dispose() {
     _unsubscribe();
@@ -289,8 +285,6 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   /// The genre the list is narrowed to; null shows every artist.
   String? genre;
 
-  bool get hasSelectedArtistAlbums => selectedArtistAlbums.isNotEmpty;
-
   String get backText => backButtonText('BackToArtists');
 
   /// Artists are sorted by name only; the arrow shows the direction.
@@ -519,7 +513,6 @@ class PlaylistsViewModel extends ChangeNotifier {
   String editingPlaylistName = '';
 
   bool get hasPlaylists => playlists.isNotEmpty;
-  bool get isSelectedPlaylistEmpty => selectedPlaylist != null && selectedPlaylistTracks.isEmpty;
   bool get isDeleteConfirmOpen => playlistPendingDelete != null;
   bool get isAnyDialogOpen => isCreateDialogOpen || isAddToPlaylistDialogOpen || isDeleteConfirmOpen;
 

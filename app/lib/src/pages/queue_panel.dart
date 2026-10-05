@@ -110,7 +110,7 @@ class _QueueRowState extends State<_QueueRow> {
           ),
           child: InkWell(
             borderRadius: radius,
-            onTap: () => player.playQueueTrack(item),
+            onTap: () => player.playQueueTrack(item.track),
             child: LayoutBuilder(
               builder: (context, constraints) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),

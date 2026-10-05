@@ -161,10 +161,10 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             back: BackLink(text: context.tr('BackToPlaylists'), onPressed: playlists.closePlaylistDetail),
             artworkPath: playlistCovers(tracks).firstOrNull,
             artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
-            tags: [
-              TagBadge(context.tr('LabelPlaylist'), color: colors.palette.lime),
-              if (playlist.formatBadge.isNotEmpty) QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec),
-            ],
+            artworkBadge: playlist.formatSpec.isEmpty
+                ? null
+                : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, fontSize: 11),
+            tags: [TagBadge(context.tr('LabelPlaylist'), color: colors.palette.lime)],
             title: playlist.name,
             titleWidget: title,
             details: [

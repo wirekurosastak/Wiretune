@@ -12,7 +12,6 @@ class WiretuneColors extends ThemeExtension<WiretuneColors> {
   final AppSection section;
 
   Color get hover => palette.hoverOf(accent);
-  Color get pressed => palette.pressedOf(accent);
   Color get textMain => palette.textMain;
   Color get textMuted => palette.textMuted;
   Color get surface1 => palette.surface1;
@@ -20,7 +19,6 @@ class WiretuneColors extends ThemeExtension<WiretuneColors> {
   Color get glassBorder => palette.glassBorder;
   Color get danger => palette.danger;
   Color get onAccent => palette.onAccent;
-  Color get tagBackground => palette.tagBackground;
   Gradient get windowGradient => palette.gradientFor(section);
 
   /// The accent as a gradient, from its lighter hover shade to the accent itself (filled buttons, the active slider).

@@ -171,17 +171,10 @@ class SearchResults extends StatelessWidget {
                       child: SectionLabel(context.tr('LabelArtists'), padding: const EdgeInsets.fromLTRB(4, 28, 4, 12)),
                     ),
                   ),
-                  TileGridSliver(
-                    kind: TileKind.twoLines,
-                    itemCount: search.matchingArtists.length,
-                    itemBuilder: (context, i) {
-                      final artist = search.matchingArtists[i];
-                      return ArtistCard(
-                        artist: artist,
-                        onOpen: () => search.openArtist(artist),
-                        onPlay: () => context.vm.artists.playArtist(artist),
-                      );
-                    },
+                  ArtistsSliver(
+                    artists: search.matchingArtists,
+                    onOpen: search.openArtist,
+                    onPlay: context.vm.artists.playArtist,
                   ),
                 ],
                 if (search.hasAlbums) ...[
@@ -191,16 +184,10 @@ class SearchResults extends StatelessWidget {
                       child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 28, 4, 12)),
                     ),
                   ),
-                  TileGridSliver(
-                    itemCount: search.matchingAlbums.length,
-                    itemBuilder: (context, i) {
-                      final album = search.matchingAlbums[i];
-                      return AlbumCard(
-                        album: album,
-                        onOpen: () => search.openAlbum(album),
-                        onPlay: () => context.vm.albums.playAlbum(album),
-                      );
-                    },
+                  AlbumsSliver(
+                    albums: search.matchingAlbums,
+                    onOpen: search.openAlbum,
+                    onPlay: context.vm.albums.playAlbum,
                   ),
                 ],
                 const PageEndSpace(),

@@ -181,10 +181,6 @@ bool equalsIgnoreCase(String? a, String? b) {
 /// Case-insensitive containment ("Contains(..., OrdinalIgnoreCase)").
 bool containsIgnoreCase(String? text, String part) => text != null && text.toLowerCase().contains(part.toLowerCase());
 
-/// Case-insensitive prefix test.
-bool startsWithIgnoreCase(String? text, String prefix) =>
-    text != null && text.toLowerCase().startsWith(prefix.toLowerCase());
-
 final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{Nd}]', unicode: true);
 final RegExp _control = RegExp(r'\p{Cc}', unicode: true);
 

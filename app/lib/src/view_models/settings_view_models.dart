@@ -80,7 +80,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
   String get passwordHint => Localizer.format('PasswordHint', [AuthRules.minPasswordLength]);
   bool get isBusy => isConnecting || isAuthenticating || (isScanning && isLoggedIn);
   bool get canRescanServer => isLoggedIn && isAdmin && !isScanning;
-  LibrarySource get librarySource => _session.source;
 
   /// Re-renders the texts that were computed in the previous language.
   void refreshLocalizedTexts() {

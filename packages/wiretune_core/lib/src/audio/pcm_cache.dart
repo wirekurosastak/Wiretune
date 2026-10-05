@@ -24,8 +24,6 @@ class PcmCache {
   /// Whether ffmpeg was found; false after a start failed, so playback does not try again for every track.
   static bool? _available;
 
-  int get sampleCount => _sampleCount;
-
   /// Starts decoding [audioSource] in the background (a file path or a stream URL).
   Future<void> loadTrack(String audioSource) async {
     if (_currentSource == audioSource && _sampleCount > 0) return;

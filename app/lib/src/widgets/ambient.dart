@@ -191,7 +191,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
 }
 
 /// The window's backdrop: the section's tint and, over it, the colours of the cover that is playing (flowing while it
-/// plays), under a veil that keeps what is on top readable. [colour] sets how much of the cover shows: a little behind
+/// plays, on a desktop), under a veil that keeps what is on top readable. [colour] sets how much of the cover shows: a little behind
 /// the phone's pages, more behind the wide layout's panels, all of it behind the full-screen player.
 class AmbientBackdrop extends StatelessWidget {
   const AmbientBackdrop({super.key, this.colour = 0.55});
@@ -201,6 +201,7 @@ class AmbientBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
+    final platform = AppPlatform.current;
     final colors = context.colors;
     final base = colors.palette.background;
     // The less colour, the thicker the veil, most of all at the top where the titles are.
@@ -216,7 +217,7 @@ class AmbientBackdrop extends StatelessWidget {
           ),
           AmbientArtwork(
             path: player.currentTrack?.coverArtPath,
-            drift: player.isPlaying && !AppPlatform.current.isTv,
+            drift: player.isPlaying && !platform.isTv && !platform.isMobile,
             opacity: colour,
           ),
           DecoratedBox(

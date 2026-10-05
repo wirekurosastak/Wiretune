@@ -500,22 +500,17 @@ void _locatePicture(ByteSource source, int bodyOffset, int frameSize, int major,
   final dataOffset = bodyOffset + skip + header.$1;
   final dataLength = bodyOffset + frameSize - dataOffset;
   if (dataLength <= 0) return;
-  tags.offerPicture(
-    location: PictureLocation(dataOffset, dataLength, type: header.$2),
-    type: header.$2,
-  );
+  tags.offerPicture(location: PictureLocation(dataOffset, dataLength), type: header.$2);
 }
 
 Uint8List _removeUnsynchronisation(Uint8List data) {
-  final out = BytesBuilder(copy: false);
   final buffer = Uint8List(data.length);
   var n = 0;
   for (var i = 0; i < data.length; i++) {
     buffer[n++] = data[i];
     if (data[i] == 0xFF && i + 1 < data.length && data[i + 1] == 0x00) i++;
   }
-  out.add(Uint8List.sublistView(buffer, 0, n));
-  return out.takeBytes();
+  return Uint8List.sublistView(buffer, 0, n);
 }
 
 /// Reads the 128-byte ID3v1 tag at the end of the file; null when there is none.

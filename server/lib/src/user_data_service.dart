@@ -28,7 +28,26 @@ class UserDataService {
     SET name = ?3, description = ?4, track_ids_json = ?5, modified_at = ?6
     WHERE user_id = ?1 AND id = ?2''';
 
-  UserDataSnapshot get(String userId) => _read(userId);
+  UserDataSnapshot get(String userId) {
+    final db = _db.connection;
+    final favorites = db
+        .select('SELECT track_id FROM user_favorites WHERE user_id = ? ORDER BY added_at, track_id', [userId])
+        .map((r) => r['track_id'] as String)
+        .toList();
+    final plays = db
+        .select('SELECT track_id, play_count, last_played FROM user_plays WHERE user_id = ?', [userId])
+        .map(_toStats)
+        .toList();
+    final playlists = db
+        .select(
+          'SELECT id, name, description, track_ids_json, created_at, modified_at FROM user_playlists '
+          'WHERE user_id = ? ORDER BY name COLLATE NOCASE, id',
+          [userId],
+        )
+        .map(_toPlaylist)
+        .toList();
+    return UserDataSnapshot(favorites, plays, playlists);
+  }
 
   /// False when the account is at its favourites limit and nothing was added.
   bool setFavorite(String userId, String trackId, bool favorite) {
@@ -100,10 +119,7 @@ class UserDataService {
     final idError = UserDataRules.validateId(playlistId);
     if (idError != null) return idError;
     if (update == null) return 'The playlist is missing.';
-    return _validatePlaylistFields(update.name, update.description, update.trackIds);
-  }
-
-  static String? _validatePlaylistFields(String? name, String? description, List<String>? trackIds) {
+    final PlaylistUpdate(:name, :description, :trackIds) = update;
     if (isBlank(name)) return 'The playlist name must not be empty.';
     if (name!.trim().length > UserDataRules.maxPlaylistNameLength) {
       return 'The playlist name must be at most ${UserDataRules.maxPlaylistNameLength} characters.';
@@ -122,27 +138,6 @@ class UserDataService {
     return null;
   }
 
-  UserDataSnapshot _read(String userId) {
-    final db = _db.connection;
-    final favorites = db
-        .select('SELECT track_id FROM user_favorites WHERE user_id = ? ORDER BY added_at, track_id', [userId])
-        .map((r) => r['track_id'] as String)
-        .toList();
-    final plays = db
-        .select('SELECT track_id, play_count, last_played FROM user_plays WHERE user_id = ?', [userId])
-        .map(_toStats)
-        .toList();
-    final playlists = db
-        .select(
-          'SELECT id, name, description, track_ids_json, created_at, modified_at FROM user_playlists '
-          'WHERE user_id = ? ORDER BY name COLLATE NOCASE, id',
-          [userId],
-        )
-        .map(_toPlaylist)
-        .toList();
-    return UserDataSnapshot(favorites, plays, playlists);
-  }
-
   static TrackPlayStats _toStats(Map<String, Object?> row) {
     final count = row['play_count'] as int;
     return TrackPlayStats(
@@ -152,21 +147,12 @@ class UserDataService {
     );
   }
 
-  static PlaylistData _toPlaylist(Map<String, Object?> row) {
-    List<String> ids;
-    try {
-      final decoded = jsonDecode(row['track_ids_json'] as String);
-      ids = decoded is List ? decoded.whereType<String>().toList() : [];
-    } on FormatException {
-      ids = [];
-    }
-    return PlaylistData(
-      row['id'] as String,
-      row['name'] as String,
-      row['description'] as String?,
-      ids,
-      fromDbTime(row['created_at']) ?? DateTime.now().toUtc(),
-      fromDbTime(row['modified_at']) ?? DateTime.now().toUtc(),
-    );
-  }
+  static PlaylistData _toPlaylist(Map<String, Object?> row) => PlaylistData(
+    row['id'] as String,
+    row['name'] as String,
+    row['description'] as String?,
+    decodeTrackIds(row['track_ids_json']),
+    fromDbTime(row['created_at']) ?? DateTime.now().toUtc(),
+    fromDbTime(row['modified_at']) ?? DateTime.now().toUtc(),
+  );
 }

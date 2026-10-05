@@ -88,9 +88,14 @@ void main() {
   test('without a known album it goes straight to the search', () async {
     final lyrics = create(
       (_) => json('[{"trackName":"Song","artistName":"Artist","duration":180,"plainLyrics":"found"}]'),
+      cache: false,
     );
-    expect(await lyrics.find(song(album: MetadataScanner.unknownAlbum)), 'found');
-    expect(requests.single, startsWith('/api/search?'));
+    // The scanner's placeholder, and a track's default.
+    for (final album in [MetadataScanner.unknownAlbum, 'Unknown Album']) {
+      requests.clear();
+      expect(await lyrics.find(song(album: album)), 'found');
+      expect(requests.single, startsWith('/api/search?'), reason: album);
+    }
   });
 
   test('when the tag names several artists it tries the first one too', () async {

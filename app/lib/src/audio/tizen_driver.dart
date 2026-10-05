@@ -21,9 +21,6 @@ class TizenAudioDriver with AudioDriverEvents implements AudioDriver {
   double _volume = 1.0;
 
   @override
-  String get driverName => 'Tizen media player';
-
-  @override
   PlaybackState get state => _state;
 
   @override

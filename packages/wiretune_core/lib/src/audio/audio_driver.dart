@@ -7,7 +7,6 @@ import '../util/event.dart';
 /// Plays audio on one platform. The engine ([WiretuneAudioEngine]) keeps the track, mode and volume and gives this
 /// the commands; a driver reports back through its events.
 abstract class AudioDriver {
-  String get driverName;
   PlaybackState get state;
   Duration get currentPosition;
 

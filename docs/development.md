@@ -29,13 +29,14 @@ sign-in alone.
 
 The server tests start a real server per test, on a free port over a generated music folder, and go through sign-in,
 per-account data, restarts, the hardening (setup code, stream tokens, rate limits, odd paths and ranges, body limits),
-the scan loop and the options. The player's side of the account data runs against that same real server. The core
-tests cover the repository on real SQLite, the tag reader on files that `ffmpeg` encodes, track IDs, the library,
-deduplication, lyrics, the spectrum and the audio engine (with `FakeAudioDriver`). The app tests cover the view models, back navigation, and every section in both layouts, both
-themes and several sizes.
+the scan loop and the options. The player's side of the account data runs against that same real server. The core tests
+cover the repository on real SQLite, the tag reader on files that `ffmpeg` encodes, track IDs, the library,
+deduplication, lyrics, the spectrum and the audio engine (with `FakeAudioDriver`). The app tests cover the view models,
+back navigation, and every section in both layouts, both themes and several sizes.
 
-Tests that need `ffmpeg` are *skipped* when it's missing, not passed, so mind the skipped count. Nothing covers the
-real drivers, the media session, Android Auto, audio hardware or the native shells.
+Tests that need `ffmpeg` (or `dbus-daemon`, for the sound card reservation) are *skipped* when it's missing, not passed,
+so mind the skipped count. Nothing covers the real drivers, the media session, Android Auto, audio hardware or the
+native shells.
 
 ## What has actually been tried
 
@@ -133,7 +134,7 @@ table, read and written through `LibraryService`. Anything the back button has t
 
 ## CI
 
-`.github/workflows/ci.yml` checks the formatting, analyses all three packages with `--fatal-infos`, runs every test
-with `ffmpeg` installed, and builds the server (Linux, Windows, macOS), the APKs, the three desktop players and an
-unsigned iOS build, keeping the server executables and the APKs as artifacts. It doesn't build Tizen, runs nothing on a
-device, and can't hear a thing, so try those parts by hand.
+`.github/workflows/ci.yml` checks the formatting, analyses all three packages and `tool/` with `--fatal-infos`, runs
+every test with `ffmpeg` installed, and builds the server (Linux, Windows, macOS), the APKs and the three desktop
+players with `tool/build.dart`, plus an unsigned iOS build, keeping `dist/server` and the APKs as artifacts. It doesn't
+build Tizen, runs nothing on a device, and can't hear a thing, so try those parts by hand.

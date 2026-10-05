@@ -73,16 +73,16 @@ void main() {
     expect(QualitySummary.of(const []), isNull);
 
     final one = QualitySummary.of([_lossless(96000, 24), _lossless(96000, 24)])!;
-    expect((one.tier, one.spec, one.isMixed), (QualityTier.gold, 'FLAC 24bit/96kHz', false));
+    expect((one.tier, one.spec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
 
     final sameTier = QualitySummary.of([_lossless(96000, 24), _lossless(192000, 24)])!;
-    expect((sameTier.tier, sameTier.spec, sameTier.isMixed), (QualityTier.gold, QualitySummary.mixedSpec, true));
+    expect((sameTier.tier, sameTier.spec), (QualityTier.gold, QualitySummary.mixedSpec));
     expect(QualitySummary.of([_lossless(96000, 24), _lossless(44100, 16)])!.tier, QualityTier.silver);
     expect(QualitySummary.of([_lossless(96000, 24), _lossy(320)])!.tier, QualityTier.bronze);
 
-    expect(QualitySummary.of([_lossy(128), _lossy(320)])!.isMixed, isTrue);
-    expect(QualitySummary.of([_lossy(320), _lossy(320)])!.isMixed, isFalse);
-    expect(QualitySummary.of([_lossless(44100, 16, 'FLAC'), _lossless(44100, 16, 'flac')])!.isMixed, isFalse);
+    expect(QualitySummary.of([_lossy(128), _lossy(320)])!.spec, QualitySummary.mixedSpec);
+    expect(QualitySummary.of([_lossy(320), _lossy(320)])!.spec, 'MP3 320kbps');
+    expect(QualitySummary.of([_lossless(44100, 16, 'FLAC'), _lossless(44100, 16, 'flac')])!.spec, 'FLAC 16bit/44.1kHz');
   });
 
   test('albums carry their tier and tag spec', () async {
@@ -112,29 +112,23 @@ void main() {
     expect((find('Silver album').tier, find('Silver album').tagSpec), (QualityTier.silver, 'FLAC 16bit/44.1kHz'));
     expect((find('Bronze album').tier, find('Bronze album').tagSpec), (QualityTier.bronze, 'MP3 320kbps'));
     expect((find('Mixed album').tier, find('Mixed album').tagSpec), (QualityTier.bronze, 'MIXED'));
-    expect(find('Mixed album').formatBadge, 'MIXED HQ');
-    expect(find('Mixed album').isHiRes, isTrue);
   });
 
-  test('playlist applyQuality sets badge, tier and spec, and clears them when empty', () {
+  test('playlist applyQuality sets tier and spec, and an empty playlist has no tag', () {
     final playlist = Playlist(name: 'p');
     playlist.applyQuality([
       TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
       TestSupport.makeTrack('b', 'B', sampleRate: 96000, bits: 24),
     ]);
-    expect(
-      (playlist.formatTier, playlist.formatSpec, playlist.formatBadge),
-      (QualityTier.gold, 'FLAC 24bit/96kHz', 'FLAC / 24bit / 96kHz'),
-    );
+    expect((playlist.formatTier, playlist.formatSpec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
 
     playlist.applyQuality([
       TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
       TestSupport.makeTrack('c', 'C', sampleRate: 44100, bits: 16),
     ]);
-    expect((playlist.formatTier, playlist.formatSpec, playlist.formatBadge), (QualityTier.silver, 'MIXED', 'MIXED HQ'));
+    expect((playlist.formatTier, playlist.formatSpec), (QualityTier.silver, 'MIXED'));
 
     playlist.applyQuality(const []);
-    expect(playlist.formatBadge, '');
-    expect(playlist.formatSpec, '');
+    expect(playlist.formatSpec, isEmpty);
   });
 }

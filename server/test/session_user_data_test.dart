@@ -59,7 +59,11 @@ void main() {
       await server.close();
     });
 
-    Future<Device> device(String name) async => (await Device.create(server, name))..let(devices.add);
+    Future<Device> device(String name) async {
+      final created = await Device.create(server, name);
+      devices.add(created);
+      return created;
+    }
 
     test('the full client life cycle', () async {
       final d = await device('client');
@@ -68,7 +72,7 @@ void main() {
       // A fresh server needs its administrator... already created by setUp, so this one signs in.
       await session.connect(server.baseUrl);
       expect(session.state, ServerConnectionState.loginRequired);
-      expect(await session.login('owner', 'wrong-password', false), isNotNull);
+      expect(await session.login('owner', 'wrong-password', false), Localizer.get('SessionBadCredentials'));
       expect(await session.login('OWNER', adminPassword, true), isNull);
       expect(session.state, ServerConnectionState.connected);
       expect(session.source, LibrarySource.server);
@@ -282,7 +286,7 @@ void main() {
     }
 
     test('a server that refuses a change can be reached, so the session stays connected', () async {
-      final (session, library, _) = await scripted(
+      final (session, library, requests) = await scripted(
         (request) => switch (request.url.path) {
           final path when path.startsWith('/api/me/playlists/') => respond({
             'error': 'An account can have at most 500 playlists.',
@@ -294,12 +298,13 @@ void main() {
 
       await library.createPlaylist('One too many');
       await session.flushUserData();
+      expect(requests.where((r) => r.startsWith('PUT /api/me/playlists/')), hasLength(1)); // sent, and refused
       expect(session.state, ServerConnectionState.connected);
       expect(library.serverConnected, isTrue);
     });
 
     test('a favourite the server refuses is shown as what it really is', () async {
-      final (session, library, _) = await scripted(
+      final (session, library, requests) = await scripted(
         (request) => switch (request.url.path) {
           '/api/me/favorites/s1' => respond({'error': 'Database is locked.'}, 500),
           _ => null,
@@ -310,6 +315,7 @@ void main() {
 
       await library.toggleFavorite('s1');
       await session.flushUserData();
+      expect(requests, contains('PUT /api/me/favorites/s1'));
       expect(library.getTrack('s1')!.isFavorite, isFalse);
     });
 
@@ -365,28 +371,4 @@ void main() {
     await library.toggleFavorite('l1');
     expect(library.getTrack('l1')!.isFavorite, isTrue);
   });
-
-  test(
-    'the engine asks for a fresh stream token each time a server track starts, and keeps the old one on failure',
-    () async {
-      final driver = FakeAudioDriver();
-      final engine = TestSupport.createEngine(driver);
-      var issued = 0;
-      engine.setStreamTokenProvider(() async => 'fresh-${++issued}');
-      final remote = TestSupport.makeServerTrack('s1', 'Remote');
-
-      await engine.playTrack(remote);
-      expect(driver.lastSource, 'http://server/api/stream/s1?token=fresh-1');
-      await engine.playTrack(remote);
-      expect(driver.lastSource, 'http://server/api/stream/s1?token=fresh-2');
-
-      engine.setStreamTokenProvider(() async => throw const ServerRequestException('server unreachable'));
-      await engine.playTrack(remote);
-      expect(driver.lastSource, 'http://server/api/stream/s1?token=fresh-2');
-    },
-  );
-}
-
-extension<T> on T {
-  void let(void Function(T) action) => action(this);
 }

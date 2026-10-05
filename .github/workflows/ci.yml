@@ -29,7 +29,9 @@ jobs:
       # ffmpeg encodes the tag-reader fixtures; without it those tests are skipped.
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - name: Formatting
-        run: dart format --output none --set-exit-if-changed packages server app/lib app/test
+        run: dart format --output none --set-exit-if-changed packages server app/lib app/test tool
+      - name: Build script
+        run: dart analyze --fatal-infos tool
       - name: Core
         working-directory: packages/wiretune_core
         run: dart pub get && dart analyze --fatal-infos && dart test
@@ -55,12 +57,11 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - working-directory: server
-        run: dart pub get && dart build cli -o build
+      - run: dart tool/build.dart server
       - uses: actions/upload-artifact@v4
         with:
           name: wiretune-server-${{ runner.os }}
-          path: server/build/bundle
+          path: dist/server
 
   android:
     name: Android APK
@@ -78,12 +79,11 @@ jobs:
           channel: stable
           cache: true
       # Signed with the debug key: there is no key.properties in CI.
-      - working-directory: app
-        run: flutter build apk --release --split-per-abi
+      - run: dart tool/build.dart android
       - uses: actions/upload-artifact@v4
         with:
           name: wiretune-android
-          path: app/build/app/outputs/flutter-apk/*.apk
+          path: dist/android/*.apk
 
   desktop:
     name: Player (${{ matrix.target }})
@@ -111,9 +111,8 @@ jobs:
       - if: matrix.target == 'linux'
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev
       - if: matrix.target != 'ios'
-        working-directory: app
-        run: flutter build ${{ matrix.target }} --release
-      # Not signed: this only checks that the iOS app builds.
+        run: dart tool/build.dart ${{ matrix.target }}
+      # Not signed: this only checks that the iOS app builds (an .ipa, tool/build.dart ios, needs a signing team).
       - if: matrix.target == 'ios'
         working-directory: app
         run: flutter build ios --release --no-codesign

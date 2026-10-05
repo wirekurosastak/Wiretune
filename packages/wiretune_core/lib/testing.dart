@@ -22,7 +22,6 @@ class MockRepository extends LibraryRepository {
   final List<Track> tracks = [];
   final List<Playlist> playlists = [];
   final Map<String, String> settings = {};
-  int replaceCalls = 0;
 
   @override
   Future<void> initialize() async {}
@@ -35,7 +34,6 @@ class MockRepository extends LibraryRepository {
 
   @override
   Future<void> replaceAllTracks(Iterable<Track> tracks) async {
-    replaceCalls++;
     final copy = tracks.toList();
     this.tracks
       ..clear()
@@ -53,18 +51,6 @@ class MockRepository extends LibraryRepository {
   Future<void> incrementPlayCount(String trackId) async {
     for (final t in tracks.where((t) => t.id == trackId)) {
       t.playCount++;
-    }
-  }
-
-  @override
-  Future<void> updateTracksUserData(Iterable<Track> tracks) async {
-    for (final update in tracks) {
-      for (final stored in tracks.where((t) => t.id == update.id)) {
-        stored
-          ..isFavorite = update.isFavorite
-          ..playCount = update.playCount
-          ..lastPlayed = update.lastPlayed;
-      }
     }
   }
 
@@ -125,9 +111,6 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   FakeAudioDriver({this.devices});
 
   final List<AudioOutputDevice>? devices;
-
-  @override
-  String get driverName => 'Fake';
 
   @override
   PlaybackState state = PlaybackState.stopped;

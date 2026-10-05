@@ -19,9 +19,9 @@ header or in *Settings → Appearance*. If the server can't be reached at start-
 
 - **Desktop, tablet and TV**: the header on top, the sections on the left, the player at the bottom; the queue and the
   lyrics open in place of the page. Below 1000 pixels the sections shrink to icons.
-- **Phone**, or a window under 720 pixels: the sections at the bottom under a mini player. Tap it for the full-screen
-  player and its *Queue* and *Lyrics* tabs. Back closes what's open, then retraces your sections, and only then leaves
-  the app. The music keeps playing.
+- **Phone**, or a window under 720 pixels: the sections at the bottom under a mini player, and the albums and the
+  artists as lists. Tap the mini player for the full-screen player and its *Queue* and *Lyrics* tabs. Back closes what's
+  open, then retraces your sections, and only then leaves the app. The music keeps playing.
 
 ## The library
 
@@ -31,8 +31,9 @@ header or in *Settings → Appearance*. If the server can't be reached at start-
 - **Artists** lists album artists only. A guest on other people's albums gets no page, but their tracks are still in
   *Tracks* and in search.
 - **Quality tags**: **gold** is hi-res (lossless above 16 bit or 48 kHz), **silver** is lossless at CD resolution,
-  **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The track
-  lists (on a wide screen) and the player show the whole tag (`FLAC 24bit/96kHz`); the covers and the queue show the
+  **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The whole tag
+  (`FLAC 24bit/96kHz`) sits on the cover of the full-screen player, of an album and of a playlist, and in the track
+  lists and the player bar of a wide screen; the album and playlist tiles, a phone's album list and the queue show the
   resolution (`24bit/96kHz`, `320kbps`), and a narrow queue leaves it out. Hover or long-press a tag for the details.
 - **Sorting and filtering**: albums sort by title, year or quality (best first, an album counting as its weakest
   track). When the files carry genre tags, a genre filter narrows the albums and the artists to those with a track of
@@ -101,7 +102,6 @@ sign in again.
 |---|---|
 | *None of the output devices supports exclusive mode…* | No device can do it. On Linux there's no ALSA hardware device (check `aplay -l`); press **Refresh** once there is. |
 | Exclusive playback on Linux fails with *device busy* | Something holds the card that doesn't hand it over on request: another player on the same `hw:` device, or a sound server without device reservation. Close it, or pick another output. |
-| A card stays silent and missing after an older Wiretune was closed in exclusive mode | Earlier builds left a `pw-reserve` helper holding the card. Stop it with `pkill -f 'pw-reserve.*Wiretune'` and the sound server takes the card back. |
 | No spectrum on the desktop | `ffmpeg` isn't on the `PATH`. |
 | The Linux player won't start, missing `libmpv` | Install it: `libmpv2` on Debian and Ubuntu, `mpv-libs` on Fedora. |
 | The banner says the server is offline | Wrong address, server not running, or no network. Press **Reconnect**. |

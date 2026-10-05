@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -88,6 +89,18 @@ class DatabaseManager {
     _db?.close();
     _db = null;
     _schemaReady = false;
+  }
+}
+
+/// The track IDs held in a `track_ids_json` column (of `playlists` and `user_playlists`); a value that is not a JSON
+/// list reads as none, and entries that are not strings are skipped.
+List<String> decodeTrackIds(Object? json) {
+  if (json is! String) return [];
+  try {
+    final decoded = jsonDecode(json);
+    return decoded is List ? decoded.whereType<String>().toList() : [];
+  } on FormatException {
+    return [];
   }
 }
 

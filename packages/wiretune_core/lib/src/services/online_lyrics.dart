@@ -333,12 +333,9 @@ class LyricsQuery {
     if (MetadataScanner.isUnknownArtist(artist)) return null;
     if (equalsIgnoreCase(title, 'Unknown Title')) return null;
 
-    var album = cleanText(track.album);
-    if (album != null &&
-        (equalsIgnoreCase(album, MetadataScanner.unknownAlbum) || equalsIgnoreCase(album, 'Unknown Album'))) {
-      album = null;
-    }
-    return LyricsQuery(title, artist, album, (track.duration.inMilliseconds / 1000).round());
+    final album = cleanText(track.album);
+    final knownAlbum = equalsIgnoreCase(album, MetadataScanner.unknownAlbum) ? null : album;
+    return LyricsQuery(title, artist, knownAlbum, (track.duration.inMilliseconds / 1000).round());
   }
 
   /// A stable file name for this track's cache entry (a hash, so no tag text ends up in a path).

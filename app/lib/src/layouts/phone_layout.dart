@@ -22,14 +22,6 @@ import '../widgets/player_controls.dart';
 class PhoneLayout extends StatelessWidget {
   const PhoneLayout({super.key});
 
-  static const List<AppSection> tabs = [
-    AppSection.artists,
-    AppSection.albums,
-    AppSection.tracks,
-    AppSection.favorites,
-    AppSection.playlists,
-  ];
-
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
@@ -500,11 +492,13 @@ class _MiniPlayer extends StatelessWidget {
                     left: 16,
                     right: 16,
                     bottom: 0,
-                    child: ValueListenableBuilder(
-                      valueListenable: player.position,
-                      builder: (context, position, _) {
+                    child: ListenableBuilder(
+                      listenable: progressOf(player),
+                      builder: (context, _) {
                         final total = player.duration.inMilliseconds;
-                        final fraction = total <= 0 ? 0.0 : (position.inMilliseconds / total).clamp(0.0, 1.0);
+                        final fraction = total <= 0
+                            ? 0.0
+                            : (player.position.value.inMilliseconds / total).clamp(0.0, 1.0);
                         return Container(
                           height: 2.5,
                           decoration: BoxDecoration(

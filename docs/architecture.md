@@ -10,6 +10,7 @@ app/                          the Flutter player: view models, layouts, pages, w
 server/                       the Dart server: bin/ is the command line, lib/ the routes, accounts and scanning
 packages/wiretune_core/       shared by everything: models, database, tag reader, library, audio engine, server client
 packages/wiretune_platform/   Wiretune's own Android code, as a Flutter plugin
+tool/build.dart               release builds of every target, collected in dist/
 ```
 
 The server is a headless player: it runs the same `LibraryService`, `MetadataScanner` and `DatabaseManager` from
@@ -107,8 +108,12 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
   MB image cache (160 MB on a TV). The token for server covers travels in a header, never in the URL.
 - **Theme**: an accent and a window gradient per section (`theme/palette.dart`), built once per section. Over the
   gradient the backdrop washes in the colours of the cover that's playing (`widgets/ambient.dart`): the cover is
-  decoded at 64 px and blurred once into a 96 px bitmap, so nothing is blurred per frame, and it only turns while
-  music plays (never on a TV, nor with the system's reduced motion).
+  decoded at 64 px and blurred once into a 96 px bitmap, so nothing is blurred per frame, and it turns only on a
+  desktop while music plays (not with the system's reduced motion).
+- **Battery**: on a phone or tablet (`AppPlatform.isMobile`) nothing animates on its own: the backdrop doesn't turn,
+  the logo and the player's cover don't breathe, and the progress follows `PlayerViewModel.elapsedSeconds`, so music
+  that plays on draws a frame a second. `WiretuneMediaSession` publishes changes, never a position that keeps pace: the
+  system moves its own progress on from the last one.
 - **Lyrics** load only while they're on screen: the file's own (or the server's `/api/lyrics`), then LRCLIB if
   allowed, cached per track. A failed lookup isn't cached, so the panel can tell "couldn't reach" from "no lyrics".
 

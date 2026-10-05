@@ -45,7 +45,7 @@ void main() {
     expect(service.artists, hasLength(2));
     final starboy = service.albums.firstWhere((a) => a.title == 'Starboy');
     expect(starboy.trackCount, 2);
-    expect(starboy.isHiRes, isTrue);
+    expect(starboy.tier, QualityTier.gold); // both of its tracks are hi-res
     expect(service.search('Lucky').map((t) => t.title), ['Get Lucky']);
     expect(service.search('daft').map((t) => t.title), ['Get Lucky']); // ignoring case
   });
@@ -160,7 +160,7 @@ void main() {
     expect(service.albums, hasLength(2));
   });
 
-  test('an album with hi-res and CD tracks gets the MIXED HQ badge', () async {
+  test('an album of hi-res and CD tracks is tagged MIXED, at the tier of its weakest track', () async {
     final repo = MockRepository();
     final service = _service(repo);
     repo.saveTracks([
@@ -184,8 +184,8 @@ void main() {
       ),
     ]);
     await service.initialize();
-    expect(service.albums.single.formatBadge, 'MIXED HQ');
-    expect(service.albums.single.isHiRes, isTrue);
+    final album = service.albums.single;
+    expect((album.tier, album.tagSpec), (QualityTier.silver, QualitySummary.mixedSpec));
   });
 
   test('sorting ignores accents and case', () async {

@@ -14,8 +14,6 @@ class Event<T> {
     return () => _listeners.remove(listener);
   }
 
-  bool get hasListeners => _listeners.isNotEmpty;
-
   void emit(T value) {
     for (final listener in List.of(_listeners)) {
       try {

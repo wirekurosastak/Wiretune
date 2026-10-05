@@ -149,12 +149,9 @@ class Album {
     this.title = 'Unknown Album',
     this.artist = 'Unknown Artist',
     this.year,
-    this.genre,
     this.coverArtPath,
     this.trackCount = 0,
     this.totalDuration = Duration.zero,
-    this.isHiRes = false,
-    this.formatBadge = 'FLAC',
     this.tier = QualityTier.silver,
     this.tagSpec = '',
     List<Track>? tracks,
@@ -165,12 +162,9 @@ class Album {
   final String title;
   final String artist;
   final int? year;
-  final String? genre;
   final String? coverArtPath;
   final int trackCount;
   final Duration totalDuration;
-  final bool isHiRes;
-  final String formatBadge;
 
   /// The lowest [QualityTier] among the album's tracks (see [QualitySummary]).
   final QualityTier tier;
@@ -238,29 +232,21 @@ class Playlist {
 
   int get trackCount => trackIds.length;
 
-  String formatBadge = '';
-
-  /// The lowest tier among the playlist's tracks; only meaningful while [formatBadge] is not empty.
+  /// The lowest tier among the playlist's tracks; only meaningful while [formatSpec] is not empty.
   QualityTier formatTier = QualityTier.silver;
 
-  /// What the quality tag says after the tier word, e.g. "FLAC 24bit/96kHz", or "MIXED".
+  /// What the quality tag says, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty for an empty playlist, which has no tag.
   String formatSpec = '';
 
-  /// Sets [formatBadge], [formatTier] and [formatSpec] from the playlist's tracks; an empty playlist has no badge.
+  /// Sets [formatTier] and [formatSpec] from the playlist's tracks.
   void applyQuality(List<Track> tracks) {
     final summary = QualitySummary.of(tracks.map((t) => t.format));
-    if (summary == null) {
-      formatBadge = '';
-      formatSpec = '';
-      return;
-    }
-    formatTier = summary.tier;
-    formatSpec = summary.spec;
-    formatBadge = summary.isMixed ? 'MIXED HQ' : tracks.first.format.displayBadge;
+    formatSpec = summary?.spec ?? '';
+    if (summary != null) formatTier = summary.tier;
   }
 }
 
-enum PlaybackState { stopped, playing, paused, buffering, error }
+enum PlaybackState { stopped, playing, paused, error }
 
 enum RepeatMode { off, all, one }
 
@@ -287,14 +273,12 @@ class AudioOutputDevice {
     this.id = 'default',
     String? name,
     this.nameKey,
-    this.description = '',
     this.driverType = 'Default',
     this.hardwareCard = '',
     this.isExclusiveSupported = false,
     this.isBitperfectSupported = false,
     this.isDefault = false,
     this.supportedSampleRates = const [44100, 48000, 88200, 96000, 176400, 192000],
-    this.supportedBitDepths = const [16, 24, 32],
   }) : _name = name;
 
   final String id;
@@ -302,7 +286,6 @@ class AudioOutputDevice {
 
   /// Key of the translated name to use when no explicit name was given.
   final String? nameKey;
-  final String description;
 
   /// ALSA, PipeWire, WASAPI, CoreAudio, Android, Tizen ...
   final String driverType;
@@ -311,25 +294,10 @@ class AudioOutputDevice {
   final bool isBitperfectSupported;
   final bool isDefault;
   final List<int> supportedSampleRates;
-  final List<int> supportedBitDepths;
 
   /// Name shown to the user. Devices without an explicit name get a translated "default output" text that is looked
   /// up when read, so it follows the interface language.
   String get name => _name ?? Localizer.get(nameKey ?? 'AudioSystemDefaultOutput');
 
   String get displayTitle => hardwareCard.trim().isEmpty ? name : '$name ($hardwareCard)';
-
-  AudioOutputDevice copyWith({bool? isDefault}) => AudioOutputDevice(
-    id: id,
-    name: _name,
-    nameKey: nameKey,
-    description: description,
-    driverType: driverType,
-    hardwareCard: hardwareCard,
-    isExclusiveSupported: isExclusiveSupported,
-    isBitperfectSupported: isBitperfectSupported,
-    isDefault: isDefault ?? this.isDefault,
-    supportedSampleRates: supportedSampleRates,
-    supportedBitDepths: supportedBitDepths,
-  );
 }

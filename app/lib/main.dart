@@ -52,11 +52,7 @@ Future<void> main() async {
     library,
     session,
     onlineLyrics: OnlineLyrics.createDefault(),
-    capabilities: DeviceCapabilities(
-      supportsLocalFolder: platform.supportsLocalFolder,
-      isTv: platform.isTv,
-      isDesktop: platform.isDesktop,
-    ),
+    capabilities: DeviceCapabilities(supportsLocalFolder: platform.supportsLocalFolder),
   );
   vm.onServerCredentialsChanged = (serverUrl, token) {
     CoverArt.serverUrl = serverUrl.isEmpty ? null : serverUrl;

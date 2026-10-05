@@ -160,12 +160,21 @@ void main() {
       expect(player.currentTrack, tracks[2]);
     });
 
-    test('an empty list or a single track does not break anything', () {
+    test('a single track ends the queue, and back plays it again', () {
       final (player, tracks, _) = createQueue(count: 1, startAt: 0);
       player.nextTrack();
+      expect(player.currentTrack, isNull);
       player.previousTrack();
+      expect(player.currentTrack, tracks[0]);
+    });
+
+    test('an empty list plays nothing and keeps the queue, also through shuffle on and off', () {
+      final (player, tracks, _) = createQueue(startAt: 0);
       player.playQueue(const []);
-      expect(tracks, hasLength(1));
+      expect(player.currentTrack, tracks[0]);
+      player.setShuffle(true);
+      player.setShuffle(false);
+      expect(player.queueTracks, tracks);
     });
 
     test('a playback failure is shown and cleared when playback starts again', () {
@@ -188,9 +197,11 @@ void main() {
       player.toggleMute();
 
       await player.toggleBitperfect();
-      expect(player.isBitperfect, isTrue);
       expect(player.isVolumeLocked, isTrue);
       expect(player.volume, 100);
+      expect(driver.volume, 1.0); // unity gain where the samples are scaled
+      player.setVolume(10);
+      expect(driver.volume, 1.0);
       player.toggleMute(); // refused in bit-perfect mode
       expect(player.isMuted, isFalse);
       await player.toggleBitperfect();
@@ -229,10 +240,10 @@ void main() {
       expect(player.hasLyrics, isFalse);
 
       player.isQueueOpen = true;
-      expect(await waitUntil(() => player.currentLyrics == 'Lyrics of t1'), isTrue);
+      expect(await waitUntil(() => player.plainLyricsText == 'Lyrics of t1'), isTrue);
 
       player.currentTrack = TestSupport.makeTrack('t2', 'Two');
-      expect(await waitUntil(() => player.currentLyrics == 'Lyrics of t2'), isTrue);
+      expect(await waitUntil(() => player.plainLyricsText == 'Lyrics of t2'), isTrue);
 
       player.isQueueOpen = false;
       player.isQueueOpen = true; // reopening does not fetch again
@@ -240,7 +251,7 @@ void main() {
       expect(requested, ['t1', 't2']);
 
       player.currentTrack = null;
-      expect(player.currentLyrics, isNull);
+      expect(player.plainLyricsText, isNull);
       expect(player.hasLyrics, isFalse);
     });
 
@@ -256,7 +267,7 @@ void main() {
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(await waitUntil(() => player.hasLyrics), isTrue);
-      expect(player.currentLyrics, 'From the tag');
+      expect(player.plainLyricsText, 'From the tag');
       expect(player.lyricsOrigin, LyricsOrigin.tags);
       expect(player.lyricsSourceText, "Source: the track's own tags");
       expect(asked, 0);
@@ -366,11 +377,11 @@ void main() {
       expect(await waitUntil(() => firstToken != null), isTrue);
       player.currentTrack = TestSupport.makeTrack('t2', 'Two');
       expect(firstToken!.isCancelled, isTrue);
-      expect(await waitUntil(() => player.currentLyrics == 'Lyrics of t2'), isTrue);
+      expect(await waitUntil(() => player.plainLyricsText == 'Lyrics of t2'), isTrue);
 
       slow.complete('Lyrics of t1 (late)');
       await Future<void>.delayed(const Duration(milliseconds: 30));
-      expect(player.currentLyrics, 'Lyrics of t2');
+      expect(player.plainLyricsText, 'Lyrics of t2');
       expect(player.isLoadingLyrics, isFalse);
     });
 

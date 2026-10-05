@@ -59,15 +59,12 @@ class WiretuneAudioEngine {
   Track? get currentTrack => _currentTrack;
   PlaybackState get state => _driver.state;
   Duration get currentPosition => _driver.currentPosition;
-  Duration get duration => _currentTrack?.duration ?? Duration.zero;
   double get volume => _isBitperfect ? 1.0 : (_isMuted ? 0.0 : _volume);
   bool get isMuted => _isMuted;
   bool get isExclusiveMode => _isExclusiveMode;
   bool get isBitperfect => _isBitperfect;
-  bool get isVolumeLocked => _isBitperfect;
   AudioOutputDevice? get currentDevice => _currentDevice;
   List<AudioOutputDevice> get availableDevices => _availableDevices;
-  AudioFormat? get currentFormat => _currentTrack?.format;
 
   /// Waits for the device scan started by the constructor.
   Future<void> get ready => _initialDeviceScan;
@@ -94,9 +91,6 @@ class WiretuneAudioEngine {
       Localizer.format('SignalTarget', [device]),
     ].join('\n');
   }
-
-  void setStreamAuthorization(String? bearerToken) =>
-      _streamToken = bearerToken == null || bearerToken.isEmpty ? null : bearerToken;
 
   /// Supplies the token appended to stream URLs. It is asked for each time a server track starts, so a long-running
   /// player always uses a token that is still valid.

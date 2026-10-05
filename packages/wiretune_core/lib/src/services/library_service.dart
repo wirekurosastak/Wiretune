@@ -534,20 +534,16 @@ class LibrarySnapshot {
         ]),
       );
       final first = ordered.first;
-      final formats = ordered.map((t) => t.format).toList();
-      final quality = QualitySummary.of(formats)!; // an album always has at least one track
+      final quality = QualitySummary.of(ordered.map((t) => t.format))!; // an album always has at least one track
       albums.add(
         Album(
           id: entry.key,
           title: first.album,
           artist: first.effectiveAlbumArtist,
           year: ordered.map((t) => t.year).whereType<int>().firstOrNull,
-          genre: ordered.map((t) => t.genre).where((g) => !isBlank(g)).firstOrNull,
           coverArtPath: ordered.where((t) => !isBlank(t.coverArtPath)).firstOrNull?.coverArtPath,
           trackCount: ordered.length,
           totalDuration: ordered.fold(Duration.zero, (sum, t) => sum + t.duration),
-          isHiRes: formats.any((f) => f.isHiRes),
-          formatBadge: quality.isMixed ? 'MIXED HQ' : formats.first.displayBadge,
           tier: quality.tier,
           tagSpec: quality.spec,
           tracks: ordered,

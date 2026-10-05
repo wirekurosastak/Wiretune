@@ -51,7 +51,6 @@ class PlayerViewModel extends ChangeNotifier {
   PlayerViewModel(this._engine, this._library) {
     isExclusiveMode = _engine.isExclusiveMode;
     isBitperfect = _engine.isBitperfect;
-    isVolumeLocked = _engine.isBitperfect;
 
     _subscriptions.addAll([
       _engine.stateChanged.listen((state) {
@@ -74,12 +73,11 @@ class PlayerViewModel extends ChangeNotifier {
       }),
       _engine.trackEnded.listen((_) => _onTrackEnded()),
       _engine.positionChanged.listen((position) {
-        if (!_isUserSeeking) _setPositionFromEngine(position);
+        if (!_isUserSeeking) _setPosition(position);
       }),
       _engine.trackChanged.listen(_onEngineTrackChanged),
       _engine.bitperfectChanged.listen((value) {
         isBitperfect = value;
-        isVolumeLocked = value;
         volume = value ? 100 : (_engine.volume * 100).roundToDouble();
         signalPath = _engine.signalPathDescription;
         notifyListeners();
@@ -107,8 +105,6 @@ class PlayerViewModel extends ChangeNotifier {
   CancellationToken? _lyricsToken;
   String? _lyricsTrackId;
 
-  WiretuneAudioEngine get engine => _engine;
-
   // ── State ──────────────────────────────────────────────────────────────────────────────────────
 
   Track? _currentTrack;
@@ -118,6 +114,10 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// The playback position; updated several times a second, so it has its own notifier.
   final ValueNotifier<Duration> position = ValueNotifier(Duration.zero);
+
+  /// The whole seconds of [position]: what the times show, and what a progress bar has to follow to be drawn once a
+  /// second rather than at every position update.
+  final ValueNotifier<int> elapsedSeconds = ValueNotifier(0);
 
   /// The 32 spectrum bands (0..1), about 30 times a second while playing.
   final ValueNotifier<Float32List> spectrum = ValueNotifier(Float32List(32));
@@ -130,7 +130,6 @@ class PlayerViewModel extends ChangeNotifier {
   bool isMuted = false;
   bool isExclusiveMode = false;
   bool isBitperfect = false;
-  bool isVolumeLocked = false;
   bool isShuffle = false;
   RepeatMode repeatMode = RepeatMode.off;
   String signalPath = '';
@@ -140,9 +139,11 @@ class PlayerViewModel extends ChangeNotifier {
 
   bool get hasError => errorMessage != null && errorMessage!.isNotEmpty;
   bool get isPlaying => playbackState == PlaybackState.playing;
+
+  /// Bit-perfect pins the volume at 100 %.
+  bool get isVolumeLocked => isBitperfect;
   bool get isVolumeDisabledOrMuted => isMuted || isVolumeLocked;
   bool get isVolumeActive => !isMuted && !isVolumeLocked;
-  bool get isVolumeLockedAndNotMuted => !isMuted && isVolumeLocked;
   String get volumeToolTip =>
       Localizer.get(isMuted ? 'VolumeUnmute' : (isVolumeLocked ? 'VolumeLocked' : 'VolumeMute'));
 
@@ -176,15 +177,8 @@ class PlayerViewModel extends ChangeNotifier {
 
   void closeQueue() => isQueueOpen = false;
 
-  /// Plays an entry of the queue (a [Track] or a [QueueItem]); a track that is not queued yet starts the library.
-  void playQueueTrack(Object? parameter) {
-    final track = switch (parameter) {
-      Track t => t,
-      QueueItem entry => entry.track,
-      _ => null,
-    };
-    if (track == null) return;
-
+  /// Plays a track of the queue; a track that is not queued yet starts the library.
+  void playQueueTrack(Track track) {
     final index = _playbackQueue.indexOf(track);
     if (index >= 0) {
       _playAt(index);
@@ -287,10 +281,11 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void _playQueueInternal(Iterable<Track> tracks, Track? startTrack) {
+    final list = tracks.toList();
+    if (list.isEmpty) return;
     _originalQueue
       ..clear()
-      ..addAll(tracks);
-    if (_originalQueue.isEmpty) return;
+      ..addAll(list);
 
     final start = startTrack != null && _originalQueue.contains(startTrack) ? startTrack : null;
     _playbackQueue.clear();
@@ -298,7 +293,7 @@ class PlayerViewModel extends ChangeNotifier {
       final first = start ?? _originalQueue[_random.nextInt(_originalQueue.length)];
       _playbackQueue
         ..add(first)
-        ..addAll(_shuffled(_originalQueue.where((t) => !identical(t, first))));
+        ..addAll(_originalQueue.where((t) => !identical(t, first)).toList()..shuffle(_random));
       _playAt(0);
     } else {
       _playbackQueue.addAll(_originalQueue);
@@ -381,7 +376,7 @@ class PlayerViewModel extends ChangeNotifier {
     if (_playbackQueue.length >= 2 && _queueIndex >= 0 && _queueIndex < _playbackQueue.length) {
       final current = _playbackQueue[_queueIndex];
       final rest = value
-          ? _shuffled(_originalQueue.where((t) => !identical(t, current)))
+          ? (_originalQueue.where((t) => !identical(t, current)).toList()..shuffle(_random))
           : _originalQueue.skipWhile((t) => !identical(t, current)).skip(1).toList();
       _playbackQueue
         ..clear()
@@ -433,8 +428,7 @@ class PlayerViewModel extends ChangeNotifier {
   void seekTo(Duration target) {
     if (_currentTrack == null) return;
     if (target < Duration.zero) target = Duration.zero;
-    position.value = target;
-    _updateLyricPosition(target);
+    _setPosition(target);
     _isUserSeeking = true;
 
     _seekDebounce?.cancel();
@@ -472,7 +466,7 @@ class PlayerViewModel extends ChangeNotifier {
     _isUserSeeking = false;
 
     currentTrack = track;
-    _setPositionFromEngine(Duration.zero);
+    _setPosition(Duration.zero);
     if (track != null) {
       currentTier = track.format.tier;
       currentTagSpec = track.format.tagSpec;
@@ -514,8 +508,9 @@ class PlayerViewModel extends ChangeNotifier {
     }
   }
 
-  void _setPositionFromEngine(Duration value) {
+  void _setPosition(Duration value) {
     position.value = value;
+    elapsedSeconds.value = value.inSeconds;
     _updateLyricPosition(value);
   }
 
@@ -534,7 +529,6 @@ class PlayerViewModel extends ChangeNotifier {
   LyricsProvider? onlineLyricsProvider;
 
   String? _currentLyrics;
-  String? get currentLyrics => _currentLyrics;
   bool get hasLyrics => _currentLyrics != null && _currentLyrics!.trim().isNotEmpty;
 
   /// The lines of time-synced lyrics; empty for plain lyrics or none.
@@ -544,7 +538,6 @@ class PlayerViewModel extends ChangeNotifier {
   final ValueNotifier<int> currentLyricIndex = ValueNotifier(-1);
 
   bool get hasSyncedLyrics => lyricLines.isNotEmpty;
-  bool get hasPlainLyrics => hasLyrics && !hasSyncedLyrics;
   String? get plainLyricsText => hasSyncedLyrics ? null : _currentLyrics;
 
   bool isLoadingLyrics = false;
@@ -696,19 +689,6 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────────────────────────
-
-  List<Track> _shuffled(Iterable<Track> source) {
-    final list = source.toList();
-    for (var n = list.length - 1; n > 0; n--) {
-      final k = _random.nextInt(n + 1);
-      final t = list[k];
-      list[k] = list[n];
-      list[n] = t;
-    }
-    return list;
-  }
-
   Future<void> _runSafe(Future<void> Function() action) async {
     try {
       await action();
@@ -727,6 +707,7 @@ class PlayerViewModel extends ChangeNotifier {
     _seekDebounce?.cancel();
     _lyricsToken?.cancel();
     position.dispose();
+    elapsedSeconds.dispose();
     spectrum.dispose();
     currentLyricIndex.dispose();
     super.dispose();

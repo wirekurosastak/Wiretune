@@ -188,14 +188,15 @@ class BackLink extends StatelessWidget {
 }
 
 /// The header of a detail page, over a wash of its own artwork's colours that fades into the page: the [back] button,
-/// then the large artwork beside the labels, the title, a line of details and the buttons (on a phone the artwork sits
-/// above, centred).
+/// then the large artwork (with its [artworkBadge]) beside the labels, the title, a line of details and the buttons (on
+/// a phone the artwork sits above, centred, and the labels are left out).
 class DetailHeader extends StatelessWidget {
   const DetailHeader({
     super.key,
     required this.artwork,
     required this.tags,
     required this.title,
+    this.artworkBadge,
     this.artworkPath,
     this.back,
     this.details = const [],
@@ -205,9 +206,14 @@ class DetailHeader extends StatelessWidget {
 
   final Widget artwork;
 
+  /// Shown on the artwork's corner, as on the tiles: an album's or a playlist's quality tag.
+  final Widget? artworkBadge;
+
   /// The picture whose colours wash the header; none leaves a glow of the accent.
   final String? artworkPath;
   final Widget? back;
+
+  /// The labels above the title on a wide screen ("ALBUM", "PLAYLIST").
   final List<Widget> tags;
   final String title;
 
@@ -261,6 +267,16 @@ class DetailHeader extends StatelessWidget {
         ),
       ),
     );
+    final badge = artworkBadge;
+    final framed = badge == null
+        ? artwork
+        : Stack(
+            fit: StackFit.expand,
+            children: [
+              artwork,
+              Positioned(left: 10, top: 10, child: badge),
+            ],
+          );
     final detailRow = details.isEmpty
         ? null
         : Wrap(
@@ -273,7 +289,7 @@ class DetailHeader extends StatelessWidget {
             ],
           );
     if (narrow) {
-      // The phone's header: the 230 px artwork with a glow, the title, the details and the quality, all centred.
+      // The phone's header: the 230 px artwork with a glow, the title and the details, all centred.
       return Stack(
         children: [
           wash,
@@ -288,7 +304,7 @@ class DetailHeader extends StatelessWidget {
                       width: 230,
                       height: 230,
                       decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
-                      child: artwork,
+                      child: framed,
                     ),
                     const SizedBox(height: 20),
                     titleWidget ??
@@ -305,14 +321,6 @@ class DetailHeader extends StatelessWidget {
                           ),
                         ),
                     if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
-                    if (tags.any((t) => t is! TagBadge)) ...[
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [...tags.where((t) => t is! TagBadge)],
-                      ),
-                    ],
                     if (actions.isNotEmpty) ...[
                       const SizedBox(height: 18),
                       for (final action in actions) Padding(padding: const EdgeInsets.only(bottom: 10), child: action),
@@ -352,7 +360,7 @@ class DetailHeader extends StatelessWidget {
                     width: 210,
                     height: 210,
                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
-                    child: artwork,
+                    child: framed,
                   ),
                   const SizedBox(width: 30),
                   Expanded(child: text),
@@ -556,17 +564,7 @@ class AlbumsPage extends StatelessWidget {
                 ],
               ),
             ),
-            TileGridSliver(
-              itemCount: albums.displayedAlbums.length,
-              itemBuilder: (context, index) {
-                final album = albums.displayedAlbums[index];
-                return AlbumCard(
-                  album: album,
-                  onOpen: () => albums.openAlbum(album),
-                  onPlay: () => albums.playAlbum(album),
-                );
-              },
-            ),
+            AlbumsSliver(albums: albums.displayedAlbums, onOpen: albums.openAlbum, onPlay: albums.playAlbum),
             const PageEndSpace(),
           ],
         );
@@ -599,10 +597,8 @@ class AlbumDetail extends StatelessWidget {
               placeholderIcon: Icons.album,
               placeholderColor: colors.palette.purple,
             ),
-            tags: [
-              TagBadge(context.tr('ColAlbum'), color: colors.palette.purple),
-              QualityTag(tier: album.tier, spec: album.tagSpec),
-            ],
+            artworkBadge: QualityTag(tier: album.tier, spec: album.tagSpec, fontSize: 11),
+            tags: [TagBadge(context.tr('ColAlbum'), color: colors.palette.purple)],
             title: album.title,
             details: [
               LinkText(
@@ -664,18 +660,7 @@ class ArtistsPage extends StatelessWidget {
                 ],
               ),
             ),
-            TileGridSliver(
-              kind: TileKind.twoLines,
-              itemCount: artists.displayedArtists.length,
-              itemBuilder: (context, index) {
-                final artist = artists.displayedArtists[index];
-                return ArtistCard(
-                  artist: artist,
-                  onOpen: () => artists.openArtist(artist),
-                  onPlay: () => artists.playArtist(artist),
-                );
-              },
-            ),
+            ArtistsSliver(artists: artists.displayedArtists, onOpen: artists.openArtist, onPlay: artists.playArtist),
             const PageEndSpace(),
           ],
         );
@@ -731,14 +716,7 @@ class ArtistDetail extends StatelessWidget {
               child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 10)),
             ),
           ),
-          TileGridSliver(
-            itemCount: albums.length,
-            itemBuilder: (context, index) => AlbumCard(
-              album: albums[index],
-              onOpen: () => vm.openAlbum(albums[index]),
-              onPlay: () => vm.albums.playAlbum(albums[index]),
-            ),
-          ),
+          AlbumsSliver(albums: albums, onOpen: vm.openAlbum, onPlay: vm.albums.playAlbum),
         ],
         SliverToBoxAdapter(
           child: Padding(

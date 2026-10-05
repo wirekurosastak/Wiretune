@@ -636,7 +636,8 @@ class _WindowButtonState extends State<_WindowButton> {
   }
 }
 
-/// A small dot that slowly fades in and out (the "live" mark of an active mode and of the status line).
+/// A small dot that slowly fades in and out (the "live" mark of an active mode and of the status line); a steady one on
+/// a phone or tablet.
 class _PulsingDot extends StatefulWidget {
   const _PulsingDot({required this.color, required this.size});
 
@@ -648,8 +649,17 @@ class _PulsingDot extends StatefulWidget {
 }
 
 class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))
-    ..repeat(reverse: true);
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 1),
+    value: 1,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (!AppPlatform.current.isMobile) _controller.repeat(reverse: true);
+  }
 
   @override
   void dispose() {
@@ -1123,7 +1133,8 @@ class _PlayerBar extends StatelessWidget {
 }
 
 /// The cover of the current track, which opens and closes the queue: a dark veil with a chevron under the mouse (and
-/// while the queue is open), and a slow "breath" and a glow of the accent while a track plays.
+/// while the queue is open), and a glow of the accent while a track plays, with a slow "breath" (not on a phone or
+/// tablet).
 class _QueueCover extends StatefulWidget {
   @override
   State<_QueueCover> createState() => _QueueCoverState();
@@ -1147,9 +1158,10 @@ class _QueueCoverState extends State<_QueueCover> with SingleTickerProviderState
     final player = context.vm.player;
     final colors = context.colors;
     final open = player.isQueueOpen;
-    if (player.isPlaying && !_breath.isAnimating) {
+    final breathe = player.isPlaying && !AppPlatform.current.isMobile;
+    if (breathe && !_breath.isAnimating) {
       _breath.repeat(reverse: true);
-    } else if (!player.isPlaying && _breath.isAnimating) {
+    } else if (!breathe && _breath.isAnimating) {
       _breath.animateTo(0, duration: const Duration(milliseconds: 400));
     }
     return Tooltip(

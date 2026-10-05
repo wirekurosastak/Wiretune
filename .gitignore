@@ -26,7 +26,8 @@ app.*.map.json
 # pubspec.lock is committed for what is run (app/, server/) and left out for the libraries (packages/*).
 /packages/*/pubspec.lock
 
-## Built packages copied out of build/
+## What tool/build.dart collects from the builds, and packages copied out of build/ by hand
+/dist/
 *.apk
 *.aab
 *.ipa

@@ -11,18 +11,18 @@ import '../view_models/main_view_model.dart';
 /// lock screen and Control Center on iOS, the Now Playing widget on macOS, media buttons on headsets, and the browse
 /// tree that Android Auto shows in the car (albums, artists, playlists, favourites) and its voice search.
 class WiretuneMediaSession extends BaseAudioHandler {
-  WiretuneMediaSession(this._vm) {
+  /// [now] is the clock the published positions are timed by; replaceable by tests.
+  WiretuneMediaSession(this._vm, {DateTime Function()? now}) : _now = now ?? DateTime.now {
     _vm.player.addListener(_publish);
-    _vm.player.position.addListener(_publishPosition);
+    _vm.player.position.addListener(_followPosition);
     _vm.library.libraryChanged.listen((_) => notifyChildrenChanged());
     _vm.library.playlistsChanged.listen((_) => notifyChildrenChanged());
     _publish();
   }
 
   final MainViewModel _vm;
+  final DateTime Function() _now;
   String? _publishedTrackId;
-  bool _publishedPlaying = false;
-  core.PlaybackState? _publishedState;
   String? _streamToken;
 
   static Future<WiretuneMediaSession> start(MainViewModel vm) => AudioService.init(
@@ -46,22 +46,30 @@ class WiretuneMediaSession extends BaseAudioHandler {
   );
 
   // ── Publishing the player's state ──────────────────────────────────────────────────────────────
+  // The system shows the position it was last given, carried on by the time since while playing: a track that plays on
+  // needs no updates, only changes do (play, pause, a seek, the next track, the modes).
 
   void _publish() {
     final player = _vm.player;
     final track = player.currentTrack;
-    final playing = player.playbackState == core.PlaybackState.playing;
 
-    if (track?.id != _publishedTrackId) {
+    final trackChanged = track?.id != _publishedTrackId;
+    if (trackChanged) {
       _publishedTrackId = track?.id;
-      if (!track.isLocalOrNull) unawaited(_refreshToken());
+      if (track != null && !track.isLocal) unawaited(_refreshToken());
       mediaItem.add(track == null ? null : _item(track, playable: true));
     }
 
-    if (playing != _publishedPlaying || player.playbackState != _publishedState) {
-      _publishedPlaying = playing;
-      _publishedState = player.playbackState;
-      _publishPosition();
+    final state = _playbackState();
+    final last = playbackState.value;
+    if (trackChanged ||
+        state.playing != last.playing ||
+        state.processingState != last.processingState ||
+        state.repeatMode != last.repeatMode ||
+        state.shuffleMode != last.shuffleMode ||
+        state.queueIndex != last.queueIndex ||
+        state.errorMessage != last.errorMessage) {
+      playbackState.add(state);
     }
 
     final queueTracks = player.queueTracks;
@@ -70,36 +78,43 @@ class WiretuneMediaSession extends BaseAudioHandler {
     }
   }
 
-  void _publishPosition() {
+  /// A position that has drifted from where the system has carried it to (a seek, a stream that stalled) is published;
+  /// one that keeps pace is not.
+  void _followPosition() {
+    final last = playbackState.value;
+    final carried = last.playing ? last.updatePosition + _now().difference(last.updateTime) : last.updatePosition;
+    if ((_vm.player.position.value - carried).abs() > const Duration(seconds: 1)) playbackState.add(_playbackState());
+  }
+
+  /// The player's state as the system shows it, with the position at this moment.
+  PlaybackState _playbackState() {
     final player = _vm.player;
     final playing = player.playbackState == core.PlaybackState.playing;
-    playbackState.add(
-      PlaybackState(
-        controls: [
-          MediaControl.skipToPrevious,
-          if (playing) MediaControl.pause else MediaControl.play,
-          MediaControl.skipToNext,
-        ],
-        systemActions: const {MediaAction.seek, MediaAction.seekForward, MediaAction.seekBackward},
-        androidCompactActionIndices: const [0, 1, 2],
-        processingState: switch (player.playbackState) {
-          core.PlaybackState.buffering => AudioProcessingState.buffering,
-          core.PlaybackState.error => AudioProcessingState.error,
-          core.PlaybackState.stopped =>
-            player.currentTrack == null ? AudioProcessingState.idle : AudioProcessingState.ready,
-          _ => AudioProcessingState.ready,
-        },
-        playing: playing,
-        updatePosition: player.position.value,
-        errorMessage: player.errorMessage,
-        repeatMode: switch (player.repeatMode) {
-          RepeatMode.off => AudioServiceRepeatMode.none,
-          RepeatMode.all => AudioServiceRepeatMode.all,
-          RepeatMode.one => AudioServiceRepeatMode.one,
-        },
-        shuffleMode: player.isShuffle ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
-        queueIndex: player.currentQueueIndex >= 0 ? player.currentQueueIndex : null,
-      ),
+    return PlaybackState(
+      controls: [
+        MediaControl.skipToPrevious,
+        if (playing) MediaControl.pause else MediaControl.play,
+        MediaControl.skipToNext,
+      ],
+      systemActions: const {MediaAction.seek, MediaAction.seekForward, MediaAction.seekBackward},
+      androidCompactActionIndices: const [0, 1, 2],
+      processingState: switch (player.playbackState) {
+        core.PlaybackState.error => AudioProcessingState.error,
+        core.PlaybackState.stopped =>
+          player.currentTrack == null ? AudioProcessingState.idle : AudioProcessingState.ready,
+        _ => AudioProcessingState.ready,
+      },
+      playing: playing,
+      updatePosition: player.position.value,
+      updateTime: _now(),
+      errorMessage: player.errorMessage,
+      repeatMode: switch (player.repeatMode) {
+        RepeatMode.off => AudioServiceRepeatMode.none,
+        RepeatMode.all => AudioServiceRepeatMode.all,
+        RepeatMode.one => AudioServiceRepeatMode.one,
+      },
+      shuffleMode: player.isShuffle ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
+      queueIndex: player.currentQueueIndex >= 0 ? player.currentQueueIndex : null,
     );
   }
 
@@ -342,8 +357,4 @@ class WiretuneMediaSession extends BaseAudioHandler {
       subject.add(<String, dynamic>{});
     }
   }
-}
-
-extension on Track? {
-  bool get isLocalOrNull => this == null || this!.isLocal;
 }

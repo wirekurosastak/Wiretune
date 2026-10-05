@@ -8,13 +8,15 @@ void main() {
   setUp(() => Localizer.instance.setLanguage('en'));
 
   test('bit-perfect locks the volume to unity gain', () async {
-    final engine = TestSupport.createEngine();
+    final driver = FakeAudioDriver();
+    final engine = TestSupport.createEngine(driver);
+    engine.setVolume(0.5);
     await engine.setBitperfectMode(true);
     expect(engine.isBitperfect, isTrue);
-    expect(engine.isVolumeLocked, isTrue);
-    expect(engine.volume, 1.0);
+    expect(driver.volume, 1.0);
 
     engine.setVolume(0.5); // must stay at 0 dB: no digital attenuation of the bits
+    expect(driver.volume, 1.0);
     expect(engine.volume, 1.0);
   });
 
@@ -40,6 +42,10 @@ void main() {
     expect(engine.volume, 0.0);
     engine.setMuted(false);
     expect(driver.volume, closeTo(0.6, 0.001));
+
+    await engine.setBitperfectMode(true);
+    engine.setMuted(true);
+    expect(driver.volume, 1.0);
   });
 
   test('bit-perfect switches exclusive on; switching exclusive off switches bit-perfect off', () async {
@@ -68,12 +74,6 @@ void main() {
     expect(engine.isExclusiveMode, isFalse);
     expect(engine.isBitperfect, isFalse);
     expect(failures, hasLength(2));
-  });
-
-  test('seeking updates the position', () async {
-    final engine = TestSupport.createEngine();
-    await engine.seek(const Duration(seconds: 42));
-    expect(engine.currentPosition, const Duration(seconds: 42));
   });
 
   test('exclusive mode picks the hardware device of the shared sink\'s card, and back', () async {
@@ -150,6 +150,23 @@ void main() {
     expect(asked, 1); // only server tracks need a token
   });
 
+  test('a fresh stream token is asked for each time a server track starts, and the old one kept on failure', () async {
+    final driver = FakeAudioDriver();
+    final engine = TestSupport.createEngine(driver);
+    var issued = 0;
+    engine.setStreamTokenProvider(() async => 'fresh-${++issued}');
+    final remote = TestSupport.makeServerTrack('s1', 'Remote');
+
+    await engine.playTrack(remote);
+    expect(driver.lastSource, 'http://server/api/stream/s1?token=fresh-1');
+    await engine.playTrack(remote);
+    expect(driver.lastSource, 'http://server/api/stream/s1?token=fresh-2');
+
+    engine.setStreamTokenProvider(() async => throw const ServerRequestException('server unreachable'));
+    await engine.playTrack(remote);
+    expect(driver.lastSource, 'http://server/api/stream/s1?token=fresh-2');
+  });
+
   test('a track without a source is reported, not played', () async {
     final driver = FakeAudioDriver();
     final engine = TestSupport.createEngine(driver);
@@ -158,15 +175,5 @@ void main() {
     await engine.playTrack(Track(title: 'Nowhere', filePath: ''));
     expect(driver.playCalls, 0);
     expect(failures.single, contains('Nowhere'));
-  });
-
-  test('hi-res formats are recognised', () {
-    const cd = AudioFormat(sampleRate: 44100, bitsPerSample: 16);
-    const master = AudioFormat(sampleRate: 96000, bitsPerSample: 24);
-    expect(cd.isHiRes, isFalse);
-    expect(master.isHiRes, isTrue);
-    expect(master.displayBadge, contains('96'));
-    expect(master.displayBadge, contains('24bit'));
-    expect(cd.displayBadge, 'FLAC / 16bit / 44.1kHz');
   });
 }

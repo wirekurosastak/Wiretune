@@ -112,15 +112,4 @@ class Localizer {
     }
     return value.toString();
   }
-
-  /// The decimal number [value] with [decimals] places at most (trailing zeros dropped), in the active language's
-  /// notation: `44.1` in English, `44,1` in Hungarian and German.
-  static String formatNumber(double value, {int decimals = 1}) {
-    var text = value.toStringAsFixed(decimals);
-    if (text.contains('.')) {
-      text = text.replaceFirst(RegExp(r'0+$'), '');
-      if (text.endsWith('.')) text = text.substring(0, text.length - 1);
-    }
-    return instance._language == english ? text : text.replaceAll('.', ',');
-  }
 }

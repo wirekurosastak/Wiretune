@@ -3,6 +3,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
+import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/player_view_model.dart';
 
@@ -222,6 +223,10 @@ class _HeartIconState extends State<HeartIcon> with SingleTickerProviderStateMix
   );
 }
 
+/// What a progress bar follows: every position update, or on a phone or tablet only the whole seconds, so that it is
+/// drawn once a second there.
+Listenable progressOf(PlayerViewModel player) => AppPlatform.current.isMobile ? player.elapsedSeconds : player.position;
+
 /// The position slider with the elapsed and total time.
 class SeekBar extends StatefulWidget {
   const SeekBar({super.key, this.timesBelow = false});
@@ -247,7 +252,7 @@ class _SeekBarState extends State<SeekBar> {
       fontFeatures: const [FontFeature.tabularFigures()],
     );
     return ListenableBuilder(
-      listenable: Listenable.merge([player, player.position]),
+      listenable: Listenable.merge([player, progressOf(player)]),
       builder: (context, _) {
         final total = player.durationSeconds;
         final value = (_dragValue ?? player.positionSeconds).clamp(0.0, total > 0 ? total : 1.0);
@@ -358,8 +363,4 @@ class FavoriteCurrentButton extends StatelessWidget {
       },
     );
   }
-}
-
-extension PlayerSignal on PlayerViewModel {
-  bool get hasTrack => currentTrack != null;
 }

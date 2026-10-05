@@ -40,10 +40,6 @@ class AlbumCard extends StatelessWidget {
       placeholderIcon: Icons.album,
       placeholderColor: purple,
     );
-    final badge = QualityTag(tier: album.tier, spec: album.tagSpec, compact: true);
-    if (_TileStyle.phoneOf(context)) {
-      return _PhoneTile(onTap: onOpen, cover: cover, badge: badge, title: album.title, subtitle: album.artist);
-    }
     final details = [
       context.trf('TrackCount', [album.trackCount]),
       if (album.year != null) '${album.year}',
@@ -57,7 +53,7 @@ class AlbumCard extends StatelessWidget {
         _line(album.artist, 12.5, FontWeight.w500, colors.textMuted),
         _line(details, 11, FontWeight.w500, colors.textMuted.withValues(alpha: 0.75)),
       ],
-      badge: badge,
+      badge: QualityTag(tier: album.tier, spec: album.tagSpec, compact: true),
       play: TilePlayButton(color: purple, onPressed: onPlay, tooltip: context.tr('Play')),
     );
   }
@@ -81,15 +77,6 @@ class ArtistCard extends StatelessWidget {
       placeholderIcon: Icons.person,
       placeholderColor: coral,
     );
-    if (_TileStyle.phoneOf(context)) {
-      return _PhoneTile(
-        onTap: onOpen,
-        cover: picture,
-        title: artist.name,
-        subtitle: context.trf('TrackCount', [artist.trackCount]),
-        centered: true,
-      );
-    }
     return _DesktopTile(
       accent: coral,
       onTap: onOpen,
@@ -100,6 +87,166 @@ class ArtistCard extends StatelessWidget {
         _line(context.trf('TrackCount', [artist.trackCount]), 12.5, FontWeight.w500, colors.textMuted, center: true),
       ],
       play: TilePlayButton(color: coral, onPressed: onPlay, tooltip: context.tr('Play')),
+    );
+  }
+}
+
+/// Albums as a sliver: on a phone a list of rows (the cover, the title, and the quality tag before the artist and the
+/// year), on a wide screen a grid of tiles.
+class AlbumsSliver extends StatelessWidget {
+  const AlbumsSliver({super.key, required this.albums, required this.onOpen, required this.onPlay});
+
+  final List<Album> albums;
+  final void Function(Album album) onOpen;
+  final void Function(Album album) onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PhoneChrome.isPhone(context)) {
+      return TileGridSliver(
+        itemCount: albums.length,
+        itemBuilder: (context, index) =>
+            AlbumCard(album: albums[index], onOpen: () => onOpen(albums[index]), onPlay: () => onPlay(albums[index])),
+      );
+    }
+    final purple = context.colors.palette.purple;
+    return _rows(albums.length, (index) {
+      final album = albums[index];
+      return _ListRow(
+        onTap: () => onOpen(album),
+        picture: CoverImage(
+          path: album.coverArtPath,
+          size: _ListRow.pictureSize,
+          radius: Radii.small + 2,
+          placeholderIcon: Icons.album,
+          placeholderColor: purple,
+        ),
+        title: album.title,
+        tag: QualityTag(tier: album.tier, spec: album.tagSpec, compact: true),
+        subtitle: [album.artist, if (album.year != null) '${album.year}'].join('  •  '),
+      );
+    });
+  }
+}
+
+/// Artists as a sliver: on a phone a list of rows (the round picture, the name, the albums and tracks), on a wide
+/// screen a grid of tiles.
+class ArtistsSliver extends StatelessWidget {
+  const ArtistsSliver({super.key, required this.artists, required this.onOpen, required this.onPlay});
+
+  final List<Artist> artists;
+  final void Function(Artist artist) onOpen;
+  final void Function(Artist artist) onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PhoneChrome.isPhone(context)) {
+      return TileGridSliver(
+        kind: TileKind.twoLines,
+        itemCount: artists.length,
+        itemBuilder: (context, index) => ArtistCard(
+          artist: artists[index],
+          onOpen: () => onOpen(artists[index]),
+          onPlay: () => onPlay(artists[index]),
+        ),
+      );
+    }
+    final coral = context.colors.palette.coral;
+    return _rows(artists.length, (index) {
+      final artist = artists[index];
+      return _ListRow(
+        onTap: () => onOpen(artist),
+        picture: CoverImage(
+          path: artist.picturePath,
+          size: _ListRow.pictureSize,
+          circle: true,
+          placeholderIcon: Icons.person,
+          placeholderColor: coral,
+        ),
+        title: artist.name,
+        subtitle:
+            '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}',
+      );
+    });
+  }
+}
+
+/// A phone's list of [count] rows, all as tall as the first: that follows the user's font size, and the list still
+/// knows where every row is without building it.
+Widget _rows(int count, Widget Function(int index) row) => count == 0
+    ? const SliverToBoxAdapter()
+    : SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        sliver: SliverPrototypeExtentList.builder(
+          prototypeItem: row(0),
+          itemCount: count,
+          itemBuilder: (context, index) => row(index),
+        ),
+      );
+
+/// A phone's list row: the picture, the title, and below it the [tag] and the [subtitle]; a tap opens what it shows.
+class _ListRow extends StatelessWidget {
+  const _ListRow({required this.onTap, required this.picture, required this.title, required this.subtitle, this.tag});
+
+  static const double pictureSize = 56;
+
+  final VoidCallback onTap;
+  final Widget picture;
+  final String title;
+  final String subtitle;
+  final Widget? tag;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Radii.card),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              SizedBox.square(dimension: pictureSize, child: picture),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.1,
+                        color: colors.textMain,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        if (tag != null) ...[tag!, const SizedBox(width: 8)],
+                        Flexible(
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12.5, color: colors.textMuted),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -146,7 +293,7 @@ class PlaylistCard extends StatelessWidget {
     final colors = context.colors;
     final lime = colors.palette.lime;
     final cover = PlaylistCover(covers: covers, radius: Radii.small + 2);
-    final badge = playlist.formatBadge.isEmpty
+    final badge = playlist.formatSpec.isEmpty
         ? null
         : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, compact: true);
     if (_TileStyle.phoneOf(context)) {
@@ -304,28 +451,19 @@ class _DesktopTileState extends State<_DesktopTile> {
   }
 }
 
-/// A phone tile: a square cover (or round picture) with a soft shadow and the [badge] on it, and two lines below it.
+/// A phone tile: a square cover with a soft shadow and the [badge] on it, and two lines below it.
 class _PhoneTile extends StatelessWidget {
-  const _PhoneTile({
-    required this.onTap,
-    required this.cover,
-    required this.title,
-    required this.subtitle,
-    this.badge,
-    this.centered = false,
-  });
+  const _PhoneTile({required this.onTap, required this.cover, required this.title, required this.subtitle, this.badge});
 
   final VoidCallback onTap;
   final Widget cover;
   final Widget? badge;
   final String title;
   final String subtitle;
-  final bool centered;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final align = centered ? CrossAxisAlignment.center : CrossAxisAlignment.start;
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
@@ -334,7 +472,7 @@ class _PhoneTile extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(4),
           child: Column(
-            crossAxisAlignment: align,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: Align(
@@ -343,8 +481,7 @@ class _PhoneTile extends StatelessWidget {
                     aspectRatio: 1,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        shape: centered ? BoxShape.circle : BoxShape.rectangle,
-                        borderRadius: centered ? null : BorderRadius.circular(Radii.small + 2),
+                        borderRadius: BorderRadius.circular(Radii.small + 2),
                         boxShadow: [
                           BoxShadow(
                             color: colors.palette.shadow,
@@ -374,7 +511,6 @@ class _PhoneTile extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  textAlign: centered ? TextAlign.center : TextAlign.start,
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -390,7 +526,6 @@ class _PhoneTile extends StatelessWidget {
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  textAlign: centered ? TextAlign.center : TextAlign.start,
                   style: TextStyle(fontSize: 12, color: colors.textMuted),
                 ),
               ),

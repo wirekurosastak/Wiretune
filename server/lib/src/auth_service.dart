@@ -76,10 +76,6 @@ class AuthService {
     return _db.connection.updatedRows > 0;
   }
 
-  static Future<String> _hash(String password) => _hashInIsolate(password, _bcryptWorkFactor);
-
-  static Future<bool> _verify(String password, String hash) => _verifyInIsolate(password, hash);
-
   bool hasAnyUsers() => (_db.connection.select('SELECT COUNT(*) AS n FROM users').first['n'] as int) > 0;
 
   Future<AuthResponse?> login(String username, String password, {bool rememberMe = false}) async {
@@ -202,10 +198,10 @@ class AuthService {
 // bcrypt is slow on purpose; it runs in a background isolate so that other requests are not held up meanwhile. The
 // isolate entries are top-level so that their closures capture nothing but their arguments.
 
-Future<String> _hashInIsolate(String password, int workFactor) =>
-    Isolate.run(() => BCrypt.hashpw(password, BCrypt.gensalt(logRounds: workFactor)));
+Future<String> _hash(String password) =>
+    Isolate.run(() => BCrypt.hashpw(password, BCrypt.gensalt(logRounds: AuthService._bcryptWorkFactor)));
 
-Future<bool> _verifyInIsolate(String password, String hash) => Isolate.run(() {
+Future<bool> _verify(String password, String hash) => Isolate.run(() {
   try {
     return BCrypt.checkpw(password, hash);
   } catch (_) {

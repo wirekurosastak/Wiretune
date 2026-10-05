@@ -35,7 +35,6 @@ class ByteSource {
 
 /// Reading numbers and text out of a byte array.
 extension ByteReading on Uint8List {
-  int u8(int o) => this[o];
   int u16be(int o) => (this[o] << 8) | this[o + 1];
   int u16le(int o) => this[o] | (this[o + 1] << 8);
   int u24be(int o) => (this[o] << 16) | (this[o + 1] << 8) | this[o + 2];

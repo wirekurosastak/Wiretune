@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune_core/testing.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -18,4 +22,15 @@ Future<bool> waitUntil(bool Function() condition) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   return condition();
+}
+
+/// Writes a small cover (a 4 x 4 PNG in four colours) into [directory] and returns its path.
+String writeCover(Directory directory) {
+  final file = File(p.join(directory.path, 'cover.png'));
+  file.writeAsBytesSync(
+    base64.decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAJ0lEQVR4nGN44JDg0PDA4UDDgw0GDHDWA4cEBjjLoeEBA5zlcKABAJiSGYEhhgnzAAAAAElFTkSuQmCC',
+    ),
+  );
+  return file.path;
 }

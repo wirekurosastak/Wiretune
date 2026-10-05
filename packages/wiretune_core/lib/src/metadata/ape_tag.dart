@@ -69,10 +69,7 @@ AudioTags? readApeTag(ByteSource source, {bool wantLyrics = true}) {
         final nameEnd = nameBytes.indexOf(0);
         if (nameEnd < 0) continue;
         final type = lowerKey == 'cover art (front)' ? 3 : 0;
-        tags.offerPicture(
-          location: PictureLocation(valueOffset + nameEnd + 1, valueLength - nameEnd - 1, type: type),
-          type: type,
-        );
+        tags.offerPicture(location: PictureLocation(valueOffset + nameEnd + 1, valueLength - nameEnd - 1), type: type);
         continue;
       }
 

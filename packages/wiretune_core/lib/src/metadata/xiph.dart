@@ -5,6 +5,7 @@ import 'audio_tags.dart';
 import 'byte_source.dart';
 import 'id3.dart';
 
+/// The Vorbis comment fields Wiretune reads. The order matters: of two fields for one tag, the one listed first wins.
 const Map<String, TagField> _vorbisFields = {
   'TITLE': TagField.title,
   'ARTIST': TagField.artist,
@@ -67,28 +68,8 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
       values.putIfAbsent(key, () => value);
     }
 
-    for (final key in const [
-      'TITLE',
-      'ARTIST',
-      'ALBUMARTIST',
-      'ALBUM ARTIST',
-      'ALBUM_ARTIST',
-      'ENSEMBLE',
-      'ALBUM',
-      'GENRE',
-      'TRACKNUMBER',
-      'TRACKTOTAL',
-      'TOTALTRACKS',
-      'DISCNUMBER',
-      'DATE',
-      'YEAR',
-      'ORIGINALDATE',
-      'LYRICS',
-      'UNSYNCEDLYRICS',
-      'UNSYNCED LYRICS',
-    ]) {
+    for (final MapEntry(:key, value: field) in _vorbisFields.entries) {
       final value = values[key];
-      final field = _vorbisFields[key]!;
       if (value == null || (field == TagField.lyrics && !wantLyrics)) continue;
       tags.setText(field, field == TagField.genre ? resolveId3Genre(value) : value);
     }
@@ -118,6 +99,14 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
   }
 }
 
+/// Reads a FLAC STREAMINFO block (at least 18 bytes) into [tags] and returns the stream's length in samples.
+int _readStreamInfo(Uint8List info, AudioTags tags) {
+  tags.sampleRate = (info[10] << 12) | (info[11] << 4) | (info[12] >> 4);
+  tags.channels = ((info[12] >> 1) & 0x07) + 1;
+  tags.bitsPerSample = (((info[12] & 0x01) << 4) | (info[13] >> 4)) + 1;
+  return ((info[13] & 0x0F) << 32) | info.u32be(14);
+}
+
 /// FLAC: STREAMINFO for the properties, VORBIS_COMMENT for the tags, PICTURE blocks located for later.
 AudioTags? readFlac(ByteSource source, {bool wantLyrics = true}) {
   final start = skipLeadingId3v2(source);
@@ -141,11 +130,7 @@ AudioTags? readFlac(ByteSource source, {bool wantLyrics = true}) {
     switch (type) {
       case 0: // STREAMINFO
         final info = source.readExact(body, 18);
-        if (info == null) break;
-        tags.sampleRate = (info[10] << 12) | (info[11] << 4) | (info[12] >> 4);
-        tags.channels = ((info[12] >> 1) & 0x07) + 1;
-        tags.bitsPerSample = (((info[12] & 0x01) << 4) | (info[13] >> 4)) + 1;
-        totalSamples = ((info[13] & 0x0F) << 32) | info.u32be(14);
+        if (info != null) totalSamples = _readStreamInfo(info, tags);
       case 4: // VORBIS_COMMENT
         if (length > 64 * 1024 * 1024) break;
         readVorbisComment(source.read(body, length), 0, tags, wantLyrics: wantLyrics);
@@ -160,10 +145,7 @@ AudioTags? readFlac(ByteSource source, {bool wantLyrics = true}) {
           final dataLength = head.u32be(p);
           p += 4;
           if (dataLength > 0 && p + dataLength <= length) {
-            tags.offerPicture(
-              location: PictureLocation(body + p, dataLength, type: pictureType),
-              type: pictureType,
-            );
+            tags.offerPicture(location: PictureLocation(body + p, dataLength), type: pictureType);
           }
         } on RangeError {
           // A picture block whose header does not fit what was read: ignore it.
@@ -301,12 +283,7 @@ AudioTags? readOgg(ByteSource source, {bool wantLyrics = true}) {
 
   if (id.length >= 13 && id[0] == 0x7F && id.matches(1, 'FLAC')) {
     // Ogg FLAC: STREAMINFO follows the 13-byte mapping header and the "fLaC" marker.
-    if (id.length >= 13 + 4 + 4 + 18) {
-      final info = Uint8List.sublistView(id, 13 + 4 + 4);
-      tags.sampleRate = (info[10] << 12) | (info[11] << 4) | (info[12] >> 4);
-      tags.channels = ((info[12] >> 1) & 0x07) + 1;
-      tags.bitsPerSample = (((info[12] & 0x01) << 4) | (info[13] >> 4)) + 1;
-    }
+    if (id.length >= 13 + 4 + 4 + 18) _readStreamInfo(Uint8List.sublistView(id, 13 + 4 + 4), tags);
     if (packets.length > 1 && packets[1].length > 4) readVorbisComment(packets[1], 4, tags, wantLyrics: wantLyrics);
     final samples = lastOggGranule(source, serial);
     if (tags.sampleRate > 0 && samples > 0) {

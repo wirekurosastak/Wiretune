@@ -17,8 +17,8 @@ creates it, every start logs a line like this, and the player will ask for that 
 No administrator account exists yet. Create it in the player with the setup code K7QP-2WXM
 ```
 
-For a server that stays up, build the standalone executable ([building.md](building.md#server)) and run
-`build/bundle/bin/wiretune_server` with the same options.
+For a server that stays up, build the standalone executable with `dart tool/build.dart server`
+([building.md](building.md#server)) and run `dist/server/bin/wiretune_server` with the same options.
 
 ## Options
 
@@ -65,7 +65,7 @@ that an older server won't open it, so keep a backup from before an upgrade.
 At start-up, every `--scan-interval` minutes, on **Reindex** and whenever the music folder changes. Scans are
 incremental: files with the same path, size and modification time aren't read again, vanished files drop out, and
 hidden and unreadable ones are skipped. A music folder that doesn't exist (yet) is reported by every scan until it
-appears, so a share that mounts late is simply picked up by the next one.
+appears, so a share that mounts late is picked up by the next one.
 
 The extension decides what's indexed: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis and
 Opus. A file whose extension lies is recognised by its content. Missing tags fall back to the file name,
@@ -126,7 +126,8 @@ journalctl -u wiretune -f        # the setup code shows up here on the first sta
 ```
 
 systemd creates `/var/lib/wiretune` for the service account, readable by nobody else: the database in it holds the
-password hashes and the key that signs tokens. The `wiretune` user needs nothing but read access to the music. `systemctl stop` shuts it down cleanly; a scan that's running is dropped and runs again at the next start.
+password hashes and the key that signs tokens. The `wiretune` user needs nothing but read access to the music.
+`systemctl stop` shuts it down cleanly; a scan that's running is dropped and runs again at the next start.
 
 ## Reverse proxy and TLS
 
