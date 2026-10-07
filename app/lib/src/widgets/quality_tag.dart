@@ -11,22 +11,19 @@ import '../theme/palette.dart';
 /// (gold), `FLAC 16bit/44.1kHz` (silver) or `MP3 320kbps` (bronze); the colour alone names the tier. It has a fill and
 /// an outline of its own, so the three medal colours keep their contrast in both themes. Hovering explains the tier.
 class QualityTag extends StatelessWidget {
-  const QualityTag({super.key, required this.tier, this.spec, this.compact = false, this.fontSize = 10});
+  const QualityTag({super.key, required this.tier, this.spec, this.fontSize = 10});
 
   final QualityTier tier;
 
-  /// The text after the tier word, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty shows the tier word alone.
+  /// The format, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty shows the tier word alone.
   final String? spec;
-
-  /// For tiles, the queue and a narrow player bar: the resolution without the file format (`24bit/96kHz`).
-  final bool compact;
   final double fontSize;
 
   @override
   Widget build(BuildContext context) {
     context.tr('QualityGold'); // rebuild when the language changes
-    final text = tier.tagText(spec, compact: compact);
-    final hint = compact && spec != null && spec!.trim().isNotEmpty ? '${tier.hint}\n${spec!.trim()}' : tier.hint;
+    final text = tier.tagText(spec);
+    final hint = tier.hint;
     return Tooltip(
       message: hint,
       child: Container(

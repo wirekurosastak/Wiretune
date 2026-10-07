@@ -50,6 +50,7 @@ class LibraryRepository {
             isLossless: _int(r['is_lossless']) == 1,
           ),
           isFavorite: _int(r['is_favorite']) == 1,
+          favoritedAt: fromDbTime(r['favorited_at']),
           playCount: _int(r['play_count']) ?? 0,
           lastPlayed: fromDbTime(r['last_played']),
           dateAdded: fromDbTime(r['date_added']),
@@ -62,9 +63,9 @@ class LibraryRepository {
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
         year, genre, duration_ms, file_size_bytes, file_modified, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
-        bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added
+        bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added, favorited_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-              ?24, ?25, ?26, ?27)
+              ?24, ?25, ?26, ?27, ?28)
     ON CONFLICT(id) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, album = excluded.album,
         album_artist = excluded.album_artist, track_number = excluded.track_number,
@@ -76,7 +77,7 @@ class LibraryRepository {
         bits_per_sample = excluded.bits_per_sample, channels = excluded.channels,
         bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless,
         is_favorite = excluded.is_favorite, play_count = excluded.play_count,
-        last_played = excluded.last_played, date_added = excluded.date_added
+        last_played = excluded.last_played, date_added = excluded.date_added, favorited_at = excluded.favorited_at
     WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR album IS NOT excluded.album
        OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
        OR track_count IS NOT excluded.track_count OR disc_number IS NOT excluded.disc_number
@@ -90,6 +91,7 @@ class LibraryRepository {
        OR bitrate_kbps IS NOT excluded.bitrate_kbps OR is_lossless IS NOT excluded.is_lossless
        OR is_favorite IS NOT excluded.is_favorite OR play_count IS NOT excluded.play_count
        OR last_played IS NOT excluded.last_played OR date_added IS NOT excluded.date_added
+       OR favorited_at IS NOT excluded.favorited_at
     ''';
 
   /// Makes the table hold exactly [tracks]. Rows that are gone are deleted and the others are inserted or updated in
@@ -145,6 +147,7 @@ class LibraryRepository {
             t.playCount,
             toDbTime(t.lastPlayed),
             toDbTime(t.dateAdded),
+            toDbTime(t.favoritedAt),
           ]);
         }
       } finally {
@@ -153,8 +156,13 @@ class LibraryRepository {
     });
   }
 
-  Future<void> updateTrackFavorite(String trackId, bool isFavorite) async {
-    _db.connection.execute('UPDATE tracks SET is_favorite = ? WHERE id = ?', [isFavorite ? 1 : 0, trackId]);
+  /// Marks a track as a favourite since [favoritedAt], or (null) as none.
+  Future<void> updateTrackFavorite(String trackId, DateTime? favoritedAt) async {
+    _db.connection.execute('UPDATE tracks SET is_favorite = ?, favorited_at = ? WHERE id = ?', [
+      favoritedAt == null ? 0 : 1,
+      toDbTime(favoritedAt),
+      trackId,
+    ]);
   }
 
   Future<void> incrementPlayCount(String trackId) async {

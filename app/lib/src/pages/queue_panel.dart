@@ -79,7 +79,7 @@ class _QueueRow extends StatefulWidget {
 
 class _QueueRowState extends State<_QueueRow> {
   /// The row width from which the quality tag fits beside a title of about 160 px.
-  static const double _tagRowWidth = 480;
+  static const double _tagRowWidth = 520;
 
   bool _hover = false;
 
@@ -202,7 +202,7 @@ class _QueueRowState extends State<_QueueRow> {
                     // A narrow row (a phone's, a narrow window's) leaves the tag out: the title keeps the room.
                     if (constraints.maxWidth >= _tagRowWidth) ...[
                       const SizedBox(width: 12),
-                      QualityTag(tier: track.format.tier, spec: track.format.tagSpec, compact: true),
+                      QualityTag(tier: track.format.tier, spec: track.format.tagSpec),
                     ],
                     const SizedBox(width: 12),
                     Text(

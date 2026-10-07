@@ -54,7 +54,7 @@ and none takes a stream token. Limits: 100,000 favourites, 100,000 tracks with p
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "plays": [{ "trackId", "playCount", "lastPlayed" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }] }` |
+| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayed" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }] }`. The favourites come in the order they were marked; marking one again keeps its time |
 | `PUT /api/me/favorites/{trackId}` | user | Marks a favourite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` for an invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
 | `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayed" }`, `409` at the limit |

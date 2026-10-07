@@ -197,24 +197,35 @@ class PlaylistUpdate {
 
 /// Everything the server keeps for one account besides the account itself: favourites, play statistics and playlists.
 class UserDataSnapshot {
-  const UserDataSnapshot(this.favorites, this.plays, this.playlists);
+  const UserDataSnapshot(this.favorites, this.plays, this.playlists, [this.favoritedAt = const {}]);
 
+  /// The favourite track IDs, the earliest marked first.
   final List<String> favorites;
   final List<TrackPlayStats> plays;
   final List<PlaylistData> playlists;
 
+  /// When each favourite was marked (a server from before this field sends none).
+  final Map<String, DateTime> favoritedAt;
+
   Map<String, Object?> toJson() => {
     'favorites': favorites,
+    'favoritedAt': {for (final MapEntry(:key, :value) in favoritedAt.entries) key: formatIsoUtc(value)},
     'plays': plays.map((p) => p.toJson()).toList(),
     'playlists': playlists.map((p) => p.toJson()).toList(),
   };
 
   static UserDataSnapshot fromJson(Object? json) {
     final map = _object(json);
+    final times = map['favoritedAt'];
     return UserDataSnapshot(
       _stringList(map['favorites']),
       (map['plays'] as List? ?? const []).map(TrackPlayStats.fromJson).toList(),
       (map['playlists'] as List? ?? const []).map(PlaylistData.fromJson).toList(),
+      {
+        if (times is Map)
+          for (final MapEntry(:key, :value) in times.entries)
+            if (key is String) key: ?parseIsoUtc(value),
+      },
     );
   }
 }

@@ -214,6 +214,7 @@ class LibraryService {
     final plays = {for (final stats in data.plays) stats.trackId: stats};
     for (final track in serverTracks) {
       track.isFavorite = favorites.contains(track.id);
+      track.favoritedAt = track.isFavorite ? data.favoritedAt[track.id] : null;
       final stats = plays[track.id];
       track.playCount = stats?.playCount ?? 0;
       track.lastPlayed = stats?.lastPlayed;
@@ -270,6 +271,7 @@ class LibraryService {
       if (old != null && !identical(old, track)) {
         if (!(serverOwnsUserData && !track.isLocal)) {
           track.isFavorite = old.isFavorite;
+          track.favoritedAt = old.favoritedAt;
           track.playCount = old.playCount;
           track.lastPlayed = old.lastPlayed;
         }
@@ -290,8 +292,8 @@ class LibraryService {
     final track = getTrack(trackId);
     if (track == null || !_canChangeUserData(track)) return;
 
-    track.isFavorite = !track.isFavorite;
-    await _repository.updateTrackFavorite(track.id, track.isFavorite);
+    _markFavorite(track, !track.isFavorite);
+    await _repository.updateTrackFavorite(track.id, track.favoritedAt);
     favoriteChanged.emit(track);
     if (!track.isLocal) favoriteToggled.emit(track);
   }
@@ -301,9 +303,15 @@ class LibraryService {
     final track = getTrack(trackId);
     if (track == null || track.isFavorite == isFavorite) return;
 
-    track.isFavorite = isFavorite;
-    await _repository.updateTrackFavorite(track.id, track.isFavorite);
+    _markFavorite(track, isFavorite);
+    await _repository.updateTrackFavorite(track.id, track.favoritedAt);
     favoriteChanged.emit(track);
+  }
+
+  static void _markFavorite(Track track, bool favorite) {
+    track
+      ..isFavorite = favorite
+      ..favoritedAt = favorite ? DateTime.now().toUtc() : null;
   }
 
   Future<void> recordPlay(String trackId) async {

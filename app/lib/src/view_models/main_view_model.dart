@@ -323,7 +323,7 @@ class MainViewModel extends ChangeNotifier {
     if (_isSearchActive) {
       final activeQuery = _searchQuery;
       return (
-        () => Localizer.get('BackToSearch'),
+        () => Localizer.get('Search'),
         () {
           _searchQuery = '';
           searchQuery = activeQuery;
@@ -337,7 +337,7 @@ class MainViewModel extends ChangeNotifier {
           when target != AppSection.albums && albums.isAlbumDetailOpen && albums.selectedAlbum != null:
         final returnAlbum = albums.selectedAlbum!;
         return (
-          () => Localizer.format('BackTo', [returnAlbum.title]),
+          () => returnAlbum.title,
           () {
             selectedSection = AppSection.albums;
             albums.openAlbumWithOrigin(returnAlbum, null, null, NavWaveDirection.rightToLeft);
@@ -347,7 +347,7 @@ class MainViewModel extends ChangeNotifier {
           when target != AppSection.artists && artists.isArtistDetailOpen && artists.selectedArtist != null:
         final returnArtist = artists.selectedArtist!;
         return (
-          () => Localizer.format('BackTo', [returnArtist.name]),
+          () => returnArtist.name,
           () {
             selectedSection = AppSection.artists;
             artists.openArtistWithOrigin(returnArtist, null, null, NavWaveDirection.rightToLeft);
@@ -356,16 +356,16 @@ class MainViewModel extends ChangeNotifier {
       case AppSection.playlists when playlists.isPlaylistDetailOpen && playlists.selectedPlaylist != null:
         final returnPlaylist = playlists.selectedPlaylist!;
         return (
-          () => Localizer.format('BackTo', [returnPlaylist.name]),
+          () => returnPlaylist.name,
           () {
             selectedSection = AppSection.playlists;
             playlists.openPlaylist(returnPlaylist);
           },
         );
       case AppSection.favorites:
-        return (() => Localizer.get('BackToFavorites'), () => selectedSection = AppSection.favorites);
+        return (() => Localizer.get('NavFavorites'), () => selectedSection = AppSection.favorites);
       case AppSection.tracks:
-        return (() => Localizer.get('BackToTracks'), () => selectedSection = AppSection.tracks);
+        return (() => Localizer.get('NavTracks'), () => selectedSection = AppSection.tracks);
       default:
         return (null, null);
     }

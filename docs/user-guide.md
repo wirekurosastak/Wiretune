@@ -20,8 +20,10 @@ header or in *Settings → Appearance*. If the server can't be reached at start-
 - **Desktop, tablet and TV**: the header on top, the sections on the left, the player at the bottom; the queue and the
   lyrics open in place of the page. Below 1000 pixels the sections shrink to icons.
 - **Phone**, or a window under 720 pixels: the sections at the bottom under a mini player, and the albums and the
-  artists as lists. Tap the mini player for the full-screen player and its *Queue* and *Lyrics* tabs. Back closes what's
-  open, then retraces your sections, and only then leaves the app. The music keeps playing.
+  artists as lists. Tap the mini player, or swipe it up, for the full-screen player and its *Queue* and *Lyrics* tabs; a
+  swipe down over its cover closes it again, and its *⋮* adds the track to a playlist, downloads it, or goes to its
+  album or artist. Back closes what's open, then retraces your sections, and only then leaves the app. The music keeps
+  playing.
 
 ## The library
 
@@ -31,14 +33,15 @@ header or in *Settings → Appearance*. If the server can't be reached at start-
 - **Artists** lists album artists only. A guest on other people's albums gets no page, but their tracks are still in
   *Tracks* and in search.
 - **Quality tags**: **gold** is hi-res (lossless above 16 bit or 48 kHz), **silver** is lossless at CD resolution,
-  **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The whole tag
-  (`FLAC 24bit/96kHz`) sits in the bottom-left corner of the cover of the full-screen player, of an album and of a
-  playlist, and in the track lists and the player bar of a wide screen; the album and playlist tiles (in the same
-  corner), a phone's album list and the queue show the resolution (`24bit/96kHz`, `320kbps`), and a narrow queue leaves
-  it out. Hover or long-press a tag for the details.
+  **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The tag says the
+  format and the resolution (`FLAC 24bit/96kHz`, `MP3 320kbps`) wherever it shows: in the bottom-left corner of the
+  album and playlist tiles and of the covers of the full-screen player, an album and a playlist, in the track lists and
+  the player bar of a wide screen, and in a wide queue. A phone's album list and a narrow queue leave it out. Hover or
+  long-press a tag for the details.
 - **Sorting and filtering**: albums sort by title, year or quality (best first, an album counting as its weakest
-  track). When the files carry genre tags, a genre filter narrows the albums and the artists to those with a track of
-  that genre.
+  track). *Tracks* and *Favourites* sort by title, artist, album, date added or quality; the favourites start with the
+  newest, by the time you marked them. When the files carry genre tags, a genre filter narrows the albums and the
+  artists to those with a track of that genre.
 - **Covers** are the file's embedded picture, else a `cover`, `folder` or `front` image (`.jpg`, `.jpeg`, `.png`),
   `albumart.jpg` or `artwork.jpg` in its folder. **Artist pictures** are looked up online
   ([SECURITY.md](../SECURITY.md#players)); until one turns up, the artist's first album cover stands in.
@@ -75,22 +78,28 @@ server restarts. Other accounts have their own.
 ## Downloads
 
 Music from a server can stay on the device, to play without the server or the network: a single track (its download
-button in a track list, or *⋮ → Download to this device* on a phone), an album, a playlist or all your favourites (the
-button beside *Play* and *Shuffle*).
+button in a track list, or *⋮ → Download to this device* on a phone), an album, all of an artist's albums, a playlist
+or all your favourites (the button beside *Play* and *Shuffle*).
 
-- What you marked stays in step: a track added to a downloaded playlist, or a new favourite, is downloaded; one taken
-  off is deleted. A file that changed on the server (new tags) is fetched again, and the old copy plays until then.
+- What you marked stays in step: a track added to a downloaded playlist, a new favourite or a new album of a downloaded
+  artist is downloaded; one taken off is deleted. A file that changed on the server (new tags) is fetched again, and
+  the old copy plays until then.
 - Downloads run one track at a time while you're signed in and the app is running (in the background too, as long as
   the system lets it run); one that was cut short continues where it stopped. A track shows the arrow in progress
   while it waits or arrives and a tick once it's here; a list's button fills its ring as its tracks arrive.
-- A track kept because its album, a playlist or the favourites are can only be let go with them.
+- A track kept because its album, its artist, a playlist or the favourites are can only be let go with them.
+- The copies are the server's files byte for byte, in the `Downloads` folder of the player's data directory
+  (such as `~/.config/Wiretune/Downloads` on Linux, `%APPDATA%\Wiretune\Downloads` on Windows,
+  `~/Library/Application Support/Wiretune/Downloads` on macOS, and inside the app's private support folder on
+  mobile and TVs). Their filenames include the artist and track title (`<hash>-Artist - Title.ext`) so they are recognizable
+  in a file manager, while an album's cover is saved beside them in `Downloads/covers`.
 - **Settings → Downloads** shows how much room they take and removes them all. Signing out removes them too.
 - There's no "Wi-Fi only" switch yet: downloads use whatever network the device is on, mobile data included.
 
 ## Playing on another device
 
 Every player signed in to the same account on the same server sees the others. The cast button (in the player bar,
-the mini player, the full-screen player and a phone's page headers) lists them with what each one plays; it lights up
+the full-screen player and a phone's page headers) lists them with what each one plays; it lights up
 when another device plays while this one is idle. Pick one, and this player becomes its remote: you see what plays
 there, and play, pause, skip, seek, shuffle, repeat, the volume and whatever you start from your library go there.
 Music that was playing here moves along, and stops here; picking *This device* again brings what plays there back.

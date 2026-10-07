@@ -161,7 +161,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
       slivers: [
         SliverToBoxAdapter(
           child: DetailHeader(
-            back: BackLink(text: context.tr('BackToPlaylists'), onPressed: playlists.closePlaylistDetail),
+            back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),
             artworkPath: playlistCovers(tracks).firstOrNull,
             artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
             artworkBadge: playlist.formatSpec.isEmpty

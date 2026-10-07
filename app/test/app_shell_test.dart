@@ -11,6 +11,7 @@ import 'package:wiretune/src/layouts/phone_layout.dart';
 import 'package:wiretune/src/layouts/wide_layout.dart';
 import 'package:wiretune/src/pages/library_pages.dart';
 import 'package:wiretune/src/pages/now_playing_page.dart';
+import 'package:wiretune/src/pages/playlists_page.dart';
 import 'package:wiretune/src/pages/queue_panel.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
@@ -18,6 +19,7 @@ import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/widgets/ambient.dart';
 import 'package:wiretune/src/widgets/common.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
+import 'package:wiretune/src/widgets/devices.dart';
 import 'package:wiretune/src/widgets/quality_tag.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -252,11 +254,7 @@ void main() {
     vm.navigateTo(AppSection.albums);
     await settle(tester);
     expectRows('Kind of Blue', 'Random Access Memories');
-    // The resolution leads the album's second line (the test tracks are FLAC 16bit/44.1kHz).
-    final tag = tester.getRect(find.text('16bit/44.1kHz').first);
-    final artist = tester.getRect(find.text('Miles Davis').first);
-    expect((tag.center.dy - artist.center.dy).abs(), lessThan(2));
-    expect(tag.right, lessThan(artist.left));
+    expect(find.text('2 albums'), findsOneWidget); // under the title
     await tester.tap(find.text('Kind of Blue'));
     await settle(tester);
     expect(vm.albums.selectedAlbum?.title, 'Kind of Blue');
@@ -264,6 +262,7 @@ void main() {
     vm.navigateTo(AppSection.artists);
     await settle(tester);
     expectRows('Daft Punk', 'Miles Davis');
+    expect(find.text('2 artists'), findsOneWidget);
     expect(find.text('1 album  •  2 tracks'), findsOneWidget);
     await tester.tap(find.text('Miles Davis'));
     await settle(tester);
@@ -302,11 +301,12 @@ void main() {
     expectOnCover(header, find.descendant(of: header, matching: find.byType(CoverImage)));
   });
 
-  testWidgets('a phone shows the resolution on its album rows, and a queue without quality tags', (tester) async {
+  testWidgets('a phone leaves the quality tags out of its album rows and its queue', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.albums);
     await settle(tester);
-    expect(find.text('16bit/44.1kHz'), findsWidgets); // the test tracks are FLAC 16bit/44.1kHz
+    expect(find.text('Kind of Blue'), findsOneWidget);
+    expect(find.byType(QualityTag), findsNothing);
 
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
@@ -499,6 +499,42 @@ void main() {
     );
     await settle(tester);
     expect(downloads.areFavoritesPinned, isTrue);
+
+    // An artist's albums, from the artist's page.
+    final coltrane = vm.library.getArtistByName('John Coltrane')!;
+    vm.openArtist(coltrane);
+    await settle(tester);
+    await tester.tap(inHeader('Download to this device'));
+    await settle(tester);
+    expect(downloads.isArtistPinned(coltrane), isTrue);
+  });
+
+  testWidgets('on a phone a swipe up opens the full-screen player, whose menu adds the track to a playlist', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    await tester.drag(find.text(vm.player.nowPlayingTitle), const Offset(0, -120)); // on the mini player
+    await settle(tester);
+    expect(vm.isNowPlayingOpen, isTrue);
+
+    final player = find.byType(NowPlayingPage);
+    await tester.tap(find.descendant(of: player, matching: find.byTooltip('More')));
+    await settle(tester);
+    expect(find.text('Go to artist'), findsOneWidget);
+    await tester.tap(find.text('Add to playlist'));
+    await settle(tester);
+    expect(vm.playlists.isAddToPlaylistDialogOpen, isTrue);
+    // The dialog lies over the player: its button takes the tap, and the player stays open.
+    await tester.tap(find.descendant(of: find.byType(PlaylistDialogsLayer), matching: find.text('Cancel')));
+    await settle(tester);
+    expect((vm.playlists.isAddToPlaylistDialogOpen, vm.isNowPlayingOpen), (false, true));
+
+    // A swipe down over the cover closes the player.
+    await tester.drag(find.descendant(of: player, matching: find.byType(CoverImage)), const Offset(0, 200));
+    await settle(tester);
+    expect(vm.isNowPlayingOpen, isFalse);
   });
 
   testWidgets("on a phone a track's menu downloads it, and the row shows that it is kept", (tester) async {
@@ -576,6 +612,7 @@ void main() {
 
     expect(vm.player.isRemote, isTrue);
     expect(find.text('Playing on Desk'), findsOneWidget); // in the mini player, in place of the artist
+    expect(find.byType(DevicesButton), findsOneWidget); // the page header's: the mini player has none
     expect(find.text('So What'), findsWidgets);
     await tester.tap(find.byTooltip('Pause'));
     await settle(tester);

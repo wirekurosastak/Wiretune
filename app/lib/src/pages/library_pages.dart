@@ -70,6 +70,7 @@ class TracksPage extends StatelessWidget {
                     onPlay: tracks.playAll,
                     onShuffle: tracks.shuffleAll,
                   ),
+                  _TrackSortButtons(tracks),
                 ],
               ),
             ),
@@ -118,6 +119,7 @@ class FavoritesPage extends StatelessWidget {
                       onPressed: context.vm.downloads.toggleFavorites,
                     ),
                   ),
+                  _TrackSortButtons(favorites),
                 ],
               ),
             ),
@@ -470,6 +472,24 @@ class _SortButtons extends StatelessWidget {
   }
 }
 
+/// The sort buttons of the Tracks and the Favourites pages.
+class _TrackSortButtons extends StatelessWidget {
+  const _TrackSortButtons(this.sorting);
+
+  final TrackSorting sorting;
+
+  @override
+  Widget build(BuildContext context) {
+    context.tr('SortBy'); // the labels follow the language
+    return _SortButtons(
+      buttons: [
+        for (final field in TrackSortField.values)
+          (sorting.sortLabel(field), sorting.sortField == field, () => sorting.setSortField(field)),
+      ],
+    );
+  }
+}
+
 /// The genre filter of a list page: a pill naming the chosen genre (or "All genres"), opening a menu of the library's
 /// genres.
 class _GenreFilter extends StatelessWidget {
@@ -556,6 +576,7 @@ class AlbumsPage extends StatelessWidget {
             SliverToBoxAdapter(
               child: PageHeader(
                 title: context.tr('NavAlbums'),
+                subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
                 actions: [
                   if (albums.genres.isNotEmpty)
                     _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
@@ -667,6 +688,7 @@ class ArtistsPage extends StatelessWidget {
             SliverToBoxAdapter(
               child: PageHeader(
                 title: context.tr('NavArtists'),
+                subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
                 actions: [
                   if (artists.genres.isNotEmpty)
                     _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
@@ -695,6 +717,7 @@ class ArtistDetail extends StatelessWidget {
     final albums = artists.selectedArtistAlbums;
     final colors = context.colors;
     final narrow = MediaQuery.sizeOf(context).width < 600;
+    final albumTracks = [for (final album in albums) ...album.tracks];
     return CustomScrollView(
       key: PageStorageKey('artist-${artist.id}'),
       slivers: [
@@ -719,6 +742,12 @@ class ArtistDetail extends StatelessWidget {
                 shuffleLabel: context.tr('Shuffle'),
                 onPlay: () => artists.playArtist(),
                 onShuffle: () => artists.shuffleArtist(),
+                // The artist's albums, also the ones that arrive later.
+                trailing: DownloadListButton.forTracks(
+                  albumTracks,
+                  isPinned: () => vm.downloads.isArtistPinned(artist),
+                  onPressed: () => vm.downloads.toggleArtist(artist),
+                ),
               ),
             ],
           ),

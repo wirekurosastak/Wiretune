@@ -213,6 +213,29 @@ void main() {
     expect(tokenRequests, 1);
   });
 
+  test("an artist's albums are downloaded, also one that arrives later; unmarking deletes them", () async {
+    server
+      ..add(serverTrack('a1', 'One', 'Album A'), audio(1))
+      ..add(serverTrack('b1', 'Two', 'Album B'), audio(2))
+      ..add(TestSupport.makeServerTrack('x1', 'Else', artist: 'Someone Else', album: 'Album X'), audio(3));
+    final player = await signedIn();
+    final downloads = player.downloads;
+    final artist = player.library.getArtistByName('Artist')!;
+
+    await downloads.pinArtist(artist.id, true);
+    await until(() => downloads.doneCount == 2);
+    expect(downloads.isArtistPinned(artist.id), isTrue);
+    expect(downloads.stateOf(player.library.getTrack('x1')!), DownloadState.none);
+
+    // A new album of the artist follows once the library knows it.
+    server.add(serverTrack('c1', 'Three', 'Album C'), audio(4));
+    await player.session.refreshLibrary();
+    await until(() => downloads.doneCount == 3);
+
+    await downloads.pinArtist(artist.id, false);
+    await until(() => filesIn(downloads.directory).isEmpty);
+  });
+
   test('a playlist and the favourites keep their copies in step; unmarking deletes them', () async {
     for (final (id, number) in [('t1', 1), ('t2', 2), ('t3', 3)]) {
       server.add(serverTrack(id, 'Song $id', 'Album', number: number), audio(number));
@@ -374,7 +397,7 @@ void main() {
 
     final copy = downloads.localCopy(player.library.getTrack('../../outside')!)!;
     expect(p.isWithin(downloads.directory, copy), isTrue);
-    expect(p.basename(copy), matches(RegExp(r'^[0-9a-f]{16}-[0-9a-f]{8}\.flac$')));
+    expect(p.basename(copy), matches(RegExp(r'^[0-9a-f]{16}-[0-9a-f]{8}.*\.flac$')));
     expect(filesIn(downloads.directory), [p.basename(copy)]);
     expect(filesIn(directory), isEmpty);
     expect(filesIn(p.dirname(directory)).where((name) => name.contains('outside')), isEmpty);

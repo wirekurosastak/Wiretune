@@ -70,6 +70,18 @@ void main() {
     setUp(() async => server = await ServerFixture.start());
     tearDown(() async => server.close());
 
+    test('a favourite says when it was marked, and marking it again keeps that time', () async {
+      final (admin, _) = await setupAdmin(server);
+      final before = DateTime.now().toUtc().subtract(const Duration(seconds: 1));
+      await admin.put('/api/me/favorites/t1');
+      final marked = (await data(admin)).favoritedAt['t1'];
+      expect(marked != null && marked.isAfter(before), isTrue);
+
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await admin.put('/api/me/favorites/t1');
+      expect((await data(admin)).favoritedAt['t1'], marked);
+    });
+
     test('favourites can be added and removed repeatedly', () async {
       final (admin, _) = await setupAdmin(server);
       expect((await admin.put('/api/me/favorites/t1')).statusCode, 200);

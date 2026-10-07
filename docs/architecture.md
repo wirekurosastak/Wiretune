@@ -43,13 +43,14 @@ The services talk through synchronous `Event<T>`s: a handler has run by the time
 ## Persistence
 
 SQLite in WAL mode, one synchronous connection per database, instants stored as microseconds since the epoch. The
-schema version is `PRAGMA user_version` (1), and a database of any other version is refused
-(`IncompatibleDatabaseException`) rather than misread. A change to the tables raises the version and adds the step that
-upgrades the previous one in place. Both sides create every table and use what they need:
+schema version is `PRAGMA user_version` (2). A database of version 1 is upgraded in place (it gains
+`tracks.favorited_at`); one of any other version is refused (`IncompatibleDatabaseException`) rather than misread. A
+change to the tables raises the version and adds the step that upgrades the previous one in place. Both sides create
+every table and use what they need:
 
 | Table | Used by | Holds |
 |---|---|---|
-| `tracks` | both | The index; in the player also the cached favourites and play counts |
+| `tracks` | both | The index; in the player also the cached favourites (and when each was marked) and play counts |
 | `playlists` | player | Playlists; `is_server` marks a cached server one |
 | `settings` | both | Key/value pairs: the player's server address, token and preferences; the server's `jwt_secret` and music folder |
 | `users` | server | Accounts, with bcrypt hashes |
@@ -70,13 +71,13 @@ Changes to the account's data go through one ordered queue, flushed before every
 download can't undo them. A favourite the server refused is put back; a failed play or playlist edit isn't retried.
 `400`, `409` and `413` mean "reachable, but no" and keep the session connected; anything else marks it offline.
 
-**Downloads** (`DownloadService`): what the user marked (tracks, albums, playlists, the favourites) is a preference,
-and the tracks it covers are worked out again from the library after every change, so a playlist that grows grows on
-the device too. One file at a time comes from `/api/stream` with the sign-in token in the header, into `Downloads/` in
-the data directory, and an interrupted one continues with a range request. A copy is named by hashes of the track's ID
-and of the server's size and modification time: no ID a server sends becomes a path, and a copy of a file that has
-since changed is recognised by its name and replaced once the new one is there. The engine plays a copy instead of the
-stream (and asks for no stream token, which might hang without a server); covers and lyrics come from copies too.
+**Downloads** (`DownloadService`): what the user marked (tracks, albums, artists, playlists, the favourites) is a
+preference, and the tracks it covers are worked out again from the library after every change, so a playlist that grows
+grows on the device too. One file at a time comes from `/api/stream` with the sign-in token in the header, into
+`Downloads/` in the data directory, and an interrupted one continues with a range request. A copy is named by hashes of
+the track's ID and of the server's size and modification time, followed by the sanitized artist and title: no ID a server sends becomes a path, and a copy of a file
+that has since changed is recognised by its name and replaced once the new one is there. The engine plays a copy instead
+of the stream (and asks for no stream token, which might hang without a server); covers and lyrics come from copies too.
 
 **Remote control** (`RemoteClient`): while signed in, one WebSocket to `/api/remote`, reconnected with a growing pause
 and given up on a refusal until the sign-in changes. `PlayerViewModel` tells the others its state at every change and

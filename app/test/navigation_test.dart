@@ -111,7 +111,7 @@ void main() {
     expect(vm.albums.isAlbumDetailOpen, isTrue);
     expect(vm.isSearchOpen, isFalse); // the album replaces the search page...
     expect(vm.searchQuery, 'kind'); // ...but the query is kept
-    expect(vm.albums.backText, 'Back to search');
+    expect(vm.albums.backText, 'Search');
 
     expect(vm.tryNavigateBack(), isTrue);
     expect(vm.albums.isAlbumDetailOpen, isFalse);
@@ -128,7 +128,7 @@ void main() {
 
     vm.openAlbum(artist.albums.first);
     expect(vm.selectedSection, AppSection.albums);
-    expect(vm.albums.backText, 'Back to: Miles Davis');
+    expect(vm.albums.backText, 'Miles Davis');
 
     vm.albums.closeAlbumDetail();
     expect(vm.selectedSection, AppSection.artists);

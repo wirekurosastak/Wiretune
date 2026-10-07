@@ -42,7 +42,7 @@ class AlbumCard extends StatelessWidget {
         _line(album.artist, 12.5, FontWeight.w500, colors.textMuted),
         _line(details, 11, FontWeight.w500, colors.textMuted.withValues(alpha: 0.75)),
       ],
-      badge: QualityTag(tier: album.tier, spec: album.tagSpec, compact: true),
+      badge: QualityTag(tier: album.tier, spec: album.tagSpec),
       play: TilePlayButton(color: purple, onPressed: onPlay, tooltip: context.tr('Play')),
     );
   }
@@ -80,8 +80,8 @@ class ArtistCard extends StatelessWidget {
   }
 }
 
-/// Albums as a sliver: on a phone a list of rows (the cover, the title, and the quality tag before the artist and the
-/// year), on a wide screen a grid of tiles.
+/// Albums as a sliver: on a phone a list of rows (the cover, the title, the artist and the year), on a wide screen a grid
+/// of tiles.
 class AlbumsSliver extends StatelessWidget {
   const AlbumsSliver({super.key, required this.albums, required this.onOpen, required this.onPlay});
 
@@ -111,7 +111,6 @@ class AlbumsSliver extends StatelessWidget {
           placeholderColor: purple,
         ),
         title: album.title,
-        tag: QualityTag(tier: album.tier, spec: album.tagSpec, compact: true),
         subtitle: [album.artist, if (album.year != null) '${album.year}'].join('  •  '),
       );
     });
@@ -173,17 +172,17 @@ Widget _rows(int count, Widget Function(int index) row) => count == 0
         ),
       );
 
-/// A phone's list row: the picture, the title, and below it the [tag] and the [subtitle]; a tap opens what it shows.
+/// A phone's list row, as large as the music apps' lists: the picture, the title and below it the [subtitle]; a tap
+/// opens what it shows.
 class _ListRow extends StatelessWidget {
-  const _ListRow({required this.onTap, required this.picture, required this.title, required this.subtitle, this.tag});
+  const _ListRow({required this.onTap, required this.picture, required this.title, required this.subtitle});
 
-  static const double pictureSize = 56;
+  static const double pictureSize = 68;
 
   final VoidCallback onTap;
   final Widget picture;
   final String title;
   final String subtitle;
-  final Widget? tag;
 
   @override
   Widget build(BuildContext context) {
@@ -194,11 +193,11 @@ class _ListRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(Radii.card),
         child: Padding(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
             children: [
               SizedBox.square(dimension: pictureSize, child: picture),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -209,25 +208,18 @@ class _ListRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 16.5,
                         fontWeight: FontWeight.w700,
-                        letterSpacing: -0.1,
+                        letterSpacing: -0.2,
                         color: colors.textMain,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        if (tag != null) ...[tag!, const SizedBox(width: 8)],
-                        Flexible(
-                          child: Text(
-                            subtitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12.5, color: colors.textMuted),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13.5, color: colors.textMuted),
                     ),
                   ],
                 ),
@@ -283,9 +275,7 @@ class PlaylistCard extends StatelessWidget {
     final colors = context.colors;
     final lime = colors.palette.lime;
     final cover = PlaylistCover(covers: covers, radius: Radii.small + 2);
-    final badge = playlist.formatSpec.isEmpty
-        ? null
-        : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, compact: true);
+    final badge = playlist.formatSpec.isEmpty ? null : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec);
     if (PhoneChrome.isPhone(context)) {
       return _PhoneTile(
         onTap: onOpen,
@@ -385,7 +375,18 @@ class _DesktopTileState extends State<_DesktopTile> {
             ),
             child: widget.cover,
           ),
-          if (widget.badge != null) Positioned(left: 8, bottom: 8, child: widget.badge!),
+          if (widget.badge != null)
+            // Beside the play button, while it is there, the tag shrinks rather than slide under it.
+            Positioned(
+              left: 8,
+              right: showPlay ? 8 + 44 + 8 : 8,
+              bottom: 8,
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                heightFactor: 1,
+                child: FittedBox(fit: BoxFit.scaleDown, child: widget.badge!),
+              ),
+            ),
           Positioned(
             right: widget.circle ? 4 : 8,
             bottom: widget.circle ? 4 : 8,

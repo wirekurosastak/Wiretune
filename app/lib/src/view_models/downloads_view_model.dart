@@ -6,7 +6,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// The download buttons (a track, an album, a playlist, the favourites) and the Downloads card in the settings.
+/// The download buttons (a track, an album, an artist, a playlist, the favourites) and the Downloads card in the
+/// settings.
 class DownloadsViewModel extends ChangeNotifier {
   DownloadsViewModel(this._downloads) {
     _unsubscribe = _downloads.changed.listen((_) => _onChanged());
@@ -47,6 +48,11 @@ class DownloadsViewModel extends ChangeNotifier {
   bool isAlbumPinned(Album album) => _downloads.isAlbumPinned(album.id);
 
   void toggleAlbum(Album album) => _pin(_downloads.pinAlbum(album.id, !isAlbumPinned(album)));
+
+  /// All the artist's albums, also the ones that arrive later.
+  bool isArtistPinned(Artist artist) => _downloads.isArtistPinned(artist.id);
+
+  void toggleArtist(Artist artist) => _pin(_downloads.pinArtist(artist.id, !isArtistPinned(artist)));
 
   bool isPlaylistPinned(Playlist playlist) => _downloads.isPlaylistPinned(playlist.id);
 

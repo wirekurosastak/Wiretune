@@ -8,14 +8,18 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../widgets/ambient.dart';
+import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/quality_tag.dart';
+import '../widgets/track_list.dart';
 import 'queue_panel.dart';
 
 /// The phone's full-screen player, over the colours of the cover: the cover (with its quality tag), the queue or the
-/// lyrics on top (three tabs), and the seek bar and the transport below, whatever the tab.
+/// lyrics on top (three tabs), and the seek bar and the transport below, whatever the tab. The header has the track's
+/// menu (a playlist, the download, the album, the artist); a swipe down over the header, or over the player tab, closes
+/// it.
 class NowPlayingPage extends StatelessWidget {
   const NowPlayingPage({super.key});
 
@@ -68,60 +72,85 @@ class NowPlayingPage extends StatelessWidget {
               SafeArea(
                 child: Column(
                   children: [
-                    SizedBox(
-                      height: 60,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Row(
-                          children: [
-                            SizedBox.square(
-                              dimension: 44,
-                              child: IconButton(
-                                tooltip: context.tr('Close'),
-                                style: IconButton.styleFrom(backgroundColor: colors.surface1),
-                                onPressed: vm.closeNowPlaying,
-                                icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
+                    VerticalSwipe(
+                      upwards: false,
+                      onSwipe: vm.closeNowPlaying,
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: 60,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 10),
+                              child: Row(
+                                children: [
+                                  SizedBox.square(
+                                    dimension: 44,
+                                    child: IconButton(
+                                      tooltip: context.tr('Close'),
+                                      style: IconButton.styleFrom(backgroundColor: colors.surface1),
+                                      onPressed: vm.closeNowPlaying,
+                                      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 44), // the title stays centred between the buttons
+                                  Expanded(
+                                    child: ListenableBuilder(
+                                      listenable: vm.player,
+                                      builder: (context, _) => vm.player.isRemote
+                                          ? const Center(child: PlayingOnLabel(fontSize: 12))
+                                          : Text(
+                                              context.tr('NowPlaying').toUpperCase(),
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 11.5,
+                                                letterSpacing: 2,
+                                                fontWeight: FontWeight.w800,
+                                                color: colors.textMain.withValues(alpha: 0.75),
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
+                                  ListenableBuilder(
+                                    listenable: vm.player,
+                                    builder: (context, _) {
+                                      // Only a track of this library: another device's may be unknown here.
+                                      final current = vm.player.currentTrack;
+                                      final track = current == null ? null : vm.library.getTrack(current.id);
+                                      return track == null
+                                          ? const SizedBox(width: 44)
+                                          : TrackMenu(
+                                              track: track,
+                                              kind: TrackTableKind.tracks,
+                                              width: 44,
+                                              color: colors.textMain,
+                                            );
+                                    },
+                                  ),
+                                ],
                               ),
                             ),
-                            Expanded(
-                              child: ListenableBuilder(
-                                listenable: vm.player,
-                                builder: (context, _) => vm.player.isRemote
-                                    ? const Center(child: PlayingOnLabel(fontSize: 12))
-                                    : Text(
-                                        context.tr('NowPlaying').toUpperCase(),
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 11.5,
-                                          letterSpacing: 2,
-                                          fontWeight: FontWeight.w800,
-                                          color: colors.textMain.withValues(alpha: 0.75),
-                                        ),
-                                      ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            // Scaled down rather than cut off on a narrow screen with a large font.
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: colors.surface1,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: colors.glassBorder),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [segment(0, 'TabPlayer'), segment(1, 'Queue'), segment(2, 'TabLyrics')],
+                                ),
                               ),
                             ),
-                            const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                      // Scaled down rather than cut off on a narrow screen with a large font.
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: colors.surface1,
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: colors.glassBorder),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [segment(0, 'TabPlayer'), segment(1, 'Queue'), segment(2, 'TabLyrics')],
-                          ),
-                        ),
+                        ],
                       ),
                     ),
                     Expanded(
@@ -161,49 +190,54 @@ class _PlayerTab extends StatelessWidget {
     final player = vm.player;
     final colors = context.colors;
     final track = player.currentTrack;
-    return Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 12, 28, 16),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  // The cover sits back a little while the music is paused, and springs forward when it plays.
-                  child: AnimatedScale(
-                    scale: player.isPlaying ? 1 : 0.86,
-                    duration: const Duration(milliseconds: 520),
-                    curve: player.isPlaying ? Curves.easeOutBack : Curves.easeOutCubic,
-                    child: AnimatedContainer(
+    // The queue and the lyrics scroll vertically themselves; here a swipe down closes the player.
+    return VerticalSwipe(
+      upwards: false,
+      onSwipe: vm.closeNowPlaying,
+      child: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, 12, 28, 16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    // The cover sits back a little while the music is paused, and springs forward when it plays.
+                    child: AnimatedScale(
+                      scale: player.isPlaying ? 1 : 0.86,
                       duration: const Duration(milliseconds: 520),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(Radii.panel),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0x8C000000),
-                            blurRadius: player.isPlaying ? 50 : 24,
-                            spreadRadius: -10,
-                            offset: Offset(0, player.isPlaying ? 28 : 14),
-                          ),
-                        ],
-                      ),
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          Hero(
-                            tag: 'now-playing-cover',
-                            child: CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
-                          ),
-                          // On the cover, as on the album tiles.
-                          if (player.currentTagSpec.isNotEmpty)
-                            Positioned(
-                              left: 14,
-                              bottom: 14,
-                              child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 12),
+                      curve: player.isPlaying ? Curves.easeOutBack : Curves.easeOutCubic,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 520),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(Radii.panel),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0x8C000000),
+                              blurRadius: player.isPlaying ? 50 : 24,
+                              spreadRadius: -10,
+                              offset: Offset(0, player.isPlaying ? 28 : 14),
                             ),
-                        ],
+                          ],
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Hero(
+                              tag: 'now-playing-cover',
+                              child: CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
+                            ),
+                            // On the cover, as on the album tiles.
+                            if (player.currentTagSpec.isNotEmpty)
+                              Positioned(
+                                left: 14,
+                                bottom: 14,
+                                child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 12),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -211,50 +245,50 @@ class _PlayerTab extends StatelessWidget {
               ),
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 16, 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      player.nowPlayingTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 24,
-                        letterSpacing: -0.6,
-                        fontWeight: FontWeight.w800,
-                        color: colors.textMain,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(6),
-                      onTap: track == null ? null : () => vm.openArtistByName(track.artist),
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                        child: Text(
-                          player.nowPlayingArtist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.hover),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 16, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        player.nowPlayingTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 24,
+                          letterSpacing: -0.6,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textMain,
                         ),
                       ),
-                    ),
-                    if (player.hasError)
-                      Text(player.errorMessage!, style: TextStyle(fontSize: 12, color: colors.danger)),
-                  ],
+                      const SizedBox(height: 2),
+                      InkWell(
+                        borderRadius: BorderRadius.circular(6),
+                        onTap: track == null ? null : () => vm.openArtistByName(track.artist),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
+                          child: Text(
+                            player.nowPlayingArtist,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.hover),
+                          ),
+                        ),
+                      ),
+                      if (player.hasError)
+                        Text(player.errorMessage!, style: TextStyle(fontSize: 12, color: colors.danger)),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox.square(dimension: 52, child: FavoriteCurrentButton(size: 28)),
-            ],
+                const SizedBox.square(dimension: 52, child: FavoriteCurrentButton(size: 28)),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

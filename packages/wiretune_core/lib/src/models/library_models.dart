@@ -47,6 +47,7 @@ class Track {
     this.format = const AudioFormat(),
     DateTime? dateAdded,
     this.isFavorite = false,
+    this.favoritedAt,
     this.playCount = 0,
     this.lastPlayed,
   }) : id = id ?? newId(),
@@ -76,6 +77,9 @@ class Track {
   AudioFormat format;
   DateTime dateAdded;
   bool isFavorite;
+
+  /// When the track became a favourite (null when it is none, or was marked before Wiretune kept the time).
+  DateTime? favoritedAt;
   int playCount;
   DateTime? lastPlayed;
 

@@ -74,7 +74,6 @@ class PhoneLayout extends StatelessWidget {
               ),
               bottomNavigationBar: const _BottomBars(),
             ),
-            const PlaylistDialogsLayer(),
             Positioned.fill(
               child: IgnorePointer(
                 ignoring: !vm.isNowPlayingOpen,
@@ -86,6 +85,8 @@ class PhoneLayout extends StatelessWidget {
                 ),
               ),
             ),
+            // Over the full-screen player too: its menu adds the track to a playlist.
+            const PlaylistDialogsLayer(),
             if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
           ],
         ),
@@ -384,7 +385,8 @@ class _OfflineBanner extends StatelessWidget {
 }
 
 /// The mini player: a floating glass card washed in the colours of the cover, with the cover, title and artist,
-/// play/pause and next, and the progress as a glowing line along its lower edge. A tap opens the full-screen player.
+/// play/pause and next, and the progress as a glowing line along its lower edge. A tap or a swipe up opens the
+/// full-screen player. (The way to another device is in the page header and the full-screen player.)
 class _MiniPlayer extends StatelessWidget {
   const _MiniPlayer();
 
@@ -400,135 +402,138 @@ class _MiniPlayer extends StatelessWidget {
         if (track == null) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-          child: _Frosted(
-            radius: 20,
-            background: AmbientArtwork(path: track.coverArtPath, opacity: 0.9),
-            child: Material(
-              type: MaterialType.transparency,
-              child: Stack(
-                children: [
-                  SizedBox(
-                    height: 66,
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: vm.openNowPlaying,
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(9, 0, 4, 0),
-                              child: Row(
-                                children: [
-                                  Hero(
-                                    tag: 'now-playing-cover',
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(Radii.small + 2),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: colors.palette.shadow,
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 4),
-                                          ),
-                                        ],
-                                      ),
-                                      child: CoverImage(path: track.coverArtPath, size: 48, radius: Radii.small + 2),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          player.nowPlayingTitle,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: -0.2,
-                                            color: colors.textMain,
-                                          ),
+          child: VerticalSwipe(
+            upwards: true,
+            onSwipe: vm.openNowPlaying,
+            child: _Frosted(
+              radius: 20,
+              background: AmbientArtwork(path: track.coverArtPath, opacity: 0.9),
+              child: Material(
+                type: MaterialType.transparency,
+                child: Stack(
+                  children: [
+                    SizedBox(
+                      height: 66,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: InkWell(
+                              onTap: vm.openNowPlaying,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(9, 0, 4, 0),
+                                child: Row(
+                                  children: [
+                                    Hero(
+                                      tag: 'now-playing-cover',
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(Radii.small + 2),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: colors.palette.shadow,
+                                              blurRadius: 10,
+                                              offset: const Offset(0, 4),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 1),
-                                        if (player.isRemote && !player.hasError)
-                                          const PlayingOnLabel(fontSize: 12.5)
-                                        else
+                                        child: CoverImage(path: track.coverArtPath, size: 48, radius: Radii.small + 2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
                                           Text(
-                                            player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                            player.nowPlayingTitle,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w500,
-                                              color: player.hasError ? colors.danger : colors.textMuted,
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: -0.2,
+                                              color: colors.textMain,
                                             ),
                                           ),
-                                      ],
+                                          const SizedBox(height: 1),
+                                          if (player.isRemote && !player.hasError)
+                                            const PlayingOnLabel(fontSize: 12.5)
+                                          else
+                                            Text(
+                                              player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w500,
+                                                color: player.hasError ? colors.danger : colors.textMuted,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const DevicesButton(),
-                        SizedBox.square(
-                          dimension: 46,
-                          child: IconButton(
-                            tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
-                            onPressed: player.togglePlayPause,
-                            icon: PlayPauseIcon(playing: player.isPlaying, size: 30, color: colors.textMain),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: SizedBox.square(
+                          SizedBox.square(
                             dimension: 46,
                             child: IconButton(
-                              tooltip: context.tr('TipNext'),
-                              onPressed: player.nextTrack,
-                              icon: Icon(Icons.skip_next_rounded, size: 28, color: colors.textMain),
+                              tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
+                              onPressed: player.togglePlayPause,
+                              icon: PlayPauseIcon(playing: player.isPlaying, size: 30, color: colors.textMain),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 0,
-                    child: ListenableBuilder(
-                      listenable: progressOf(player),
-                      builder: (context, _) {
-                        final total = player.duration.inMilliseconds;
-                        final fraction = total <= 0
-                            ? 0.0
-                            : (player.position.value.inMilliseconds / total).clamp(0.0, 1.0);
-                        return Container(
-                          height: 2.5,
-                          decoration: BoxDecoration(
-                            color: colors.palette.glassHighlight,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                          alignment: Alignment.centerLeft,
-                          child: FractionallySizedBox(
-                            widthFactor: fraction,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: colors.accentGradient,
-                                borderRadius: BorderRadius.circular(2),
-                                boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 6)],
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: SizedBox.square(
+                              dimension: 46,
+                              child: IconButton(
+                                tooltip: context.tr('TipNext'),
+                                onPressed: player.nextTrack,
+                                icon: Icon(Icons.skip_next_rounded, size: 28, color: colors.textMain),
                               ),
                             ),
                           ),
-                        );
-                      },
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 0,
+                      child: ListenableBuilder(
+                        listenable: progressOf(player),
+                        builder: (context, _) {
+                          final total = player.duration.inMilliseconds;
+                          final fraction = total <= 0
+                              ? 0.0
+                              : (player.position.value.inMilliseconds / total).clamp(0.0, 1.0);
+                          return Container(
+                            height: 2.5,
+                            decoration: BoxDecoration(
+                              color: colors.palette.glassHighlight,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                            alignment: Alignment.centerLeft,
+                            child: FractionallySizedBox(
+                              widthFactor: fraction,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: colors.accentGradient,
+                                  borderRadius: BorderRadius.circular(2),
+                                  boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 6)],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

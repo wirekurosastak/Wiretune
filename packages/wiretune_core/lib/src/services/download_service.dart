@@ -31,8 +31,8 @@ enum DownloadState {
   done,
 }
 
-/// Copies of server tracks kept on this device, so that they play without the server: a track, an album, a playlist or
-/// the favourites at a time. What the user marked is kept in the settings; the copies follow it whenever the library
+/// Copies of server tracks kept on this device, so that they play without the server: a track, an album, an artist's
+/// albums, a playlist or the favourites at a time. What the user marked is kept in the settings; the copies follow it whenever the library
 /// changes (a playlist that grows gets the new track), are downloaded again when the server's file changes, and are
 /// deleted as soon as nothing wants them any more. One file is downloaded at a time, and only while signed in.
 ///
@@ -51,7 +51,7 @@ class DownloadService {
   static const Duration _firstRetry = Duration(seconds: 15);
   static const Duration _lastRetry = Duration(minutes: 10);
 
-  static final RegExp _copyName = RegExp(r'^([0-9a-f]{16})-([0-9a-f]{8})\.([a-z0-9]{1,8})$');
+  static final RegExp _copyName = RegExp(r'^([0-9a-f]{16})-([0-9a-f]{8})(?:-[^.]+)?\.([a-z0-9]{1,8})$');
   static final RegExp _coverName = RegExp(r'^([0-9a-f]{16})\.([a-z0-9]{1,8})$');
 
   final LibraryService _library;
@@ -100,12 +100,17 @@ class DownloadService {
 
   bool isTrackPinned(String trackId) => _pins.tracks.contains(trackId);
   bool isAlbumPinned(String albumId) => _pins.albums.contains(albumId);
+  bool isArtistPinned(String artistId) => _pins.artists.contains(artistId);
   bool isPlaylistPinned(String playlistId) => _pins.playlists.contains(playlistId);
   bool get areFavoritesPinned => _pins.favorites;
 
   Future<void> pinTrack(String trackId, bool pinned) => _changePins((pins) => _toggle(pins.tracks, trackId, pinned));
 
   Future<void> pinAlbum(String albumId, bool pinned) => _changePins((pins) => _toggle(pins.albums, albumId, pinned));
+
+  /// Every album filed under the artist, also the ones that arrive later.
+  Future<void> pinArtist(String artistId, bool pinned) =>
+      _changePins((pins) => _toggle(pins.artists, artistId, pinned));
 
   Future<void> pinPlaylist(String playlistId, bool pinned) =>
       _changePins((pins) => _toggle(pins.playlists, playlistId, pinned));
@@ -116,6 +121,7 @@ class DownloadService {
   Future<void> removeAll() => _changePins((pins) {
     pins.tracks.clear();
     pins.albums.clear();
+    pins.artists.clear();
     pins.playlists.clear();
     pins.favorites = false;
   });
@@ -258,7 +264,8 @@ class DownloadService {
 
   // ── Keeping the copies in line with the marks ──────────────────────────────────────────────────
 
-  /// Every server track the marks cover: the albums', the playlists', the favourites and the single tracks.
+  /// Every server track the marks cover: the albums', the artists' albums', the playlists', the favourites and the
+  /// single tracks.
   void _refreshWanted() {
     final wanted = <String, Track>{};
     void add(Track? track) {
@@ -267,6 +274,11 @@ class DownloadService {
 
     for (final albumId in _pins.albums) {
       _library.getAlbum(albumId)?.tracks.forEach(add);
+    }
+    for (final artistId in _pins.artists) {
+      for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) {
+        album.tracks.forEach(add);
+      }
     }
     for (final playlistId in _pins.playlists) {
       final playlist = _library.getPlaylist(playlistId);
@@ -539,7 +551,20 @@ class DownloadService {
     return stableId('${track.fileSizeBytes}\u001f${modified == null ? '' : modified ~/ 1000}').substring(0, 8);
   }
 
-  static String _fileName(Track track) => '${_stemOf(track)}-${_version(track)}.${_extension(track.format.codec)}';
+  /// The filename of a downloaded track: stem+version prefix (for dedup) followed by a human-readable
+  /// "Artist - Title.ext" suffix so the file is recognisable in a file manager.
+  static String _fileName(Track track) {
+    final safeName = _safeFileName('${track.artist} - ${track.title}');
+    final ext = _extension(track.format.codec);
+    return '${_stemOf(track)}-${_version(track)}-$safeName.$ext';
+  }
+
+  /// Replaces filesystem-unsafe characters with underscores and trims to 160 characters so the full
+  /// path stays well within every platform's 255-byte limit.
+  static String _safeFileName(String name) {
+    final safe = name.replaceAll(RegExp(r'[/\\:*?"<>|]'), '_').trim();
+    return safe.length > 160 ? safe.substring(0, 160).trimRight() : safe;
+  }
 
   /// The usual extension of a codec; the decoders look at the content, the extension is for people.
   static String _extension(String codec) => switch (codec.toUpperCase()) {
@@ -577,12 +602,14 @@ class DownloadService {
 class _Pins {
   final Set<String> tracks = {};
   final Set<String> albums = {};
+  final Set<String> artists = {};
   final Set<String> playlists = {};
   bool favorites = false;
 
   Map<String, Object?> toJson() => {
     'tracks': tracks.toList(),
     'albums': albums.toList(),
+    'artists': artists.toList(),
     'playlists': playlists.toList(),
     'favorites': favorites,
   };
@@ -593,6 +620,7 @@ class _Pins {
     Iterable<String> ids(Object? list) => list is List ? list.whereType<String>() : const [];
     pins.tracks.addAll(ids(json['tracks']));
     pins.albums.addAll(ids(json['albums']));
+    pins.artists.addAll(ids(json['artists']));
     pins.playlists.addAll(ids(json['playlists']));
     pins.favorites = json['favorites'] == true;
     return pins;

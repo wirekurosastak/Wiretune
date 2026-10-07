@@ -232,6 +232,28 @@ void main() {
     expect(service.getTrack('local')!.playCount, 1);
   });
 
+  test('a favourite remembers when it was marked: here, or on the server', () async {
+    final repo = MockRepository();
+    final service = _service(repo);
+    repo.saveTracks([TestSupport.makeTrack('local', 'Local')]);
+    await service.initialize();
+
+    final before = DateTime.now().toUtc();
+    await service.toggleFavorite('local');
+    final marked = service.getTrack('local')!.favoritedAt;
+    expect(marked != null && !marked.isBefore(before), isTrue);
+    expect(repo.tracks.single.favoritedAt, marked); // and stored
+    await service.toggleFavorite('local');
+    expect(service.getTrack('local')!.favoritedAt, isNull);
+
+    // A server's favourites come with the time the account marked them.
+    final when = DateTime.utc(2026, 2, 3);
+    await service.mergeServerTracks([
+      TestSupport.makeServerTrack('s1', 'Server'),
+    ], UserDataSnapshot(['s1'], const [], const [], {'s1': when}));
+    expect(service.getTrack('s1')!.favoritedAt, when);
+  });
+
   test('a rescan keeps favourites, play counts and the date added', () async {
     final repo = MockRepository();
     final service = _service(repo);

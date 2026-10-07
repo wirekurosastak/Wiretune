@@ -171,6 +171,27 @@ void main() {
     expect(foreign.initializeSchema, throwsA(isA<IncompatibleDatabaseException>()));
   });
 
+  test('a database of the previous schema is upgraded in place, and favourites get their time from then on', () async {
+    final (repo, db) = await open();
+    await repo.replaceAllTracks([make('a')..isFavorite = true]);
+    // Back to what schema 1 was: no time for a favourite.
+    db.connection.execute('ALTER TABLE tracks DROP COLUMN favorited_at');
+    db.connection.execute('PRAGMA user_version = 1');
+    db.close();
+
+    final (upgraded, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    final kept = (await upgraded.getAllTracks()).single;
+    expect((kept.id, kept.isFavorite, kept.favoritedAt), ('a', true, null));
+
+    final when = DateTime.utc(2026, 3, 4, 5, 6, 7);
+    await upgraded.updateTrackFavorite('a', when);
+    expect((await upgraded.getAllTracks()).single.favoritedAt, when);
+    await upgraded.updateTrackFavorite('a', null);
+    final unmarked = (await upgraded.getAllTracks()).single;
+    expect((unmarked.isFavorite, unmarked.favoritedAt), (false, null));
+  });
+
   test('initializing the schema twice changes nothing', () async {
     final (repo, db) = await open();
     await repo.replaceAllTracks([make('a')]);

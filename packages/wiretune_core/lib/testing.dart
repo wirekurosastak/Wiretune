@@ -50,9 +50,11 @@ class MockRepository extends LibraryRepository {
   }
 
   @override
-  Future<void> updateTrackFavorite(String trackId, bool isFavorite) async {
+  Future<void> updateTrackFavorite(String trackId, DateTime? favoritedAt) async {
     for (final t in tracks.where((t) => t.id == trackId)) {
-      t.isFavorite = isFavorite;
+      t
+        ..isFavorite = favoritedAt != null
+        ..favoritedAt = favoritedAt;
     }
   }
 
@@ -111,6 +113,7 @@ Track copyTrack(Track t) => Track(
   format: t.format,
   dateAdded: t.dateAdded,
   isFavorite: t.isFavorite,
+  favoritedAt: t.favoritedAt,
   playCount: t.playCount,
   lastPlayed: t.lastPlayed,
 );

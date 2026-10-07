@@ -464,6 +464,35 @@ class TilePlayButton extends StatelessWidget {
   }
 }
 
+/// Calls [onSwipe] when a vertical swipe over [child] goes far or fast enough [upwards] (or downwards). Taps, and
+/// horizontal drags such as a slider's, still reach the child.
+class VerticalSwipe extends StatefulWidget {
+  const VerticalSwipe({super.key, required this.upwards, required this.onSwipe, required this.child});
+
+  final bool upwards;
+  final VoidCallback onSwipe;
+  final Widget child;
+
+  @override
+  State<VerticalSwipe> createState() => _VerticalSwipeState();
+}
+
+class _VerticalSwipeState extends State<VerticalSwipe> {
+  double _distance = 0;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onVerticalDragStart: (_) => _distance = 0,
+    onVerticalDragUpdate: (details) => _distance += details.delta.dy,
+    onVerticalDragEnd: (details) {
+      final direction = widget.upwards ? -1 : 1;
+      if (_distance * direction > 40 || (details.primaryVelocity ?? 0) * direction > 400) widget.onSwipe();
+    },
+    child: widget.child,
+  );
+}
+
 /// Marks the phone layout, whose pages draw the phone's headers and full-width buttons.
 class PhoneChrome extends InheritedWidget {
   const PhoneChrome({super.key, required super.child});

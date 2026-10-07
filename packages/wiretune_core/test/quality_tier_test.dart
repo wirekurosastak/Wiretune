@@ -43,18 +43,15 @@ void main() {
     expect(_lossy(320).tagSpec, 'MP3 320kbps');
   });
 
-  test('tag text is just the spec; compact keeps only the resolution', () {
+  test('tag text is the whole spec: format and resolution', () {
     expect(QualityTier.gold.tagText('FLAC 24bit/96kHz'), 'FLAC 24bit/96kHz');
     expect(QualityTier.bronze.tagText('MP3 320kbps'), 'MP3 320kbps');
-    expect(QualityTier.gold.tagText('FLAC 24bit/96kHz', compact: true), '24bit/96kHz');
-    expect(QualityTier.bronze.tagText('MP3 320kbps', compact: true), '320kbps');
-    expect(QualityTier.silver.tagText(QualitySummary.mixedSpec, compact: true), 'MIXED');
+    expect(QualityTier.silver.tagText(QualitySummary.mixedSpec), 'MIXED');
   });
 
   test('without a spec the tag is the tier word', () {
     for (final spec in [null, '', '   ']) {
       expect(QualityTier.gold.tagText(spec), 'GOLD');
-      expect(QualityTier.gold.tagText(spec, compact: true), 'GOLD');
     }
   });
 

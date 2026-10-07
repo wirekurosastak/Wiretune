@@ -85,13 +85,6 @@ const Map<String, (String, String, String)> allStrings = {
   'TipLanguage': ('Nyelv váltása', 'Change language', 'Sprache wechseln'),
   'Back': ('Vissza', 'Back', 'Zurück'),
   'BackToMusic': ('Vissza a zenékhez', 'Back to music', 'Zurück zur Musik'),
-  'BackToSearch': ('Vissza a kereséshez', 'Back to search', 'Zurück zur Suche'),
-  'BackToTracks': ('Vissza a számokhoz', 'Back to tracks', 'Zurück zu den Titeln'),
-  'BackToFavorites': ('Vissza a kedvencekhez', 'Back to favorites', 'Zurück zu den Favoriten'),
-  'BackToAlbums': ('Vissza az összes albumhoz', 'Back to all albums', 'Zurück zu allen Alben'),
-  'BackToArtists': ('Vissza az összes előadóhoz', 'Back to all artists', 'Zurück zu allen Künstlern'),
-  'BackToPlaylists': ('Vissza a lejátszási listákhoz', 'Back to playlists', 'Zurück zu den Playlists'),
-  'BackTo': ('Vissza: {0}', 'Back to: {0}', 'Zurück zu: {0}'),
 
   // ── Counts and durations ────────────────────────────────────────────────────────────────────────────
   'TrackCountInDatabase': ('{0} szám az adatbázisban', '{0} tracks in the database', '{0} Titel in der Datenbank'),
@@ -162,6 +155,9 @@ const Map<String, (String, String, String)> allStrings = {
   'SortBy': ('Rendezés:', 'Sort by:', 'Sortieren nach:'),
   'SortYear': ('Év', 'Year', 'Jahr'),
   'SortQuality': ('Minőség', 'Quality', 'Qualität'),
+  'SortArtist': ('Előadó', 'Artist', 'Künstler'),
+  'SortAlbum': ('Album', 'Album', 'Album'),
+  'SortAdded': ('Hozzáadás', 'Date added', 'Hinzugefügt'),
   'Genre': ('Műfaj', 'Genre', 'Genre'),
   'AllGenres': ('Minden műfaj', 'All genres', 'Alle Genres'),
   'EmptyAlbumsTitle': ('Még nincsenek albumok', 'No albums yet', 'Noch keine Alben'),

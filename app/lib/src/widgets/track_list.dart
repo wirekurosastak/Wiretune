@@ -69,7 +69,8 @@ class _TrackSliverState extends State<TrackSliver> {
   List<Track>? _sortedSource;
   List<Track> _sorted = const [];
 
-  static const double _phoneRowHeight = 68;
+  // As large as the music apps' rows.
+  static const double _phoneRowHeight = 76;
 
   TrackTableKind get kind => widget.kind;
   bool get _leadIsNumber => kind == TrackTableKind.album;
@@ -370,7 +371,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
     ),
     onPressed: () => vm.library.toggleFavorite(track.id),
   );
-  if (phone) return [favorite, _TrackMenu(track: track, kind: kind, width: size)];
+  if (phone) return [favorite, TrackMenu(track: track, kind: kind, width: size)];
 
   final add = _IconCell(
     width: size,
@@ -421,14 +422,20 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
 
 enum _TrackAction { addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist }
 
-/// A phone row's menu: what the table has as buttons (a playlist, the download), and the way to the album and the
-/// artist.
-class _TrackMenu extends StatelessWidget {
-  const _TrackMenu({required this.track, required this.kind, required this.width});
+/// The "⋮" menu of a track, on a phone's rows and its full-screen player: what the table has as buttons (a playlist,
+/// the download), and the way to the album and the artist.
+class TrackMenu extends StatelessWidget {
+  const TrackMenu({super.key, required this.track, required this.kind, required this.width, this.color});
 
   final Track track;
+
+  /// The list it is shown in, which decides the entries (a playlist's can remove the track; an album's has no way to
+  /// the album).
   final TrackTableKind kind;
   final double width;
+
+  /// The dots' colour; muted when not given.
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
@@ -454,7 +461,7 @@ class _TrackMenu extends StatelessWidget {
       child: Center(
         child: PopupMenuButton<_TrackAction>(
           tooltip: context.tr('TipMore'),
-          icon: Icon(Icons.more_vert_rounded, color: colors.textMuted, size: 22),
+          icon: Icon(Icons.more_vert_rounded, color: color ?? colors.textMuted, size: 22),
           onSelected: (action) => switch (action) {
             _TrackAction.addToPlaylist => vm.addToPlaylist(track),
             _TrackAction.removeFromPlaylist => vm.playlists.removeTrackFromSelected(track),
@@ -624,19 +631,19 @@ class _PhoneRow extends StatelessWidget {
               const SizedBox(width: 8),
               if (state._leadIsNumber)
                 SizedBox(
-                  width: 48,
-                  height: 48,
+                  width: 56,
+                  height: 56,
                   child: Center(
                     child: playing
                         ? EqualizerBars(playing: context.vm.player.isPlaying)
                         : Text(
                             track.displayTrackNumber,
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.textMuted),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.textMuted),
                           ),
                   ),
                 )
               else
-                _Cover(track: track, playing: playing, size: 48, radius: Radii.small),
+                _Cover(track: track, playing: playing, size: 56, radius: Radii.small),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -648,12 +655,12 @@ class _PhoneRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                         color: playing ? colors.accent : colors.textMain,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Row(
                       children: [
                         if (downloadIcon(context.vm.downloads.stateOf(track)) case final icon?) ...[
@@ -665,7 +672,7 @@ class _PhoneRow extends StatelessWidget {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: colors.textMuted),
+                            style: TextStyle(fontSize: 13, color: colors.textMuted),
                           ),
                         ),
                       ],

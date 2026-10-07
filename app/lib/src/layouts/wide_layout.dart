@@ -1086,16 +1086,15 @@ class _PlayerBar extends StatelessWidget {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // Spectrum, quality and volume, as many as fit: the volume first, then the full quality tag (the
-                    // short one when the full one doesn't fit), then the spectrum in what is left, down to 80 px.
+                    // Spectrum, quality and volume, as many as fit: the volume first, then the quality tag, then the
+                    // spectrum in what is left, down to 80 px.
                     final scale = MediaQuery.textScalerOf(context).scale(1);
                     // The devices button (while there are other devices to reach) takes its place first.
                     final devices = player.canReachDevices || player.isRemote;
                     final volume = platform.isDesktop && constraints.maxWidth >= 12 + 36 + 8 + 95;
                     var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0);
-                    final showTag = !compact && track != null && room >= 90 * scale;
-                    final fullTag = showTag && room >= 125 * scale;
-                    if (showTag) room -= (fullTag ? 125 : 90) * scale + 8;
+                    final showTag = !compact && track != null && room >= 125 * scale;
+                    if (showTag) room -= 125 * scale + 8;
                     final spectrumWidth = math.min(130.0, room - 14);
                     final showSpectrum = !compact && platform.isDesktop && spectrumWidth >= 80;
                     return Padding(
@@ -1117,11 +1116,7 @@ class _PlayerBar extends StatelessWidget {
                           ],
                           if (showTag) ...[
                             Flexible(
-                              child: QualityTag(
-                                tier: player.currentTier,
-                                spec: player.currentTagSpec,
-                                compact: !fullTag,
-                              ),
+                              child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec),
                             ),
                             const SizedBox(width: 8),
                           ],

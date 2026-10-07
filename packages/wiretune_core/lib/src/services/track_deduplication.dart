@@ -68,7 +68,14 @@ abstract final class TrackDeduplication {
 
   /// Moves what the server copy knows onto the preferred local track.
   static void mergeMetadataIntoLocal(Track localTrack, Track serverTrack) {
-    if (serverTrack.isFavorite) localTrack.isFavorite = true;
+    if (serverTrack.isFavorite) {
+      // The favourite counts from whichever copy was marked first.
+      final local = localTrack.isFavorite ? localTrack.favoritedAt : null;
+      final server = serverTrack.favoritedAt;
+      localTrack
+        ..isFavorite = true
+        ..favoritedAt = local != null && server != null && local.isBefore(server) ? local : server ?? local;
+    }
     if (serverTrack.playCount > localTrack.playCount) localTrack.playCount = serverTrack.playCount;
     final serverPlayed = serverTrack.lastPlayed;
     if (serverPlayed != null && (localTrack.lastPlayed == null || serverPlayed.isAfter(localTrack.lastPlayed!))) {

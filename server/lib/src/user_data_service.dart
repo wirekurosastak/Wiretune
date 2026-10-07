@@ -33,10 +33,12 @@ class UserDataService {
 
   UserDataSnapshot get(String userId) {
     final db = _db.connection;
-    final favorites = db
-        .select('SELECT track_id FROM user_favorites WHERE user_id = ? ORDER BY added_at, track_id', [userId])
-        .map((r) => r['track_id'] as String)
-        .toList();
+    final favoriteRows = db.select(
+      'SELECT track_id, added_at FROM user_favorites WHERE user_id = ? ORDER BY added_at, track_id',
+      [userId],
+    );
+    final favorites = [for (final r in favoriteRows) r['track_id'] as String];
+    final favoritedAt = {for (final r in favoriteRows) r['track_id'] as String: ?fromDbTime(r['added_at'])};
     final plays = db
         .select('SELECT track_id, play_count, last_played FROM user_plays WHERE user_id = ?', [userId])
         .map(_toStats)
@@ -49,7 +51,7 @@ class UserDataService {
         )
         .map(_toPlaylist)
         .toList();
-    return UserDataSnapshot(favorites, plays, playlists);
+    return UserDataSnapshot(favorites, plays, playlists, favoritedAt);
   }
 
   /// False when the account is at its favourites limit and nothing was added.

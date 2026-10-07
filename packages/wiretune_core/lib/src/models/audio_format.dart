@@ -28,15 +28,9 @@ enum QualityTier {
     QualityTier.bronze => 'QualityBronzeHint',
   });
 
-  /// The text of the tag: just [spec] (`FLAC 24bit/96kHz`); the tier itself is told by the colour of the tag. With
-  /// [compact] the file format is left off and the resolution kept (`24bit/96kHz`, `320kbps`). Without a spec the tier
-  /// word stands alone rather than leaving an empty pill.
-  String tagText(String? spec, {bool compact = false}) {
-    if (spec == null || spec.trim().isEmpty) return word;
-    final text = spec.trim();
-    final space = text.indexOf(' ');
-    return compact && space > 0 ? text.substring(space + 1).trim() : text;
-  }
+  /// The text of the tag: just [spec] (`FLAC 24bit/96kHz`); the tier itself is told by the colour of the tag. Without a
+  /// spec the tier word stands alone rather than leaving an empty pill.
+  String tagText(String? spec) => spec == null || spec.trim().isEmpty ? word : spec.trim();
 }
 
 /// The technical description of one recording.

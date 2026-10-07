@@ -32,7 +32,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in
   /// [initializeSchema] that upgrades a database of the previous version in place.
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
 
   final String databasePath;
   Database? _db;
@@ -63,8 +63,8 @@ class DatabaseManager {
     }
   }
 
-  /// Creates the tables of a new database. Safe to call repeatedly. Throws [IncompatibleDatabaseException] for a
-  /// database of another schema version.
+  /// Creates the tables of a new database, or upgrades one of the previous schema version in place. Safe to call
+  /// repeatedly. Throws [IncompatibleDatabaseException] for a database of any other version.
   void initializeSchema() {
     if (_schemaReady) return;
 
@@ -73,16 +73,23 @@ class DatabaseManager {
     final version = db.userVersion;
     if (version != schemaVersion) {
       final isNew = version == 0 && db.select("SELECT 1 FROM sqlite_master WHERE type = 'table'").isEmpty;
-      if (!isNew) {
+      if (isNew) {
+        transaction((db) {
+          db.execute(_schema);
+          db.userVersion = schemaVersion;
+        });
+      } else if (version == 1) {
+        // 1 -> 2: when each favourite was marked.
+        transaction((db) {
+          db.execute('ALTER TABLE tracks ADD COLUMN favorited_at INTEGER;');
+          db.userVersion = schemaVersion;
+        });
+      } else {
         throw IncompatibleDatabaseException(
           "'$databasePath' was made by another version of Wiretune (schema $version, this one reads $schemaVersion). "
           'Move it out of the way to start with an empty one.',
         );
       }
-      transaction((db) {
-        db.execute(_schema);
-        db.userVersion = schemaVersion;
-      });
     }
     _schemaReady = true;
   }
@@ -137,7 +144,8 @@ const String _schema = '''
       is_favorite INTEGER NOT NULL DEFAULT 0,
       play_count INTEGER NOT NULL DEFAULT 0,
       last_played INTEGER,
-      date_added INTEGER NOT NULL
+      date_added INTEGER NOT NULL,
+      favorited_at INTEGER
   );
 
   -- The player's playlists; is_server marks a cached copy of one that belongs to the signed-in server account.

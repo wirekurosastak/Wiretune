@@ -10,8 +10,69 @@ import 'player_view_model.dart';
 String formatTotal(Iterable<Track> tracks) =>
     Localizer.formatTotalDuration(tracks.fold(Duration.zero, (sum, t) => sum + t.duration));
 
+/// What the Tracks and the Favourites pages sort by.
+enum TrackSortField { title, artist, album, added, quality }
+
+/// The order of a page of tracks and the labels of its sort buttons. As on the albums page, the active field flips its
+/// direction and another one starts in its natural one: A to Z for text, the newest first for the date, the best first
+/// for the quality.
+mixin TrackSorting on ChangeNotifier {
+  TrackSortField _sortField = TrackSortField.artist;
+  bool _sortDescending = false;
+
+  TrackSortField get sortField => _sortField;
+  bool get isSortDescending => _sortDescending;
+
+  /// When a track was added: to the library, or (on the favourites page) to the favourites.
+  DateTime? addedAt(Track track) => track.dateAdded;
+
+  /// Puts the page's tracks in the order again.
+  void _applySort();
+
+  void setSortField(TrackSortField field) {
+    if (field == _sortField) {
+      _sortDescending = !_sortDescending;
+    } else {
+      _sortField = field;
+      _sortDescending = field == TrackSortField.added || field == TrackSortField.quality;
+    }
+    _applySort();
+    notifyListeners();
+  }
+
+  /// The button of [field]: its name, and while it is the active one the direction.
+  String sortLabel(TrackSortField field) {
+    final name = switch (field) {
+      TrackSortField.title => 'ABC',
+      TrackSortField.artist => Localizer.get('SortArtist'),
+      TrackSortField.album => Localizer.get('SortAlbum'),
+      TrackSortField.added => Localizer.get('SortAdded'),
+      TrackSortField.quality => Localizer.get('SortQuality'),
+    };
+    return field == _sortField ? '$name ${_sortDescending ? '↓' : '↑'}' : name;
+  }
+
+  /// [tracks] (in the library's order) in the page's order; the library's order of artist, album and track number
+  /// stays among tracks that tie. A track without a date counts as the oldest.
+  List<Track> _sorted(List<Track> tracks) {
+    final int Function(Track a, Track b) compare = switch (_sortField) {
+      TrackSortField.title => (a, b) => compareText(a.title, b.title),
+      TrackSortField.artist => (a, b) => compareText(a.artist, b.artist),
+      TrackSortField.album => (a, b) => compareText(a.album, b.album),
+      TrackSortField.added => (a, b) {
+        final (x, y) = (addedAt(a), addedAt(b));
+        return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
+      },
+      TrackSortField.quality => (a, b) => compareFormatQuality(a.format, b.format),
+    };
+    final list = List.of(tracks);
+    sortStable(list, _sortDescending ? (Track a, Track b) => compare(b, a) : compare);
+    return list;
+  }
+}
+
 /// The Tracks section: the whole library.
-class TracksViewModel extends ChangeNotifier {
+class TracksViewModel extends ChangeNotifier with TrackSorting {
   TracksViewModel(this._library, this._player) {
     _unsubscribe = _library.libraryChanged.listen((_) => refreshTracks());
     refreshTracks();
@@ -27,10 +88,13 @@ class TracksViewModel extends ChangeNotifier {
   String totalTracksDuration = '';
 
   void refreshTracks() {
-    displayedTracks = _library.tracks;
+    _applySort();
     totalTracksDuration = formatTotal(displayedTracks);
     notifyListeners();
   }
+
+  @override
+  void _applySort() => displayedTracks = _sorted(_library.tracks);
 
   void playTrack(Track? track) {
     if (track != null) _player.playQueue(displayedTracks, track);
@@ -119,7 +183,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   bool get isSortByYear => sortField == AlbumSortField.year;
   bool get isSortByQuality => sortField == AlbumSortField.quality;
 
-  String get backText => backButtonText('BackToAlbums');
+  String get backText => backButtonText('NavAlbums');
 
   String get sortTitleLabel => isSortByTitle ? 'ABC ${isSortDescending ? '↓' : '↑'}' : 'ABC';
   String get sortYearLabel =>
@@ -278,7 +342,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   /// The genre the list is narrowed to; null shows every artist.
   String? genre;
 
-  String get backText => backButtonText('BackToArtists');
+  String get backText => backButtonText('NavArtists');
 
   /// Artists are sorted by name only; the arrow shows the direction.
   String get sortNameLabel => 'ABC ${isSortDescending ? '↓' : '↑'}';
@@ -386,9 +450,11 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   }
 }
 
-/// The Favorites section.
-class FavoritesViewModel extends ChangeNotifier {
+/// The Favorites section; the newest favourites first unless the user sorts otherwise.
+class FavoritesViewModel extends ChangeNotifier with TrackSorting {
   FavoritesViewModel(this._library, this._player) {
+    _sortField = TrackSortField.added;
+    _sortDescending = true;
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) => refreshFavorites()),
       _library.favoriteChanged.listen((_) => refreshFavorites()),
@@ -407,10 +473,17 @@ class FavoritesViewModel extends ChangeNotifier {
   void refreshLocalizedTexts() => refreshFavorites();
 
   void refreshFavorites() {
-    favoriteTracks = _library.favorites;
+    _applySort();
     totalFavoritesDuration = formatTotal(favoriteTracks);
     notifyListeners();
   }
+
+  /// When the track became a favourite.
+  @override
+  DateTime? addedAt(Track track) => track.favoritedAt;
+
+  @override
+  void _applySort() => favoriteTracks = _sorted(_library.favorites);
 
   void playTrack(Track? track) {
     if (track != null) _player.playQueue(favoriteTracks, track);
