@@ -218,10 +218,13 @@ ThemeData buildTheme({
     progressIndicatorTheme: ProgressIndicatorThemeData(color: accent, linearTrackColor: palette.surface2),
     dialogTheme: DialogThemeData(
       backgroundColor: palette.modal,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: palette.glassBorder),
+      ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: light ? Colors.white : const Color(0xFF16161D),
+      color: light ? Colors.white : const Color(0xFF000000),
       elevation: 12,
       shadowColor: const Color(0x80000000),
       shape: RoundedRectangleBorder(

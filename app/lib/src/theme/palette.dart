@@ -85,7 +85,7 @@ class Palette {
     success: Color(0xFF34F5A0),
     warning: Color(0xFFFFC53D),
     danger: Color(0xFFFF3B6B),
-    modal: Color(0xFF111118),
+    modal: Color(0xFF000000),
     coral: Color(0xFFFB7185),
     purple: Color(0xFFC084FC),
     cyan: Color(0xFF22D3EE),

@@ -71,7 +71,6 @@ class _WiretuneAppState extends State<WiretuneApp> {
                     _MediaCommand.previous,
                   ),
                   const SingleActivator(LogicalKeyboardKey.escape): const _BackIntent(),
-                  const SingleActivator(LogicalKeyboardKey.goBack): const _BackIntent(),
                 },
                 actions: {
                   ...WidgetsApp.defaultActions,

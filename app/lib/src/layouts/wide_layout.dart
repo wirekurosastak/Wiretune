@@ -58,6 +58,7 @@ class WideLayout extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: gap),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const _Sidebar(),
                         const SizedBox(width: gap),
@@ -142,6 +143,13 @@ class _Content extends StatelessWidget {
       return AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         switchInCurve: Curves.easeOutCubic,
+        layoutBuilder: (currentChild, previousChildren) => Stack(
+          fit: StackFit.expand,
+          children: [
+            ...previousChildren,
+            ?currentChild,
+          ],
+        ),
         transitionBuilder: (child, animation) => FadeTransition(
           opacity: animation,
           child: SlideTransition(

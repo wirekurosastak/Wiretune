@@ -7,6 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
+import '../view_models/library_view_models.dart';
 import 'cover_image.dart';
 import 'common.dart';
 import 'downloads.dart';
@@ -36,7 +37,7 @@ enum TrackTableKind {
   search,
 }
 
-enum _Column { title, artist, album, quality, length }
+enum _Column { title, artist, album, length, year, added, quality }
 
 /// A list of tracks as slivers: on a wide screen a table (a header row with sortable columns over rounded rows that
 /// light up under the mouse), on a phone rows of cover, title, the favourite and a menu. The track that is playing is
@@ -68,22 +69,70 @@ class _TrackSliverState extends State<TrackSliver> {
   bool _descending = false;
   List<Track>? _sortedSource;
   List<Track> _sorted = const [];
+  double _tableWidth = 1200;
 
   // As large as the music apps' rows.
   static const double _phoneRowHeight = 76;
 
+  @override
+  void initState() {
+    super.initState();
+    _initDefaultSort();
+  }
+
+  @override
+  void didUpdateWidget(TrackSliver oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.kind != widget.kind) {
+      _initDefaultSort();
+      _sortedSource = null;
+    }
+  }
+
+  void _initDefaultSort() {
+    switch (widget.kind) {
+      case TrackTableKind.tracks:
+        _sortColumn = _Column.title;
+        _descending = false;
+      case TrackTableKind.favorites:
+        _sortColumn = _Column.added;
+        _descending = true;
+      default:
+        _sortColumn = null;
+        _descending = false;
+    }
+  }
+
   TrackTableKind get kind => widget.kind;
   bool get _leadIsNumber => kind == TrackTableKind.album;
   bool get _showArtist => kind != TrackTableKind.album && kind != TrackTableKind.artist;
-  bool get _showAlbum => kind != TrackTableKind.album;
-  bool get _showQuality => kind != TrackTableKind.search;
+  bool get _showAlbum => kind != TrackTableKind.album && _tableWidth >= 560;
+  bool get _showYear =>
+      (kind == TrackTableKind.tracks ||
+          kind == TrackTableKind.favorites ||
+          kind == TrackTableKind.artist ||
+          kind == TrackTableKind.playlist) &&
+      _tableWidth >= 720;
+  bool get _showAdded =>
+      (kind == TrackTableKind.tracks ||
+          kind == TrackTableKind.favorites ||
+          kind == TrackTableKind.playlist) &&
+      _tableWidth >= 880;
+  bool get _showQuality => kind != TrackTableKind.search && _tableWidth >= 1060;
 
-  (int title, int artist, int album) get _flex => switch (kind) {
-    TrackTableKind.album => (1, 0, 0),
-    TrackTableKind.artist => (5, 0, 3),
-    TrackTableKind.search => (5, 4, 4),
-    _ => (4, 3, 3),
-  };
+  int get _titleFlex {
+    if (kind == TrackTableKind.album) return 8;
+    if (!_showArtist && !_showAlbum) return 8;
+    if (!_showArtist || !_showAlbum) return 7;
+    return 6;
+  }
+
+  int get _artistFlex => 4;
+  int get _albumFlex => 4;
+  int get _lengthFlex => 3;
+  int get _yearFlex => 3;
+  int get _addedFlex => 3;
+  int get _qualityFlex => 4;
 
   List<Track> get _tracks {
     final column = _sortColumn;
@@ -94,8 +143,17 @@ class _TrackSliverState extends State<TrackSliver> {
       _Column.title => compareText(a.title, b.title),
       _Column.artist => compareText(a.artist, b.artist),
       _Column.album => compareText(a.album, b.album),
-      _Column.quality => a.format.tier.index.compareTo(b.format.tier.index),
       _Column.length => a.duration.compareTo(b.duration),
+      _Column.year => () {
+        if ((a.year == null) != (b.year == null)) return a.year == null ? 1 : -1;
+        return (a.year ?? 0).compareTo(b.year ?? 0);
+      }(),
+      _Column.added => () {
+        final aTime = a.favoritedAt ?? a.dateAdded;
+        final bTime = b.favoritedAt ?? b.dateAdded;
+        return aTime.compareTo(bTime);
+      }(),
+      _Column.quality => compareFormatQuality(a.format, b.format),
     };
     sortStable(list, _descending ? (Track a, Track b) => compare(b, a) : compare);
     _sortedSource = widget.tracks;
@@ -105,15 +163,10 @@ class _TrackSliverState extends State<TrackSliver> {
   void _sortBy(_Column column) {
     setState(() {
       if (_sortColumn == column) {
-        if (_descending) {
-          _sortColumn = null; // third click: back to the list's own order
-          _descending = false;
-        } else {
-          _descending = true;
-        }
+        _descending = !_descending;
       } else {
         _sortColumn = column;
-        _descending = false;
+        _descending = column == _Column.added || column == _Column.year || column == _Column.quality;
       }
       _sortedSource = null;
     });
@@ -129,6 +182,7 @@ class _TrackSliverState extends State<TrackSliver> {
         // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
         final padding = widget.horizontalPadding ?? (table ? 20.0 : 8.0);
+        _tableWidth = constraints.crossAxisExtent - 2 * padding;
         return ListenableBuilder(
           listenable: listenable,
           builder: (context, _) {
@@ -164,7 +218,6 @@ class _TrackSliverState extends State<TrackSliver> {
 
   Widget _header(BuildContext context) {
     final colors = context.colors;
-    final (titleFlex, artistFlex, albumFlex) = _flex;
     Widget cell(String label, _Column? column, {int flex = 0, double? width}) {
       final active = column != null && _sortColumn == column;
       final text = Padding(
@@ -176,8 +229,8 @@ class _TrackSliverState extends State<TrackSliver> {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 10.5,
-                  letterSpacing: 1.1,
+                  fontSize: 10,
+                  letterSpacing: 0.9,
                   fontWeight: FontWeight.w700,
                   color: active ? colors.accent : colors.textMuted,
                 ),
@@ -205,12 +258,14 @@ class _TrackSliverState extends State<TrackSliver> {
       ),
       child: Row(
         children: [
-          cell(_leadIsNumber ? '#' : '', null, width: _leadIsNumber ? 52 : 60),
-          cell(context.tr('ColTitle'), _Column.title, flex: titleFlex),
-          if (_showArtist) cell(context.tr('ColArtist'), _Column.artist, flex: artistFlex),
-          if (_showAlbum) cell(context.tr('ColAlbum'), _Column.album, flex: albumFlex),
-          if (_showQuality) cell(context.tr('ColQuality'), _Column.quality, width: 215),
-          cell(context.tr('ColLength'), _Column.length, width: 90),
+          cell(_leadIsNumber ? '#' : '', null, width: _leadIsNumber ? 48 : 56),
+          cell(context.tr('ColTitle'), _Column.title, flex: _titleFlex),
+          if (_showArtist) cell(context.tr('ColArtist'), _Column.artist, flex: _artistFlex),
+          if (_showAlbum) cell(context.tr('ColAlbum'), _Column.album, flex: _albumFlex),
+          cell(context.tr('ColLength'), _Column.length, flex: _lengthFlex),
+          if (_showYear) cell(context.tr('ColYear'), _Column.year, flex: _yearFlex),
+          if (_showAdded) cell(context.tr('ColAdded'), _Column.added, flex: _addedFlex),
+          if (_showQuality) cell(context.tr('ColQuality'), _Column.quality, flex: _qualityFlex),
           const SizedBox(width: 3 * 44),
         ],
       ),
@@ -240,7 +295,6 @@ class _TableRowState extends State<_TableRow> {
     final track = widget.track;
     final state = widget.state;
     final playing = track.isPlaying;
-    final (titleFlex, artistFlex, albumFlex) = state._flex;
     final onPlay = state.widget.onPlay;
     final kind = state.kind;
     final radius = BorderRadius.circular(Radii.small + 2);
@@ -285,11 +339,11 @@ class _TableRowState extends State<_TableRow> {
               child: Row(
                 children: [
                   SizedBox(
-                    width: state._leadIsNumber ? 52 : 60,
+                    width: state._leadIsNumber ? 48 : 56,
                     child: Center(child: lead),
                   ),
                   Expanded(
-                    flex: titleFlex,
+                    flex: state._titleFlex,
                     child: _CellLink(
                       track.title,
                       hoverColor: colors.accent,
@@ -300,7 +354,7 @@ class _TableRowState extends State<_TableRow> {
                   ),
                   if (state._showArtist)
                     Expanded(
-                      flex: artistFlex,
+                      flex: state._artistFlex,
                       child: _CellLink(
                         track.artist,
                         hoverColor: colors.palette.coral,
@@ -310,7 +364,7 @@ class _TableRowState extends State<_TableRow> {
                     ),
                   if (state._showAlbum)
                     Expanded(
-                      flex: albumFlex,
+                      flex: state._albumFlex,
                       child: _CellLink(
                         track.album,
                         hoverColor: colors.palette.purple,
@@ -318,9 +372,65 @@ class _TableRowState extends State<_TableRow> {
                         onTap: () => vm.openAlbumOfTrack(track),
                       ),
                     ),
+                  Expanded(
+                    flex: state._lengthFlex,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          track.formattedDuration,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: colors.textMuted,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (state._showYear)
+                    Expanded(
+                      flex: state._yearFlex,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            track.year?.toString() ?? '—',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: colors.textMuted,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (state._showAdded)
+                    Expanded(
+                      flex: state._addedFlex,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _formatDate(track.favoritedAt ?? track.dateAdded),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: colors.textMuted,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   if (state._showQuality)
-                    SizedBox(
-                      width: 215,
+                    Expanded(
+                      flex: state._qualityFlex,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
@@ -329,21 +439,6 @@ class _TableRowState extends State<_TableRow> {
                         ),
                       ),
                     ),
-                  SizedBox(
-                    width: 90,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(
-                        track.formattedDuration,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: colors.textMuted,
-                          fontFeatures: const [FontFeature.tabularFigures()],
-                        ),
-                      ),
-                    ),
-                  ),
                   ..._trailing(context, kind, track),
                 ],
               ),
@@ -685,4 +780,12 @@ class _PhoneRow extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDate(DateTime date) {
+  final local = date.toLocal();
+  final y = local.year;
+  final m = local.month.toString().padLeft(2, '0');
+  final d = local.day.toString().padLeft(2, '0');
+  return '$y.$m.$d';
 }

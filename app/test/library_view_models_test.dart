@@ -163,7 +163,7 @@ void main() {
     ]);
     final favorites = FavoritesViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
     expect([for (final t in favorites.favoriteTracks) t.id], ['2', '1', '3']); // Date added newest first default
-    expect(favorites.sortLabel(TrackSortField.added), 'Date added ↓');
+    expect(favorites.sortLabel(TrackSortField.added), 'Added ↓');
     favorites.setSortField(TrackSortField.title);
     expect([for (final t in favorites.favoriteTracks) t.id], ['3', '2', '1']);
 

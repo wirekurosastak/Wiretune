@@ -1,6 +1,8 @@
 // Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
@@ -151,65 +153,79 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    // Scrolls when a short screen (a phone held sideways, a large font) has less room than the message needs.
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(32).copyWith(bottom: 32 + MediaQuery.paddingOf(context).bottom),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // The icon in an orb of the accent: a soft halo, a glass disc and a thin ring.
-              Container(
-                width: 112,
-                height: 112,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [colors.accent.withValues(alpha: 0.28), colors.accent.withValues(alpha: 0)],
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    // Centers the empty state block naturally on the screen.
+    // Anchoring to a consistent reference height (260px) guarantees that:
+    // 1. Every empty page (Favorites, Playlists, Albums, etc.) has its icon, title and hint at the exact same vertical level.
+    // 2. The block sits comfortably in the true visual center of the window instead of sinking towards the bottom.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight = constraints.maxHeight;
+        final usableHeight = availableHeight - bottomInset;
+        final topSpacing = usableHeight.isFinite ? math.max(20.0, (usableHeight - 260.0) / 2) : 48.0;
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(32, topSpacing, 32, 32 + bottomInset),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // The icon in an orb of the accent: a soft halo, a glass disc and a thin ring.
+                  Container(
+                    width: 112,
+                    height: 112,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [colors.accent.withValues(alpha: 0.28), colors.accent.withValues(alpha: 0)],
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: colors.palette.panel,
+                        border: Border.all(color: colors.accent.withValues(alpha: 0.45)),
+                        boxShadow: colors.accentGlow(0.8),
+                      ),
+                      child: Icon(icon, size: 34, color: colors.accent),
+                    ),
                   ),
-                ),
-                alignment: Alignment.center,
-                child: Container(
-                  width: 76,
-                  height: 76,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: colors.palette.panel,
-                    border: Border.all(color: colors.accent.withValues(alpha: 0.45)),
-                    boxShadow: colors.accentGlow(0.8),
+                  const SizedBox(height: 16),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.4,
+                      color: colors.textMain,
+                    ),
                   ),
-                  child: Icon(icon, size: 34, color: colors.accent),
-                ),
+                  if (hint != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      hint!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13.5, height: 1.45, color: colors.textMuted),
+                    ),
+                  ],
+                  if (actions.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    Wrap(spacing: 12, runSpacing: 10, alignment: WrapAlignment.center, children: actions),
+                  ],
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.4,
-                  color: colors.textMain,
-                ),
-              ),
-              if (hint != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  hint!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13.5, height: 1.45, color: colors.textMuted),
-                ),
-              ],
-              if (actions.isNotEmpty) ...[
-                const SizedBox(height: 22),
-                Wrap(spacing: 12, runSpacing: 10, alignment: WrapAlignment.center, children: actions),
-              ],
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

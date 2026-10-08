@@ -48,6 +48,13 @@ class PhoneLayout extends StatelessWidget {
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 220),
                             switchInCurve: Curves.easeOutCubic,
+                            layoutBuilder: (currentChild, previousChildren) => Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                ...previousChildren,
+                                ?currentChild,
+                              ],
+                            ),
                             transitionBuilder: (child, animation) => FadeTransition(
                               opacity: animation,
                               child: ScaleTransition(

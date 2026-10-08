@@ -69,7 +69,7 @@ class TracksPage extends StatelessWidget {
                     onPlay: tracks.playAll,
                     onShuffle: tracks.shuffleAll,
                   ),
-                  _TrackSortButtons(tracks),
+                  if (PhoneChrome.isPhone(context)) _TrackSortButtons(tracks),
                 ],
               ),
             ),
@@ -118,7 +118,7 @@ class FavoritesPage extends StatelessWidget {
                       onPressed: context.vm.downloads.toggleFavorites,
                     ),
                   ),
-                  _TrackSortButtons(favorites),
+                  if (PhoneChrome.isPhone(context)) _TrackSortButtons(favorites),
                 ],
               ),
             ),
@@ -433,9 +433,10 @@ class _SortButtons extends StatelessWidget {
             }
             showModalBottomSheet<void>(
               context: context,
-              backgroundColor: isDark ? const Color(0xFF101014) : Colors.white,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                side: BorderSide(color: colors.palette.glassBorder),
               ),
               builder: (ctx) => SafeArea(
                 child: Padding(

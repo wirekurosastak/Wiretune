@@ -361,7 +361,10 @@ class _DialogCard extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 440),
         child: Material(
           color: colors.palette.modal,
-          borderRadius: BorderRadius.circular(18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(color: colors.palette.glassBorder),
+          ),
           elevation: 12,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
