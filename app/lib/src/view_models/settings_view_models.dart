@@ -107,7 +107,11 @@ class ServerSettingsViewModel extends ChangeNotifier {
     currentUserName = _session.currentUser?.username ?? '';
     currentUserRole = Localizer.get(isAdmin ? 'RoleAdmin' : 'RoleUser');
     final message = _session.statusMessage;
-    if (message != null && message.trim().isNotEmpty) statusMessage = message;
+    if (message != null && message.trim().isNotEmpty) {
+      statusMessage = message;
+    } else if (_session.state == ServerConnectionState.connected) {
+      statusMessage = '';
+    }
 
     serverStatusBadge = Localizer.get(switch (_session.state) {
       ServerConnectionState.connected => isLoggedIn ? 'BadgeConnected' : 'BadgeOnline',
@@ -119,8 +123,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
     });
 
     librarySourceText = switch (_session.source) {
-      LibrarySource.hybrid => Localizer.format('SourceHybrid', [_session.serverUrl]),
-      LibrarySource.server => Localizer.format('SourceServer', [_session.serverUrl]),
+      LibrarySource.hybrid => Localizer.get('SourceHybrid'),
+      LibrarySource.server => Localizer.get('SourceServer'),
       LibrarySource.local => Localizer.format('SourceLocal', [_library.libraryPath]),
       LibrarySource.none => Localizer.get('SourceNone'),
     };

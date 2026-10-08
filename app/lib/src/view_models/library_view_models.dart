@@ -11,7 +11,7 @@ String formatTotal(Iterable<Track> tracks) =>
     Localizer.formatTotalDuration(tracks.fold(Duration.zero, (sum, t) => sum + t.duration));
 
 /// What the Tracks and the Favourites pages sort by.
-enum TrackSortField { title, artist, album, added, year, quality }
+enum TrackSortField { title, artist, album, year, added, quality }
 
 /// The order of a page of tracks and the labels of its sort buttons. As on the albums page, the active field flips its
 /// direction and another one starts in its natural one: A to Z for text, the newest first for the date, the best first
@@ -35,7 +35,7 @@ mixin TrackSorting on ChangeNotifier {
     } else {
       _sortField = field;
       _sortDescending =
-          field == TrackSortField.added || field == TrackSortField.year || field == TrackSortField.quality;
+          field == TrackSortField.year || field == TrackSortField.added || field == TrackSortField.quality;
     }
     _applySort();
     notifyListeners();
@@ -47,8 +47,8 @@ mixin TrackSorting on ChangeNotifier {
       TrackSortField.title => 'ABC',
       TrackSortField.artist => Localizer.get('SortArtist'),
       TrackSortField.album => Localizer.get('SortAlbum'),
-      TrackSortField.added => Localizer.get('SortAdded'),
       TrackSortField.year => Localizer.get('SortYear'),
+      TrackSortField.added => Localizer.get('SortAdded'),
       TrackSortField.quality => Localizer.get('SortQuality'),
     };
     return field == _sortField ? '$name ${_sortDescending ? '↓' : '↑'}' : name;
@@ -61,12 +61,12 @@ mixin TrackSorting on ChangeNotifier {
       TrackSortField.title => (a, b) => compareText(a.title, b.title),
       TrackSortField.artist => (a, b) => compareText(a.artist, b.artist),
       TrackSortField.album => (a, b) => compareText(a.album, b.album),
-      TrackSortField.added => (a, b) {
-        final (x, y) = (addedAt(a), addedAt(b));
-        return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
-      },
       TrackSortField.year => (a, b) {
         final (x, y) = (a.year, b.year);
+        return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
+      },
+      TrackSortField.added => (a, b) {
+        final (x, y) = (addedAt(a), addedAt(b));
         return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
       },
       TrackSortField.quality => (a, b) => compareFormatQuality(a.format, b.format),
@@ -119,7 +119,7 @@ class TracksViewModel extends ChangeNotifier with TrackSorting {
   }
 }
 
-enum AlbumSortField { title, artist, year, quality, added }
+enum AlbumSortField { title, artist, year, added, quality }
 
 enum ArtistSortField { name, added, albums }
 
@@ -190,8 +190,8 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   bool get isSortByTitle => sortField == AlbumSortField.title;
   bool get isSortByArtist => sortField == AlbumSortField.artist;
   bool get isSortByYear => sortField == AlbumSortField.year;
-  bool get isSortByQuality => sortField == AlbumSortField.quality;
   bool get isSortByAdded => sortField == AlbumSortField.added;
+  bool get isSortByQuality => sortField == AlbumSortField.quality;
 
   String get backText => backButtonText('NavAlbums');
 
@@ -200,22 +200,23 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
       isSortByArtist ? '${Localizer.get('SortArtist')} ${isSortDescending ? '↓' : '↑'}' : Localizer.get('SortArtist');
   String get sortYearLabel =>
       isSortByYear ? '${Localizer.get('SortYear')} ${isSortDescending ? '↓' : '↑'}' : Localizer.get('SortYear');
-  String get sortQualityLabel => isSortByQuality
-      ? '${Localizer.get('SortQuality')} ${isSortDescending ? '↓' : '↑'}'
-      : Localizer.get('SortQuality');
   String get sortAddedLabel => isSortByAdded
       ? '${Localizer.get('SortAdded')} ${isSortDescending ? '↓' : '↑'}'
       : Localizer.get('SortAdded');
+  String get sortQualityLabel => isSortByQuality
+      ? '${Localizer.get('SortQuality')} ${isSortDescending ? '↓' : '↑'}'
+      : Localizer.get('SortQuality');
 
   void refreshLocalizedTexts() => notifyListeners();
 
   /// The active field flips its direction; another one is switched to with its natural default (A→Z for titles and
-  /// artists, newest first for years, quality, and added).
+  /// artists, newest first for years and added, best first for quality).
   void setSortField(AlbumSortField field) {
     if (field == sortField) {
       isSortDescending = !isSortDescending;
     } else {
-      isSortDescending = field == AlbumSortField.year || field == AlbumSortField.quality || field == AlbumSortField.added;
+      isSortDescending =
+          field == AlbumSortField.year || field == AlbumSortField.added || field == AlbumSortField.quality;
       sortField = field;
     }
     _applySort();

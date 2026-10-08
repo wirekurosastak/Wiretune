@@ -460,7 +460,6 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
             _CardTitle(
               icon: Icons.person_rounded,
               title: context.tr(server.isAdmin ? 'Users' : 'TipAccount'),
-              subtitle: context.tr('UsersSubtitle'),
             ),
             if (server.isLoggedIn) ...[
               Row(
@@ -718,7 +717,6 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
             _CardTitle(
               icon: Icons.dns_outlined,
               title: context.tr('Connection'),
-              subtitle: '${server.librarySourceText} • ${context.tr('SettingsServerSection')}',
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
@@ -782,9 +780,10 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
                       label: Text(context.tr('Reindex')),
                     ),
                   ),
-                  FilledButton(
+                  FilledButton.icon(
                     onPressed: server.isUpdatingServerConfig ? null : server.updateServerLibraryPath,
-                    child: Text(context.tr('SaveFolder')),
+                    icon: const Icon(Icons.save_rounded, size: 18),
+                    label: Text(context.tr('SaveFolder')),
                   ),
                 ],
               ),
@@ -809,10 +808,14 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
                   onSubmitted: (_) => server.startScanFolder(),
                 ),
                 actions: [
-                  OutlinedButton(onPressed: () => _browseLocal(server), child: Text(context.tr('Browse'))),
+                  OutlinedButton.icon(
+                    onPressed: () => _browseLocal(server),
+                    icon: const Icon(Icons.folder_open_rounded, size: 18),
+                    label: Text(context.tr('Browse')),
+                  ),
                   FilledButton.icon(
                     onPressed: server.isScanning ? null : server.startScanFolder,
-                    icon: const Icon(Icons.manage_search_rounded),
+                    icon: const Icon(Icons.manage_search_rounded, size: 18),
                     label: Text(context.tr('Scan')),
                   ),
                 ],
@@ -1058,14 +1061,10 @@ class _AudioCard extends StatelessWidget {
           _CardTitle(
             icon: Icons.volume_up_rounded,
             title: context.tr('SettingsAudioSection'),
-            trailing: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 32),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-              ),
+            trailing: IconButton(
+              tooltip: context.tr('Refresh'),
               onPressed: audio.refreshDevices,
-              icon: const Icon(Icons.refresh_rounded, size: 15),
-              label: Text(context.tr('Refresh')),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
             ),
           ),
           Text(

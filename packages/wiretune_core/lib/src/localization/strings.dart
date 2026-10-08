@@ -309,7 +309,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Server, library, and audio output.',
     'Server, Bibliothek und Audioausgabe.',
   ),
-  'SettingsServerSection': ('SZERVER ÉS KÖNYVTÁR', 'SERVER & LIBRARY', 'SERVER & BIBLIOTHEK'),
   'SettingsAudioSection': (
     'HANG',
     'AUDIO',
@@ -417,11 +416,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Ohne Server fortfahren (lokale Musik)',
   ),
   'Users': ('Felhasználók', 'Users', 'Benutzer'),
-  'UsersSubtitle': (
-    'Felhasználók regisztrálása és eltávolítása a szerverről',
-    'Register and remove users on the server',
-    'Benutzer auf dem Server registrieren und entfernen',
-  ),
   'NewUser': ('Új felhasználó', 'New user', 'Neuer Benutzer'),
   'RegisteredUsers': ('REGISZTRÁLT FELHASZNÁLÓK', 'REGISTERED USERS', 'REGISTRIERTE BENUTZER'),
   'TipRefreshList': ('Lista frissítése', 'Refresh list', 'Liste aktualisieren'),
@@ -437,11 +431,11 @@ const Map<String, (String, String, String)> allStrings = {
   'BadgeSetupRequired': ('Beállítás szükséges', 'Setup required', 'Einrichtung erforderlich'),
   'BadgeNoConnection': ('Nincs kapcsolat', 'No connection', 'Keine Verbindung'),
   'SourceHybrid': (
-    'Egyesített ({0} + helyi mappa)',
-    'Combined ({0} + local folder)',
-    'Kombiniert ({0} + lokaler Ordner)',
+    'Egyesített (szerver + helyi mappa)',
+    'Combined (server + local folder)',
+    'Kombiniert (Server + lokaler Ordner)',
   ),
-  'SourceServer': ('Szerver ({0})', 'Server ({0})', 'Server ({0})'),
+  'SourceServer': ('Szerver', 'Server', 'Server'),
   'SourceLocal': ('Helyi mappa ({0})', 'Local folder ({0})', 'Lokaler Ordner ({0})'),
   'SourceNone': ('Nincs aktív forrás', 'No active source', 'Keine aktive Quelle'),
   'SourceNoneSelected': ('Nincs kiválasztott könyvtár', 'No library selected', 'Keine Bibliothek ausgewählt'),
@@ -604,16 +598,16 @@ const Map<String, (String, String, String)> allStrings = {
     'Invalid server address: “{0}”. Example: http://192.168.1.10:5200',
     'Ungültige Serveradresse: „{0}“. Beispiel: http://192.168.1.10:5200',
   ),
-  'SessionConnecting': ('Kapcsolódás: {0}...', 'Connecting to {0}…', 'Verbinde mit {0} …'),
+  'SessionConnecting': ('Kapcsolódás...', 'Connecting…', 'Verbinde …'),
   'SessionSetupRequired': (
     'A szerver még nincs beállítva. Hozz létre egy adminisztrátori fiókot!',
     'The server is not set up yet. Create an administrator account!',
     'Der Server ist noch nicht eingerichtet. Erstelle ein Administratorkonto!',
   ),
   'SessionLoginRequired': (
-    'A szerver ({0}) elérhető. Jelentkezz be a folytatáshoz.',
-    'The server ({0}) is reachable. Sign in to continue.',
-    'Der Server ({0}) ist erreichbar. Melde dich an, um fortzufahren.',
+    'A szerver elérhető. Jelentkezz be a folytatáshoz.',
+    'The server is reachable. Sign in to continue.',
+    'Der Server ist erreichbar. Melde dich an, um fortzufahren.',
   ),
   'SessionExpired': (
     'A munkamenet lejárt. Jelentkezz be újra.',
@@ -651,26 +645,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Der Server wurde inzwischen eingerichtet. Melde dich mit dem vorhandenen Konto an.',
   ),
   'SessionSignedOut': ('Kijelentkezve a szerverről.', 'Signed out of the server.', 'Vom Server abgemeldet.'),
-  'SessionConnectedHybrid': (
-    'Csatlakozva: {1} ({2}) • {0} szám (Helyi + Szerver)',
-    'Connected: {1} ({2}) • {0} tracks (local + server)',
-    'Verbunden: {1} ({2}) • {0} Titel (lokal + Server)',
-  ),
-  'SessionConnectedHybrid_One': (
-    'Csatlakozva: {1} ({2}) • {0} szám (Helyi + Szerver)',
-    'Connected: {1} ({2}) • {0} track (local + server)',
-    'Verbunden: {1} ({2}) • {0} Titel (lokal + Server)',
-  ),
-  'SessionConnected': (
-    'Csatlakozva: {1} ({2}) • {0} szám',
-    'Connected: {1} ({2}) • {0} tracks',
-    'Verbunden: {1} ({2}) • {0} Titel',
-  ),
-  'SessionConnected_One': (
-    'Csatlakozva: {1} ({2}) • {0} szám',
-    'Connected: {1} ({2}) • {0} track',
-    'Verbunden: {1} ({2}) • {0} Titel',
-  ),
   'SessionLocalInUse': (
     'Helyi könyvtár használatban.',
     'Using the local library.',

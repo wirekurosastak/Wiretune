@@ -171,4 +171,69 @@ void main() {
     favorites.setSortField(TrackSortField.added);
     expect(favorites.favoriteTracks.first.id, '4');
   });
+
+  test('sort fields maintain a consistent relative order across views', () {
+    expect(TrackSortField.values, [
+      TrackSortField.title,
+      TrackSortField.artist,
+      TrackSortField.album,
+      TrackSortField.year,
+      TrackSortField.added,
+      TrackSortField.quality,
+    ]);
+    expect(AlbumSortField.values, [
+      AlbumSortField.title,
+      AlbumSortField.artist,
+      AlbumSortField.year,
+      AlbumSortField.added,
+      AlbumSortField.quality,
+    ]);
+    expect(ArtistSortField.values, [
+      ArtistSortField.name,
+      ArtistSortField.added,
+      ArtistSortField.albums,
+    ]);
+  });
+
+  test('sorting albums by added puts the newest album first', () async {
+    final lib = await library([
+      track('1', 'Old Album', artist: 'Artist')
+        ..dateAdded = DateTime.utc(2025, 1, 1),
+      track('2', 'New Album', artist: 'Artist')
+        ..dateAdded = DateTime.utc(2026, 1, 1),
+    ]);
+    final albums = AlbumsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+
+    albums.setSortField(AlbumSortField.added);
+    expect(albums.isSortDescending, isTrue);
+    expect(albums.sortAddedLabel, 'Added ↓');
+    expect(titles(albums), ['New Album', 'Old Album']);
+
+    albums.setSortField(AlbumSortField.added);
+    expect(albums.isSortDescending, isFalse);
+    expect(albums.sortAddedLabel, 'Added ↑');
+    expect(titles(albums), ['Old Album', 'New Album']);
+  });
+
+  test('sorting artists by albums and added behaves consistently', () async {
+    final lib = await library([
+      track('1', 'Album 1', artist: 'Few')
+        ..dateAdded = DateTime.utc(2026, 5, 1),
+      track('2', 'Album 2', artist: 'Many')
+        ..dateAdded = DateTime.utc(2025, 1, 1),
+      track('3', 'Album 3', artist: 'Many')
+        ..dateAdded = DateTime.utc(2025, 2, 1),
+    ]);
+    final artists = ArtistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+
+    artists.setSortField(ArtistSortField.albums);
+    expect(artists.isSortDescending, isTrue);
+    expect(artists.sortAlbumsLabel, 'Albums ↓');
+    expect([for (final a in artists.displayedArtists) a.name], ['Many', 'Few']);
+
+    artists.setSortField(ArtistSortField.added);
+    expect(artists.isSortDescending, isTrue);
+    expect(artists.sortAddedLabel, 'Added ↓');
+    expect([for (final a in artists.displayedArtists) a.name], ['Few', 'Many']);
+  });
 }

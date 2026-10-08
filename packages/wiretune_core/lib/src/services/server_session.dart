@@ -149,7 +149,7 @@ class ServerSession {
         await _settings.setSetting('server_url', serverUrl);
       }
 
-      _setState(ServerConnectionState.connecting, 'SessionConnecting', [serverUrl]);
+      _setState(ServerConnectionState.connecting, 'SessionConnecting');
       WiretuneLog.info('ServerSession', "Connecting to '$serverUrl'");
 
       if (await _client.checkSetupRequired(serverUrl)) {
@@ -157,7 +157,7 @@ class ServerSession {
         return;
       }
       if (_client.authToken == null || _client.authToken!.isEmpty) {
-        _setState(ServerConnectionState.loginRequired, 'SessionLoginRequired', [serverUrl]);
+        _setState(ServerConnectionState.loginRequired, 'SessionLoginRequired');
         return;
       }
 
@@ -271,11 +271,7 @@ class ServerSession {
     await _setSource(hasServer ? LibrarySource.hybrid : LibrarySource.local);
 
     if (hasServer && state == ServerConnectionState.connected) {
-      _setState(ServerConnectionState.connected, 'SessionConnectedHybrid', [
-        _library.tracks.length,
-        currentUser?.username,
-        serverUrl,
-      ]);
+      _setState(ServerConnectionState.connected, null);
     } else if (!hasServer) {
       _setState(ServerConnectionState.notConfigured, 'SessionLocalInUse');
     }
@@ -297,11 +293,7 @@ class ServerSession {
       'ServerSession',
       "Loaded ${tracks.length} tracks from '$serverUrl'. Total library: ${_library.tracks.length} tracks.",
     );
-    _setState(ServerConnectionState.connected, hasLocal ? 'SessionConnectedHybrid' : 'SessionConnected', [
-      _library.tracks.length,
-      currentUser?.username,
-      serverUrl,
-    ]);
+    _setState(ServerConnectionState.connected, null);
   }
 
   /// The token for stream URLs: a short-lived one that opens only the audio and cover routes, so that the URL (which

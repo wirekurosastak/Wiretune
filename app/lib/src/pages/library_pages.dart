@@ -687,12 +687,12 @@ class AlbumsPage extends StatelessWidget {
                       (albums.sortTitleLabel, albums.isSortByTitle, () => albums.setSortField(AlbumSortField.title)),
                       (albums.sortArtistLabel, albums.isSortByArtist, () => albums.setSortField(AlbumSortField.artist)),
                       (albums.sortYearLabel, albums.isSortByYear, () => albums.setSortField(AlbumSortField.year)),
+                      (albums.sortAddedLabel, albums.isSortByAdded, () => albums.setSortField(AlbumSortField.added)),
                       (
                         albums.sortQualityLabel,
                         albums.isSortByQuality,
                         () => albums.setSortField(AlbumSortField.quality),
                       ),
-                      (albums.sortAddedLabel, albums.isSortByAdded, () => albums.setSortField(AlbumSortField.added)),
                     ],
                   ),
                 ],
