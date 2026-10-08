@@ -343,9 +343,10 @@ class VolumeControl extends StatelessWidget {
 
 /// The heart of the current track.
 class FavoriteCurrentButton extends StatelessWidget {
-  const FavoriteCurrentButton({super.key, this.size = 20});
+  const FavoriteCurrentButton({super.key, this.size = 20, this.visualDensity});
 
   final double size;
+  final VisualDensity? visualDensity;
 
   @override
   Widget build(BuildContext context) {
@@ -356,6 +357,7 @@ class FavoriteCurrentButton extends StatelessWidget {
       builder: (context, _) {
         final favorite = player.currentTrack?.isFavorite ?? false;
         return IconButton(
+          visualDensity: visualDensity,
           tooltip: context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
           iconSize: size,
           onPressed: player.currentTrack == null ? null : player.toggleFavoriteCurrent,

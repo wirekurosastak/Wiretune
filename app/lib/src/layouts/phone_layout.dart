@@ -445,137 +445,101 @@ class _MiniPlayerContent extends StatelessWidget {
         return VerticalSwipe(
           upwards: true,
           onSwipe: vm.openNowPlaying,
-          child: Stack(
-            children: [
-              SizedBox(
-                height: 66,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: vm.openNowPlaying,
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
-                          child: Row(
-                            children: [
-                              Hero(
-                                tag: 'now-playing-cover',
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(Radii.small + 2),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: colors.palette.shadow,
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
+          child: SizedBox(
+            height: 66,
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: vm.openNowPlaying,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
+                      child: Row(
+                        children: [
+                          Hero(
+                            tag: 'now-playing-cover',
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(Radii.small + 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: colors.palette.shadow,
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
                                   ),
-                                  child: CoverImage(path: track.coverArtPath, size: 44, radius: Radii.small + 2),
-                                ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      player.nowPlayingTitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 14.5,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -0.2,
-                                        color: colors.textMain,
-                                      ),
+                              child: CoverImage(path: track.coverArtPath, size: 44, radius: Radii.small + 2),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  player.nowPlayingTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.2,
+                                    color: colors.textMain,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                if (player.isRemote && !player.hasError)
+                                  const PlayingOnLabel(fontSize: 11.5)
+                                else
+                                  Text(
+                                    player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: player.hasError ? colors.danger : colors.textMuted,
                                     ),
-                                    const SizedBox(height: 1),
-                                    if (player.isRemote && !player.hasError)
-                                      const PlayingOnLabel(fontSize: 11.5)
-                                    else
-                                      Text(
-                                        player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                          color: player.hasError ? colors.danger : colors.textMuted,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-                    SizedBox.square(
-                      dimension: 38,
-                      child: IconButton(
-                        tooltip: context.tr('TipPrevious'),
-                        onPressed: player.previousTrack,
-                        icon: Icon(Icons.skip_previous_rounded, size: 24, color: colors.textMain),
-                      ),
-                    ),
-                    SizedBox.square(
-                      dimension: 42,
-                      child: IconButton(
-                        tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
-                        onPressed: player.togglePlayPause,
-                        icon: PlayPauseIcon(playing: player.isPlaying, size: 28, color: colors.accent),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: SizedBox.square(
-                        dimension: 38,
-                        child: IconButton(
-                          tooltip: context.tr('TipNext'),
-                          onPressed: player.nextTrack,
-                          icon: Icon(Icons.skip_next_rounded, size: 24, color: colors.textMain),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              Positioned(
-                left: 14,
-                right: 14,
-                bottom: 0,
-                child: ListenableBuilder(
-                  listenable: progressOf(player),
-                  builder: (context, _) {
-                    final total = player.duration.inMilliseconds;
-                    final fraction = total <= 0
-                        ? 0.0
-                        : (player.position.value.inMilliseconds / total).clamp(0.0, 1.0);
-                    return Container(
-                      height: 2,
-                      decoration: BoxDecoration(
-                        color: colors.palette.glassHighlight,
-                        borderRadius: BorderRadius.circular(1),
-                      ),
-                      alignment: Alignment.centerLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: fraction,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: colors.accentGradient,
-                            borderRadius: BorderRadius.circular(1),
-                            boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 4)],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                SizedBox.square(
+                  dimension: 38,
+                  child: IconButton(
+                    tooltip: context.tr('TipPrevious'),
+                    onPressed: player.previousTrack,
+                    icon: Icon(Icons.skip_previous_rounded, size: 24, color: colors.textMain),
+                  ),
                 ),
-              ),
-            ],
+                SizedBox.square(
+                  dimension: 42,
+                  child: IconButton(
+                    tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
+                    onPressed: player.togglePlayPause,
+                    icon: PlayPauseIcon(playing: player.isPlaying, size: 28, color: colors.accent),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: SizedBox.square(
+                    dimension: 38,
+                    child: IconButton(
+                      tooltip: context.tr('TipNext'),
+                      onPressed: player.nextTrack,
+                      icon: Icon(Icons.skip_next_rounded, size: 24, color: colors.textMain),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },

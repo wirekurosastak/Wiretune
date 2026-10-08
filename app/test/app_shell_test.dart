@@ -428,20 +428,16 @@ void main() {
 
     testWidgets('the progress is drawn once a second, not at every position update', (tester) async {
       final (vm, driver) = await playWithCover(tester);
-      for (final page in ['library', 'full-screen player']) {
-        if (page != 'library') {
-          vm.openNowPlaying();
-          await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
-        }
-        expect(tester.binding.hasScheduledFrame, isFalse, reason: '$page, before'); // everything has come to rest
-        final second = vm.player.position.value.inSeconds + 1;
-        driver.positionChanged.emit(Duration(seconds: second, milliseconds: 100)); // a new second: drawn
-        expect(tester.binding.hasScheduledFrame, isTrue, reason: page);
-        await tester.pump();
-        for (final ms in [250, 400, 550, 700, 850]) {
-          driver.positionChanged.emit(Duration(seconds: second, milliseconds: ms)); // the rest of it: not
-          expect(tester.binding.hasScheduledFrame, isFalse, reason: '$page, $ms ms');
-        }
+      vm.openNowPlaying();
+      await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
+      expect(tester.binding.hasScheduledFrame, isFalse, reason: 'full-screen player, before'); // everything has come to rest
+      final second = vm.player.position.value.inSeconds + 1;
+      driver.positionChanged.emit(Duration(seconds: second, milliseconds: 100)); // a new second: drawn
+      expect(tester.binding.hasScheduledFrame, isTrue, reason: 'full-screen player');
+      await tester.pump();
+      for (final ms in [250, 400, 550, 700, 850]) {
+        driver.positionChanged.emit(Duration(seconds: second, milliseconds: ms)); // the rest of it: not
+        expect(tester.binding.hasScheduledFrame, isFalse, reason: 'full-screen player, $ms ms');
       }
     });
   });

@@ -24,6 +24,7 @@ import '../widgets/ambient.dart';
 import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
+import '../widgets/downloads.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/quality_tag.dart';
@@ -942,24 +943,35 @@ class _PlayerBar extends StatelessWidget {
                     const SizedBox(width: 14),
                     Flexible(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 240),
+                        constraints: const BoxConstraints(maxWidth: 320),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Tooltip(
-                              message: track?.title ?? '',
-                              child: Text(
-                                player.nowPlayingTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.1,
-                                  color: colors.textMain,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Flexible(
+                                  child: Tooltip(
+                                    message: track?.title ?? '',
+                                    child: Text(
+                                      player.nowPlayingTitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.1,
+                                        color: colors.textMain,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                if (track != null && track.bpm != null && track.bpm! > 0) ...[
+                                  const SizedBox(width: 6),
+                                  PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 10),
+                                ],
+                              ],
                             ),
                             const SizedBox(height: 3),
                             if (player.hasError)
@@ -972,27 +984,61 @@ class _PlayerBar extends StatelessWidget {
                                   style: TextStyle(fontSize: 12, color: colors.danger),
                                 ),
                               )
+                            else if (track == null)
+                              Text(
+                                player.nowPlayingArtist,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12, color: colors.textMuted),
+                              )
                             else
-                              InkWell(
-                                borderRadius: BorderRadius.circular(4),
-                                onTap: track == null ? null : () => vm.openArtistByName(track.artist),
-                                child: Text(
-                                  player.nowPlayingArtist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 12, color: colors.textMuted),
-                                ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: _PlayerLink(
+                                      text: track.artist,
+                                      hoverColor: colors.palette.coral,
+                                      onTap: () => vm.openArtistByName(track.artist),
+                                    ),
+                                  ),
+                                  if (track.album.trim().isNotEmpty) ...[
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                                      child: Text(
+                                        '•',
+                                        style: TextStyle(fontSize: 11, color: colors.textMuted.withValues(alpha: 0.6)),
+                                      ),
+                                    ),
+                                    Flexible(
+                                      child: _PlayerLink(
+                                        text: track.album,
+                                        hoverColor: colors.palette.purple,
+                                        onTap: () => vm.openAlbumOfTrack(track),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             if (player.isRemote) ...[const SizedBox(height: 3), const PlayingOnLabel(fontSize: 11)],
-                            if (track != null && track.bpm != null && track.bpm! > 0) ...[
-                              const SizedBox(height: 4),
-                              PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 10),
-                            ],
                           ],
                         ),
                       ),
                     ),
-                    if (track != null) ...[const SizedBox(width: 4), const FavoriteCurrentButton(size: 19)],
+                    if (track != null) ...[
+                      const SizedBox(width: 8),
+                      const FavoriteCurrentButton(size: 19, visualDensity: VisualDensity.compact),
+                      Tooltip(
+                        message: context.tr('TipAddToPlaylist'),
+                        child: IconButton(
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 19,
+                          onPressed: () => vm.addToPlaylist(track),
+                          icon: Icon(Icons.playlist_add_rounded, size: 19, color: colors.textMuted),
+                        ),
+                      ),
+                      _CurrentTrackDownloadButton(track: track),
+                    ],
                   ],
                 ),
               ),
@@ -1206,6 +1252,85 @@ class _Footer extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PlayerLink extends StatefulWidget {
+  const _PlayerLink({
+    required this.text,
+    required this.hoverColor,
+    required this.onTap,
+  });
+
+  final String text;
+  final Color hoverColor;
+  final VoidCallback onTap;
+
+  @override
+  State<_PlayerLink> createState() => _PlayerLinkState();
+}
+
+class _PlayerLinkState extends State<_PlayerLink> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Tooltip(
+      message: widget.text,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Text(
+            widget.text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: _hover ? widget.hoverColor : colors.textMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CurrentTrackDownloadButton extends StatelessWidget {
+  const _CurrentTrackDownloadButton({required this.track});
+
+  final Track track;
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final downloads = vm.downloads;
+    final colors = context.colors;
+    return ValueListenableBuilder(
+      valueListenable: downloads.states,
+      builder: (context, _, _) {
+        if (!downloads.canDownload(track)) return const SizedBox.shrink();
+        final state = downloads.stateOf(track);
+        final pinned = downloads.isPinnedByList(track);
+        return Tooltip(
+          message: downloadTip(context, track),
+          child: IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 19,
+            onPressed: pinned ? null : () => downloads.toggleTrack(track),
+            icon: Icon(
+              downloadIcon(state) ?? Icons.download_rounded,
+              size: 19,
+              color: state == DownloadState.none ? colors.textMuted : colors.accent,
+            ),
+          ),
+        );
+      },
     );
   }
 }

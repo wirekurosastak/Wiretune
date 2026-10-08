@@ -4,7 +4,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-/// A 64-band real-time analyser of the audible spectrum (32 Hz to 20 kHz): a 2048-point FFT of the PCM window, the
+/// A 64-band real-time analyser of the audible spectrum (20 Hz to 20 kHz): a 2048-point FFT of the PCM window, the
 /// energy of each band with a perceptual weighting, shown on a -54..-6 dBFS scale with an instant attack and a smooth
 /// release.
 class SpectrumAnalyzer {
@@ -18,8 +18,12 @@ class SpectrumAnalyzer {
   static const int numBands = 64;
   static const int fftSize = 2048;
 
-  /// FFT bins of each band at 44.1 kHz (21.533 Hz per bin), covering up to 20 kHz.
+  /// FFT bins of each band at 44.1 kHz (21.533 Hz per bin), covering 20 Hz up to 20 kHz.
   static const List<(int, int)> _bandBinRanges = [
+    (1, 1),
+    (1, 1),
+    (1, 1),
+    (1, 1),
     (1, 2),
     (2, 2),
     (2, 2),
@@ -30,60 +34,68 @@ class SpectrumAnalyzer {
     (3, 3),
     (3, 4),
     (4, 4),
-    (4, 4),
     (4, 5),
     (5, 5),
     (5, 6),
+    (6, 6),
     (6, 7),
-    (7, 7),
     (7, 8),
     (8, 9),
     (9, 10),
     (10, 11),
     (11, 12),
-    (12, 13),
-    (13, 15),
-    (15, 16),
-    (16, 18),
-    (18, 20),
-    (20, 22),
-    (22, 24),
-    (24, 27),
-    (27, 30),
-    (30, 33),
-    (33, 37),
-    (37, 41),
+    (12, 14),
+    (14, 15),
+    (15, 17),
+    (17, 19),
+    (19, 21),
+    (21, 24),
+    (24, 26),
+    (26, 29),
+    (29, 33),
+    (33, 36),
+    (36, 41),
     (41, 45),
     (45, 50),
-    (50, 55),
-    (55, 61),
-    (61, 68),
-    (68, 75),
-    (75, 83),
-    (83, 92),
-    (92, 102),
-    (102, 112),
-    (112, 124),
-    (124, 138),
-    (138, 153),
-    (153, 169),
-    (169, 187),
-    (187, 207),
-    (207, 229),
-    (229, 254),
-    (254, 281),
-    (281, 311),
-    (311, 344),
-    (344, 381),
-    (381, 422),
-    (422, 467),
-    (467, 517),
-    (517, 573),
-    (573, 634),
-    (634, 702),
-    (702, 777),
-    (777, 861),
-    (861, 929),
+    (50, 56),
+    (56, 63),
+    (63, 70),
+    (70, 78),
+    (78, 86),
+    (86, 96),
+    (96, 107),
+    (107, 119),
+    (119, 133),
+    (133, 148),
+    (148, 165),
+    (165, 184),
+    (184, 205),
+    (205, 228),
+    (228, 254),
+    (254, 283),
+    (283, 316),
+    (316, 352),
+    (352, 392),
+    (392, 436),
+    (436, 486),
+    (486, 541),
+    (541, 603),
+    (603, 672),
+    (672, 748),
+    (748, 834),
+    (834, 929),
+  ];
+
+  /// Center bin of each band for continuous sub-bass interpolation.
+  static const List<double> _bandCenterBins = [
+    0.980, 1.092, 1.216, 1.355, 1.510, 1.682, 1.873, 2.087,
+    2.325, 2.590, 2.885, 3.214, 3.580, 3.988, 4.442, 4.949,
+    5.513, 6.141, 6.841, 7.621, 8.489, 9.457, 10.534, 11.735,
+    13.073, 14.562, 16.222, 18.071, 20.131, 22.425, 24.981, 27.828,
+    31.000, 34.533, 38.469, 42.853, 47.737, 53.178, 59.239, 65.991,
+    73.512, 81.891, 91.224, 101.621, 113.203, 126.105, 140.478, 156.489,
+    174.325, 194.193, 216.326, 240.982, 268.447, 299.043, 333.126, 371.094,
+    413.389, 460.504, 512.990, 571.457, 636.589, 709.143, 789.967, 880.002,
   ];
 
   /// Perceptual weighting that compensates the natural roll-off of music towards the treble.
@@ -114,7 +126,7 @@ class SpectrumAnalyzer {
     }
   }
 
-  /// The 32 band levels (0..1) of [pcmWindow] (at least [fftSize] samples, -1..1). While not playing, the bars fall.
+  /// The 64 band levels (0..1) of [pcmWindow] (at least [fftSize] samples, -1..1). While not playing, the bars fall.
   Float32List processPcm(Float32List pcmWindow, {required bool isPlaying}) {
     final result = Float32List(numBands);
     if (!isPlaying || pcmWindow.length < fftSize) {
@@ -138,11 +150,22 @@ class SpectrumAnalyzer {
 
     for (var band = 0; band < numBands; band++) {
       final (startBin, endBin) = _bandBinRanges[band];
-      var sumSq = 0.0;
-      for (var k = startBin; k <= endBin; k++) {
-        sumSq += _magnitude[k] * _magnitude[k];
+      double rms;
+      if (startBin < 4) {
+        final centerBin = _bandCenterBins[band];
+        final k0 = centerBin.floor();
+        final k1 = k0 + 1;
+        final t = centerBin - k0;
+        final m0 = _magnitude[k0];
+        final m1 = k1 < _magnitude.length ? _magnitude[k1] : m0;
+        rms = ((1.0 - t) * m0 + t * m1) * _isoBandWeights[band];
+      } else {
+        var sumSq = 0.0;
+        for (var k = startBin; k <= endBin; k++) {
+          sumSq += _magnitude[k] * _magnitude[k];
+        }
+        rms = math.sqrt(sumSq / (endBin - startBin + 1)) * _isoBandWeights[band];
       }
-      final rms = math.sqrt(sumSq / (endBin - startBin + 1)) * _isoBandWeights[band];
 
       // dBFS on a -54..-6 scale.
       final db = 20.0 * math.log(rms + 1e-5) / math.ln10;
