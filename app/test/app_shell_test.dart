@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:io';
@@ -589,7 +589,7 @@ void main() {
     // Online, but nobody else is: the button is there, and its menu says what to do.
     await tester.tap(find.byTooltip('Play on another device'));
     await settle(tester);
-    expect(find.textContaining('No other device is online'), findsOneWidget);
+    expect(find.textContaining('No other devices online'), findsOneWidget);
     await tester.tapAt(const Offset(10, 10));
     await settle(tester);
 
@@ -631,7 +631,7 @@ void main() {
     await tester.pumpWidget(WiretuneApp(vm: signedIn));
     await settle(tester);
     expect(find.text('Downloads'), findsOneWidget);
-    expect(find.textContaining('Nothing is downloaded yet'), findsOneWidget);
+    expect(find.textContaining('No downloads yet'), findsOneWidget);
     expect(find.text('Remote control'), findsOneWidget);
     final toggle = find.descendant(
       of: find.ancestor(of: find.text('Remote control'), matching: find.byType(Row)).first,

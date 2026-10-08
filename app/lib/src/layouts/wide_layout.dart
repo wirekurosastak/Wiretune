@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:math' as math;
@@ -185,13 +185,13 @@ class _Header extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListenableBuilder(
-                  listenable: vm.player,
+                  listenable: Listenable.merge([vm, vm.player]),
                   builder: (context, _) => Tooltip(
                     message: 'Wiretune Streamer Visualizer',
                     child: NavVisualizer(
                       waveTrigger: vm.waveTrigger,
                       direction: vm.lastWaveDirection,
-                      color: colors.accent,
+                      color: context.colors.accent,
                       isPlaying: vm.player.isPlaying,
                     ),
                   ),

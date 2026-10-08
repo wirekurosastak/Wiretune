@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
@@ -450,6 +450,7 @@ class _DesktopTileState extends State<_DesktopTile> {
       aspectRatio: 1,
       child: Stack(
         fit: StackFit.expand,
+        clipBehavior: Clip.none,
         children: [
           AnimatedContainer(
             duration: duration,

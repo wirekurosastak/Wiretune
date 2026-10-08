@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
@@ -220,32 +220,29 @@ class _TrackSliverState extends State<TrackSliver> {
     final colors = context.colors;
     Widget cell(String label, _Column? column, {int flex = 0, double? width}) {
       final active = column != null && _sortColumn == column;
-      final text = Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Row(
-          children: [
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 0.9,
-                  fontWeight: FontWeight.w700,
-                  color: active ? colors.accent : colors.textMuted,
+      final content = column != null
+          ? _HeaderCell(
+              label: label,
+              active: active,
+              descending: _descending,
+              onTap: () => _sortBy(column),
+            )
+          : Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w700,
+                    color: colors.textMuted,
+                  ),
                 ),
               ),
-            ),
-            if (active) ...[
-              const SizedBox(width: 4),
-              Icon(_descending ? Icons.south_rounded : Icons.north_rounded, size: 12, color: colors.accent),
-            ],
-          ],
-        ),
-      );
-      final content = column != null
-          ? InkWell(borderRadius: BorderRadius.circular(Radii.small), onTap: () => _sortBy(column), child: text)
-          : text;
+            );
       final sized = SizedBox(height: TrackSliver.tableHeaderHeight - 8, child: content);
       return width != null ? SizedBox(width: width, child: sized) : Expanded(flex: flex, child: sized);
     }
@@ -788,4 +785,79 @@ String _formatDate(DateTime date) {
   final m = local.month.toString().padLeft(2, '0');
   final d = local.day.toString().padLeft(2, '0');
   return '$y.$m.$d';
+}
+
+class _HeaderCell extends StatefulWidget {
+  const _HeaderCell({
+    required this.label,
+    required this.active,
+    required this.descending,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final bool descending;
+  final VoidCallback onTap;
+
+  @override
+  State<_HeaderCell> createState() => _HeaderCellState();
+}
+
+class _HeaderCellState extends State<_HeaderCell> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final color = widget.active ? colors.accent : colors.textMain;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _hover ? 1.05 : 1.0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.centerLeft,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    widget.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 10,
+                      letterSpacing: 0.9,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                      shadows: _hover
+                          ? [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 10)]
+                          : null,
+                    ),
+                  ),
+                ),
+                if (widget.active) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    widget.descending ? Icons.south_rounded : Icons.north_rounded,
+                    size: 12,
+                    color: colors.accent,
+                    shadows: _hover
+                        ? [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 10)]
+                        : null,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

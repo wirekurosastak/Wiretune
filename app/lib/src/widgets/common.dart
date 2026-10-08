@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:math' as math;
@@ -72,6 +72,70 @@ class PageHeader extends StatelessWidget {
 }
 
 /// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner, and after them [trailing] (a list's
+/// Adds a smooth lift, scale, and optional glow hover pop-up effect to any action widget.
+class PopEffect extends StatefulWidget {
+  const PopEffect({
+    super.key,
+    required this.child,
+    this.enabled = true,
+    this.scale = 1.05,
+    this.offsetY = -3.0,
+    this.glow = false,
+    this.glowColor,
+    this.borderRadius,
+  });
+
+  final Widget child;
+  final bool enabled;
+  final double scale;
+  final double offsetY;
+  final bool glow;
+  final Color? glowColor;
+  final BorderRadiusGeometry? borderRadius;
+
+  @override
+  State<PopEffect> createState() => _PopEffectState();
+}
+
+class _PopEffectState extends State<PopEffect> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) return widget.child;
+    final active = _hover;
+    final colors = context.colors;
+    final effectiveGlowColor = widget.glowColor ?? colors.accent;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        transformAlignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..translateByDouble(0.0, active ? widget.offsetY : 0.0, 0.0, 1.0)
+          ..scaleByDouble(active ? widget.scale : 1.0, active ? widget.scale : 1.0, 1.0, 1.0),
+        decoration: widget.glow && active
+            ? BoxDecoration(
+                shape: widget.borderRadius != null ? BoxShape.rectangle : BoxShape.circle,
+                borderRadius: widget.borderRadius,
+                boxShadow: [
+                  BoxShadow(
+                    color: effectiveGlowColor.withValues(alpha: 0.45),
+                    blurRadius: 18,
+                    spreadRadius: -2,
+                  ),
+                ],
+              )
+            : null,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+/// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner, and after them [trailing] (a list's
 /// download button).
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({
@@ -97,32 +161,38 @@ class PlayShuffleButtons extends StatelessWidget {
     final size = Size(0, phone ? 48 : 46);
     const text = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.1);
     final padding = EdgeInsets.symmetric(horizontal: phone ? 12 : 24);
-    final play = DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: onPlay == null ? const [] : colors.accentGlow(),
-      ),
-      child: FilledButton.icon(
-        style: FilledButton.styleFrom(minimumSize: size, padding: padding, textStyle: text),
-        onPressed: onPlay,
-        icon: const Icon(Icons.play_arrow_rounded, size: 22),
-        label: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(playLabel, maxLines: 1, softWrap: false),
+    final play = PopEffect(
+      enabled: onPlay != null,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          boxShadow: onPlay == null ? const [] : colors.accentGlow(),
+        ),
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: size, padding: padding, textStyle: text),
+          onPressed: onPlay,
+          icon: const Icon(Icons.play_arrow_rounded, size: 22),
+          label: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(playLabel, maxLines: 1, softWrap: false),
+          ),
         ),
       ),
     );
-    final shuffle = OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(
-        minimumSize: size,
-        padding: padding,
-        textStyle: text,
-      ),
-      onPressed: onShuffle,
-      icon: Icon(Icons.shuffle_rounded, size: 20, color: onShuffle == null ? null : colors.accent),
-      label: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(shuffleLabel, maxLines: 1, softWrap: false),
+    final shuffle = PopEffect(
+      enabled: onShuffle != null,
+      child: OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(
+          minimumSize: size,
+          padding: padding,
+          textStyle: text,
+        ),
+        onPressed: onShuffle,
+        icon: Icon(Icons.shuffle_rounded, size: 20, color: onShuffle == null ? null : colors.accent),
+        label: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(shuffleLabel, maxLines: 1, softWrap: false),
+        ),
       ),
     );
     if (phone) {
@@ -459,39 +529,42 @@ class TilePlayButton extends StatelessWidget {
     final enabled = onPressed != null;
     return Tooltip(
       message: tooltip,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: enabled ? null : colors.palette.modal,
-          gradient: enabled
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [colors.palette.hoverOf(color), color],
-                )
-              : null,
-          boxShadow: [
-            BoxShadow(
-              color: enabled ? color.withValues(alpha: 0.5) : colors.palette.shadow,
-              blurRadius: 16,
-              spreadRadius: -2,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onPressed,
-            child: SizedBox.square(
-              dimension: size,
-              child: Icon(
-                Icons.play_arrow_rounded,
-                size: size * 0.58,
-                color: enabled ? colors.onAccent : colors.textMuted,
+      child: PopEffect(
+        enabled: enabled,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: enabled ? null : colors.palette.modal,
+            gradient: enabled
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [colors.palette.hoverOf(color), color],
+                  )
+                : null,
+            boxShadow: [
+              BoxShadow(
+                color: enabled ? color.withValues(alpha: 0.5) : colors.palette.shadow,
+                blurRadius: 16,
+                spreadRadius: -2,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: SizedBox.square(
+                dimension: size,
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  size: size * 0.58,
+                  color: enabled ? colors.onAccent : colors.textMuted,
+                ),
               ),
             ),
           ),

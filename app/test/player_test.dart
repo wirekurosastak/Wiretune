@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
@@ -345,7 +345,7 @@ void main() {
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(await waitUntil(() => player.lyricsLookupFailed), isTrue);
       expect(player.showLyricsEmptyState, isTrue);
-      expect(player.lyricsEmptyText, contains("Couldn't reach"));
+      expect(player.lyricsEmptyText, contains('Lyrics service unreachable'));
       expect(asked, 1);
 
       player.isQueueOpen = false;

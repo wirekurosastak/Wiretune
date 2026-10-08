@@ -109,7 +109,7 @@ controls are [audio_service](https://pub.dev/packages/audio_service).
 
 ## License
 
-Copyright (C) 2026 Wiretune contributors. Wiretune is free software under the [GNU Affero General Public License,
+Copyright (C) 2026 wirekurosastak. Wiretune is free software under the [GNU Affero General Public License,
 version 3](LICENSE), with the additional terms in [NOTICE.md](NOTICE.md). Anyone may use, change and share it. A changed
 version has to stay under the same license with its source available, also to people who only use it over a network,
 keep Wiretune's copyright notices, say that it's based on Wiretune, and go by a name of its own.

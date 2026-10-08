@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:file_picker/file_picker.dart';
@@ -788,7 +788,6 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
                   ),
                 ],
               ),
-              _StatusLine(server.statusMessage),
             ],
 
             if (server.supportsLocalFolder) ...[
@@ -822,7 +821,6 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
                 const SizedBox(height: 12),
                 LinearProgressIndicator(value: server.scanProgress > 0 ? server.scanProgress / 100 : null),
               ],
-              _StatusLine(server.statusMessage),
             ],
           ],
         ),

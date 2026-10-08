@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 // Every translatable text: key -> (Hungarian, English, German). Keys are grouped by the screen or component that shows
@@ -56,22 +56,22 @@ const Map<String, (String, String, String)> allStrings = {
     'Exklusivmodus (direkter DAC-Zugriff am System-Mixer vorbei)',
   ),
   'TipAccount': (
-    'Wiretune Szerver Fiók és Bejelentkezés',
-    'Wiretune server account and sign-in',
-    'Wiretune-Serverkonto und Anmeldung',
+    'Fiók és Bejelentkezés',
+    'Account and sign-in',
+    'Konto und Anmeldung',
   ),
   'TipAccountSettings': ('Fiók és beállítások', 'Account and settings', 'Konto und Einstellungen'),
   'SettingsOnlineLyrics': ('Dalszöveg az internetről', 'Lyrics from the internet', 'Liedtexte aus dem Internet'),
   'SettingsOnlineLyricsHint': (
-    'Ha egy számnak nincs saját dalszövege, megkeressük az lrclib.net-en (ingyenes, nyílt dalszöveg-adatbázis). Csak a szám címe, előadója, albuma és hossza kerül elküldésre.',
-    'When a track has no lyrics of its own, look them up on lrclib.net (a free, open lyrics database). Only the track\'s title, artist, album and length are sent.',
-    'Hat ein Titel keinen eigenen Liedtext, wird er auf lrclib.net gesucht (eine freie, offene Liedtext-Datenbank). Gesendet werden nur Titel, Künstler, Album und Länge des Titels.',
+    'Hiányzó dalszövegek keresése az lrclib.net-en.',
+    'Search lrclib.net when track lyrics are missing.',
+    'Fehlende Liedtexte auf lrclib.net suchen.',
   ),
   'SettingsPerformanceStats': ('Teljesítménystatisztika', 'Performance statistics', 'Leistungsstatistik'),
   'SettingsPerformanceStatsHint': (
-    'Képkocka-grafikonok és számlálók a képernyő alján, a teljesítményhangoláshoz.',
-    'Frame graphs and counters at the bottom of the screen, for tuning performance.',
-    'Bildraten-Diagramme und Zähler am unteren Bildschirmrand zur Leistungsabstimmung.',
+    'Képkocka-grafikonok a hibakereséshez.',
+    'Frame graphs for debugging.',
+    'Bildraten-Diagramme zur Fehlersuche.',
   ),
   'TipMinimize': ('Kis méret', 'Minimize', 'Minimieren'),
   'TipMaximize': ('Teljes méret / Visszaállítás', 'Maximize / Restore', 'Maximieren / Wiederherstellen'),
@@ -158,6 +158,7 @@ const Map<String, (String, String, String)> allStrings = {
   'SortQuality': ('Minőség', 'Quality', 'Qualität'),
   'SortArtist': ('Előadó', 'Artist', 'Künstler'),
   'SortAlbum': ('Album', 'Album', 'Album'),
+  'SortAlbums': ('Albumok', 'Albums', 'Alben'),
   'SortAdded': ('Hozzáadás', 'Added', 'Hinzugefügt'),
   'Genre': ('Műfaj', 'Genre', 'Genre'),
   'AllGenres': ('Minden műfaj', 'All genres', 'Alle Genres'),
@@ -240,9 +241,9 @@ const Map<String, (String, String, String)> allStrings = {
   'ClearQueue': ('Sor kiürítése', 'Clear queue', 'Warteschlange leeren'),
   'QueueEmptyTitle': ('A lejátszási sor jelenleg üres', 'The queue is empty', 'Die Warteschlange ist leer'),
   'QueueEmptyHint': (
-    'Indíts el egy albumot vagy számot a lejátszáshoz a gyűjteményedből.',
-    'Start an album or track from your collection to play it.',
-    'Starte ein Album oder einen Titel aus deiner Sammlung.',
+    'Indíts el egy számot vagy albumot.',
+    'Play an album or track to fill the queue.',
+    'Starte ein Album oder einen Titel.',
   ),
   'TipDragToReorder': ('Húzd a sorrend módosításához', 'Drag to reorder', 'Zum Umsortieren ziehen'),
   'TipMoveUp': ('Mozgatás feljebb', 'Move up', 'Nach oben'),
@@ -257,15 +258,15 @@ const Map<String, (String, String, String)> allStrings = {
     'Für diesen Titel wurde kein Liedtext gefunden.',
   ),
   'NoLyricsInTags': (
-    'Ehhez a számhoz nincs dalszöveg a metaadatokban. Az online keresést a Beállításokban kapcsolhatod be.',
-    'This track has no lyrics in its tags. You can turn on the online lookup in Settings.',
-    'Für diesen Titel sind keine Liedtexte in den Metadaten vorhanden. Die Online-Suche kannst du in den Einstellungen einschalten.',
+    'Nincs dalszöveg a fájlban. Az online keresést a Beállításokban kapcsolhatod be.',
+    'No embedded lyrics found. Enable online lookup in Settings.',
+    'Kein Liedtext in den Metadaten. Aktiviere die Online-Suche in den Einstellungen.',
   ),
   'LyricsSearching': ('Dalszöveg keresése…', 'Looking for lyrics…', 'Liedtext wird gesucht …'),
   'LyricsLookupFailed': (
-    'A dalszövegszolgáltatás nem érhető el. Ellenőrizd a kapcsolatot, a lejátszási sor újranyitásakor újra próbáljuk.',
-    'Couldn\'t reach the lyrics service. Check your connection; reopening the queue tries again.',
-    'Der Liedtext-Dienst ist nicht erreichbar. Prüfe deine Verbindung; beim erneuten Öffnen der Warteschlange wird es noch einmal versucht.',
+    'A dalszövegszolgáltatás nem érhető el.',
+    'Lyrics service unreachable.',
+    'Liedtext-Dienst nicht erreichbar.',
   ),
   'LyricsSource': ('Forrás: {0}', 'Source: {0}', 'Quelle: {0}'),
   'LyricsSourceTags': (
@@ -274,17 +275,17 @@ const Map<String, (String, String, String)> allStrings = {
     'Quelle: Metadaten des Titels',
   ),
   'TipQueueToggle': (
-    'Lejátszási sor (kattints a megnyitáshoz / elrejtéshez)',
-    'Queue (click to show / hide)',
-    'Warteschlange (zum Ein-/Ausblenden klicken)',
+    'Lejátszási sor',
+    'Queue',
+    'Warteschlange',
   ),
   'TipShuffle': ('Véletlenszerű lejátszás', 'Shuffle', 'Zufallswiedergabe'),
   'TipPrevious': ('Előző szám', 'Previous track', 'Vorheriger Titel'),
   'TipNext': ('Következő szám', 'Next track', 'Nächster Titel'),
   'TipRepeat': (
-    'Ismétlés: Ki / Összes / Egy szám',
-    'Repeat: off / all / one track',
-    'Wiederholen: Aus / Alle / Ein Titel',
+    'Ismétlés',
+    'Repeat',
+    'Wiederholen',
   ),
   'TipSpectrum': (
     '32 sávos valós idejű spektrumanalizátor',
@@ -304,9 +305,9 @@ const Map<String, (String, String, String)> allStrings = {
 
   // ── Settings screen ─────────────────────────────────────────────────────────────────────────────────
   'SettingsSubtitle': (
-    'Szerverkapcsolat, zenei könyvtár és hangkimenet.',
-    'Server connection, music library and audio output.',
-    'Serververbindung, Musikbibliothek und Audioausgabe.',
+    'Szerver, könyvtár és hangkimenet.',
+    'Server, library, and audio output.',
+    'Server, Bibliothek und Audioausgabe.',
   ),
   'SettingsServerSection': ('SZERVER ÉS KÖNYVTÁR', 'SERVER & LIBRARY', 'SERVER & BIBLIOTHEK'),
   'SettingsAudioSection': (
@@ -325,9 +326,9 @@ const Map<String, (String, String, String)> allStrings = {
   'AboutSource': ('Forráskód', 'Source code', 'Quellcode'),
   'AboutLicenses': ('Licencek', 'Licenses', 'Lizenzen'),
   'SettingsLanguageHint': (
-    'A felület nyelve. A választás megmarad a következő indításig is.',
-    'The language of the interface. Your choice is remembered.',
-    'Die Sprache der Oberfläche. Deine Auswahl bleibt erhalten.',
+    'A felület nyelve.',
+    'Interface language.',
+    'Die Sprache der Oberfläche.',
   ),
   'SettingsThemeHint': (
     'Sötét vagy világos megjelenés.',
@@ -337,9 +338,9 @@ const Map<String, (String, String, String)> allStrings = {
   'Connection': ('Kapcsolat', 'Connection', 'Verbindung'),
   'ServerUrlPlaceholder': ('http://szerver-ip:5200', 'http://server-ip:5200', 'http://server-ip:5200'),
   'ServerFolderLabel': (
-    'Zenemappa a szerveren (admin)',
-    'Server music folder (admin)',
-    'Musikordner auf dem Server (Admin)',
+    'Szerver mappa',
+    'Server folder',
+    'Serverordner',
   ),
   'ServerFolderPlaceholder': (
     '/eleresi/ut/a/szerveren/zenek',
@@ -347,14 +348,14 @@ const Map<String, (String, String, String)> allStrings = {
     '/pfad/auf/dem/server/musik',
   ),
   'SaveFolder': ('Mappa mentése', 'Save folder', 'Ordner speichern'),
-  'LocalFolderLabel': ('Helyi zenemappa', 'Local music folder', 'Lokaler Musikordner'),
+  'LocalFolderLabel': ('Helyi mappa', 'Local folder', 'Lokaler Ordner'),
   'LocalFolderPlaceholder': ('/eleresi/ut/zenek', '/path/to/music', '/pfad/zur/musik'),
   'Scan': ('Beolvasás', 'Scan', 'Einlesen'),
   'Reindex': ('Újraindexelés', 'Reindex', 'Neu indizieren'),
   'TipReindex': (
-    'A szerver újraolvassa a zenemappát (adminisztrátori jog szükséges).',
-    'The server rescans the music folder (administrator rights required).',
-    'Der Server liest den Musikordner neu ein (Administratorrechte erforderlich).',
+    'Szerver mappa újraolvasása.',
+    'Rescan server folder.',
+    'Serverordner neu einlesen.',
   ),
   'TipCheckConnection': ('Kapcsolat ellenőrzése', 'Check connection', 'Verbindung prüfen'),
   'SignIn': ('Bejelentkezés', 'Sign in', 'Anmelden'),
@@ -362,23 +363,23 @@ const Map<String, (String, String, String)> allStrings = {
   'TipSignOut': ('Kijelentkezés a szerverfiókból', 'Sign out of the server account', 'Vom Serverkonto abmelden'),
   'NotSignedIn': ('Nincs bejelentkezve', 'Not signed in', 'Nicht angemeldet'),
   'NotSignedInHint': (
-    'Jelentkezz be a szerverre a veszteségmentes streameléshez, vagy használj helyi mappát.',
-    'Sign in to the server for lossless streaming, or use a local folder.',
-    'Melde dich am Server an, um verlustfrei zu streamen, oder nutze einen lokalen Ordner.',
+    'Jelentkezz be a szerverre, vagy használj helyi mappát.',
+    'Sign in for server streaming, or use a local folder.',
+    'Melde dich am Server an oder nutze einen lokalen Ordner.',
   ),
   'RoleAdmin': ('Adminisztrátor', 'Administrator', 'Administrator'),
   'RoleUser': ('Felhasználó', 'User', 'Benutzer'),
   'ServerAddressLabel': ('SZERVER CÍME', 'SERVER ADDRESS', 'SERVERADRESSE'),
   'ServerUnreachableHint': (
-    'A szerver nem érhető el. Ellenőrizd a címet, és hogy a Wiretune szerver fut-e.',
-    'The server is unreachable. Check the address and that the Wiretune server is running.',
-    'Der Server ist nicht erreichbar. Prüfe die Adresse und ob der Wiretune-Server läuft.',
+    'A szerver nem érhető el. Ellenőrizd a címet és a szervert.',
+    'Server unreachable. Check the address and server status.',
+    'Server nicht erreichbar. Prüfe Adresse und Serverstatus.',
   ),
   'FirstRun': ('Első indítás', 'First run', 'Erster Start'),
   'FirstRunHint': (
-    'Hozd létre a szerver adminisztrátori fiókját. Később ezzel adhatsz hozzá további felhasználókat. A beállítási kódot a szerver naplója írja ki indításkor.',
-    'Create the server\'s administrator account. You can use it later to add more users. The server prints the setup code in its log when it starts.',
-    'Erstelle das Administratorkonto des Servers. Damit kannst du später weitere Benutzer hinzufügen. Den Einrichtungscode gibt der Server beim Start in seinem Protokoll aus.',
+    'Admin fiók létrehozása. A beállítási kód a szerver naplójában található.',
+    'Create the admin account. The setup code is in the server log.',
+    'Admin-Konto erstellen. Der Einrichtungscode steht im Server-Protokoll.',
   ),
   'SetupCodePlaceholder': (
     'Beállítási kód (a szerver naplójából)',
@@ -794,9 +795,9 @@ const Map<String, (String, String, String)> allStrings = {
   // ── Downloads ───────────────────────────────────────────────────────────────────────────────────────
   'Downloads': ('Letöltések', 'Downloads', 'Downloads'),
   'DownloadsHint': (
-    'A megjelölt számok, albumok, listák és a kedvencek ezen az eszközön is megvannak: szerver nélkül is szólnak.',
-    'The tracks, albums, playlists and favourites you mark are kept on this device: they play without the server.',
-    'Markierte Titel, Alben, Playlists und Favoriten bleiben auf diesem Gerät: Sie spielen auch ohne Server.',
+    'A letöltött elemek offline is elérhetők.',
+    'Downloaded items stay available offline.',
+    'Heruntergeladene Elemente bleiben offline verfügbar.',
   ),
   'DownloadsSize': ('{0} {1} ezen az eszközön', '{0} {1} on this device', '{0} {1} auf diesem Gerät'),
   'DownloadsProgress': (
@@ -825,9 +826,9 @@ const Map<String, (String, String, String)> allStrings = {
     '{0} Titel ist heruntergeladen und aktuell.',
   ),
   'DownloadsNone': (
-    'Még nincs letöltés. A letöltés gomb az albumoknál, a listáknál, a kedvenceknél és minden szám mellett ott van.',
-    'Nothing is downloaded yet. There is a download button on every album, playlist and the favourites, and beside each track.',
-    'Noch nichts heruntergeladen. Alben, Playlists und Favoriten haben eine Download-Schaltfläche, ebenso jeder Titel.',
+    'Még nincsenek letöltések.',
+    'No downloads yet.',
+    'Noch keine Downloads.',
   ),
   'DownloadsRemoveAll': ('Összes letöltés törlése', 'Remove all downloads', 'Alle Downloads entfernen'),
   'DownloadsRemoveConfirm': ('Igen, mind törlődjön', 'Yes, remove them all', 'Ja, alle entfernen'),
@@ -861,9 +862,9 @@ const Map<String, (String, String, String)> allStrings = {
   // ── Remote control ──────────────────────────────────────────────────────────────────────────────────
   'RemoteControl': ('Távvezérlés', 'Remote control', 'Fernsteuerung'),
   'RemoteControlHint': (
-    'Az ugyanabba a fiókba bejelentkezett eszközeid látják, mi szól itt, és vezérelhetik – ez pedig őket.',
-    'Your other devices signed in to the same account see what plays here and can control it, and this one them.',
-    'Deine anderen Geräte mit demselben Konto sehen, was hier läuft, und können es steuern – und dieses sie.',
+    'Vezérlés engedélyezése a saját hálózaton lévő eszközeidről.',
+    'Allow remote control from devices on your network.',
+    'Fernsteuerung von Geräten im selben Netzwerk erlauben.',
   ),
   'DeviceNameLabel': ('Az eszköz neve', 'This device’s name', 'Name dieses Geräts'),
   'RemoteStatusConnected': (
@@ -886,9 +887,9 @@ const Map<String, (String, String, String)> allStrings = {
   'DevicesTitle': ('Lejátszás itt', 'Play on', 'Wiedergabe auf'),
   'DevicesThisDevice': ('Ez az eszköz', 'This device', 'Dieses Gerät'),
   'DevicesNone': (
-    'Nincs más eszköz online. Nyisd meg a Wiretune-t egy másik gépen, telefonon vagy tévén, ugyanazzal a fiókkal.',
-    'No other device is online. Open Wiretune on another computer, phone or TV signed in to the same account.',
-    'Kein anderes Gerät ist online. Öffne Wiretune auf einem anderen Computer, Telefon oder Fernseher mit demselben Konto.',
+    'Nincs más eszköz online.',
+    'No other devices online.',
+    'Keine anderen Geräte online.',
   ),
   'DeviceKindDesktop': ('Számítógép', 'Computer', 'Computer'),
   'DeviceKindPhone': ('Telefon', 'Phone', 'Telefon'),

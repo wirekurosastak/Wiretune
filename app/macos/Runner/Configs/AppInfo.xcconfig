@@ -11,4 +11,4 @@ PRODUCT_NAME = Wiretune
 PRODUCT_BUNDLE_IDENTIFIER = com.wiretune.player
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 Wiretune contributors. Licensed under the GNU AGPL v3.
+PRODUCT_COPYRIGHT = Copyright © 2026 wirekurosastak. Licensed under the GNU AGPL v3.

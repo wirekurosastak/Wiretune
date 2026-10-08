@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
@@ -556,21 +556,23 @@ class QueueLyricsPanel extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Another device's queue is its own to clear.
-                  if (player.canEditQueue) ...[
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
-                      onPressed: count == 0 ? null : player.clearQueue,
-                      icon: Icon(Icons.delete_outline_rounded, size: 18, color: count == 0 ? null : colors.danger),
-                      label: Text(context.tr('ClearQueue')),
+                  if (player.canEditQueue)
+                    PopEffect(
+                      enabled: count > 0,
+                      glow: true,
+                      glowColor: colors.danger,
+                      borderRadius: BorderRadius.circular(999),
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: colors.danger,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          overlayColor: Colors.transparent,
+                        ),
+                        onPressed: count == 0 ? null : player.clearQueue,
+                        icon: Icon(Icons.delete_outline_rounded, size: 18, color: count == 0 ? null : colors.danger),
+                        label: Text(context.tr('ClearQueue')),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                  ],
-                  FilledButton.icon(
-                    onPressed: player.closeQueue,
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    label: Text(context.tr('Close')),
-                  ),
                 ],
               ),
               const SizedBox(height: 20),

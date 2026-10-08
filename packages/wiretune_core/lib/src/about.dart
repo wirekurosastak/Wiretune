@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /// What Wiretune says about itself: its version, its copyright and where its source is (NOTICE.md).
@@ -7,7 +7,7 @@ abstract final class WiretuneInfo {
   /// the version name and the build number.
   static const String version = '1.0.2026.1';
 
-  static const String copyright = 'Copyright (C) 2026 Wiretune contributors';
+  static const String copyright = 'Copyright (C) 2026 wirekurosastak';
 
   static const String sourceUrl = 'https://github.com/wirekurosastak/Wiretune';
 

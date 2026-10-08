@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
@@ -513,21 +513,18 @@ class _SortButtons extends StatelessWidget {
         ),
       );
     }
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      runSpacing: 6,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           context.tr('SortBy'),
           style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted),
         ),
         const SizedBox(width: 10),
-        // On a line too short for every segment (a phone with a large font) the pill shrinks rather than overflow.
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
+        Flexible(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
@@ -538,45 +535,40 @@ class _SortButtons extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                for (final (label, selected, onTap) in buttons)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    decoration: BoxDecoration(
-                      color: selected ? colors.accent : colors.accent.withValues(alpha: 0),
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: selected ? colors.accentGlow(0.5) : const [],
-                    ),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: InkWell(
-                        customBorder: const StadiumBorder(),
-                        onTap: onTap,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minWidth: 64, minHeight: 30),
+                  for (final (label, selected, onTap) in buttons)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      decoration: BoxDecoration(
+                        color: selected ? colors.accent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: selected ? colors.accentGlow(0.5) : const [],
+                      ),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: InkWell(
+                          customBorder: const StadiumBorder(),
+                          onTap: onTap,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            child: Center(
-                              widthFactor: 1,
-                              child: Text(
-                                label,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: selected ? colors.onAccent : colors.textMuted,
-                                ),
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: selected ? colors.onAccent : colors.textMuted,
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ],
     );
   }
@@ -700,6 +692,7 @@ class AlbumsPage extends StatelessWidget {
                         albums.isSortByQuality,
                         () => albums.setSortField(AlbumSortField.quality),
                       ),
+                      (albums.sortAddedLabel, albums.isSortByAdded, () => albums.setSortField(AlbumSortField.added)),
                     ],
                   ),
                 ],
@@ -803,7 +796,13 @@ class ArtistsPage extends StatelessWidget {
                 actions: [
                   if (artists.genres.isNotEmpty)
                     _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
-                  _SortButtons(buttons: [(artists.sortNameLabel, true, artists.toggleSort)]),
+                  _SortButtons(
+                    buttons: [
+                      (artists.sortNameLabel, artists.isSortByName, () => artists.setSortField(ArtistSortField.name)),
+                      (artists.sortAddedLabel, artists.isSortByAdded, () => artists.setSortField(ArtistSortField.added)),
+                      (artists.sortAlbumsLabel, artists.isSortByAlbums, () => artists.setSortField(ArtistSortField.albums)),
+                    ],
+                  ),
                 ],
               ),
             ),

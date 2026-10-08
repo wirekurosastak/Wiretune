@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
@@ -31,7 +31,6 @@ class DownloadListButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final downloads = context.vm.downloads;
-    final colors = context.colors;
     return ValueListenableBuilder(
       valueListenable: downloads.states,
       builder: (context, _, _) {
@@ -40,43 +39,18 @@ class DownloadListButton extends StatelessWidget {
         final pinned = isPinned();
         final complete = pinned && done == total;
         final dimension = size(context);
-        return SizedBox.square(
+        return _DownloadHoverButton(
+          pinned: pinned,
+          complete: complete,
+          done: done,
+          total: total,
           dimension: dimension,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              if (pinned && !complete)
-                SizedBox.square(
-                  dimension: dimension,
-                  child: CircularProgressIndicator(
-                    value: done / total,
-                    strokeWidth: 2.5,
-                    color: colors.accent,
-                    backgroundColor: colors.glassBorder,
-                  ),
-                ),
-              IconButton(
-                tooltip: !pinned
-                    ? context.tr('TipDownload')
-                    : (complete
-                          ? context.tr('TipRemoveDownload')
-                          : context.trf('DownloadsListProgress', [done, total])),
-                style: IconButton.styleFrom(
-                  fixedSize: Size.square(dimension),
-                  side: BorderSide(color: pinned ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
-                  backgroundColor: pinned ? colors.accent.withValues(alpha: 0.12) : null,
-                ),
-                onPressed: onPressed,
-                icon: Icon(
-                  complete
-                      ? Icons.download_done_rounded
-                      : (pinned ? Icons.downloading_rounded : Icons.download_rounded),
-                  size: 22,
-                  color: pinned ? colors.accent : colors.textMain,
-                ),
-              ),
-            ],
-          ),
+          tooltip: !pinned
+              ? context.tr('TipDownload')
+              : (complete
+                    ? context.tr('TipRemoveDownload')
+                    : context.trf('DownloadsListProgress', [done, total])),
+          onPressed: onPressed,
         );
       },
     );
@@ -96,4 +70,94 @@ String downloadTip(BuildContext context, Track track) {
   final downloads = context.vm.downloads;
   if (downloads.isPinnedByList(track)) return context.tr('TipDownloadedWithList');
   return context.tr(downloads.isTrackPinned(track) ? 'TipRemoveDownload' : 'TipDownload');
+}
+
+class _DownloadHoverButton extends StatefulWidget {
+  const _DownloadHoverButton({
+    required this.pinned,
+    required this.complete,
+    required this.done,
+    required this.total,
+    required this.dimension,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final bool pinned;
+  final bool complete;
+  final int done;
+  final int total;
+  final double dimension;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  State<_DownloadHoverButton> createState() => _DownloadHoverButtonState();
+}
+
+class _DownloadHoverButtonState extends State<_DownloadHoverButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final iconColor = widget.pinned ? colors.accent : colors.textMain;
+    return PopEffect(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: SizedBox.square(
+          dimension: widget.dimension,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (widget.pinned && !widget.complete)
+                SizedBox.square(
+                  dimension: widget.dimension,
+                  child: CircularProgressIndicator(
+                    value: widget.total > 0 ? widget.done / widget.total : 0,
+                    strokeWidth: 2.5,
+                    color: colors.accent,
+                    backgroundColor: colors.glassBorder,
+                  ),
+                ),
+              IconButton(
+                tooltip: widget.tooltip,
+                hoverColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                splashColor: Colors.transparent,
+                focusColor: Colors.transparent,
+                style: IconButton.styleFrom(
+                  side: BorderSide.none,
+                  backgroundColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  overlayColor: Colors.transparent,
+                  splashFactory: NoSplash.splashFactory,
+                ),
+                onPressed: widget.onPressed,
+                icon: Icon(
+                  widget.complete
+                      ? Icons.download_done_rounded
+                      : (widget.pinned ? Icons.downloading_rounded : Icons.download_rounded),
+                  size: 22,
+                  color: iconColor,
+                  shadows: _hover
+                      ? [
+                          BoxShadow(
+                            color: iconColor.withValues(alpha: 0.7),
+                            blurRadius: 14,
+                          ),
+                        ]
+                      : null,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

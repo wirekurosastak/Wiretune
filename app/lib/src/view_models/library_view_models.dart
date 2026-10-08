@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/foundation.dart';
@@ -119,7 +119,9 @@ class TracksViewModel extends ChangeNotifier with TrackSorting {
   }
 }
 
-enum AlbumSortField { title, artist, year, quality }
+enum AlbumSortField { title, artist, year, quality, added }
+
+enum ArtistSortField { name, added, albums }
 
 /// Whether any of [tracks] is tagged with [genre], in any capitalisation.
 bool hasGenre(Iterable<Track> tracks, String genre) => tracks.any((t) => equalsIgnoreCase(t.genre, genre));
@@ -189,6 +191,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   bool get isSortByArtist => sortField == AlbumSortField.artist;
   bool get isSortByYear => sortField == AlbumSortField.year;
   bool get isSortByQuality => sortField == AlbumSortField.quality;
+  bool get isSortByAdded => sortField == AlbumSortField.added;
 
   String get backText => backButtonText('NavAlbums');
 
@@ -200,16 +203,19 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   String get sortQualityLabel => isSortByQuality
       ? '${Localizer.get('SortQuality')} ${isSortDescending ? '↓' : '↑'}'
       : Localizer.get('SortQuality');
+  String get sortAddedLabel => isSortByAdded
+      ? '${Localizer.get('SortAdded')} ${isSortDescending ? '↓' : '↑'}'
+      : Localizer.get('SortAdded');
 
   void refreshLocalizedTexts() => notifyListeners();
 
   /// The active field flips its direction; another one is switched to with its natural default (A→Z for titles and
-  /// artists, newest first for years, best first for quality).
+  /// artists, newest first for years, quality, and added).
   void setSortField(AlbumSortField field) {
     if (field == sortField) {
       isSortDescending = !isSortDescending;
     } else {
-      isSortDescending = field == AlbumSortField.year || field == AlbumSortField.quality;
+      isSortDescending = field == AlbumSortField.year || field == AlbumSortField.quality || field == AlbumSortField.added;
       sortField = field;
     }
     _applySort();
@@ -279,6 +285,19 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
         });
       case AlbumSortField.title:
         sortStable(albums, (a, b) => isSortDescending ? compareText(b.title, a.title) : compareText(a.title, b.title));
+      case AlbumSortField.added:
+        final latestAdded = <Album, DateTime>{
+          for (final album in albums)
+            album: album.tracks.isEmpty
+                ? DateTime.fromMillisecondsSinceEpoch(0)
+                : album.tracks.map((t) => t.dateAdded).reduce((a, b) => a.isAfter(b) ? a : b),
+        };
+        sortStable(albums, (a, b) {
+          final da = latestAdded[a]!;
+          final db = latestAdded[b]!;
+          final byAdded = isSortDescending ? db.compareTo(da) : da.compareTo(db);
+          return byAdded != 0 ? byAdded : compareText(a.title, b.title);
+        });
     }
     displayedAlbums = albums;
   }
@@ -348,6 +367,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   bool isArtistDetailOpen = false;
   List<Album> selectedArtistAlbums = const [];
   List<Track> selectedArtistTracks = const [];
+  ArtistSortField sortField = ArtistSortField.name;
   bool isSortDescending = false;
 
   /// The library's genres, for the filter; empty when no track has one.
@@ -356,15 +376,29 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   /// The genre the list is narrowed to; null shows every artist.
   String? genre;
 
+  bool get isSortByName => sortField == ArtistSortField.name;
+  bool get isSortByAdded => sortField == ArtistSortField.added;
+  bool get isSortByAlbums => sortField == ArtistSortField.albums;
+
   String get backText => backButtonText('NavArtists');
 
-  /// Artists are sorted by name only; the arrow shows the direction.
-  String get sortNameLabel => 'ABC ${isSortDescending ? '↓' : '↑'}';
+  String get sortNameLabel => isSortByName ? 'ABC ${isSortDescending ? '↓' : '↑'}' : 'ABC';
+  String get sortAddedLabel => isSortByAdded
+      ? '${Localizer.get('SortAdded')} ${isSortDescending ? '↓' : '↑'}'
+      : Localizer.get('SortAdded');
+  String get sortAlbumsLabel => isSortByAlbums
+      ? '${Localizer.get('SortAlbums')} ${isSortDescending ? '↓' : '↑'}'
+      : Localizer.get('SortAlbums');
 
   void refreshLocalizedTexts() => notifyListeners();
 
-  void toggleSort() {
-    isSortDescending = !isSortDescending;
+  void setSortField(ArtistSortField field) {
+    if (field == sortField) {
+      isSortDescending = !isSortDescending;
+    } else {
+      isSortDescending = field == ArtistSortField.added || field == ArtistSortField.albums;
+      sortField = field;
+    }
     _applySort();
     notifyListeners();
   }
@@ -382,7 +416,28 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
       for (final artist in _library.artists)
         if (wanted == null || hasGenre(artist.tracks, wanted)) artist,
     ];
-    sortStable(artists, (a, b) => isSortDescending ? compareText(b.name, a.name) : compareText(a.name, b.name));
+    switch (sortField) {
+      case ArtistSortField.name:
+        sortStable(artists, (a, b) => isSortDescending ? compareText(b.name, a.name) : compareText(a.name, b.name));
+      case ArtistSortField.added:
+        final latestAdded = <Artist, DateTime>{
+          for (final artist in artists)
+            artist: artist.tracks.isEmpty
+                ? DateTime.fromMillisecondsSinceEpoch(0)
+                : artist.tracks.map((t) => t.dateAdded).reduce((a, b) => a.isAfter(b) ? a : b),
+        };
+        sortStable(artists, (a, b) {
+          final da = latestAdded[a]!;
+          final db = latestAdded[b]!;
+          final byAdded = isSortDescending ? db.compareTo(da) : da.compareTo(db);
+          return byAdded != 0 ? byAdded : compareText(a.name, b.name);
+        });
+      case ArtistSortField.albums:
+        sortStable(artists, (a, b) {
+          final byAlbums = isSortDescending ? b.albumCount.compareTo(a.albumCount) : a.albumCount.compareTo(b.albumCount);
+          return byAlbums != 0 ? byAlbums : compareText(a.name, b.name);
+        });
+    }
     displayedArtists = artists;
   }
 

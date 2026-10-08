@@ -1,7 +1,7 @@
 # Copyright and license
 
 Wiretune<br>
-Copyright (C) 2026 Wiretune contributors<br>
+Copyright (C) 2026 wirekurosastak<br>
 <https://github.com/wirekurosastak/Wiretune>
 
 Everything in this repository (the player, the server, the shared packages, the build tool, the documentation and the

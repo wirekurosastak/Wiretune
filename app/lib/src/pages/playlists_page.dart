@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
@@ -200,11 +200,21 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                 ),
               ),
               if (!PhoneChrome.isPhone(context))
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(foregroundColor: colors.danger, minimumSize: const Size(0, 46)),
-                  onPressed: () => playlists.requestDeletePlaylist(playlist),
-                  icon: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
-                  label: Text(context.tr('PlaylistDeleteAction')),
+                PopEffect(
+                  glow: true,
+                  glowColor: colors.danger,
+                  borderRadius: BorderRadius.circular(999),
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.danger,
+                      minimumSize: const Size(0, 46),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      overlayColor: Colors.transparent,
+                    ),
+                    onPressed: () => playlists.requestDeletePlaylist(playlist),
+                    icon: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
+                    label: Text(context.tr('PlaylistDeleteAction')),
+                  ),
                 ),
             ],
           ),

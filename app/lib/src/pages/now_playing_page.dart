@@ -1,4 +1,4 @@
-// Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart' hide RepeatMode;
@@ -327,13 +327,23 @@ class _QueueTab extends StatelessWidget {
                 ),
               ),
               if (player.canEditQueue)
-                TextButton.icon(
-                  style: TextButton.styleFrom(foregroundColor: colors.palette.coral, minimumSize: const Size(0, 40)),
-                  onPressed: player.queueItems.isEmpty ? null : player.clearQueue,
-                  icon: const Icon(Icons.playlist_remove_rounded, size: 20),
-                  label: Text(
-                    context.tr('ClearQueue'),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                PopEffect(
+                  enabled: player.queueItems.isNotEmpty,
+                  glow: true,
+                  glowColor: colors.palette.coral,
+                  borderRadius: BorderRadius.circular(999),
+                  child: TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.palette.coral,
+                      minimumSize: const Size(0, 40),
+                      overlayColor: Colors.transparent,
+                    ),
+                    onPressed: player.queueItems.isEmpty ? null : player.clearQueue,
+                    icon: const Icon(Icons.playlist_remove_rounded, size: 20),
+                    label: Text(
+                      context.tr('ClearQueue'),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
                   ),
                 )
               else
