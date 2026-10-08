@@ -395,6 +395,39 @@ class ServerSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  Future<String?> changePassword(String currentPassword, String newPassword, String confirmPassword) async {
+    if (!isLoggedIn) return Localizer.get('NotSignedIn');
+    if (currentPassword.isEmpty) return Localizer.get('EnterCurrentPassword');
+    if (newPassword.isEmpty) return Localizer.get('EnterNewPassword');
+    if (newPassword.length < AuthRules.minPasswordLength) {
+      return Localizer.format('PasswordTooShort', [AuthRules.minPasswordLength]);
+    }
+    if (newPassword != confirmPassword) return Localizer.get('PasswordsDontMatch');
+
+    try {
+      await _session.changePassword(currentPassword, newPassword);
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
+  Future<String?> adminResetPassword(String userId, String newPassword, String confirmPassword) async {
+    if (!isLoggedIn || !isAdmin) return Localizer.get('SessionRejected');
+    if (newPassword.isEmpty) return Localizer.get('EnterNewPassword');
+    if (newPassword.length < AuthRules.minPasswordLength) {
+      return Localizer.format('PasswordTooShort', [AuthRules.minPasswordLength]);
+    }
+    if (newPassword != confirmPassword) return Localizer.get('PasswordsDontMatch');
+
+    try {
+      await _session.adminResetPassword(userId, newPassword);
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
   void _showUserManagementError(String? message) {
     userManagementErrorMessage = message ?? '';
     notifyListeners();
@@ -470,9 +503,20 @@ class AudioSettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setExclusiveMode(bool value) => _engine.setExclusiveMode(value);
+  Future<void> setExclusiveMode(bool value) async {
+    isExclusiveMode = value;
+    notifyListeners();
+    await _engine.setExclusiveMode(value);
+    _syncWithEngine();
+  }
 
-  Future<void> setBitperfect(bool value) => _engine.setBitperfectMode(value);
+  Future<void> setBitperfect(bool value) async {
+    isBitperfect = value;
+    if (value) isExclusiveMode = true;
+    notifyListeners();
+    await _engine.setBitperfectMode(value);
+    _syncWithEngine();
+  }
 
   Future<void> selectDevice(AudioOutputDevice? device) async {
     if (device == null || device.id == _engine.currentDevice?.id) return;

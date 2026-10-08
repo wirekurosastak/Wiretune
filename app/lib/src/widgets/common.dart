@@ -94,7 +94,7 @@ class PlayShuffleButtons extends StatelessWidget {
     // The phone's two full-width buttons are a little taller.
     final size = Size(0, phone ? 48 : 46);
     const text = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.1);
-    const padding = EdgeInsets.symmetric(horizontal: 26);
+    final padding = EdgeInsets.symmetric(horizontal: phone ? 12 : 24);
     final play = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
@@ -104,14 +104,24 @@ class PlayShuffleButtons extends StatelessWidget {
         style: FilledButton.styleFrom(minimumSize: size, padding: padding, textStyle: text),
         onPressed: onPlay,
         icon: const Icon(Icons.play_arrow_rounded, size: 22),
-        label: Text(playLabel),
+        label: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(playLabel, maxLines: 1, softWrap: false),
+        ),
       ),
     );
     final shuffle = OutlinedButton.icon(
-      style: OutlinedButton.styleFrom(minimumSize: size, padding: padding, textStyle: text),
+      style: OutlinedButton.styleFrom(
+        minimumSize: size,
+        padding: padding,
+        textStyle: text,
+      ),
       onPressed: onShuffle,
       icon: Icon(Icons.shuffle_rounded, size: 20, color: onShuffle == null ? null : colors.accent),
-      label: Text(shuffleLabel),
+      label: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(shuffleLabel, maxLines: 1, softWrap: false),
+      ),
     );
     if (phone) {
       return Row(
@@ -206,7 +216,7 @@ class EmptyState extends StatelessWidget {
 
 /// A rounded card of glass: a faint sheen from its top-left corner and a hairline edge.
 class GlassCard extends StatelessWidget {
-  const GlassCard({super.key, required this.child, this.padding, this.hoverColor});
+  const GlassCard({super.key, required this.child, this.padding, this.hoverColor, this.opaque = false});
 
   final Widget child;
 
@@ -216,28 +226,39 @@ class GlassCard extends StatelessWidget {
   /// The border's colour under the mouse (the section's accent); none keeps it unchanged.
   final Color? hoverColor;
 
+  /// Whether the card should be solid pitch black (dark) / pure white (light) instead of translucent glass.
+  final bool opaque;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final radius = BorderRadius.circular(Radii.card + 4);
+    final isDark = colors.palette.isDark;
     return _HoverBorder(
       hoverColor: hoverColor,
       builder: (border) => DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: radius,
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [colors.surface2, colors.surface1, colors.palette.glassBackground],
-            stops: const [0, 0.35, 1],
-          ),
+          color: opaque ? (isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF)) : null,
+          gradient: opaque
+              ? null
+              : LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [colors.surface2, colors.surface1, colors.palette.glassBackground],
+                  stops: const [0, 0.35, 1],
+                ),
         ),
         // A Material, so the ink of the tiles and buttons inside is painted on the card.
         child: Material(
           type: MaterialType.transparency,
           shape: RoundedRectangleBorder(
             borderRadius: radius,
-            side: BorderSide(color: border),
+            side: BorderSide(
+              color: opaque
+                  ? (isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000))
+                  : border,
+            ),
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(padding: padding ?? EdgeInsets.all(PhoneChrome.isPhone(context) ? 18 : 24), child: child),
@@ -477,20 +498,64 @@ class VerticalSwipe extends StatefulWidget {
   State<VerticalSwipe> createState() => _VerticalSwipeState();
 }
 
-class _VerticalSwipeState extends State<VerticalSwipe> {
+class _VerticalSwipeState extends State<VerticalSwipe> with SingleTickerProviderStateMixin {
   double _distance = 0;
+  late final AnimationController _resetController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+  );
+  Animation<double>? _resetAnimation;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    behavior: HitTestBehavior.translucent,
-    onVerticalDragStart: (_) => _distance = 0,
-    onVerticalDragUpdate: (details) => _distance += details.delta.dy,
-    onVerticalDragEnd: (details) {
-      final direction = widget.upwards ? -1 : 1;
-      if (_distance * direction > 40 || (details.primaryVelocity ?? 0) * direction > 400) widget.onSwipe();
-    },
-    child: widget.child,
-  );
+  void dispose() {
+    _resetController.dispose();
+    super.dispose();
+  }
+
+  void _onDragStart(DragStartDetails _) {
+    _resetController.stop();
+    _distance = 0;
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _distance += details.delta.dy;
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final direction = widget.upwards ? -1 : 1;
+    final velocity = (details.primaryVelocity ?? 0) * direction;
+    final traveled = _distance * direction;
+    if (traveled > 40 || velocity > 350) {
+      widget.onSwipe();
+      setState(() => _distance = 0);
+    } else if (_distance != 0) {
+      _resetAnimation = Tween<double>(begin: _distance, end: 0).animate(
+        CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic),
+      )..addListener(() {
+          setState(() {
+            _distance = _resetAnimation!.value;
+          });
+        });
+      _resetController.forward(from: 0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offset = widget.upwards ? _distance.clamp(-60.0, 0.0) : _distance.clamp(0.0, 60.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: _onDragStart,
+      onVerticalDragUpdate: _onDragUpdate,
+      onVerticalDragEnd: _onDragEnd,
+      child: Transform.translate(
+        offset: Offset(0, offset),
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 /// Marks the phone layout, whose pages draw the phone's headers and full-width buttons.
@@ -516,74 +581,129 @@ class _PhonePageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 68),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 30,
-                          letterSpacing: -0.8,
-                          fontWeight: FontWeight.w800,
-                          color: colors.textMain,
-                        ),
-                      ),
-                      if (subtitle != null && subtitle!.isNotEmpty)
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 68),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          subtitle!,
+                          title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 12, color: colors.textMuted),
+                          style: TextStyle(
+                            fontSize: 30,
+                            letterSpacing: -0.8,
+                            fontWeight: FontWeight.w800,
+                            color: colors.textMain,
+                          ),
                         ),
-                    ],
+                        if (subtitle != null && subtitle!.isNotEmpty)
+                          Text(
+                            subtitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: colors.textMuted),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                // The way to another device also while nothing plays here (no mini player then).
-                const DevicesButton(dimension: 44, iconSize: 23),
-                if (vm.selectedSection != AppSection.settings)
+                  // The way to another device also while nothing plays here (no mini player then).
+                  const DevicesButton(dimension: 44, iconSize: 23),
+                  if (vm.selectedSection != AppSection.settings)
+                    SizedBox.square(
+                      dimension: 44,
+                      child: IconButton(
+                        tooltip: context.tr('SearchPlaceholderShort'),
+                        onPressed: vm.openSearch,
+                        icon: Icon(Icons.search_rounded, size: 24, color: colors.textMain),
+                      ),
+                    ),
                   SizedBox.square(
                     dimension: 44,
                     child: IconButton(
-                      tooltip: context.tr('SearchPlaceholderShort'),
-                      onPressed: vm.openSearch,
-                      icon: Icon(Icons.search_rounded, size: 24, color: colors.textMain),
+                      tooltip: context.tr('TipAccountSettings'),
+                      onPressed: () => vm.navigateTo(AppSection.settings),
+                      icon: Icon(
+                        vm.isUserLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,
+                        size: 26,
+                        color: vm.isUserLoggedIn ? colors.textMain : colors.textMuted,
+                      ),
                     ),
                   ),
-                SizedBox.square(
-                  dimension: 44,
-                  child: IconButton(
-                    tooltip: context.tr('TipAccountSettings'),
-                    onPressed: () => vm.navigateTo(AppSection.settings),
-                    icon: Icon(
-                      vm.isUserLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,
-                      size: 26,
-                      color: vm.isUserLoggedIn ? colors.accent : colors.textMuted,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        if (actions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-            child: actions.length == 1 ? actions.first : Wrap(spacing: 10, runSpacing: 8, children: actions),
-          ),
-      ],
+          if (actions.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              child: Builder(
+                builder: (context) {
+                  final ordered = List<Widget>.from(actions);
+                  final playIndex = ordered.indexWhere((w) => w is PlayShuffleButtons);
+                  if (playIndex != -1) {
+                    final play = ordered.removeAt(playIndex);
+                    ordered.add(play);
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (int i = 0; i < ordered.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        ordered[i],
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
+
+/// A compact badge for track metadata (BPM, bitrate) displayed in the players.
+class PlayerMetaBadge extends StatelessWidget {
+  const PlayerMetaBadge({super.key, required this.text, this.fontSize = 10});
+
+  final String text;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: colors.surface2,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colors.glassBorder),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+          color: colors.textMuted,
+          height: 1.3,
+        ),
+      ),
+    );
+  }
+}
+

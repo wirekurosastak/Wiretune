@@ -339,6 +339,7 @@ class WiretuneServer {
       return user == null ? unauthorized() : jsonResponse(user.toJson());
     }),
     _Route('GET', '/api/users', Access.admin, (_) => jsonResponse(auth.getAllUsers().map((u) => u.toJson()).toList())),
+    _Route('POST', '/api/users/{userId}/password', Access.admin, _adminResetPassword),
     _Route('DELETE', '/api/users/{userId}', Access.admin, (call) {
       final userId = call.params['userId']!;
       if (call.userId == userId) {
@@ -457,6 +458,18 @@ class WiretuneServer {
     return await auth.changePassword(call.userId, current, replacement)
         ? jsonResponse({'changed': true})
         : errorResponse(403, 'The current password is wrong.');
+  }
+
+  Future<Response> _adminResetPassword(_Call call) async {
+    final body = await call.jsonObject();
+    final replacement = body?['newPassword'];
+    if (replacement is! String) return errorResponse(400, 'A new password is required.');
+    final error = AuthService.validatePassword(replacement);
+    if (error != null) return errorResponse(400, error);
+    final userId = call.params['userId']!;
+    return await auth.resetPassword(userId, replacement)
+        ? jsonResponse({'changed': true})
+        : errorResponse(404, 'User not found.');
   }
 
   Future<Response> _register(_Call call) async {

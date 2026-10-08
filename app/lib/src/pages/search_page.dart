@@ -103,7 +103,7 @@ class SearchResults extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SizedBox(
-                            width: 340,
+                            width: 320,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -218,12 +218,14 @@ class _BestMatchCard extends StatelessWidget {
       BestMatchKind.album => palette.purple,
       BestMatchKind.track => palette.cyan,
     };
-    return MetricCard(
-      accent: typeColor,
-      padding: 20,
-      onTap: match.open,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SizedBox(
+      width: 320,
+      child: MetricCard(
+        accent: typeColor,
+        padding: 20,
+        onTap: match.open,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CoverImage(
             path: match.coverPath,
@@ -264,6 +266,7 @@ class _BestMatchCard extends StatelessWidget {
           TilePlayButton(color: typeColor, onPressed: match.play, tooltip: context.tr('Play'), size: 48),
         ],
       ),
-    );
+    ),
+  );
   }
 }

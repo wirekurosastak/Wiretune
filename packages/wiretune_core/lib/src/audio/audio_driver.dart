@@ -16,7 +16,7 @@ abstract class AudioDriver {
   Event<PlaybackState> get stateChanged;
   Event<Duration> get positionChanged;
 
-  /// 32 band levels (0..1), about 30 times a second while playing; drivers without an analyser never raise it.
+  /// 64 band levels (0..1), about 30 times a second while playing; drivers without an analyser never raise it.
   Event<Float32List> get spectrumDataAvailable;
   Event<void> get trackEnded;
 

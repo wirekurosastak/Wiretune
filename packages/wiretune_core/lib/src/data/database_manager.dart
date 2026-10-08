@@ -32,7 +32,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in
   /// [initializeSchema] that upgrades a database of the previous version in place.
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 3;
 
   final String databasePath;
   Database? _db;
@@ -79,9 +79,16 @@ class DatabaseManager {
           db.userVersion = schemaVersion;
         });
       } else if (version == 1) {
-        // 1 -> 2: when each favourite was marked.
+        // 1 -> 3: when each favourite was marked, and bpm.
         transaction((db) {
           db.execute('ALTER TABLE tracks ADD COLUMN favorited_at INTEGER;');
+          db.execute('ALTER TABLE tracks ADD COLUMN bpm INTEGER;');
+          db.userVersion = schemaVersion;
+        });
+      } else if (version == 2) {
+        // 2 -> 3: bpm.
+        transaction((db) {
+          db.execute('ALTER TABLE tracks ADD COLUMN bpm INTEGER;');
           db.userVersion = schemaVersion;
         });
       } else {
@@ -127,6 +134,7 @@ const String _schema = '''
       track_count INTEGER,
       disc_number INTEGER,
       year INTEGER,
+      bpm INTEGER,
       genre TEXT,
       duration_ms INTEGER NOT NULL,
       file_size_bytes INTEGER NOT NULL,

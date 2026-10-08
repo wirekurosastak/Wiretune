@@ -92,7 +92,6 @@ class NowPlayingPage extends StatelessWidget {
                                       icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
                                     ),
                                   ),
-                                  const SizedBox(width: 44), // the title stays centred between the buttons
                                   Expanded(
                                     child: ListenableBuilder(
                                       listenable: vm.player,
@@ -111,22 +110,6 @@ class NowPlayingPage extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
-                                  ListenableBuilder(
-                                    listenable: vm.player,
-                                    builder: (context, _) {
-                                      // Only a track of this library: another device's may be unknown here.
-                                      final current = vm.player.currentTrack;
-                                      final track = current == null ? null : vm.library.getTrack(current.id);
-                                      return track == null
-                                          ? const SizedBox(width: 44)
-                                          : TrackMenu(
-                                              track: track,
-                                              kind: TrackTableKind.tracks,
-                                              width: 44,
-                                              color: colors.textMain,
-                                            );
-                                    },
-                                  ),
                                 ],
                               ),
                             ),
@@ -245,6 +228,16 @@ class _PlayerTab extends StatelessWidget {
               ),
             ),
           ),
+          if (track != null && track.bpm != null && track.bpm! > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 0, 28, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 11),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 16, 4),
             child: Row(
@@ -283,7 +276,19 @@ class _PlayerTab extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox.square(dimension: 52, child: FavoriteCurrentButton(size: 28)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox.square(dimension: 48, child: FavoriteCurrentButton(size: 28)),
+                    if (track != null)
+                      TrackMenu(
+                        track: vm.library.getTrack(track.id) ?? track,
+                        kind: TrackTableKind.tracks,
+                        width: 44,
+                        color: colors.textMain,
+                      ),
+                  ],
+                ),
               ],
             ),
           ),

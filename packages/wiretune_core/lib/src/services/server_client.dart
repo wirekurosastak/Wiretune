@@ -107,6 +107,17 @@ class ServerStreamingClient {
   Future<void> deleteUser(String baseUrl, String userId) =>
       _send('DELETE', baseUrl, '/api/users/${Uri.encodeComponent(userId)}');
 
+  Future<void> changePassword(String baseUrl, String currentPassword, String newPassword) =>
+      _send('POST', baseUrl, '/api/auth/change-password', body: {
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      });
+
+  Future<void> adminResetPassword(String baseUrl, String userId, String newPassword) =>
+      _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/password', body: {
+        'newPassword': newPassword,
+      });
+
   Future<ServerConfigInfo> getServerConfig(String baseUrl) async =>
       _parse(ServerConfigInfo.fromJson, await _send('GET', baseUrl, '/api/config'));
 

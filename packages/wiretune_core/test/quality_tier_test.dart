@@ -49,6 +49,29 @@ void main() {
     expect(QualityTier.silver.tagText(QualitySummary.mixedSpec), 'MIXED');
   });
 
+  test('compact spec is HI-RES for gold, format for silver, and codec for bronze', () {
+    expect(AudioFormat.compactSpec(QualityTier.gold, 'FLAC 24bit/96kHz'), 'HI-RES');
+    expect(AudioFormat.compactSpec(QualityTier.gold, 'ALAC 24bit/192kHz'), 'HI-RES');
+    expect(AudioFormat.compactSpec(QualityTier.gold, 'MIXED'), 'HI-RES');
+    expect(AudioFormat.compactSpec(QualityTier.silver, 'FLAC 16bit/44.1kHz'), 'FLAC');
+    expect(AudioFormat.compactSpec(QualityTier.silver, 'ALAC 16bit/44.1kHz'), 'ALAC');
+    expect(AudioFormat.compactSpec(QualityTier.silver, 'WAV 16bit/44.1kHz'), 'WAV');
+    expect(AudioFormat.compactSpec(QualityTier.silver, 'MIXED'), 'MIXED');
+    expect(AudioFormat.compactSpec(QualityTier.silver, ''), 'FLAC');
+    expect(AudioFormat.compactSpec(QualityTier.bronze, 'MP3 320kbps'), 'MP3');
+    expect(AudioFormat.compactSpec(QualityTier.bronze, 'AAC 256kbps'), 'AAC');
+    expect(AudioFormat.compactSpec(QualityTier.bronze, 'OGG 192kbps'), 'OGG');
+    expect(AudioFormat.compactSpec(QualityTier.bronze, 'MIXED'), 'MIXED');
+    expect(AudioFormat.compactSpec(QualityTier.bronze, ''), 'MP3');
+
+    final hiResTrack = _lossless(96000, 24);
+    expect(hiResTrack.compactTagSpec, 'HI-RES');
+    final cdTrack = _lossless(44100, 16);
+    expect(cdTrack.compactTagSpec, 'FLAC');
+    final mp3Track = _lossy(320);
+    expect(mp3Track.compactTagSpec, 'MP3');
+  });
+
   test('without a spec the tag is the tier word', () {
     for (final spec in [null, '', '   ']) {
       expect(QualityTier.gold.tagText(spec), 'GOLD');

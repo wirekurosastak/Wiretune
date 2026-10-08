@@ -62,6 +62,27 @@ class AudioFormat {
       ? '${codec.toUpperCase()} ${bitrateKbps}kbps'
       : '${codec.toUpperCase()} ${bitsPerSample}bit/${khz(sampleRate)}kHz';
 
+  /// A compact representation of quality suitable for small thumbnails (e.g. `HI-RES` for gold,
+  /// codec like `FLAC` for silver, codec like `MP3` for bronze).
+  static String compactSpec(QualityTier tier, String spec) {
+    if (tier == QualityTier.gold) return 'HI-RES';
+    final trimmed = spec.trim();
+    if (trimmed.isEmpty) {
+      return tier == QualityTier.silver ? 'FLAC' : 'MP3';
+    }
+    if (trimmed == QualitySummary.mixedSpec) {
+      return QualitySummary.mixedSpec;
+    }
+    final space = trimmed.indexOf(' ');
+    if (space > 0) {
+      return trimmed.substring(0, space);
+    }
+    return trimmed;
+  }
+
+  /// Compact tag text suitable for small thumbnails.
+  String get compactTagSpec => compactSpec(tier, tagSpec);
+
   /// A sample rate in kHz with at most one decimal: `44.1`, `96`, `2822.4`.
   static String khz(int sampleRate) {
     final text = (sampleRate / 1000.0).toStringAsFixed(1);

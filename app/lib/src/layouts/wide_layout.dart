@@ -5,12 +5,14 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
-import 'package:wiretune_core/wiretune_core.dart' hide RepeatMode;
+
+import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
+import '../theme/palette.dart';
 import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
 import '../pages/login_page.dart';
@@ -19,6 +21,7 @@ import '../pages/queue_panel.dart';
 import '../pages/search_page.dart';
 import '../pages/section_page.dart';
 import '../widgets/ambient.dart';
+import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
 import '../widgets/nav_visualizer.dart';
@@ -58,8 +61,23 @@ class WideLayout extends StatelessWidget {
                         const _Sidebar(),
                         const SizedBox(width: gap),
                         Expanded(
-                          child: _Panel(
-                            child: FocusTraversalGroup(child: _Content(vm: vm)),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(Radii.panel),
+                            child: ShaderMask(
+                              shaderCallback: (rect) => const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black,
+                                  Colors.black,
+                                  Colors.transparent,
+                                ],
+                                stops: [0.0, 0.035, 0.965, 1.0],
+                              ).createShader(rect),
+                              blendMode: BlendMode.dstIn,
+                              child: FocusTraversalGroup(child: _Content(vm: vm)),
+                            ),
                           ),
                         ),
                       ],
@@ -80,7 +98,7 @@ class WideLayout extends StatelessWidget {
   }
 }
 
-/// A floating panel: rounded, translucent over the backdrop, with a hairline edge; what scrolls inside is clipped to it.
+/// A floating panel: rounded, pitch dark and non-transparent in dark mode, with a hairline edge.
 class _Panel extends StatelessWidget {
   const _Panel({required this.child});
 
@@ -89,12 +107,13 @@ class _Panel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final isDark = colors.palette.isDark;
     final radius = BorderRadius.circular(Radii.panel);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: colors.palette.panel,
+        color: isDark ? const Color(0xFF000000) : colors.palette.modal,
         borderRadius: radius,
-        border: Border.all(color: colors.glassBorder),
+        border: Border.all(color: isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)),
       ),
       child: ClipRRect(borderRadius: radius, child: child),
     );
@@ -211,8 +230,8 @@ class _Header extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _HeaderPills(compact: compact),
-                if (frameless) ...[const SizedBox(width: 10), const _WindowButtons()],
+                _HeaderModes(compact: compact),
+                if (frameless) const _WindowButtons(),
               ],
             ),
           ),
@@ -331,7 +350,7 @@ class _SearchFieldState extends State<_SearchField> {
           decoration: InputDecoration(
             hintText: context.tr('SearchPlaceholder'),
             filled: true,
-            fillColor: focused ? colors.palette.modal : (_hover ? colors.surface2 : colors.surface1),
+            fillColor: colors.palette.isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
             prefixIcon: Padding(
               padding: const EdgeInsets.only(left: 16, right: 8),
               child: Icon(Icons.search_rounded, size: 19, color: focused ? colors.accent : colors.textMuted),
@@ -346,8 +365,8 @@ class _SearchFieldState extends State<_SearchField> {
                   )
                 : null,
             contentPadding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
-            border: border(colors.glassBorder, 1),
-            enabledBorder: border(_hover ? colors.palette.glassHighlight : colors.glassBorder, 1),
+            border: border(colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000), 1),
+            enabledBorder: border(_hover ? colors.palette.glassHighlight : (colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)), 1),
             focusedBorder: border(colors.accent, 1.5),
           ),
         ),
@@ -356,51 +375,8 @@ class _SearchFieldState extends State<_SearchField> {
   }
 }
 
-/// A header pill: 32 px high and fully rounded, on the glass; an active mode is tinted with its colour and glows.
-class _Pill extends StatelessWidget {
-  const _Pill({required this.child, required this.onPressed, required this.tooltip, this.activeColor});
-
-  final Widget child;
-  final VoidCallback? onPressed;
-  final String tooltip;
-
-  /// The mode's colour when the mode is on; null for an inactive or a plain pill.
-  final Color? activeColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final active = activeColor;
-    return Tooltip(
-      message: tooltip,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        height: 32,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          boxShadow: active == null
-              ? const []
-              : [BoxShadow(color: active.withValues(alpha: 0.35), blurRadius: 14, spreadRadius: -3)],
-        ),
-        child: Material(
-          color: active != null ? active.withValues(alpha: 0.16) : colors.surface1,
-          shape: StadiumBorder(side: BorderSide(color: active?.withValues(alpha: 0.7) ?? colors.glassBorder)),
-          child: InkWell(
-            customBorder: const StadiumBorder(),
-            onTap: onPressed,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Center(child: child),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HeaderPills extends StatelessWidget {
-  const _HeaderPills({required this.compact});
+class _HeaderModes extends StatelessWidget {
+  const _HeaderModes({required this.compact});
 
   final bool compact;
 
@@ -412,128 +388,71 @@ class _HeaderPills extends StatelessWidget {
       listenable: vm.player,
       builder: (context, _) {
         final player = vm.player;
-        Widget modePill(String label, bool on, Color color, VoidCallback onTap, String tip) => _Pill(
-          tooltip: context.tr(tip),
-          activeColor: on ? color : null,
-          onPressed: onTap,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // A status light, dim while the mode is off: the pill keeps its width, so nothing beside it moves.
-              if (on)
-                _PulsingDot(color: color, size: 7)
-              else
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(color: colors.textMuted.withValues(alpha: 0.35), shape: BoxShape.circle),
-                ),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10.5,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w800,
-                  color: on ? color : colors.textMuted,
+        Widget modeBadge({
+          required String label,
+          required bool on,
+          required QualityTier tier,
+          required VoidCallback onTap,
+          required String tip,
+        }) {
+          final bg = on ? MedalColors.bg(tier) : colors.surface1;
+          final border = on ? MedalColors.border(tier) : colors.glassBorder;
+          final fg = on ? MedalColors.fg(tier) : colors.textMuted;
+          return Tooltip(
+            message: context.tr(tip),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(4),
+                onTap: onTap,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    border: Border.all(color: border),
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: on
+                        ? [BoxShadow(color: fg.withValues(alpha: 0.25), blurRadius: 10, spreadRadius: -2)]
+                        : const [],
+                  ),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: fg,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                      height: 1.3,
+                    ),
+                  ),
                 ),
               ),
-            ],
-          ),
-        );
-        // The mode pills exist where the modes do: on a desktop, outside the compact layout, and not while the player
-        // shows another device (the modes are this one's).
+            ),
+          );
+        }
+
         final modes = !compact && AppPlatform.current.isDesktop && !player.isRemote;
+        if (!modes) return const SizedBox.shrink();
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (modes) ...[
-              const SizedBox(width: 16),
-              modePill(
-                'BIT-PERFECT',
-                player.isBitperfect,
-                colors.palette.purple,
-                player.toggleBitperfect,
-                'TipBitPerfect',
-              ),
-              const SizedBox(width: 8),
-              modePill(
-                'EXCLUSIVE',
-                player.isExclusiveMode,
-                colors.palette.lime,
-                player.toggleExclusiveMode,
-                'TipExclusive',
-              ),
-              const SizedBox(width: 8),
-            ] else
-              const SizedBox(width: 16),
-            _Pill(
-              tooltip: context.tr('TipAccount'),
-              onPressed: vm.showLoginScreen,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    vm.isUserLoggedIn ? Icons.account_circle_rounded : Icons.key_rounded,
-                    size: 17,
-                    color: vm.isUserLoggedIn ? colors.palette.cyan : colors.textMuted,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    vm.currentUserBadge,
-                    style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: colors.textMain),
-                  ),
-                ],
-              ),
+            modeBadge(
+              label: 'BIT-PERFECT',
+              on: player.isBitperfect,
+              tier: QualityTier.gold,
+              onTap: player.toggleBitperfect,
+              tip: 'TipBitPerfect',
             ),
             const SizedBox(width: 8),
-            PopupMenuButton<String>(
-              tooltip: context.tr('TipLanguage'),
-              onSelected: vm.changeLanguage,
-              position: PopupMenuPosition.under,
-              itemBuilder: (context) => [
-                for (final l in Localizer.languages)
-                  CheckedPopupMenuItem(value: l.code, checked: l.code == vm.language, child: Text(l.nativeName)),
-              ],
-              child: IgnorePointer(
-                child: _Pill(
-                  tooltip: context.tr('TipLanguage'),
-                  onPressed: () {},
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.translate_rounded, size: 16, color: colors.palette.cyan),
-                      const SizedBox(width: 6),
-                      Text(
-                        vm.languageBadge,
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: colors.textMain),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            modeBadge(
+              label: 'EXCLUSIVE',
+              on: player.isExclusiveMode,
+              tier: QualityTier.silver,
+              onTap: player.toggleExclusiveMode,
+              tip: 'TipExclusive',
             ),
-            const SizedBox(width: 4),
-            IconButton(
-              tooltip: context.tr('TipToggleTheme'),
-              onPressed: vm.toggleTheme,
-              iconSize: 20,
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
-                transitionBuilder: (child, animation) => RotationTransition(
-                  turns: Tween(
-                    begin: 0.6,
-                    end: 1.0,
-                  ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
-                  child: FadeTransition(opacity: animation, child: child),
-                ),
-                child: Icon(
-                  vm.isLight ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                  key: ValueKey(vm.isLight),
-                  color: vm.isLight ? colors.palette.purple : colors.palette.warning,
-                ),
-              ),
-            ),
+            const SizedBox(width: 12),
           ],
         );
       },
@@ -821,7 +740,7 @@ class _Sidebar extends StatelessWidget {
                   ),
                   const SizedBox(height: 22),
                   if (!compact) _GroupTitle(context.tr('SectionSettings')),
-                  item(AppSection.settings, Icons.tune_rounded, palette.cyan, context.tr('NavSettings'), null),
+                  item(AppSection.settings, Icons.tune_rounded, colors.textMain, context.tr('NavSettings'), null),
                 ],
               ),
             );
@@ -1003,9 +922,9 @@ class _PlayerBar extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: WideLayout.gap),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: colors.palette.panel,
+        color: colors.palette.isDark ? const Color(0xFF000000) : colors.palette.modal,
         borderRadius: BorderRadius.circular(Radii.panel + 2),
-        border: Border.all(color: colors.glassBorder),
+        border: Border.all(color: colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)),
         boxShadow: [
           BoxShadow(color: colors.palette.shadow, blurRadius: 30, spreadRadius: -8, offset: const Offset(0, 12)),
         ],
@@ -1023,7 +942,7 @@ class _PlayerBar extends StatelessWidget {
                     const SizedBox(width: 14),
                     Flexible(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 190),
+                        constraints: const BoxConstraints(maxWidth: 240),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1065,6 +984,10 @@ class _PlayerBar extends StatelessWidget {
                                 ),
                               ),
                             if (player.isRemote) ...[const SizedBox(height: 3), const PlayingOnLabel(fontSize: 11)],
+                            if (track != null && track.bpm != null && track.bpm! > 0) ...[
+                              const SizedBox(height: 4),
+                              PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 10),
+                            ],
                           ],
                         ),
                       ),
@@ -1095,8 +1018,8 @@ class _PlayerBar extends StatelessWidget {
                     var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0);
                     final showTag = !compact && track != null && room >= 125 * scale;
                     if (showTag) room -= 125 * scale + 8;
-                    final spectrumWidth = math.min(130.0, room - 14);
-                    final showSpectrum = !compact && platform.isDesktop && spectrumWidth >= 80;
+                    final spectrumWidth = math.min(260.0, room - 14);
+                    final showSpectrum = !compact && platform.isDesktop && spectrumWidth >= 160;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Row(

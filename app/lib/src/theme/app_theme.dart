@@ -107,7 +107,7 @@ ThemeData buildTheme({
     canvasColor: palette.modal,
     focusColor: focus,
     hoverColor: palette.surface1,
-    splashFactory: InkSparkle.splashFactory,
+    splashFactory: InkRipple.splashFactory,
     visualDensity: isTv ? VisualDensity.comfortable : VisualDensity.standard,
     dividerColor: palette.glassBorder,
     // Text fields write in bodyLarge: 15 px, a step above the 13–14 px of the text around them, not two.
@@ -206,7 +206,9 @@ ThemeData buildTheme({
               (s) => s.contains(WidgetState.hovered) ? palette.surface2 : palette.surface1,
             ),
             side: WidgetStateProperty.resolveWith(
-              (s) => BorderSide(color: s.contains(WidgetState.hovered) ? palette.glassHighlight : palette.glassBorder),
+              (s) => BorderSide(
+                color: s.contains(WidgetState.hovered) ? palette.glassHighlight : palette.glassBorder,
+              ),
             ),
           ),
     ),

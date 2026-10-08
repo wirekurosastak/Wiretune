@@ -7,6 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
+import '../view_models/library_view_models.dart';
 import 'common.dart';
 import 'cover_image.dart';
 import 'quality_tag.dart';
@@ -40,7 +41,7 @@ class AlbumCard extends StatelessWidget {
       lines: [
         _line(album.title, 14, FontWeight.w700, colors.textMain),
         _line(album.artist, 12.5, FontWeight.w500, colors.textMuted),
-        _line(details, 11, FontWeight.w500, colors.textMuted.withValues(alpha: 0.75)),
+        _line(details, 11, FontWeight.w500, colors.textMuted),
       ],
       badge: QualityTag(tier: album.tier, spec: album.tagSpec),
       play: TilePlayButton(color: purple, onPressed: onPlay, tooltip: context.tr('Play')),
@@ -112,6 +113,12 @@ class AlbumsSliver extends StatelessWidget {
         ),
         title: album.title,
         subtitle: [album.artist, if (album.year != null) '${album.year}'].join('  •  '),
+        badge: QualityTag(
+          tier: album.tier,
+          spec: album.compactTagSpec,
+          fontSize: 9.5,
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+        ),
       );
     });
   }
@@ -159,6 +166,63 @@ class ArtistsSliver extends StatelessWidget {
   }
 }
 
+/// Playlists as a sliver: on a phone a list of rows (matching album cover size), on a wide screen a grid of tiles.
+class PlaylistsSliver extends StatelessWidget {
+  const PlaylistsSliver({
+    super.key,
+    required this.playlists,
+    required this.tracksOf,
+    required this.onOpen,
+    required this.onPlay,
+  });
+
+  final List<Playlist> playlists;
+  final List<Track> Function(Playlist playlist) tracksOf;
+  final void Function(Playlist playlist) onOpen;
+  final void Function(Playlist playlist) onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PhoneChrome.isPhone(context)) {
+      return TileGridSliver(
+        kind: TileKind.twoLines,
+        itemCount: playlists.length,
+        itemBuilder: (context, index) {
+          final playlist = playlists[index];
+          return PlaylistCard(
+            playlist: playlist,
+            covers: playlistCovers(tracksOf(playlist)),
+            onOpen: () => onOpen(playlist),
+            onPlay: () => onPlay(playlist),
+          );
+        },
+      );
+    }
+    return _rows(playlists.length, (index) {
+      final playlist = playlists[index];
+      final covers = playlistCovers(tracksOf(playlist));
+      final badge = playlist.formatSpec.isEmpty
+          ? null
+          : QualityTag(
+              tier: playlist.formatTier,
+              spec: playlist.compactFormatSpec,
+              fontSize: 9.5,
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+            );
+      return _ListRow(
+        onTap: () => onOpen(playlist),
+        picture: PlaylistCover(
+          covers: covers,
+          radius: Radii.small + 2,
+        ),
+        title: playlist.name,
+        subtitle: context.trf('TrackCount', [playlist.trackCount]),
+        badge: badge,
+      );
+    });
+  }
+}
+
 /// A phone's list of [count] rows, all as tall as the first: that follows the user's font size, and the list still
 /// knows where every row is without building it.
 Widget _rows(int count, Widget Function(int index) row) => count == 0
@@ -175,7 +239,13 @@ Widget _rows(int count, Widget Function(int index) row) => count == 0
 /// A phone's list row, as large as the music apps' lists: the picture, the title and below it the [subtitle]; a tap
 /// opens what it shows.
 class _ListRow extends StatelessWidget {
-  const _ListRow({required this.onTap, required this.picture, required this.title, required this.subtitle});
+  const _ListRow({
+    required this.onTap,
+    required this.picture,
+    required this.title,
+    required this.subtitle,
+    this.badge,
+  });
 
   static const double pictureSize = 68;
 
@@ -183,6 +253,7 @@ class _ListRow extends StatelessWidget {
   final Widget picture;
   final String title;
   final String subtitle;
+  final Widget? badge;
 
   @override
   Widget build(BuildContext context) {
@@ -196,7 +267,26 @@ class _ListRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
             children: [
-              SizedBox.square(dimension: pictureSize, child: picture),
+              SizedBox.square(
+                dimension: pictureSize,
+                child: badge == null
+                    ? picture
+                    : Stack(
+                        children: [
+                          Positioned.fill(child: picture),
+                          Positioned(
+                            left: 4,
+                            right: 4,
+                            bottom: 4,
+                            child: Align(
+                              alignment: Alignment.bottomLeft,
+                              heightFactor: 1,
+                              child: FittedBox(fit: BoxFit.scaleDown, child: badge!),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -411,14 +501,13 @@ class _DesktopTileState extends State<_DesktopTile> {
           duration: duration,
           curve: Curves.easeOutCubic,
           transform: Matrix4.translationValues(0, active ? -4 : 0, 0),
-          decoration: BoxDecoration(
-            color: active ? colors.surface1 : colors.surface1.withValues(alpha: 0),
-            borderRadius: BorderRadius.circular(Radii.card + 2),
-          ),
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
               borderRadius: BorderRadius.circular(Radii.card + 2),
+              hoverColor: Colors.transparent,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
               onTap: widget.onTap,
               child: Padding(
                 padding: const EdgeInsets.all(_DesktopTile.padding),

@@ -82,6 +82,15 @@ class AuthService {
     return _db.connection.updatedRows > 0;
   }
 
+  /// Sets a new password for [userId] directly (used by administrator).
+  Future<bool> resetPassword(String userId, String replacement) async {
+    final rows = _db.connection.select('SELECT id FROM users WHERE id = ?', [userId]);
+    if (rows.isEmpty) return false;
+    final hash = await _hash(replacement);
+    _db.connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
+    return _db.connection.updatedRows > 0;
+  }
+
   bool hasAnyUsers() => (_db.connection.select('SELECT COUNT(*) AS n FROM users').first['n'] as int) > 0;
 
   Future<AuthResponse?> login(String username, String password, {bool rememberMe = false}) async {

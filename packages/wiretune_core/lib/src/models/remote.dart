@@ -156,11 +156,14 @@ enum RemoteAction {
   repeat,
   playTracks,
   playIndex,
+  moveTrack,
+  removeTrack,
+  clearQueue,
 }
 
 /// A command for another player. Each action reads only its own fields: [position] (seek; where playTracks starts),
 /// [volume] (0 to 100), [on] (mute, shuffle), [repeat], [trackIds] and [index] (playTracks, where -1 lets the player
-/// choose the first track as it would itself; playIndex).
+/// choose the first track as it would itself; playIndex; moveTrack from-index; removeTrack index), and [toIndex] (moveTrack to-index).
 class RemoteCommand {
   const RemoteCommand(
     this.action, {
@@ -170,6 +173,7 @@ class RemoteCommand {
     this.repeat = RepeatMode.off,
     this.trackIds = const [],
     this.index = 0,
+    this.toIndex = 0,
   });
 
   final RemoteAction action;
@@ -179,6 +183,7 @@ class RemoteCommand {
   final RepeatMode repeat;
   final List<String> trackIds;
   final int index;
+  final int toIndex;
 
   Map<String, Object?> toJson() => {
     'action': action.name,
@@ -187,7 +192,12 @@ class RemoteCommand {
     if (action == RemoteAction.mute || action == RemoteAction.shuffle) 'on': on,
     if (action == RemoteAction.repeat) 'repeat': repeat.name,
     if (action == RemoteAction.playTracks) 'trackIds': trackIds,
-    if (action == RemoteAction.playTracks || action == RemoteAction.playIndex) 'index': index,
+    if (action == RemoteAction.playTracks ||
+        action == RemoteAction.playIndex ||
+        action == RemoteAction.moveTrack ||
+        action == RemoteAction.removeTrack)
+      'index': index,
+    if (action == RemoteAction.moveTrack) 'toIndex': toIndex,
   };
 
   /// Null when [json] is not a command this player understands.
@@ -199,6 +209,7 @@ class RemoteCommand {
     final volume = json['volume'];
     final on = json['on'];
     final index = json['index'];
+    final toIndex = json['toIndex'];
     switch (action) {
       case RemoteAction.seek:
         if (position is! int || position < 0) return null;
@@ -223,6 +234,14 @@ class RemoteCommand {
         );
       case RemoteAction.playIndex:
         return index is int && index >= 0 ? RemoteCommand(action, index: index) : null;
+      case RemoteAction.moveTrack:
+        return index is int && index >= 0 && toIndex is int && toIndex >= 0
+            ? RemoteCommand(action, index: index, toIndex: toIndex)
+            : null;
+      case RemoteAction.removeTrack:
+        return index is int && index >= 0 ? RemoteCommand(action, index: index) : null;
+      case RemoteAction.clearQueue:
+        return RemoteCommand(action);
       default:
         return RemoteCommand(action);
     }

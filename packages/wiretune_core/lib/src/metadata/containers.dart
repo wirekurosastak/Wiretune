@@ -390,6 +390,14 @@ void _readIlst(ByteSource source, _Box ilst, AudioTags tags, bool wantLyrics) {
       if (payload.length == 2) tags.genre ??= genreByIndex(payload.u16be(0) - 1);
       continue;
     }
+    if (item.type == 'tmpo') {
+      final payload = source.read(payloadOffset, 2);
+      if (payload.length == 2) {
+        final val = payload.u16be(0);
+        if (val > 0) tags.bpm ??= val;
+      }
+      continue;
+    }
 
     final field = _mp4Fields[item.type];
     if (field == null || (field == TagField.lyrics && !wantLyrics) || payloadLength > 4 * 1024 * 1024) continue;

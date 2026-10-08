@@ -61,6 +61,26 @@ void main() {
     expect(titles(albums), ['Lossy', 'CD', 'Mixed', 'Studio 48', 'Studio 96']);
   });
 
+  test('sorting albums by artist sorts alphabetically by artist name', () async {
+    final lib = await library([
+      track('1', 'Album Z', artist: 'Miles Davis'),
+      track('2', 'Album A', artist: 'Miles Davis'),
+      track('3', 'Nevermind', artist: 'Nirvana'),
+      track('4', 'Abbey Road', artist: 'The Beatles'),
+    ]);
+    final albums = AlbumsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+
+    albums.setSortField(AlbumSortField.artist);
+    expect(albums.isSortDescending, isFalse);
+    expect(titles(albums), ['Album A', 'Album Z', 'Nevermind', 'Abbey Road']);
+    expect(albums.sortArtistLabel, 'Artist ↑');
+
+    albums.setSortField(AlbumSortField.artist);
+    expect(albums.isSortDescending, isTrue);
+    expect(titles(albums), ['Abbey Road', 'Nevermind', 'Album A', 'Album Z']);
+    expect(albums.sortArtistLabel, 'Artist ↓');
+  });
+
   test(
     'the genre filter narrows albums and artists to those with a track of the genre, in any capitalisation',
     () async {
@@ -112,12 +132,11 @@ void main() {
       final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
       List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
 
-      expect(titles(), ['Gamma', 'Alpha', 'Beta']); // by artist, the library's own order
-      tracks.setSortField(TrackSortField.title);
-      expect(titles(), ['Alpha', 'Beta', 'Gamma']);
-      expect(tracks.sortLabel(TrackSortField.title), 'ABC ↑');
+      expect(titles(), ['Alpha', 'Beta', 'Gamma']); // ABC default
       tracks.setSortField(TrackSortField.title);
       expect(titles(), ['Gamma', 'Beta', 'Alpha']);
+      tracks.setSortField(TrackSortField.artist);
+      expect(titles(), ['Gamma', 'Alpha', 'Beta']);
       tracks.setSortField(TrackSortField.added); // the newest first
       expect(titles(), ['Beta', 'Alpha', 'Gamma']);
       tracks.setSortField(TrackSortField.quality); // the best first
@@ -127,22 +146,29 @@ void main() {
     },
   );
 
-  test('the favourites come newest first, the ones without a time last', () async {
+  test('the favourites can sort by date added with newest first', () async {
     final lib = await library([
       track('1', 'Album')
+        ..title = 'C'
         ..isFavorite = true
         ..favoritedAt = DateTime.utc(2026, 1, 1),
       track('2', 'Album')
+        ..title = 'B'
         ..isFavorite = true
         ..favoritedAt = DateTime.utc(2026, 3, 1),
-      track('3', 'Album')..isFavorite = true,
+      track('3', 'Album')
+        ..title = 'A'
+        ..isFavorite = true,
       track('4', 'Album'),
     ]);
     final favorites = FavoritesViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
-    expect([for (final t in favorites.favoriteTracks) t.id], ['2', '1', '3']);
+    expect([for (final t in favorites.favoriteTracks) t.id], ['2', '1', '3']); // Date added newest first default
     expect(favorites.sortLabel(TrackSortField.added), 'Date added ↓');
+    favorites.setSortField(TrackSortField.title);
+    expect([for (final t in favorites.favoriteTracks) t.id], ['3', '2', '1']);
 
     await lib.toggleFavorite('4'); // marked just now: the newest
+    favorites.setSortField(TrackSortField.added);
     expect(favorites.favoriteTracks.first.id, '4');
   });
 }

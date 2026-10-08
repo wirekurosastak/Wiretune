@@ -8,6 +8,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
+import '../theme/palette.dart';
 import '../view_models/settings_view_models.dart';
 import '../widgets/common.dart';
 import '../widgets/devices.dart';
@@ -26,46 +27,46 @@ class SettingsPage extends StatelessWidget {
       builder: (context, _) {
         final server = vm.serverSettings;
         final left = <Widget>[
-          SectionLabel(context.tr('SettingsServerSection'), padding: const EdgeInsets.fromLTRB(4, 8, 4, 16)),
-          const _AccountCard(),
+          const _AccountAndUsersCard(),
           const SizedBox(height: 16),
-          const _ServerCard(),
-          if (server.isLoggedIn || vm.downloads.hasAnything) ...[const SizedBox(height: 16), const _DownloadsCard()],
-          if (server.isLoggedIn) ...[const SizedBox(height: 16), const _RemoteCard()],
-          if (server.supportsLocalFolder) ...[const SizedBox(height: 16), const _LocalFolderCard()],
-          if (server.isLoggedIn && server.isAdmin) ...[
-            const SizedBox(height: 16),
-            const _AdminCard(),
-            const SizedBox(height: 16),
-            const _UsersCard(),
-          ],
+          const _ConnectionAndStorageCard(),
+          const SizedBox(height: 16),
+          const _AboutCard(),
         ];
         final right = <Widget>[
-          SectionLabel(context.tr('SettingsAppearanceSection'), padding: const EdgeInsets.fromLTRB(4, 0, 4, 16)),
-          const _AppearanceCard(),
-          SectionLabel(context.tr('Lyrics'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 16)),
-          _SwitchCard(
-            icon: Icons.lyrics_outlined,
-            title: context.tr('SettingsOnlineLyrics'),
-            hint: context.tr('SettingsOnlineLyricsHint'),
-            value: vm.useOnlineLyrics,
-            onChanged: (v) => vm.useOnlineLyrics = v,
-          ),
           if (vm.audioSettings.hasDeviceChoice) ...[
-            SectionLabel(context.tr('SettingsAudioSection'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 16)),
             const _AudioCard(),
+            const SizedBox(height: 16),
+          ],
+          const _AppearanceCard(),
+          if (server.isLoggedIn || vm.downloads.hasAnything) ...[
+            const SizedBox(height: 16),
+            const _DownloadsCard(),
+          ],
+          if (server.isLoggedIn) ...[
+            const SizedBox(height: 16),
+            const _RemoteCard(),
+          ],
+        ];
+        final singleColumn = <Widget>[
+          const _AccountAndUsersCard(),
+          const SizedBox(height: 16),
+          const _ConnectionAndStorageCard(),
+          const SizedBox(height: 16),
+          if (vm.audioSettings.hasDeviceChoice) ...[
+            const _AudioCard(),
+            const SizedBox(height: 16),
+          ],
+          const _AppearanceCard(),
+          if (server.isLoggedIn || vm.downloads.hasAnything) ...[
+            const SizedBox(height: 16),
+            const _DownloadsCard(),
+          ],
+          if (server.isLoggedIn) ...[
+            const SizedBox(height: 16),
+            const _RemoteCard(),
           ],
           const SizedBox(height: 16),
-          _SwitchCard(
-            icon: Icons.speed_rounded,
-            title: context.tr('SettingsPerformanceStats'),
-            hint: context.tr('SettingsPerformanceStatsHint'),
-            value: vm.showPerformanceStats,
-            onChanged: (v) => vm.showPerformanceStats = v,
-          ),
-          const SizedBox(height: 16),
-          const _LibraryStatsCard(),
-          SectionLabel(context.tr('SettingsAboutSection'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 16)),
           const _AboutCard(),
         ];
         return LayoutBuilder(
@@ -94,7 +95,7 @@ class SettingsPage extends StatelessWidget {
                         )
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [...left, const SizedBox(height: 24), ...right],
+                          children: singleColumn,
                         ),
                 ),
               ],
@@ -125,8 +126,9 @@ class _CardTitle extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: colors.accent.withValues(alpha: 0.14),
+              color: colors.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(11),
+              border: Border.all(color: colors.accent.withValues(alpha: 0.25)),
             ),
             child: Icon(icon, color: colors.accent, size: 20),
           ),
@@ -207,158 +209,626 @@ class _FieldRow extends StatelessWidget {
   );
 }
 
-class _AccountCard extends StatelessWidget {
-  const _AccountCard();
+class _AccountAndUsersCard extends StatefulWidget {
+  const _AccountAndUsersCard();
+
+  @override
+  State<_AccountAndUsersCard> createState() => _AccountAndUsersCardState();
+}
+
+class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
+  final _username = TextEditingController();
+  final _password = TextEditingController();
+  final _confirm = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final server = context.vm.serverSettings;
+        if (server.isLoggedIn && server.isAdmin) {
+          server.loadUsers();
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _username.dispose();
+    _password.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  Future<void> _add(ServerSettingsViewModel server) async {
+    server
+      ..newUsername = _username.text
+      ..newPassword = _password.text
+      ..confirmPassword = _confirm.text;
+    await server.addUser();
+    if (!server.hasUserManagementError) {
+      _username.clear();
+      _password.clear();
+      _confirm.clear();
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _openChangePasswordDialog(BuildContext context, ServerSettingsViewModel server) {
+    final current = TextEditingController();
+    final next = TextEditingController();
+    final confirm = TextEditingController();
+    String? error;
+    bool busy = false;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final colors = ctx.colors;
+          return AlertDialog(
+            title: Text(ctx.tr('ChangePassword')),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: current,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: ctx.tr('CurrentPassword'),
+                      hintText: ctx.tr('CurrentPassword'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: next,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: ctx.tr('NewPassword'),
+                      hintText: ctx.tr('PasswordMinPlaceholder'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirm,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: ctx.tr('PasswordConfirmPlaceholder'),
+                      hintText: ctx.tr('PasswordConfirmPlaceholder'),
+                    ),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.of(ctx).pop(),
+                child: Text(ctx.tr('Cancel')),
+              ),
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          busy = true;
+                          error = null;
+                        });
+                        final err = await server.changePassword(current.text, next.text, confirm.text);
+                        if (err != null) {
+                          setDialogState(() {
+                            busy = false;
+                            error = err;
+                          });
+                        } else {
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(context.tr('PasswordChanged'))),
+                            );
+                          }
+                        }
+                      },
+                child: Text(ctx.tr('Save')),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _openAdminResetPasswordDialog(BuildContext context, ServerSettingsViewModel server, UserInfo user) {
+    final next = TextEditingController();
+    final confirm = TextEditingController();
+    String? error;
+    bool busy = false;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final colors = ctx.colors;
+          return AlertDialog(
+            title: Text('${ctx.tr('ResetPassword')}: ${user.username}'),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 380),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: next,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: ctx.tr('NewPassword'),
+                      hintText: ctx.tr('PasswordMinPlaceholder'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: confirm,
+                    obscureText: true,
+                    decoration: InputDecoration(
+                      labelText: ctx.tr('PasswordConfirmPlaceholder'),
+                      hintText: ctx.tr('PasswordConfirmPlaceholder'),
+                    ),
+                  ),
+                  if (error != null) ...[
+                    const SizedBox(height: 12),
+                    Text(error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: busy ? null : () => Navigator.of(ctx).pop(),
+                child: Text(ctx.tr('Cancel')),
+              ),
+              FilledButton(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        setDialogState(() {
+                          busy = true;
+                          error = null;
+                        });
+                        final err = await server.adminResetPassword(user.id, next.text, confirm.text);
+                        if (err != null) {
+                          setDialogState(() {
+                            busy = false;
+                            error = err;
+                          });
+                        } else {
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(context.tr('PasswordChanged'))),
+                            );
+                          }
+                        }
+                      },
+                child: Text(ctx.tr('Save')),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
     final server = vm.serverSettings;
     final colors = context.colors;
-    if (server.isLoggedIn) {
-      return GlassCard(
-        child: Row(
+
+    final fields = [
+      TextField(
+        controller: _username,
+        decoration: InputDecoration(hintText: context.tr('UsernamePlaceholder')),
+      ),
+      TextField(
+        controller: _password,
+        obscureText: true,
+        decoration: InputDecoration(hintText: context.tr('PasswordMinPlaceholder')),
+      ),
+      TextField(
+        controller: _confirm,
+        obscureText: true,
+        decoration: InputDecoration(hintText: context.tr('PasswordConfirmPlaceholder')),
+        onSubmitted: (_) => _add(server),
+      ),
+    ];
+
+    return ListenableBuilder(
+      listenable: server,
+      builder: (context, _) => GlassCard(
+        opaque: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: colors.accent.withValues(alpha: 0.18),
-              child: Icon(
-                server.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
-                color: colors.accent,
-              ),
+            _CardTitle(
+              icon: Icons.person_rounded,
+              title: context.tr(server.isAdmin ? 'Users' : 'TipAccount'),
+              subtitle: context.tr('UsersSubtitle'),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            if (server.isLoggedIn) ...[
+              Row(
                 children: [
-                  Text(
-                    server.currentUserName,
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: colors.textMain),
+                  Tooltip(
+                    message: context.tr('TipAccount'),
+                    child: CircleAvatar(
+                      radius: 22,
+                      backgroundColor: colors.surface2,
+                      child: Icon(
+                        server.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
+                        color: colors.textMain,
+                      ),
+                    ),
                   ),
-                  Text(
-                    '${server.currentUserRole} • ${server.serverUrl}',
-                    style: TextStyle(fontSize: 12, color: colors.textMuted),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          server.currentUserName,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                        ),
+                        Text(
+                          '${server.currentUserRole} • ${server.serverUrl}',
+                          style: TextStyle(fontSize: 12, color: colors.textMuted),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ),
-            Tooltip(
-              message: context.tr('TipSignOut'),
-              child: OutlinedButton.icon(
-                onPressed: vm.logout,
-                icon: Icon(Icons.logout_rounded, color: colors.danger),
-                label: Text(context.tr('SignOut')),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Tooltip(
+                    message: context.tr('TipChangePassword'),
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openChangePasswordDialog(context, server),
+                      icon: const Icon(Icons.key_rounded, size: 16),
+                      label: Text(context.tr('ChangePassword')),
+                    ),
+                  ),
+                  Tooltip(
+                    message: context.tr('TipSignOut'),
+                    child: OutlinedButton.icon(
+                      onPressed: vm.logout,
+                      icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
+                      label: Text(context.tr('SignOut')),
+                    ),
+                  ),
+                ],
               ),
-            ),
+            ]
+            else
+              Row(
+                children: [
+                  Tooltip(
+                    message: context.tr('TipAccount'),
+                    child: Icon(Icons.account_circle_outlined, size: 40, color: colors.textMuted),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('NotSignedIn'),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                        ),
+                        Text(context.tr('NotSignedInHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                      ],
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: vm.showLoginScreen,
+                    icon: const Icon(Icons.login_rounded, size: 16),
+                    label: Text(context.tr('SignIn')),
+                  ),
+                ],
+              ),
+            if (server.isLoggedIn && server.isAdmin) ...[
+              const SizedBox(height: 20),
+              Divider(color: colors.glassBorder, height: 1),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: SectionLabel(context.tr('NewUser'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 8)),
+                  ),
+                  IconButton(
+                    tooltip: context.tr('TipRefreshList'),
+                    onPressed: server.loadUsers,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final add = FilledButton.icon(
+                    onPressed: server.isAddingUser ? null : () => _add(server),
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: Text(context.tr('Add')),
+                  );
+                  if (constraints.maxWidth < 760) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 10), child: f),
+                        Align(alignment: Alignment.centerRight, child: add),
+                      ],
+                    );
+                  }
+                  return IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final f in fields) ...[Expanded(child: f), const SizedBox(width: 10)],
+                        add,
+                      ],
+                    ),
+                  );
+                },
+              ),
+              _StatusLine(server.userManagementErrorMessage, isError: true),
+              SectionLabel(context.tr('RegisteredUsers'), padding: const EdgeInsets.fromLTRB(0, 16, 0, 4)),
+              for (final user in server.serverUsers)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: colors.surface2,
+                        child: Icon(
+                          user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
+                          size: 18,
+                          color: colors.textMain,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.username,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
+                            ),
+                            Text(
+                              '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • '
+                              '${context.trf('CreatedAt', [user.createdAt])}',
+                              style: TextStyle(fontSize: 12, color: colors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (user.username != server.currentUserName) ...[
+                        IconButton(
+                          tooltip: context.tr('TipResetPassword'),
+                          icon: Icon(Icons.lock_reset_rounded, color: colors.textMuted),
+                          onPressed: () => _openAdminResetPasswordDialog(context, server, user),
+                        ),
+                        IconButton(
+                          tooltip: context.tr('TipDeleteUser'),
+                          icon: Icon(Icons.delete_outline, color: colors.danger),
+                          onPressed: () => server.deleteUser(user.id),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
           ],
         ),
-      );
-    }
-    return GlassCard(
-      child: Row(
-        children: [
-          Icon(Icons.account_circle_outlined, size: 40, color: colors.textMuted),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.tr('NotSignedIn'),
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: colors.textMain),
-                ),
-                Text(context.tr('NotSignedInHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-              ],
-            ),
-          ),
-          FilledButton.icon(
-            onPressed: vm.showLoginScreen,
-            icon: const Icon(Icons.login_rounded),
-            label: Text(context.tr('SignIn')),
-          ),
-        ],
       ),
     );
   }
 }
 
-class _ServerCard extends StatefulWidget {
-  const _ServerCard();
+class _ConnectionAndStorageCard extends StatefulWidget {
+  const _ConnectionAndStorageCard();
 
   @override
-  State<_ServerCard> createState() => _ServerCardState();
+  State<_ConnectionAndStorageCard> createState() => _ConnectionAndStorageCardState();
 }
 
-class _ServerCardState extends State<_ServerCard> {
-  late final TextEditingController _url = TextEditingController(text: context.vm.serverSettings.serverUrl);
-  String _lastSynced = '';
+class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
+  late final TextEditingController _url;
+  late final TextEditingController _serverFolder;
+  late final TextEditingController _localPath;
+  String _lastSyncedUrl = '';
+  String _lastLoadedServerFolder = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final server = context.vm.serverSettings;
+    _url = TextEditingController(text: server.serverUrl);
+    _serverFolder = TextEditingController(text: server.serverLibraryPath);
+    _localPath = TextEditingController(text: server.localLibraryPath);
+    _lastSyncedUrl = server.serverUrl;
+    _lastLoadedServerFolder = server.serverLibraryPath;
+  }
 
   @override
   void dispose() {
     _url.dispose();
+    _serverFolder.dispose();
+    _localPath.dispose();
     super.dispose();
+  }
+
+  Future<void> _browseLocal(ServerSettingsViewModel server) async {
+    final chosen = await FilePicker.getDirectoryPath(initialDirectory: server.localLibraryPath);
+    if (chosen == null) return;
+    _localPath.text = chosen;
+    server.localLibraryPath = chosen;
   }
 
   @override
   Widget build(BuildContext context) {
     final server = context.vm.serverSettings;
     final colors = context.colors;
-    // Follow the session's address when it changes, never while the user types.
-    if (server.serverUrl != _lastSynced && server.serverUrl != _url.text) {
-      _lastSynced = server.serverUrl;
-      _url.text = server.serverUrl;
-    }
-    final badgeColor = server.isLoggedIn
-        ? colors.palette.success
-        : (server.isServerOffline ? colors.danger : colors.palette.warning);
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CardTitle(
-            icon: Icons.dns_outlined,
-            title: context.tr('Connection'),
-            subtitle: server.librarySourceText,
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: badgeColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                server.serverStatusBadge,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: badgeColor),
-              ),
-            ),
-          ),
-          _FieldRow(
-            field: TextField(
-              controller: _url,
-              keyboardType: TextInputType.url,
-              decoration: InputDecoration(
-                hintText: context.tr('ServerUrlPlaceholder'),
-                prefixIcon: const Icon(Icons.link_rounded, size: 18),
-              ),
-              onChanged: (v) => server.serverUrl = v,
-              onSubmitted: (_) => server.connectServer(),
-            ),
-            actions: [
-              Tooltip(
-                message: context.tr('TipCheckConnection'),
-                child: FilledButton(
-                  onPressed: server.isConnecting ? null : server.connectServer,
-                  child: server.isConnecting
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(context.tr('ConnectShort')),
+
+    return ListenableBuilder(
+      listenable: server,
+      builder: (context, _) {
+        if (server.serverUrl != _lastSyncedUrl && server.serverUrl != _url.text) {
+          _lastSyncedUrl = server.serverUrl;
+          _url.text = server.serverUrl;
+        }
+        if (server.serverLibraryPath != _lastLoadedServerFolder) {
+          _lastLoadedServerFolder = server.serverLibraryPath;
+          _serverFolder.text = server.serverLibraryPath;
+        }
+        if (server.localLibraryPath != _localPath.text) {
+          _localPath.text = server.localLibraryPath;
+        }
+
+        final badgeColor = server.isLoggedIn
+            ? colors.palette.success
+            : (server.isServerOffline ? colors.danger : colors.palette.warning);
+
+        return GlassCard(
+          opaque: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _CardTitle(
+              icon: Icons.dns_outlined,
+              title: context.tr('Connection'),
+              subtitle: '${server.librarySourceText} • ${context.tr('SettingsServerSection')}',
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  server.serverStatusBadge,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: badgeColor),
                 ),
               ),
+            ),
+            _FieldRow(
+              field: TextField(
+                controller: _url,
+                keyboardType: TextInputType.url,
+                decoration: InputDecoration(
+                  hintText: context.tr('ServerUrlPlaceholder'),
+                  prefixIcon: const Icon(Icons.link_rounded, size: 18),
+                ),
+                onChanged: (v) => server.serverUrl = v,
+                onSubmitted: (_) => server.connectServer(),
+              ),
+              actions: [
+                Tooltip(
+                  message: context.tr('TipCheckConnection'),
+                  child: FilledButton(
+                    onPressed: server.isConnecting ? null : server.connectServer,
+                    child: server.isConnecting
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(context.tr('ConnectShort')),
+                  ),
+                ),
+              ],
+            ),
+            _StatusLine(server.statusMessage, isError: server.isServerOffline),
+
+            if (server.isLoggedIn && server.isAdmin) ...[
+              const SizedBox(height: 20),
+              Divider(color: colors.glassBorder, height: 1),
+              const SizedBox(height: 16),
+              _CardTitle(
+                icon: Icons.folder_shared_outlined,
+                title: context.tr('ServerFolderLabel'),
+              ),
+              _FieldRow(
+                field: TextField(
+                  controller: _serverFolder,
+                  decoration: InputDecoration(
+                    hintText: context.tr('ServerFolderPlaceholder'),
+                    prefixIcon: const Icon(Icons.folder_outlined, size: 18),
+                  ),
+                  onChanged: (v) => server.serverLibraryPath = v,
+                ),
+                actions: [
+                  Tooltip(
+                    message: context.tr('TipReindex'),
+                    child: OutlinedButton.icon(
+                      onPressed: server.canRescanServer ? server.rescanServer : null,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: Text(context.tr('Reindex')),
+                    ),
+                  ),
+                  FilledButton(
+                    onPressed: server.isUpdatingServerConfig ? null : server.updateServerLibraryPath,
+                    child: Text(context.tr('SaveFolder')),
+                  ),
+                ],
+              ),
+              _StatusLine(server.statusMessage),
             ],
-          ),
-          _StatusLine(server.statusMessage, isError: server.isServerOffline),
-        ],
-      ),
-    );
+
+            if (server.supportsLocalFolder) ...[
+              const SizedBox(height: 20),
+              Divider(color: colors.glassBorder, height: 1),
+              const SizedBox(height: 16),
+              _CardTitle(
+                icon: Icons.folder_open_rounded,
+                title: context.tr('LocalFolderLabel'),
+              ),
+              _FieldRow(
+                field: TextField(
+                  controller: _localPath,
+                  decoration: InputDecoration(
+                    hintText: context.tr('LocalFolderPlaceholder'),
+                    prefixIcon: const Icon(Icons.folder_outlined, size: 18),
+                  ),
+                  onChanged: (v) => server.localLibraryPath = v,
+                  onSubmitted: (_) => server.startScanFolder(),
+                ),
+                actions: [
+                  OutlinedButton(onPressed: () => _browseLocal(server), child: Text(context.tr('Browse'))),
+                  FilledButton.icon(
+                    onPressed: server.isScanning ? null : server.startScanFolder,
+                    icon: const Icon(Icons.manage_search_rounded),
+                    label: Text(context.tr('Scan')),
+                  ),
+                ],
+              ),
+              if (server.isScanning) ...[
+                const SizedBox(height: 12),
+                LinearProgressIndicator(value: server.scanProgress > 0 ? server.scanProgress / 100 : null),
+              ],
+              _StatusLine(server.statusMessage),
+            ],
+          ],
+        ),
+      );
+    },
+  );
   }
 }
 
@@ -381,6 +851,7 @@ class _DownloadsCardState extends State<_DownloadsCard> {
     return ListenableBuilder(
       listenable: downloads,
       builder: (context, _) => GlassCard(
+        opaque: true,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -442,7 +913,13 @@ class _RemoteCard extends StatefulWidget {
 }
 
 class _RemoteCardState extends State<_RemoteCard> {
-  late final TextEditingController _name = TextEditingController(text: context.vm.deviceName);
+  late final TextEditingController _name;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: context.vm.deviceName);
+  }
 
   @override
   void dispose() {
@@ -464,6 +941,7 @@ class _RemoteCardState extends State<_RemoteCard> {
                   ? context.trf('RemoteStatusConnected', [others])
                   : context.tr('RemoteStatusConnecting'));
         return GlassCard(
+          opaque: true,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -494,278 +972,7 @@ class _RemoteCardState extends State<_RemoteCard> {
   }
 }
 
-class _LocalFolderCard extends StatefulWidget {
-  const _LocalFolderCard();
-
-  @override
-  State<_LocalFolderCard> createState() => _LocalFolderCardState();
-}
-
-class _LocalFolderCardState extends State<_LocalFolderCard> {
-  late final TextEditingController _path = TextEditingController(text: context.vm.serverSettings.localLibraryPath);
-
-  @override
-  void dispose() {
-    _path.dispose();
-    super.dispose();
-  }
-
-  Future<void> _browse(ServerSettingsViewModel server) async {
-    final chosen = await FilePicker.getDirectoryPath(initialDirectory: server.localLibraryPath);
-    if (chosen == null) return;
-    _path.text = chosen;
-    server.localLibraryPath = chosen;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final server = context.vm.serverSettings;
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CardTitle(icon: Icons.folder_open_rounded, title: context.tr('LocalFolderLabel')),
-          _FieldRow(
-            field: TextField(
-              controller: _path,
-              decoration: InputDecoration(
-                hintText: context.tr('LocalFolderPlaceholder'),
-                prefixIcon: const Icon(Icons.folder_outlined, size: 18),
-              ),
-              onChanged: (v) => server.localLibraryPath = v,
-              onSubmitted: (_) => server.startScanFolder(),
-            ),
-            actions: [
-              OutlinedButton(onPressed: () => _browse(server), child: Text(context.tr('Browse'))),
-              FilledButton.icon(
-                onPressed: server.isScanning ? null : server.startScanFolder,
-                icon: const Icon(Icons.manage_search_rounded),
-                label: Text(context.tr('Scan')),
-              ),
-            ],
-          ),
-          if (server.isScanning) ...[
-            const SizedBox(height: 12),
-            LinearProgressIndicator(value: server.scanProgress > 0 ? server.scanProgress / 100 : null),
-          ],
-          _StatusLine(server.statusMessage),
-        ],
-      ),
-    );
-  }
-}
-
-class _AdminCard extends StatefulWidget {
-  const _AdminCard();
-
-  @override
-  State<_AdminCard> createState() => _AdminCardState();
-}
-
-class _AdminCardState extends State<_AdminCard> {
-  final TextEditingController _folder = TextEditingController();
-  String _lastLoaded = '';
-
-  @override
-  void dispose() {
-    _folder.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final server = context.vm.serverSettings;
-    if (server.serverLibraryPath != _lastLoaded) {
-      _lastLoaded = server.serverLibraryPath;
-      _folder.text = server.serverLibraryPath;
-    }
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CardTitle(icon: Icons.admin_panel_settings_outlined, title: context.tr('ServerFolderLabel')),
-          _FieldRow(
-            field: TextField(
-              controller: _folder,
-              decoration: InputDecoration(
-                hintText: context.tr('ServerFolderPlaceholder'),
-                prefixIcon: const Icon(Icons.folder_outlined, size: 18),
-              ),
-              onChanged: (v) => server.serverLibraryPath = v,
-            ),
-            actions: [
-              Tooltip(
-                message: context.tr('TipReindex'),
-                child: OutlinedButton.icon(
-                  onPressed: server.canRescanServer ? server.rescanServer : null,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                  label: Text(context.tr('Reindex')),
-                ),
-              ),
-              FilledButton(
-                onPressed: server.isUpdatingServerConfig ? null : server.updateServerLibraryPath,
-                child: Text(context.tr('SaveFolder')),
-              ),
-            ],
-          ),
-          _StatusLine(server.statusMessage),
-        ],
-      ),
-    );
-  }
-}
-
-class _UsersCard extends StatefulWidget {
-  const _UsersCard();
-
-  @override
-  State<_UsersCard> createState() => _UsersCardState();
-}
-
-class _UsersCardState extends State<_UsersCard> {
-  final _username = TextEditingController();
-  final _password = TextEditingController();
-  final _confirm = TextEditingController();
-
-  @override
-  void dispose() {
-    _username.dispose();
-    _password.dispose();
-    _confirm.dispose();
-    super.dispose();
-  }
-
-  Future<void> _add(ServerSettingsViewModel server) async {
-    server
-      ..newUsername = _username.text
-      ..newPassword = _password.text
-      ..confirmPassword = _confirm.text;
-    await server.addUser();
-    if (!server.hasUserManagementError) {
-      _username.clear();
-      _password.clear();
-      _confirm.clear();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final server = context.vm.serverSettings;
-    final colors = context.colors;
-    final fields = [
-      TextField(
-        controller: _username,
-        decoration: InputDecoration(hintText: context.tr('UsernamePlaceholder')),
-      ),
-      TextField(
-        controller: _password,
-        obscureText: true,
-        decoration: InputDecoration(hintText: context.tr('PasswordMinPlaceholder')),
-      ),
-      TextField(
-        controller: _confirm,
-        obscureText: true,
-        decoration: InputDecoration(hintText: context.tr('PasswordConfirmPlaceholder')),
-        onSubmitted: (_) => _add(server),
-      ),
-    ];
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CardTitle(
-            icon: Icons.group_outlined,
-            title: context.tr('Users'),
-            subtitle: context.tr('UsersSubtitle'),
-            trailing: IconButton(
-              tooltip: context.tr('TipRefreshList'),
-              onPressed: server.loadUsers,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ),
-          Text(
-            context.tr('NewUser'),
-            style: TextStyle(fontWeight: FontWeight.w700, color: colors.textMain),
-          ),
-          const SizedBox(height: 8),
-          // In a row with the button where each field still shows its hint, otherwise one under the other.
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final add = FilledButton.icon(
-                onPressed: server.isAddingUser ? null : () => _add(server),
-                icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: Text(context.tr('Add')),
-              );
-              if (constraints.maxWidth < 760) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 10), child: f),
-                    Align(alignment: Alignment.centerRight, child: add),
-                  ],
-                );
-              }
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final f in fields) ...[Expanded(child: f), const SizedBox(width: 10)],
-                    add,
-                  ],
-                ),
-              );
-            },
-          ),
-          _StatusLine(server.userManagementErrorMessage, isError: true),
-          SectionLabel(context.tr('RegisteredUsers'), padding: const EdgeInsets.fromLTRB(0, 16, 0, 4)),
-          for (final user in server.serverUsers)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: colors.accent.withValues(alpha: 0.14),
-                    child: Icon(
-                      user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
-                      size: 18,
-                      color: colors.accent,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          user.username,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
-                        ),
-                        Text(
-                          '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • '
-                          '${context.trf('CreatedAt', [user.createdAt])}',
-                          style: TextStyle(fontSize: 12, color: colors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (user.username != server.currentUserName)
-                    IconButton(
-                      tooltip: context.tr('TipDeleteUser'),
-                      icon: Icon(Icons.delete_outline, color: colors.danger),
-                      onPressed: () => server.deleteUser(user.id),
-                    ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The audio output: the two mode cards side by side, the output device, and the signal path.
+/// The audio settings: output device, audiophile mode switches, and signal path in one unified frame.
 class _AudioCard extends StatelessWidget {
   const _AudioCard();
 
@@ -774,172 +981,205 @@ class _AudioCard extends StatelessWidget {
     final audio = context.vm.audioSettings;
     final colors = context.colors;
     final palette = colors.palette;
-    final devices = audio.availableDevices;
-    Widget mode(
-      String title,
-      String description,
-      bool value,
-      bool available,
-      ValueChanged<bool> onChanged,
-      Color color,
-    ) => MetricCard(
-      accent: color,
-      onTap: available ? () => onChanged(!value) : () {},
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color),
-                ),
+
+    final player = context.vm.player;
+
+    return ListenableBuilder(
+      listenable: Listenable.merge([audio, player]),
+      builder: (context, _) {
+        final devices = audio.availableDevices;
+
+        Widget mode(
+          String title,
+          String badgeText,
+          QualityTier tier,
+          String description,
+          bool value,
+          bool available,
+          ValueChanged<bool> onChanged,
+          String tip,
+        ) {
+          final fg = MedalColors.fg(tier);
+          final border = value ? fg.withValues(alpha: 0.6) : colors.glassBorder;
+          return Tooltip(
+            message: '$title: ${context.tr(tip)}',
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colors.surface1,
+                borderRadius: BorderRadius.circular(Radii.small + 2),
+                border: Border.all(color: border),
               ),
-              Switch(value: value, activeTrackColor: color, onChanged: available ? onChanged : null),
-            ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: MedalColors.bg(tier),
+                          border: Border.all(color: MedalColors.border(tier)),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          badgeText,
+                          style: TextStyle(
+                            color: fg,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.6,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Switch(
+                        value: value,
+                        activeTrackColor: fg,
+                        onChanged: available ? onChanged : null,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(description, style: TextStyle(fontSize: 11.5, height: 1.35, color: colors.textMuted)),
+                  if (!available) ...[
+                    const SizedBox(height: 6),
+                    Text(context.tr('ExclusiveUnavailable'), style: TextStyle(fontSize: 10, color: palette.warning)),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }
+
+        return GlassCard(
+          opaque: true,
+          child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _CardTitle(
+            icon: Icons.volume_up_rounded,
+            title: context.tr('SettingsAudioSection'),
+            trailing: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+              ),
+              onPressed: audio.refreshDevices,
+              icon: const Icon(Icons.refresh_rounded, size: 15),
+              label: Text(context.tr('Refresh')),
+            ),
           ),
-          const SizedBox(height: 4),
-          Text(description, style: TextStyle(fontSize: 12, height: 1.35, color: colors.textMuted)),
-          if (!available) ...[
-            const SizedBox(height: 8),
-            Text(context.tr('ExclusiveUnavailable'), style: TextStyle(fontSize: 10, color: palette.warning)),
-          ],
+          Text(
+            context.tr('OutputDevice'),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
+            isExpanded: true,
+            items: [
+              for (final d in devices)
+                DropdownMenuItem(
+                  value: d.id,
+                  child: Row(
+                    children: [
+                      Icon(Icons.speaker_outlined, size: 16, color: colors.textMain),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
+                          d.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (d.driverType.isNotEmpty) ...[
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            '[${d.driverType}]',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 11, color: colors.textMuted),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+            onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
+          ),
+          const SizedBox(height: 8),
+          Text(audio.hardwareStatusText, style: TextStyle(fontSize: 11.5, color: colors.textMuted)),
+
+          const SizedBox(height: 18),
+          Divider(color: colors.glassBorder, height: 1),
+          const SizedBox(height: 14),
+
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final exclusive = mode(
+                context.tr('ExclusiveLabel'),
+                'EXCLUSIVE',
+                QualityTier.silver,
+                context.tr('ExclusiveDescription'),
+                audio.isExclusiveMode,
+                audio.isExclusiveAvailable,
+                audio.setExclusiveMode,
+                'TipExclusive',
+              );
+              final bitperfect = mode(
+                context.tr('ModeBitPerfect'),
+                'BIT-PERFECT',
+                QualityTier.gold,
+                context.tr('BitPerfectDescription'),
+                audio.isBitperfect,
+                audio.isBitperfectAvailable,
+                audio.setBitperfect,
+                'TipBitPerfect',
+              );
+              if (constraints.maxWidth < 420) {
+                return Column(children: [exclusive, const SizedBox(height: 10), bitperfect]);
+              }
+              return Row(
+                children: [
+                  Expanded(child: exclusive),
+                  const SizedBox(width: 10),
+                  Expanded(child: bitperfect),
+                ],
+              );
+            },
+          ),
+
+          const SizedBox(height: 18),
+          Divider(color: colors.glassBorder, height: 1),
+          const SizedBox(height: 14),
+
+          Text(
+            context.tr('SignalPath'),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small + 2)),
+            child: Text(
+              audio.signalPath,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontFamilyFallback: const ['JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'],
+                fontSize: 11.5,
+                height: 18 / 11.5,
+                color: palette.lime,
+              ),
+            ),
+          ),
         ],
       ),
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final exclusive = mode(
-              context.tr('ExclusiveLabel'),
-              context.tr('ExclusiveDescription'),
-              audio.isExclusiveMode,
-              audio.isExclusiveAvailable,
-              audio.setExclusiveMode,
-              palette.lime,
-            );
-            final bitperfect = mode(
-              context.tr('ModeBitPerfect'),
-              context.tr('BitPerfectDescription'),
-              audio.isBitperfect,
-              audio.isBitperfectAvailable,
-              audio.setBitperfect,
-              palette.purple,
-            );
-            if (constraints.maxWidth < 440) {
-              return Column(children: [exclusive, const SizedBox(height: 12), bitperfect]);
-            }
-            return IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: exclusive),
-                  const SizedBox(width: 12),
-                  Expanded(child: bitperfect),
-                ],
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        GlassCard(
-          hoverColor: palette.cyan,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      context.tr('OutputDevice'),
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: colors.textMain),
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 34),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                    ),
-                    onPressed: audio.refreshDevices,
-                    icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: Text(context.tr('Refresh')),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
-                isExpanded: true,
-                items: [
-                  for (final d in devices)
-                    DropdownMenuItem(
-                      value: d.id,
-                      child: Row(
-                        children: [
-                          Icon(Icons.speaker_outlined, size: 16, color: palette.cyan),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              d.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          if (d.driverType.isNotEmpty) ...[
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                '[${d.driverType}]',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 11, color: colors.textMuted),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                ],
-                onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
-              ),
-              const SizedBox(height: 16),
-              Text(audio.hardwareStatusText, style: TextStyle(fontSize: 12, color: colors.textMuted)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        GlassCard(
-          hoverColor: palette.lime,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                context.tr('SignalPath'),
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: colors.textMain),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small + 2)),
-                child: Text(
-                  audio.signalPath,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontFamilyFallback: const ['JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'],
-                    fontSize: 12,
-                    height: 20 / 12,
-                    color: palette.lime,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+  },
+);
   }
 }
 
@@ -950,37 +1190,49 @@ class _AppearanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
-    return GlassCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return ListenableBuilder(
+      listenable: vm,
+      builder: (context, _) => GlassCard(
+        opaque: true,
+        child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _CardTitle(
-            icon: Icons.translate_rounded,
-            title: context.tr('Language'),
-            subtitle: context.tr('SettingsLanguageHint'),
+            icon: Icons.palette_outlined,
+            title: context.tr('SettingsAppearanceSection'),
           ),
+          Text(
+            context.tr('Language'),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+          ),
+          const SizedBox(height: 2),
+          Text(context.tr('SettingsLanguageHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+          const SizedBox(height: 10),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               for (final l in Localizer.languages)
-                l.code == vm.language
-                    ? FilledButton(
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size(0, 34),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                Tooltip(
+                  message: context.tr('TipLanguage'),
+                  child: l.code == vm.language
+                      ? FilledButton(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                          ),
+                          onPressed: () => vm.changeLanguage(l.code),
+                          child: Text(l.nativeName),
+                        )
+                      : OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                          ),
+                          onPressed: () => vm.changeLanguage(l.code),
+                          child: Text(l.nativeName),
                         ),
-                        onPressed: () => vm.changeLanguage(l.code),
-                        child: Text(l.nativeName),
-                      )
-                    : OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 34),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                        ),
-                        onPressed: () => vm.changeLanguage(l.code),
-                        child: Text(l.nativeName),
-                      ),
+                ),
             ],
           ),
           const SizedBox(height: 14),
@@ -992,53 +1244,75 @@ class _AppearanceCard extends StatelessWidget {
                   children: [
                     Text(
                       context.tr('Theme'),
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
                     ),
                     Text(context.tr('SettingsThemeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
                   ],
                 ),
               ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 34),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+              Tooltip(
+                message: context.tr('TipToggleTheme'),
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                  onPressed: vm.toggleTheme,
+                  icon: Icon(vm.isLight ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 16),
+                  label: Text(context.tr('Theme')),
                 ),
-                onPressed: vm.toggleTheme,
-                icon: Icon(vm.isLight ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 16),
-                label: Text(context.tr('Theme')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(color: colors.glassBorder, height: 1),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('SettingsOnlineLyrics'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                    ),
+                    Text(context.tr('SettingsOnlineLyricsHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: vm.useOnlineLyrics,
+                onChanged: (v) => vm.useOnlineLyrics = v,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('SettingsPerformanceStats'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                    ),
+                    Text(context.tr('SettingsPerformanceStatsHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: vm.showPerformanceStats,
+                onChanged: (v) => vm.showPerformanceStats = v,
               ),
             ],
           ),
         ],
       ),
+    ),
     );
   }
-}
-
-class _SwitchCard extends StatelessWidget {
-  const _SwitchCard({
-    required this.icon,
-    required this.title,
-    required this.hint,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final IconData icon;
-  final String title;
-  final String hint;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) => GlassCard(
-    child: _CardTitle(
-      icon: icon,
-      title: title,
-      subtitle: hint,
-      trailing: Switch(value: value, onChanged: onChanged),
-    ),
-  );
 }
 
 /// The version, the copyright, the license and where the source is: the GNU AGPL's "Appropriate Legal Notices". A version
@@ -1051,13 +1325,14 @@ class _AboutCard extends StatelessWidget {
     final colors = context.colors;
     final text = TextStyle(fontSize: 12.5, height: 1.45, color: colors.textMuted);
     return GlassCard(
+      opaque: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _CardTitle(
             icon: Icons.info_outline_rounded,
-            title: 'Wiretune',
-            subtitle: context.trf('AboutVersion', [WiretuneInfo.version]),
+            title: context.tr('SettingsAboutSection'),
+            subtitle: 'Wiretune • ${context.trf('AboutVersion', [WiretuneInfo.version])}',
           ),
           Text(WiretuneInfo.copyright, style: text),
           const SizedBox(height: 4),
@@ -1095,39 +1370,3 @@ class _AboutCard extends StatelessWidget {
   }
 }
 
-class _LibraryStatsCard extends StatelessWidget {
-  const _LibraryStatsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final server = context.vm.serverSettings;
-    final colors = context.colors;
-    Widget stat(String label, int value) => Column(
-      children: [
-        ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: colors.accentGradient.createShader,
-          child: Text('$value', style: const TextStyle(fontSize: 30, letterSpacing: -1, fontWeight: FontWeight.w900)),
-        ),
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(fontSize: 10.5, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: colors.textMuted),
-        ),
-      ],
-    );
-    return GlassCard(
-      child: Wrap(
-        alignment: WrapAlignment.spaceAround,
-        spacing: 24,
-        runSpacing: 12,
-        children: [
-          stat(context.tr('NavArtists'), server.totalArtistsCount),
-          stat(context.tr('NavAlbums'), server.totalAlbumsCount),
-          stat(context.tr('NavTracks'), server.totalTracksCount),
-          stat(context.tr('NavFavorites'), server.totalFavoritesCount),
-          stat(context.tr('NavPlaylists'), server.totalPlaylistsCount),
-        ],
-      ),
-    );
-  }
-}

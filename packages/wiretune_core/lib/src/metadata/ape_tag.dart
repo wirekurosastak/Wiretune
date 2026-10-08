@@ -20,6 +20,7 @@ const Map<String, TagField> _apeFields = {
   'date': TagField.year,
   'lyrics': TagField.lyrics,
   'unsyncedlyrics': TagField.lyrics,
+  'bpm': TagField.bpm,
 };
 
 /// The byte range an APEv2 tag occupies at the end of the file (header included), or null when there is none.

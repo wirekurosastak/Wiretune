@@ -121,9 +121,9 @@ void main() {
   testWidgets('a narrow window gets the phone layout with the bottom navigation', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     expect(find.byType(PhoneLayout), findsOneWidget);
-    expect(find.text(Localizer.get('NavSongs')), findsOneWidget); // the bottom navigation's label
+    expect(find.text(Localizer.get('NavTracks')), findsOneWidget); // the bottom navigation's label
 
-    await tester.tap(find.text(Localizer.get('NavSongs')));
+    await tester.tap(find.text(Localizer.get('NavTracks')));
     await settle(tester);
     expect(vm.selectedSection, AppSection.tracks);
     expect(find.text('So What'), findsOneWidget);
@@ -301,12 +301,12 @@ void main() {
     expectOnCover(header, find.descendant(of: header, matching: find.byType(CoverImage)));
   });
 
-  testWidgets('a phone leaves the quality tags out of its album rows and its queue', (tester) async {
+  testWidgets('a phone shows quality tags in its album rows and leaves them out of its queue', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.albums);
     await settle(tester);
     expect(find.text('Kind of Blue'), findsOneWidget);
-    expect(find.byType(QualityTag), findsNothing);
+    expect(find.byType(QualityTag), findsWidgets);
 
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();

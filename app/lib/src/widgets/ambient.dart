@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
+import '../view_models/app_section.dart';
+import '../view_models/main_view_model.dart';
 import 'cover_image.dart';
 
 /// A cover turned into a soft wash of its colours: decoded tiny, blurred and saturated once into a 96 px bitmap, then
@@ -67,6 +69,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
   }
 
   void _updateDrift() {
+    if (!mounted) return;
     final animate = widget.drift && _image != null && !MediaQuery.disableAnimationsOf(context);
     if (animate && !_drift.isAnimating) {
       _drift.repeat();
@@ -193,47 +196,108 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
   );
 }
 
-/// The window's backdrop: the section's tint and, over it, the colours of the cover that is playing (flowing while it
+/// The window's backdrop: a neutral dark base and, over it, the colours of the cover that is playing or viewed (flowing while it
 /// plays, on a desktop), under a veil that keeps what is on top readable. [colour] sets how much of the cover shows: a little behind
-/// the phone's pages, more behind the wide layout's panels, all of it behind the full-screen player.
+/// the phone's pages, more behind the wide layout, all of it behind the full-screen player.
 class AmbientBackdrop extends StatelessWidget {
   const AmbientBackdrop({super.key, this.colour = 0.55});
 
   final double colour;
 
+  static String? activeCoverPath(MainViewModel vm) {
+    // 1. Only navigating inside an album or artist overrides the playing track's cover,
+    // and only while that section is currently selected.
+    if (vm.selectedSection == AppSection.albums && vm.albums.isAlbumDetailOpen && vm.albums.selectedAlbum != null) {
+      final path = vm.albums.selectedAlbum?.coverArtPath;
+      if (path != null && path.isNotEmpty) return path;
+    }
+    if (vm.selectedSection == AppSection.artists && vm.artists.isArtistDetailOpen && vm.artists.selectedArtist != null) {
+      final artist = vm.artists.selectedArtist;
+      final path = artist?.picturePath ?? vm.artists.selectedArtistAlbums.firstOrNull?.coverArtPath;
+      if (path != null && path.isNotEmpty) return path;
+    }
+
+    // 2. Default: always current playing song's cover.
+    final track = vm.player.currentTrack;
+    if (track != null) {
+      if (track.coverArtPath != null && track.coverArtPath!.isNotEmpty) {
+        return track.coverArtPath;
+      }
+      for (final album in vm.albums.displayedAlbums) {
+        if (album.id == track.albumId || (album.title == track.album && album.artist == track.artist)) {
+          if (album.coverArtPath != null && album.coverArtPath!.isNotEmpty) {
+            return album.coverArtPath;
+          }
+        }
+      }
+      for (final t in vm.tracks.displayedTracks) {
+        if (t.id == track.id && t.coverArtPath != null && t.coverArtPath!.isNotEmpty) {
+          return t.coverArtPath;
+        }
+      }
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final player = context.vm.player;
+    final vm = context.vm;
+    final player = vm.player;
     final platform = AppPlatform.current;
     final colors = context.colors;
+    final isDark = colors.palette.isDark;
     final base = colors.palette.background;
-    // The less colour, the thicker the veil, most of all at the top where the titles are.
-    final veil = [0.5 - 0.35 * colour, 0.75 - 0.4 * colour, 0.85 - 0.1 * colour];
+    // The less colour, the thicker the veil. In light mode a gentle pastel wash keeps readability crisp.
+    final veil = isDark
+        ? [0.5 - 0.35 * colour, 0.75 - 0.4 * colour, 0.85 - 0.1 * colour]
+        : [0.68 - 0.22 * colour, 0.82 - 0.18 * colour, 0.92 - 0.12 * colour];
+    final artworkOpacity = isDark ? colour : (colour * 0.42).clamp(0.0, 0.36);
+
     return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) => Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 450),
-            decoration: BoxDecoration(gradient: colors.windowGradient),
-          ),
-          AmbientArtwork(
-            path: player.currentTrack?.coverArtPath,
-            drift: player.isPlaying && !platform.isTv && !platform.isMobile,
-            opacity: colour,
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [for (final alpha in veil) base.withValues(alpha: alpha)],
+      listenable: Listenable.merge([vm, player, vm.albums, vm.artists, vm.playlists]),
+      builder: (context, _) {
+        final cover = activeCoverPath(vm);
+        // Only use section or artist/album tint when there is no cover image to illuminate the backdrop.
+        final Gradient? fallbackGradient;
+        if (cover == null) {
+          if (vm.selectedSection == AppSection.albums && vm.albums.isAlbumDetailOpen) {
+            fallbackGradient = colors.palette.gradientFor(AppSection.albums);
+          } else if (vm.selectedSection == AppSection.artists && vm.artists.isArtistDetailOpen) {
+            fallbackGradient = colors.palette.gradientFor(AppSection.artists);
+          } else {
+            fallbackGradient = colors.windowGradient;
+          }
+        } else {
+          fallbackGradient = null;
+        }
+
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 450),
+              decoration: BoxDecoration(
+                color: base,
+                gradient: fallbackGradient,
               ),
             ),
-          ),
-        ],
-      ),
+            AmbientArtwork(
+              path: cover,
+              drift: player.isPlaying && !platform.isTv && !platform.isMobile,
+              opacity: artworkOpacity,
+            ),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [for (final alpha in veil) base.withValues(alpha: alpha)],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

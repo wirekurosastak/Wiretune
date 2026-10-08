@@ -1,8 +1,6 @@
 // Copyright (C) 2026 Wiretune contributors. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
@@ -21,8 +19,8 @@ import '../widgets/devices.dart';
 import '../widgets/player_controls.dart';
 
 /// The phone layout: the page (each draws its own header with the search and account buttons) over the ambient
-/// backdrop, and floating over its lower edge the glass mini player and bottom navigation, which the page scrolls
-/// under; search and the full-screen player slide over it.
+/// backdrop, and floating over its lower edge the unified pill with the mini player and bottom navigation;
+/// search and the full-screen player slide over it.
 class PhoneLayout extends StatelessWidget {
   const PhoneLayout({super.key});
 
@@ -41,14 +39,12 @@ class PhoneLayout extends StatelessWidget {
               extendBody: true,
               body: Stack(
                 children: [
-                  const Positioned.fill(child: AmbientBackdrop(colour: 0.42)),
-                  SafeArea(
-                    bottom: false,
-                    child: Column(
-                      children: [
-                        if (vm.isSearchOpen) const _SearchBar(),
-                        if (vm.isServerOfflineBannerVisible) const _OfflineBanner(),
-                        Expanded(
+                  const Positioned.fill(child: AmbientBackdrop(colour: 0.70)),
+                  Column(
+                    children: [
+                      if (vm.isSearchOpen) const SafeArea(bottom: false, child: _SearchBar()),
+                      if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
+                      Expanded(
                           child: AnimatedSwitcher(
                             duration: const Duration(milliseconds: 220),
                             switchInCurve: Curves.easeOutCubic,
@@ -69,21 +65,12 @@ class PhoneLayout extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
                 ],
               ),
               bottomNavigationBar: const _BottomBars(),
             ),
             Positioned.fill(
-              child: IgnorePointer(
-                ignoring: !vm.isNowPlayingOpen,
-                child: AnimatedSlide(
-                  offset: vm.isNowPlayingOpen ? Offset.zero : const Offset(0, 1),
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
-                  child: vm.isNowPlayingOpen ? const NowPlayingPage() : const SizedBox.shrink(),
-                ),
-              ),
+              child: _NowPlayingOverlay(isOpen: vm.isNowPlayingOpen),
             ),
             // Over the full-screen player too: its menu adds the track to a playlist.
             const PlaylistDialogsLayer(),
@@ -95,69 +82,129 @@ class PhoneLayout extends StatelessWidget {
   }
 }
 
-/// The floating bars at the bottom: the mini player over the navigation, on a fade of the backdrop's colour so the
-/// page scrolling under them stays out of their way.
+/// The full-screen player sliding up from the bottom when opened, and back down when closed.
+class _NowPlayingOverlay extends StatefulWidget {
+  const _NowPlayingOverlay({required this.isOpen});
+
+  final bool isOpen;
+
+  @override
+  State<_NowPlayingOverlay> createState() => _NowPlayingOverlayState();
+}
+
+class _NowPlayingOverlayState extends State<_NowPlayingOverlay> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, 1),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  ));
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isOpen) _controller.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(_NowPlayingOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isOpen != oldWidget.isOpen) {
+      if (widget.isOpen) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        if (_controller.isDismissed && !widget.isOpen) return const SizedBox.shrink();
+        return SlideTransition(
+          position: _slide,
+          child: IgnorePointer(
+            ignoring: !widget.isOpen,
+            child: const NowPlayingPage(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The floating bars at the bottom: a single unified pill containing the mini player and bottom navigation,
+/// which smoothly extends upwards when a song is playing (Tidal style).
 class _BottomBars extends StatelessWidget {
   const _BottomBars();
 
   @override
   Widget build(BuildContext context) {
-    final background = context.colors.palette.background;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [background.withValues(alpha: 0), background.withValues(alpha: 0.85)],
-        ),
-      ),
-      child: const SafeArea(
-        top: false,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [_MiniPlayer(), _BottomNavigation()]),
-      ),
-    );
-  }
-}
-
-/// A floating pane of frosted glass: what is behind it is blurred and tinted with the panel colour.
-class _Frosted extends StatelessWidget {
-  const _Frosted({required this.child, this.radius = 22, this.background});
-
-  final Widget child;
-  final double radius;
-
-  /// Painted behind the tint, inside the frost (the mini player's wash of the cover).
-  final Widget? background;
-
-  @override
-  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final player = vm.player;
     final colors = context.colors;
-    final shape = BorderRadius.circular(radius);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: shape,
-        boxShadow: [
-          BoxShadow(color: colors.palette.shadow, blurRadius: 24, spreadRadius: -6, offset: const Offset(0, 10)),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: shape,
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Stack(
-            children: [
-              if (background != null) Positioned.fill(child: background!),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.palette.panel.withValues(alpha: colors.palette.isDark ? 0.62 : 0.7),
-                    borderRadius: shape,
-                    border: Border.all(color: colors.glassBorder),
-                  ),
+    final isDark = colors.palette.isDark;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: colors.palette.shadow,
+                blurRadius: 24,
+                spreadRadius: -4,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: Material(
+              type: MaterialType.transparency,
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.bottomCenter,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListenableBuilder(
+                      listenable: player,
+                      builder: (context, _) {
+                        final track = player.currentTrack;
+                        if (track == null) return const SizedBox.shrink();
+                        return const _MiniPlayerContent();
+                      },
+                    ),
+                    const _BottomNavigation(),
+                  ],
                 ),
               ),
-              child,
-            ],
+            ),
           ),
         ),
       ),
@@ -165,8 +212,7 @@ class _Frosted extends StatelessWidget {
   }
 }
 
-/// The five sections at the bottom, on a floating glass bar; the active one takes the colour of its section, and a
-/// pill of that colour grows behind its icon.
+/// The five sections at the bottom, on a floating pill bar; the active one takes the colour and glow of its section.
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation();
 
@@ -178,34 +224,28 @@ class _BottomNavigation extends StatelessWidget {
     final items = [
       (AppSection.artists, Icons.person_rounded, palette.coral, 'NavArtists'),
       (AppSection.albums, Icons.album, palette.purple, 'NavAlbums'),
-      (AppSection.tracks, Icons.music_note_rounded, palette.cyan, 'NavSongs'),
+      (AppSection.tracks, Icons.music_note_rounded, palette.cyan, 'NavTracks'),
       (AppSection.favorites, Icons.favorite_rounded, palette.coral, 'NavFavorites'),
       (AppSection.playlists, Icons.queue_music_rounded, palette.lime, 'NavPlaylistsShort'),
     ];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: _Frosted(
-        radius: 26,
-        child: SizedBox(
-          height: 66,
-          child: Row(
-            children: [
-              for (final (section, icon, color, label) in items)
-                Expanded(
-                  child: _NavItem(
-                    icon: icon,
-                    label: context.tr(label),
-                    color: color,
-                    active: !vm.isSearchOpen && vm.selectedSection == section,
-                    onTap: () {
-                      vm.closeSearch();
-                      vm.navigateTo(section);
-                    },
-                  ),
-                ),
-            ],
-          ),
-        ),
+    return SizedBox(
+      height: 64,
+      child: Row(
+        children: [
+          for (final (section, icon, color, label) in items)
+            Expanded(
+              child: _NavItem(
+                icon: icon,
+                label: context.tr(label),
+                color: color,
+                active: !vm.isSearchOpen && vm.selectedSection == section,
+                onTap: () {
+                  vm.closeSearch();
+                  vm.navigateTo(section);
+                },
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -233,28 +273,28 @@ class _NavItem extends StatelessWidget {
     return Semantics(
       selected: active,
       button: true,
-      child: InkResponse(
-        onTap: onTap,
-        radius: 36,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // No overshooting curve here: a shadow lerped past its end would get a negative blur.
-            AnimatedContainer(
-              duration: duration,
-              curve: Curves.easeOutCubic,
-              width: active ? 56 : 32,
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+            SizedBox(
               height: 30,
-              decoration: BoxDecoration(
-                color: active ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0),
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: active ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 14)] : const [],
-              ),
               child: AnimatedScale(
                 scale: active ? 1.08 : 1,
                 duration: duration,
                 curve: Curves.easeOutBack,
-                child: Icon(icon, size: 23, color: active ? color : muted),
+                child: Icon(
+                  icon,
+                  size: 24,
+                  color: active ? color : muted,
+                  shadows: active ? [Shadow(color: color.withValues(alpha: 0.75), blurRadius: 16)] : null,
+                ),
               ),
             ),
             const SizedBox(height: 3),
@@ -270,7 +310,9 @@ class _NavItem extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }
 
@@ -384,158 +426,156 @@ class _OfflineBanner extends StatelessWidget {
   }
 }
 
-/// The mini player: a floating glass card washed in the colours of the cover, with the cover, title and artist,
-/// play/pause and next, and the progress as a glowing line along its lower edge. A tap or a swipe up opens the
-/// full-screen player. (The way to another device is in the page header and the full-screen player.)
-class _MiniPlayer extends StatelessWidget {
-  const _MiniPlayer();
+/// The mini player content embedded in the upper part of the floating pill.
+class _MiniPlayerContent extends StatelessWidget {
+  const _MiniPlayerContent();
 
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
     final player = vm.player;
     final colors = context.colors;
+
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
         final track = player.currentTrack;
         if (track == null) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-          child: VerticalSwipe(
-            upwards: true,
-            onSwipe: vm.openNowPlaying,
-            child: _Frosted(
-              radius: 20,
-              background: AmbientArtwork(path: track.coverArtPath, opacity: 0.9),
-              child: Material(
-                type: MaterialType.transparency,
-                child: Stack(
+
+        return VerticalSwipe(
+          upwards: true,
+          onSwipe: vm.openNowPlaying,
+          child: Stack(
+            children: [
+              SizedBox(
+                height: 66,
+                child: Row(
                   children: [
-                    SizedBox(
-                      height: 66,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: vm.openNowPlaying,
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(9, 0, 4, 0),
-                                child: Row(
+                    Expanded(
+                      child: InkWell(
+                        onTap: vm.openNowPlaying,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
+                          child: Row(
+                            children: [
+                              Hero(
+                                tag: 'now-playing-cover',
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(Radii.small + 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: colors.palette.shadow,
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: CoverImage(path: track.coverArtPath, size: 44, radius: Radii.small + 2),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Hero(
-                                      tag: 'now-playing-cover',
-                                      child: DecoratedBox(
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(Radii.small + 2),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: colors.palette.shadow,
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
+                                    Text(
+                                      player.nowPlayingTitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 14.5,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.2,
+                                        color: colors.textMain,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 1),
+                                    if (player.isRemote && !player.hasError)
+                                      const PlayingOnLabel(fontSize: 11.5)
+                                    else
+                                      Text(
+                                        player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: player.hasError ? colors.danger : colors.textMuted,
                                         ),
-                                        child: CoverImage(path: track.coverArtPath, size: 48, radius: Radii.small + 2),
                                       ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            player.nowPlayingTitle,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: -0.2,
-                                              color: colors.textMain,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 1),
-                                          if (player.isRemote && !player.hasError)
-                                            const PlayingOnLabel(fontSize: 12.5)
-                                          else
-                                            Text(
-                                              player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 12.5,
-                                                fontWeight: FontWeight.w500,
-                                                color: player.hasError ? colors.danger : colors.textMuted,
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
                                   ],
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                          SizedBox.square(
-                            dimension: 46,
-                            child: IconButton(
-                              tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
-                              onPressed: player.togglePlayPause,
-                              icon: PlayPauseIcon(playing: player.isPlaying, size: 30, color: colors.textMain),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: SizedBox.square(
-                              dimension: 46,
-                              child: IconButton(
-                                tooltip: context.tr('TipNext'),
-                                onPressed: player.nextTrack,
-                                icon: Icon(Icons.skip_next_rounded, size: 28, color: colors.textMain),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: 0,
-                      child: ListenableBuilder(
-                        listenable: progressOf(player),
-                        builder: (context, _) {
-                          final total = player.duration.inMilliseconds;
-                          final fraction = total <= 0
-                              ? 0.0
-                              : (player.position.value.inMilliseconds / total).clamp(0.0, 1.0);
-                          return Container(
-                            height: 2.5,
-                            decoration: BoxDecoration(
-                              color: colors.palette.glassHighlight,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                            alignment: Alignment.centerLeft,
-                            child: FractionallySizedBox(
-                              widthFactor: fraction,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: colors.accentGradient,
-                                  borderRadius: BorderRadius.circular(2),
-                                  boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 6)],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+                    SizedBox.square(
+                      dimension: 38,
+                      child: IconButton(
+                        tooltip: context.tr('TipPrevious'),
+                        onPressed: player.previousTrack,
+                        icon: Icon(Icons.skip_previous_rounded, size: 24, color: colors.textMain),
+                      ),
+                    ),
+                    SizedBox.square(
+                      dimension: 42,
+                      child: IconButton(
+                        tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
+                        onPressed: player.togglePlayPause,
+                        icon: PlayPauseIcon(playing: player.isPlaying, size: 28, color: colors.accent),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: SizedBox.square(
+                        dimension: 38,
+                        child: IconButton(
+                          tooltip: context.tr('TipNext'),
+                          onPressed: player.nextTrack,
+                          icon: Icon(Icons.skip_next_rounded, size: 24, color: colors.textMain),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 0,
+                child: ListenableBuilder(
+                  listenable: progressOf(player),
+                  builder: (context, _) {
+                    final total = player.duration.inMilliseconds;
+                    final fraction = total <= 0
+                        ? 0.0
+                        : (player.position.value.inMilliseconds / total).clamp(0.0, 1.0);
+                    return Container(
+                      height: 2,
+                      decoration: BoxDecoration(
+                        color: colors.palette.glassHighlight,
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                      alignment: Alignment.centerLeft,
+                      child: FractionallySizedBox(
+                        widthFactor: fraction,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: colors.accentGradient,
+                            borderRadius: BorderRadius.circular(1),
+                            boxShadow: [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 4)],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         );
       },

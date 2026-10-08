@@ -157,13 +157,10 @@ class MainViewModel extends ChangeNotifier {
   }
 
   void navigateTo(AppSection section) {
-    if (section == AppSection.albums) {
-      albums.returnAction = null;
-      albums.closeAlbumDetail();
-    } else if (section == AppSection.artists) {
-      artists.returnAction = null;
-      artists.closeArtistDetail();
-    }
+    albums.returnAction = null;
+    albums.closeAlbumDetail();
+    artists.returnAction = null;
+    artists.closeArtistDetail();
     searchQuery = '';
     isSearchOpen = false;
     selectedSection = section;

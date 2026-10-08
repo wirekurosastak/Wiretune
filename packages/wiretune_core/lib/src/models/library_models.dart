@@ -36,6 +36,7 @@ class Track {
     this.trackCount,
     this.discNumber,
     this.year,
+    this.bpm,
     this.genre,
     this.duration = Duration.zero,
     this.fileSizeBytes = 0,
@@ -66,6 +67,7 @@ class Track {
   int? trackCount;
   int? discNumber;
   int? year;
+  int? bpm;
   String? genre;
   Duration duration;
   int fileSizeBytes;
@@ -111,6 +113,7 @@ class Track {
     'trackCount': trackCount,
     'discNumber': discNumber,
     'year': year,
+    'bpm': bpm,
     'genre': genre,
     'durationMs': duration.inMilliseconds,
     'fileSizeBytes': fileSizeBytes,
@@ -136,6 +139,7 @@ class Track {
       trackCount: integer('trackCount'),
       discNumber: integer('discNumber'),
       year: integer('year'),
+      bpm: integer('bpm'),
       genre: json['genre'] as String?,
       duration: Duration(milliseconds: integer('durationMs') ?? 0),
       fileSizeBytes: integer('fileSizeBytes') ?? 0,
@@ -178,6 +182,10 @@ class Album {
 
   /// What the quality tag says after the tier word, e.g. "FLAC 24bit/96kHz", or "MIXED".
   final String tagSpec;
+
+  /// A compact representation of quality suitable for small thumbnails.
+  String get compactTagSpec => AudioFormat.compactSpec(tier, tagSpec);
+
   final List<Track> tracks;
 
   String get formattedTotalDuration => Localizer.formatTotalDuration(totalDuration);
@@ -244,6 +252,9 @@ class Playlist {
 
   /// What the quality tag says, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty for an empty playlist, which has no tag.
   String formatSpec = '';
+
+  /// A compact representation of quality suitable for small thumbnails.
+  String get compactFormatSpec => AudioFormat.compactSpec(formatTier, formatSpec);
 
   /// Sets [formatTier] and [formatSpec] from the playlist's tracks.
   void applyQuality(List<Track> tracks) {

@@ -25,6 +25,7 @@ class AudioTags {
   int? trackCount;
   int? disc;
   int? year;
+  int? bpm;
 
   Duration duration = Duration.zero;
   int sampleRate = 0;
@@ -75,6 +76,7 @@ class AudioTags {
     trackCount ??= other.trackCount;
     disc ??= other.disc;
     year ??= other.year;
+    bpm ??= other.bpm;
     if (!hasPicture && other.hasPicture) {
       pictureData = other.pictureData;
       pictureLocation = other.pictureLocation;
@@ -109,11 +111,14 @@ class AudioTags {
         disc ??= parseNumberPair(text).$1;
       case TagField.year:
         year ??= parseYear(text);
+      case TagField.bpm:
+        final parsed = int.tryParse(text) ?? double.tryParse(text)?.round();
+        if (parsed != null && parsed > 0) bpm ??= parsed;
     }
   }
 }
 
-enum TagField { title, artist, albumArtist, album, genre, lyrics, track, trackCount, disc, year }
+enum TagField { title, artist, albumArtist, album, genre, lyrics, track, trackCount, disc, year, bpm }
 
 /// "3/12" -> (3, 12), "3" -> (3, null); zero or garbage -> null.
 (int?, int?) parseNumberPair(String text) {

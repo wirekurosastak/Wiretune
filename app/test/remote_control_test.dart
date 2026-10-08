@@ -63,7 +63,7 @@ void main() {
     expect((player.isPlaying, player.volume, player.isShuffle, player.repeatMode), (true, 70.0, true, RepeatMode.all));
     expect(player.position.value.inMilliseconds, inInclusiveRange(30000, 31000));
     expect([for (final item in player.queueItems) item.track.title], ['Song 1', 'Song 2', 'Song 3']);
-    expect((player.currentQueueIndex, player.canEditQueue), (1, false));
+    expect((player.currentQueueIndex, player.canEditQueue), (1, true));
 
     player.nextTrack();
     await player.togglePlayPause();
@@ -77,6 +77,10 @@ void main() {
     expect(player.position.value, const Duration(seconds: 90));
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
+    player.moveQueueTrack(0, 2);
+    player.removeQueueTrack(player.queueItems[0].track);
+    player.clearQueue();
+
     expect(hub.commandsTo('desk'), [
       {'action': 'next'},
       {'action': 'toggle'},
@@ -84,6 +88,9 @@ void main() {
       {'action': 'shuffle', 'on': false},
       {'action': 'volume', 'volume': 25.0},
       {'action': 'seek', 'positionMs': 90000},
+      {'action': 'moveTrack', 'index': 0, 'toIndex': 2},
+      {'action': 'removeTrack', 'index': 0},
+      {'action': 'clearQueue'},
     ]);
     expect(driver.playCalls, 0);
 
@@ -97,7 +104,7 @@ void main() {
     player.selectDevice(null);
     expect((player.isRemote, player.repeatMode), (false, RepeatMode.off));
     expect(player.currentTrack, isNull);
-    expect(hub.commandsTo('desk'), hasLength(6));
+    expect(hub.commandsTo('desk'), hasLength(9));
   });
 
   test('this device tells the others what it plays, at changes only, and does what they ask', () async {

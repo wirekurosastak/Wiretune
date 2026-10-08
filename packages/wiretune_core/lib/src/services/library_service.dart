@@ -324,6 +324,12 @@ class LibraryService {
     if (!track.isLocal) playRecorded.emit(track);
   }
 
+  Future<void> updateTrackBpm(String trackId, int bpm) async {
+    final track = getTrack(trackId);
+    if (track != null) track.bpm = bpm;
+    await _repository.updateTrackBpm(trackId, bpm);
+  }
+
   Future<Playlist> createPlaylist(String name, [String? description]) async {
     final playlist = Playlist(
       id: newId(),

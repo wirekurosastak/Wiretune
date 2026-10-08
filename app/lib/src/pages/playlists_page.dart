@@ -40,6 +40,7 @@ class PlaylistsPage extends StatelessWidget {
             SliverToBoxAdapter(
               child: PageHeader(
                 title: context.tr('NavPlaylists'),
+                subtitle: context.trf('PlaylistCount', [playlists.playlists.length]),
                 actions: [
                   FilledButton.icon(
                     onPressed: playlists.openCreateDialog,
@@ -49,18 +50,11 @@ class PlaylistsPage extends StatelessWidget {
                 ],
               ),
             ),
-            TileGridSliver(
-              kind: TileKind.twoLines,
-              itemCount: playlists.playlists.length,
-              itemBuilder: (context, index) {
-                final playlist = playlists.playlists[index];
-                return PlaylistCard(
-                  playlist: playlist,
-                  covers: playlistCovers(playlists.tracksOf(playlist)),
-                  onOpen: () => playlists.openPlaylist(playlist),
-                  onPlay: () => playlists.playPlaylist(playlist),
-                );
-              },
+            PlaylistsSliver(
+              playlists: playlists.playlists,
+              tracksOf: playlists.tracksOf,
+              onOpen: playlists.openPlaylist,
+              onPlay: playlists.playPlaylist,
             ),
             const PageEndSpace(),
           ],
@@ -180,6 +174,18 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                   playlists.selectedPlaylistTotalDuration,
                   style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
                 ),
+              if (PhoneChrome.isPhone(context))
+                Tooltip(
+                  message: context.tr('PlaylistDeleteAction'),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(99),
+                    onTap: () => playlists.requestDeletePlaylist(playlist),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
+                    ),
+                  ),
+                ),
             ],
             actions: [
               PlayShuffleButtons(
@@ -193,12 +199,13 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                   onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                 ),
               ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(foregroundColor: colors.danger, minimumSize: const Size(0, 46)),
-                onPressed: () => playlists.requestDeletePlaylist(playlist),
-                icon: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
-                label: Text(context.tr('PlaylistDeleteAction')),
-              ),
+              if (!PhoneChrome.isPhone(context))
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(foregroundColor: colors.danger, minimumSize: const Size(0, 46)),
+                  onPressed: () => playlists.requestDeletePlaylist(playlist),
+                  icon: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
+                  label: Text(context.tr('PlaylistDeleteAction')),
+                ),
             ],
           ),
         ),

@@ -335,6 +335,7 @@ Track? _readTrack(String filePath, String? coverCacheDirectory, Map<String, Stri
         trackCount: positive(tags.trackCount),
         discNumber: positive(tags.disc),
         year: positive(tags.year),
+        bpm: positive(tags.bpm),
         genre: cleanText(tags.genre),
         duration: tags.duration,
         fileSizeBytes: stat.size,

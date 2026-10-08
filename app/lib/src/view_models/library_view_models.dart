@@ -11,13 +11,13 @@ String formatTotal(Iterable<Track> tracks) =>
     Localizer.formatTotalDuration(tracks.fold(Duration.zero, (sum, t) => sum + t.duration));
 
 /// What the Tracks and the Favourites pages sort by.
-enum TrackSortField { title, artist, album, added, quality }
+enum TrackSortField { title, artist, album, added, year, quality }
 
 /// The order of a page of tracks and the labels of its sort buttons. As on the albums page, the active field flips its
 /// direction and another one starts in its natural one: A to Z for text, the newest first for the date, the best first
 /// for the quality.
 mixin TrackSorting on ChangeNotifier {
-  TrackSortField _sortField = TrackSortField.artist;
+  TrackSortField _sortField = TrackSortField.title;
   bool _sortDescending = false;
 
   TrackSortField get sortField => _sortField;
@@ -34,7 +34,8 @@ mixin TrackSorting on ChangeNotifier {
       _sortDescending = !_sortDescending;
     } else {
       _sortField = field;
-      _sortDescending = field == TrackSortField.added || field == TrackSortField.quality;
+      _sortDescending =
+          field == TrackSortField.added || field == TrackSortField.year || field == TrackSortField.quality;
     }
     _applySort();
     notifyListeners();
@@ -47,6 +48,7 @@ mixin TrackSorting on ChangeNotifier {
       TrackSortField.artist => Localizer.get('SortArtist'),
       TrackSortField.album => Localizer.get('SortAlbum'),
       TrackSortField.added => Localizer.get('SortAdded'),
+      TrackSortField.year => Localizer.get('SortYear'),
       TrackSortField.quality => Localizer.get('SortQuality'),
     };
     return field == _sortField ? '$name ${_sortDescending ? '↓' : '↑'}' : name;
@@ -61,6 +63,10 @@ mixin TrackSorting on ChangeNotifier {
       TrackSortField.album => (a, b) => compareText(a.album, b.album),
       TrackSortField.added => (a, b) {
         final (x, y) = (addedAt(a), addedAt(b));
+        return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
+      },
+      TrackSortField.year => (a, b) {
+        final (x, y) = (a.year, b.year);
         return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
       },
       TrackSortField.quality => (a, b) => compareFormatQuality(a.format, b.format),
@@ -113,7 +119,7 @@ class TracksViewModel extends ChangeNotifier with TrackSorting {
   }
 }
 
-enum AlbumSortField { title, year, quality }
+enum AlbumSortField { title, artist, year, quality }
 
 /// Whether any of [tracks] is tagged with [genre], in any capitalisation.
 bool hasGenre(Iterable<Track> tracks, String genre) => tracks.any((t) => equalsIgnoreCase(t.genre, genre));
@@ -180,12 +186,15 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   String? genre;
 
   bool get isSortByTitle => sortField == AlbumSortField.title;
+  bool get isSortByArtist => sortField == AlbumSortField.artist;
   bool get isSortByYear => sortField == AlbumSortField.year;
   bool get isSortByQuality => sortField == AlbumSortField.quality;
 
   String get backText => backButtonText('NavAlbums');
 
   String get sortTitleLabel => isSortByTitle ? 'ABC ${isSortDescending ? '↓' : '↑'}' : 'ABC';
+  String get sortArtistLabel =>
+      isSortByArtist ? '${Localizer.get('SortArtist')} ${isSortDescending ? '↓' : '↑'}' : Localizer.get('SortArtist');
   String get sortYearLabel =>
       isSortByYear ? '${Localizer.get('SortYear')} ${isSortDescending ? '↓' : '↑'}' : Localizer.get('SortYear');
   String get sortQualityLabel => isSortByQuality
@@ -194,13 +203,13 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
 
   void refreshLocalizedTexts() => notifyListeners();
 
-  /// The active field flips its direction; another one is switched to with its natural default (A→Z for titles,
-  /// newest first for years, best first for quality).
+  /// The active field flips its direction; another one is switched to with its natural default (A→Z for titles and
+  /// artists, newest first for years, best first for quality).
   void setSortField(AlbumSortField field) {
     if (field == sortField) {
       isSortDescending = !isSortDescending;
     } else {
-      isSortDescending = field != AlbumSortField.title;
+      isSortDescending = field == AlbumSortField.year || field == AlbumSortField.quality;
       sortField = field;
     }
     _applySort();
@@ -262,6 +271,11 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
         sortStable(albums, (a, b) {
           final byQuality = compare(a, b);
           return byQuality != 0 ? (isSortDescending ? -byQuality : byQuality) : compareText(a.title, b.title);
+        });
+      case AlbumSortField.artist:
+        sortStable(albums, (a, b) {
+          final byArtist = isSortDescending ? compareText(b.artist, a.artist) : compareText(a.artist, b.artist);
+          return byArtist != 0 ? byArtist : compareText(a.title, b.title);
         });
       case AlbumSortField.title:
         sortStable(albums, (a, b) => isSortDescending ? compareText(b.title, a.title) : compareText(a.title, b.title));

@@ -14,7 +14,7 @@ class SpectrumVisualizer extends StatelessWidget {
     required this.bands,
     required this.color,
     this.highlight,
-    this.width = 130,
+    this.width = 260,
     this.height = 36,
   });
 
@@ -46,7 +46,7 @@ class _SpectrumPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final values = bands.value;
-    final count = values.isEmpty ? 32 : values.length;
+    final count = values.isEmpty ? 64 : values.length;
     const padding = 2.0;
     final slot = (size.width - padding * 2) / count;
     final barWidth = (slot * 0.70).clamp(2.0, 5.0);

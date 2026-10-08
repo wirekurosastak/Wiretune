@@ -14,12 +14,12 @@ Float32List _tone(double frequency) => Float32List.fromList([
 void main() {
   test('when playback stops the bars fall to the floor, whatever the window still holds', () {
     final analyzer = SpectrumAnalyzer();
-    expect(analyzer.processPcm(_tone(1000), isPlaying: true)[17], greaterThan(0.40));
+    expect(analyzer.processPcm(_tone(1000), isPlaying: true)[34], greaterThan(0.40));
     var bands = Float32List(SpectrumAnalyzer.numBands);
     for (var i = 0; i < 20; i++) {
       bands = analyzer.processPcm(_tone(1000), isPlaying: false);
     }
-    expect(bands, hasLength(32));
+    expect(bands, hasLength(64));
     for (final level in bands) {
       expect(level, lessThanOrEqualTo(0.10));
     }
@@ -27,14 +27,20 @@ void main() {
 
   test('a 100 Hz tone lights the bass bands only', () {
     final bands = SpectrumAnalyzer().processPcm(_tone(100), isPlaying: true);
-    expect(math.max(bands[5], bands[6]), greaterThan(0.40));
-    expect(bands[29], lessThan(0.15));
-    expect(bands[31], lessThan(0.15));
+    expect(math.max(bands[10], bands[11]), greaterThan(0.40));
+    expect(bands[55], lessThan(0.15));
+    expect(bands[63], lessThan(0.15));
   });
 
   test('a 1 kHz tone lights the 1 kHz band', () {
     final bands = SpectrumAnalyzer().processPcm(_tone(1000), isPlaying: true);
-    expect(bands[17], greaterThan(0.40));
+    expect(bands[34], greaterThan(0.40));
+    expect(bands[0], lessThan(0.15));
+  });
+
+  test('an 18 kHz tone lights the highest band (up to 20 kHz)', () {
+    final bands = SpectrumAnalyzer().processPcm(_tone(18000), isPlaying: true);
+    expect(math.max(bands[62], bands[63]), greaterThan(0.40));
     expect(bands[0], lessThan(0.15));
   });
 

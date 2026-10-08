@@ -33,6 +33,7 @@ class LibraryRepository {
           trackCount: _int(r['track_count']),
           discNumber: _int(r['disc_number']),
           year: _int(r['year']),
+          bpm: _int(r['bpm']),
           genre: r['genre'] as String?,
           duration: Duration(milliseconds: _int(r['duration_ms']) ?? 0),
           fileSizeBytes: _int(r['file_size_bytes']) ?? 0,
@@ -61,16 +62,16 @@ class LibraryRepository {
   static const String _upsertSql = '''
     INSERT INTO tracks (
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
-        year, genre, duration_ms, file_size_bytes, file_modified, file_path, stream_url,
+        year, bpm, genre, duration_ms, file_size_bytes, file_modified, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
         bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added, favorited_at
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-              ?24, ?25, ?26, ?27, ?28)
+              ?24, ?25, ?26, ?27, ?28, ?29)
     ON CONFLICT(id) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, album = excluded.album,
         album_artist = excluded.album_artist, track_number = excluded.track_number,
         track_count = excluded.track_count, disc_number = excluded.disc_number, year = excluded.year,
-        genre = excluded.genre, duration_ms = excluded.duration_ms,
+        bpm = excluded.bpm, genre = excluded.genre, duration_ms = excluded.duration_ms,
         file_size_bytes = excluded.file_size_bytes, file_modified = excluded.file_modified,
         file_path = excluded.file_path, stream_url = excluded.stream_url, has_cover_art = excluded.has_cover_art,
         cover_art_path = excluded.cover_art_path, codec = excluded.codec, sample_rate = excluded.sample_rate,
@@ -81,7 +82,7 @@ class LibraryRepository {
     WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR album IS NOT excluded.album
        OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
        OR track_count IS NOT excluded.track_count OR disc_number IS NOT excluded.disc_number
-       OR year IS NOT excluded.year OR genre IS NOT excluded.genre
+       OR year IS NOT excluded.year OR bpm IS NOT excluded.bpm OR genre IS NOT excluded.genre
        OR duration_ms IS NOT excluded.duration_ms OR file_size_bytes IS NOT excluded.file_size_bytes
        OR file_modified IS NOT excluded.file_modified OR file_path IS NOT excluded.file_path
        OR stream_url IS NOT excluded.stream_url
@@ -129,6 +130,7 @@ class LibraryRepository {
             t.trackCount,
             t.discNumber,
             t.year,
+            t.bpm,
             t.genre,
             t.duration.inMilliseconds,
             t.fileSizeBytes,
@@ -168,6 +170,13 @@ class LibraryRepository {
   Future<void> incrementPlayCount(String trackId) async {
     _db.connection.execute('UPDATE tracks SET play_count = play_count + 1, last_played = ? WHERE id = ?', [
       toDbTime(DateTime.now()),
+      trackId,
+    ]);
+  }
+
+  Future<void> updateTrackBpm(String trackId, int bpm) async {
+    _db.connection.execute('UPDATE tracks SET bpm = ? WHERE id = ?', [
+      bpm,
       trackId,
     ]);
   }

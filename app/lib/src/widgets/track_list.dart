@@ -591,8 +591,6 @@ class _CellLinkState extends State<_CellLink> {
             style: TextStyle(
               fontSize: widget.bold ? 14 : 13.5,
               fontWeight: widget.bold ? FontWeight.w600 : FontWeight.w500,
-              decoration: _hover ? TextDecoration.underline : null,
-              decorationColor: widget.hoverColor,
               color: _hover ? widget.hoverColor : (widget.color ?? context.colors.textMain),
             ),
           ),

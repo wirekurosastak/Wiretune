@@ -44,7 +44,6 @@ class DevicesButton extends StatelessWidget {
       builder: (context, _) {
         final remote = player.isRemote;
         if (!player.canReachDevices && !remote) return const SizedBox.shrink();
-        final playingElsewhere = !remote && player.otherDevices.any((d) => d.playback?.playing ?? false);
         final here = deviceLabel(context, vm.deviceName, vm.capabilities.kind);
         Widget entry(IconData icon, String title, String subtitle) => Row(
           children: [
@@ -76,7 +75,7 @@ class DevicesButton extends StatelessWidget {
             iconSize: iconSize,
             icon: Icon(
               remote ? Icons.cast_connected_rounded : Icons.cast_rounded,
-              color: remote || playingElsewhere ? colors.accent : colors.textMain,
+              color: remote ? colors.accent : colors.textMain,
             ),
             // This device is the empty string: a null would read as "closed without a choice".
             onSelected: (id) => player.selectDevice(id.isEmpty ? null : id),

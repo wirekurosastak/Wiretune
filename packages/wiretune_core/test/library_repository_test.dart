@@ -174,8 +174,9 @@ void main() {
   test('a database of the previous schema is upgraded in place, and favourites get their time from then on', () async {
     final (repo, db) = await open();
     await repo.replaceAllTracks([make('a')..isFavorite = true]);
-    // Back to what schema 1 was: no time for a favourite.
+    // Back to what schema 1 was: no time for a favourite, no bpm.
     db.connection.execute('ALTER TABLE tracks DROP COLUMN favorited_at');
+    db.connection.execute('ALTER TABLE tracks DROP COLUMN bpm');
     db.connection.execute('PRAGMA user_version = 1');
     db.close();
 
@@ -190,6 +191,20 @@ void main() {
     await upgraded.updateTrackFavorite('a', null);
     final unmarked = (await upgraded.getAllTracks()).single;
     expect((unmarked.isFavorite, unmarked.favoritedAt), (false, null));
+  });
+
+  test('a database of schema 2 is upgraded to schema 3 adding bpm', () async {
+    final (repo, db) = await open();
+    await repo.replaceAllTracks([make('a')]);
+    // Back to schema 2: no bpm.
+    db.connection.execute('ALTER TABLE tracks DROP COLUMN bpm');
+    db.connection.execute('PRAGMA user_version = 2');
+    db.close();
+
+    final (upgraded, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    final kept = (await upgraded.getAllTracks()).single;
+    expect((kept.id, kept.bpm), ('a', null));
   });
 
   test('initializing the schema twice changes nothing', () async {

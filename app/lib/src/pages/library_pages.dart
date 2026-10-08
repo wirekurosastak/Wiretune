@@ -9,7 +9,6 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../view_models/library_view_models.dart';
-import '../widgets/ambient.dart';
 import '../widgets/cards.dart';
 import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
@@ -133,11 +132,18 @@ class FavoritesPage extends StatelessWidget {
 }
 
 /// The button that leads back from a detail page (a bordered button with the section's arrow).
-class BackLink extends StatelessWidget {
+class BackLink extends StatefulWidget {
   const BackLink({super.key, required this.text, required this.onPressed});
 
   final String text;
   final VoidCallback onPressed;
+
+  @override
+  State<BackLink> createState() => _BackLinkState();
+}
+
+class _BackLinkState extends State<BackLink> {
+  bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +156,7 @@ class BackLink extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: InkWell(
             borderRadius: BorderRadius.circular(6),
-            onTap: onPressed,
+            onTap: widget.onPressed,
             child: SizedBox(
               height: 56,
               child: Padding(
@@ -163,7 +169,7 @@ class BackLink extends StatelessWidget {
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 280),
                       child: Text(
-                        text,
+                        widget.text,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.textMain),
@@ -182,16 +188,49 @@ class BackLink extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(narrow ? 16 : 26, narrow ? 12 : 22, narrow ? 16 : 26, 12),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: OutlinedButton.icon(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 36),
-            padding: const EdgeInsets.fromLTRB(12, 0, 16, 0),
-            backgroundColor: colors.palette.panel,
-            textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: GestureDetector(
+            onTap: widget.onPressed,
+            child: AnimatedScale(
+              scale: _hover ? 1.05 : 1.0,
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.arrow_back_rounded,
+                      size: 20,
+                      color: colors.textMain,
+                      shadows: _hover
+                          ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)]
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.text,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: colors.textMain,
+                        letterSpacing: -0.2,
+                        shadows: _hover
+                            ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)]
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          onPressed: onPressed,
-          icon: Icon(Icons.arrow_back_rounded, size: 18, color: context.colors.accent),
-          label: Text(text, overflow: TextOverflow.ellipsis),
         ),
       ),
     );
@@ -251,33 +290,6 @@ class DetailHeader extends StatelessWidget {
       BoxShadow(color: colors.palette.shadow, blurRadius: 40, spreadRadius: -8, offset: const Offset(0, 20)),
       BoxShadow(color: colors.accent.withValues(alpha: 0.18), blurRadius: 60, spreadRadius: -10),
     ];
-    // The wash: the artwork's colours (or a glow of the accent), fading out towards the bottom.
-    final wash = Positioned.fill(
-      child: ShaderMask(
-        blendMode: BlendMode.dstIn,
-        shaderCallback: (rect) => const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.black, Colors.black54, Colors.transparent],
-          stops: [0, 0.55, 1],
-        ).createShader(rect),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(-0.7, -0.8),
-                  radius: 1.2,
-                  colors: [colors.accent.withValues(alpha: 0.3), colors.accent.withValues(alpha: 0)],
-                ),
-              ),
-            ),
-            AmbientArtwork(path: artworkPath, opacity: colors.palette.isDark ? 0.6 : 0.45),
-          ],
-        ),
-      ),
-    );
     final badge = artworkBadge;
     final framed = badge == null
         ? artwork
@@ -301,48 +313,46 @@ class DetailHeader extends StatelessWidget {
           );
     if (narrow) {
       // The phone's header: the 230 px artwork with a glow, the title and the details, all centred.
-      return Stack(
-        children: [
-          wash,
-          Column(
-            children: [
-              ?back,
-              Padding(
-                padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 10),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 230,
-                      height: 230,
-                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
-                      child: framed,
-                    ),
-                    const SizedBox(height: 20),
-                    titleWidget ??
-                        Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 24,
-                            letterSpacing: -0.6,
-                            fontWeight: FontWeight.w800,
-                            color: colors.textMain,
+      return SafeArea(
+        bottom: false,
+        child: Column(
+              children: [
+                ?back,
+                Padding(
+                  padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 10),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 230,
+                        height: 230,
+                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
+                        child: framed,
+                      ),
+                      const SizedBox(height: 20),
+                      titleWidget ??
+                          Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 24,
+                              letterSpacing: -0.6,
+                              fontWeight: FontWeight.w800,
+                              color: colors.textMain,
+                            ),
                           ),
-                        ),
-                    if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
-                    if (actions.isNotEmpty) ...[
-                      const SizedBox(height: 18),
-                      for (final action in actions) Padding(padding: const EdgeInsets.only(bottom: 10), child: action),
+                      if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
+                      if (actions.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        for (final action in actions) Padding(padding: const EdgeInsets.only(bottom: 10), child: action),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
-      );
+              ],
+            ),
+          );
     }
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,30 +365,25 @@ class DetailHeader extends StatelessWidget {
         if (actions.isNotEmpty) ...[const SizedBox(height: 22), Wrap(spacing: 12, runSpacing: 8, children: actions)],
       ],
     );
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        wash,
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            ?back,
-            Padding(
-              padding: EdgeInsets.fromLTRB(30, back == null ? 28 : 6, 30, 28),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    width: 210,
-                    height: 210,
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
-                    child: framed,
-                  ),
-                  const SizedBox(width: 30),
-                  Expanded(child: text),
-                ],
+        ?back,
+        Padding(
+          padding: EdgeInsets.fromLTRB(30, back == null ? 28 : 6, 30, 28),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                width: 210,
+                height: 210,
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
+                child: framed,
               ),
-            ),
-          ],
+              const SizedBox(width: 30),
+              Expanded(child: text),
+            ],
+          ),
         ),
       ],
     );
@@ -407,6 +412,106 @@ class _SortButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final isDark = colors.palette.isDark;
+    if (PhoneChrome.isPhone(context)) {
+      final active = buttons.firstWhere((b) => b.$2, orElse: () => buttons.first);
+      final cleanLabel = active.$1.replaceAll(RegExp(r'\s*[↑↓]'), '');
+      return SizedBox(
+        width: double.infinity,
+        height: 38,
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            backgroundColor: colors.surface1,
+            side: BorderSide(color: colors.glassBorder),
+            shape: const StadiumBorder(),
+          ),
+          onPressed: () {
+            if (buttons.length == 1) {
+              buttons.first.$3();
+              return;
+            }
+            showModalBottomSheet<void>(
+              context: context,
+              backgroundColor: isDark ? const Color(0xFF101014) : Colors.white,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (ctx) => SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 16),
+                          decoration: BoxDecoration(
+                            color: colors.textMuted.withValues(alpha: 0.3),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                        child: Text(
+                          context.tr('SortBy'),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: colors.textMain,
+                          ),
+                        ),
+                      ),
+                      for (final (label, selected, onTap) in buttons)
+                        ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                          title: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                              color: selected ? colors.accent : colors.textMain,
+                            ),
+                          ),
+                          trailing: selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            onTap();
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  cleanLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: colors.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.swap_vert_rounded, size: 18, color: colors.accent),
+            ],
+          ),
+        ),
+      );
+    }
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       runSpacing: 6,
@@ -419,16 +524,19 @@ class _SortButtons extends StatelessWidget {
         // On a line too short for every segment (a phone with a large font) the pill shrinks rather than overflow.
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Container(
-            padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(
-              color: colors.surface1,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: colors.glassBorder),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: colors.surface1,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: colors.glassBorder),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 for (final (label, selected, onTap) in buttons)
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 220),
@@ -467,6 +575,7 @@ class _SortButtons extends StatelessWidget {
             ),
           ),
         ),
+      ),
       ],
     );
   }
@@ -583,6 +692,7 @@ class AlbumsPage extends StatelessWidget {
                   _SortButtons(
                     buttons: [
                       (albums.sortTitleLabel, albums.isSortByTitle, () => albums.setSortField(AlbumSortField.title)),
+                      (albums.sortArtistLabel, albums.isSortByArtist, () => albums.setSortField(AlbumSortField.artist)),
                       (albums.sortYearLabel, albums.isSortByYear, () => albums.setSortField(AlbumSortField.year)),
                       (
                         albums.sortQualityLabel,
@@ -634,7 +744,7 @@ class AlbumDetail extends StatelessWidget {
               LinkText(
                 album.artist,
                 onTap: () => vm.openArtistByName(album.artist),
-                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.purple),
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.coral),
               ),
               if (album.year != null) _Detail('${album.year}'),
               _Detail(context.trf('TrackCount', [album.trackCount])),

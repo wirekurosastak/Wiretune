@@ -250,6 +250,12 @@ class ServerSession {
 
   Future<void> deleteUser(String userId) => _client.deleteUser(serverUrl, userId);
 
+  Future<void> changePassword(String currentPassword, String newPassword) =>
+      _client.changePassword(serverUrl, currentPassword, newPassword);
+
+  Future<void> adminResetPassword(String userId, String newPassword) =>
+      _client.adminResetPassword(serverUrl, userId, newPassword);
+
   Future<ServerConfigInfo> getServerConfig() => _client.getServerConfig(serverUrl);
 
   Future<ServerConfigInfo> updateServerLibraryPath(String newPath) =>

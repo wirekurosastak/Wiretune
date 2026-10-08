@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -64,7 +65,7 @@ class PlayerViewModel extends ChangeNotifier {
       _engine.stateChanged.listen((state) {
         _state = state;
         if (state == PlaybackState.playing) errorMessage = null;
-        if (state != PlaybackState.playing) spectrum.value = Float32List(32);
+        if (state != PlaybackState.playing) spectrum.value = Float32List(SpectrumAnalyzer.numBands);
         notifyListeners();
       }),
       // The player keeps the Track instance it started with; a favourite toggled elsewhere changes the library's one.
@@ -157,8 +158,8 @@ class PlayerViewModel extends ChangeNotifier {
   /// second rather than at every position update.
   final ValueNotifier<int> elapsedSeconds = ValueNotifier(0);
 
-  /// The 32 spectrum bands (0..1), about 30 times a second while playing.
-  final ValueNotifier<Float32List> spectrum = ValueNotifier(Float32List(32));
+  /// The spectrum bands (0..1), about 30 times a second while playing.
+  final ValueNotifier<Float32List> spectrum = ValueNotifier(Float32List(SpectrumAnalyzer.numBands));
 
   double get positionSeconds => position.value.inMicroseconds / 1e6;
   Duration get duration => currentTrack?.duration ?? Duration.zero;
@@ -212,8 +213,8 @@ class PlayerViewModel extends ChangeNotifier {
   List<QueueItem> get queueItems => isRemote ? _remoteQueue : _queueItems;
   int get currentQueueIndex => isRemote ? _remoteQueue.indexWhere((item) => item.isCurrent) : _queueIndex;
 
-  /// The queue can be reordered and edited (not the one of another device).
-  bool get canEditQueue => !isRemote;
+  /// The queue can be reordered and edited (both locally and when casting to another device).
+  bool get canEditQueue => true;
 
   void toggleQueue() => isQueueOpen = !isQueueOpen;
 
@@ -239,10 +240,19 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void moveQueueTrack(int oldIndex, int newIndex) {
-    if (!canEditQueue) return;
-    if (oldIndex < 0 || oldIndex >= _playbackQueue.length) return;
-    if (newIndex < 0 || newIndex >= _playbackQueue.length) return;
+    if (oldIndex < 0 || newIndex < 0) return;
     if (oldIndex == newIndex) return;
+
+    if (isRemote) {
+      if (oldIndex >= _remoteQueue.length || newIndex >= _remoteQueue.length) return;
+      final item = _remoteQueue.removeAt(oldIndex);
+      _remoteQueue.insert(newIndex, item);
+      notifyListeners();
+      _sendRemote(RemoteCommand(RemoteAction.moveTrack, index: oldIndex, toIndex: newIndex));
+      return;
+    }
+
+    if (oldIndex >= _playbackQueue.length || newIndex >= _playbackQueue.length) return;
 
     final track = _playbackQueue.removeAt(oldIndex);
     _playbackQueue.insert(newIndex, track);
@@ -273,12 +283,22 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void moveQueueTrackDown(QueueItem? item) {
-    if (item == null || item.index >= _playbackQueue.length - 1) return;
+    final count = isRemote ? _remoteQueue.length : _playbackQueue.length;
+    if (item == null || item.index >= count - 1) return;
     moveQueueTrack(item.index, item.index + 1);
   }
 
   void removeQueueTrack(Track? track) {
-    if (track == null || !canEditQueue) return;
+    if (track == null) return;
+    if (isRemote) {
+      final index = _remoteQueue.indexWhere((item) => item.track.id == track.id);
+      if (index >= 0) {
+        _remoteQueue.removeAt(index);
+        notifyListeners();
+        _sendRemote(RemoteCommand(RemoteAction.removeTrack, index: index));
+      }
+      return;
+    }
     final index = _playbackQueue.indexOf(track);
     if (index < 0) return;
 
@@ -305,7 +325,13 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void clearQueue() {
-    if (!canEditQueue) return;
+    if (isRemote) {
+      final current = _remoteQueue.where((item) => item.isCurrent).firstOrNull;
+      _remoteQueue = current != null ? [current] : [];
+      notifyListeners();
+      _sendRemote(const RemoteCommand(RemoteAction.clearQueue));
+      return;
+    }
     final current =
         _currentTrack ?? (_queueIndex >= 0 && _queueIndex < _playbackQueue.length ? _playbackQueue[_queueIndex] : null);
     _playbackQueue.clear();
@@ -637,6 +663,9 @@ class PlayerViewModel extends ChangeNotifier {
         shown.isPlaying = true;
         final inLibrary = _library.getTrack(shown.id);
         if (inLibrary != null && !identical(inLibrary, shown)) inLibrary.isPlaying = true;
+        if (shown.bpm == null || shown.bpm == 0) {
+          _loadTrackBpm(shown);
+        }
       }
     }
     if (_lyricsTrackId != shown?.id) {
@@ -644,6 +673,26 @@ class PlayerViewModel extends ChangeNotifier {
       _refreshLyrics();
     }
     notifyListeners();
+  }
+
+  void _loadTrackBpm(Track track) {
+    final path = track.filePath;
+    if (path.isEmpty) return;
+    try {
+      final file = File(path);
+      if (!file.existsSync()) return;
+      final tags = TagReader.read(path);
+      final bpm = tags?.bpm;
+      if (bpm != null && bpm > 0) {
+        track.bpm = bpm;
+        final inLibrary = _library.getTrack(track.id);
+        if (inLibrary != null && !identical(inLibrary, track)) {
+          inLibrary.bpm = bpm;
+        }
+        _library.updateTrackBpm(track.id, bpm);
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Track? _marked;
@@ -770,7 +819,7 @@ class PlayerViewModel extends ChangeNotifier {
     _remoteVolume = null;
     _seekDebounce?.cancel();
     _isUserSeeking = false;
-    spectrum.value = Float32List(32);
+    spectrum.value = Float32List(SpectrumAnalyzer.numBands);
     final device = _remote?.device(deviceId);
     _remoteName = device?.name ?? '';
     _remoteKind = device?.kind ?? DeviceKind.desktop;
@@ -936,6 +985,14 @@ class PlayerViewModel extends ChangeNotifier {
         notifyListeners();
       case RemoteAction.playIndex:
         if (command.index < _playbackQueue.length) _playAt(command.index);
+      case RemoteAction.moveTrack:
+        moveQueueTrack(command.index, command.toIndex);
+      case RemoteAction.removeTrack:
+        if (command.index >= 0 && command.index < _playbackQueue.length) {
+          removeQueueTrack(_playbackQueue[command.index]);
+        }
+      case RemoteAction.clearQueue:
+        clearQueue();
     }
   }
 

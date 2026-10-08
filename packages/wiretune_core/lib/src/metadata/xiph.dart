@@ -28,6 +28,9 @@ const Map<String, TagField> _vorbisFields = {
   'LYRICS': TagField.lyrics,
   'UNSYNCEDLYRICS': TagField.lyrics,
   'UNSYNCED LYRICS': TagField.lyrics,
+  'BPM': TagField.bpm,
+  'TEMPO': TagField.bpm,
+  'FBPM': TagField.bpm,
 };
 
 /// Reads a Vorbis comment block (FLAC's VORBIS_COMMENT, the comment packet of Ogg Vorbis and Opus) into [tags].
