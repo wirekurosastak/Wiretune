@@ -247,5 +247,42 @@ class LibraryRepository {
     return db.select('SELECT value FROM settings WHERE key = ?', [key]).first['value'] as String;
   }
 
+  Future<Map<String, Set<String>>> getHiddenItems([String userId = 'local']) async {
+    final rows = _db.connection.select(
+      'SELECT item_type, item_id FROM user_hidden WHERE user_id = ?',
+      [userId],
+    );
+    final result = <String, Set<String>>{
+      'artist': <String>{},
+      'album': <String>{},
+      'track': <String>{},
+    };
+    for (final r in rows) {
+      final type = r['item_type'] as String;
+      final id = r['item_id'] as String;
+      result.putIfAbsent(type, () => <String>{}).add(id);
+    }
+    return result;
+  }
+
+  Future<void> setHiddenItem(String itemType, String itemId, bool hidden, [String userId = 'local']) async {
+    if (hidden) {
+      _db.connection.execute(
+        'INSERT OR REPLACE INTO user_hidden (user_id, item_type, item_id, hidden_at) VALUES (?, ?, ?, ?)',
+        [userId, itemType, itemId, toDbTime(DateTime.now().toUtc())],
+      );
+    } else {
+      _db.connection.execute(
+        'DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?',
+        [userId, itemType, itemId],
+      );
+    }
+  }
+
+  Future<void> clearHiddenItems([String userId = 'local']) async {
+    _db.connection.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
+  }
+
   static int? _int(Object? value) => value == null ? null : (value as num).toInt();
 }
+

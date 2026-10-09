@@ -30,7 +30,9 @@ class ServerSession {
       _library.playRecorded.listen((track) => _enqueue(() => _pushPlay(track))),
       _library.playlistEdited.listen((playlist) => _enqueue(() => _pushPlaylist(playlist.id))),
       _library.playlistRemoved.listen((id) => _enqueue(() => _pushPlaylistRemoved(id))),
+      _library.hiddenToggled.listen((event) => _enqueue(() => _pushHidden(event.itemType, event.itemId, event.hidden))),
     ]);
+
   }
 
   static const String defaultServerUrl = 'http://localhost:5200';
@@ -162,6 +164,7 @@ class ServerSession {
       }
 
       currentUser = await _client.getCurrentUser(serverUrl);
+      await _library.setCurrentUser(currentUser?.id);
       await _refreshLibraryCore();
     }),
   );
@@ -218,6 +221,7 @@ class ServerSession {
         _streamToken = null;
         _client.authToken = auth.token;
         currentUser = auth.user;
+        await _library.setCurrentUser(auth.user.id);
         await _guarded(() async {
           await _settings.setSetting('auth_token', rememberMe ? auth.token : '');
           await _refreshLibraryCore();
@@ -325,8 +329,10 @@ class ServerSession {
     _streamToken = null;
     _client.authToken = null;
     currentUser = null;
+    await _library.setCurrentUser('local');
     await _settings.setSetting('auth_token', '');
   }
+
 
   Future<void> _setSource(LibrarySource value) async {
     source = value;
@@ -423,6 +429,11 @@ class ServerSession {
   Future<void> _pushPlaylistRemoved(String playlistId) async {
     if (!_canPush) return;
     await _sendChange(() => _client.deletePlaylist(serverUrl, playlistId));
+  }
+
+  Future<void> _pushHidden(String itemType, String itemId, bool hidden) async {
+    if (!_canPush) return;
+    await _sendChange(() => _client.setHidden(serverUrl, itemType, itemId, hidden));
   }
 
   void dispose() {

@@ -31,6 +31,11 @@ class UserDataService {
     SET name = ?3, description = ?4, track_ids_json = ?5, modified_at = ?6
     WHERE user_id = ?1 AND id = ?2''';
 
+  static const String _hiddenInsertSql = '''
+    INSERT OR IGNORE INTO user_hidden (user_id, item_type, item_id, hidden_at)
+    SELECT ?1, ?2, ?3, ?4
+    WHERE (SELECT COUNT(*) FROM user_hidden WHERE user_id = ?1) < ?5''';
+
   UserDataSnapshot get(String userId) {
     final db = _db.connection;
     final favoriteRows = db.select(
@@ -51,7 +56,26 @@ class UserDataService {
         )
         .map(_toPlaylist)
         .toList();
-    return UserDataSnapshot(favorites, plays, playlists, favoritedAt);
+    final hiddenRows = db.select(
+      'SELECT item_type, item_id FROM user_hidden WHERE user_id = ? ORDER BY hidden_at',
+      [userId],
+    );
+    final hiddenArtists = <String>[];
+    final hiddenAlbums = <String>[];
+    final hiddenTracks = <String>[];
+    for (final r in hiddenRows) {
+      final type = r['item_type'] as String;
+      final id = r['item_id'] as String;
+      switch (type) {
+        case 'artist':
+          hiddenArtists.add(id);
+        case 'album':
+          hiddenAlbums.add(id);
+        case 'track':
+          hiddenTracks.add(id);
+      }
+    }
+    return UserDataSnapshot(favorites, plays, playlists, favoritedAt, hiddenArtists, hiddenAlbums, hiddenTracks);
   }
 
   /// False when the account is at its favourites limit and nothing was added.
@@ -63,6 +87,23 @@ class UserDataService {
     }
     db.execute(_favoriteInsertSql, [userId, trackId, toDbTime(DateTime.now()), UserDataRules.maxFavorites]);
     return db.select('SELECT 1 FROM user_favorites WHERE user_id = ? AND track_id = ?', [userId, trackId]).isNotEmpty;
+  }
+
+  /// Sets whether an artist, album or track is hidden for [userId]. False when the account is at its hidden limit.
+  bool setHidden(String userId, String itemType, String itemId, bool hidden) {
+    final db = _db.connection;
+    if (!hidden) {
+      db.execute(
+        'DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?',
+        [userId, itemType, itemId],
+      );
+      return true;
+    }
+    db.execute(_hiddenInsertSql, [userId, itemType, itemId, toDbTime(DateTime.now()), UserDataRules.maxHidden]);
+    return db.select(
+      'SELECT 1 FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?',
+      [userId, itemType, itemId],
+    ).isNotEmpty;
   }
 
   /// Counts one more play of a track. Null when the account is at its statistics limit.

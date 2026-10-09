@@ -93,8 +93,26 @@ class DownloadService {
   /// Raised when the pins, the copies, the progress or the error change.
   final Event<void> changed = Event<void>();
 
-  String get directory => _directory ??= p.join(AppPaths.getDataDirectory(), 'Downloads');
+  static String defaultDownloadDirectory() {
+    if (AppPaths.platformDataRoot != null) {
+      return p.join(AppPaths.getDataDirectory(), 'Downloads');
+    }
+    final legacy = p.join(AppPaths.getDataDirectory(), 'Downloads');
+    final legacyDir = Directory(legacy);
+    if (legacyDir.existsSync()) {
+      try {
+        final entries = legacyDir.listSync();
+        if (entries.isNotEmpty) {
+          return legacy;
+        }
+      } catch (_) {}
+    }
+    return p.join(AppPaths.musicFolder(), 'Wiretune');
+  }
+
+  String get directory => _directory ??= defaultDownloadDirectory();
   String get _coverDirectory => p.join(directory, 'covers');
+
 
   // ── What the user marked ───────────────────────────────────────────────────────────────────────
 

@@ -263,7 +263,7 @@ class _TrackSliverState extends State<TrackSliver> {
           if (_showYear) cell(context.tr('ColYear'), _Column.year, flex: _yearFlex),
           if (_showAdded) cell(context.tr('ColAdded'), _Column.added, flex: _addedFlex),
           if (_showQuality) cell(context.tr('ColQuality'), _Column.quality, flex: _qualityFlex),
-          const SizedBox(width: 3 * 44),
+          const SizedBox(width: 4 * 44),
         ],
       ),
     );
@@ -333,6 +333,7 @@ class _TableRowState extends State<_TableRow> {
             child: InkWell(
               borderRadius: radius,
               onTap: () => onPlay(track),
+              onSecondaryTapUp: (details) => _showTrackContextMenu(context, details.globalPosition, track, kind),
               child: Row(
                 children: [
                   SizedBox(
@@ -486,6 +487,23 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
           // Kept because its album, playlist or the favourites are: those buttons let it go.
           onPressed: downloads.isPinnedByList(track) ? null : () => downloads.toggleTrack(track),
         );
+  final isHidden = vm.library.isTrackExplicitlyHidden(track.id);
+  final hide = _IconCell(
+    width: size,
+    tooltip: context.tr(isHidden ? 'Unhide' : 'HideTrack'),
+    icon: Icon(
+      isHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+      color: colors.textMuted,
+      size: 18,
+    ),
+    onPressed: () {
+      if (isHidden) {
+        vm.library.unhideTrack(track.id);
+      } else {
+        vm.library.hideTrack(track.id);
+      }
+    },
+  );
   return switch (kind) {
     // The heart first and "add to playlist" after it, as in every other list.
     TrackTableKind.favorites => [
@@ -497,6 +515,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
       ),
       add,
       download,
+      hide,
     ],
     TrackTableKind.playlist => [
       favorite,
@@ -507,12 +526,29 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
         onPressed: () => vm.playlists.removeTrackFromSelected(track),
       ),
       download,
+      hide,
     ],
-    _ => [favorite, add, download],
+    _ => [favorite, add, download, hide],
   };
 }
 
-enum _TrackAction { addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist }
+enum TrackAction { addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist, hideTrack }
+
+Future<void> _showTrackContextMenu(
+  BuildContext context,
+  Offset position,
+  Track track,
+  TrackTableKind kind,
+) async {
+  final action = await showMenu<TrackAction>(
+    context: context,
+    position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
+    items: TrackMenu.buildMenuItems(context, track, kind),
+  );
+  if (action != null && context.mounted) {
+    TrackMenu.handleAction(context, action, track);
+  }
+}
 
 /// The "⋮" menu of a track, on a phone's rows and its full-screen player: what the table has as buttons (a playlist,
 /// the download), and the way to the album and the artist.
@@ -529,12 +565,16 @@ class TrackMenu extends StatelessWidget {
   /// The dots' colour; muted when not given.
   final Color? color;
 
-  @override
-  Widget build(BuildContext context) {
+  static List<PopupMenuEntry<TrackAction>> buildMenuItems(
+    BuildContext context,
+    Track track,
+    TrackTableKind kind,
+  ) {
     final vm = context.vm;
     final colors = context.colors;
     final downloads = vm.downloads;
-    PopupMenuItem<_TrackAction> item(_TrackAction action, IconData icon, String text, {Color? color, bool? enabled}) =>
+    final isHidden = vm.library.isTrackExplicitlyHidden(track.id);
+    PopupMenuItem<TrackAction> item(TrackAction action, IconData icon, String text, {Color? color, bool? enabled}) =>
         PopupMenuItem(
           value: action,
           enabled: enabled ?? true,
@@ -548,40 +588,68 @@ class TrackMenu extends StatelessWidget {
             ],
           ),
         );
+    return [
+      item(TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
+      if (kind == TrackTableKind.playlist)
+        item(
+          TrackAction.removeFromPlaylist,
+          Icons.playlist_remove_rounded,
+          context.tr('TipRemoveFromPlaylist'),
+          color: colors.danger,
+        ),
+      if (downloads.canDownload(track))
+        item(
+          TrackAction.download,
+          downloadIcon(downloads.stateOf(track)) ?? Icons.download_rounded,
+          downloadTip(context, track),
+          enabled: !downloads.isPinnedByList(track),
+        ),
+      if (kind != TrackTableKind.album)
+        item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
+      if (kind != TrackTableKind.artist)
+        item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
+      item(
+        TrackAction.hideTrack,
+        Icons.visibility_off_outlined,
+        context.tr(isHidden ? 'Unhide' : 'HideTrack'),
+        color: colors.textMuted,
+      ),
+    ];
+  }
+
+  static void handleAction(BuildContext context, TrackAction action, Track track) {
+    final vm = context.vm;
+    switch (action) {
+      case TrackAction.addToPlaylist:
+        vm.addToPlaylist(track);
+      case TrackAction.removeFromPlaylist:
+        vm.playlists.removeTrackFromSelected(track);
+      case TrackAction.download:
+        vm.downloads.toggleTrack(track);
+      case TrackAction.openAlbum:
+        vm.openAlbumOfTrack(track);
+      case TrackAction.openArtist:
+        vm.openArtistByName(track.artist);
+      case TrackAction.hideTrack:
+        if (vm.library.isTrackExplicitlyHidden(track.id)) {
+          vm.library.unhideTrack(track.id);
+        } else {
+          vm.library.hideTrack(track.id);
+        }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
     return SizedBox(
       width: width,
       child: Center(
-        child: PopupMenuButton<_TrackAction>(
+        child: PopupMenuButton<TrackAction>(
           tooltip: context.tr('TipMore'),
           icon: Icon(Icons.more_vert_rounded, color: color ?? colors.textMuted, size: 22),
-          onSelected: (action) => switch (action) {
-            _TrackAction.addToPlaylist => vm.addToPlaylist(track),
-            _TrackAction.removeFromPlaylist => vm.playlists.removeTrackFromSelected(track),
-            _TrackAction.download => downloads.toggleTrack(track),
-            _TrackAction.openAlbum => vm.openAlbumOfTrack(track),
-            _TrackAction.openArtist => vm.openArtistByName(track.artist),
-          },
-          itemBuilder: (context) => [
-            item(_TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
-            if (kind == TrackTableKind.playlist)
-              item(
-                _TrackAction.removeFromPlaylist,
-                Icons.playlist_remove_rounded,
-                context.tr('TipRemoveFromPlaylist'),
-                color: colors.danger,
-              ),
-            if (downloads.canDownload(track))
-              item(
-                _TrackAction.download,
-                downloadIcon(downloads.stateOf(track)) ?? Icons.download_rounded,
-                downloadTip(context, track),
-                enabled: !downloads.isPinnedByList(track),
-              ),
-            if (kind != TrackTableKind.album)
-              item(_TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
-            if (kind != TrackTableKind.artist)
-              item(_TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
-          ],
+          onSelected: (action) => handleAction(context, action, track),
+          itemBuilder: (context) => buildMenuItems(context, track, kind),
         ),
       ),
     );

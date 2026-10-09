@@ -174,5 +174,44 @@ void main() {
       expect(stored.playlists, isEmpty);
       expect((await guest.get('/api/me/data')).statusCode, 401);
     });
+
+    test('hidden content belongs to the account, isolates users, and is removed on account deletion', () async {
+      final (admin, _) = await setupAdmin(server);
+      final (guest, guestInfo) = await registerGuest(server, admin);
+
+      // Admin hides track, album, artist
+      expect((await admin.put('/api/me/hidden/track/t1')).statusCode, 200);
+      expect((await admin.put('/api/me/hidden/album/al1')).statusCode, 200);
+      expect((await admin.put('/api/me/hidden/artist/ar1')).statusCode, 200);
+
+      // Guest hides different items
+      expect((await guest.put('/api/me/hidden/track/t2')).statusCode, 200);
+
+      final adminData = await data(admin);
+      expect(adminData.hiddenTracks, ['t1']);
+      expect(adminData.hiddenAlbums, ['al1']);
+      expect(adminData.hiddenArtists, ['ar1']);
+
+      final guestData = await data(guest);
+      expect(guestData.hiddenTracks, ['t2']);
+      expect(guestData.hiddenAlbums, isEmpty);
+      expect(guestData.hiddenArtists, isEmpty);
+
+      // Invalid item type
+      expect((await admin.put('/api/me/hidden/genre/g1')).statusCode, 400);
+
+      // Too long item id
+      final tooLong = 'x' * (UserDataRules.maxIdLength + 1);
+      expect((await admin.put('/api/me/hidden/track/$tooLong')).statusCode, 400);
+
+      // Unhide
+      expect((await admin.delete('/api/me/hidden/track/t1')).statusCode, 200);
+      expect((await data(admin)).hiddenTracks, isEmpty);
+
+      // Guest account deletion clears guest hidden items
+      expect((await admin.delete('/api/users/${guestInfo.id}')).statusCode, 200);
+      final storedGuest = server.server.userData.get(guestInfo.id);
+      expect(storedGuest.hiddenTracks, isEmpty);
+    });
   });
 }

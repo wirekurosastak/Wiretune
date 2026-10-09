@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
+import '../app_scope.dart';
 import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
@@ -37,6 +38,49 @@ class AlbumCard extends StatelessWidget {
     return _DesktopTile(
       accent: purple,
       onTap: onOpen,
+      onSecondaryTap: (pos) async {
+        final action = await showMenu<String>(
+          context: context,
+          position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx, pos.dy),
+          items: [
+            PopupMenuItem(
+              value: 'open',
+              child: Row(
+                children: [
+                  Icon(Icons.album_rounded, size: 20, color: colors.textMuted),
+                  const SizedBox(width: 14),
+                  Text(context.tr('NavAlbums')),
+                ],
+              ),
+            ),
+            if (onPlay != null)
+              PopupMenuItem(
+                value: 'play',
+                child: Row(
+                  children: [
+                    Icon(Icons.play_arrow_rounded, size: 20, color: colors.textMuted),
+                    const SizedBox(width: 14),
+                    Text(context.tr('Play')),
+                  ],
+                ),
+              ),
+            PopupMenuItem(
+              value: 'hide',
+              child: Row(
+                children: [
+                  Icon(Icons.visibility_off_outlined, size: 20, color: colors.textMuted),
+                  const SizedBox(width: 14),
+                  Text(context.tr('HideAlbum')),
+                ],
+              ),
+            ),
+          ],
+        );
+        if (!context.mounted) return;
+        if (action == 'open') onOpen();
+        if (action == 'play') onPlay?.call();
+        if (action == 'hide') context.vm.library.hideAlbum(album.id);
+      },
       cover: cover,
       lines: [
         _line(album.title, 14, FontWeight.w700, colors.textMain),
@@ -70,6 +114,49 @@ class ArtistCard extends StatelessWidget {
     return _DesktopTile(
       accent: coral,
       onTap: onOpen,
+      onSecondaryTap: (pos) async {
+        final action = await showMenu<String>(
+          context: context,
+          position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx, pos.dy),
+          items: [
+            PopupMenuItem(
+              value: 'open',
+              child: Row(
+                children: [
+                  Icon(Icons.person_rounded, size: 20, color: colors.textMuted),
+                  const SizedBox(width: 14),
+                  Text(context.tr('NavArtists')),
+                ],
+              ),
+            ),
+            if (onPlay != null)
+              PopupMenuItem(
+                value: 'play',
+                child: Row(
+                  children: [
+                    Icon(Icons.play_arrow_rounded, size: 20, color: colors.textMuted),
+                    const SizedBox(width: 14),
+                    Text(context.tr('Play')),
+                  ],
+                ),
+              ),
+            PopupMenuItem(
+              value: 'hide',
+              child: Row(
+                children: [
+                  Icon(Icons.visibility_off_outlined, size: 20, color: colors.textMuted),
+                  const SizedBox(width: 14),
+                  Text(context.tr('HideArtist')),
+                ],
+              ),
+            ),
+          ],
+        );
+        if (!context.mounted) return;
+        if (action == 'open') onOpen();
+        if (action == 'play') onPlay?.call();
+        if (action == 'hide') context.vm.library.hideArtist(artist.id);
+      },
       circle: true,
       cover: picture,
       lines: [
@@ -119,6 +206,39 @@ class AlbumsSliver extends StatelessWidget {
           fontSize: 9.5,
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
         ),
+        trailing: PopupMenuButton<String>(
+          icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
+          tooltip: context.tr('TipMore'),
+          onSelected: (value) async {
+            if (value == 'play') {
+              onPlay(album);
+            } else if (value == 'hide') {
+              await context.vm.library.hideAlbum(album.id);
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'play',
+              child: Row(
+                children: [
+                  Icon(Icons.play_arrow_rounded, size: 20, color: context.colors.textMuted),
+                  const SizedBox(width: 12),
+                  Text(context.tr('Play')),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'hide',
+              child: Row(
+                children: [
+                  Icon(Icons.visibility_off_outlined, size: 20, color: context.colors.textMuted),
+                  const SizedBox(width: 12),
+                  Text(context.tr('HideAlbum')),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
     });
   }
@@ -161,6 +281,39 @@ class ArtistsSliver extends StatelessWidget {
         title: artist.name,
         subtitle:
             '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}',
+        trailing: PopupMenuButton<String>(
+          icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
+          tooltip: context.tr('TipMore'),
+          onSelected: (value) async {
+            if (value == 'play') {
+              onPlay(artist);
+            } else if (value == 'hide') {
+              await context.vm.library.hideArtist(artist.id);
+            }
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'play',
+              child: Row(
+                children: [
+                  Icon(Icons.play_arrow_rounded, size: 20, color: context.colors.textMuted),
+                  const SizedBox(width: 12),
+                  Text(context.tr('Play')),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'hide',
+              child: Row(
+                children: [
+                  Icon(Icons.visibility_off_outlined, size: 20, color: context.colors.textMuted),
+                  const SizedBox(width: 12),
+                  Text(context.tr('HideArtist')),
+                ],
+              ),
+            ),
+          ],
+        ),
       );
     });
   }
@@ -245,6 +398,7 @@ class _ListRow extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.badge,
+    this.trailing,
   });
 
   static const double pictureSize = 68;
@@ -254,6 +408,7 @@ class _ListRow extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget? badge;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -314,6 +469,7 @@ class _ListRow extends StatelessWidget {
                   ],
                 ),
               ),
+              ?trailing,
             ],
           ),
         ),
@@ -408,6 +564,7 @@ class _DesktopTile extends StatefulWidget {
   const _DesktopTile({
     required this.accent,
     required this.onTap,
+    this.onSecondaryTap,
     required this.cover,
     required this.lines,
     required this.play,
@@ -423,6 +580,7 @@ class _DesktopTile extends StatefulWidget {
 
   final Color accent;
   final VoidCallback onTap;
+  final void Function(Offset position)? onSecondaryTap;
   final Widget cover;
   final List<Widget> lines;
   final Widget play;
@@ -510,6 +668,7 @@ class _DesktopTileState extends State<_DesktopTile> {
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,
               onTap: widget.onTap,
+              onSecondaryTapUp: widget.onSecondaryTap != null ? (d) => widget.onSecondaryTap!(d.globalPosition) : null,
               child: Padding(
                 padding: const EdgeInsets.all(_DesktopTile.padding),
                 child: Column(

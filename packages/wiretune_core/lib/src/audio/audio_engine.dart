@@ -77,13 +77,20 @@ class WiretuneAudioEngine {
     final track = _currentTrack;
     if (track == null) return Localizer.get('SignalNone');
 
+    final isLossless = track.format.isLossless;
     final device = _currentDevice?.displayTitle ?? Localizer.get('DefaultOutput');
-    final processing = Localizer.get(_isBitperfect ? 'SignalProcessingBitPerfect' : 'SignalProcessingMixer');
+    final processing = Localizer.get(
+      _isBitperfect
+          ? (isLossless ? 'SignalProcessingBitPerfect' : 'SignalProcessingBitPerfectLossy')
+          : 'SignalProcessingMixer',
+    );
     final access = Localizer.get(_isExclusiveMode ? 'SignalAccessExclusive' : 'SignalAccessShared');
     final transport = Localizer.get(
       track.isLocal
           ? 'SignalTransportLocal'
-          : (_offlineCopy?.call(track) != null ? 'SignalTransportDownloaded' : 'SignalTransportServer'),
+          : (_offlineCopy?.call(track) != null
+              ? 'SignalTransportDownloaded'
+              : (isLossless ? 'SignalTransportServer' : 'SignalTransportServerLossy')),
     );
 
     return [
@@ -94,6 +101,7 @@ class WiretuneAudioEngine {
       Localizer.format('SignalTarget', [device]),
     ].join('\n');
   }
+
 
   /// Supplies the token appended to stream URLs. It is asked for each time a server track starts, so a long-running
   /// player always uses a token that is still valid.

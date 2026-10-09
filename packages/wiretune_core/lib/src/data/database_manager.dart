@@ -32,7 +32,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in
   /// [initializeSchema] that upgrades a database of the previous version in place.
-  static const int schemaVersion = 3;
+  static const int schemaVersion = 4;
 
   final String databasePath;
   Database? _db;
@@ -79,16 +79,24 @@ class DatabaseManager {
           db.userVersion = schemaVersion;
         });
       } else if (version == 1) {
-        // 1 -> 3: when each favourite was marked, and bpm.
+        // 1 -> 4: when each favourite was marked, bpm, and user_hidden table.
         transaction((db) {
           db.execute('ALTER TABLE tracks ADD COLUMN favorited_at INTEGER;');
           db.execute('ALTER TABLE tracks ADD COLUMN bpm INTEGER;');
+          db.execute(_userHiddenTable);
           db.userVersion = schemaVersion;
         });
       } else if (version == 2) {
-        // 2 -> 3: bpm.
+        // 2 -> 4: bpm, and user_hidden table.
         transaction((db) {
           db.execute('ALTER TABLE tracks ADD COLUMN bpm INTEGER;');
+          db.execute(_userHiddenTable);
+          db.userVersion = schemaVersion;
+        });
+      } else if (version == 3) {
+        // 3 -> 4: user_hidden table.
+        transaction((db) {
+          db.execute(_userHiddenTable);
           db.userVersion = schemaVersion;
         });
       } else {
@@ -207,4 +215,23 @@ const String _schema = '''
       modified_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, id)
   );
+
+  CREATE TABLE user_hidden (
+      user_id TEXT NOT NULL,
+      item_type TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      hidden_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, item_type, item_id)
+  );
 ''';
+
+const String _userHiddenTable = '''
+  CREATE TABLE IF NOT EXISTS user_hidden (
+      user_id TEXT NOT NULL,
+      item_type TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      hidden_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, item_type, item_id)
+  );
+''';
+

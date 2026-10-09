@@ -47,19 +47,21 @@ artists themselves.
 
 ## Your data
 
-The signed-in account's favourites, play counts and playlists. Every route here touches only the account in the token,
-and none takes a stream token. Limits: 100,000 favourites, 100,000 tracks with play counts, 500 playlists of up to
-20,000 tracks, IDs up to 128 characters, playlist names up to 200 and descriptions up to 1,000. Over a limit you get
-`409`.
+The signed-in account's favourites, play counts, playlists and hidden content preferences. Every route here touches
+only the account in the token, and none takes a stream token. Limits: 100,000 favourites, 100,000 tracks with play
+counts, 500 playlists of up to 20,000 tracks, 50,000 hidden items, IDs up to 128 characters, playlist names up to 200 and
+descriptions up to 1,000. Over a limit you get `409`.
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayed" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }] }`. The favourites come in the order they were marked; marking one again keeps its time |
+| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayed" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favourites come in the order they were marked; marking one again keeps its time |
 | `PUT /api/me/favorites/{trackId}` | user | Marks a favourite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` for an invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
 | `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayed" }`, `409` at the limit |
 | `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` for a rule violation, `409` at the limit |
 | `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` for an unknown ID |
+| `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album, or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` for an invalid type or ID, `409` at the limit |
+| `DELETE /api/me/hidden/{type}/{itemId}` | user | Unhides an item. `200 { "itemType", "itemId", "hidden": false }` |
 
 The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs stay.
 

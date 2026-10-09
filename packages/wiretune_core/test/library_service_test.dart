@@ -271,4 +271,119 @@ void main() {
     expect(track.playCount, 1);
     expect(track.dateAdded, DateTime.utc(2020));
   });
+
+  test('content hiding: tracks, albums, artists, precedence, non-destructive hierarchy, and playback', () async {
+    final repo = MockRepository();
+    final service = _service(repo);
+    final t1 = Track(
+      id: 't1',
+      title: 'Song 1',
+      artist: 'Artist A',
+      album: 'Album 1',
+      duration: const Duration(seconds: 180),
+      format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
+    )..isFavorite = true;
+    final t2 = Track(
+      id: 't2',
+      title: 'Song 2',
+      artist: 'Artist A',
+      album: 'Album 1',
+      duration: const Duration(seconds: 200),
+      format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
+    );
+    final t3 = Track(
+      id: 't3',
+      title: 'Song 3',
+      artist: 'Artist B',
+      album: 'Album 2',
+      duration: const Duration(seconds: 210),
+      format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
+    );
+    repo.saveTracks([t1, t2, t3]);
+    await service.initialize();
+
+    expect(service.tracks, hasLength(3));
+    expect(service.albums, hasLength(2));
+    expect(service.artists, hasLength(2));
+    expect(service.favorites, hasLength(1));
+
+    // 1. Hide track 1
+    await service.hideTrack('t1');
+    expect(service.isTrackHidden(t1), isTrue);
+    expect(service.isTrackExplicitlyHidden('t1'), isTrue);
+    expect(service.tracks.map((t) => t.id), ['t2', 't3']);
+    expect(service.favorites, isEmpty);
+    expect(service.search('Song 1'), isEmpty);
+    expect(service.search('Song 2'), hasLength(1));
+
+    // Direct playback & playlist resolution still works for hidden track
+    expect(service.getTrack('t1'), isNotNull);
+    expect(service.resolveTracks(['t1', 't2']).map((t) => t.id), ['t1', 't2']);
+
+    // 2. Hide Album 1 (precedence & hierarchy)
+    final album1Id = t1.albumId;
+    await service.hideAlbum(album1Id);
+    expect(service.isAlbumHidden(album1Id), isTrue);
+    expect(service.isTrackHidden(t2), isTrue); // t2 is hidden via album
+    expect(service.albums.map((a) => a.id), [t3.albumId]);
+    expect(service.tracks.map((t) => t.id), ['t3']);
+
+    // 3. Unhide Album 1: Non-destructive hierarchy test!
+    // t1 was explicitly hidden, so when Album 1 is unhidden, t1 MUST STILL be hidden, while t2 reappears.
+    await service.unhideAlbum(album1Id);
+    expect(service.isAlbumHidden(album1Id), isFalse);
+    expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
+    expect(service.isTrackHidden(t2), isFalse); // visible again
+    expect(service.tracks.map((t) => t.id), ['t2', 't3']);
+
+    // 4. Hide Artist A: hides Album 1 and all its tracks
+    final artistAId = service.artists.firstWhere((a) => a.name == 'Artist A').id;
+    await service.hideArtist(artistAId);
+    expect(service.isArtistHidden(artistAId), isTrue);
+    expect(service.isTrackHidden(t2), isTrue);
+    expect(service.artists.map((a) => a.name), ['Artist B']);
+    expect(service.tracks.map((t) => t.id), ['t3']);
+
+    // 5. Unhide Artist A: non-destructive hierarchy
+    await service.unhideArtist(artistAId);
+    expect(service.isArtistHidden(artistAId), isFalse);
+    expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
+    expect(service.isTrackHidden(t2), isFalse); // visible again
+
+    // 6. Unhide All
+    await service.unhideAll();
+    expect(service.isTrackHidden(t1), isFalse);
+    expect(service.tracks, hasLength(3));
+    expect(service.favorites, hasLength(1));
+  });
+
+  test('content hiding: user switching isolates hidden items', () async {
+    final repo = MockRepository();
+    final service = _service(repo);
+    final t1 = Track(
+      id: 't1',
+      title: 'Song 1',
+      artist: 'Artist A',
+      album: 'Album 1',
+      duration: const Duration(seconds: 180),
+      format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
+    );
+    repo.saveTracks([t1]);
+    await service.initialize();
+
+    await service.setCurrentUser('user_alpha');
+    await service.hideTrack('t1');
+    expect(service.isTrackHidden(t1), isTrue);
+    expect(service.tracks, isEmpty);
+
+    // Switch to user_beta
+    await service.setCurrentUser('user_beta');
+    expect(service.isTrackHidden(t1), isFalse);
+    expect(service.tracks, hasLength(1));
+
+    // Switch back to user_alpha
+    await service.setCurrentUser('user_alpha');
+    expect(service.isTrackHidden(t1), isTrue);
+    expect(service.tracks, isEmpty);
+  });
 }

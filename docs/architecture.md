@@ -74,7 +74,7 @@ download can't undo them. A favourite the server refused is put back; a failed p
 **Downloads** (`DownloadService`): what the user marked (tracks, albums, artists, playlists, the favourites) is a
 preference, and the tracks it covers are worked out again from the library after every change, so a playlist that grows
 grows on the device too. One file at a time comes from `/api/stream` with the sign-in token in the header, into
-`Downloads/` in the data directory, and an interrupted one continues with a range request. A copy is named by hashes of
+the user's Music directory (`~/Music/Wiretune` on desktop, or platform support directory), and an interrupted one continues with a range request. A copy is named by hashes of
 the track's ID and of the server's size and modification time, followed by the sanitized artist and title: no ID a server sends becomes a path, and a copy of a file
 that has since changed is recognised by its name and replaced once the new one is there. The engine plays a copy instead
 of the stream (and asks for no stream token, which might hang without a server); covers and lyrics come from copies too.

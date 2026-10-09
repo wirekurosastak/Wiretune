@@ -98,7 +98,7 @@ stay dark, and the log says why.
   reviewed but never measured; on Windows and macOS the code has never met a DAC. Reports from real setups are very
   welcome.
 - **The signal-path readout shows what Wiretune asked for, not what it measured.** In bit-perfect mode it says
-  *Bit-perfect requested (PCM, no gain, exclusive device access)*, and means exactly that.
+  *Bit-perfect requested (PCM, no gain, exclusive device access)* (or *Bit-perfect requested (lossy source decoded to PCM, no gain, exclusive device access)* when playing a lossy file), and means exactly that.
 - **No gapless playback, no crossfade**: each track opens when the previous one ends, with a short gap.
 - **No equaliser and no ReplayGain** (mpv's is switched off on purpose).
 - **Windows and Tizen have no system media controls.** Windows media keys work while the window has the focus; on a

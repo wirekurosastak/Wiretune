@@ -39,6 +39,8 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 16),
           ],
           const _AppearanceCard(),
+          const SizedBox(height: 16),
+          const _HiddenContentCard(),
           if (server.isLoggedIn || vm.downloads.hasAnything) ...[
             const SizedBox(height: 16),
             const _DownloadsCard(),
@@ -58,6 +60,8 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: 16),
           ],
           const _AppearanceCard(),
+          const SizedBox(height: 16),
+          const _HiddenContentCard(),
           if (server.isLoggedIn || vm.downloads.hasAnything) ...[
             const SizedBox(height: 16),
             const _DownloadsCard(),
@@ -69,6 +73,7 @@ class SettingsPage extends StatelessWidget {
           const SizedBox(height: 16),
           const _AboutCard(),
         ];
+
         return LayoutBuilder(
           builder: (context, constraints) {
             final twoColumns = constraints.maxWidth >= _twoColumnWidth;
@@ -668,7 +673,16 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
     _localPath = TextEditingController(text: server.localLibraryPath);
     _lastSyncedUrl = server.serverUrl;
     _lastLoadedServerFolder = server.serverLibraryPath;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final vm = context.vm.serverSettings;
+        if (vm.isLoggedIn && vm.isAdmin) {
+          vm.loadServerConfig();
+        }
+      }
+    });
   }
+
 
   @override
   void dispose() {
@@ -767,10 +781,14 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
                   controller: _serverFolder,
                   decoration: InputDecoration(
                     hintText: context.tr('ServerFolderPlaceholder'),
+                    helperText: context.tr('ServerFolderHelper'),
+                    helperMaxLines: 2,
                     prefixIcon: const Icon(Icons.folder_outlined, size: 18),
                   ),
                   onChanged: (v) => server.serverLibraryPath = v,
+                  onSubmitted: (_) => server.updateServerLibraryPath(),
                 ),
+
                 actions: [
                   Tooltip(
                     message: context.tr('TipReindex'),
@@ -862,10 +880,16 @@ class _DownloadsCardState extends State<_DownloadsCard> {
               subtitle: context.tr('DownloadsHint'),
             ),
             Text(
+              context.trf('DownloadsLocation', [downloads.destinationDirectory]),
+              style: TextStyle(fontSize: 12, color: colors.textMuted),
+            ),
+            const SizedBox(height: 6),
+            Text(
               downloads.sizeText,
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textMain),
             ),
             _StatusLine(downloads.statusText, isError: downloads.hasError),
+
             if (downloads.hasAnything) ...[
               const SizedBox(height: 14),
               Wrap(
@@ -1366,4 +1390,138 @@ class _AboutCard extends StatelessWidget {
     );
   }
 }
+
+class _HiddenContentCard extends StatelessWidget {
+  const _HiddenContentCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final lib = vm.library;
+    final colors = context.colors;
+
+    return ListenableBuilder(
+      listenable: vm,
+      builder: (context, _) {
+        final hiddenTracks = lib.hiddenTracks;
+        final hiddenAlbums = lib.hiddenAlbums;
+        final hiddenArtists = lib.hiddenArtists;
+        final totalHidden = hiddenTracks.length + hiddenAlbums.length + hiddenArtists.length;
+
+        return GlassCard(
+          opaque: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _CardTitle(
+                icon: Icons.visibility_off_outlined,
+                title: context.tr('HiddenContent'),
+                subtitle: context.tr('HiddenContentHint'),
+              ),
+              if (totalHidden == 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    context.tr('HiddenContentEmpty'),
+                    style: TextStyle(color: colors.textMuted, fontSize: 13),
+                  ),
+                )
+              else ...[
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 280),
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final id in hiddenArtists) ...[
+                        _hiddenRow(
+                          context,
+                          icon: Icons.person_outline_rounded,
+                          label: lib.rawTracks
+                                  .where((t) =>
+                                      stableId(t.artist.toLowerCase()) == id ||
+                                      stableId(t.effectiveAlbumArtist.toLowerCase()) == id)
+                                  .firstOrNull
+                                  ?.effectiveAlbumArtist ??
+                              id,
+                          onUnhide: () => lib.unhideArtist(id),
+                        ),
+                        Divider(color: colors.glassBorder, height: 1),
+                      ],
+                      for (final id in hiddenAlbums) ...[
+                        _hiddenRow(
+                          context,
+                          icon: Icons.album_outlined,
+                          label: () {
+                            final track = lib.rawTracks.where((t) => t.albumId == id).firstOrNull;
+                            return track != null ? '${track.album} • ${track.effectiveAlbumArtist}' : id;
+                          }(),
+                          onUnhide: () => lib.unhideAlbum(id),
+                        ),
+                        Divider(color: colors.glassBorder, height: 1),
+                      ],
+                      for (final id in hiddenTracks) ...[
+                        _hiddenRow(
+                          context,
+                          icon: Icons.music_note_outlined,
+                          label: () {
+                            final track = lib.getTrack(id);
+                            return track != null ? '${track.title} • ${track.artist}' : id;
+                          }(),
+                          onUnhide: () => lib.unhideTrack(id),
+                        ),
+                        Divider(color: colors.glassBorder, height: 1),
+                      ],
+                    ],
+                  ),
+                ),
+                if (totalHidden > 1) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: OutlinedButton.icon(
+                      onPressed: () => lib.unhideAll(),
+                      icon: const Icon(Icons.visibility_rounded, size: 16),
+                      label: Text(context.tr('UnhideAll')),
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _hiddenRow(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onUnhide,
+  }) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: colors.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 13, color: colors.textMain),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: onUnhide,
+            child: Text(context.tr('Unhide'), style: TextStyle(color: colors.accent, fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 

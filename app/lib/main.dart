@@ -104,10 +104,32 @@ Future<void> main() async {
     }
   }
 
+  if (platform.isDesktop) {
+    await windowManager.setPreventClose(true);
+    windowManager.addListener(_DesktopWindowListener(vm));
+  }
+
   runApp(WiretuneApp(vm: vm));
   unawaited(vm.start());
   if (UiAutomationServer.isEnabled) unawaited(UiAutomationServer(vm).start());
 }
+
+class _DesktopWindowListener with WindowListener {
+  _DesktopWindowListener(this._vm);
+  final MainViewModel _vm;
+
+  @override
+  void onWindowClose() async {
+    try {
+      await _vm.audioEngine.dispose();
+      _vm.dispose();
+    } catch (e, s) {
+      WiretuneLog.error('App', 'Error during desktop window close disposal', e, s);
+    }
+    await windowManager.destroy();
+  }
+}
+
 
 /// What the account's other players see this one as. A phone or a tablet tells by its screen: a tablet's shorter side
 /// is at least 600 points.

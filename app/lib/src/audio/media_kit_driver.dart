@@ -47,6 +47,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   Timer? _spectrumTimer;
   Timer? _startCheck;
   AlsaCardReservation? _reservation;
+  AudioOutputDevice? _configuredDevice;
+  bool _exclusive = false;
 
   PlaybackState _state = PlaybackState.stopped;
   bool _bitperfect = false;
@@ -211,13 +213,20 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   @override
   Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect}) async {
     _bitperfect = bitperfect;
+    _configuredDevice = device;
+    _exclusive = exclusive;
     final native = _player.platform;
     if (native is! NativePlayer) return;
 
     if (allowDeviceSelection) {
       await _player.setAudioDevice(AudioDevice(device.id, device.name));
       await native.setProperty('audio-exclusive', exclusive ? 'yes' : 'no');
-      await _reserveCard(device);
+      if (exclusive) {
+        await _reserveCard(device);
+      } else {
+        await _reservation?.release();
+        _reservation = null;
+      }
     }
 
     // Bit-perfect: no gain, no filters, no replay gain, no resampling requested (mpv's `audio-format` is left unset,
@@ -261,6 +270,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     final generation = ++_generation;
     _lastError = null;
     _setState(PlaybackState.playing);
+    if (allowDeviceSelection && _exclusive && _configuredDevice != null && _reservation == null) {
+      await _reserveCard(_configuredDevice!);
+    }
     try {
       await _player.open(Media(audioSource, start: startPosition > Duration.zero ? startPosition : null), play: true);
     } catch (e) {
@@ -313,6 +325,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _setState(PlaybackState.stopped);
     _pcm.cancelAndReset();
     await _player.stop();
+    await _reservation?.release();
+    _reservation = null;
   }
 
   @override
@@ -333,8 +347,10 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     if (!completed || _state != PlaybackState.playing) return;
     _generation++;
     _setState(PlaybackState.stopped);
+    unawaited(_reservation?.release().then((_) => _reservation = null));
     trackEnded.emit(null);
   }
+
 
   void _onPosition(Duration position) {
     final now = DateTime.now();
@@ -414,5 +430,6 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _pcm.dispose();
     await _player.dispose();
     await _reservation?.release();
+    _reservation = null;
   }
 }

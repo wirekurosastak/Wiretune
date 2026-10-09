@@ -157,6 +157,34 @@ void main() {
       expect(phone.library.getTrack(track.id)!.isFavorite, isFalse);
     });
 
+    test('hidden content syncs to the server and follows the account to another device', () async {
+      final phone = await device('phone-hidden');
+      await phone.signIn(server);
+      expect(phone.library.tracks, hasLength(3));
+
+      final trackToHide = phone.library.tracks.first;
+      await phone.library.hideTrack(trackToHide.id);
+      await phone.session.flushUserData();
+
+      final data = await serverData(admin);
+      expect(data.hiddenTracks, [trackToHide.id]);
+      expect(phone.library.tracks, hasLength(2));
+      expect(phone.library.isTrackHidden(trackToHide), isTrue);
+
+      final laptop = await device('laptop-hidden');
+      await laptop.signIn(server);
+      expect(laptop.library.tracks, hasLength(2));
+      expect(laptop.library.isTrackIdHidden(trackToHide.id), isTrue);
+
+      // Unhide from laptop
+      await laptop.library.unhideTrack(trackToHide.id);
+      await laptop.session.flushUserData();
+
+      await phone.session.refreshLibrary();
+      expect(phone.library.tracks, hasLength(3));
+      expect(phone.library.isTrackHidden(trackToHide), isFalse);
+    });
+
     test("signing out removes the account's data from the device, and signing in brings it back", () async {
       final d = await device('device');
       await d.signIn(server);

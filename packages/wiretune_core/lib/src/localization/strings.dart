@@ -346,7 +346,13 @@ const Map<String, (String, String, String)> allStrings = {
     '/path/on/the/server/music',
     '/pfad/auf/dem/server/musik',
   ),
+  'ServerFolderHelper': (
+    'A zenei mappa elérési útja a szerver gépén (pl. /media/music vagy D:\\Music).',
+    'The music folder path on the server host (e.g. /media/music or D:\\Music).',
+    'Der Pfad des Musikordners auf dem Server (z. B. /media/music oder D:\\Music).',
+  ),
   'SaveFolder': ('Mappa mentése', 'Save folder', 'Ordner speichern'),
+
   'LocalFolderLabel': ('Helyi mappa', 'Local folder', 'Lokaler Ordner'),
   'LocalFolderPlaceholder': ('/eleresi/ut/zenek', '/path/to/music', '/pfad/zur/musik'),
   'Scan': ('Beolvasás', 'Scan', 'Einlesen'),
@@ -721,6 +727,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Bit-perfect requested (PCM, no gain, exclusive device access)',
     'Bit-Perfect angefordert (PCM, ohne Verstärkung, exklusiver Gerätezugriff)',
   ),
+  'SignalProcessingBitPerfectLossy': (
+    'Közvetlen kimenet kérve (Veszteséges forrás PCM-re dekódolva, erősítés nélkül, kizárólagos hozzáférés)',
+    'Direct output requested (lossy source decoded to PCM, no gain, exclusive device access)',
+    'Direkte Ausgabe angefordert (verlustbehaftete Quelle zu PCM decodiert, ohne Verstärkung, exklusiver Gerätezugriff)',
+  ),
   'SignalProcessingMixer': (
     'Rendszerkeverő (megosztott kimenet)',
     'System mixer (shared output)',
@@ -737,6 +748,12 @@ const Map<String, (String, String, String)> allStrings = {
     'Server stream (lossless, no transcoding)',
     'Server-Stream (verlustfrei, ohne Transcodierung)',
   ),
+  'SignalTransportServerLossy': (
+    'Szerver stream (közvetlen, átkódolás nélkül)',
+    'Server stream (direct, no transcoding)',
+    'Server-Stream (direkt, ohne Transcodierung)',
+  ),
+
   'SignalTransportLocal': ('Helyi fájl', 'Local file', 'Lokale Datei'),
   'SignalTransportDownloaded': ('Letöltött másolat', 'Downloaded copy', 'Heruntergeladene Kopie'),
   'EngineDeviceInitFailed': (
@@ -773,7 +790,13 @@ const Map<String, (String, String, String)> allStrings = {
     'Downloaded items stay available offline.',
     'Heruntergeladene Elemente bleiben offline verfügbar.',
   ),
+  'DownloadsLocation': (
+    'Letöltési célmappa: {0}',
+    'Download destination: {0}',
+    'Download-Zielordner: {0}',
+  ),
   'DownloadsSize': ('{0} {1} ezen az eszközön', '{0} {1} on this device', '{0} {1} auf diesem Gerät'),
+
   'DownloadsProgress': (
     'Letöltés: „{0}” ({1}%) • {2}. / {3}',
     'Downloading “{0}” ({1}%) • {2} of {3}',
@@ -821,6 +844,24 @@ const Map<String, (String, String, String)> allStrings = {
   'TipMore': ('Továbbiak', 'More', 'Mehr'),
   'GoToAlbum': ('Ugrás az albumra', 'Go to album', 'Zum Album'),
   'GoToArtist': ('Ugrás az előadóra', 'Go to artist', 'Zum Künstler'),
+  'HideTrack': ('Szám elrejtése', 'Hide track', 'Titel ausblenden'),
+  'HideAlbum': ('Album elrejtése', 'Hide album', 'Album ausblenden'),
+  'HideArtist': ('Előadó elrejtése', 'Hide artist', 'Künstler ausblenden'),
+  'Unhide': ('Megjelenítés', 'Unhide', 'Einblenden'),
+
+  'UnhideAll': ('Összes megjelenítése', 'Unhide all', 'Alle einblenden'),
+  'HiddenContent': ('Rejtett tartalmak', 'Hidden content', 'Ausgeblendete Inhalte'),
+  'HiddenContentHint': (
+    'Az elrejtett előadók, albumok és számok nem jelennek meg a könyvtárban és a keresésben.',
+    'Hidden artists, albums, and tracks do not appear in library browsing and search.',
+    'Ausgeblendete Künstler, Alben und Titel erscheinen nicht in der Bibliothek und Suche.',
+  ),
+  'HiddenContentEmpty': (
+    'Nincsenek elrejtett tartalmak.',
+    'No hidden content.',
+    'Keine ausgeblendeten Inhalte.',
+  ),
+
   'DownloadsFailed': ('Egy letöltés sikertelen: {0}', 'A download failed: {0}', 'Ein Download ist fehlgeschlagen: {0}'),
   'DownloadsDiskError': (
     'Egy letöltés nem menthető: {0}',

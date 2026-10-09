@@ -395,10 +395,12 @@ class WiretuneServer {
     // Remote control: a WebSocket per player
     _Route('GET', '/api/remote', Access.user, _remote),
 
-    // The signed-in account's favourites, play counts and playlists
+    // The signed-in account's favourites, play counts, playlists and hidden items
     _Route('GET', '/api/me/data', Access.user, (call) => jsonResponse(userData.get(call.userId).toJson())),
     _Route('PUT', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, true)),
     _Route('DELETE', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, false)),
+    _Route('PUT', '/api/me/hidden/{type}/{itemId}', Access.user, (call) => _setHidden(call, true)),
+    _Route('DELETE', '/api/me/hidden/{type}/{itemId}', Access.user, (call) => _setHidden(call, false)),
     _Route('POST', '/api/me/plays/{trackId}', Access.user, (call) {
       final trackId = call.params['trackId']!;
       final error = UserDataRules.validateId(trackId);
@@ -581,6 +583,19 @@ class WiretuneServer {
     return userData.setFavorite(call.userId, trackId, favorite)
         ? jsonResponse({'trackId': trackId, 'isFavorite': favorite})
         : errorResponse(409, 'An account can have at most ${UserDataRules.maxFavorites} favourites.');
+  }
+
+  Response _setHidden(_Call call, bool hidden) {
+    final type = call.params['type']!;
+    final itemId = call.params['itemId']!;
+    if (type != 'artist' && type != 'album' && type != 'track') {
+      return errorResponse(400, 'Invalid item type: $type. Must be artist, album, or track.');
+    }
+    final error = UserDataRules.validateId(itemId);
+    if (error != null) return errorResponse(400, error);
+    return userData.setHidden(call.userId, type, itemId, hidden)
+        ? jsonResponse({'type': type, 'itemId': itemId, 'hidden': hidden})
+        : errorResponse(409, 'An account can have at most ${UserDataRules.maxHidden} hidden items.');
   }
 
   Future<Response> _savePlaylist(_Call call) async {

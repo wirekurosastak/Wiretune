@@ -88,12 +88,12 @@ or all your favourites (the button beside *Play* and *Shuffle*).
   the system lets it run); one that was cut short continues where it stopped. A track shows the arrow in progress
   while it waits or arrives and a tick once it's here; a list's button fills its ring as its tracks arrive.
 - A track kept because its album, its artist, a playlist or the favourites are can only be let go with them.
-- The copies are the server's files byte for byte, in the `Downloads` folder of the player's data directory
-  (such as `~/.config/Wiretune/Downloads` on Linux, `%APPDATA%\Wiretune\Downloads` on Windows,
-  `~/Library/Application Support/Wiretune/Downloads` on macOS, and inside the app's private support folder on
-  mobile and TVs). Their filenames include the artist and track title (`<hash>-Artist - Title.ext`) so they are recognizable
-  in a file manager, while an album's cover is saved beside them in `Downloads/covers`.
-- **Settings → Downloads** shows how much room they take and removes them all. Signing out removes them too.
+- The copies are the server's files byte for byte, placed in the standard user Music directory on desktop
+  (`~/Music/Wiretune` on Linux/macOS, `%USERPROFILE%\Music\Wiretune` on Windows, falling back to legacy
+  `Downloads` in the data directory if unavailable, and inside the app's private support folder on mobile and TVs).
+  Their filenames include the artist and track title (`<hash>-Artist - Title.ext`) so they are recognizable
+  in a file manager, while an album's cover is saved beside them in `covers`.
+- **Settings → Downloads** displays the destination folder path, shows how much room they take, and removes them all. Signing out removes them too.
 - There's no "Wi-Fi only" switch yet: downloads use whatever network the device is on, mobile data included.
 
 ## Playing on another device

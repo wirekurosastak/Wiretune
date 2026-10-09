@@ -195,9 +195,18 @@ class PlaylistUpdate {
   }
 }
 
-/// Everything the server keeps for one account besides the account itself: favourites, play statistics and playlists.
+/// Everything the server keeps for one account besides the account itself: favourites, play statistics, playlists,
+/// and hidden items.
 class UserDataSnapshot {
-  const UserDataSnapshot(this.favorites, this.plays, this.playlists, [this.favoritedAt = const {}]);
+  const UserDataSnapshot(
+    this.favorites,
+    this.plays,
+    this.playlists, [
+    this.favoritedAt = const {},
+    this.hiddenArtists = const [],
+    this.hiddenAlbums = const [],
+    this.hiddenTracks = const [],
+  ]);
 
   /// The favourite track IDs, the earliest marked first.
   final List<String> favorites;
@@ -207,11 +216,19 @@ class UserDataSnapshot {
   /// When each favourite was marked (a server from before this field sends none).
   final Map<String, DateTime> favoritedAt;
 
+  /// IDs of artists, albums, and tracks hidden by this user.
+  final List<String> hiddenArtists;
+  final List<String> hiddenAlbums;
+  final List<String> hiddenTracks;
+
   Map<String, Object?> toJson() => {
     'favorites': favorites,
     'favoritedAt': {for (final MapEntry(:key, :value) in favoritedAt.entries) key: formatIsoUtc(value)},
     'plays': plays.map((p) => p.toJson()).toList(),
     'playlists': playlists.map((p) => p.toJson()).toList(),
+    'hiddenArtists': hiddenArtists,
+    'hiddenAlbums': hiddenAlbums,
+    'hiddenTracks': hiddenTracks,
   };
 
   static UserDataSnapshot fromJson(Object? json) {
@@ -226,6 +243,9 @@ class UserDataSnapshot {
           for (final MapEntry(:key, :value) in times.entries)
             if (key is String) key: ?parseIsoUtc(value),
       },
+      _stringList(map['hiddenArtists']),
+      _stringList(map['hiddenAlbums']),
+      _stringList(map['hiddenTracks']),
     );
   }
 }
@@ -239,6 +259,7 @@ abstract final class UserDataRules {
   static const int maxPlaylists = 500;
   static const int maxFavorites = 100000;
   static const int maxTrackStats = 100000;
+  static const int maxHidden = 50000;
 
   /// Returns null when [id] is acceptable as a track or playlist ID, otherwise the reason.
   static String? validateId(String? id) {

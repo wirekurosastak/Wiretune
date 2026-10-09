@@ -402,6 +402,72 @@ class _Detail extends StatelessWidget {
   );
 }
 
+class _HideActionButton extends StatefulWidget {
+  const _HideActionButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  State<_HideActionButton> createState() => _HideActionButtonState();
+}
+
+class _HideActionButtonState extends State<_HideActionButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final dimension = PhoneChrome.isPhone(context) ? 48.0 : 46.0;
+    final iconColor = _hover ? colors.textMain : colors.textMuted;
+    return PopEffect(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: SizedBox.square(
+          dimension: dimension,
+          child: IconButton(
+            tooltip: widget.tooltip,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            focusColor: Colors.transparent,
+            style: IconButton.styleFrom(
+              side: BorderSide.none,
+              backgroundColor: Colors.transparent,
+              hoverColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              focusColor: Colors.transparent,
+              overlayColor: Colors.transparent,
+              splashFactory: NoSplash.splashFactory,
+            ),
+            onPressed: widget.onPressed,
+            icon: Icon(
+              widget.icon,
+              size: 22,
+              color: iconColor,
+              shadows: _hover
+                  ? [
+                      BoxShadow(
+                        color: colors.textMain.withValues(alpha: 0.7),
+                        blurRadius: 14,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The sort buttons of a list page ("Sort by: ABC ↑ | Year") as one segmented pill; the active segment is filled with
 /// the accent.
 class _SortButtons extends StatelessWidget {
@@ -756,6 +822,19 @@ class AlbumDetail extends StatelessWidget {
                   onPressed: () => vm.downloads.toggleAlbum(album),
                 ),
               ),
+              _HideActionButton(
+                tooltip: context.tr(vm.library.isAlbumHidden(album.id) ? 'Unhide' : 'HideAlbum'),
+                icon: vm.library.isAlbumHidden(album.id) ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                onPressed: () {
+                  final isHidden = vm.library.isAlbumHidden(album.id);
+                  if (isHidden) {
+                    vm.library.unhideAlbum(album.id);
+                  } else {
+                    vm.library.hideAlbum(album.id);
+                    albums.closeAlbumDetail();
+                  }
+                },
+              ),
             ],
           ),
         ),
@@ -858,6 +937,19 @@ class ArtistDetail extends StatelessWidget {
                   isPinned: () => vm.downloads.isArtistPinned(artist),
                   onPressed: () => vm.downloads.toggleArtist(artist),
                 ),
+              ),
+              _HideActionButton(
+                tooltip: context.tr(vm.library.isArtistHidden(artist.id) ? 'Unhide' : 'HideArtist'),
+                icon: vm.library.isArtistHidden(artist.id) ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                onPressed: () {
+                  final isHidden = vm.library.isArtistHidden(artist.id);
+                  if (isHidden) {
+                    vm.library.unhideArtist(artist.id);
+                  } else {
+                    vm.library.hideArtist(artist.id);
+                    artists.closeArtistDetail();
+                  }
+                },
               ),
             ],
           ),

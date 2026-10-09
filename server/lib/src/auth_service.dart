@@ -158,13 +158,14 @@ class AuthService {
       .map(_toUserInfo)
       .toList();
 
-  /// Deletes the account together with its favourites, play statistics and playlists.
+  /// Deletes the account together with its favourites, play statistics, playlists and hidden items.
   bool deleteUser(String userId) => _db.transaction((db) {
     db.execute('DELETE FROM users WHERE id = ?', [userId]);
     final count = db.updatedRows;
     db.execute('DELETE FROM user_favorites WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_plays WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_playlists WHERE user_id = ?', [userId]);
+    db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
     return count > 0;
   });
 

@@ -20,6 +20,13 @@ import 'metadata_scanner.dart';
 import 'track_deduplication.dart';
 import 'wiretune_log.dart';
 
+class HiddenChangeEvent {
+  const HiddenChangeEvent(this.itemType, this.itemId, this.hidden);
+  final String itemType;
+  final String itemId;
+  final bool hidden;
+}
+
 /// The library: every track (local and from a server), the albums and artists built from them, and the playlists. It
 /// is held in memory as an immutable snapshot that is replaced wholesale after every change, so readers need no lock.
 class LibraryService {
@@ -38,16 +45,67 @@ class LibraryService {
   List<Playlist> _playlists = const [];
   bool _isScanning = false;
 
+  List<Track> _rawTracks = const [];
+  Map<String, Track> _rawTrackById = const {};
+  final Set<String> _hiddenTracks = <String>{};
+  final Set<String> _hiddenAlbums = <String>{};
+  final Set<String> _hiddenArtists = <String>{};
+  String _currentUserId = 'local';
+
   // Server track ID -> ID of the local file it was folded into (see TrackDeduplication); server playlists and the
   // server's favourites still refer to the server ID.
   Map<String, String> _serverAliases = const {};
 
   List<Track> get tracks => _snapshot.tracks;
+  List<Track> get rawTracks => _rawTracks;
   List<Album> get albums => _snapshot.albums;
   List<Artist> get artists => _snapshot.artists;
   List<String> get genres => _snapshot.genres;
   List<Playlist> get playlists => _playlists;
   List<Track> get favorites => _snapshot.tracks.where((t) => t.isFavorite).toList();
+
+  Set<String> get hiddenTracks => Set.unmodifiable(_hiddenTracks);
+  Set<String> get hiddenAlbums => Set.unmodifiable(_hiddenAlbums);
+  Set<String> get hiddenArtists => Set.unmodifiable(_hiddenArtists);
+
+  Future<void> setCurrentUser(String? userId) async {
+    _currentUserId = (userId != null && userId.isNotEmpty) ? userId : 'local';
+    final userHidden = await _repository.getHiddenItems(_currentUserId);
+    _hiddenArtists
+      ..clear()
+      ..addAll(userHidden['artist'] ?? const {});
+    _hiddenAlbums
+      ..clear()
+      ..addAll(userHidden['album'] ?? const {});
+    _hiddenTracks
+      ..clear()
+      ..addAll(userHidden['track'] ?? const {});
+    _rebuildSnapshot();
+    libraryChanged.emit(null);
+  }
+
+  bool isTrackHidden(Track track) {
+    if (_hiddenTracks.contains(track.id)) return true;
+    if (_hiddenAlbums.contains(track.albumId)) return true;
+    if (_hiddenArtists.contains(stableId(track.artist.toLowerCase()))) return true;
+    if (_hiddenArtists.contains(stableId(track.effectiveAlbumArtist.toLowerCase()))) return true;
+    return false;
+  }
+
+  bool isTrackIdHidden(String trackId) {
+    final track = _rawTrackById[trackId];
+    if (track == null) return _hiddenTracks.contains(trackId);
+    return isTrackHidden(track);
+  }
+
+  bool isArtistHidden(String artistId) => _hiddenArtists.contains(artistId);
+  bool isAlbumHidden(String albumId) => _hiddenAlbums.contains(albumId);
+  bool isTrackExplicitlyHidden(String trackId) => _hiddenTracks.contains(trackId);
+
+  void _rebuildSnapshot() {
+    final visible = _rawTracks.where((t) => !isTrackHidden(t)).toList();
+    _snapshot = LibrarySnapshot.build(visible);
+  }
 
   bool get isScanning => _isScanning;
   String libraryPath = '';
@@ -57,12 +115,13 @@ class LibraryService {
   final Event<Track> favoriteChanged = Event<Track>();
   final Event<bool> scanningStateChanged = Event<bool>();
 
-  // The next four are raised only for changes the user made to data that lives on the server; the server session
+  // The next five are raised only for changes the user made to data that lives on the server; the server session
   // listens and sends them on. favoriteChanged and playlistsChanged stay the "something changed, redraw" events.
   final Event<Track> favoriteToggled = Event<Track>();
   final Event<Track> playRecorded = Event<Track>();
   final Event<Playlist> playlistEdited = Event<Playlist>();
   final Event<String> playlistRemoved = Event<String>();
+  final Event<HiddenChangeEvent> hiddenToggled = Event<HiddenChangeEvent>();
 
   /// Set by the server session while it is signed in. The favourites, play counts and playlists of server tracks live
   /// on the server account, so they can only be changed then: a change is saved here at once and sent on.
@@ -80,16 +139,31 @@ class LibraryService {
     final storedTracks = await _repository.getAllTracks();
     final storedPlaylists = await _repository.getAllPlaylists();
 
-    _snapshot = LibrarySnapshot.build(storedTracks);
+    _rawTracks = storedTracks;
+    _rawTrackById = {for (final t in storedTracks) t.id: t};
+
+    final localHidden = await _repository.getHiddenItems(_currentUserId);
+    _hiddenArtists
+      ..clear()
+      ..addAll(localHidden['artist'] ?? const {});
+    _hiddenAlbums
+      ..clear()
+      ..addAll(localHidden['album'] ?? const {});
+    _hiddenTracks
+      ..clear()
+      ..addAll(localHidden['track'] ?? const {});
+
+    _rebuildSnapshot();
     _playlists = _sortedPlaylists(storedPlaylists);
 
     WiretuneLog.info(
       'LibraryService',
-      'Initialized with ${tracks.length} tracks, ${albums.length} albums, ${artists.length} artists, ${playlists.length} playlists.',
+      'Initialized with ${tracks.length} tracks (${_rawTracks.length} total), ${albums.length} albums, ${artists.length} artists, ${playlists.length} playlists.',
     );
     libraryChanged.emit(null);
     playlistsChanged.emit(null);
   }
+
 
   static List<Playlist> _sortedPlaylists(Iterable<Playlist> playlists) {
     final list = playlists.toList();
@@ -115,7 +189,7 @@ class LibraryService {
         WiretuneLog.info('LibraryService', "Scanning '$root'...");
 
         final known = <String, Track>{};
-        for (final t in _snapshot.tracks) {
+        for (final t in _rawTracks) {
           if (t.filePath.isNotEmpty) known.putIfAbsent(t.filePath, () => t);
         }
 
@@ -138,7 +212,7 @@ class LibraryService {
         await _repository.setSetting('library_path', root);
 
         await _commitGate.synchronized(() async {
-          final existingServerTracks = _snapshot.tracks.where((t) => !t.isLocal).toList();
+          final existingServerTracks = _rawTracks.where((t) => !t.isLocal).toList();
           List<Track> toSave;
           if (existingServerTracks.isNotEmpty) {
             final aliased = <String, String>{};
@@ -178,8 +252,18 @@ class LibraryService {
     final incomingServer = serverTracks.toList();
     _applyUserData(incomingServer, userData);
 
+    _hiddenArtists
+      ..clear()
+      ..addAll(userData.hiddenArtists);
+    _hiddenAlbums
+      ..clear()
+      ..addAll(userData.hiddenAlbums);
+    _hiddenTracks
+      ..clear()
+      ..addAll(userData.hiddenTracks);
+
     await _commitGate.synchronized(() async {
-      final existingLocalTracks = _snapshot.tracks.where((t) => t.isLocal).toList();
+      final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
 
       List<Track> merged;
       if (existingLocalTracks.isNotEmpty) {
@@ -201,9 +285,20 @@ class LibraryService {
   /// Drops the server's tracks and the cached copies of its playlists (sign-out); local tracks and playlists stay.
   Future<void> removeServerTracks() async {
     await _commitGate.synchronized(() async {
-      final existingLocalTracks = _snapshot.tracks.where((t) => t.isLocal).toList();
+      final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
       _serverAliases = const {};
       if (_playlists.any((p) => p.isServer)) await _replaceServerPlaylists(const []);
+      _currentUserId = 'local';
+      final localHidden = await _repository.getHiddenItems('local');
+      _hiddenArtists
+        ..clear()
+        ..addAll(localHidden['artist'] ?? const {});
+      _hiddenAlbums
+        ..clear()
+        ..addAll(localHidden['album'] ?? const {});
+      _hiddenTracks
+        ..clear()
+        ..addAll(localHidden['track'] ?? const {});
       await _replaceTracksCore(existingLocalTracks);
     });
   }
@@ -265,7 +360,7 @@ class LibraryService {
   /// [serverOwnsUserData]: the server's favourites and play counts were just applied to its tracks, so the cached ones
   /// must not overwrite them.
   Future<void> _replaceTracksCore(List<Track> tracks, {bool serverOwnsUserData = false}) async {
-    final previous = _snapshot.trackById;
+    final previous = _rawTrackById.isNotEmpty ? _rawTrackById : _snapshot.trackById;
     for (final track in tracks) {
       final old = previous[track.id];
       if (old != null && !identical(old, track)) {
@@ -281,9 +376,12 @@ class LibraryService {
     }
 
     await _repository.replaceAllTracks(tracks);
-    _snapshot = LibrarySnapshot.build(tracks);
+    _rawTracks = tracks;
+    _rawTrackById = {for (final t in tracks) t.id: t};
+    _rebuildSnapshot();
     libraryChanged.emit(null);
   }
+
 
   /// False for a server track while the server cannot be reached: its favourite and play count live there.
   bool _canChangeUserData(Track track) => track.isLocal || serverConnected;
@@ -399,7 +497,73 @@ class LibraryService {
     return all.where((t) => has(t.title) || has(t.artist) || has(t.album) || has(t.albumArtist) || has(t.genre));
   }
 
-  Track? getTrack(String trackId) => _snapshot.trackById[trackId];
+  Track? getTrack(String trackId) => _snapshot.trackById[trackId] ?? _rawTrackById[trackId];
+
+  Future<void> hideTrack(String trackId) async {
+    if (_hiddenTracks.add(trackId)) {
+      await _repository.setHiddenItem('track', trackId, true, _currentUserId);
+      if (serverConnected) hiddenToggled.emit(HiddenChangeEvent('track', trackId, true));
+      _rebuildSnapshot();
+      libraryChanged.emit(null);
+    }
+  }
+
+  Future<void> unhideTrack(String trackId) async {
+    if (_hiddenTracks.remove(trackId)) {
+      await _repository.setHiddenItem('track', trackId, false, _currentUserId);
+      if (serverConnected) hiddenToggled.emit(HiddenChangeEvent('track', trackId, false));
+      _rebuildSnapshot();
+      libraryChanged.emit(null);
+    }
+  }
+
+  Future<void> hideAlbum(String albumId) async {
+    if (_hiddenAlbums.add(albumId)) {
+      await _repository.setHiddenItem('album', albumId, true, _currentUserId);
+      if (serverConnected) hiddenToggled.emit(HiddenChangeEvent('album', albumId, true));
+      _rebuildSnapshot();
+      libraryChanged.emit(null);
+    }
+  }
+
+  Future<void> unhideAlbum(String albumId) async {
+    if (_hiddenAlbums.remove(albumId)) {
+      await _repository.setHiddenItem('album', albumId, false, _currentUserId);
+      if (serverConnected) hiddenToggled.emit(HiddenChangeEvent('album', albumId, false));
+      _rebuildSnapshot();
+      libraryChanged.emit(null);
+    }
+  }
+
+  Future<void> hideArtist(String artistId) async {
+    if (_hiddenArtists.add(artistId)) {
+      await _repository.setHiddenItem('artist', artistId, true, _currentUserId);
+      if (serverConnected) hiddenToggled.emit(HiddenChangeEvent('artist', artistId, true));
+      _rebuildSnapshot();
+      libraryChanged.emit(null);
+    }
+  }
+
+  Future<void> unhideArtist(String artistId) async {
+    if (_hiddenArtists.remove(artistId)) {
+      await _repository.setHiddenItem('artist', artistId, false, _currentUserId);
+      if (serverConnected) hiddenToggled.emit(HiddenChangeEvent('artist', artistId, false));
+      _rebuildSnapshot();
+      libraryChanged.emit(null);
+    }
+  }
+
+  Future<void> unhideAll() async {
+    for (final id in _hiddenArtists.toList()) {
+      await unhideArtist(id);
+    }
+    for (final id in _hiddenAlbums.toList()) {
+      await unhideAlbum(id);
+    }
+    for (final id in _hiddenTracks.toList()) {
+      await unhideTrack(id);
+    }
+  }
 
   Album? getAlbum(String albumId) => _snapshot.albumById[albumId];
 
@@ -432,10 +596,11 @@ class LibraryService {
   /// The tracks with these IDs, in their order; a server ID also finds the local file it was matched to. Unknown IDs
   /// are left out.
   List<Track> resolveTracks(Iterable<String> trackIds) {
-    final byId = _snapshot.trackById;
+    final byId = _rawTrackById.isNotEmpty ? _rawTrackById : _snapshot.trackById;
     final aliases = _serverAliases;
     return [for (final id in trackIds) ?(byId[id] ?? byId[aliases[id]])];
   }
+
 
   /// The ID the other devices of the account know [track] by: the server's, also for a local file that was matched to
   /// a server track; the track's own ID for a file only this device has.

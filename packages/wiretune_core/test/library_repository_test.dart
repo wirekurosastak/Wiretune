@@ -207,6 +207,51 @@ void main() {
     expect((kept.id, kept.bpm), ('a', null));
   });
 
+  test('a database of schema 3 is upgraded to schema 4 adding user_hidden table', () async {
+    final (repo, db) = await open();
+    await repo.replaceAllTracks([make('a')]);
+    // Drop user_hidden and set schema to 3
+    db.connection.execute('DROP TABLE user_hidden');
+    db.connection.execute('PRAGMA user_version = 3');
+    db.close();
+
+    final (upgraded, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    final hidden = await upgraded.getHiddenItems('user1');
+    expect(hidden['track'], isEmpty);
+    expect(hidden['album'], isEmpty);
+    expect(hidden['artist'], isEmpty);
+  });
+
+  test('user_hidden items persist, isolate users, and clear correctly', () async {
+    final (repo, _) = await open();
+    await repo.setHiddenItem('track', 't1', true, 'u1');
+    await repo.setHiddenItem('album', 'al1', true, 'u1');
+    await repo.setHiddenItem('artist', 'ar1', true, 'u1');
+    await repo.setHiddenItem('track', 't2', true, 'u2');
+
+    final u1Hidden = await repo.getHiddenItems('u1');
+    expect(u1Hidden['track'], {'t1'});
+    expect(u1Hidden['album'], {'al1'});
+    expect(u1Hidden['artist'], {'ar1'});
+
+    final u2Hidden = await repo.getHiddenItems('u2');
+    expect(u2Hidden['track'], {'t2'});
+    expect(u2Hidden['album'], isEmpty);
+    expect(u2Hidden['artist'], isEmpty);
+
+    // Unhide t1
+    await repo.setHiddenItem('track', 't1', false, 'u1');
+    final u1After = await repo.getHiddenItems('u1');
+    expect(u1After['track'], isEmpty);
+    expect(u1After['album'], {'al1'});
+
+    // Clear u1
+    await repo.clearHiddenItems('u1');
+    expect((await repo.getHiddenItems('u1'))['album'], isEmpty);
+    expect((await repo.getHiddenItems('u2'))['track'], {'t2'});
+  });
+
   test('initializing the schema twice changes nothing', () async {
     final (repo, db) = await open();
     await repo.replaceAllTracks([make('a')]);

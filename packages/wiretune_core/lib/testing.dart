@@ -97,7 +97,44 @@ class MockRepository extends LibraryRepository {
   @override
   Future<String> getOrAddSetting(String key, String Function() createValue) async =>
       settings.putIfAbsent(key, createValue);
+
+  final Map<String, Map<String, Set<String>>> _hidden = {};
+
+  @override
+  Future<Map<String, Set<String>>> getHiddenItems([String userId = 'local']) async {
+    final userMap = _hidden.putIfAbsent(userId, () => {
+      'artist': <String>{},
+      'album': <String>{},
+      'track': <String>{},
+    });
+    return {
+      'artist': Set<String>.from(userMap['artist'] ?? const {}),
+      'album': Set<String>.from(userMap['album'] ?? const {}),
+      'track': Set<String>.from(userMap['track'] ?? const {}),
+    };
+  }
+
+  @override
+  Future<void> setHiddenItem(String itemType, String itemId, bool hidden, [String userId = 'local']) async {
+    final userMap = _hidden.putIfAbsent(userId, () => {
+      'artist': <String>{},
+      'album': <String>{},
+      'track': <String>{},
+    });
+    final set = userMap.putIfAbsent(itemType, () => <String>{});
+    if (hidden) {
+      set.add(itemId);
+    } else {
+      set.remove(itemId);
+    }
+  }
+
+  @override
+  Future<void> clearHiddenItems([String userId = 'local']) async {
+    _hidden.remove(userId);
+  }
 }
+
 
 Track copyTrack(Track t) => Track(
   id: t.id,
