@@ -14,6 +14,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) => _updateStats()),
       _library.playlistsChanged.listen((_) => _updateStats()),
+      _library.favoriteChanged.listen((_) => _updateStats()),
       _library.scanningStateChanged.listen((scanning) {
         isScanning = scanning;
         notifyListeners();

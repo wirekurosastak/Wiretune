@@ -106,6 +106,33 @@ void main() {
     expect(find.text('Blue in Green'), findsOneWidget);
   });
 
+  testWidgets('favoriting a track dynamically updates the count next to Favorites in the sidebar', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final navFavorites = Localizer.get('NavFavorites');
+    expect(find.text(navFavorites), findsOneWidget);
+    expect(vm.serverSettings.totalFavoritesCount, 0);
+
+    final favoritesItem = find.ancestor(
+      of: find.text(navFavorites),
+      matching: find.byType(InkWell),
+    );
+    expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
+
+    await vm.library.toggleFavorite('1');
+    await tester.pump();
+    await settle(tester);
+
+    expect(vm.serverSettings.totalFavoritesCount, 1);
+    expect(find.descendant(of: favoritesItem, matching: find.text('1')), findsOneWidget);
+
+    await vm.library.toggleFavorite('1');
+    await tester.pump();
+    await settle(tester);
+
+    expect(vm.serverSettings.totalFavoritesCount, 0);
+    expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
+  });
+
   testWidgets('typing in the search field shows the results, Escape steps back out', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     await tester.enterText(find.byType(TextField).first, 'daft');
