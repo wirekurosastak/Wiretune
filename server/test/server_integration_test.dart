@@ -99,6 +99,13 @@ void main() {
 
     expect(File(outsidePath).existsSync(), isTrue);
     expect((await client.get('/api/stream/outside')).statusCode, 404);
+
+    // A symlink inside the library pointing outside must also be refused.
+    final symlinkPath = p.join(server.libraryPath, 'symlink_outside.wav');
+    Link(symlinkPath).createSync(outsidePath);
+    final symlinked = Track(id: 'symlinked', title: 'Symlinked', filePath: symlinkPath);
+    await server.server.library.replaceTracks([...server.server.library.tracks, symlinked]);
+    expect((await client.get('/api/stream/symlinked')).statusCode, 404);
   });
 
   test('the admin policy protects registration and scanning', () async {
@@ -212,10 +219,14 @@ void main() {
     expect(status.lastScanError, contains('empty'));
   });
 
-  test('the library folder must exist', () async {
+  test('the library folder must exist and cannot be a sensitive system or data folder', () async {
     final (admin, _) = await setupAdmin(server);
     expect((await admin.post('/api/config/library-path', {'newPath': p.join(server.root, 'nope')})).statusCode, 400);
     expect((await admin.post('/api/config/library-path', {'newPath': '  '})).statusCode, 400);
+    expect((await admin.post('/api/config/library-path', {'newPath': server.dataPath})).statusCode, 400);
+    if (Platform.isLinux && Directory('/proc').existsSync()) {
+      expect((await admin.post('/api/config/library-path', {'newPath': '/proc'})).statusCode, 400);
+    }
     expect(json(await admin.get('/api/config'))['libraryPath'], server.libraryPath);
   });
 

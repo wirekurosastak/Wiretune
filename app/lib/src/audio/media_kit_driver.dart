@@ -46,6 +46,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   final Float32List _window = Float32List(SpectrumAnalyzer.fftSize);
   Timer? _spectrumTimer;
   Timer? _startCheck;
+  Timer? _releaseTimer;
   AlsaCardReservation? _reservation;
   AudioOutputDevice? _configuredDevice;
   bool _exclusive = false;
@@ -267,6 +268,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
 
   @override
   Future<void> play(String audioSource, AudioFormat format, Duration startPosition) async {
+    _releaseTimer?.cancel();
+    _releaseTimer = null;
     final generation = ++_generation;
     _lastError = null;
     _setState(PlaybackState.playing);
@@ -322,6 +325,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   Future<void> stop() async {
     _generation++;
     _startCheck?.cancel();
+    _releaseTimer?.cancel();
+    _releaseTimer = null;
     _setState(PlaybackState.stopped);
     _pcm.cancelAndReset();
     await _player.stop();
@@ -347,7 +352,13 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     if (!completed || _state != PlaybackState.playing) return;
     _generation++;
     _setState(PlaybackState.stopped);
-    unawaited(_reservation?.release().then((_) => _reservation = null));
+    _releaseTimer?.cancel();
+    _releaseTimer = Timer(const Duration(milliseconds: 1500), () async {
+      if (_state != PlaybackState.playing) {
+        await _reservation?.release();
+        _reservation = null;
+      }
+    });
     trackEnded.emit(null);
   }
 
@@ -423,6 +434,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   @override
   Future<void> dispose() async {
     _startCheck?.cancel();
+    _releaseTimer?.cancel();
+    _releaseTimer = null;
     _spectrumTimer?.cancel();
     for (final subscription in _subscriptions) {
       await subscription.cancel();

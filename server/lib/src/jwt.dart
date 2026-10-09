@@ -33,7 +33,7 @@ class Jwt {
       final expires = claims['exp'];
       final seconds = (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000;
       return expires is int && seconds < expires ? claims : null;
-    } on FormatException {
+    } catch (_) {
       return null;
     }
   }

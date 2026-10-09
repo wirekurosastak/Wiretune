@@ -179,4 +179,36 @@ void main() {
     expect(driver.playCalls, 0);
     expect(failures.single, contains('Nowhere'));
   });
+
+  test('switching to a device without bitperfect support automatically disables bitperfect mode', () async {
+    const exclusiveOnlyDevice = AudioOutputDevice(
+      id: 'excl_only',
+      name: 'Exclusive Only DAC',
+      driverType: 'ALSA Direct',
+      isExclusiveSupported: true,
+      isBitperfectSupported: false,
+    );
+    final engine = TestSupport.createEngine(null, [TestSupport.capableDevice, exclusiveOnlyDevice, TestSupport.sharedOnlyDevice]);
+    await engine.ready;
+    engine.setVolume(0.7);
+    await engine.setBitperfectMode(true);
+    expect(engine.isBitperfect, isTrue);
+    expect(engine.volume, 1.0);
+
+    // Switch to device supporting exclusive mode but NOT bit-perfect
+    await engine.setOutputDevice(exclusiveOnlyDevice);
+    expect(engine.isBitperfect, isFalse);
+    expect(engine.isExclusiveMode, isTrue);
+    expect(engine.volume, closeTo(0.7, 0.001));
+
+    // Re-enable bitperfect on capableDevice, then switch to shared-only
+    await engine.setOutputDevice(TestSupport.capableDevice);
+    await engine.setBitperfectMode(true);
+    expect(engine.isBitperfect, isTrue);
+
+    await engine.setOutputDevice(TestSupport.sharedOnlyDevice);
+    expect(engine.isBitperfect, isFalse);
+    expect(engine.isExclusiveMode, isFalse);
+    expect(engine.volume, closeTo(0.7, 0.001));
+  });
 }

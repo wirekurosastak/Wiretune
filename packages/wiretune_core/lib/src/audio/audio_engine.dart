@@ -242,8 +242,10 @@ class WiretuneAudioEngine {
 
   Future<void> setOutputDevice(AudioOutputDevice device) async {
     _currentDevice = device;
+    if (!device.isBitperfectSupported && _isBitperfect) {
+      _disableBitperfect();
+    }
     if (!device.isExclusiveSupported && _isExclusiveMode) {
-      if (_isBitperfect) _disableBitperfect();
       _isExclusiveMode = false;
       exclusiveModeChanged.emit(false);
     }

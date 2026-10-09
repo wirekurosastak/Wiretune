@@ -433,7 +433,10 @@ class ServerSession {
 
   Future<void> _pushHidden(String itemType, String itemId, bool hidden) async {
     if (!_canPush) return;
-    await _sendChange(() => _client.setHidden(serverUrl, itemType, itemId, hidden));
+    final sent = await _sendChange(() => _client.setHidden(serverUrl, itemType, itemId, hidden));
+    if (!sent) {
+      await _library.setHiddenLocal(itemType, itemId, !hidden);
+    }
   }
 
   void dispose() {

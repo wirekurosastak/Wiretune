@@ -279,6 +279,27 @@ void main() {
     expect((downloads.isTrackPinned('t2'), downloads.areFavoritesPinned), (false, false));
   });
 
+  test('unrelated files in the download directory are preserved during scan and prune', () async {
+    final player = await signedIn();
+    final downloads = player.downloads;
+    Directory(downloads.directory).createSync(recursive: true);
+    final foreignFile = File(p.join(downloads.directory, 'user_notes.txt'))..writeAsStringSync('keep me');
+    final foreignMusic = File(p.join(downloads.directory, 'MySong.flac'))..writeAsStringSync('do not delete');
+
+    // Create a new DownloadService on the same directory to run _scanDirectory()
+    final freshDownloads = DownloadService(player.library, player.session);
+    await freshDownloads.initialize();
+
+    expect(foreignFile.existsSync(), isTrue);
+    expect(foreignMusic.existsSync(), isTrue);
+    expect(foreignFile.readAsStringSync(), 'keep me');
+
+    await downloads.removeAll();
+    expect(foreignFile.existsSync(), isTrue);
+    expect(foreignMusic.existsSync(), isTrue);
+    freshDownloads.dispose();
+  });
+
   test('a copy follows the server file: a changed file is fetched again and then replaces the old copy', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
     final player = await signedIn();

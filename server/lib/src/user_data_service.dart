@@ -122,11 +122,11 @@ class UserDataService {
       if (db.updatedRows == 0) return null; // at the limit
     }
 
-    final row = db.select(
+    final rows = db.select(
       'SELECT track_id, play_count, last_played FROM user_plays WHERE user_id = ? AND track_id = ?',
       [userId, trackId],
-    ).first;
-    return _toStats(row);
+    );
+    return rows.isEmpty ? null : _toStats(rows.first);
   }
 
   /// Creates the playlist or replaces its name, description and tracks. Null when it is new and the account is at its
@@ -148,11 +148,11 @@ class UserDataService {
       if (db.updatedRows == 0) return null;
     }
 
-    final row = db.select(
+    final rows = db.select(
       'SELECT id, name, description, track_ids_json, created_at, modified_at FROM user_playlists WHERE user_id = ? AND id = ?',
       [userId, playlistId],
-    ).first;
-    return _toPlaylist(row);
+    );
+    return rows.isEmpty ? null : _toPlaylist(rows.first);
   }
 
   bool deletePlaylist(String userId, String playlistId) {

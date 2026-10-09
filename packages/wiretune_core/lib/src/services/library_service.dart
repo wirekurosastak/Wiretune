@@ -565,6 +565,22 @@ class LibraryService {
     }
   }
 
+  /// Sets hidden state locally without emitting hiddenToggled event, e.g. to undo a change rejected by the server.
+  Future<void> setHiddenLocal(String itemType, String itemId, bool hidden) async {
+    final Set<String> targetSet = switch (itemType) {
+      'artist' => _hiddenArtists,
+      'album' => _hiddenAlbums,
+      'track' => _hiddenTracks,
+      _ => _hiddenTracks,
+    };
+    final changed = hidden ? targetSet.add(itemId) : targetSet.remove(itemId);
+    if (changed) {
+      await _repository.setHiddenItem(itemType, itemId, hidden, _currentUserId);
+      _rebuildSnapshot();
+      libraryChanged.emit(null);
+    }
+  }
+
   Album? getAlbum(String albumId) => _snapshot.albumById[albumId];
 
   Album? getAlbumForTrack(Track track) => _snapshot.albumById[track.albumId];

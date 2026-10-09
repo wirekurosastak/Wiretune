@@ -73,7 +73,7 @@ abstract final class AppPaths {
   static String comparable(String path) => Platform.isWindows || Platform.isMacOS ? path.toLowerCase() : path;
 
   /// True when [path] resolves to [root] or a location inside it. Compares whole path segments, so `/music2` is not
-  /// inside `/music`.
+  /// inside `/music`. Also checks that if [path] exists on disk, its resolved symbolic links stay inside [root].
   static bool isPathUnderRoot(String? path, String? root) {
     if (path == null || root == null || path.trim().isEmpty || root.trim().isEmpty) return false;
 
@@ -84,6 +84,27 @@ abstract final class AppPaths {
     } catch (_) {
       return false;
     }
-    return fullFile == fullRoot || p.isWithin(fullRoot, fullFile);
+    if (fullFile != fullRoot && !p.isWithin(fullRoot, fullFile)) {
+      return false;
+    }
+
+    try {
+      final type = FileSystemEntity.typeSync(path, followLinks: false);
+      if (type != FileSystemEntityType.notFound) {
+        final canonicalFile = comparable(fullPath(type == FileSystemEntityType.directory
+            ? Directory(path).resolveSymbolicLinksSync()
+            : File(path).resolveSymbolicLinksSync()));
+        final canonicalRoot = comparable(fullPath(Directory(root).existsSync()
+            ? Directory(root).resolveSymbolicLinksSync()
+            : root));
+        if (canonicalFile != canonicalRoot && !p.isWithin(canonicalRoot, canonicalFile)) {
+          return false;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return true;
   }
 }

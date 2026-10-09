@@ -497,6 +497,16 @@ class WiretuneServer {
     }
     if (!Directory(fullPath).existsSync()) return errorResponse(400, 'The folder does not exist: $fullPath');
 
+    if (Platform.isLinux) {
+      const forbiddenRoots = ['/proc', '/sys', '/dev'];
+      if (forbiddenRoots.any((b) => fullPath == b || p.isWithin(b, fullPath))) {
+        return errorResponse(400, 'System directory cannot be used as library folder.');
+      }
+    }
+    if (AppPaths.isPathUnderRoot(fullPath, paths.dataDirectory)) {
+      return errorResponse(400, 'Server data directory cannot be used as library folder.');
+    }
+
     await repository.setSetting(_chosenLibraryPathKey, fullPath);
     paths.libraryRoot = fullPath;
     scanner.requestScan();

@@ -266,10 +266,7 @@ class DownloadService {
         final name = p.basename(entity.path);
         if (name.endsWith('.part')) continue; // resumed, or removed by the next run
         final match = (isCover ? _coverName : _copyName).firstMatch(name);
-        if (match == null) {
-          await _delete(entity.path); // not ours, or of an older layout
-          continue;
-        }
+        if (match == null) continue;
         if (isCover) {
           _covers[match.group(1)!] = entity.path;
         } else {
@@ -518,6 +515,10 @@ class DownloadService {
     }
 
     final target = job.isCover ? '${job.target}.${_imageExtension(response.headers['content-type'])}' : job.target;
+    final targetFile = File(target);
+    if (await targetFile.exists()) {
+      await _delete(target);
+    }
     return (await part.rename(target)).path;
   }
 
@@ -577,10 +578,12 @@ class DownloadService {
     return '${_stemOf(track)}-${_version(track)}-$safeName.$ext';
   }
 
-  /// Replaces filesystem-unsafe characters with underscores and trims to 160 characters so the full
-  /// path stays well within every platform's 255-byte limit.
+  /// Replaces filesystem-unsafe and control characters with underscores, strips trailing dots/spaces,
+  /// and trims to 160 characters so the full path stays well within every platform's limit.
   static String _safeFileName(String name) {
-    final safe = name.replaceAll(RegExp(r'[/\\:*?"<>|]'), '_').trim();
+    var safe = name.replaceAll(RegExp(r'[\x00-\x1f\x7f/\\:*?"<>|]'), '_').trim();
+    safe = safe.replaceAll(RegExp(r'[. ]+$'), '');
+    if (safe.isEmpty) safe = 'track';
     return safe.length > 160 ? safe.substring(0, 160).trimRight() : safe;
   }
 

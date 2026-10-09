@@ -219,7 +219,8 @@ class RemoteClient {
 
   static Uri _remoteUri(String serverUrl) {
     final base = Uri.parse(serverUrl);
-    return base.replace(scheme: base.scheme == 'https' ? 'wss' : 'ws', path: '${base.path}/api/remote');
+    final cleanPath = base.path.endsWith('/') ? base.path.substring(0, base.path.length - 1) : base.path;
+    return base.replace(scheme: base.scheme == 'https' ? 'wss' : 'ws', path: '$cleanPath/api/remote');
   }
 
   /// The real connection: a WebSocket with the token in its header (never in the URL), pinged so that a dead

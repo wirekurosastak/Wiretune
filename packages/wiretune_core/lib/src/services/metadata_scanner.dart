@@ -253,6 +253,8 @@ List<String> _enumerateAudioFiles(String root) {
         files.add(entry.path);
       } else if (entry is Link) {
         try {
+          final target = File(entry.path).resolveSymbolicLinksSync();
+          if (!AppPaths.isPathUnderRoot(target, root)) continue;
           final type = FileSystemEntity.typeSync(entry.path);
           if (type == FileSystemEntityType.file && AudioFileTypes.isSupported(name)) files.add(entry.path);
         } catch (_) {}
