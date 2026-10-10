@@ -889,6 +889,30 @@ class _DownloadsCardState extends State<_DownloadsCard> {
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textMain),
             ),
             _StatusLine(downloads.statusText, isError: downloads.hasError),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr('DownloadsSyncMode'),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                      ),
+                      Text(
+                        context.tr('DownloadsSyncModeHint'),
+                        style: TextStyle(fontSize: 12, color: colors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: downloads.isSyncModeEnabled,
+                  onChanged: (v) => downloads.setSyncModeEnabled(v),
+                ),
+              ],
+            ),
 
             if (downloads.hasAnything) ...[
               const SizedBox(height: 14),

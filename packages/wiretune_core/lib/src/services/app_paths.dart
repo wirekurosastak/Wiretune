@@ -57,8 +57,9 @@ abstract final class AppPaths {
     return xdg != null && xdg.isNotEmpty ? xdg : p.join(home, '.config');
   }
 
-  /// The user's music folder (`~/Music`, `%USERPROFILE%\Music`).
+  /// The user's music folder (`~/Music`, `%USERPROFILE%\Music`, `/storage/emulated/0/Music` on Android).
   static String musicFolder() {
+    if (Platform.isAndroid) return '/storage/emulated/0/Music';
     final env = Platform.environment;
     final home = Platform.isWindows ? env['USERPROFILE'] : env['HOME'];
     final xdg = env['XDG_MUSIC_DIR'];

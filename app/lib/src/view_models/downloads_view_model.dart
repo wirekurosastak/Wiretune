@@ -80,6 +80,9 @@ class DownloadsViewModel extends ChangeNotifier {
   int get wantedCount => _downloads.wantedCount;
   bool get hasAnything => _downloads.wantedCount > 0 || _downloads.bytesOnDisk > 0;
   String get destinationDirectory => _downloads.directory;
+  bool get isSyncModeEnabled => _downloads.isSyncModeEnabled;
+
+  Future<void> setSyncModeEnabled(bool enabled) => _downloads.setSyncModeEnabled(enabled);
 
   /// "1.4 GB on this device" (with the language's decimal separator).
   String get sizeText {

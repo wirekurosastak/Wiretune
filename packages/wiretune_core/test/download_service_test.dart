@@ -168,7 +168,7 @@ void main() {
         ..hasCoverArt = true;
 
   List<String> filesIn(String folder) => Directory(folder).existsSync()
-      ? [for (final f in Directory(folder).listSync().whereType<File>()) p.basename(f.path)]
+      ? [for (final f in Directory(folder).listSync(recursive: true).whereType<File>()) p.relative(f.path, from: folder)]
       : [];
 
   test('an album is downloaded with its cover, and then plays from the copies without the server', () async {
@@ -317,9 +317,8 @@ void main() {
     await until(() => downloads.stateOf(track) == DownloadState.done);
 
     final second = downloads.localCopy(track)!;
-    expect(second, isNot(first));
+    expect(second, first);
     expect(File(second).readAsBytesSync(), audio(9, 50100));
-    expect(File(first).existsSync(), isFalse);
     expect(server.streamRequests.length, requestsBefore + 1);
     expect(filesIn(downloads.directory).where((n) => !n.startsWith('covers')), hasLength(1));
   });
@@ -409,7 +408,7 @@ void main() {
     expect(server.streamRequests, hasLength(1));
   });
 
-  test('a server ID never becomes a path: copies are named by hashes, inside the downloads folder', () async {
+  test('a server ID never becomes a path: copies are named safely inside the downloads folder', () async {
     server.add(serverTrack('../../outside', 'Sneaky', 'Album'), audio(1));
     final player = await signedIn();
     final downloads = player.downloads;
@@ -418,9 +417,64 @@ void main() {
 
     final copy = downloads.localCopy(player.library.getTrack('../../outside')!)!;
     expect(p.isWithin(downloads.directory, copy), isTrue);
-    expect(p.basename(copy), matches(RegExp(r'^[0-9a-f]{16}-[0-9a-f]{8}.*\.flac$')));
-    expect(filesIn(downloads.directory), [p.basename(copy)]);
-    expect(filesIn(directory), isEmpty);
-    expect(filesIn(p.dirname(directory)).where((name) => name.contains('outside')), isEmpty);
+    expect(p.basename(copy), '01 - Sneaky.flac');
+    expect(p.relative(copy, from: downloads.directory), p.join('Artist', 'Album', '01 - Sneaky.flac'));
+    expect(filesIn(downloads.directory).where((n) => !n.startsWith('covers')), [p.join('Artist', 'Album', '01 - Sneaky.flac')]);
+    expect(File(p.join(p.dirname(directory), 'outside')).existsSync(), isFalse);
+    expect(File(p.join(directory, 'outside')).existsSync(), isFalse);
+  });
+
+  test('downloads are stored in nested Artist/Album/Track folders', () async {
+    server
+      ..add(serverTrack('t1', 'Track 1', 'Album A', number: 1), audio(1))
+      ..add(serverTrack('t2', 'Track 2', 'Album A', number: 2), audio(2));
+    final player = await signedIn();
+    final downloads = player.downloads;
+    final album = player.library.albums.firstWhere((a) => a.title == 'Album A');
+
+    await downloads.pinAlbum(album.id, true);
+    await until(() => downloads.doneCount == 2);
+
+    final t1Copy = downloads.localCopy(album.tracks.first)!;
+    final t2Copy = downloads.localCopy(album.tracks.last)!;
+
+    expect(p.relative(t1Copy, from: downloads.directory), p.join('Artist', 'Album A', '01 - Track 1.flac'));
+    expect(p.relative(t2Copy, from: downloads.directory), p.join('Artist', 'Album A', '02 - Track 2.flac'));
+    expect(File(t1Copy).existsSync(), isTrue);
+    expect(File(t2Copy).existsSync(), isTrue);
+  });
+
+  test('when sync mode is disabled, manual deletions stay gone and are not auto-redownloaded', () async {
+    server
+      ..add(serverTrack('t1', 'Track 1', 'Album A', number: 1), audio(1))
+      ..add(serverTrack('t2', 'Track 2', 'Album A', number: 2), audio(2));
+
+    final repo = MockRepository();
+    final first = await signedIn(repo: repo);
+    final albumId = first.library.albums.single.id;
+
+    await first.downloads.setSyncModeEnabled(false);
+    await first.downloads.pinAlbum(albumId, true);
+    await until(() => first.downloads.doneCount == 2);
+    expect(server.streamRequests, hasLength(2));
+
+    first.close();
+    players.remove(first);
+
+    // Delete downloads folder manually
+    final downloadsDir = Directory(p.join(directory, 'Downloads'));
+    if (downloadsDir.existsSync()) downloadsDir.deleteSync(recursive: true);
+
+    // Restart app
+    final again = await Player.start(server, directory, repo: repo);
+    players.add(again);
+    await again.signIn();
+    await settle();
+
+    // In non-sync mode, nothing is redownloaded
+    expect(server.streamRequests, hasLength(2));
+    expect(again.downloads.doneCount, 0);
+    expect(again.downloads.wantedCount, 0);
+    expect(again.downloads.isAlbumPinned(albumId), isFalse);
   });
 }

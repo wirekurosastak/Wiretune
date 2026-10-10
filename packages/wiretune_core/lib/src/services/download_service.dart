@@ -39,15 +39,18 @@ enum DownloadState {
 /// A copy is named after hashes of the track's ID and of the server's size and modification time of the file, so no ID
 /// a server sends ends up in a path, and a copy that no longer matches the server's file is recognised by its name.
 class DownloadService {
-  DownloadService(this._library, this._session, {String? directory, http.Client? client})
-    : _directory = directory,
-      _client = client,
-      _ownsClient = client == null;
+  DownloadService(
+    this._library,
+    this._session, {
+    String? directory,
+    http.Client? client,
+    FileDownloader? downloader,
+  })  : _directory = directory,
+        _downloader = downloader ?? DefaultFileDownloader(client: client);
 
   static const String _pinsPreference = 'downloads';
+  static const String _syncModePreference = 'download_sync_mode';
 
-  /// How long a download may go without receiving anything before it counts as failed.
-  static const Duration _idleTimeout = Duration(seconds: 30);
   static const Duration _firstRetry = Duration(seconds: 15);
   static const Duration _lastRetry = Duration(minutes: 10);
 
@@ -56,12 +59,12 @@ class DownloadService {
 
   final LibraryService _library;
   final ServerSession _session;
-  http.Client? _client;
-  final bool _ownsClient;
+  final FileDownloader _downloader;
   final List<void Function()> _unsubscribers = [];
   String? _directory;
   bool _initialized = false;
   bool _disposed = false;
+  bool _syncModeEnabled = true;
 
   _Pins _pins = _Pins();
 
@@ -95,6 +98,9 @@ class DownloadService {
 
   static String defaultDownloadDirectory() {
     if (AppPaths.platformDataRoot != null) {
+      if (Platform.isAndroid) {
+        return p.join(AppPaths.musicFolder(), 'Wiretune');
+      }
       return p.join(AppPaths.getDataDirectory(), 'Downloads');
     }
     final legacy = p.join(AppPaths.getDataDirectory(), 'Downloads');
@@ -134,6 +140,18 @@ class DownloadService {
       _changePins((pins) => _toggle(pins.playlists, playlistId, pinned));
 
   Future<void> pinFavorites(bool pinned) => _changePins((pins) => pins.favorites = pinned);
+
+  /// Whether missing tracks in pinned lists or new releases from pinned artists are automatically synced.
+  bool get isSyncModeEnabled => _syncModeEnabled;
+
+  Future<void> setSyncModeEnabled(bool enabled) async {
+    if (_syncModeEnabled == enabled) return;
+    _syncModeEnabled = enabled;
+    await _library.setPreference(_syncModePreference, enabled ? '1' : '0');
+    _refreshWanted();
+    changed.emit(null);
+    _schedule();
+  }
 
   /// Forgets every mark and deletes every copy (also what a sign-out does).
   Future<void> removeAll() => _changePins((pins) {
@@ -214,6 +232,8 @@ class DownloadService {
   /// Reads the marks and the files on disk, then keeps the copies in line with the library from now on.
   Future<void> initialize() async {
     if (_initialized) return;
+    final syncPref = await _library.getPreference(_syncModePreference);
+    _syncModeEnabled = syncPref != '0';
     _pins = _Pins.fromJson(_decode(await _library.getPreference(_pinsPreference)));
     await _scanDirectory();
     _unsubscribers.addAll([
@@ -258,22 +278,105 @@ class DownloadService {
     _copies.clear();
     _covers.clear();
     _bytesOnDisk = 0;
-    for (final (folder, isCover) in [(directory, false), (_coverDirectory, true)]) {
-      final dir = Directory(folder);
-      if (!await dir.exists()) continue;
-      await for (final entity in dir.list(followLinks: false)) {
+
+    final tracksByRelPath = <String, List<Track>>{};
+    final tracksByFileName = <String, List<Track>>{};
+    for (final track in _library.tracks) {
+      tracksByRelPath.putIfAbsent(_relativeFilePath(track).toLowerCase(), () => []).add(track);
+      tracksByFileName.putIfAbsent(_fileName(track).toLowerCase(), () => []).add(track);
+      tracksByFileName.putIfAbsent(p.basename(_relativeFilePath(track)).toLowerCase(), () => []).add(track);
+    }
+
+    final dir = Directory(directory);
+    if (await dir.exists()) {
+      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final relPath = p.relative(entity.path, from: directory).toLowerCase();
+        if (relPath.startsWith('covers')) continue;
+        final name = p.basename(entity.path);
+        if (name.endsWith('.part')) continue;
+
+        final len = await entity.length();
+
+        // 1. Nested folder path: "Artist/Album/01 - Title.ext"
+        final matchByRel = tracksByRelPath[relPath];
+        if (matchByRel != null && matchByRel.isNotEmpty) {
+          var matched = false;
+          for (final track in matchByRel) {
+            if (track.fileSizeBytes <= 0 || len == track.fileSizeBytes) {
+              (_copies[_stemOf(track)] ??= {})[_version(track)] = entity.path;
+              matched = true;
+            }
+          }
+          if (matched) {
+            _bytesOnDisk += len;
+            continue;
+          }
+        }
+
+        // 2. Flat / fallback clean filename: "01 - Title.ext" or "Artist - Title.ext"
+        final matchByFn = tracksByFileName[name.toLowerCase()];
+        if (matchByFn != null && matchByFn.isNotEmpty) {
+          var matched = false;
+          for (final track in matchByFn) {
+            if (track.fileSizeBytes <= 0 || len == track.fileSizeBytes) {
+              (_copies[_stemOf(track)] ??= {})[_version(track)] = entity.path;
+              matched = true;
+            }
+          }
+          if (matched) {
+            _bytesOnDisk += len;
+            continue;
+          }
+        }
+
+        // 3. Legacy hash-prefixed filename: "stem-version-name.ext"
+        final match = _copyName.firstMatch(name);
+        if (match != null) {
+          (_copies[match.group(1)!] ??= {})[match.group(2)!] = entity.path;
+          _bytesOnDisk += len;
+        }
+      }
+    }
+
+    final coverDir = Directory(_coverDirectory);
+    if (await coverDir.exists()) {
+      await for (final entity in coverDir.list(followLinks: false)) {
         if (entity is! File) continue;
         final name = p.basename(entity.path);
-        if (name.endsWith('.part')) continue; // resumed, or removed by the next run
-        final match = (isCover ? _coverName : _copyName).firstMatch(name);
+        if (name.endsWith('.part')) continue;
+        final match = _coverName.firstMatch(name);
         if (match == null) continue;
-        if (isCover) {
-          _covers[match.group(1)!] = entity.path;
-        } else {
-          (_copies[match.group(1)!] ??= {})[match.group(2)!] = entity.path;
-        }
+        _covers[match.group(1)!] = entity.path;
         _bytesOnDisk += await entity.length();
       }
+    }
+
+    if (!_syncModeEnabled) {
+      bool hasFile(Track t) =>
+          (_copies[_stemOf(t)]?.isNotEmpty ?? false) || File(p.join(directory, _relativeFilePath(t))).existsSync();
+      bool hasAnyFile(Iterable<Track> tracks) => tracks.any(hasFile);
+
+      _pins.tracks.removeWhere((id) {
+        final track = _library.getTrack(id);
+        return track == null || !hasFile(track);
+      });
+      _pins.albums.removeWhere((id) {
+        final album = _library.getAlbum(id);
+        return album == null || !hasAnyFile(album.tracks);
+      });
+      _pins.artists.removeWhere((id) {
+        final artist = _library.getArtist(id);
+        return artist == null || !hasAnyFile(artist.albums.expand((a) => a.tracks));
+      });
+      _pins.playlists.removeWhere((id) {
+        final playlist = _library.getPlaylist(id);
+        return playlist == null || !hasAnyFile(_library.getPlaylistTracks(playlist));
+      });
+      if (_pins.favorites && !hasAnyFile(_library.favorites)) {
+        _pins.favorites = false;
+      }
+      await _library.setPreference(_pinsPreference, jsonEncode(_pins.toJson()));
     }
   }
 
@@ -353,9 +456,14 @@ class DownloadService {
       final current = track == null ? null : _version(track);
       // An older version stays until the current one has arrived: it still plays.
       final keep = track == null ? null : (versions.containsKey(current) ? current : versions.keys.first);
+      final keepPath = keep == null ? null : versions[keep];
       for (final version in versions.keys.toList()) {
         if (version == keep) continue;
-        if (await _delete(versions[version]!)) versions.remove(version);
+        final oldPath = versions[version]!;
+        if (oldPath != keepPath) {
+          await _delete(oldPath);
+        }
+        versions.remove(version);
       }
       if (versions.isEmpty) _copies.remove(stem);
     }
@@ -370,16 +478,12 @@ class DownloadService {
         if (entity is! File || !name.endsWith('.part')) continue;
         final current = _current;
         if (current != null && entity.path == current.partPath) continue;
-        final stem = name.split(RegExp(r'[-.]')).first;
-        final wanted = isCover ? _wantedCovers.contains(stem) : _isCurrentPart(stem, name);
+        final wanted = isCover
+            ? _wantedCovers.contains(name.split('.').first)
+            : _wanted.values.any((t) => name == '${_fileName(t)}.part');
         if (!wanted) await _delete(entity.path);
       }
     }
-  }
-
-  bool _isCurrentPart(String stem, String name) {
-    final track = _wanted[stem];
-    return track != null && name == '${_fileName(track)}.part';
   }
 
   /// The next file to fetch: an album's cover before its first track, then the track.
@@ -394,7 +498,7 @@ class DownloadService {
         }
       }
       if (!(_copies[stem]?.containsKey(_version(track)) ?? false)) {
-        return _Job(stem, track.streamUrl!, p.join(directory, _fileName(track)), track);
+        return _Job(stem, track.streamUrl!, p.join(directory, _relativeFilePath(track)), track);
       }
     }
     return null;
@@ -408,7 +512,30 @@ class DownloadService {
     _currentTotal = job.isCover ? 0 : job.track.fileSizeBytes;
     changed.emit(null);
     try {
-      final path = await _fetch(job);
+      final token = _session.authToken;
+      if (token == null || token.isEmpty || !_isServerUrl(job.url)) throw const _Refused();
+
+      final path = await _downloader.downloadFile(
+        url: job.url,
+        token: token,
+        partPath: job.partPath,
+        targetPath: job.target,
+        isCover: job.isCover,
+        track: job.track,
+        onStart: (totalSize, offset) {
+          _currentTotal = totalSize;
+          _currentReceived = offset;
+          _sinceProgress..reset()..start();
+        },
+        onProgress: (bytesReceived) {
+          _currentReceived += bytesReceived;
+          if (_sinceProgress.elapsedMilliseconds >= 500) {
+            _sinceProgress.reset();
+            changed.emit(null);
+          }
+        },
+        isCancelled: () => _cancelCurrent || _disposed,
+      );
       _errorKey = null;
       _retryDelay = _firstRetry;
       _bytesOnDisk += File(path).lengthSync();
@@ -420,7 +547,11 @@ class DownloadService {
         versions[version] = path;
         // The copy of the server's earlier file has been playable until now; this one replaces it.
         for (final old in versions.keys.where((v) => v != version).toList()) {
-          if (await _delete(versions[old]!)) versions.remove(old);
+          final oldPath = versions[old]!;
+          if (oldPath != path) {
+            await _delete(oldPath);
+          }
+          versions.remove(old);
         }
         WiretuneLog.info('Downloads', "Downloaded '${job.track.artist} - ${job.track.title}'.");
       }
@@ -463,69 +594,11 @@ class DownloadService {
     _retryDelay = doubled > _lastRetry ? _lastRetry : doubled;
   }
 
-  /// Downloads [job] into its partial file (continuing one an earlier attempt left), then gives it its final name.
-  Future<String> _fetch(_Job job) async {
-    final token = _session.authToken;
-    if (token == null || token.isEmpty || !_isServerUrl(job.url)) throw const _Refused();
-
-    final part = File(job.partPath);
-    await part.parent.create(recursive: true);
-    var offset = await part.exists() ? await part.length() : 0;
-    final request = http.Request('GET', Uri.parse(job.url))..headers['Authorization'] = 'Bearer $token';
-    if (offset > 0) request.headers['Range'] = 'bytes=$offset-';
-
-    final response = await (_client ??= http.Client()).send(request).timeout(_idleTimeout);
-    final status = response.statusCode;
-    if (status == 401 || status == 403) throw const _Refused();
-    if (status == 404 || status == 410) throw const _Gone();
-    if (status == 416) {
-      await _delete(job.partPath); // the partial file is longer than the server's: start again next time
-      throw const HttpException('The partial download did not match the server file.');
-    }
-    final resumed = status == 206 && _rangeStart(response.headers['content-range']) == offset;
-    if (status != 200 && !resumed) throw HttpException('HTTP $status');
-    if (!resumed) offset = 0;
-
-    final length = response.contentLength;
-    if (length != null) _currentTotal = offset + length;
-    _currentReceived = offset;
-    _sinceProgress
-      ..reset()
-      ..start();
-
-    final file = await part.open(mode: resumed ? FileMode.append : FileMode.write);
-    try {
-      await for (final chunk in response.stream.timeout(_idleTimeout)) {
-        if (_cancelCurrent || _disposed) throw const _Cancelled();
-        await file.writeFrom(chunk);
-        _currentReceived += chunk.length;
-        if (_sinceProgress.elapsedMilliseconds >= 500) {
-          _sinceProgress.reset();
-          changed.emit(null);
-        }
-      }
-    } finally {
-      await file.close();
-    }
-
-    final size = await part.length();
-    if ((length != null && size != offset + length) || (!job.isCover && !_matchesServer(job.track, size))) {
-      await _delete(job.partPath);
-      throw HttpException('The download ended early ($size bytes).');
-    }
-
-    final target = job.isCover ? '${job.target}.${_imageExtension(response.headers['content-type'])}' : job.target;
-    final targetFile = File(target);
-    if (await targetFile.exists()) {
-      await _delete(target);
-    }
-    return (await part.rename(target)).path;
-  }
 
   /// The server's listing gives the file's size; a copy of another size is not a whole copy of it.
-  static bool _matchesServer(Track track, int size) => track.fileSizeBytes <= 0 || track.fileSizeBytes == size;
+  static bool matchesServer(Track track, int size) => track.fileSizeBytes <= 0 || track.fileSizeBytes == size;
 
-  static int? _rangeStart(String? contentRange) {
+  static int? rangeStart(String? contentRange) {
     final match = RegExp(r'^bytes (\d+)-\d+/(\d+|\*)$').firstMatch(contentRange?.trim() ?? '');
     return match == null ? null : int.tryParse(match.group(1)!);
   }
@@ -538,12 +611,27 @@ class DownloadService {
         final size = path.endsWith('.part') ? 0 : await file.length();
         await file.delete();
         _bytesOnDisk -= size;
+        _cleanEmptyParents(file.parent);
       }
       return true;
     } on FileSystemException catch (e) {
       WiretuneLog.warn('Downloads', 'Could not delete a download: $e');
       return false;
     }
+  }
+
+  void _cleanEmptyParents(Directory dir) {
+    try {
+      var current = dir;
+      while (current.path != directory && p.isWithin(directory, current.path)) {
+        if (current.existsSync() && current.listSync().isEmpty) {
+          current.deleteSync();
+          current = current.parent;
+        } else {
+          break;
+        }
+      }
+    } catch (_) {}
   }
 
   /// Only the server the session is signed in to is sent the token (`http://host:52001` is not `http://host:5200`).
@@ -570,12 +658,28 @@ class DownloadService {
     return stableId('${track.fileSizeBytes}\u001f${modified == null ? '' : modified ~/ 1000}').substring(0, 8);
   }
 
-  /// The filename of a downloaded track: stem+version prefix (for dedup) followed by a human-readable
-  /// "Artist - Title.ext" suffix so the file is recognisable in a file manager.
-  static String _fileName(Track track) {
-    final safeName = _safeFileName('${track.artist} - ${track.title}');
+  /// The relative path of a downloaded track: "Artist/Album/01 - Title.ext"
+  /// (or "Artist/Singles/Title.ext" if no album).
+  static String _relativeFilePath(Track track) {
+    final artist = _safeFileName(track.artist.trim().isEmpty ? 'Unknown Artist' : track.artist);
+    final album = _safeFileName(track.album.trim().isEmpty ? 'Singles' : track.album);
+    final trackNum = track.trackNumber;
+    final num = (trackNum != null && trackNum > 0) ? '${trackNum.toString().padLeft(2, '0')} - ' : '';
+    final title = _safeFileName(track.title.trim().isEmpty ? 'track' : track.title);
     final ext = _extension(track.format.codec);
-    return '${_stemOf(track)}-${_version(track)}-$safeName.$ext';
+    return p.join(artist, album, '$num$title.$ext');
+  }
+
+  /// Flat filename: "Artist - Title.ext" (or "Title.ext") for fallback matching.
+  static String _fileName(Track track) {
+    final artist = track.artist.trim();
+    final title = track.title.trim();
+    final base = artist.isEmpty || title.toLowerCase().startsWith('${artist.toLowerCase()} -')
+        ? title
+        : '$artist - $title';
+    final safeName = _safeFileName(base.isEmpty ? 'track' : base);
+    final ext = _extension(track.format.codec);
+    return '$safeName.$ext';
   }
 
   /// Replaces filesystem-unsafe and control characters with underscores, strips trailing dots/spaces,
@@ -602,7 +706,7 @@ class DownloadService {
     _ => 'audio',
   };
 
-  static String _imageExtension(String? contentType) => switch (contentType?.split(';').first.trim().toLowerCase()) {
+  static String imageExtension(String? contentType) => switch (contentType?.split(';').first.trim().toLowerCase()) {
     'image/png' => 'png',
     'image/jpeg' => 'jpg',
     _ => 'img',
@@ -615,7 +719,7 @@ class DownloadService {
       unsubscribe();
     }
     _unsubscribers.clear();
-    if (_ownsClient) _client?.close();
+    _downloader.dispose();
   }
 }
 
@@ -673,4 +777,104 @@ class _Gone implements Exception {
 
 class _Refused implements Exception {
   const _Refused();
+}
+
+
+/// Abstraction for HTTP downloading logic.
+abstract class FileDownloader {
+  /// Downloads a file from [url] to [partPath], then renames it to [targetPath].
+  Future<String> downloadFile({
+    required String url,
+    required String token,
+    required String partPath,
+    required String targetPath,
+    required bool isCover,
+    required Track track,
+    required void Function(int totalSize, int offset) onStart,
+    required void Function(int bytesReceived) onProgress,
+    required bool Function() isCancelled,
+  });
+
+  void dispose();
+}
+
+class DefaultFileDownloader implements FileDownloader {
+  DefaultFileDownloader({http.Client? client})
+      : _client = client ?? http.Client(),
+        _ownsClient = client == null;
+
+  final http.Client _client;
+  final bool _ownsClient;
+
+  static const Duration _idleTimeout = Duration(seconds: 30);
+
+  @override
+  Future<String> downloadFile({
+    required String url,
+    required String token,
+    required String partPath,
+    required String targetPath,
+    required bool isCover,
+    required Track track,
+    required void Function(int totalSize, int offset) onStart,
+    required void Function(int bytesReceived) onProgress,
+    required bool Function() isCancelled,
+  }) async {
+    final part = File(partPath);
+    await part.parent.create(recursive: true);
+    var offset = await part.exists() ? await part.length() : 0;
+    final request = http.Request('GET', Uri.parse(url))..headers['Authorization'] = 'Bearer $token';
+    if (offset > 0) request.headers['Range'] = 'bytes=$offset-';
+
+    final response = await _client.send(request).timeout(_idleTimeout);
+    final status = response.statusCode;
+    if (status == 401 || status == 403) throw const _Refused();
+    if (status == 404 || status == 410) throw const _Gone();
+    if (status == 416) {
+      await _deleteFile(partPath); // the partial file is longer than the server's: start again next time
+      throw const HttpException('The partial download did not match the server file.');
+    }
+    final resumed = status == 206 && DownloadService.rangeStart(response.headers['content-range']) == offset;
+    if (status != 200 && !resumed) throw HttpException('HTTP $status');
+    if (!resumed) offset = 0;
+
+    final length = response.contentLength;
+    onStart(length != null ? offset + length : 0, offset);
+
+    final file = await part.open(mode: resumed ? FileMode.append : FileMode.write);
+    try {
+      await for (final chunk in response.stream.timeout(_idleTimeout)) {
+        if (isCancelled()) throw const _Cancelled();
+        await file.writeFrom(chunk);
+        onProgress(chunk.length);
+      }
+    } finally {
+      await file.close();
+    }
+
+    final size = await part.length();
+    if ((length != null && size != offset + length) || (!isCover && !DownloadService.matchesServer(track, size))) {
+      await _deleteFile(partPath);
+      throw HttpException('The download ended early ($size bytes).');
+    }
+
+    final target = isCover ? '$targetPath.${DownloadService.imageExtension(response.headers['content-type'])}' : targetPath;
+    final targetFile = File(target);
+    if (await targetFile.exists()) {
+      await _deleteFile(target);
+    }
+    return (await part.rename(target)).path;
+  }
+
+  Future<void> _deleteFile(String path) async {
+    final file = File(path);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_ownsClient) _client.close();
+  }
 }
