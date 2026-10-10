@@ -494,11 +494,25 @@ class DownloadService {
       if (_isServerUrl(cover)) {
         final coverStem = _coverStem(cover!);
         if (!_covers.containsKey(coverStem) && !_unavailable.contains(coverStem)) {
-          return _Job(coverStem, cover, p.join(_coverDirectory, coverStem), track, isCover: true);
+          final targetBase = p.join(_coverDirectory, coverStem);
+          final existing = ['.jpg', '.png', '.img'].map((ext) => File('$targetBase$ext')).where((f) => f.existsSync()).firstOrNull;
+          if (existing != null) {
+            _covers[coverStem] = existing.path;
+            _bytesOnDisk += existing.lengthSync();
+          } else {
+            return _Job(coverStem, cover, targetBase, track, isCover: true);
+          }
         }
       }
       if (!(_copies[stem]?.containsKey(_version(track)) ?? false)) {
-        return _Job(stem, track.streamUrl!, p.join(directory, _relativeFilePath(track)), track);
+        final targetPath = p.join(directory, _relativeFilePath(track));
+        final file = File(targetPath);
+        if (file.existsSync() && matchesServer(track, file.lengthSync())) {
+          (_copies[stem] ??= {})[_version(track)] = targetPath;
+          _bytesOnDisk += file.lengthSync();
+          continue;
+        }
+        return _Job(stem, track.streamUrl!, targetPath, track);
       }
     }
     return null;
