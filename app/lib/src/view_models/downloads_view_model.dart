@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 /// The download buttons (a track, an album, an artist, a playlist, the favourites) and the Downloads card in the
@@ -41,34 +43,45 @@ class DownloadsViewModel extends ChangeNotifier {
   /// Wanted because of a list it is on, not by itself: its own button cannot remove it.
   bool isPinnedByList(Track track) => _downloads.isWanted(track) && !isTrackPinned(track);
 
-  void toggleTrack(Track track) => _pin(_downloads.pinTrack(track.id, !isTrackPinned(track)));
+  void toggleTrack(Track track) => _pin(() => _downloads.pinTrack(track.id, !isTrackPinned(track)));
 
   // ── A list ─────────────────────────────────────────────────────────────────────────────────────
 
   bool isAlbumPinned(Album album) => _downloads.isAlbumPinned(album.id);
 
-  void toggleAlbum(Album album) => _pin(_downloads.pinAlbum(album.id, !isAlbumPinned(album)));
+  void toggleAlbum(Album album) => _pin(() => _downloads.pinAlbum(album.id, !isAlbumPinned(album)));
 
   /// All the artist's albums, also the ones that arrive later.
   bool isArtistPinned(Artist artist) => _downloads.isArtistPinned(artist.id);
 
-  void toggleArtist(Artist artist) => _pin(_downloads.pinArtist(artist.id, !isArtistPinned(artist)));
+  void toggleArtist(Artist artist) => _pin(() => _downloads.pinArtist(artist.id, !isArtistPinned(artist)));
 
   bool isPlaylistPinned(Playlist playlist) => _downloads.isPlaylistPinned(playlist.id);
 
-  void togglePlaylist(Playlist playlist) => _pin(_downloads.pinPlaylist(playlist.id, !isPlaylistPinned(playlist)));
+  void togglePlaylist(Playlist playlist) => _pin(() => _downloads.pinPlaylist(playlist.id, !isPlaylistPinned(playlist)));
 
   bool get areFavoritesPinned => _downloads.areFavoritesPinned;
 
-  void toggleFavorites() => _pin(_downloads.pinFavorites(!areFavoritesPinned));
+  void toggleFavorites() => _pin(() => _downloads.pinFavorites(!areFavoritesPinned));
 
   /// How many of [tracks] are downloaded, of how many that can be.
   (int done, int total) progressOf(Iterable<Track> tracks) => _downloads.progressOf(tracks);
 
-  void _pin(Future<void> change) {
+  Future<void> _checkPermissions() async {
+    if (Platform.isAndroid) {
+      await [
+        Permission.storage,
+        Permission.audio,
+        Permission.manageExternalStorage,
+      ].request();
+    }
+  }
+
+  void _pin(Future<void> Function() change) async {
+    await _checkPermissions();
     _pinChanges++;
     unawaited(
-      change.catchError((Object e) {
+      change().catchError((Object e) {
         WiretuneLog.warn('Downloads', 'Could not save the downloads: $e');
       }),
     );

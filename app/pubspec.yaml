@@ -28,6 +28,7 @@ dependencies:
     path: ../packages/wiretune_core
   wiretune_platform:
     path: ../packages/wiretune_platform
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -33,6 +34,13 @@ Future<void> main() async {
 
   if (platform.isAndroid || platform.isIOS) {
     unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+  }
+  if (platform.isAndroid) {
+    await [
+      Permission.storage,
+      Permission.audio,
+      Permission.manageExternalStorage,
+    ].request();
   }
   if (platform.isDesktop) await _prepareWindow(platform);
   // A TV is steered with the remote: the focused item is always highlighted, not only after a key press.
