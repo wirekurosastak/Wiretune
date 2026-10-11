@@ -901,6 +901,25 @@ void main() {
     }
   });
 
+  testWidgets("the player bar's cover follows the track that plays, without the mouse over it", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final tracks = vm.library.tracks;
+    for (final (i, t) in tracks.indexed) {
+      t.coverArtPath = '/covers/$i.jpg';
+    }
+    String? shown() => tester
+        .widget<CoverImage>(
+          find.descendant(of: find.byTooltip(Localizer.get('TipQueueToggle')), matching: find.byType(CoverImage)),
+        )
+        .path;
+    vm.player.playQueue(tracks, tracks[0]);
+    await settle(tester);
+    expect(shown(), tracks[0].coverArtPath);
+    vm.player.nextTrack();
+    await settle(tester);
+    expect(shown(), tracks[1].coverArtPath);
+  });
+
   testWidgets('an empty library says so alike on every page of it, with the way to fill it', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900), () async {
       final library = createLibrary(const []);

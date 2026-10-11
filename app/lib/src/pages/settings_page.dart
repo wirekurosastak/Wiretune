@@ -770,8 +770,6 @@ class _LibraryCardState extends State<_LibraryCard> {
                     controller: _serverFolder,
                     decoration: InputDecoration(
                       hintText: context.tr('ServerFolderPlaceholder'),
-                      helperText: context.tr('ServerFolderHelper'),
-                      helperMaxLines: 2,
                       prefixIcon: const Icon(Icons.folder_outlined, size: 18),
                     ),
                     onChanged: (v) => server.serverLibraryPath = v,
@@ -794,6 +792,8 @@ class _LibraryCardState extends State<_LibraryCard> {
                     ),
                   ],
                 ),
+                // Under the row, not in the field: the buttons beside it are as tall as the field alone.
+                _StatusLine(context.tr('ServerFolderHelper')),
                 _StatusLine(server.serverFolderProblem, isError: true),
                 _StatusLine(server.serverFolderMessage, isError: server.serverFolderIsError),
               ],

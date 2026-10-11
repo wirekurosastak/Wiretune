@@ -62,22 +62,13 @@ class AudioFormat {
       ? '${codec.toUpperCase()} ${bitrateKbps}kbps'
       : '${codec.toUpperCase()} ${bitsPerSample}bit/${khz(sampleRate)}kHz';
 
-  /// A compact representation of quality suitable for small thumbnails (e.g. `HI-RES` for gold,
-  /// codec like `FLAC` for silver, codec like `MP3` for bronze).
+  /// The tag of a small cover: the format alone (`FLAC`, `MP3`, `MIXED`), in every tier; the tag's colour says the
+  /// tier, so a hi-res FLAC reads `FLAC` in gold.
   static String compactSpec(QualityTier tier, String spec) {
-    if (tier == QualityTier.gold) return 'HI-RES';
     final trimmed = spec.trim();
-    if (trimmed.isEmpty) {
-      return tier == QualityTier.silver ? 'FLAC' : 'MP3';
-    }
-    if (trimmed == QualitySummary.mixedSpec) {
-      return QualitySummary.mixedSpec;
-    }
+    if (trimmed.isEmpty) return tier == QualityTier.bronze ? 'MP3' : 'FLAC';
     final space = trimmed.indexOf(' ');
-    if (space > 0) {
-      return trimmed.substring(0, space);
-    }
-    return trimmed;
+    return space > 0 ? trimmed.substring(0, space) : trimmed;
   }
 
   /// Compact tag text suitable for small thumbnails.

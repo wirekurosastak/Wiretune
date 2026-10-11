@@ -206,8 +206,17 @@ void main() {
     expect(find.text(Localizer.format('ServerFolderUnavailable', ['/mnt/nas/music'])), findsOneWidget);
 
     final folder = find.byWidgetPredicate((w) => w is TextField && w.controller?.text == '/mnt/nas/music');
-    await tester.enterText(folder, '/');
     final save = find.widgetWithText(FilledButton, Localizer.get('SaveFolder'));
+    // One column, the buttons beside the field: as tall as the field, its hint under them rather than inside it.
+    tester.view.physicalSize = const Size(1100, 1600);
+    await settle(tester);
+    expect(find.descendant(of: folder, matching: find.text(Localizer.get('ServerFolderHelper'))), findsNothing);
+    expect(find.text(Localizer.get('ServerFolderHelper')), findsOneWidget);
+    expect(tester.getSize(save).height, tester.getSize(folder).height);
+    expect(tester.getCenter(save).dy, moreOrLessEquals(tester.getCenter(folder).dy, epsilon: 1));
+    tester.view.physicalSize = wide;
+    await settle(tester);
+    await tester.enterText(folder, '/');
     await tester.ensureVisible(save);
     await settle(tester);
     await tester.tap(save);

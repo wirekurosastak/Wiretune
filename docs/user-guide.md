@@ -36,8 +36,9 @@ so and offers to reconnect or sign in.
   **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The tag says the
   format and the resolution (`FLAC 24bit/96kHz`, `MP3 320kbps`) wherever it shows: in the bottom-left corner of the
   album and playlist tiles and of the covers of the full-screen player, an album and a playlist, in the track lists and
-  the player bar of a wide screen, and in a wide queue. A phone's album list and a narrow queue leave it out. Hover or
-  long-press a tag for the details.
+  the player bar of a wide screen, and in a wide queue. A phone's album and playlist lists show the format alone
+  (`FLAC`, `MP3`), its colour telling the tier; a narrow queue leaves the tag out. Hover or long-press a tag for the
+  details.
 - **Sorting and filtering**: artists, albums and tracks start A→Z, the favourites with the newest (by the time you
   marked them), your playlists with the newest, a playlist's tracks in the order they were added, and an album's and an
   artist's tracks in their own order. Each list's sort buttons offer *ABC* first, then its own fields, then the shared

@@ -1130,8 +1130,12 @@ class _PlayerBar extends StatelessWidget {
 class _QueueCover extends StatelessWidget {
   const _QueueCover();
 
+  // It follows the player itself: as a const child it isn't rebuilt with the bar around it.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm.player, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final player = context.vm.player;
     final colors = context.colors;
     final open = player.isQueueOpen;
