@@ -418,14 +418,20 @@ class _Transport extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                icon(Icons.shuffle_rounded, 24, 'TipShuffle', player.toggleShuffle, color: toggle(player.isShuffle)),
+                icon(
+                  Icons.shuffle_rounded,
+                  24,
+                  shuffleTip(player),
+                  player.toggleShuffle,
+                  color: toggle(player.isShuffle),
+                ),
                 icon(Icons.skip_previous_rounded, 34, 'TipPrevious', player.previousTrack),
                 const PlayButton(size: 70),
                 icon(Icons.skip_next_rounded, 34, 'TipNext', player.nextTrack),
                 icon(
                   player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
                   24,
-                  'TipRepeat',
+                  repeatTip(player),
                   player.toggleRepeat,
                   color: toggle(player.repeatMode != RepeatMode.off),
                 ),

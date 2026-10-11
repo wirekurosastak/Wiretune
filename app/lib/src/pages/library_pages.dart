@@ -467,86 +467,90 @@ class SortButtons extends StatelessWidget {
       return SizedBox(
         width: double.infinity,
         height: PhoneChrome.controlHeight,
-        child: OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            backgroundColor: colors.surface1,
-            side: BorderSide(color: colors.glassBorder),
-            shape: const StadiumBorder(),
-          ),
-          onPressed: () {
-            if (buttons.length == 1) {
-              buttons.first.$3();
-              return;
-            }
-            showModalBottomSheet<void>(
-              context: context,
-              backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                side: BorderSide(color: colors.palette.glassBorder),
-              ),
-              builder: (ctx) => SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 36,
-                          height: 4,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: colors.textMuted.withValues(alpha: 0.3),
-                            borderRadius: BorderRadius.circular(2),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                        child: Text(
-                          context.tr('SortBy'),
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                        ),
-                      ),
-                      for (final (label, selected, onTap) in buttons)
-                        ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                          title: Text(
-                            label,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                              color: selected ? colors.accent : colors.textMain,
+        // The label is the order alone ("ABC ↑"): the tooltip, and a screen reader, say what the button is.
+        child: Tooltip(
+          message: context.tr('TipSortBy'),
+          child: OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              backgroundColor: colors.surface1,
+              side: BorderSide(color: colors.glassBorder),
+              shape: const StadiumBorder(),
+            ),
+            onPressed: () {
+              if (buttons.length == 1) {
+                buttons.first.$3();
+                return;
+              }
+              showModalBottomSheet<void>(
+                context: context,
+                backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  side: BorderSide(color: colors.palette.glassBorder),
+                ),
+                builder: (ctx) => SafeArea(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: colors.textMuted.withValues(alpha: 0.3),
+                              borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                          trailing: selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
-                          onTap: () {
-                            Navigator.pop(ctx);
-                            onTap();
-                          },
                         ),
-                    ],
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                          child: Text(
+                            context.tr('SortBy'),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                          ),
+                        ),
+                        for (final (label, selected, onTap) in buttons)
+                          ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                            title: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                color: selected ? colors.accent : colors.textMain,
+                              ),
+                            ),
+                            trailing: selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              onTap();
+                            },
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  active.$1,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.accent),
+              );
+            },
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Flexible(
+                  child: Text(
+                    active.$1,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.accent),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -645,7 +649,7 @@ class _GenreFilter extends StatelessWidget {
     final active = selected != null;
     final color = active ? colors.accent : colors.textMuted;
     return PopupMenuButton<String>(
-      tooltip: context.tr('Genre'),
+      tooltip: context.tr('TipGenreFilter'),
       position: PopupMenuPosition.under,
       // The menu's "all" entry has the empty string as its value: a null would read as "closed without a choice".
       onSelected: (value) => onSelected(value.isEmpty ? null : value),

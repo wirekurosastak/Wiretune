@@ -265,17 +265,14 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
           const SizedBox(width: 8),
-          Tooltip(
-            message: context.tr('TipCheckConnection'),
-            child: OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 46),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-              ),
-              onPressed: server.isConnecting ? null : _connect,
-              icon: Icon(Icons.dns_outlined, size: 16, color: colors.palette.cyan),
-              label: Text(context.tr('Connect'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(0, 46),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
             ),
+            onPressed: server.isConnecting ? null : _connect,
+            icon: Icon(Icons.dns_outlined, size: 16, color: colors.palette.cyan),
+            label: Text(context.tr('Connect'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
       ),

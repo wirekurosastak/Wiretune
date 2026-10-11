@@ -10,6 +10,16 @@ import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/player_view_model.dart';
 
+/// The tooltip of the shuffle button: what pressing it does.
+String shuffleTip(PlayerViewModel player) => player.isShuffle ? 'TipShuffleOff' : 'TipShuffleOn';
+
+/// The tooltip of the repeat button: the mode a press moves to (off → all → one → off).
+String repeatTip(PlayerViewModel player) => switch (player.repeatMode) {
+  RepeatMode.off => 'TipRepeatAll',
+  RepeatMode.all => 'TipRepeatOne',
+  RepeatMode.one => 'TipRepeatOff',
+};
+
 /// Shuffle, previous, play/pause, next, repeat. Shuffle and repeat take the accent and a dot under them while on.
 class TransportControls extends StatelessWidget {
   const TransportControls({super.key});
@@ -51,7 +61,7 @@ class TransportControls extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            toggle(Icons.shuffle_rounded, 'TipShuffle', player.isShuffle, player.toggleShuffle),
+            toggle(Icons.shuffle_rounded, shuffleTip(player), player.isShuffle, player.toggleShuffle),
             const SizedBox(width: 4),
             IconButton(
               tooltip: context.tr('TipPrevious'),
@@ -71,7 +81,7 @@ class TransportControls extends StatelessWidget {
             const SizedBox(width: 4),
             toggle(
               player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-              'TipRepeat',
+              repeatTip(player),
               player.repeatMode != RepeatMode.off,
               player.toggleRepeat,
             ),

@@ -500,14 +500,11 @@ class _AccountCardState extends State<_AccountCard> {
                   onSubmitted: (_) => _connect(server),
                 ),
                 actions: [
-                  Tooltip(
-                    message: context.tr('TipCheckConnection'),
-                    child: FilledButton(
-                      onPressed: server.isConnecting ? null : () => _connect(server),
-                      child: server.isConnecting
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : Text(context.tr('ConnectShort')),
-                    ),
+                  FilledButton(
+                    onPressed: server.isConnecting ? null : () => _connect(server),
+                    child: server.isConnecting
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(context.tr('ConnectShort')),
                   ),
                 ],
               ),
@@ -546,21 +543,15 @@ class _AccountCardState extends State<_AccountCard> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    Tooltip(
-                      message: context.tr('TipChangePassword'),
-                      child: OutlinedButton.icon(
-                        onPressed: () => _openChangePasswordDialog(context, server),
-                        icon: const Icon(Icons.key_rounded, size: 16),
-                        label: Text(context.tr('ChangePassword')),
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: () => _openChangePasswordDialog(context, server),
+                      icon: const Icon(Icons.key_rounded, size: 16),
+                      label: Text(context.tr('ChangePassword')),
                     ),
-                    Tooltip(
-                      message: context.tr('TipSignOut'),
-                      child: OutlinedButton.icon(
-                        onPressed: () => confirmAndSignOut(context),
-                        icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
-                        label: Text(context.tr('SignOut')),
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: () => confirmAndSignOut(context),
+                      icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
+                      label: Text(context.tr('SignOut')),
                     ),
                   ],
                 ),
@@ -1062,44 +1053,41 @@ class _AudioCard extends StatelessWidget {
         ) {
           final fg = MedalColors.fg(tier);
           final border = value ? fg.withValues(alpha: 0.6) : colors.glassBorder;
-          return Tooltip(
-            message: '$title: ${context.tr(tip)}',
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: colors.surface1,
-                borderRadius: BorderRadius.circular(Radii.small + 2),
-                border: Border.all(color: border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: MedalColors.bg(tier),
-                          border: Border.all(color: MedalColors.border(tier)),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          badgeText,
-                          style: TextStyle(color: fg, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.6),
-                        ),
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: colors.surface1,
+              borderRadius: BorderRadius.circular(Radii.small + 2),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: MedalColors.bg(tier),
+                        border: Border.all(color: MedalColors.border(tier)),
+                        borderRadius: BorderRadius.circular(5),
                       ),
-                      const Spacer(),
-                      Switch(value: value, activeTrackColor: fg, onChanged: available ? onChanged : null),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(description, style: TextStyle(fontSize: 11.5, height: 1.35, color: colors.textMuted)),
-                  if (!available) ...[
-                    const SizedBox(height: 6),
-                    Text(context.tr('ExclusiveUnavailable'), style: TextStyle(fontSize: 10, color: palette.warning)),
+                      child: Text(
+                        badgeText,
+                        style: TextStyle(color: fg, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.6),
+                      ),
+                    ),
+                    const Spacer(),
+                    Switch(value: value, activeTrackColor: fg, onChanged: available ? onChanged : null),
                   ],
+                ),
+                const SizedBox(height: 8),
+                Text(description, style: TextStyle(fontSize: 11.5, height: 1.35, color: colors.textMuted)),
+                if (!available) ...[
+                  const SizedBox(height: 6),
+                  Text(context.tr('ExclusiveUnavailable'), style: TextStyle(fontSize: 10, color: palette.warning)),
                 ],
-              ),
+              ],
             ),
           );
         }
@@ -1258,26 +1246,23 @@ class _AppearanceCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 for (final l in Localizer.languages)
-                  Tooltip(
-                    message: context.tr('TipLanguage'),
-                    child: l.code == vm.language
-                        ? FilledButton(
-                            style: FilledButton.styleFrom(
-                              minimumSize: const Size(0, 32),
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
-                            ),
-                            onPressed: () => vm.changeLanguage(l.code),
-                            child: Text(l.nativeName),
-                          )
-                        : OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              minimumSize: const Size(0, 32),
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
-                            ),
-                            onPressed: () => vm.changeLanguage(l.code),
-                            child: Text(l.nativeName),
+                  l.code == vm.language
+                      ? FilledButton(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
                           ),
-                  ),
+                          onPressed: () => vm.changeLanguage(l.code),
+                          child: Text(l.nativeName),
+                        )
+                      : OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(0, 32),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                          ),
+                          onPressed: () => vm.changeLanguage(l.code),
+                          child: Text(l.nativeName),
+                        ),
               ],
             ),
             const SizedBox(height: 14),
@@ -1296,7 +1281,7 @@ class _AppearanceCard extends StatelessWidget {
                   ),
                 ),
                 Tooltip(
-                  message: context.tr('TipToggleTheme'),
+                  message: context.tr(vm.isLight ? 'TipThemeDark' : 'TipThemeLight'),
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(0, 32),

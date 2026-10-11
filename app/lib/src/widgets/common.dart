@@ -812,7 +812,7 @@ class _PhonePageHeader extends StatelessWidget {
                     SizedBox.square(
                       dimension: 44,
                       child: IconButton(
-                        tooltip: context.tr('SearchPlaceholderShort'),
+                        tooltip: context.tr('Search'),
                         onPressed: vm.openSearch,
                         icon: Icon(Icons.search_rounded, size: 24, color: colors.textMain),
                       ),
@@ -820,7 +820,7 @@ class _PhonePageHeader extends StatelessWidget {
                   SizedBox.square(
                     dimension: 44,
                     child: IconButton(
-                      tooltip: context.tr('TipAccountSettings'),
+                      tooltip: context.tr('NavSettings'),
                       onPressed: () => vm.navigateTo(AppSection.settings),
                       icon: Icon(
                         vm.isUserLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,

@@ -176,14 +176,11 @@ class _Header extends StatelessWidget {
               children: [
                 ListenableBuilder(
                   listenable: Listenable.merge([vm, vm.player]),
-                  builder: (context, _) => Tooltip(
-                    message: 'Wiretune Streamer Visualizer',
-                    child: NavVisualizer(
-                      waveTrigger: vm.waveTrigger,
-                      direction: vm.lastWaveDirection,
-                      color: context.colors.accent,
-                      isPlaying: vm.player.isPlaying,
-                    ),
+                  builder: (context, _) => NavVisualizer(
+                    waveTrigger: vm.waveTrigger,
+                    direction: vm.lastWaveDirection,
+                    color: context.colors.accent,
+                    isPlaying: vm.player.isPlaying,
                   ),
                 ),
                 if (!compact) ...[
@@ -508,7 +505,7 @@ class _WindowButtonsState extends State<_WindowButtons> with WindowListener {
       const SizedBox(width: 4),
       _WindowButton(
         icon: _maximized ? Icons.filter_none_rounded : Icons.crop_square_rounded,
-        tooltip: context.tr('TipMaximize'),
+        tooltip: context.tr(_maximized ? 'TipRestore' : 'TipMaximize'),
         onPressed: () => _maximized ? windowManager.unmaximize() : windowManager.maximize(),
       ),
       const SizedBox(width: 4),
@@ -1098,14 +1095,11 @@ class _PlayerBar extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           if (showSpectrum) ...[
-                            Tooltip(
-                              message: context.tr('TipSpectrum'),
-                              child: SpectrumVisualizer(
-                                bands: player.spectrum,
-                                color: colors.accent,
-                                highlight: colors.hover,
-                                width: spectrumWidth,
-                              ),
+                            SpectrumVisualizer(
+                              bands: player.spectrum,
+                              color: colors.accent,
+                              highlight: colors.hover,
+                              width: spectrumWidth,
                             ),
                             const SizedBox(width: 14),
                           ],

@@ -500,7 +500,7 @@ void main() {
     );
     expect(ring.value, 0);
     // The album keeps its tracks: their own buttons cannot let them go.
-    final keptByAlbum = inRows('Downloaded with an album, a playlist or the favourites');
+    final keptByAlbum = inRows(Localizer.get('TipDownloadedWithList'));
     expect(keptByAlbum, findsNWidgets(2));
     await tester.tap(keptByAlbum.first, warnIfMissed: false);
     await settle(tester);
@@ -514,14 +514,14 @@ void main() {
     await tester.tap(inRows('Download to this device').first);
     await settle(tester);
     expect(downloads.isTrackPinned(vm.library.getTrack('s1')!), isTrue);
-    expect(inRows('Remove the download'), findsOneWidget);
+    expect(inRows(Localizer.get('TipRemoveDownload')), findsOneWidget);
 
     // The favourites, from their page.
     await tester.runAsync(() => vm.library.setFavorite('s2', true)); // not signed in: as the server told it
     vm.navigateTo(AppSection.favorites);
     await settle(tester);
     await tester.tap(
-      find.descendant(of: find.byType(PlayShuffleButtons), matching: find.byTooltip('Download to this device')),
+      find.descendant(of: find.byType(PlayShuffleButtons), matching: find.byTooltip(Localizer.get('TipDownload'))),
     );
     await settle(tester);
     expect(downloads.areFavoritesPinned, isTrue);
@@ -546,7 +546,7 @@ void main() {
     expect(vm.isNowPlayingOpen, isTrue);
 
     final player = find.byType(NowPlayingPage);
-    await tester.tap(find.descendant(of: player, matching: find.byTooltip('More')));
+    await tester.tap(find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipMore'))));
     await settle(tester);
     expect(find.text('Go to artist'), findsOneWidget);
     await tester.tap(find.text('Add to playlist'));
@@ -617,7 +617,7 @@ void main() {
     await tester.pumpWidget(WiretuneApp(vm: vm));
     await settle(tester);
     // Online, but nobody else is: the button is there, and its menu says what to do.
-    await tester.tap(find.byTooltip('Play on another device'));
+    await tester.tap(find.byTooltip(Localizer.get('TipDevices')));
     await settle(tester);
     expect(find.textContaining('No other devices online'), findsOneWidget);
     await tester.tapAt(const Offset(10, 10));
@@ -629,7 +629,7 @@ void main() {
       await pumpEventQueue();
     });
     await settle(tester);
-    await tester.tap(find.byTooltip('Play on another device'));
+    await tester.tap(find.byTooltip(Localizer.get('TipDevices')));
     await settle(tester);
     expect(find.text('This device'), findsOneWidget);
     expect(find.text('So What • Miles Davis'), findsOneWidget);
@@ -640,7 +640,7 @@ void main() {
     expect(find.text('Playing on Desk'), findsOneWidget); // in the mini player, in place of the artist
     expect(find.byType(DevicesButton), findsOneWidget); // the page header's: the mini player has none
     expect(find.text('So What'), findsWidgets);
-    await tester.tap(find.byTooltip('Pause'));
+    await tester.tap(find.byTooltip(Localizer.get('TipPause')));
     await settle(tester);
     expect(hub.commandsTo('desk'), [
       {'action': 'toggle'},
@@ -877,6 +877,28 @@ void main() {
     expect(find.descendant(of: account, matching: find.text(Localizer.get('NotSignedIn'))), findsOneWidget);
     // Neither the server's folder (not signed in) nor one of this device (it can't scan one): no card for them.
     expect(find.text(Localizer.get('SettingsLibrarySection')), findsNothing);
+  });
+
+  testWidgets('tooltips say what a press does next, and a button that says it already has none', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    expect(find.byTooltip(Localizer.get('TipShuffleOn')), findsOneWidget);
+    expect(find.byTooltip(Localizer.get('TipRepeatAll')), findsOneWidget);
+    vm.player.toggleShuffle();
+    vm.player.toggleRepeat();
+    await settle(tester);
+    expect(find.byTooltip(Localizer.get('TipShuffleOff')), findsOneWidget);
+    expect(find.byTooltip(Localizer.get('TipRepeatOne')), findsOneWidget);
+    vm.player.toggleRepeat();
+    await settle(tester);
+    expect(find.byTooltip(Localizer.get('TipRepeatOff')), findsOneWidget);
+
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    for (final label in [Localizer.get('ConnectShort'), 'Magyar', 'Deutsch']) {
+      for (final element in find.text(label).evaluate()) {
+        expect(find.ancestor(of: find.byWidget(element.widget), matching: find.byType(Tooltip)), findsNothing);
+      }
+    }
   });
 
   testWidgets('an empty library says so alike on every page of it, with the way to fill it', (tester) async {
