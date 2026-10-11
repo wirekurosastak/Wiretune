@@ -56,7 +56,7 @@ void main() {
     albums.setSortField(AlbumSortField.quality);
     expect(albums.isSortDescending, isTrue);
     expect(titles(albums), ['Studio 96', 'Studio 48', 'CD', 'Mixed', 'Lossy']);
-    expect(albums.sortQualityLabel, 'Quality ↓');
+    expect(albums.sortLabel(AlbumSortField.quality), 'Quality ↓');
 
     albums.setSortField(AlbumSortField.quality);
     expect(titles(albums), ['Lossy', 'CD', 'Mixed', 'Studio 48', 'Studio 96']);
@@ -74,12 +74,12 @@ void main() {
     albums.setSortField(AlbumSortField.artist);
     expect(albums.isSortDescending, isFalse);
     expect(titles(albums), ['Album A', 'Album Z', 'Nevermind', 'Abbey Road']);
-    expect(albums.sortArtistLabel, 'Artist ↑');
+    expect(albums.sortLabel(AlbumSortField.artist), 'Artist ↑');
 
     albums.setSortField(AlbumSortField.artist);
     expect(albums.isSortDescending, isTrue);
     expect(titles(albums), ['Abbey Road', 'Nevermind', 'Album A', 'Album Z']);
-    expect(albums.sortArtistLabel, 'Artist ↓');
+    expect(albums.sortLabel(AlbumSortField.artist), 'Artist ↓');
   });
 
   test(
@@ -173,11 +173,12 @@ void main() {
     expect(favorites.favoriteTracks.first.id, '4');
   });
 
-  test('sort fields maintain a consistent relative order across views', () {
+  test('every list offers ABC first, then its own fields, then the shared year, date added and quality', () {
     expect(TrackSortField.values, [
       TrackSortField.title,
       TrackSortField.artist,
       TrackSortField.album,
+      TrackSortField.length,
       TrackSortField.year,
       TrackSortField.added,
       TrackSortField.quality,
@@ -189,53 +190,123 @@ void main() {
       AlbumSortField.added,
       AlbumSortField.quality,
     ]);
-    expect(ArtistSortField.values, [
-      ArtistSortField.name,
-      ArtistSortField.added,
-      ArtistSortField.albums,
+    expect(ArtistSortField.values, [ArtistSortField.name, ArtistSortField.albums, ArtistSortField.added]);
+  });
+
+  test('a track without a year or a date goes last in either direction, and length starts with the shortest', () async {
+    final lib = await library([
+      track('1', 'Album')
+        ..title = 'Dated'
+        ..year = 2001
+        ..duration = const Duration(minutes: 5),
+      track('2', 'Album')
+        ..title = 'Undated'
+        ..duration = const Duration(minutes: 2),
+      track('3', 'Album')
+        ..title = 'Recent'
+        ..year = 2020
+        ..duration = const Duration(minutes: 3),
     ]);
+    final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
+
+    tracks.setSortField(TrackSortField.year);
+    expect(titles(), ['Recent', 'Dated', 'Undated']);
+    tracks.setSortField(TrackSortField.year);
+    expect(titles(), ['Dated', 'Recent', 'Undated']);
+    tracks.setSortField(TrackSortField.length);
+    expect(tracks.sortLabel(TrackSortField.length), 'Length ↑');
+    expect(titles(), ['Undated', 'Recent', 'Dated']);
   });
 
   test('sorting albums by added puts the newest album first', () async {
     final lib = await library([
-      track('1', 'Old Album', artist: 'Artist')
-        ..dateAdded = DateTime.utc(2025, 1, 1),
-      track('2', 'New Album', artist: 'Artist')
-        ..dateAdded = DateTime.utc(2026, 1, 1),
+      track('1', 'Old Album', artist: 'Artist')..dateAdded = DateTime.utc(2025, 1, 1),
+      track('2', 'New Album', artist: 'Artist')..dateAdded = DateTime.utc(2026, 1, 1),
     ]);
     final albums = AlbumsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
 
     albums.setSortField(AlbumSortField.added);
     expect(albums.isSortDescending, isTrue);
-    expect(albums.sortAddedLabel, 'Added ↓');
+    expect(albums.sortLabel(AlbumSortField.added), 'Added ↓');
     expect(titles(albums), ['New Album', 'Old Album']);
 
     albums.setSortField(AlbumSortField.added);
     expect(albums.isSortDescending, isFalse);
-    expect(albums.sortAddedLabel, 'Added ↑');
+    expect(albums.sortLabel(AlbumSortField.added), 'Added ↑');
     expect(titles(albums), ['Old Album', 'New Album']);
   });
 
   test('sorting artists by albums and added behaves consistently', () async {
     final lib = await library([
-      track('1', 'Album 1', artist: 'Few')
-        ..dateAdded = DateTime.utc(2026, 5, 1),
-      track('2', 'Album 2', artist: 'Many')
-        ..dateAdded = DateTime.utc(2025, 1, 1),
-      track('3', 'Album 3', artist: 'Many')
-        ..dateAdded = DateTime.utc(2025, 2, 1),
+      track('1', 'Album 1', artist: 'Few')..dateAdded = DateTime.utc(2026, 5, 1),
+      track('2', 'Album 2', artist: 'Many')..dateAdded = DateTime.utc(2025, 1, 1),
+      track('3', 'Album 3', artist: 'Many')..dateAdded = DateTime.utc(2025, 2, 1),
     ]);
     final artists = ArtistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
 
     artists.setSortField(ArtistSortField.albums);
     expect(artists.isSortDescending, isTrue);
-    expect(artists.sortAlbumsLabel, 'Albums ↓');
+    expect(artists.sortLabel(ArtistSortField.albums), 'Albums ↓');
     expect([for (final a in artists.displayedArtists) a.name], ['Many', 'Few']);
 
     artists.setSortField(ArtistSortField.added);
     expect(artists.isSortDescending, isTrue);
-    expect(artists.sortAddedLabel, 'Added ↓');
+    expect(artists.sortLabel(ArtistSortField.added), 'Added ↓');
     expect([for (final a in artists.displayedArtists) a.name], ['Few', 'Many']);
+  });
+
+  test("a playlist's tracks start in the order they were added, and play in the order shown", () async {
+    final lib = await library([
+      track('1', 'Album')..title = 'Beta',
+      track('2', 'Album')..title = 'Alpha',
+      track('3', 'Album')..title = 'Gamma',
+    ]);
+    final engine = TestSupport.createEngine();
+    final player = PlayerViewModel(engine, lib);
+    final playlists = PlaylistsViewModel(lib, player);
+    final mix = await lib.createPlaylist('Mix');
+    for (final id in ['3', '1', '2']) {
+      await lib.addTrackToPlaylist(mix.id, id);
+    }
+    playlists.openPlaylist(lib.getPlaylist(mix.id));
+    List<String> titles() => [for (final t in playlists.selectedPlaylistTracks) t.title];
+
+    expect(titles(), ['Gamma', 'Beta', 'Alpha']);
+    expect(playlists.sortLabel(TrackSortField.added), 'Added ↑');
+    expect([for (final t in playlists.selectedPlaylistTracks) playlists.positionOf(t)], [1, 2, 3]);
+    playlists.setSortField(TrackSortField.added); // the newest added first
+    expect(titles(), ['Alpha', 'Beta', 'Gamma']);
+    playlists.setSortField(TrackSortField.title);
+    expect(titles(), ['Alpha', 'Beta', 'Gamma']);
+    playlists.setSortField(TrackSortField.title);
+    expect(titles(), ['Gamma', 'Beta', 'Alpha']);
+
+    playlists.playPlaylist();
+    expect([for (final t in player.queueTracks) t.title], ['Gamma', 'Beta', 'Alpha']);
+    playlists.dispose();
+  });
+
+  test('the playlists page starts with the newest playlist and sorts by name, tracks or added', () async {
+    final lib = await library([track('1', 'Album'), track('2', 'Album')]);
+    final playlists = PlaylistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    for (final (name, tracks) in [('Zed', 2), ('Alpha', 0), ('Mid', 1)]) {
+      final created = await lib.createPlaylist(name);
+      for (final id in ['1', '2'].take(tracks)) {
+        await lib.addTrackToPlaylist(created.id, id);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 2)); // a creation time of its own
+    }
+    List<String> names() => [for (final p in playlists.playlists) p.name];
+
+    expect(names(), ['Mid', 'Alpha', 'Zed']);
+    expect(playlists.listSortLabel(PlaylistSortField.added), 'Added ↓');
+    playlists.setListSortField(PlaylistSortField.name);
+    expect(names(), ['Alpha', 'Mid', 'Zed']);
+    playlists.setListSortField(PlaylistSortField.tracks); // the most first
+    expect(names(), ['Zed', 'Mid', 'Alpha']);
+    expect(PlaylistSortField.values, [PlaylistSortField.name, PlaylistSortField.tracks, PlaylistSortField.added]);
+    playlists.dispose();
   });
 
   test('totalFavoritesCount updates when a track is toggled in favorites', () async {

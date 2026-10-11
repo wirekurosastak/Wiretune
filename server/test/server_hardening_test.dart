@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
@@ -120,17 +121,170 @@ void main() {
       expect((await server.client().get(url)).statusCode, 401);
     });
 
-    test('a token carries the account and its role, and nothing more', () async {
+    test('a token carries the account and its token version, and nothing more', () async {
       final (_, auth) = await setupAdmin(server);
       final parts = auth.token.split('.');
       final header = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[0]))));
       final claims = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1])))) as Map;
       expect(header, {'alg': 'HS256', 'typ': 'JWT'});
-      expect(claims.keys, unorderedEquals(['sub', 'name', 'role', 'aud', 'exp']));
+      expect(claims.keys, unorderedEquals(['sub', 'name', 'aud', 'ver', 'exp']));
       expect(claims['sub'], auth.user.id);
       expect(claims['name'], 'owner');
-      expect(claims['role'], 'admin');
+      expect(claims['ver'], 0);
       expect(claims['aud'], AuthService.audience);
+    });
+
+    test('the role is the account\'s present one, not what the token was issued with', () async {
+      final (admin, _) = await setupAdmin(server);
+      expect((await admin.get('/api/users')).statusCode, 200);
+      server.server.database.connection.execute('UPDATE users SET is_admin = 0');
+      expect((await admin.get('/api/users')).statusCode, 403);
+      expect(UserInfo.fromJson(json(await admin.get('/api/auth/me'))).isAdmin, isFalse);
+    });
+
+    test('a token signed before token versions existed still opens the API', () async {
+      final (admin, auth) = await setupAdmin(server);
+      final secret = (await server.server.repository.getSetting('jwt_secret'))!;
+      final old = Jwt(secret).sign({
+        'sub': auth.user.id,
+        'name': 'owner',
+        'role': 'admin',
+        'aud': AuthService.audience,
+        'exp': DateTime.now().toUtc().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+      });
+      expect((await server.client(old).get('/api/users')).statusCode, 200);
+
+      // Once the password changes, it is a token of the old password like any other.
+      expect(
+        (await admin.post('/api/auth/change-password', {
+          'currentPassword': adminPassword,
+          'newPassword': 'a-brand-new-password',
+        })).statusCode,
+        200,
+      );
+      expect((await server.client(old).get('/api/auth/me')).statusCode, 401);
+    });
+
+    test('a password change ends every other session; the caller carries on with a new token', () async {
+      final (phone, auth) = await setupAdmin(server);
+      final track = (await server.waitForTracks(phone, 3)).first;
+      final (desktop, _) = await login(server, 'owner', adminPassword, rememberMe: true);
+      final streamToken = StreamTokenResponse.fromJson(json(await desktop.post('/api/auth/stream-token'))).token;
+      final streamUrl = '/api/stream/${track['id']}?token=${Uri.encodeComponent(streamToken)}';
+      expect((await server.client().get(streamUrl)).statusCode, 200);
+
+      final changed = await phone.post('/api/auth/change-password', {
+        'currentPassword': adminPassword,
+        'newPassword': 'a-brand-new-password',
+      });
+      expect(changed.statusCode, 200);
+      expect(json(changed)['changed'], isTrue);
+      final renewed = AuthResponse.fromJson(json(changed));
+      expect(renewed.user.id, auth.user.id);
+      // As long as the token it replaces, no longer: changing a password does not extend a session.
+      expect(renewed.expiresAt.difference(auth.expiresAt).inSeconds.abs(), lessThanOrEqualTo(1));
+
+      expect((await desktop.get('/api/auth/me')).statusCode, 401);
+      expect((await server.client().get(streamUrl)).statusCode, 401);
+      expect((await phone.get('/api/auth/me')).statusCode, 401);
+      expect((await server.client(renewed.token).get('/api/auth/me')).statusCode, 200);
+    });
+
+    test("an administrator's reset ends the account's sessions, but not for their own account", () async {
+      final (admin, auth) = await setupAdmin(server);
+      final (guest, guestInfo) = await registerGuest(server, admin);
+      expect((await guest.get('/api/auth/me')).statusCode, 200);
+
+      final reset = await admin.post('/api/users/${guestInfo.id}/password', {'newPassword': 'reset-by-admin'});
+      expect(reset.statusCode, 200);
+      expect((await guest.get('/api/auth/me')).statusCode, 401);
+      final (_, again) = await login(server, 'guest', 'reset-by-admin');
+      expect(again.user.id, guestInfo.id);
+
+      final own = await admin.post('/api/users/${auth.user.id}/password', {'newPassword': 'reset-by-admin'});
+      expect(own.statusCode, 400);
+      expect((await admin.get('/api/auth/me')).statusCode, 200);
+      expect((await admin.post('/api/users/nobody/password', {'newPassword': 'reset-by-admin'})).statusCode, 404);
+      expect((await guest.post('/api/users/${auth.user.id}/password', {'newPassword': 'x' * 12})).statusCode, 401);
+    });
+
+    test(
+      'every refusal says why with a code: a 401 tells a missing, foreign, expired, outdated or orphaned token apart',
+      () async {
+        final (admin, auth) = await setupAdmin(server);
+        final (guest, guestInfo) = await registerGuest(server, admin);
+        Future<(int, Object?)> me(String? token) async {
+          final response = await server.client(token).get('/api/auth/me');
+          return (response.statusCode, json(response)['code']);
+        }
+
+        expect(await me(null), (401, ErrorCodes.signInRequired));
+        expect(await me('not.a.token'), (401, ErrorCodes.tokenInvalid));
+        final secret = (await server.server.repository.getSetting('jwt_secret'))!;
+        final expired = Jwt(secret).sign({
+          'sub': auth.user.id,
+          'name': 'owner',
+          'aud': AuthService.audience,
+          'exp': DateTime.now().toUtc().subtract(const Duration(minutes: 1)).millisecondsSinceEpoch ~/ 1000,
+        });
+        expect(await me(expired), (401, ErrorCodes.sessionExpired));
+
+        final oldGuestToken = guest.token;
+        await admin.post('/api/users/${guestInfo.id}/password', {'newPassword': 'reset-by-admin'});
+        expect(await me(oldGuestToken), (401, ErrorCodes.passwordChanged));
+        final (again, _) = await login(server, 'guest', 'reset-by-admin');
+        await admin.delete('/api/users/${guestInfo.id}');
+        expect(await me(again.token), (401, ErrorCodes.accountRemoved));
+
+        final wrong = await server.client().post('/api/auth/login', {'username': 'owner', 'password': 'nope-nope'});
+        expect((wrong.statusCode, json(wrong)['code']), (401, ErrorCodes.wrongCredentials));
+        expect(wrong.headers['www-authenticate'], 'Bearer');
+      },
+    );
+
+    test('refusals carry the code and the numbers or path their message names', () async {
+      final (admin, _) = await setupAdmin(server);
+      final (guest, _) = await registerGuest(server, admin);
+
+      final adminOnly = await guest.get('/api/users');
+      expect((adminOnly.statusCode, json(adminOnly)['code']), (403, ErrorCodes.adminOnly));
+
+      final disk = await admin.post('/api/config/library-path', {'newPath': '/'});
+      expect((disk.statusCode, json(disk)['code']), (400, ErrorCodes.folderWholeDisk));
+      final missing = await admin.post('/api/config/library-path', {'newPath': '${server.root}/nope'});
+      expect(json(missing)['code'], ErrorCodes.folderMissing);
+      expect(json(missing)['path'], '${server.root}/nope');
+
+      final taken = await admin.post('/api/auth/register', {'username': 'GUEST', 'password': guestPassword});
+      expect((taken.statusCode, json(taken)['code']), (409, ErrorCodes.usernameTaken));
+      final short = await admin.post('/api/auth/register', {'username': 'x', 'password': 'short'});
+      expect((json(short)['code'], json(short)['min']), (ErrorCodes.passwordTooShort, AuthRules.minPasswordLength));
+
+      final name = await guest.put('/api/me/playlists/p1', {'name': 'n' * 300, 'trackIds': <String>[]});
+      expect(
+        (json(name)['code'], json(name)['max']),
+        (ErrorCodes.playlistNameTooLong, UserDataRules.maxPlaylistNameLength),
+      );
+      final unknown = await guest.delete('/api/me/playlists/none');
+      expect((unknown.statusCode, json(unknown)['code']), (404, ErrorCodes.playlistNotFound));
+      final wrongCode = await server.client().post('/api/auth/setup', {
+        'username': 'x',
+        'password': adminPassword,
+        'setupCode': 'wrong',
+      });
+      expect(json(wrongCode)['code'], ErrorCodes.alreadySetUp);
+    });
+
+    test('only an administrator sees why a scan failed, which names the server\'s folders', () async {
+      final (admin, _) = await setupAdmin(server);
+      final (guest, _) = await registerGuest(server, admin);
+      await server.waitForTracks(admin, 3);
+      server.server.scanner.lastScanError = 'Library folder does not exist: /srv/secret';
+      expect(
+        ServerLibraryStatus.fromJson(json(await admin.get('/api/library/status'))).lastScanError,
+        contains('/srv'),
+      );
+      expect(ServerLibraryStatus.fromJson(json(await guest.get('/api/library/status'))).lastScanError, isNull);
     });
   });
 
@@ -174,6 +328,36 @@ void main() {
     expect((await restarted.client(auth.token).get('/api/auth/me')).statusCode, 200);
     expect(json(await restarted.client().get('/api/auth/setup-required'))['setupRequired'], isFalse);
   });
+
+  test(
+    'a library folder chosen by the admin is kept when it is missing at start-up, e.g. an unmounted share',
+    () async {
+      final first = await ServerFixture.start();
+      first.keepFiles = true;
+      final (admin, _) = await setupAdmin(first);
+      final share = Directory('${first.root}/share')..createSync();
+      writeWav('${share.path}/Artist/Album/01 Track.wav', 44100);
+      expect((await admin.post('/api/config/library-path', {'newPath': share.path})).statusCode, 200);
+      await first.waitForTracks(admin, 1);
+      await first.close();
+
+      share.renameSync('${first.root}/unmounted');
+      final second = await ServerFixture.start(existingRoot: first.root);
+      addTearDown(() async {
+        await second.close();
+        first.keepFiles = false;
+        await first.close().catchError((_) {});
+      });
+      final (admin2, _) = await login(second, 'owner', adminPassword);
+      expect(json(await admin2.get('/api/config'))['libraryPath'], AppPaths.fullPath(share.path));
+      // The scan waits for the share instead of putting the configured folder (three tracks) in its place.
+      for (var i = 0; i < 100 && second.server.scanner.lastScanError == null; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      expect(second.server.scanner.lastScanError, contains('does not exist'));
+      expect(json(await admin2.get('/api/library/status'))['trackCount'], 1);
+    },
+  );
 
   test('a library folder chosen by the admin survives a restart', () async {
     final first = await ServerFixture.start();

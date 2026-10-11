@@ -11,13 +11,7 @@ import '../theme/palette.dart';
 /// (gold), `FLAC 16bit/44.1kHz` (silver) or `MP3 320kbps` (bronze); the colour alone names the tier. It has a fill and
 /// an outline of its own, so the three medal colours keep their contrast in both themes. Hovering explains the tier.
 class QualityTag extends StatelessWidget {
-  const QualityTag({
-    super.key,
-    required this.tier,
-    this.spec,
-    this.fontSize = 10,
-    this.padding,
-  });
+  const QualityTag({super.key, required this.tier, this.spec, this.fontSize = 10, this.padding});
 
   final QualityTier tier;
 
@@ -39,9 +33,7 @@ class QualityTag extends StatelessWidget {
           color: MedalColors.bg(tier),
           border: Border.all(color: MedalColors.border(tier)),
           borderRadius: BorderRadius.circular(4),
-          boxShadow: const [
-            BoxShadow(color: Color(0x55000000), blurRadius: 3, offset: Offset(0, 1)),
-          ],
+          boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 3, offset: Offset(0, 1))],
         ),
         child: Text(
           text,

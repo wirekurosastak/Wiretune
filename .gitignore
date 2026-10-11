@@ -62,3 +62,6 @@ key.properties
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Prompts for AI sessions (local only)
+/prompts/

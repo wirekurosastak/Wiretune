@@ -130,12 +130,45 @@ void main() {
       );
       client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
       expect(await until(() => client.isConnected), isTrue);
+      expect(client.problem, isNull);
       await incoming.close();
       await Future<void>.delayed(const Duration(milliseconds: 2500));
       expect((connections, client.isConnected), (1, false), reason: 'close code $code');
+      // The settings say why it stopped.
+      expect(client.problem, switch (code) {
+        RemoteRules.closeReplaced => RemoteProblem.replaced,
+        RemoteRules.closeTooManyDevices => RemoteProblem.tooManyDevices,
+        _ => RemoteProblem.ended,
+      });
       client.dispose();
     }
   });
+
+  test(
+    'a server without remote control, or one that refuses the token, is told apart; signing out forgets it',
+    () async {
+      for (final (status, problem) in [(404, RemoteProblem.unsupported), (401, RemoteProblem.ended)]) {
+        final client = RemoteClient(
+          session,
+          connector: (uri, token) async => throw RemoteRefusedException('HTTP $status', status),
+        );
+        client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
+        expect(await until(() => client.problem != null), isTrue);
+        expect(client.problem, problem);
+        client.dispose();
+      }
+
+      final client = RemoteClient(
+        session,
+        connector: (uri, token) async => throw const RemoteRefusedException('HTTP 404', 404),
+      );
+      addTearDown(client.dispose);
+      client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
+      expect(await until(() => client.problem == RemoteProblem.unsupported), isTrue);
+      await session.logout();
+      expect(client.problem, isNull);
+    },
+  );
 
   test('what does not keep to the protocol is ignored', () async {
     final hub = FakeRemoteHub();

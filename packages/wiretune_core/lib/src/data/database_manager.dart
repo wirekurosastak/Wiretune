@@ -11,9 +11,12 @@ import '../services/app_paths.dart';
 
 /// The database file belongs to another version of Wiretune: reading it with this schema would misread it.
 class IncompatibleDatabaseException implements Exception {
-  const IncompatibleDatabaseException(this.message);
+  const IncompatibleDatabaseException(this.message, [this.path]);
 
   final String message;
+
+  /// The database file.
+  final String? path;
 
   @override
   String toString() => message;
@@ -30,9 +33,23 @@ class DatabaseManager {
     Directory(p.dirname(databasePath)).createSync(recursive: true);
   }
 
-  /// The schema this build creates and reads. A change to the tables raises it, together with a step in
-  /// [initializeSchema] that upgrades a database of the previous version in place.
-  static const int schemaVersion = 4;
+  /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
+  /// that upgrades a database of the previous version in place.
+  static const int schemaVersion = 5;
+
+  /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
+  /// its own, in one transaction.
+  static const List<String> _upgrades = [
+    // 1 -> 2: when each favourite was marked.
+    'ALTER TABLE tracks ADD COLUMN favorited_at INTEGER;',
+    // 2 -> 3: the tempo tag.
+    'ALTER TABLE tracks ADD COLUMN bpm INTEGER;',
+    // 3 -> 4: each account's hidden artists, albums and tracks.
+    _userHiddenTable,
+    // 4 -> 5: a password change ends the sessions that signed in with the old one; the player's record of its
+    // downloaded copies.
+    'ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0; $_downloadsTable',
+  ];
 
   final String databasePath;
   Database? _db;
@@ -63,10 +80,11 @@ class DatabaseManager {
     }
   }
 
-  /// Creates the tables of a new database, or upgrades one of the previous schema version in place. Safe to call
-  /// repeatedly. Throws [IncompatibleDatabaseException] for a database of any other version.
+  /// Creates the tables of a new database, or upgrades one of an earlier schema version in place. Safe to call
+  /// repeatedly. Throws [IncompatibleDatabaseException] for a database of a newer version, or tables of unknown origin.
   void initializeSchema() {
     if (_schemaReady) return;
+    assert(_upgrades.length + 1 == schemaVersion, 'Every schema version needs its upgrade step.');
 
     final db = connection;
     db.execute('PRAGMA journal_mode = WAL;');
@@ -78,31 +96,18 @@ class DatabaseManager {
           db.execute(_schema);
           db.userVersion = schemaVersion;
         });
-      } else if (version == 1) {
-        // 1 -> 4: when each favourite was marked, bpm, and user_hidden table.
+      } else if (version >= 1 && version < schemaVersion) {
         transaction((db) {
-          db.execute('ALTER TABLE tracks ADD COLUMN favorited_at INTEGER;');
-          db.execute('ALTER TABLE tracks ADD COLUMN bpm INTEGER;');
-          db.execute(_userHiddenTable);
-          db.userVersion = schemaVersion;
-        });
-      } else if (version == 2) {
-        // 2 -> 4: bpm, and user_hidden table.
-        transaction((db) {
-          db.execute('ALTER TABLE tracks ADD COLUMN bpm INTEGER;');
-          db.execute(_userHiddenTable);
-          db.userVersion = schemaVersion;
-        });
-      } else if (version == 3) {
-        // 3 -> 4: user_hidden table.
-        transaction((db) {
-          db.execute(_userHiddenTable);
+          for (final step in _upgrades.skip(version - 1)) {
+            db.execute(step);
+          }
           db.userVersion = schemaVersion;
         });
       } else {
         throw IncompatibleDatabaseException(
           "'$databasePath' was made by another version of Wiretune (schema $version, this one reads $schemaVersion). "
           'Move it out of the way to start with an empty one.',
+          databasePath,
         );
       }
     }
@@ -129,7 +134,8 @@ List<String> decodeTrackIds(Object? json) {
   }
 }
 
-const String _schema = '''
+const String _schema =
+    '''
   -- The library index. A server keeps its own files here; a player keeps its local files and a cache of its server's
   -- tracks (no file path, a stream URL), with the favourite flag and play statistics it shows for each.
   CREATE TABLE tracks (
@@ -187,7 +193,9 @@ const String _schema = '''
       password_hash TEXT NOT NULL,
       is_admin INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
-      last_login INTEGER
+      last_login INTEGER,
+      -- Raised by a password change; a token signed for an older value is refused.
+      token_version INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE user_favorites (
@@ -223,6 +231,18 @@ const String _schema = '''
       hidden_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, item_type, item_id)
   );
+
+  $_downloadsTable
+''';
+
+/// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
+/// track, and of which version of the server's file ('' while it is being moved into place).
+const String _downloadsTable = '''
+  CREATE TABLE downloads (
+      track_id TEXT PRIMARY KEY,
+      version TEXT NOT NULL,
+      path TEXT NOT NULL
+  );
 ''';
 
 const String _userHiddenTable = '''
@@ -234,4 +254,3 @@ const String _userHiddenTable = '''
       PRIMARY KEY (user_id, item_type, item_id)
   );
 ''';
-

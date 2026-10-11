@@ -48,6 +48,10 @@ class WiretuneAudioEngine {
   String? Function(Track track)? _offlineCopy;
   bool _disposed = false;
 
+  // Counts the requests to play or stop: a track whose start waited for a stream token is not started once another
+  // request came meanwhile (a downloaded track skipped to needs no token, and would otherwise start first).
+  int _request = 0;
+
   final Event<PlaybackState> stateChanged = Event<PlaybackState>();
   final Event<Duration> positionChanged = Event<Duration>();
   final Event<Track?> trackChanged = Event<Track?>();
@@ -89,8 +93,8 @@ class WiretuneAudioEngine {
       track.isLocal
           ? 'SignalTransportLocal'
           : (_offlineCopy?.call(track) != null
-              ? 'SignalTransportDownloaded'
-              : (isLossless ? 'SignalTransportServer' : 'SignalTransportServerLossy')),
+                ? 'SignalTransportDownloaded'
+                : (isLossless ? 'SignalTransportServer' : 'SignalTransportServerLossy')),
     );
 
     return [
@@ -101,7 +105,6 @@ class WiretuneAudioEngine {
       Localizer.format('SignalTarget', [device]),
     ].join('\n');
   }
-
 
   /// Supplies the token appended to stream URLs. It is asked for each time a server track starts, so a long-running
   /// player always uses a token that is still valid.
@@ -126,6 +129,9 @@ class WiretuneAudioEngine {
         : devices.firstWhere((d) => d.id == current.id);
 
     final device = _currentDevice;
+    // The device a mode was set up on may be gone (a DAC unplugged): the default one that takes its place must not be
+    // reported as exclusive or bit-perfect.
+    if (device != null) _dropModesTheDeviceLacks(device);
     if (device != null) {
       try {
         await _driver.initialize(device, exclusive: _isExclusiveMode, bitperfect: _isBitperfect);
@@ -139,12 +145,14 @@ class WiretuneAudioEngine {
 
   /// Starts [track], at [start] (another device handing its playback over continues where it was).
   Future<void> playTrack(Track track, {Duration start = Duration.zero}) async {
+    final request = ++_request;
     _currentTrack = track;
     trackChanged.emit(track);
 
     // A downloaded copy needs no token, and must not wait for a server that may be out of reach.
     if (!track.isLocal && _streamTokenProvider != null && _offlineCopy?.call(track) == null) {
       await _refreshStreamToken();
+      if (request != _request || _disposed) return;
     }
 
     final source = resolveSource(track);
@@ -162,6 +170,7 @@ class WiretuneAudioEngine {
   Future<void> resume() => _driver.resume();
 
   Future<void> stop() {
+    _request++;
     _currentTrack = null;
     trackChanged.emit(null);
     return _driver.stop();
@@ -242,14 +251,16 @@ class WiretuneAudioEngine {
 
   Future<void> setOutputDevice(AudioOutputDevice device) async {
     _currentDevice = device;
-    if (!device.isBitperfectSupported && _isBitperfect) {
-      _disableBitperfect();
-    }
-    if (!device.isExclusiveSupported && _isExclusiveMode) {
+    _dropModesTheDeviceLacks(device);
+    await _reinitializeOutput();
+  }
+
+  void _dropModesTheDeviceLacks(AudioOutputDevice device) {
+    if (_isBitperfect && !(device.isBitperfectSupported && device.isExclusiveSupported)) _disableBitperfect();
+    if (_isExclusiveMode && !device.isExclusiveSupported) {
       _isExclusiveMode = false;
       exclusiveModeChanged.emit(false);
     }
-    await _reinitializeOutput();
   }
 
   void _disableBitperfect() {

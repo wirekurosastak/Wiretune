@@ -175,10 +175,7 @@ class LibraryRepository {
   }
 
   Future<void> updateTrackBpm(String trackId, int bpm) async {
-    _db.connection.execute('UPDATE tracks SET bpm = ? WHERE id = ?', [
-      bpm,
-      trackId,
-    ]);
+    _db.connection.execute('UPDATE tracks SET bpm = ? WHERE id = ?', [bpm, trackId]);
   }
 
   Future<List<Playlist>> getAllPlaylists() async {
@@ -248,15 +245,8 @@ class LibraryRepository {
   }
 
   Future<Map<String, Set<String>>> getHiddenItems([String userId = 'local']) async {
-    final rows = _db.connection.select(
-      'SELECT item_type, item_id FROM user_hidden WHERE user_id = ?',
-      [userId],
-    );
-    final result = <String, Set<String>>{
-      'artist': <String>{},
-      'album': <String>{},
-      'track': <String>{},
-    };
+    final rows = _db.connection.select('SELECT item_type, item_id FROM user_hidden WHERE user_id = ?', [userId]);
+    final result = <String, Set<String>>{'artist': <String>{}, 'album': <String>{}, 'track': <String>{}};
     for (final r in rows) {
       final type = r['item_type'] as String;
       final id = r['item_id'] as String;
@@ -272,17 +262,56 @@ class LibraryRepository {
         [userId, itemType, itemId, toDbTime(DateTime.now().toUtc())],
       );
     } else {
-      _db.connection.execute(
-        'DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?',
-        [userId, itemType, itemId],
-      );
+      _db.connection.execute('DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?', [
+        userId,
+        itemType,
+        itemId,
+      ]);
     }
+  }
+
+  /// Makes the hidden items of [userId] exactly these, in one transaction.
+  Future<void> replaceHiddenItems(
+    String userId, {
+    required Iterable<String> artists,
+    required Iterable<String> albums,
+    required Iterable<String> tracks,
+  }) async {
+    final now = toDbTime(DateTime.now().toUtc());
+    _db.transaction((db) {
+      db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
+      final insert = db.prepare(
+        'INSERT OR IGNORE INTO user_hidden (user_id, item_type, item_id, hidden_at) VALUES (?, ?, ?, ?)',
+      );
+      try {
+        for (final (type, ids) in [('artist', artists), ('album', albums), ('track', tracks)]) {
+          for (final id in ids) {
+            insert.execute([userId, type, id, now]);
+          }
+        }
+      } finally {
+        insert.close();
+      }
+    });
   }
 
   Future<void> clearHiddenItems([String userId = 'local']) async {
     _db.connection.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
   }
 
+  /// The downloaded copies: track ID -> the version of the server's file and the path relative to the downloads folder.
+  Future<Map<String, (String version, String path)>> getDownloads() async => {
+    for (final r in _db.connection.select('SELECT track_id, version, path FROM downloads'))
+      r['track_id'] as String: (r['version'] as String, r['path'] as String),
+  };
+
+  Future<void> saveDownload(String trackId, String version, String path) async => _db.connection.execute(
+    'INSERT OR REPLACE INTO downloads (track_id, version, path) VALUES (?, ?, ?)',
+    [trackId, version, path],
+  );
+
+  Future<void> deleteDownload(String trackId) async =>
+      _db.connection.execute('DELETE FROM downloads WHERE track_id = ?', [trackId]);
+
   static int? _int(Object? value) => value == null ? null : (value as num).toInt();
 }
-

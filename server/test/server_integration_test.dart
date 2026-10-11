@@ -179,6 +179,8 @@ void main() {
     }
     expect(last.statusCode, 429);
     expect(json(last)['error'], contains('Too many attempts'));
+    expect(json(last)['code'], ErrorCodes.rateLimited);
+    expect(json(last)['retryAfter'], int.parse(last.headers['retry-after']!));
     expect(last.headers['retry-after'], isNotNull);
   });
 
@@ -226,6 +228,13 @@ void main() {
     expect((await admin.post('/api/config/library-path', {'newPath': server.dataPath})).statusCode, 400);
     if (Platform.isLinux && Directory('/proc').existsSync()) {
       expect((await admin.post('/api/config/library-path', {'newPath': '/proc'})).statusCode, 400);
+    }
+    // A whole disk, a folder that holds the server's data, and a link that leads into it.
+    expect((await admin.post('/api/config/library-path', {'newPath': p.rootPrefix(server.root)})).statusCode, 400);
+    expect((await admin.post('/api/config/library-path', {'newPath': server.root})).statusCode, 400);
+    if (!Platform.isWindows) {
+      final link = Link(p.join(server.root, 'innocent'))..createSync(server.dataPath);
+      expect((await admin.post('/api/config/library-path', {'newPath': link.path})).statusCode, 400);
     }
     expect(json(await admin.get('/api/config'))['libraryPath'], server.libraryPath);
   });

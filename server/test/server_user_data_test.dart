@@ -180,7 +180,9 @@ void main() {
       final (guest, guestInfo) = await registerGuest(server, admin);
 
       // Admin hides track, album, artist
-      expect((await admin.put('/api/me/hidden/track/t1')).statusCode, 200);
+      final hidden = await admin.put('/api/me/hidden/track/t1');
+      expect(hidden.statusCode, 200);
+      expect(json(hidden), {'itemType': 'track', 'itemId': 't1', 'hidden': true});
       expect((await admin.put('/api/me/hidden/album/al1')).statusCode, 200);
       expect((await admin.put('/api/me/hidden/artist/ar1')).statusCode, 200);
 

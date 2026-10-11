@@ -1,6 +1,6 @@
 ; The Windows installer, made with Inno Setup 6 by `dart tool/build.dart windows-installer`, which defines what follows
-; from the build: AppVersion (2.0.0), FileVersion (2.0.0.2), Arch (x64compatible or arm64), ArchName (x64 or arm64),
-; SourceDir (dist\windows), OutputDir, IconFile and LicenseFile.
+; from the build: AppVersion (1.0.2026), FileVersion (1.0.2026.1), Arch (x64compatible or arm64), ArchName (x64 or
+; arm64), SourceDir (dist\windows), OutputDir, IconFile and LicenseFile.
 ;
 ; It installs for the current user by default (no administrator needed), or for everyone if they choose so. The AppId
 ; must never change: it is how an update finds the installed Wiretune.

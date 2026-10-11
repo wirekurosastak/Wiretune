@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import '../data/library_repository.dart';
 import '../localization/localizer.dart';
 import '../models/library_models.dart';
 import '../util/event.dart';
@@ -32,52 +33,59 @@ enum DownloadState {
 }
 
 /// Copies of server tracks kept on this device, so that they play without the server: a track, an album, an artist's
-/// albums, a playlist or the favourites at a time. What the user marked is kept in the settings; the copies follow it whenever the library
-/// changes (a playlist that grows gets the new track), are downloaded again when the server's file changes, and are
-/// deleted as soon as nothing wants them any more. One file is downloaded at a time, and only while signed in.
+/// albums, a playlist or the favourites at a time. What the user marked is kept in the settings. With sync on (the
+/// default) the copies follow it whenever the library changes: a playlist that grows gets the new track, a copy deleted
+/// outside Wiretune comes back. With sync off, marking something downloads what it covers then, and nothing more is
+/// fetched on its own. Copies are downloaded again when the server's file changes, and deleted as soon as nothing wants
+/// them any more. One file is downloaded at a time, and only while signed in.
 ///
-/// A copy is named after hashes of the track's ID and of the server's size and modification time of the file, so no ID
-/// a server sends ends up in a path, and a copy that no longer matches the server's file is recognised by its name.
+/// A copy is a readable file in [directory], `Album artist/Album/01 - Title.flac`, its name made of the tags with
+/// anything a file system or another device could trip on taken out, so no ID or tag a server sends can lead outside
+/// the folder. The repository's `downloads` table records which file is the copy of which track and of which version
+/// of the server's file, so two tracks that would get the same name get two files, a file someone else put there is
+/// never taken for a copy or overwritten, and only Wiretune's own copies are ever deleted. A download is written to
+/// [workDirectory] (private to the app, as are the covers) and moved into place once it is complete.
 class DownloadService {
-  DownloadService(
-    this._library,
-    this._session, {
-    String? directory,
-    http.Client? client,
-    FileDownloader? downloader,
-  })  : _directory = directory,
-        _downloader = downloader ?? DefaultFileDownloader(client: client);
+  DownloadService(this._library, this._session, {String? directory, String? workDirectory, http.Client? client})
+    : _directory = directory,
+      _workDirectory = workDirectory,
+      _http = client ?? http.Client(),
+      _ownsClient = client == null;
 
   static const String _pinsPreference = 'downloads';
   static const String _syncModePreference = 'download_sync_mode';
 
   static const Duration _firstRetry = Duration(seconds: 15);
   static const Duration _lastRetry = Duration(minutes: 10);
+  static const Duration _idleTimeout = Duration(seconds: 30);
 
-  static final RegExp _copyName = RegExp(r'^([0-9a-f]{16})-([0-9a-f]{8})(?:-[^.]+)?\.([a-z0-9]{1,8})$');
+  // The names of earlier versions' copies (stem-version[-name].ext) and of covers (stem.ext).
+  static final RegExp _legacyCopyName = RegExp(r'^([0-9a-f]{16})-([0-9a-f]{8})(?:-[^.]+)?\.([a-z0-9]{1,8})$');
   static final RegExp _coverName = RegExp(r'^([0-9a-f]{16})\.([a-z0-9]{1,8})$');
 
   final LibraryService _library;
   final ServerSession _session;
-  final FileDownloader _downloader;
+  final http.Client _http;
+  final bool _ownsClient;
   final List<void Function()> _unsubscribers = [];
   String? _directory;
+  String? _workDirectory;
   bool _initialized = false;
   bool _disposed = false;
   bool _syncModeEnabled = true;
 
   _Pins _pins = _Pins();
 
-  // What the pins want right now, in download order: the copy's stem -> the track.
+  // What the marks want right now, in download order: track ID -> the track.
   Map<String, Track> _wanted = const {};
   Set<String> _wantedCovers = const {};
 
-  // The files on disk: stem -> version -> path, and cover stem -> path.
-  final Map<String, Map<String, String>> _copies = {};
+  // The copies on disk, as the repository records them (track ID -> copy), and the covers (cover stem -> path).
+  final Map<String, _Copy> _copies = {};
   final Map<String, String> _covers = {};
   int _bytesOnDisk = 0;
 
-  // Tracks the server no longer has (404): skipped until the library is refreshed.
+  // Tracks and covers the server no longer has (404): skipped until the library is refreshed.
   final Set<String> _unavailable = {};
 
   bool _running = false;
@@ -96,29 +104,22 @@ class DownloadService {
   /// Raised when the pins, the copies, the progress or the error change.
   final Event<void> changed = Event<void>();
 
-  static String defaultDownloadDirectory() {
-    if (AppPaths.platformDataRoot != null) {
-      if (Platform.isAndroid) {
-        return p.join(AppPaths.musicFolder(), 'Wiretune');
-      }
-      return p.join(AppPaths.getDataDirectory(), 'Downloads');
-    }
-    final legacy = p.join(AppPaths.getDataDirectory(), 'Downloads');
-    final legacyDir = Directory(legacy);
-    if (legacyDir.existsSync()) {
-      try {
-        final entries = legacyDir.listSync();
-        if (entries.isNotEmpty) {
-          return legacy;
-        }
-      } catch (_) {}
-    }
-    return p.join(AppPaths.musicFolder(), 'Wiretune');
-  }
+  /// Where the copies go unless the app says otherwise: `Wiretune` in the user's music folder on a computer (and on
+  /// Android, whose music folder the app sets in [AppPaths.platformMusicFolder]); `Downloads` in the app's own data on
+  /// the other devices.
+  static String defaultDownloadDirectory() => AppPaths.platformMusicFolder == null && AppPaths.platformDataRoot != null
+      ? p.join(AppPaths.getDataDirectory(), 'Downloads')
+      : p.join(AppPaths.musicFolder(), 'Wiretune');
 
+  /// The folder of the copies, where people find them.
   String get directory => _directory ??= defaultDownloadDirectory();
-  String get _coverDirectory => p.join(directory, 'covers');
 
+  /// The app's own folder for downloads in progress and the covers.
+  String get workDirectory => _workDirectory ??= p.join(AppPaths.getDataDirectory(), 'DownloadCache');
+
+  String get _partialDirectory => p.join(workDirectory, 'partial');
+  String get _coverDirectory => p.join(workDirectory, 'covers');
+  LibraryRepository get _repository => _library.repository;
 
   // ── What the user marked ───────────────────────────────────────────────────────────────────────
 
@@ -128,26 +129,44 @@ class DownloadService {
   bool isPlaylistPinned(String playlistId) => _pins.playlists.contains(playlistId);
   bool get areFavoritesPinned => _pins.favorites;
 
-  Future<void> pinTrack(String trackId, bool pinned) => _changePins((pins) => _toggle(pins.tracks, trackId, pinned));
+  Future<void> pinTrack(String trackId, bool pinned) =>
+      _changePins((pins) => _toggle(pins.tracks, trackId, pinned), pinned ? [?_library.getTrack(trackId)] : const []);
 
-  Future<void> pinAlbum(String albumId, bool pinned) => _changePins((pins) => _toggle(pins.albums, albumId, pinned));
+  Future<void> pinAlbum(String albumId, bool pinned) => _changePins(
+    (pins) => _toggle(pins.albums, albumId, pinned),
+    pinned ? _library.getAlbum(albumId)?.tracks ?? const [] : const [],
+  );
 
   /// Every album filed under the artist, also the ones that arrive later.
-  Future<void> pinArtist(String artistId, bool pinned) =>
-      _changePins((pins) => _toggle(pins.artists, artistId, pinned));
+  Future<void> pinArtist(String artistId, bool pinned) => _changePins(
+    (pins) => _toggle(pins.artists, artistId, pinned),
+    pinned ? [for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) ...album.tracks] : const [],
+  );
 
-  Future<void> pinPlaylist(String playlistId, bool pinned) =>
-      _changePins((pins) => _toggle(pins.playlists, playlistId, pinned));
+  Future<void> pinPlaylist(String playlistId, bool pinned) {
+    final playlist = _library.getPlaylist(playlistId);
+    return _changePins(
+      (pins) => _toggle(pins.playlists, playlistId, pinned),
+      pinned && playlist != null ? _library.getPlaylistTracks(playlist) : const [],
+    );
+  }
 
-  Future<void> pinFavorites(bool pinned) => _changePins((pins) => pins.favorites = pinned);
+  Future<void> pinFavorites(bool pinned) =>
+      _changePins((pins) => pins.favorites = pinned, pinned ? _library.favorites : const []);
 
-  /// Whether missing tracks in pinned lists or new releases from pinned artists are automatically synced.
+  /// Whether the copies follow the marks on their own: tracks that join a marked list later are downloaded, and so is a
+  /// copy that was deleted outside Wiretune. Off, a mark downloads what it covers when it is made, and nothing else.
   bool get isSyncModeEnabled => _syncModeEnabled;
 
   Future<void> setSyncModeEnabled(bool enabled) async {
     if (_syncModeEnabled == enabled) return;
     _syncModeEnabled = enabled;
+    // From now on only what is still to come for the present marks is fetched; with sync on, the marks decide.
+    _pins.pending
+      ..clear()
+      ..addAll(enabled ? const [] : _covered().keys.where((id) => !_hasCurrentCopy(id)));
     await _library.setPreference(_syncModePreference, enabled ? '1' : '0');
+    await _savePins();
     _refreshWanted();
     changed.emit(null);
     _schedule();
@@ -164,27 +183,39 @@ class DownloadService {
 
   static void _toggle(Set<String> set, String id, bool pinned) => pinned ? set.add(id) : set.remove(id);
 
-  Future<void> _changePins(void Function(_Pins pins) change) async {
+  /// Applies [change] to the marks; [marked] are the tracks a new mark covers.
+  Future<void> _changePins(void Function(_Pins pins) change, [Iterable<Track> marked = const []]) async {
     change(_pins);
-    await _library.setPreference(_pinsPreference, jsonEncode(_pins.toJson()));
+    final covered = _covered();
+    _pins.pending.removeWhere((id) => !covered.containsKey(id));
+    // Without sync, a new mark still downloads what it covers now: that is the point of making it.
+    if (!_syncModeEnabled) {
+      _pins.pending.addAll([
+        for (final track in marked)
+          if (!track.isLocal && !_hasCurrentCopy(track.id, track)) track.id,
+      ]);
+    }
+    await _savePins();
     _refreshWanted();
     changed.emit(null);
     _schedule();
   }
+
+  Future<void> _savePins() => _library.setPreference(_pinsPreference, jsonEncode(_pins.toJson()));
 
   // ── What is on this device ─────────────────────────────────────────────────────────────────────
 
   /// A server track, which can be downloaded; a local file needs no copy.
   static bool canDownload(Track track) => !track.isLocal;
 
-  bool isWanted(Track track) => _wanted.containsKey(_stemOf(track));
+  bool isWanted(Track track) => _wanted.containsKey(track.id);
 
   /// The path of a copy of [track] that can be played (possibly of an older version of the server's file), or null.
   String? localCopy(Track track) {
     if (track.isLocal) return null;
-    final versions = _copies[_stemOf(track)];
-    if (versions == null || versions.isEmpty) return null;
-    final path = versions[_version(track)] ?? versions.values.first;
+    final copy = _copies[track.id];
+    if (copy == null || copy.isMoving) return null;
+    final path = _absolute(copy.path);
     return File(path).existsSync() ? path : null;
   }
 
@@ -192,11 +223,9 @@ class DownloadService {
   String? localCover(String url) => _covers[_coverStem(url)];
 
   DownloadState stateOf(Track track) {
-    if (track.isLocal) return DownloadState.none;
-    final stem = _stemOf(track);
-    if (!_wanted.containsKey(stem)) return DownloadState.none;
-    if (_copies[stem]?.containsKey(_version(track)) ?? false) return DownloadState.done;
-    return _current?.stem == stem ? DownloadState.downloading : DownloadState.queued;
+    if (track.isLocal || !_wanted.containsKey(track.id)) return DownloadState.none;
+    if (_hasCurrentCopy(track.id, track)) return DownloadState.done;
+    return _current?.id == track.id ? DownloadState.downloading : DownloadState.queued;
   }
 
   /// How many of [tracks] that can be downloaded are on this device and up to date, and how many can be downloaded.
@@ -205,7 +234,7 @@ class DownloadService {
     for (final track in tracks) {
       if (track.isLocal) continue;
       total++;
-      if (_copies[_stemOf(track)]?.containsKey(_version(track)) ?? false) done++;
+      if (_hasCurrentCopy(track.id, track)) done++;
     }
     return (done, total);
   }
@@ -217,8 +246,11 @@ class DownloadService {
   /// The space the copies take, covers included.
   int get bytesOnDisk => _bytesOnDisk;
 
+  /// The copies on this device, whether the marks still want them or not.
+  int get copyCount => _copies.length;
+
   /// The track being downloaded and how far it is (0..1), or null.
-  Track? get currentTrack => _current?.track;
+  Track? get currentTrack => _current?.isCover ?? true ? null : _current!.track;
   double get currentProgress => _currentTotal <= 0 ? 0 : (_currentReceived / _currentTotal).clamp(0.0, 1.0);
 
   /// Downloads are waiting because the server cannot be reached or nobody is signed in.
@@ -227,21 +259,29 @@ class DownloadService {
   /// Why the last download failed, in the active language; null while nothing failed.
   String? get errorMessage => _errorKey == null ? null : Localizer.format(_errorKey!, _errorArgs);
 
+  bool _hasCurrentCopy(String trackId, [Track? track]) {
+    final copy = _copies[trackId];
+    final current = track ?? _library.getTrack(trackId);
+    return copy != null && current != null && copy.version == _version(current);
+  }
+
+  String _absolute(String relative) => p.join(directory, relative);
+
   // ── Start-up ───────────────────────────────────────────────────────────────────────────────────
 
-  /// Reads the marks and the files on disk, then keeps the copies in line with the library from now on.
+  /// Reads the marks, the record of the copies and the files on disk, then keeps the copies in line with the library.
   Future<void> initialize() async {
     if (_initialized) return;
-    final syncPref = await _library.getPreference(_syncModePreference);
-    _syncModeEnabled = syncPref != '0';
+    _syncModeEnabled = await _library.getPreference(_syncModePreference) != '0';
     _pins = _Pins.fromJson(_decode(await _library.getPreference(_pinsPreference)));
-    await _scanDirectory();
+    await _loadCopies();
+    await _loadCovers();
+    await _adoptLegacyCopies();
+    if (!_syncModeEnabled) await _dropEmptyMarks();
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) {
         _unavailable.clear();
-        _refreshWanted();
-        changed.emit(null);
-        _schedule();
+        _onListChanged(true);
       }),
       _library.playlistsChanged.listen((_) => _onListChanged(_pins.playlists.isNotEmpty)),
       _library.favoriteChanged.listen((_) => _onListChanged(_pins.favorites)),
@@ -274,120 +314,114 @@ class DownloadService {
     }
   }
 
-  Future<void> _scanDirectory() async {
+  /// The copies the repository records, as far as they are still there. A copy deleted outside Wiretune is forgotten
+  /// (and with sync on fetched again); one that was being moved into place when the app stopped may be cut short, so it
+  /// goes.
+  Future<void> _loadCopies() async {
     _copies.clear();
-    _covers.clear();
     _bytesOnDisk = 0;
-
-    final tracksByRelPath = <String, List<Track>>{};
-    final tracksByFileName = <String, List<Track>>{};
-    for (final track in _library.tracks) {
-      tracksByRelPath.putIfAbsent(_relativeFilePath(track).toLowerCase(), () => []).add(track);
-      tracksByFileName.putIfAbsent(_fileName(track).toLowerCase(), () => []).add(track);
-      tracksByFileName.putIfAbsent(p.basename(_relativeFilePath(track)).toLowerCase(), () => []).add(track);
+    for (final MapEntry(key: id, value: (version, path)) in (await _repository.getDownloads()).entries) {
+      final file = File(_absolute(path));
+      if (version.isNotEmpty && _isInside(path) && await file.exists()) {
+        _copies[id] = _Copy(version, path);
+        _bytesOnDisk += await file.length();
+        continue;
+      }
+      if (version.isEmpty && _isInside(path)) await _deleteFile(file.path);
+      await _repository.deleteDownload(id);
     }
+  }
 
-    final dir = Directory(directory);
-    if (await dir.exists()) {
-      await for (final entity in dir.list(recursive: true, followLinks: false)) {
-        if (entity is! File) continue;
-        final relPath = p.relative(entity.path, from: directory).toLowerCase();
-        if (relPath.startsWith('covers')) continue;
-        final name = p.basename(entity.path);
-        if (name.endsWith('.part')) continue;
+  Future<void> _loadCovers() async {
+    _covers.clear();
+    final dir = Directory(_coverDirectory);
+    if (!await dir.exists()) return;
+    await for (final entity in dir.list(followLinks: false)) {
+      final match = _coverName.firstMatch(p.basename(entity.path));
+      if (entity is! File || match == null) continue;
+      _covers[match.group(1)!] = entity.path;
+      _bytesOnDisk += await entity.length();
+    }
+  }
 
-        final len = await entity.length();
-
-        // 1. Nested folder path: "Artist/Album/01 - Title.ext"
-        final matchByRel = tracksByRelPath[relPath];
-        if (matchByRel != null && matchByRel.isNotEmpty) {
-          var matched = false;
-          for (final track in matchByRel) {
-            if (track.fileSizeBytes <= 0 || len == track.fileSizeBytes) {
-              (_copies[_stemOf(track)] ??= {})[_version(track)] = entity.path;
-              matched = true;
-            }
+  /// Earlier versions of Wiretune named copies by hashes (`stem-version-name.ext`), in the app's data or in this
+  /// folder, and kept the covers next to them. The copies of the present server files move into place under their
+  /// readable names; the rest, which nothing could find again, are deleted. Without a library to tell them by (before
+  /// the first sign-in) they wait.
+  Future<void> _adoptLegacyCopies() async {
+    final legacyFolders = {
+      AppPaths.fullPath(directory),
+      AppPaths.fullPath(p.join(AppPaths.getDataDirectory(), 'Downloads')),
+    };
+    final byStem = {for (final t in _library.rawTracks.where((t) => !t.isLocal)) _stem(t.id): t};
+    if (byStem.isEmpty) return;
+    for (final folder in legacyFolders) {
+      final dir = Directory(folder);
+      if (!await dir.exists()) continue;
+      await for (final entity in dir.list(followLinks: false)) {
+        final match = _legacyCopyName.firstMatch(p.basename(entity.path));
+        if (entity is! File || match == null) continue;
+        final track = byStem[match.group(1)!];
+        if (track != null && !_copies.containsKey(track.id) && match.group(2) == _version(track)) {
+          try {
+            await _placeCopy(entity.path, track);
+            continue;
+          } on FileSystemException catch (e) {
+            WiretuneLog.warn('Downloads', 'Could not move an earlier copy into place: $e');
           }
-          if (matched) {
-            _bytesOnDisk += len;
+        }
+        await _deleteFile(entity.path);
+      }
+      final oldCovers = Directory(p.join(folder, 'covers'));
+      if (await oldCovers.exists()) {
+        await for (final entity in oldCovers.list(followLinks: false)) {
+          final match = _coverName.firstMatch(p.basename(entity.path));
+          if (entity is! File || match == null) continue;
+          if (_covers.containsKey(match.group(1))) {
+            await _deleteFile(entity.path);
             continue;
           }
-        }
-
-        // 2. Flat / fallback clean filename: "01 - Title.ext" or "Artist - Title.ext"
-        final matchByFn = tracksByFileName[name.toLowerCase()];
-        if (matchByFn != null && matchByFn.isNotEmpty) {
-          var matched = false;
-          for (final track in matchByFn) {
-            if (track.fileSizeBytes <= 0 || len == track.fileSizeBytes) {
-              (_copies[_stemOf(track)] ??= {})[_version(track)] = entity.path;
-              matched = true;
-            }
-          }
-          if (matched) {
-            _bytesOnDisk += len;
-            continue;
+          try {
+            final target = p.join(_coverDirectory, p.basename(entity.path));
+            await Directory(_coverDirectory).create(recursive: true);
+            await _move(entity.path, target);
+            _covers[match.group(1)!] = target;
+            _bytesOnDisk += await File(target).length();
+          } on FileSystemException {
+            await _deleteFile(entity.path);
           }
         }
-
-        // 3. Legacy hash-prefixed filename: "stem-version-name.ext"
-        final match = _copyName.firstMatch(name);
-        if (match != null) {
-          (_copies[match.group(1)!] ??= {})[match.group(2)!] = entity.path;
-          _bytesOnDisk += len;
-        }
+        await _deleteIfEmpty(oldCovers);
       }
+      if (folder != AppPaths.fullPath(directory)) await _deleteIfEmpty(dir);
     }
+  }
 
-    final coverDir = Directory(_coverDirectory);
-    if (await coverDir.exists()) {
-      await for (final entity in coverDir.list(followLinks: false)) {
-        if (entity is! File) continue;
-        final name = p.basename(entity.path);
-        if (name.endsWith('.part')) continue;
-        final match = _coverName.firstMatch(name);
-        if (match == null) continue;
-        _covers[match.group(1)!] = entity.path;
-        _bytesOnDisk += await entity.length();
-      }
-    }
-
-    if (!_syncModeEnabled) {
-      bool hasFile(Track t) =>
-          (_copies[_stemOf(t)]?.isNotEmpty ?? false) || File(p.join(directory, _relativeFilePath(t))).existsSync();
-      bool hasAnyFile(Iterable<Track> tracks) => tracks.any(hasFile);
-
-      _pins.tracks.removeWhere((id) {
-        final track = _library.getTrack(id);
-        return track == null || !hasFile(track);
-      });
-      _pins.albums.removeWhere((id) {
-        final album = _library.getAlbum(id);
-        return album == null || !hasAnyFile(album.tracks);
-      });
-      _pins.artists.removeWhere((id) {
-        final artist = _library.getArtist(id);
-        return artist == null || !hasAnyFile(artist.albums.expand((a) => a.tracks));
-      });
-      _pins.playlists.removeWhere((id) {
-        final playlist = _library.getPlaylist(id);
-        return playlist == null || !hasAnyFile(_library.getPlaylistTracks(playlist));
-      });
-      if (_pins.favorites && !hasAnyFile(_library.favorites)) {
-        _pins.favorites = false;
-      }
-      await _library.setPreference(_pinsPreference, jsonEncode(_pins.toJson()));
-    }
+  /// With sync off, a mark none of whose tracks are on the device or still to come has nothing left to keep: the copies
+  /// it downloaded were deleted outside Wiretune.
+  Future<void> _dropEmptyMarks() async {
+    bool keeps(Iterable<Track> tracks) =>
+        tracks.any((t) => !t.isLocal && (_copies.containsKey(t.id) || _pins.pending.contains(t.id)));
+    final before = jsonEncode(_pins.toJson());
+    _pins.tracks.removeWhere((id) => !_copies.containsKey(id) && !_pins.pending.contains(id));
+    _pins.albums.removeWhere((id) => !keeps(_library.getAlbum(id)?.tracks ?? const []));
+    _pins.artists.removeWhere((id) => !keeps(_library.getArtist(id)?.albums.expand((a) => a.tracks) ?? const []));
+    _pins.playlists.removeWhere((id) {
+      final playlist = _library.getPlaylist(id);
+      return !keeps(playlist == null ? const [] : _library.getPlaylistTracks(playlist));
+    });
+    if (_pins.favorites && !keeps(_library.favorites)) _pins.favorites = false;
+    if (jsonEncode(_pins.toJson()) != before) await _savePins();
   }
 
   // ── Keeping the copies in line with the marks ──────────────────────────────────────────────────
 
   /// Every server track the marks cover: the albums', the artists' albums', the playlists', the favourites and the
   /// single tracks.
-  void _refreshWanted() {
-    final wanted = <String, Track>{};
+  Map<String, Track> _covered() {
+    final covered = <String, Track>{};
     void add(Track? track) {
-      if (track != null && !track.isLocal) wanted.putIfAbsent(_stemOf(track), () => track);
+      if (track != null && !track.isLocal) covered.putIfAbsent(track.id, () => track);
     }
 
     for (final albumId in _pins.albums) {
@@ -406,14 +440,21 @@ class DownloadService {
     for (final trackId in _pins.tracks) {
       add(_library.getTrack(trackId));
     }
+    return covered;
+  }
+
+  /// What to keep and fetch: everything the marks cover with sync on; with it off, of that only what is on the device
+  /// already or still to come from a mark.
+  void _refreshWanted() {
+    final wanted = _covered();
+    if (!_syncModeEnabled) wanted.removeWhere((id, _) => !_copies.containsKey(id) && !_pins.pending.contains(id));
     _wanted = wanted;
     _wantedCovers = {
       for (final track in wanted.values)
         if (_isServerUrl(track.coverArtPath)) _coverStem(track.coverArtPath!),
     };
     final current = _current;
-    if (current != null &&
-        !(current.isCover ? _wantedCovers.contains(current.stem) : wanted.containsKey(current.stem))) {
+    if (current != null && !(current.isCover ? _wantedCovers.contains(current.id) : wanted.containsKey(current.id))) {
       _cancelCurrent = true;
     }
   }
@@ -435,12 +476,14 @@ class DownloadService {
       do {
         _runAgain = false;
         await _prune();
-        while (_canDownload) {
-          final job = _nextJob();
+        while (_canDownload && !_runAgain) {
+          final job = await _nextJob();
           if (job == null) break;
           if (!await _perform(job)) break;
         }
       } while (_runAgain && !_disposed);
+    } catch (e, s) {
+      WiretuneLog.error('Downloads', 'Keeping the downloads in step failed', e, s);
     } finally {
       _running = false;
       _current = null;
@@ -448,74 +491,56 @@ class DownloadService {
     }
   }
 
-  /// Deletes the copies nothing wants, the copies replaced by a newer version, and the partial files of either.
+  /// Deletes the copies and covers nothing wants, and the partial downloads of either.
   Future<void> _prune() async {
-    for (final stem in _copies.keys.toList()) {
-      final track = _wanted[stem];
-      final versions = _copies[stem]!;
-      final current = track == null ? null : _version(track);
-      // An older version stays until the current one has arrived: it still plays.
-      final keep = track == null ? null : (versions.containsKey(current) ? current : versions.keys.first);
-      final keepPath = keep == null ? null : versions[keep];
-      for (final version in versions.keys.toList()) {
-        if (version == keep) continue;
-        final oldPath = versions[version]!;
-        if (oldPath != keepPath) {
-          await _delete(oldPath);
-        }
-        versions.remove(version);
+    for (final MapEntry(key: id, value: copy) in _copies.entries.toList()) {
+      if (_wanted.containsKey(id)) continue;
+      if (await _deleteFile(_absolute(copy.path), counted: true, cleanParents: true)) {
+        _copies.remove(id);
+        await _repository.deleteDownload(id);
       }
-      if (versions.isEmpty) _copies.remove(stem);
     }
-    for (final stem in _covers.keys.toList()) {
-      if (!_wantedCovers.contains(stem) && await _delete(_covers[stem]!)) _covers.remove(stem);
+    for (final MapEntry(key: stem, value: path) in _covers.entries.toList()) {
+      if (!_wantedCovers.contains(stem) && await _deleteFile(path, counted: true)) _covers.remove(stem);
     }
-    for (final (folder, isCover) in [(directory, false), (_coverDirectory, true)]) {
-      final dir = Directory(folder);
-      if (!dir.existsSync()) continue;
-      for (final entity in dir.listSync(followLinks: false)) {
+    final partial = Directory(_partialDirectory);
+    if (await partial.exists()) {
+      final keep = {for (final t in _wanted.values) _partName(t), for (final c in _wantedCovers) '$c.part'};
+      await for (final entity in partial.list(followLinks: false)) {
         final name = p.basename(entity.path);
-        if (entity is! File || !name.endsWith('.part')) continue;
-        final current = _current;
-        if (current != null && entity.path == current.partPath) continue;
-        final wanted = isCover
-            ? _wantedCovers.contains(name.split('.').first)
-            : _wanted.values.any((t) => name == '${_fileName(t)}.part');
-        if (!wanted) await _delete(entity.path);
+        if (entity is File && !keep.contains(name) && entity.path != _current?.partPath) await _deleteFile(entity.path);
       }
     }
   }
 
-  /// The next file to fetch: an album's cover before its first track, then the track.
-  _Job? _nextJob() {
-    for (final MapEntry(key: stem, value: track) in _wanted.entries) {
-      if (_unavailable.contains(stem)) continue;
+  /// The next file to fetch: an album's cover before its first track, then the track. A file already at a track's
+  /// place that is the server's file to the byte (the record of it was lost, say with the app's data) is taken as the
+  /// copy instead of being downloaded again.
+  Future<_Job?> _nextJob() async {
+    for (final track in _wanted.values) {
       final cover = track.coverArtPath;
       if (_isServerUrl(cover)) {
         final coverStem = _coverStem(cover!);
         if (!_covers.containsKey(coverStem) && !_unavailable.contains(coverStem)) {
-          final targetBase = p.join(_coverDirectory, coverStem);
-          final existing = ['.jpg', '.png', '.img'].map((ext) => File('$targetBase$ext')).where((f) => f.existsSync()).firstOrNull;
-          if (existing != null) {
-            _covers[coverStem] = existing.path;
-            _bytesOnDisk += existing.lengthSync();
-          } else {
-            return _Job(coverStem, cover, targetBase, track, isCover: true);
-          }
+          return _Job(coverStem, cover, p.join(_partialDirectory, '$coverStem.part'), track, isCover: true);
         }
       }
-      if (!(_copies[stem]?.containsKey(_version(track)) ?? false)) {
-        final targetPath = p.join(directory, _relativeFilePath(track));
-        final file = File(targetPath);
-        if (file.existsSync() && matchesServer(track, file.lengthSync())) {
-          (_copies[stem] ??= {})[_version(track)] = targetPath;
-          _bytesOnDisk += file.lengthSync();
-          continue;
-        }
-        return _Job(stem, track.streamUrl!, targetPath, track);
-      }
+      if (_hasCurrentCopy(track.id, track) || _unavailable.contains(track.id)) continue;
+      if (!_copies.containsKey(track.id) && await _adoptExisting(track)) continue;
+      return _Job(track.id, track.streamUrl!, p.join(_partialDirectory, _partName(track)), track);
     }
     return null;
+  }
+
+  Future<bool> _adoptExisting(Track track) async {
+    if (track.fileSizeBytes <= 0) return false;
+    final candidate = _freePath(track, adoptable: true);
+    final file = File(_absolute(candidate));
+    if (!await file.exists() || await file.length() != track.fileSizeBytes) return false;
+    await _record(track.id, _version(track), candidate);
+    _bytesOnDisk += track.fileSizeBytes;
+    if (_pins.pending.remove(track.id)) await _savePins();
+    return true;
   }
 
   /// Fetches one file. False when downloading has to stop for now (a failure that a retry may fix, or a refusal).
@@ -525,59 +550,35 @@ class DownloadService {
     _currentReceived = 0;
     _currentTotal = job.isCover ? 0 : job.track.fileSizeBytes;
     changed.emit(null);
+    final token = _session.authToken;
     try {
-      final token = _session.authToken;
       if (token == null || token.isEmpty || !_isServerUrl(job.url)) throw const _Refused();
 
-      final path = await _downloader.downloadFile(
-        url: job.url,
-        token: token,
-        partPath: job.partPath,
-        targetPath: job.target,
-        isCover: job.isCover,
-        track: job.track,
-        onStart: (totalSize, offset) {
-          _currentTotal = totalSize;
-          _currentReceived = offset;
-          _sinceProgress..reset()..start();
-        },
-        onProgress: (bytesReceived) {
-          _currentReceived += bytesReceived;
-          if (_sinceProgress.elapsedMilliseconds >= 500) {
-            _sinceProgress.reset();
-            changed.emit(null);
-          }
-        },
-        isCancelled: () => _cancelCurrent || _disposed,
-      );
-      _errorKey = null;
-      _retryDelay = _firstRetry;
-      _bytesOnDisk += File(path).lengthSync();
+      final contentType = await _fetch(job, token);
       if (job.isCover) {
-        _covers[job.stem] = path;
+        await Directory(_coverDirectory).create(recursive: true);
+        final target = p.join(_coverDirectory, '${job.id}.${imageExtension(contentType)}');
+        await _move(job.partPath, target);
+        _covers[job.id] = target;
+        _bytesOnDisk += await File(target).length();
       } else {
-        final versions = _copies[job.stem] ??= {};
-        final version = _version(job.track);
-        versions[version] = path;
-        // The copy of the server's earlier file has been playable until now; this one replaces it.
-        for (final old in versions.keys.where((v) => v != version).toList()) {
-          final oldPath = versions[old]!;
-          if (oldPath != path) {
-            await _delete(oldPath);
-          }
-          versions.remove(old);
-        }
+        await _placeCopy(job.partPath, job.track);
         WiretuneLog.info('Downloads', "Downloaded '${job.track.artist} - ${job.track.title}'.");
       }
+      _errorKey = null;
+      _retryDelay = _firstRetry;
       return true;
     } on _Cancelled {
-      await _delete(job.partPath);
+      // Unwanted now: the partial file goes. The app closing keeps it, and the download continues next time.
+      if (!_disposed) await _deleteFile(job.partPath);
       return true;
     } on _Gone {
       // The server no longer has it: nothing to retry until the library is refreshed.
-      _unavailable.add(job.stem);
+      _unavailable.add(job.id);
       return true;
     } on _Refused {
+      // Refused for a token the session has replaced since (a password change): the next try carries the new one.
+      if (token != null && _session.authToken != null && _session.authToken != token) return true;
       _stopped = true;
       _setError('DownloadsSignInAgain');
       return false;
@@ -587,6 +588,12 @@ class DownloadService {
       _retryLater();
       return false;
     } catch (e) {
+      if (job.isCover) {
+        // The audio matters more than its picture: the cover waits for the next refresh of the library instead.
+        WiretuneLog.warn('Downloads', "The cover of '${job.track.album}' could not be downloaded: $e");
+        _unavailable.add(job.id);
+        return true;
+      }
       WiretuneLog.warn('Downloads', "Downloading '${job.track.title}' failed: $e");
       _setError('DownloadsFailed', ['$e']);
       _retryLater();
@@ -594,6 +601,143 @@ class DownloadService {
     } finally {
       _current = null;
     }
+  }
+
+  /// Downloads [job] into its partial file, continuing one that was cut off with a range request; the content type.
+  /// The file is complete when this returns: as long as the server said, and for a track as long as its listing said.
+  Future<String?> _fetch(_Job job, String token) async {
+    final part = File(job.partPath);
+    await part.parent.create(recursive: true);
+    var offset = await part.exists() ? await part.length() : 0;
+    // Complete already: it could not be moved into place last time.
+    if (!job.isCover && offset > 0 && offset == job.track.fileSizeBytes) return null;
+    final request = http.Request('GET', Uri.parse(job.url))..headers['Authorization'] = 'Bearer $token';
+    if (offset > 0) request.headers['Range'] = 'bytes=$offset-';
+
+    final response = await _http.send(request).timeout(_idleTimeout);
+    final status = response.statusCode;
+    if (status == 401 || status == 403) throw const _Refused();
+    if (status == 404 || status == 410) throw const _Gone();
+    if (status == 416) {
+      await _deleteFile(job.partPath); // the partial file is longer than the server's: start again next time
+      throw const HttpException('The partial download did not match the server file.');
+    }
+    final resumed = status == 206 && rangeStart(response.headers['content-range']) == offset;
+    if (status != 200 && !resumed) throw HttpException('HTTP $status');
+    if (!resumed) offset = 0;
+
+    final length = response.contentLength;
+    _currentTotal = length != null ? offset + length : _currentTotal;
+    _currentReceived = offset;
+    _sinceProgress
+      ..reset()
+      ..start();
+
+    final file = await part.open(mode: resumed ? FileMode.append : FileMode.write);
+    try {
+      await for (final chunk in response.stream.timeout(_idleTimeout)) {
+        if (_cancelCurrent || _disposed) throw const _Cancelled();
+        await file.writeFrom(chunk);
+        _currentReceived += chunk.length;
+        if (_sinceProgress.elapsedMilliseconds >= 500) {
+          _sinceProgress.reset();
+          changed.emit(null);
+        }
+      }
+    } finally {
+      await file.close();
+    }
+
+    final size = await part.length();
+    if ((length != null && size != offset + length) || (!job.isCover && !matchesServer(job.track, size))) {
+      await _deleteFile(job.partPath);
+      throw HttpException('The download ended early ($size bytes).');
+    }
+    return response.headers['content-type'];
+  }
+
+  /// Moves the complete file [source] into the copy's place: the place of the copy it replaces, or a free one. The
+  /// record says "moving" until the file is all there, so a move that the app's end cuts short is noticed at the next
+  /// start.
+  Future<void> _placeCopy(String source, Track track) async {
+    final previous = _copies[track.id];
+    final relative = previous?.path ?? _freePath(track);
+    final target = _absolute(relative);
+    final previousSize = previous == null ? 0 : await _sizeOf(target);
+    await _record(track.id, '', relative);
+    try {
+      await Directory(p.dirname(target)).create(recursive: true);
+      await _move(source, target);
+    } on FileSystemException {
+      // Nothing was moved (a full disk, a folder the app may not write to, a file still open on Windows).
+      if (previous != null) {
+        await _record(track.id, previous.version, previous.path);
+      } else {
+        _copies.remove(track.id);
+        await _repository.deleteDownload(track.id);
+      }
+      rethrow;
+    }
+    await _record(track.id, _version(track), relative);
+    _bytesOnDisk += await File(target).length() - previousSize;
+    if (_pins.pending.remove(track.id)) await _savePins();
+  }
+
+  Future<void> _record(String trackId, String version, String relative) async {
+    _copies[trackId] = _Copy(version, relative);
+    await _repository.saveDownload(trackId, version, relative);
+  }
+
+  /// A place for a new copy of [track]: its readable path, or with " (2)", " (3)" … when another copy has that name or
+  /// a file that is not a copy is there. Names are compared ignoring case, as most of the file systems involved do.
+  /// [adoptable]: the first place that no other copy has, existing file or not (to look for a copy whose record was
+  /// lost).
+  String _freePath(Track track, {bool adoptable = false}) {
+    final taken = {
+      for (final MapEntry(key: id, value: copy) in _copies.entries)
+        if (id != track.id) copy.path.toLowerCase(),
+    };
+    final (folder, name, extension) = _readableName(track);
+    for (var n = 1; ; n++) {
+      final relative = p.join(folder, '${n == 1 ? name : '$name ($n)'}.$extension');
+      if (taken.contains(relative.toLowerCase())) continue;
+      if (adoptable || !File(_absolute(relative)).existsSync()) return relative;
+    }
+  }
+
+  /// The readable place of [track]: `Album artist/Album`, and `01 - Title` (`2-01 - Title` on an album of more than
+  /// one disc), with the extension of its format.
+  (String folder, String name, String extension) _readableName(Track track) {
+    final artist = safeFileName(track.effectiveAlbumArtist, fallback: 'Unknown Artist', maxLength: 60);
+    final album = safeFileName(track.album, fallback: 'Unknown Album', maxLength: 60);
+    final title = safeFileName(track.title, fallback: 'Track', maxLength: 80);
+    final number = track.trackNumber;
+    final disc = track.discNumber ?? 1;
+    final discs = _library.getAlbumForTrack(track)?.tracks.map((t) => t.discNumber ?? 1).toSet().length ?? 1;
+    final prefix = [
+      if (number != null && number > 0) ...[
+        discs > 1 || disc > 1 ? '$disc-' : '',
+        '${number.toString().padLeft(2, '0')} - ',
+      ],
+    ].join();
+    return (p.join(artist, album), '$prefix$title', _extension(track.format.codec));
+  }
+
+  /// [name] as one part of a path on every system Wiretune runs on: no separators, no characters Windows refuses, no
+  /// control characters, no leading dots (a hidden file) or trailing dots and spaces (which Windows drops), no device
+  /// names such as `CON`, at most [maxLength] characters and 200 bytes. [fallback] when nothing is left.
+  static String safeFileName(String name, {required String fallback, int maxLength = 80}) {
+    var safe = name.replaceAll(RegExp(r'[\x00-\x1f\x7f/\\:*?"<>|]'), '_').trim();
+    safe = safe.replaceFirst(RegExp(r'^[. ]+'), '').replaceFirst(RegExp(r'[. ]+$'), '');
+    final runes = safe.runes.toList();
+    if (runes.length > maxLength) safe = String.fromCharCodes(runes.take(maxLength)).trimRight();
+    while (utf8.encode(safe).length > 200) {
+      safe = String.fromCharCodes(safe.runes.take(safe.runes.length - 1));
+    }
+    safe = safe.replaceFirst(RegExp(r'[. ]+$'), '');
+    if (safe.isEmpty) return fallback;
+    final device = RegExp(r'^(con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])(\..*)?$', caseSensitive: false);
+    return device.hasMatch(safe) ? '${safe}_' : safe;
   }
 
   void _setError(String key, [List<Object?> args = const []]) {
@@ -608,7 +752,6 @@ class DownloadService {
     _retryDelay = doubled > _lastRetry ? _lastRetry : doubled;
   }
 
-
   /// The server's listing gives the file's size; a copy of another size is not a whole copy of it.
   static bool matchesServer(Track track, int size) => track.fileSizeBytes <= 0 || track.fileSizeBytes == size;
 
@@ -617,15 +760,37 @@ class DownloadService {
     return match == null ? null : int.tryParse(match.group(1)!);
   }
 
-  /// Deletes a file; false when it could not be (still open on Windows): the next run tries again.
-  Future<bool> _delete(String path) async {
+  // ── Files ──────────────────────────────────────────────────────────────────────────────────────
+
+  bool _isInside(String relative) => !p.isAbsolute(relative) && p.isWithin(directory, _absolute(relative));
+
+  /// Moves [source] to [target], over a file that is there: a rename on one file system, a copy and a delete across
+  /// two (the app's own storage and a shared music folder usually are two).
+  static Future<void> _move(String source, String target) async {
+    try {
+      await File(source).rename(target);
+    } on FileSystemException {
+      await File(source).copy(target);
+      await File(source).delete();
+    }
+  }
+
+  static Future<int> _sizeOf(String path) async {
+    final file = File(path);
+    return await file.exists() ? await file.length() : 0;
+  }
+
+  /// Deletes a file; false when it could not be (still open on Windows): the next run tries again. [counted]: a copy or
+  /// a cover, whose size [bytesOnDisk] includes. [cleanParents] removes the folders of the downloads folder that this
+  /// leaves empty.
+  Future<bool> _deleteFile(String path, {bool counted = false, bool cleanParents = false}) async {
     final file = File(path);
     try {
       if (await file.exists()) {
-        final size = path.endsWith('.part') ? 0 : await file.length();
+        final size = counted ? await file.length() : 0;
         await file.delete();
         _bytesOnDisk -= size;
-        _cleanEmptyParents(file.parent);
+        if (cleanParents) await _deleteEmptyParents(file.parent);
       }
       return true;
     } on FileSystemException catch (e) {
@@ -634,18 +799,21 @@ class DownloadService {
     }
   }
 
-  void _cleanEmptyParents(Directory dir) {
+  Future<void> _deleteEmptyParents(Directory dir) async {
+    var current = dir;
+    while (p.isWithin(directory, current.path) && await _deleteIfEmpty(current)) {
+      current = current.parent;
+    }
+  }
+
+  static Future<bool> _deleteIfEmpty(Directory dir) async {
     try {
-      var current = dir;
-      while (current.path != directory && p.isWithin(directory, current.path)) {
-        if (current.existsSync() && current.listSync().isEmpty) {
-          current.deleteSync();
-          current = current.parent;
-        } else {
-          break;
-        }
-      }
-    } catch (_) {}
+      if (!await dir.exists() || !await dir.list().isEmpty) return false;
+      await dir.delete();
+      return true;
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// Only the server the session is signed in to is sent the token (`http://host:52001` is not `http://host:5200`).
@@ -653,18 +821,16 @@ class DownloadService {
 
   // ── Names ──────────────────────────────────────────────────────────────────────────────────────
 
+  // Hashes, so that no ID a server sends becomes part of a path.
   static String _stem(String trackId) => stableId('track\u001f$trackId');
 
-  // The names of a track's copy, worked out once per Track (the library replaces them when the server's data changes).
-  static final Expando<(String stem, String version)> _names = Expando();
-
-  static (String, String) _namesOf(Track track) => _names[track] ??= (_stem(track.id), _versionOf(track));
-
-  static String _stemOf(Track track) => _namesOf(track).$1;
-
-  static String _version(Track track) => _namesOf(track).$2;
-
   static String _coverStem(String url) => stableId('cover\u001f$url');
+
+  // The version of a track's server file, worked out once per Track (the library replaces them when the server's data
+  // changes).
+  static final Expando<String> _versions = Expando();
+
+  static String _version(Track track) => _versions[track] ??= _versionOf(track);
 
   /// Changes when the server's file does (its size or its modification time, to the second).
   static String _versionOf(Track track) {
@@ -672,38 +838,8 @@ class DownloadService {
     return stableId('${track.fileSizeBytes}\u001f${modified == null ? '' : modified ~/ 1000}').substring(0, 8);
   }
 
-  /// The relative path of a downloaded track: "Artist/Album/01 - Title.ext"
-  /// (or "Artist/Singles/Title.ext" if no album).
-  static String _relativeFilePath(Track track) {
-    final artist = _safeFileName(track.artist.trim().isEmpty ? 'Unknown Artist' : track.artist);
-    final album = _safeFileName(track.album.trim().isEmpty ? 'Singles' : track.album);
-    final trackNum = track.trackNumber;
-    final num = (trackNum != null && trackNum > 0) ? '${trackNum.toString().padLeft(2, '0')} - ' : '';
-    final title = _safeFileName(track.title.trim().isEmpty ? 'track' : track.title);
-    final ext = _extension(track.format.codec);
-    return p.join(artist, album, '$num$title.$ext');
-  }
-
-  /// Flat filename: "Artist - Title.ext" (or "Title.ext") for fallback matching.
-  static String _fileName(Track track) {
-    final artist = track.artist.trim();
-    final title = track.title.trim();
-    final base = artist.isEmpty || title.toLowerCase().startsWith('${artist.toLowerCase()} -')
-        ? title
-        : '$artist - $title';
-    final safeName = _safeFileName(base.isEmpty ? 'track' : base);
-    final ext = _extension(track.format.codec);
-    return '$safeName.$ext';
-  }
-
-  /// Replaces filesystem-unsafe and control characters with underscores, strips trailing dots/spaces,
-  /// and trims to 160 characters so the full path stays well within every platform's limit.
-  static String _safeFileName(String name) {
-    var safe = name.replaceAll(RegExp(r'[\x00-\x1f\x7f/\\:*?"<>|]'), '_').trim();
-    safe = safe.replaceAll(RegExp(r'[. ]+$'), '');
-    if (safe.isEmpty) safe = 'track';
-    return safe.length > 160 ? safe.substring(0, 160).trimRight() : safe;
-  }
+  /// The partial download of one version of a track: a new version starts afresh.
+  static String _partName(Track track) => '${_stem(track.id)}-${_version(track)}.part';
 
   /// The usual extension of a codec; the decoders look at the content, the extension is for people.
   static String _extension(String codec) => switch (codec.toUpperCase()) {
@@ -733,17 +869,29 @@ class DownloadService {
       unsubscribe();
     }
     _unsubscribers.clear();
-    _downloader.dispose();
+    if (_ownsClient) _http.close();
   }
 }
 
-/// What the user marked for download.
+/// A copy on disk: the version of the server's file it is ('' while it is being moved into place), and its path
+/// relative to the downloads folder.
+class _Copy {
+  const _Copy(this.version, this.path);
+
+  final String version;
+  final String path;
+
+  bool get isMoving => version.isEmpty;
+}
+
+/// What the user marked for download, and (with sync off) the tracks the marks still have to fetch.
 class _Pins {
   final Set<String> tracks = {};
   final Set<String> albums = {};
   final Set<String> artists = {};
   final Set<String> playlists = {};
   bool favorites = false;
+  final Set<String> pending = {};
 
   Map<String, Object?> toJson() => {
     'tracks': tracks.toList(),
@@ -751,6 +899,7 @@ class _Pins {
     'artists': artists.toList(),
     'playlists': playlists.toList(),
     'favorites': favorites,
+    if (pending.isNotEmpty) 'pending': pending.toList(),
   };
 
   static _Pins fromJson(Object? json) {
@@ -762,23 +911,20 @@ class _Pins {
     pins.artists.addAll(ids(json['artists']));
     pins.playlists.addAll(ids(json['playlists']));
     pins.favorites = json['favorites'] == true;
+    pins.pending.addAll(ids(json['pending']));
     return pins;
   }
 }
 
-/// One file to fetch: a track's audio, or an album's cover.
+/// One file to fetch: a track's audio (its [id] the track's), or an album's cover (its [id] the cover's stem).
 class _Job {
-  _Job(this.stem, this.url, this.target, this.track, {this.isCover = false});
+  _Job(this.id, this.url, this.partPath, this.track, {this.isCover = false});
 
-  final String stem;
+  final String id;
   final String url;
-
-  /// The final path; a cover's gets the extension of the image type the server answers with.
-  final String target;
+  final String partPath;
   final Track track;
   final bool isCover;
-
-  String get partPath => '$target.part';
 }
 
 class _Cancelled implements Exception {
@@ -791,104 +937,4 @@ class _Gone implements Exception {
 
 class _Refused implements Exception {
   const _Refused();
-}
-
-
-/// Abstraction for HTTP downloading logic.
-abstract class FileDownloader {
-  /// Downloads a file from [url] to [partPath], then renames it to [targetPath].
-  Future<String> downloadFile({
-    required String url,
-    required String token,
-    required String partPath,
-    required String targetPath,
-    required bool isCover,
-    required Track track,
-    required void Function(int totalSize, int offset) onStart,
-    required void Function(int bytesReceived) onProgress,
-    required bool Function() isCancelled,
-  });
-
-  void dispose();
-}
-
-class DefaultFileDownloader implements FileDownloader {
-  DefaultFileDownloader({http.Client? client})
-      : _client = client ?? http.Client(),
-        _ownsClient = client == null;
-
-  final http.Client _client;
-  final bool _ownsClient;
-
-  static const Duration _idleTimeout = Duration(seconds: 30);
-
-  @override
-  Future<String> downloadFile({
-    required String url,
-    required String token,
-    required String partPath,
-    required String targetPath,
-    required bool isCover,
-    required Track track,
-    required void Function(int totalSize, int offset) onStart,
-    required void Function(int bytesReceived) onProgress,
-    required bool Function() isCancelled,
-  }) async {
-    final part = File(partPath);
-    await part.parent.create(recursive: true);
-    var offset = await part.exists() ? await part.length() : 0;
-    final request = http.Request('GET', Uri.parse(url))..headers['Authorization'] = 'Bearer $token';
-    if (offset > 0) request.headers['Range'] = 'bytes=$offset-';
-
-    final response = await _client.send(request).timeout(_idleTimeout);
-    final status = response.statusCode;
-    if (status == 401 || status == 403) throw const _Refused();
-    if (status == 404 || status == 410) throw const _Gone();
-    if (status == 416) {
-      await _deleteFile(partPath); // the partial file is longer than the server's: start again next time
-      throw const HttpException('The partial download did not match the server file.');
-    }
-    final resumed = status == 206 && DownloadService.rangeStart(response.headers['content-range']) == offset;
-    if (status != 200 && !resumed) throw HttpException('HTTP $status');
-    if (!resumed) offset = 0;
-
-    final length = response.contentLength;
-    onStart(length != null ? offset + length : 0, offset);
-
-    final file = await part.open(mode: resumed ? FileMode.append : FileMode.write);
-    try {
-      await for (final chunk in response.stream.timeout(_idleTimeout)) {
-        if (isCancelled()) throw const _Cancelled();
-        await file.writeFrom(chunk);
-        onProgress(chunk.length);
-      }
-    } finally {
-      await file.close();
-    }
-
-    final size = await part.length();
-    if ((length != null && size != offset + length) || (!isCover && !DownloadService.matchesServer(track, size))) {
-      await _deleteFile(partPath);
-      throw HttpException('The download ended early ($size bytes).');
-    }
-
-    final target = isCover ? '$targetPath.${DownloadService.imageExtension(response.headers['content-type'])}' : targetPath;
-    final targetFile = File(target);
-    if (await targetFile.exists()) {
-      await _deleteFile(target);
-    }
-    return (await part.rename(target)).path;
-  }
-
-  Future<void> _deleteFile(String path) async {
-    final file = File(path);
-    if (await file.exists()) {
-      await file.delete();
-    }
-  }
-
-  @override
-  void dispose() {
-    if (_ownsClient) _client.close();
-  }
 }

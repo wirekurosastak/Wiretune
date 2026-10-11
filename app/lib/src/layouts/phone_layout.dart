@@ -45,40 +45,30 @@ class PhoneLayout extends StatelessWidget {
                       if (vm.isSearchOpen) const SafeArea(bottom: false, child: _SearchBar()),
                       if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
                       Expanded(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            switchInCurve: Curves.easeOutCubic,
-                            layoutBuilder: (currentChild, previousChildren) => Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                ...previousChildren,
-                                ?currentChild,
-                              ],
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOutCubic,
+                          layoutBuilder: (currentChild, previousChildren) =>
+                              Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
+                          transitionBuilder: (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: Tween(begin: 0.985, end: 1.0).animate(animation),
+                              child: child,
                             ),
-                            transitionBuilder: (child, animation) => FadeTransition(
-                              opacity: animation,
-                              child: ScaleTransition(
-                                scale: Tween(begin: 0.985, end: 1.0).animate(animation),
-                                child: child,
-                              ),
-                            ),
-                            child: vm.isSearchOpen
-                                ? const SearchResults(key: ValueKey('search'))
-                                : KeyedSubtree(
-                                    key: ValueKey(vm.selectedSection),
-                                    child: sectionPage(vm.selectedSection),
-                                  ),
                           ),
+                          child: vm.isSearchOpen
+                              ? const SearchResults(key: ValueKey('search'))
+                              : KeyedSubtree(key: ValueKey(vm.selectedSection), child: sectionPage(vm.selectedSection)),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               bottomNavigationBar: const _BottomBars(),
             ),
-            Positioned.fill(
-              child: _NowPlayingOverlay(isOpen: vm.isNowPlayingOpen),
-            ),
+            Positioned.fill(child: _NowPlayingOverlay(isOpen: vm.isNowPlayingOpen)),
             // Over the full-screen player too: its menu adds the track to a playlist.
             const PlaylistDialogsLayer(),
             if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
@@ -107,11 +97,7 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> with SingleTicke
   late final Animation<Offset> _slide = Tween<Offset>(
     begin: const Offset(0, 1),
     end: Offset.zero,
-  ).animate(CurvedAnimation(
-    parent: _controller,
-    curve: Curves.easeOutCubic,
-    reverseCurve: Curves.easeInCubic,
-  ));
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic));
 
   @override
   void initState() {
@@ -145,10 +131,7 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> with SingleTicke
         if (_controller.isDismissed && !widget.isOpen) return const SizedBox.shrink();
         return SlideTransition(
           position: _slide,
-          child: IgnorePointer(
-            ignoring: !widget.isOpen,
-            child: const NowPlayingPage(),
-          ),
+          child: IgnorePointer(ignoring: !widget.isOpen, child: const NowPlayingPage()),
         );
       },
     );
@@ -175,17 +158,9 @@ class _BottomBars extends StatelessWidget {
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(
-              color: isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000),
-              width: 1.0,
-            ),
+            border: Border.all(color: isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000), width: 1.0),
             boxShadow: [
-              BoxShadow(
-                color: colors.palette.shadow,
-                blurRadius: 24,
-                spreadRadius: -4,
-                offset: const Offset(0, 8),
-              ),
+              BoxShadow(color: colors.palette.shadow, blurRadius: 24, spreadRadius: -4, offset: const Offset(0, 8)),
             ],
           ),
           child: ClipRRect(
@@ -282,44 +257,42 @@ class _NavItem extends StatelessWidget {
       button: true,
       child: Material(
         type: MaterialType.transparency,
+        // No ripple and no bounce: the section's colour and glow say which is active, as elsewhere.
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(16),
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: Colors.transparent,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-            SizedBox(
-              height: 30,
-              child: AnimatedScale(
-                scale: active ? 1.08 : 1,
-                duration: duration,
-                curve: Curves.easeOutBack,
-                child: Icon(
-                  icon,
-                  size: 24,
-                  color: active ? color : muted,
-                  shadows: active ? [Shadow(color: color.withValues(alpha: 0.75), blurRadius: 16)] : null,
+                SizedBox(
+                  height: 30,
+                  child: Icon(
+                    icon,
+                    size: 24,
+                    color: active ? color : muted,
+                    shadows: active ? [Shadow(color: color.withValues(alpha: 0.75), blurRadius: 16)] : null,
+                  ),
                 ),
-              ),
+                const SizedBox(height: 3),
+                AnimatedDefaultTextStyle(
+                  duration: duration,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
+                    color: active ? color : muted,
+                  ),
+                  child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+              ],
             ),
-            const SizedBox(height: 3),
-            AnimatedDefaultTextStyle(
-              duration: duration,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                color: active ? color : muted,
-              ),
-              child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ],
+          ),
         ),
       ),
-    ),
-  ),
-);
+    );
   }
 }
 
@@ -411,7 +384,11 @@ class _OfflineBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.cloud_off_rounded, color: colors.danger, size: 20),
+          Icon(
+            vm.serverBannerNeedsSignIn ? Icons.lock_outline_rounded : Icons.cloud_off_rounded,
+            color: colors.danger,
+            size: 20,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -421,7 +398,10 @@ class _OfflineBanner extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: colors.textMain),
             ),
           ),
-          TextButton(onPressed: vm.retryConnectServer, child: Text(context.tr('Reconnect'))),
+          TextButton(
+            onPressed: vm.serverBannerNeedsSignIn ? vm.showLoginScreen : vm.retryConnectServer,
+            child: Text(context.tr(vm.serverBannerNeedsSignIn ? 'SignIn' : 'Reconnect')),
+          ),
           IconButton(
             tooltip: context.tr('TipDismissNotice'),
             onPressed: vm.dismissServerBanner,
@@ -469,11 +449,7 @@ class _MiniPlayerContent extends StatelessWidget {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(Radii.small + 2),
                                 boxShadow: [
-                                  BoxShadow(
-                                    color: colors.palette.shadow,
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
+                                  BoxShadow(color: colors.palette.shadow, blurRadius: 8, offset: const Offset(0, 3)),
                                 ],
                               ),
                               child: CoverImage(path: track.coverArtPath, size: 44, radius: Radii.small + 2),

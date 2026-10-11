@@ -69,12 +69,7 @@ class WideLayout extends StatelessWidget {
                               shaderCallback: (rect) => const LinearGradient(
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Colors.black,
-                                  Colors.black,
-                                  Colors.transparent,
-                                ],
+                                colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
                                 stops: [0.0, 0.035, 0.965, 1.0],
                               ).createShader(rect),
                               blendMode: BlendMode.dstIn,
@@ -143,13 +138,8 @@ class _Content extends StatelessWidget {
       return AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
         switchInCurve: Curves.easeOutCubic,
-        layoutBuilder: (currentChild, previousChildren) => Stack(
-          fit: StackFit.expand,
-          children: [
-            ...previousChildren,
-            ?currentChild,
-          ],
-        ),
+        layoutBuilder: (currentChild, previousChildren) =>
+            Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
         transitionBuilder: (child, animation) => FadeTransition(
           opacity: animation,
           child: SlideTransition(
@@ -375,7 +365,12 @@ class _SearchFieldState extends State<_SearchField> {
                 : null,
             contentPadding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
             border: border(colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000), 1),
-            enabledBorder: border(_hover ? colors.palette.glassHighlight : (colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)), 1),
+            enabledBorder: border(
+              _hover
+                  ? colors.palette.glassHighlight
+                  : (colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)),
+              1,
+            ),
             focusedBorder: border(colors.accent, 1.5),
           ),
         ),
@@ -632,7 +627,11 @@ class _OfflineBanner extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
       child: Row(
         children: [
-          Icon(Icons.cloud_off_rounded, color: colors.danger, size: 20),
+          Icon(
+            vm.serverBannerNeedsSignIn ? Icons.lock_outline_rounded : Icons.cloud_off_rounded,
+            color: colors.danger,
+            size: 20,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -648,9 +647,12 @@ class _OfflineBanner extends StatelessWidget {
               minimumSize: const Size(0, 32),
               padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
-            onPressed: vm.retryConnectServer,
-            icon: const Icon(Icons.refresh_rounded, size: 16),
-            label: Text(context.tr('Reconnect'), style: const TextStyle(fontSize: 12)),
+            onPressed: vm.serverBannerNeedsSignIn ? vm.showLoginScreen : vm.retryConnectServer,
+            icon: Icon(vm.serverBannerNeedsSignIn ? Icons.login_rounded : Icons.refresh_rounded, size: 16),
+            label: Text(
+              context.tr(vm.serverBannerNeedsSignIn ? 'SignIn' : 'Reconnect'),
+              style: const TextStyle(fontSize: 12),
+            ),
           ),
           const SizedBox(width: 10),
           OutlinedButton.icon(
@@ -947,7 +949,7 @@ class _PlayerBar extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    _QueueCover(),
+                    const _QueueCover(),
                     const SizedBox(width: 14),
                     Flexible(
                       child: ConstrainedBox(
@@ -1004,10 +1006,18 @@ class _PlayerBar extends StatelessWidget {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Flexible(
-                                    child: _PlayerLink(
-                                      text: track.artist,
-                                      hoverColor: colors.palette.coral,
-                                      onTap: () => vm.openArtistByName(track.artist),
+                                    child: Tooltip(
+                                      message: track.artist,
+                                      child: LinkText(
+                                        track.artist,
+                                        hoverColor: colors.palette.coral,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: colors.textMuted,
+                                        ),
+                                        onTap: () => vm.openArtistByName(track.artist),
+                                      ),
                                     ),
                                   ),
                                   if (track.album.trim().isNotEmpty) ...[
@@ -1019,10 +1029,18 @@ class _PlayerBar extends StatelessWidget {
                                       ),
                                     ),
                                     Flexible(
-                                      child: _PlayerLink(
-                                        text: track.album,
-                                        hoverColor: colors.palette.purple,
-                                        onTap: () => vm.openAlbumOfTrack(track),
+                                      child: Tooltip(
+                                        message: track.album,
+                                        child: LinkText(
+                                          track.album,
+                                          hoverColor: colors.palette.purple,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: colors.textMuted,
+                                          ),
+                                          onTap: () => vm.openAlbumOfTrack(track),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1113,85 +1131,56 @@ class _PlayerBar extends StatelessWidget {
   }
 }
 
-/// The cover of the current track, which opens and closes the queue: a dark veil with a chevron under the mouse (and
-/// while the queue is open), and a glow of the accent while a track plays, with a slow "breath" (not on a phone or
-/// tablet).
-class _QueueCover extends StatefulWidget {
-  @override
-  State<_QueueCover> createState() => _QueueCoverState();
-}
-
-class _QueueCoverState extends State<_QueueCover> with SingleTickerProviderStateMixin {
-  bool _hover = false;
-  late final AnimationController _breath = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1800),
-  );
-
-  @override
-  void dispose() {
-    _breath.dispose();
-    super.dispose();
-  }
+/// The cover of the current track, which opens and closes the queue: a dark veil with a chevron under the mouse or the
+/// keyboard's focus (and while the queue is open), and a glow of the accent while a track plays. It holds still.
+class _QueueCover extends StatelessWidget {
+  const _QueueCover();
 
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
     final colors = context.colors;
     final open = player.isQueueOpen;
-    final breathe = player.isPlaying && !AppPlatform.current.isMobile;
-    if (breathe && !_breath.isAnimating) {
-      _breath.repeat(reverse: true);
-    } else if (!breathe && _breath.isAnimating) {
-      _breath.animateTo(0, duration: const Duration(milliseconds: 400));
-    }
     return Tooltip(
       message: context.tr('TipQueueToggle'),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: player.toggleQueue,
-          child: ScaleTransition(
-            scale: Tween(begin: 1.0, end: 1.05).animate(CurvedAnimation(parent: _breath, curve: Curves.easeInOut)),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: colors.surface2,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: player.isPlaying ? colors.accent.withValues(alpha: 0.4) : colors.palette.shadow,
-                    blurRadius: 18,
-                    spreadRadius: -4,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+      // A remote's arrows and the keyboard reach it too: the queue opens nowhere else on a wide screen.
+      child: Pressable(
+        onPressed: player.toggleQueue,
+        builder: (context, lit) => AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: colors.surface2,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: player.isPlaying ? colors.accent.withValues(alpha: 0.4) : colors.palette.shadow,
+                blurRadius: 18,
+                spreadRadius: -4,
+                offset: const Offset(0, 6),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CoverImage(path: player.currentTrack?.coverArtPath, radius: 0, placeholderColor: colors.palette.cyan),
-                  AnimatedOpacity(
-                    opacity: _hover ? 1 : (open ? 0.85 : 0),
-                    duration: const Duration(milliseconds: 180),
-                    child: ColoredBox(
-                      color: const Color(0x8C000000),
-                      child: AnimatedRotation(
-                        turns: open ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 250),
-                        curve: Curves.easeOutCubic,
-                        child: Icon(Icons.keyboard_arrow_up_rounded, size: 26, color: Colors.white),
-                      ),
-                    ),
+            ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CoverImage(path: player.currentTrack?.coverArtPath, radius: 0, placeholderColor: colors.palette.cyan),
+              AnimatedOpacity(
+                opacity: lit ? 1 : (open ? 0.85 : 0),
+                duration: const Duration(milliseconds: 180),
+                child: ColoredBox(
+                  color: const Color(0x8C000000),
+                  child: AnimatedRotation(
+                    turns: open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    child: Icon(Icons.keyboard_arrow_up_rounded, size: 26, color: Colors.white),
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -1257,51 +1246,6 @@ class _Footer extends StatelessWidget {
                 Text(vm.rightFooterStatusText, style: TextStyle(fontSize: 11, color: colors.textMuted)),
               ],
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PlayerLink extends StatefulWidget {
-  const _PlayerLink({
-    required this.text,
-    required this.hoverColor,
-    required this.onTap,
-  });
-
-  final String text;
-  final Color hoverColor;
-  final VoidCallback onTap;
-
-  @override
-  State<_PlayerLink> createState() => _PlayerLinkState();
-}
-
-class _PlayerLinkState extends State<_PlayerLink> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Tooltip(
-      message: widget.text,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Text(
-            widget.text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: _hover ? widget.hoverColor : colors.textMuted,
-            ),
           ),
         ),
       ),

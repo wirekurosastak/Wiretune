@@ -371,6 +371,7 @@ void main() {
     repo.saveTracks([t1]);
     await service.initialize();
 
+    service.serverConnected = true; // an account's hidden items change only while signed in to its server
     await service.setCurrentUser('user_alpha');
     await service.hideTrack('t1');
     expect(service.isTrackHidden(t1), isTrue);
@@ -386,4 +387,70 @@ void main() {
     expect(service.isTrackHidden(t1), isTrue);
     expect(service.tracks, isEmpty);
   });
+
+  test(
+    "the account's hidden items stay on the device for offline use, and cannot change while it is offline",
+    () async {
+      final repo = MockRepository();
+      final service = _service(repo);
+      final track = Track(
+        id: 's1',
+        title: 'Song 1',
+        artist: 'Artist A',
+        album: 'Album 1',
+        streamUrl: 'http://server/api/stream/s1',
+        duration: const Duration(seconds: 180),
+        format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
+      );
+      await service.initialize();
+      await service.setCurrentUser('account');
+      service.serverConnected = true;
+      await service.mergeServerTracks([track], const UserDataSnapshot([], [], [], {}, [], [], ['s1']));
+      expect(service.tracks, isEmpty);
+
+      // The next start, before the server answers (or when it cannot be reached): still hidden.
+      final restarted = _service(repo);
+      await restarted.initialize();
+      await restarted.setCurrentUser('account');
+      expect(restarted.isTrackIdHidden('s1'), isTrue);
+      expect(restarted.tracks, isEmpty);
+
+      // Offline, a change would be lost at the next refresh, so it is not made, nor sent; the user is told why.
+      final sent = <HiddenChangeEvent>[];
+      final notices = <ChangeNotice>[];
+      restarted.hiddenToggled.listen(sent.add);
+      restarted.changeNotice.listen(notices.add);
+      expect(restarted.canChangeHidden, isFalse);
+      await restarted.unhideTrack('s1');
+      await restarted.hideArtist('artist-b');
+      expect(restarted.isTrackIdHidden('s1'), isTrue);
+      expect(restarted.hiddenArtists, isEmpty);
+      expect(sent, isEmpty);
+      expect(notices, [ChangeNotice.readOnlyOffline, ChangeNotice.readOnlyOffline]);
+
+      // So is a favourite of a server track; and a playlist made meanwhile stays on this device.
+      await restarted.toggleFavorite('s1');
+      expect(restarted.getTrack('s1')!.isFavorite, isFalse);
+      expect((await restarted.createPlaylist('On the road')).isServer, isFalse);
+      expect(notices.skip(2), [ChangeNotice.readOnlyOffline, ChangeNotice.playlistKeptOnDevice]);
+      notices.clear();
+
+      // Signed in again, a change is made and sent on.
+      restarted.serverConnected = true;
+      await restarted.unhideTrack('s1');
+      expect(restarted.tracks, hasLength(1));
+      expect(sent.map((e) => (e.itemType, e.itemId, e.hidden)), [('track', 's1', false)]);
+
+      // Without an account, hiding is the device's own business.
+      await restarted.removeServerTracks();
+      restarted.serverConnected = false;
+      expect(restarted.canChangeHidden, isTrue);
+      await restarted.hideArtist('artist-b');
+      expect(restarted.isArtistHidden('artist-b'), isTrue);
+      expect(sent, hasLength(1));
+      await restarted.createPlaylist('Local');
+      expect(notices, isEmpty);
+      expect((await repo.getHiddenItems('account'))['track'], isEmpty); // the account's copy left with its tracks
+    },
+  );
 }

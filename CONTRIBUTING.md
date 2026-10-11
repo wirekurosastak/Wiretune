@@ -20,8 +20,8 @@ what a change has to look like.
   media routes and only carries a stream token; no token goes into a log, and no server path goes to a client. A
   person's data lives on the server under their account, and its routes take the account from the token.
 - **Player and server change together.** The HTTP API ([api.md](docs/api.md)) is their contract: change both sides in
-  one pull request. A change to the tables raises `DatabaseManager.schemaVersion` and adds the step that upgrades the
-  previous version in place, with a test that opens a database of that version.
+  one pull request. A change to the tables raises `DatabaseManager.schemaVersion` and appends the step that upgrades
+  the previous version in place to `DatabaseManager._upgrades`, with a test that opens a database of that version.
 - **No text literals in the interface**: every string goes into `strings.dart`, in all three languages
   ([how](docs/development.md#texts-and-languages)).
 - **Every screen**: the wide and the phone layout, large fonts, and a TV remote (focus works, nothing is hover-only or

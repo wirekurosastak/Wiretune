@@ -14,6 +14,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../view_models/app_section.dart';
+import '../view_models/library_view_models.dart';
 import '../view_models/main_view_model.dart';
 
 /// Local HTTP endpoint for scripted UI testing. It exists in debug builds only ([isEnabled] is false in a release or
@@ -82,6 +83,33 @@ class UiAutomationServer {
           // Below the user's 720 px minimum too, so a script can look at the phone layout.
           await windowManager.setMinimumSize(const Size(320, 480));
           await windowManager.setSize(Size(width, height));
+          return await _json(request, 200, {'success': true});
+        case '/api/ui/language':
+          final code = query['code'];
+          if (code == null || code.isEmpty) break;
+          _vm.changeLanguage(code);
+          return await _json(request, 200, {'success': true, 'language': code});
+        case '/api/ui/theme':
+          final mode = query['mode'];
+          if (mode != 'light' && mode != 'dark') break;
+          _vm.setTheme(light: mode == 'light', persist: false);
+          return await _json(request, 200, {'success': true, 'theme': mode});
+        case '/api/ui/sort':
+          // ?list=tracks|favorites|albums|artists&field=<the field's name>; the active field flips its direction.
+          final field = query['field'];
+          T? named<T extends Enum>(List<T> values) => values.where((f) => f.name == field).firstOrNull;
+          switch ((query['list'], named(TrackSortField.values), named(AlbumSortField.values))) {
+            case ('tracks', final TrackSortField f, _):
+              _vm.tracks.setSortField(f);
+            case ('favorites', final TrackSortField f, _):
+              _vm.favorites.setSortField(f);
+            case ('albums', _, final AlbumSortField f):
+              _vm.albums.setSortField(f);
+            case ('artists', _, _) when named(ArtistSortField.values) != null:
+              _vm.artists.setSortField(named(ArtistSortField.values)!);
+            default:
+              return await _json(request, 404, {'error': 'Unknown list or field'});
+          }
           return await _json(request, 200, {'success': true});
         case '/api/ui/search':
           _vm.searchQuery = query['q'] ?? '';
@@ -173,6 +201,15 @@ class UiAutomationServer {
           if (album == null) return await _json(request, 404, {'error': 'Album not found'});
           _vm.openAlbum(album);
           return await _json(request, 200, {'success': true, 'title': album.title});
+        case '/api/ui/back':
+          return await _json(request, 200, {'success': _vm.tryNavigateBack()});
+        case '/api/ui/open-playlist':
+          final name = query['name'];
+          final playlist = _vm.library.playlists.where((pl) => pl.name == name).firstOrNull;
+          if (playlist == null) return await _json(request, 404, {'error': 'Playlist not found'});
+          _vm.navigateTo(AppSection.playlists);
+          _vm.playlists.openPlaylist(playlist);
+          return await _json(request, 200, {'success': true, 'name': playlist.name});
         case '/api/ui/open-artist':
           final name = query['name']?.toLowerCase();
           if (name == null || name.isEmpty) break;
@@ -219,6 +256,7 @@ class UiAutomationServer {
       'repeatMode': _vm.player.repeatMode.name,
       'isShuffle': _vm.player.isShuffle,
       'isQueueOpen': _vm.player.isQueueOpen,
+      'remoteDevice': _vm.player.isRemote ? _vm.player.remoteDeviceName : null,
       'audioDevices': [
         for (final d in _vm.audioSettings.availableDevices)
           {'id': d.id, 'name': d.name, 'exclusive': d.isExclusiveSupported, 'bitPerfect': d.isBitperfectSupported},

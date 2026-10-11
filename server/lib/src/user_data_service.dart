@@ -56,10 +56,9 @@ class UserDataService {
         )
         .map(_toPlaylist)
         .toList();
-    final hiddenRows = db.select(
-      'SELECT item_type, item_id FROM user_hidden WHERE user_id = ? ORDER BY hidden_at',
-      [userId],
-    );
+    final hiddenRows = db.select('SELECT item_type, item_id FROM user_hidden WHERE user_id = ? ORDER BY hidden_at', [
+      userId,
+    ]);
     final hiddenArtists = <String>[];
     final hiddenAlbums = <String>[];
     final hiddenTracks = <String>[];
@@ -93,17 +92,19 @@ class UserDataService {
   bool setHidden(String userId, String itemType, String itemId, bool hidden) {
     final db = _db.connection;
     if (!hidden) {
-      db.execute(
-        'DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?',
-        [userId, itemType, itemId],
-      );
+      db.execute('DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?', [
+        userId,
+        itemType,
+        itemId,
+      ]);
       return true;
     }
     db.execute(_hiddenInsertSql, [userId, itemType, itemId, toDbTime(DateTime.now()), UserDataRules.maxHidden]);
-    return db.select(
-      'SELECT 1 FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?',
-      [userId, itemType, itemId],
-    ).isNotEmpty;
+    return db.select('SELECT 1 FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?', [
+      userId,
+      itemType,
+      itemId,
+    ]).isNotEmpty;
   }
 
   /// Counts one more play of a track. Null when the account is at its statistics limit.
@@ -160,26 +161,40 @@ class UserDataService {
     return _db.connection.updatedRows > 0;
   }
 
-  /// Null when the playlist may be stored, otherwise the reason it may not.
-  static String? validatePlaylist(String playlistId, PlaylistUpdate? update) {
+  /// Null when the playlist may be stored, otherwise the rule it breaks.
+  static RuleViolation? validatePlaylist(String playlistId, PlaylistUpdate? update) {
     final idError = UserDataRules.validateId(playlistId);
-    if (idError != null) return idError;
-    if (update == null) return 'The playlist is missing.';
+    if (idError != null) return RuleViolation(ErrorCodes.invalidId, idError);
+    if (update == null) return const RuleViolation(ErrorCodes.playlistInvalid, 'The playlist is missing.');
     final PlaylistUpdate(:name, :description, :trackIds) = update;
-    if (isBlank(name)) return 'The playlist name must not be empty.';
+    if (isBlank(name)) {
+      return const RuleViolation(ErrorCodes.playlistNameRequired, 'The playlist name must not be empty.');
+    }
     if (name!.trim().length > UserDataRules.maxPlaylistNameLength) {
-      return 'The playlist name must be at most ${UserDataRules.maxPlaylistNameLength} characters.';
+      return const RuleViolation(
+        ErrorCodes.playlistNameTooLong,
+        'The playlist name must be at most ${UserDataRules.maxPlaylistNameLength} characters.',
+        {'max': UserDataRules.maxPlaylistNameLength},
+      );
     }
     if (description != null && description.trim().length > UserDataRules.maxPlaylistDescriptionLength) {
-      return 'The playlist description must be at most ${UserDataRules.maxPlaylistDescriptionLength} characters.';
+      return const RuleViolation(
+        ErrorCodes.playlistDescriptionTooLong,
+        'The playlist description must be at most ${UserDataRules.maxPlaylistDescriptionLength} characters.',
+        {'max': UserDataRules.maxPlaylistDescriptionLength},
+      );
     }
     if (trackIds == null) return null;
     if (trackIds.length > UserDataRules.maxPlaylistTracks) {
-      return 'A playlist can hold at most ${UserDataRules.maxPlaylistTracks} tracks.';
+      return const RuleViolation(
+        ErrorCodes.playlistTooManyTracks,
+        'A playlist can hold at most ${UserDataRules.maxPlaylistTracks} tracks.',
+        {'max': UserDataRules.maxPlaylistTracks},
+      );
     }
     for (final id in trackIds) {
       final error = UserDataRules.validateId(id);
-      if (error != null) return 'Playlist track: $error';
+      if (error != null) return RuleViolation(ErrorCodes.invalidId, 'Playlist track: $error');
     }
     return null;
   }

@@ -26,7 +26,7 @@ class DownloadListButton extends StatelessWidget {
       : null;
 
   /// The button's diameter: as tall as the play and shuffle buttons beside it.
-  static double size(BuildContext context) => PhoneChrome.isPhone(context) ? 48 : 46;
+  static double size(BuildContext context) => PhoneChrome.isPhone(context) ? PhoneChrome.controlHeight : 46;
 
   @override
   Widget build(BuildContext context) {
@@ -47,9 +47,7 @@ class DownloadListButton extends StatelessWidget {
           dimension: dimension,
           tooltip: !pinned
               ? context.tr('TipDownload')
-              : (complete
-                    ? context.tr('TipRemoveDownload')
-                    : context.trf('DownloadsListProgress', [done, total])),
+              : (complete ? context.tr('TipRemoveDownload') : context.trf('DownloadsListProgress', [done, total])),
           onPressed: onPressed,
         );
       },
@@ -144,14 +142,7 @@ class _DownloadHoverButtonState extends State<_DownloadHoverButton> {
                       : (widget.pinned ? Icons.downloading_rounded : Icons.download_rounded),
                   size: 22,
                   color: iconColor,
-                  shadows: _hover
-                      ? [
-                          BoxShadow(
-                            color: iconColor.withValues(alpha: 0.7),
-                            blurRadius: 14,
-                          ),
-                        ]
-                      : null,
+                  shadows: _hover ? [BoxShadow(color: iconColor.withValues(alpha: 0.7), blurRadius: 14)] : null,
                 ),
               ),
             ],

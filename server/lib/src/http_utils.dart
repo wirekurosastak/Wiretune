@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:shelf/shelf.dart';
+import 'package:wiretune_core/wiretune_core.dart';
 
 const Map<String, String> _jsonHeaders = {'content-type': 'application/json; charset=utf-8'};
 
@@ -14,17 +15,31 @@ const Map<String, String> _jsonHeaders = {'content-type': 'application/json; cha
 Response jsonResponse(Object? body, {int status = 200, Map<String, String>? headers}) =>
     Response(status, body: utf8.encode(jsonEncode(body)), headers: {..._jsonHeaders, ...?headers});
 
-/// `{ "error": message }` with [status].
-Response errorResponse(int status, String message) => jsonResponse({'error': message}, status: status);
+/// `{ "error": message, "code": code, ...details }` with [status]: [code] (one of `ErrorCodes`) for a player to tell
+/// the user in their language, [message] in English for whoever reads the exchange, [details] the numbers or path the
+/// message names.
+Response errorResponse(int status, String code, String message, [Map<String, Object?> details = const {}]) =>
+    jsonResponse({'error': message, 'code': code, ...details}, status: status);
 
-/// 401 with an empty body, as a bearer challenge.
-Response unauthorized() => Response(401, headers: {'www-authenticate': 'Bearer'});
+/// A rule the request broke, as a 400 (or [status]).
+Response violationResponse(RuleViolation violation, {int status = 400}) =>
+    errorResponse(status, violation.code, violation.message, violation.details);
 
-/// 403 with an empty body.
-Response forbidden() => Response(403);
+/// 401 with a bearer challenge, saying why ([code]: no token, or why the one sent no longer opens the API).
+Response unauthorized(String code) => errorResponse(401, code, switch (code) {
+  ErrorCodes.sessionExpired => 'The sign-in has expired.',
+  ErrorCodes.passwordChanged => 'The password was changed since this sign-in.',
+  ErrorCodes.accountRemoved => 'The account no longer exists.',
+  ErrorCodes.wrongCredentials => 'The user name or the password is wrong.',
+  ErrorCodes.tokenInvalid => 'The token is not valid here.',
+  _ => 'Sign in first.',
+}).change(headers: {'www-authenticate': 'Bearer'});
 
-/// 404 with an empty body.
-Response notFound() => Response(404);
+/// 403: only an administrator may do this.
+Response forbidden() => errorResponse(403, ErrorCodes.adminOnly, 'Only an administrator can do this.');
+
+/// 404: there is no such thing.
+Response notFound() => errorResponse(404, ErrorCodes.notFound, 'Not found.');
 
 /// The request body was larger than allowed.
 class BodyTooLargeException implements Exception {

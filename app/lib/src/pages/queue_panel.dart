@@ -463,6 +463,7 @@ class _LyricLineState extends State<_LyricLine> {
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque, // between the words too, not only on their pixels
         onTap: widget.onTap,
         child: Padding(
           // Room at the sides for the glow of the line being sung.

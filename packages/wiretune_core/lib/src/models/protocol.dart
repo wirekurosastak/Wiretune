@@ -79,15 +79,21 @@ class ServerLibraryStatus {
     this.artistCount,
     this.isScanning,
     this.lastScanCompletedUtc,
-    this.lastScanError,
-  );
+    this.lastScanError, [
+    this.lastScanProblem,
+  ]);
 
   final int trackCount;
   final int albumCount;
   final int artistCount;
   final bool isScanning;
   final DateTime? lastScanCompletedUtc;
+
+  /// Why the last scan didn't run or failed, in English; null when it went well (or for anyone but an administrator).
   final String? lastScanError;
+
+  /// The same as a code ([ErrorCodes.folderMissing], [ErrorCodes.folderLooksUnmounted], [ErrorCodes.scanFailed]).
+  final String? lastScanProblem;
 
   Map<String, Object?> toJson() => {
     'trackCount': trackCount,
@@ -96,6 +102,7 @@ class ServerLibraryStatus {
     'isScanning': isScanning,
     'lastScanCompletedUtc': lastScanCompletedUtc == null ? null : formatIsoUtc(lastScanCompletedUtc!),
     'lastScanError': lastScanError,
+    'lastScanProblem': lastScanProblem,
   };
 
   static ServerLibraryStatus fromJson(Object? json) {
@@ -107,6 +114,7 @@ class ServerLibraryStatus {
       map['isScanning'] as bool? ?? false,
       parseIsoUtc(map['lastScanCompletedUtc']),
       map['lastScanError'] as String?,
+      map['lastScanProblem'] as String?,
     );
   }
 }
@@ -251,6 +259,76 @@ class UserDataSnapshot {
 }
 
 /// Limits the server enforces on per-account data.
+/// The `code` of the server's error answers (`{ "error", "code" }`, docs/api.md): what went wrong, for a player to
+/// say in the user's language. The `error` beside it is the same in English, for people reading the HTTP exchange.
+abstract final class ErrorCodes {
+  // Requests
+  static const String invalidJson = 'invalidJson';
+  static const String bodyTooLarge = 'bodyTooLarge';
+  static const String notFound = 'notFound';
+  static const String internalError = 'internalError';
+  static const String rateLimited = 'rateLimited'; // with retryAfter (seconds)
+
+  // Signing in (401 answers carry one of the first five)
+  static const String signInRequired = 'signInRequired';
+  static const String tokenInvalid = 'tokenInvalid';
+  static const String sessionExpired = 'sessionExpired';
+  static const String passwordChanged = 'passwordChanged';
+  static const String accountRemoved = 'accountRemoved';
+  static const String wrongCredentials = 'wrongCredentials';
+  static const String adminOnly = 'adminOnly';
+  static const String credentialsRequired = 'credentialsRequired';
+  static const String usernameInvalid = 'usernameInvalid'; // with max
+  static const String passwordTooShort = 'passwordTooShort'; // with min
+  static const String passwordTooLong = 'passwordTooLong'; // with max (bytes)
+  static const String alreadySetUp = 'alreadySetUp';
+  static const String setupCodeWrong = 'setupCodeWrong';
+  static const String currentPasswordWrong = 'currentPasswordWrong';
+  static const String usernameTaken = 'usernameTaken';
+  static const String userNotFound = 'userNotFound';
+  static const String cannotDeleteSelf = 'cannotDeleteSelf';
+  static const String cannotResetOwnPassword = 'cannotResetOwnPassword';
+
+  // The music folder (with path where there is one)
+  static const String folderRequired = 'folderRequired';
+  static const String folderInvalid = 'folderInvalid';
+  static const String folderMissing = 'folderMissing';
+  static const String folderUnreadable = 'folderUnreadable';
+  static const String folderWholeDisk = 'folderWholeDisk';
+  static const String folderSystem = 'folderSystem';
+  static const String folderServerData = 'folderServerData';
+  static const String folderLooksUnmounted = 'folderLooksUnmounted';
+  static const String scanFailed = 'scanFailed';
+
+  // The account's data (limits with limit)
+  static const String invalidId = 'invalidId';
+  static const String invalidItemType = 'invalidItemType';
+  static const String favoritesLimit = 'favoritesLimit';
+  static const String playCountsLimit = 'playCountsLimit';
+  static const String playlistsLimit = 'playlistsLimit';
+  static const String hiddenLimit = 'hiddenLimit';
+  static const String playlistInvalid = 'playlistInvalid';
+  static const String playlistNameRequired = 'playlistNameRequired';
+  static const String playlistNameTooLong = 'playlistNameTooLong'; // with max
+  static const String playlistDescriptionTooLong = 'playlistDescriptionTooLong'; // with max
+  static const String playlistTooManyTracks = 'playlistTooManyTracks'; // with max
+  static const String playlistNotFound = 'playlistNotFound';
+
+  // Remote control
+  static const String notWebSocket = 'notWebSocket';
+  static const String originRefused = 'originRefused';
+  static const String tooManyConnections = 'tooManyConnections';
+}
+
+/// A rule the server's input broke: the code ([ErrorCodes]), the English text, and the numbers the text names.
+class RuleViolation {
+  const RuleViolation(this.code, this.message, [this.details = const {}]);
+
+  final String code;
+  final String message;
+  final Map<String, Object> details;
+}
+
 abstract final class UserDataRules {
   static const int maxIdLength = 128;
   static const int maxPlaylistNameLength = 200;

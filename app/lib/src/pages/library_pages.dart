@@ -27,7 +27,7 @@ class EmptyLibrary extends StatelessWidget {
     return EmptyState(
       icon: Icons.library_music_outlined,
       title: context.tr('EmptyLibraryTitle'),
-      hint: context.tr('EmptyLibraryHint'),
+      hint: context.tr(vm.capabilities.supportsLocalFolder ? 'EmptyLibraryHint' : 'EmptyLibraryHintServer'),
       actions: [
         FilledButton.icon(
           onPressed: vm.showLoginScreen,
@@ -63,17 +63,17 @@ class TracksPage extends StatelessWidget {
                 title: context.tr('NavTracks'),
                 subtitle: '${context.trf('TrackCount', [tracks.totalTracksCount])}  •  ${tracks.totalTracksDuration}',
                 actions: [
+                  if (PhoneChrome.isPhone(context)) TrackSortButtons(tracks), // a wide table sorts by its headers
                   PlayShuffleButtons(
                     playLabel: context.tr('Play'),
                     shuffleLabel: context.tr('Shuffle'),
                     onPlay: tracks.playAll,
                     onShuffle: tracks.shuffleAll,
                   ),
-                  if (PhoneChrome.isPhone(context)) _TrackSortButtons(tracks),
                 ],
               ),
             ),
-            TrackSliver(tracks: tracks.displayedTracks, onPlay: tracks.playTrack),
+            TrackSliver(tracks: tracks.displayedTracks, sorting: tracks),
             const PageEndSpace(),
           ],
         );
@@ -107,6 +107,7 @@ class FavoritesPage extends StatelessWidget {
                 subtitle:
                     '${context.trf('TrackCount', [favorites.favoriteTracks.length])}  •  ${favorites.totalFavoritesDuration}',
                 actions: [
+                  if (PhoneChrome.isPhone(context)) TrackSortButtons(favorites), // a wide table sorts by its headers
                   PlayShuffleButtons(
                     playLabel: context.tr('Play'),
                     shuffleLabel: context.tr('Shuffle'),
@@ -118,11 +119,10 @@ class FavoritesPage extends StatelessWidget {
                       onPressed: context.vm.downloads.toggleFavorites,
                     ),
                   ),
-                  if (PhoneChrome.isPhone(context)) _TrackSortButtons(favorites),
                 ],
               ),
             ),
-            TrackSliver(tracks: favorites.favoriteTracks, onPlay: favorites.playTrack, kind: TrackTableKind.favorites),
+            TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites, kind: TrackTableKind.favorites),
             const PageEndSpace(),
           ],
         );
@@ -132,18 +132,11 @@ class FavoritesPage extends StatelessWidget {
 }
 
 /// The button that leads back from a detail page (a bordered button with the section's arrow).
-class BackLink extends StatefulWidget {
+class BackLink extends StatelessWidget {
   const BackLink({super.key, required this.text, required this.onPressed});
 
   final String text;
   final VoidCallback onPressed;
-
-  @override
-  State<BackLink> createState() => _BackLinkState();
-}
-
-class _BackLinkState extends State<BackLink> {
-  bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
@@ -156,7 +149,7 @@ class _BackLinkState extends State<BackLink> {
           alignment: Alignment.centerLeft,
           child: InkWell(
             borderRadius: BorderRadius.circular(6),
-            onTap: widget.onPressed,
+            onTap: onPressed,
             child: SizedBox(
               height: 56,
               child: Padding(
@@ -169,7 +162,7 @@ class _BackLinkState extends State<BackLink> {
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 280),
                       child: Text(
-                        widget.text,
+                        text,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.textMain),
@@ -188,46 +181,37 @@ class _BackLinkState extends State<BackLink> {
       padding: EdgeInsets.fromLTRB(narrow ? 16 : 26, narrow ? 12 : 22, narrow ? 16 : 26, 12),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hover = true),
-          onExit: (_) => setState(() => _hover = false),
-          child: GestureDetector(
-            onTap: widget.onPressed,
-            child: AnimatedScale(
-              scale: _hover ? 1.05 : 1.0,
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.arrow_back_rounded,
-                      size: 20,
+        child: Pressable(
+          onPressed: onPressed,
+          builder: (context, lit) => AnimatedScale(
+            scale: lit ? 1.05 : 1.0,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.arrow_back_rounded,
+                    size: 20,
+                    color: colors.textMain,
+                    shadows: lit ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)] : null,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    text,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                       color: colors.textMain,
-                      shadows: _hover
-                          ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)]
-                          : null,
+                      letterSpacing: -0.2,
+                      shadows: lit ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)] : null,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      widget.text,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: colors.textMain,
-                        letterSpacing: -0.2,
-                        shadows: _hover
-                            ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)]
-                            : null,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -316,43 +300,49 @@ class DetailHeader extends StatelessWidget {
       return SafeArea(
         bottom: false,
         child: Column(
-              children: [
-                ?back,
-                Padding(
-                  padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 10),
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 230,
-                        height: 230,
-                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
-                        child: framed,
-                      ),
-                      const SizedBox(height: 20),
-                      titleWidget ??
-                          Text(
-                            title,
-                            textAlign: TextAlign.center,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 24,
-                              letterSpacing: -0.6,
-                              fontWeight: FontWeight.w800,
-                              color: colors.textMain,
-                            ),
-                          ),
-                      if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
-                      if (actions.isNotEmpty) ...[
-                        const SizedBox(height: 18),
-                        for (final action in actions) Padding(padding: const EdgeInsets.only(bottom: 10), child: action),
-                      ],
-                    ],
+          children: [
+            ?back,
+            Padding(
+              padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 10),
+              child: Column(
+                children: [
+                  Container(
+                    width: 230,
+                    height: 230,
+                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
+                    child: framed,
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  titleWidget ??
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 24,
+                          letterSpacing: -0.6,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textMain,
+                        ),
+                      ),
+                  if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
+                  if (actions.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 12,
+                      runSpacing: 10,
+                      children: actions,
+                    ),
+                  ],
+                ],
+              ),
             ),
-          );
+          ],
+        ),
+      );
     }
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,29 +392,28 @@ class _Detail extends StatelessWidget {
   );
 }
 
-class _HideActionButton extends StatefulWidget {
-  const _HideActionButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-  });
+/// A round icon button beside a detail page's play and shuffle (hide, delete), named by its tooltip; [color] tints it
+/// (the danger colour for a deletion), else it is muted until the mouse is over it.
+class HeaderIconButton extends StatefulWidget {
+  const HeaderIconButton({super.key, required this.tooltip, required this.icon, required this.onPressed, this.color});
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
+  final Color? color;
 
   @override
-  State<_HideActionButton> createState() => _HideActionButtonState();
+  State<HeaderIconButton> createState() => HeaderIconButtonState();
 }
 
-class _HideActionButtonState extends State<_HideActionButton> {
+class HeaderIconButtonState extends State<HeaderIconButton> {
   bool _hover = false;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final dimension = PhoneChrome.isPhone(context) ? 48.0 : 46.0;
-    final iconColor = _hover ? colors.textMain : colors.textMuted;
+    final dimension = PhoneChrome.isPhone(context) ? PhoneChrome.controlHeight : 46.0;
+    final iconColor = widget.color ?? (_hover ? colors.textMain : colors.textMuted);
     return PopEffect(
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -452,14 +441,7 @@ class _HideActionButtonState extends State<_HideActionButton> {
               widget.icon,
               size: 22,
               color: iconColor,
-              shadows: _hover
-                  ? [
-                      BoxShadow(
-                        color: colors.textMain.withValues(alpha: 0.7),
-                        blurRadius: 14,
-                      ),
-                    ]
-                  : null,
+              shadows: _hover ? [BoxShadow(color: iconColor.withValues(alpha: 0.7), blurRadius: 14)] : null,
             ),
           ),
         ),
@@ -470,8 +452,8 @@ class _HideActionButtonState extends State<_HideActionButton> {
 
 /// The sort buttons of a list page ("Sort by: ABC ↑ | Year") as one segmented pill; the active segment is filled with
 /// the accent.
-class _SortButtons extends StatelessWidget {
-  const _SortButtons({required this.buttons});
+class SortButtons extends StatelessWidget {
+  const SortButtons({super.key, required this.buttons});
 
   final List<(String label, bool selected, VoidCallback onTap)> buttons;
 
@@ -480,11 +462,11 @@ class _SortButtons extends StatelessWidget {
     final colors = context.colors;
     final isDark = colors.palette.isDark;
     if (PhoneChrome.isPhone(context)) {
+      // The active field with its direction, as on every other sort control.
       final active = buttons.firstWhere((b) => b.$2, orElse: () => buttons.first);
-      final cleanLabel = active.$1.replaceAll(RegExp(r'\s*[↑↓]'), '');
       return SizedBox(
         width: double.infinity,
-        height: 38,
+        height: PhoneChrome.controlHeight,
         child: OutlinedButton(
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -526,11 +508,7 @@ class _SortButtons extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                         child: Text(
                           context.tr('SortBy'),
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: colors.textMain,
-                          ),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
                         ),
                       ),
                       for (final (label, selected, onTap) in buttons)
@@ -562,18 +540,12 @@ class _SortButtons extends StatelessWidget {
             children: [
               Flexible(
                 child: Text(
-                  cleanLabel,
+                  active.$1,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: colors.accent,
-                  ),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.accent),
                 ),
               ),
-              const SizedBox(width: 6),
-              Icon(Icons.swap_vert_rounded, size: 18, color: colors.accent),
             ],
           ),
         ),
@@ -640,16 +612,16 @@ class _SortButtons extends StatelessWidget {
   }
 }
 
-/// The sort buttons of the Tracks and the Favourites pages.
-class _TrackSortButtons extends StatelessWidget {
-  const _TrackSortButtons(this.sorting);
+/// The sort buttons of a list of tracks on a phone (a wide table sorts by its headers).
+class TrackSortButtons extends StatelessWidget {
+  const TrackSortButtons(this.sorting, {super.key});
 
   final TrackSorting sorting;
 
   @override
   Widget build(BuildContext context) {
     context.tr('SortBy'); // the labels follow the language
-    return _SortButtons(
+    return SortButtons(
       buttons: [
         for (final field in TrackSortField.values)
           (sorting.sortLabel(field), sorting.sortField == field, () => sorting.setSortField(field)),
@@ -684,7 +656,7 @@ class _GenreFilter extends StatelessWidget {
           CheckedPopupMenuItem(value: genre, checked: equalsIgnoreCase(genre, selected), child: Text(genre)),
       ],
       child: Container(
-        height: 38,
+        height: PhoneChrome.isPhone(context) ? PhoneChrome.controlHeight : 38,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
@@ -732,11 +704,7 @@ class AlbumsPage extends StatelessWidget {
         final selected = albums.selectedAlbum;
         if (albums.isAlbumDetailOpen && selected != null) return AlbumDetail(album: selected);
         if (albums.displayedAlbums.isEmpty) {
-          return EmptyState(
-            icon: Icons.album_outlined,
-            title: context.tr('EmptyAlbumsTitle'),
-            hint: context.tr('EmptyConnectHint'),
-          );
+          return const EmptyLibrary(); // nothing to list means nothing in the library
         }
         return CustomScrollView(
           key: const PageStorageKey('albums'),
@@ -746,21 +714,14 @@ class AlbumsPage extends StatelessWidget {
                 title: context.tr('NavAlbums'),
                 subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
                 actions: [
-                  if (albums.genres.isNotEmpty)
-                    _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
-                  _SortButtons(
+                  SortButtons(
                     buttons: [
-                      (albums.sortTitleLabel, albums.isSortByTitle, () => albums.setSortField(AlbumSortField.title)),
-                      (albums.sortArtistLabel, albums.isSortByArtist, () => albums.setSortField(AlbumSortField.artist)),
-                      (albums.sortYearLabel, albums.isSortByYear, () => albums.setSortField(AlbumSortField.year)),
-                      (albums.sortAddedLabel, albums.isSortByAdded, () => albums.setSortField(AlbumSortField.added)),
-                      (
-                        albums.sortQualityLabel,
-                        albums.isSortByQuality,
-                        () => albums.setSortField(AlbumSortField.quality),
-                      ),
+                      for (final field in AlbumSortField.values)
+                        (albums.sortLabel(field), albums.sortField == field, () => albums.setSortField(field)),
                     ],
                   ),
+                  if (albums.genres.isNotEmpty)
+                    _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
                 ],
               ),
             ),
@@ -822,7 +783,7 @@ class AlbumDetail extends StatelessWidget {
                   onPressed: () => vm.downloads.toggleAlbum(album),
                 ),
               ),
-              _HideActionButton(
+              HeaderIconButton(
                 tooltip: context.tr(vm.library.isAlbumHidden(album.id) ? 'Unhide' : 'HideAlbum'),
                 icon: vm.library.isAlbumHidden(album.id) ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                 onPressed: () {
@@ -838,7 +799,7 @@ class AlbumDetail extends StatelessWidget {
             ],
           ),
         ),
-        TrackSliver(tracks: album.tracks, onPlay: albums.playAlbumTrack, kind: TrackTableKind.album),
+        TrackSliver(tracks: album.tracks, kind: TrackTableKind.album),
         const PageEndSpace(),
       ],
     );
@@ -859,11 +820,7 @@ class ArtistsPage extends StatelessWidget {
         final selected = artists.selectedArtist;
         if (artists.isArtistDetailOpen && selected != null) return ArtistDetail(artist: selected);
         if (artists.displayedArtists.isEmpty) {
-          return EmptyState(
-            icon: Icons.person_outline,
-            title: context.tr('EmptyArtistsTitle'),
-            hint: context.tr('EmptyConnectHint'),
-          );
+          return const EmptyLibrary(); // nothing to list means nothing in the library
         }
         return CustomScrollView(
           key: const PageStorageKey('artists'),
@@ -873,15 +830,14 @@ class ArtistsPage extends StatelessWidget {
                 title: context.tr('NavArtists'),
                 subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
                 actions: [
-                  if (artists.genres.isNotEmpty)
-                    _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
-                  _SortButtons(
+                  SortButtons(
                     buttons: [
-                      (artists.sortNameLabel, artists.isSortByName, () => artists.setSortField(ArtistSortField.name)),
-                      (artists.sortAddedLabel, artists.isSortByAdded, () => artists.setSortField(ArtistSortField.added)),
-                      (artists.sortAlbumsLabel, artists.isSortByAlbums, () => artists.setSortField(ArtistSortField.albums)),
+                      for (final field in ArtistSortField.values)
+                        (artists.sortLabel(field), artists.sortField == field, () => artists.setSortField(field)),
                     ],
                   ),
+                  if (artists.genres.isNotEmpty)
+                    _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
                 ],
               ),
             ),
@@ -923,7 +879,8 @@ class ArtistDetail extends StatelessWidget {
             tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
             title: artist.name,
             details: [
-              _Detail(context.trf('TrackCountInDatabase', [artist.trackCount])),
+              _Detail(context.trf('AlbumCount', [artist.albumCount])),
+              _Detail(context.trf('TrackCount', [artist.trackCount])),
             ],
             actions: [
               PlayShuffleButtons(
@@ -938,7 +895,7 @@ class ArtistDetail extends StatelessWidget {
                   onPressed: () => vm.downloads.toggleArtist(artist),
                 ),
               ),
-              _HideActionButton(
+              HeaderIconButton(
                 tooltip: context.tr(vm.library.isArtistHidden(artist.id) ? 'Unhide' : 'HideArtist'),
                 icon: vm.library.isArtistHidden(artist.id) ? Icons.visibility_outlined : Icons.visibility_off_outlined,
                 onPressed: () {
@@ -969,7 +926,7 @@ class ArtistDetail extends StatelessWidget {
             child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
           ),
         ),
-        TrackSliver(tracks: artists.selectedArtistTracks, onPlay: artists.playArtistTrack, kind: TrackTableKind.artist),
+        TrackSliver(tracks: artists.selectedArtistTracks, kind: TrackTableKind.artist),
         const PageEndSpace(),
       ],
     );

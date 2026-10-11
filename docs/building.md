@@ -22,7 +22,8 @@ dart tool/build.dart --help                  # the targets
 | `server` | `server/bin/wiretune_server` (`.exe` on Windows) and the SQLite library in `server/lib/` |
 | `linux` | `linux/wiretune` with its `lib/` and `data/` |
 | `windows` | `windows/wiretune.exe` with its DLLs (libmpv among them) and `data/` |
-| `macos` | `macos/Wiretune.app` |
+| `windows-installer` | `windows` and `windows-installer/Wiretune-<version>-windows-<processor>-setup.exe` (Inno Setup 6) |
+| `macos` | `macos/Wiretune.app` and `macos/Wiretune.dmg` |
 | `android` | `android/app-<processor>-release.apk`, one per processor type |
 | `appbundle` | `android/app-release.aab`, for Google Play |
 | `ios` | `ios/*.ipa` |
@@ -99,9 +100,17 @@ Install Xcode from the App Store and CocoaPods (`brew install cocoapods`), then:
 dart tool/build.dart macos            # → dist/macos/Wiretune.app
 ```
 
-To hand it to other Macs, sign it with a Developer ID and notarise it: open `app/macos/Runner.xcworkspace` in Xcode,
-set the team under *Signing & Capabilities*, then *Product → Archive → Distribute App → Developer ID*. The app isn't
-sandboxed, on purpose (`app/macos/Runner/Release.entitlements` says why), so it ships outside the Mac App Store.
+To hand it to other Macs, it has to be signed with a Developer ID and notarised. With the identity in the keychain and
+a `notarytool` profile stored (`xcrun notarytool store-credentials <profile> …`), the build does both and staples the
+ticket to the disk image:
+
+```bash
+WIRETUNE_MACOS_SIGN_IDENTITY="Developer ID Application: …" WIRETUNE_NOTARY_PROFILE=<profile> dart tool/build.dart macos
+```
+
+Without them the app keeps the build's ad-hoc signature, which runs only on the Mac that built it (or after the user
+allows it in *System Settings → Privacy & Security*). The app isn't sandboxed, on purpose
+(`app/macos/Runner/Release.entitlements` says why), so it ships outside the Mac App Store.
 
 ## Android player (phones, tablets, TV, Auto)
 
@@ -198,6 +207,24 @@ hooks:
     sqlite3:
       source: system
 ```
+
+## Releases
+
+Pushing a tag `v<version>` (the `version:` of `app/pubspec.yaml` without its build number, `v1.0.2026` for
+`1.0.2026+1`) runs `.github/workflows/release.yml`: it checks that the tag, the pubspec and the Tizen manifest agree,
+builds the server for Linux (x64, arm64), Windows and macOS, the server image for both processors
+(`ghcr.io/<owner>/wiretune-server`), the Linux, Windows (installer and portable zip), macOS (disk image) and Android
+(APKs and App Bundle) players, and leaves them with a `SHA256SUMS.txt` in a draft release to read over and publish.
+iOS and Tizen aren't part of it.
+
+| Secret | For |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | Signing the Android packages: the keystore file in Base64 and what `key.properties` would hold ([signing](#signing)). Required: a release is never signed with the debug key |
+| `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD` | A *Developer ID Application* certificate with its key, exported as `.p12`, in Base64. Without it the disk image holds an ad-hoc signed app |
+| `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID`, `NOTARY_PASSWORD` | Notarising the macOS disk image (an app-specific password of the Apple ID). Needs the certificate too |
+
+The workflow hasn't run yet: the `windows-installer` target and the macOS signing, disk image and notarisation have
+only been written, not run (they need a Windows and a macOS host).
 
 ## Odds and ends
 

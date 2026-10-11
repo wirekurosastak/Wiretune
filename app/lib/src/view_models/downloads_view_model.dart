@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 /// The download buttons (a track, an album, an artist, a playlist, the favourites) and the Downloads card in the
@@ -58,7 +56,8 @@ class DownloadsViewModel extends ChangeNotifier {
 
   bool isPlaylistPinned(Playlist playlist) => _downloads.isPlaylistPinned(playlist.id);
 
-  void togglePlaylist(Playlist playlist) => _pin(() => _downloads.pinPlaylist(playlist.id, !isPlaylistPinned(playlist)));
+  void togglePlaylist(Playlist playlist) =>
+      _pin(() => _downloads.pinPlaylist(playlist.id, !isPlaylistPinned(playlist)));
 
   bool get areFavoritesPinned => _downloads.areFavoritesPinned;
 
@@ -67,18 +66,7 @@ class DownloadsViewModel extends ChangeNotifier {
   /// How many of [tracks] are downloaded, of how many that can be.
   (int done, int total) progressOf(Iterable<Track> tracks) => _downloads.progressOf(tracks);
 
-  Future<void> _checkPermissions() async {
-    if (Platform.isAndroid) {
-      await [
-        Permission.storage,
-        Permission.audio,
-        Permission.manageExternalStorage,
-      ].request();
-    }
-  }
-
-  void _pin(Future<void> Function() change) async {
-    await _checkPermissions();
+  void _pin(Future<void> Function() change) {
     _pinChanges++;
     unawaited(
       change().catchError((Object e) {
@@ -102,6 +90,15 @@ class DownloadsViewModel extends ChangeNotifier {
     final (amount, unit) = sizeOf(_downloads.bytesOnDisk);
     return Localizer.format('DownloadsSize', [amount, unit]);
   }
+
+  /// "1.4 GB" (with the language's decimal separator).
+  String get sizeLabel {
+    final (amount, unit) = sizeOf(_downloads.bytesOnDisk);
+    return Localizer.formatTemplate('{0} {1}', [amount, unit], Localizer.instance.language);
+  }
+
+  /// How many tracks are downloaded on this device (signing out deletes them).
+  int get copyCount => _downloads.copyCount;
 
   /// What the downloads are doing, in a sentence.
   String get statusText {

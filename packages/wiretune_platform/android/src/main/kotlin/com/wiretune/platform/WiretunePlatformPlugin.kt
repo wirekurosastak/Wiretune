@@ -9,12 +9,15 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.wifi.WifiManager
+import android.os.Build
+import android.os.Environment
 import android.os.PowerManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodChannel
 
 /**
- * Answers `wiretune/platform` (is this a television?) and `wiretune/power` (playback started or stopped).
+ * Answers `wiretune/platform` (is this a television? where do downloads go?) and `wiretune/power` (playback started or
+ * stopped).
  *
  * While music plays, the app holds a CPU lock and a Wi-Fi lock, so a stream from the server keeps flowing with the screen
  * off: without the Wi-Fi lock many phones put the radio to sleep and the stream stalls after a few minutes.
@@ -31,6 +34,7 @@ class WiretunePlatformPlugin : FlutterPlugin {
             setMethodCallHandler { call, result ->
                 when (call.method) {
                     "isTelevision" -> result.success(isTelevision(context))
+                    "musicDirectory" -> result.success(musicDirectory(context))
                     else -> result.notImplemented()
                 }
             }
@@ -61,6 +65,20 @@ class WiretunePlatformPlugin : FlutterPlugin {
         if (uiMode?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION) return true
         return context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
     }
+
+    /**
+     * The music folder downloads go into. From Android 11 on, the shared Music folder: an app may add audio files of its
+     * own there without any permission, and they show up in other music apps too. Before that, writing there takes a
+     * storage permission, so the app's own music folder on the shared storage instead, which needs none. Null without
+     * shared storage.
+     */
+    private fun musicDirectory(context: Context): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            @Suppress("DEPRECATION") // still the path of the shared folder; scoped storage governs what may go there
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath
+        } else {
+            context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.absolutePath
+        }
 
     // The locks are released when playback stops, so they need no timeout.
     @SuppressLint("WakelockTimeout")

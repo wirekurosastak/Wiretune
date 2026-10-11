@@ -20,10 +20,12 @@ internet. This page is the honest list of what it does and doesn't do about that
   Otherwise whoever reached a server with an empty data directory first (a wrong path, an unmounted volume) would own
   it. The code protects that first account and nothing else.
 - **Passwords** are bcrypt hashes (cost 12). Setup, sign-in and password changes share a limit of 10 requests a minute
-  per client address. No lockout beyond that, no two-factor, no reset. An account can change its own password if it
-  knows the current one (`POST /api/auth/change-password`; the players have no screen for it yet).
-- **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. There's no revocation: a
-  password change leaves earlier tokens valid until they expire. Deleting the user locks them out at once.
+  per client address. No lockout beyond that, no two-factor. An account changes its own password with the current one
+  (*Settings → Change password*); an administrator can set a new one for any other account (*Settings → Users*).
+- **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. Every request checks its token
+  against the account: deleting the user locks them out at once, and a password change (or an administrator's reset)
+  ends every session signed in before it, stream tokens included. The device that changed the password gets a new
+  token. The role comes from the account at each request, never from the token.
 - **Tokens in URLs.** libmpv, TVs and `ffmpeg` can't send headers, so audio and cover URLs carry `?token=`, and the
   server takes only a **stream token** there: 8 hours, audio and covers only, useless for anything else. It reads
   `?token=` on `/api/stream` and `/api/cover` and nowhere else, and never logs a query string. Those URLs still end up
@@ -34,10 +36,15 @@ internet. This page is the honest list of what it does and doesn't do about that
 - **Roles**: administrator and user. Every user can read the whole library. Favourites, play counts and playlists are
   per account, and no route, not even an administrator's, reads somebody else's.
 - **Files.** The server reads only the music folder and serves only files inside it (or its cover cache). Clients
-  never see a server path. Request bodies are capped at 64 KiB, 4 MiB for a playlist.
+  never see a server path, except that an administrator sees the music folder and why a scan failed. An administrator
+  can point the server at another folder, but not at a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that
+  holds or lies inside the server's data (symbolic links are followed before that is judged). Request bodies are capped
+  at 64 KiB, 4 MiB for a playlist. The tag reader reads at most 4 MiB of a text tag and 32 MiB of a picture, and gives
+  up on a compressed ID3 frame that inflates past 16 MiB, so a damaged or hostile file can't exhaust the memory.
 - **Remote control** (`/api/remote`) passes messages between the players of one account and nowhere else, takes the
   account from the sign-in token in the header (never a stream token, never the URL), turns away requests from web
-  pages, and ends a connection when its token expires or the account is deleted. Whoever holds an account's token can
+  pages, and ends a connection when its token expires, the account's password changes or the account is deleted.
+  Whoever holds an account's token can
   control that account's players. A message is read whole before its 64 K limit is checked, so a signed-in account can
   make the server hold one large message in memory: another reason the server is for people you trust.
 
@@ -46,9 +53,12 @@ internet. This page is the honest list of what it does and doesn't do about that
 - **The sign-in token is stored in plain text** in the player's `wiretune.db` when *Keep me signed in* is ticked (the
   account created on a server's first run is always kept). Anyone who can read that file can use it for up to 90
   days. Signing out clears it, and a token is only ever sent to the server that issued it.
-- **Downloads** are plain copies of the server's files in the `Downloads` folder of the player's data directory,
-  readable by whoever can read that folder. Their names are hashes, never a server's IDs or paths. Signing out deletes
-  them. On iOS they're kept out of iCloud and computer backups.
+- **Downloads** are plain copies of the server's files, readable by whoever can read their folder: `Wiretune` in your
+  music folder on a computer and on Android (the shared *Music* folder from Android 11, where other apps can see them;
+  the app's own folder on the shared storage before that), the app's private storage on iOS and Tizen. They're named
+  after the tags with everything a path could trip on taken out, never after a server's IDs or paths, and only files
+  Wiretune recorded as its own copies are ever overwritten or deleted. Signing out deletes them. On iOS they're kept
+  out of iCloud and computer backups. The player asks for no storage permission anywhere.
 - **Cleartext HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP,
   which those platforms' allow-lists can't express. Use an `https://` address whenever the network isn't yours.
 - **Artist pictures** come from Deezer's public API, which therefore sees the artist names in your library. They're

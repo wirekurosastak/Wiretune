@@ -42,6 +42,16 @@ class PlaylistsPage extends StatelessWidget {
                 title: context.tr('NavPlaylists'),
                 subtitle: context.trf('PlaylistCount', [playlists.playlists.length]),
                 actions: [
+                  SortButtons(
+                    buttons: [
+                      for (final field in PlaylistSortField.values)
+                        (
+                          playlists.listSortLabel(field),
+                          playlists.listSortField == field,
+                          () => playlists.setListSortField(field),
+                        ),
+                    ],
+                  ),
                   FilledButton.icon(
                     onPressed: playlists.openCreateDialog,
                     icon: const Icon(Icons.add_rounded, size: 18),
@@ -174,18 +184,6 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                   playlists.selectedPlaylistTotalDuration,
                   style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
                 ),
-              if (PhoneChrome.isPhone(context))
-                Tooltip(
-                  message: context.tr('PlaylistDeleteAction'),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(99),
-                    onTap: () => playlists.requestDeletePlaylist(playlist),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
-                    ),
-                  ),
-                ),
             ],
             actions: [
               PlayShuffleButtons(
@@ -199,23 +197,13 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                   onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                 ),
               ),
-              if (!PhoneChrome.isPhone(context))
-                PopEffect(
-                  glow: true,
-                  glowColor: colors.danger,
-                  borderRadius: BorderRadius.circular(999),
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: colors.danger,
-                      minimumSize: const Size(0, 46),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      overlayColor: Colors.transparent,
-                    ),
-                    onPressed: () => playlists.requestDeletePlaylist(playlist),
-                    icon: Icon(Icons.delete_outline_rounded, size: 18, color: colors.danger),
-                    label: Text(context.tr('PlaylistDeleteAction')),
-                  ),
-                ),
+              // Where an album's and an artist's page have their hide button.
+              HeaderIconButton(
+                tooltip: context.tr('PlaylistDeleteAction'),
+                icon: Icons.delete_outline_rounded,
+                color: colors.danger,
+                onPressed: () => playlists.requestDeletePlaylist(playlist),
+              ),
             ],
           ),
         ),
@@ -228,7 +216,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             ),
           )
         else
-          TrackSliver(tracks: tracks, onPlay: playlists.playTrack, kind: TrackTableKind.playlist),
+          TrackSliver(tracks: tracks, sorting: playlists, kind: TrackTableKind.playlist),
         const PageEndSpace(),
       ],
     );

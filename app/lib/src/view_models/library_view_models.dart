@@ -10,12 +10,54 @@ import 'player_view_model.dart';
 String formatTotal(Iterable<Track> tracks) =>
     Localizer.formatTotalDuration(tracks.fold(Duration.zero, (sum, t) => sum + t.duration));
 
-/// What the Tracks and the Favourites pages sort by.
-enum TrackSortField { title, artist, album, year, added, quality }
+/// What a list of tracks sorts by, in the order the sort buttons and the table's columns show them: the title, the
+/// track's own fields, then the year, the date added and the quality, as on the albums and the artists pages.
+enum TrackSortField { title, artist, album, length, year, added, quality }
 
-/// The order of a page of tracks and the labels of its sort buttons. As on the albums page, the active field flips its
-/// direction and another one starts in its natural one: A to Z for text, the newest first for the date, the best first
-/// for the quality.
+/// Whether [field] starts with its highest values (the newest year or date, the best quality) rather than A to Z or
+/// the shortest first.
+bool startsDescending(TrackSortField field) =>
+    field == TrackSortField.year || field == TrackSortField.added || field == TrackSortField.quality;
+
+/// The label of a sort button: [name], and while it is the active one the direction.
+String sortButtonLabel(String name, {required bool active, required bool descending}) =>
+    active ? '$name ${descending ? '↓' : '↑'}' : name;
+
+/// [tracks] ordered by [field]; tracks that tie keep their order in [tracks], and one without a year or a date
+/// ([addedAt], the date added to the library unless given) goes last in either direction.
+List<Track> sortTracks(
+  List<Track> tracks,
+  TrackSortField field, {
+  bool descending = false,
+  DateTime? Function(Track track)? addedAt,
+}) {
+  final added = addedAt ?? (Track t) => t.dateAdded;
+  final Object? Function(Track t) value = switch (field) {
+    TrackSortField.year => (t) => t.year,
+    TrackSortField.added => added,
+    _ => (t) => t,
+  };
+  int compare(Track a, Track b) => switch (field) {
+    TrackSortField.title => compareText(a.title, b.title),
+    TrackSortField.artist => compareText(a.artist, b.artist),
+    TrackSortField.album => compareText(a.album, b.album),
+    TrackSortField.length => a.duration.compareTo(b.duration),
+    TrackSortField.year => a.year!.compareTo(b.year!),
+    TrackSortField.added => added(a)!.compareTo(added(b)!),
+    TrackSortField.quality => compareFormatQuality(a.format, b.format),
+  };
+  final list = List.of(tracks);
+  sortStable(list, (a, b) {
+    final (missingA, missingB) = (value(a) == null, value(b) == null);
+    if (missingA || missingB) return (missingA ? 1 : 0) - (missingB ? 1 : 0);
+    return descending ? compare(b, a) : compare(a, b);
+  });
+  return list;
+}
+
+/// The order of a page of tracks and the labels of its sort buttons, which the wide table's column headers share. As
+/// on the albums page, the active field flips its direction and another one starts in its natural one
+/// ([startsDescending]).
 mixin TrackSorting on ChangeNotifier {
   TrackSortField _sortField = TrackSortField.title;
   bool _sortDescending = false;
@@ -34,47 +76,31 @@ mixin TrackSorting on ChangeNotifier {
       _sortDescending = !_sortDescending;
     } else {
       _sortField = field;
-      _sortDescending =
-          field == TrackSortField.year || field == TrackSortField.added || field == TrackSortField.quality;
+      _sortDescending = startsDescending(field);
     }
     _applySort();
     notifyListeners();
   }
 
   /// The button of [field]: its name, and while it is the active one the direction.
-  String sortLabel(TrackSortField field) {
-    final name = switch (field) {
+  String sortLabel(TrackSortField field) => sortButtonLabel(
+    switch (field) {
       TrackSortField.title => 'ABC',
       TrackSortField.artist => Localizer.get('SortArtist'),
       TrackSortField.album => Localizer.get('SortAlbum'),
+      TrackSortField.length => Localizer.get('SortLength'),
       TrackSortField.year => Localizer.get('SortYear'),
       TrackSortField.added => Localizer.get('SortAdded'),
       TrackSortField.quality => Localizer.get('SortQuality'),
-    };
-    return field == _sortField ? '$name ${_sortDescending ? '↓' : '↑'}' : name;
-  }
+    },
+    active: field == _sortField,
+    descending: _sortDescending,
+  );
 
   /// [tracks] (in the library's order) in the page's order; the library's order of artist, album and track number
-  /// stays among tracks that tie. A track without a date counts as the oldest.
-  List<Track> _sorted(List<Track> tracks) {
-    final int Function(Track a, Track b) compare = switch (_sortField) {
-      TrackSortField.title => (a, b) => compareText(a.title, b.title),
-      TrackSortField.artist => (a, b) => compareText(a.artist, b.artist),
-      TrackSortField.album => (a, b) => compareText(a.album, b.album),
-      TrackSortField.year => (a, b) {
-        final (x, y) = (a.year, b.year);
-        return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
-      },
-      TrackSortField.added => (a, b) {
-        final (x, y) = (addedAt(a), addedAt(b));
-        return x == null || y == null ? (x == null ? 0 : 1) - (y == null ? 0 : 1) : x.compareTo(y);
-      },
-      TrackSortField.quality => (a, b) => compareFormatQuality(a.format, b.format),
-    };
-    final list = List.of(tracks);
-    sortStable(list, _sortDescending ? (Track a, Track b) => compare(b, a) : compare);
-    return list;
-  }
+  /// stays among tracks that tie.
+  List<Track> _sorted(List<Track> tracks) =>
+      sortTracks(tracks, _sortField, descending: _sortDescending, addedAt: addedAt);
 }
 
 /// The Tracks section: the whole library.
@@ -102,10 +128,6 @@ class TracksViewModel extends ChangeNotifier with TrackSorting {
   @override
   void _applySort() => displayedTracks = _sorted(_library.tracks);
 
-  void playTrack(Track? track) {
-    if (track != null) _player.playQueue(displayedTracks, track);
-  }
-
   void playAll() {
     if (displayedTracks.isNotEmpty) _player.playQueue(displayedTracks);
   }
@@ -119,9 +141,15 @@ class TracksViewModel extends ChangeNotifier with TrackSorting {
   }
 }
 
+/// What the albums page sorts by, in the order of its buttons: the title, the album's own field, then the shared ones.
 enum AlbumSortField { title, artist, year, added, quality }
 
-enum ArtistSortField { name, added, albums }
+/// What the artists page sorts by, in the order of its buttons: the name, the artist's own field, then the date added.
+enum ArtistSortField { name, albums, added }
+
+/// What the playlists page sorts by, in the order of its buttons: the name, the playlist's own field, then when it was
+/// made.
+enum PlaylistSortField { name, tracks, added }
 
 /// Whether any of [tracks] is tagged with [genre], in any capitalisation.
 bool hasGenre(Iterable<Track> tracks, String genre) => tracks.any((t) => equalsIgnoreCase(t.genre, genre));
@@ -187,25 +215,20 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   /// The genre the list is narrowed to; null shows every album.
   String? genre;
 
-  bool get isSortByTitle => sortField == AlbumSortField.title;
-  bool get isSortByArtist => sortField == AlbumSortField.artist;
-  bool get isSortByYear => sortField == AlbumSortField.year;
-  bool get isSortByAdded => sortField == AlbumSortField.added;
-  bool get isSortByQuality => sortField == AlbumSortField.quality;
-
   String get backText => backButtonText('NavAlbums');
 
-  String get sortTitleLabel => isSortByTitle ? 'ABC ${isSortDescending ? '↓' : '↑'}' : 'ABC';
-  String get sortArtistLabel =>
-      isSortByArtist ? '${Localizer.get('SortArtist')} ${isSortDescending ? '↓' : '↑'}' : Localizer.get('SortArtist');
-  String get sortYearLabel =>
-      isSortByYear ? '${Localizer.get('SortYear')} ${isSortDescending ? '↓' : '↑'}' : Localizer.get('SortYear');
-  String get sortAddedLabel => isSortByAdded
-      ? '${Localizer.get('SortAdded')} ${isSortDescending ? '↓' : '↑'}'
-      : Localizer.get('SortAdded');
-  String get sortQualityLabel => isSortByQuality
-      ? '${Localizer.get('SortQuality')} ${isSortDescending ? '↓' : '↑'}'
-      : Localizer.get('SortQuality');
+  /// The button of [field]: its name, and while it is the active one the direction.
+  String sortLabel(AlbumSortField field) => sortButtonLabel(
+    switch (field) {
+      AlbumSortField.title => 'ABC',
+      AlbumSortField.artist => Localizer.get('SortArtist'),
+      AlbumSortField.year => Localizer.get('SortYear'),
+      AlbumSortField.added => Localizer.get('SortAdded'),
+      AlbumSortField.quality => Localizer.get('SortQuality'),
+    },
+    active: field == sortField,
+    descending: isSortDescending,
+  );
 
   void refreshLocalizedTexts() => notifyListeners();
 
@@ -249,10 +272,15 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
 
   void _applySort() {
     final wanted = genre;
-    final albums = [
+    displayedAlbums = inSortOrder([
       for (final album in _library.albums)
         if (wanted == null || hasGenre(album.tracks, wanted)) album,
-    ];
+    ]);
+  }
+
+  /// [source] in the order chosen on this page, which the car's list of albums follows too.
+  List<Album> inSortOrder(Iterable<Album> source) {
+    final albums = List.of(source);
     switch (sortField) {
       case AlbumSortField.year:
         // Albums without a year always go last, in either direction.
@@ -300,7 +328,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
           return byAdded != 0 ? byAdded : compareText(a.title, b.title);
         });
     }
-    displayedAlbums = albums;
+    return albums;
   }
 
   void openAlbum(Album? album) => openAlbumWithOrigin(album, null, null, NavWaveDirection.leftToRight);
@@ -333,10 +361,6 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
     final target = album ?? selectedAlbum;
     if (target == null || target.tracks.isEmpty) return;
     _player.playQueue(target.tracks);
-  }
-
-  void playAlbumTrack(Track? track) {
-    if (track != null && selectedAlbum != null) _player.playQueue(selectedAlbum!.tracks, track);
   }
 
   void shuffleAlbum() => _player.shuffleQueue(selectedAlbum?.tracks ?? const []);
@@ -377,19 +401,18 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   /// The genre the list is narrowed to; null shows every artist.
   String? genre;
 
-  bool get isSortByName => sortField == ArtistSortField.name;
-  bool get isSortByAdded => sortField == ArtistSortField.added;
-  bool get isSortByAlbums => sortField == ArtistSortField.albums;
-
   String get backText => backButtonText('NavArtists');
 
-  String get sortNameLabel => isSortByName ? 'ABC ${isSortDescending ? '↓' : '↑'}' : 'ABC';
-  String get sortAddedLabel => isSortByAdded
-      ? '${Localizer.get('SortAdded')} ${isSortDescending ? '↓' : '↑'}'
-      : Localizer.get('SortAdded');
-  String get sortAlbumsLabel => isSortByAlbums
-      ? '${Localizer.get('SortAlbums')} ${isSortDescending ? '↓' : '↑'}'
-      : Localizer.get('SortAlbums');
+  /// The button of [field]: its name, and while it is the active one the direction.
+  String sortLabel(ArtistSortField field) => sortButtonLabel(
+    switch (field) {
+      ArtistSortField.name => 'ABC',
+      ArtistSortField.albums => Localizer.get('SortAlbums'),
+      ArtistSortField.added => Localizer.get('SortAdded'),
+    },
+    active: field == sortField,
+    descending: isSortDescending,
+  );
 
   void refreshLocalizedTexts() => notifyListeners();
 
@@ -397,7 +420,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     if (field == sortField) {
       isSortDescending = !isSortDescending;
     } else {
-      isSortDescending = field == ArtistSortField.added || field == ArtistSortField.albums;
+      isSortDescending = field != ArtistSortField.name; // the most albums, the newest first
       sortField = field;
     }
     _applySort();
@@ -413,10 +436,15 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
 
   void _applySort() {
     final wanted = genre;
-    final artists = [
+    displayedArtists = inSortOrder([
       for (final artist in _library.artists)
         if (wanted == null || hasGenre(artist.tracks, wanted)) artist,
-    ];
+    ]);
+  }
+
+  /// [source] in the order chosen on this page, which the car's list of artists follows too.
+  List<Artist> inSortOrder(Iterable<Artist> source) {
+    final artists = List.of(source);
     switch (sortField) {
       case ArtistSortField.name:
         sortStable(artists, (a, b) => isSortDescending ? compareText(b.name, a.name) : compareText(a.name, b.name));
@@ -435,11 +463,13 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
         });
       case ArtistSortField.albums:
         sortStable(artists, (a, b) {
-          final byAlbums = isSortDescending ? b.albumCount.compareTo(a.albumCount) : a.albumCount.compareTo(b.albumCount);
+          final byAlbums = isSortDescending
+              ? b.albumCount.compareTo(a.albumCount)
+              : a.albumCount.compareTo(b.albumCount);
           return byAlbums != 0 ? byAlbums : compareText(a.name, b.name);
         });
     }
-    displayedArtists = artists;
+    return artists;
   }
 
   void refreshArtists() {
@@ -479,12 +509,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     _pictures.resolveArtistPicture(artist);
     isArtistDetailOpen = true;
     if (waveDirection != null) onNavWave?.call(waveDirection);
-    final albums = List<Album>.of(artist.albums);
-    sortStable(albums, (a, b) {
-      final byYear = (b.year ?? -0x80000000).compareTo(a.year ?? -0x80000000);
-      return byYear != 0 ? byYear : compareText(a.title, b.title);
-    });
-    selectedArtistAlbums = albums;
+    selectedArtistAlbums = artist.albums; // the newest first, as the library orders them
     selectedArtistTracks = artist.tracks;
   }
 
@@ -506,10 +531,6 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   }
 
   void shuffleArtist() => _player.shuffleQueue(selectedArtist?.tracks ?? const []);
-
-  void playArtistTrack(Track? track) {
-    if (track != null && selectedArtist != null) _player.playQueue(selectedArtist!.tracks, track);
-  }
 
   @override
   void dispose() {
@@ -555,10 +576,6 @@ class FavoritesViewModel extends ChangeNotifier with TrackSorting {
   @override
   void _applySort() => favoriteTracks = _sorted(_library.favorites);
 
-  void playTrack(Track? track) {
-    if (track != null) _player.playQueue(favoriteTracks, track);
-  }
-
   void playAll() {
     if (favoriteTracks.isNotEmpty) _player.playQueue(favoriteTracks);
   }
@@ -601,9 +618,12 @@ List<String> playlistCovers(List<Track> tracks) {
   };
 }
 
-/// The Playlists section, its dialogs (new playlist, add to playlist, delete) and one playlist's page.
-class PlaylistsViewModel extends ChangeNotifier {
+/// The Playlists section, its dialogs (new playlist, add to playlist, delete) and one playlist's page. The list of
+/// playlists starts with the newest; a playlist's tracks in the order they were added to it (Added ↑), the only date a
+/// playlist knows of them being their place in it.
+class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   PlaylistsViewModel(this._library, this._player) {
+    _sortField = TrackSortField.added;
     _unsubscribers.addAll([
       _library.playlistsChanged.listen((_) => refreshPlaylists()),
       _library.libraryChanged.listen((_) => refreshPlaylists()),
@@ -620,7 +640,12 @@ class PlaylistsViewModel extends ChangeNotifier {
   List<Playlist> playlists = const [];
   Map<String, List<Track>> _tracksOf = const {};
   Playlist? selectedPlaylist;
+
+  /// The open playlist's tracks in the order chosen on its page.
   List<Track> selectedPlaylistTracks = const [];
+  Map<String, int> _positions = const {};
+  PlaylistSortField listSortField = PlaylistSortField.added;
+  bool isListSortDescending = true;
   String selectedPlaylistTotalDuration = '';
   bool isPlaylistDetailOpen = false;
 
@@ -646,9 +671,50 @@ class PlaylistsViewModel extends ChangeNotifier {
   /// The tracks of [playlist] as the library resolves them (cached per refresh).
   List<Track> tracksOf(Playlist playlist) => _tracksOf[playlist.id] ?? _library.getPlaylistTracks(playlist);
 
+  /// The button of [field] on the playlists page: its name, and while it is the active one the direction.
+  String listSortLabel(PlaylistSortField field) => sortButtonLabel(
+    switch (field) {
+      PlaylistSortField.name => 'ABC',
+      PlaylistSortField.tracks => Localizer.get('SortTracks'),
+      PlaylistSortField.added => Localizer.get('SortAdded'),
+    },
+    active: field == listSortField,
+    descending: isListSortDescending,
+  );
+
+  /// The active field flips its direction; another one starts A to Z (the name) or with the most and the newest.
+  void setListSortField(PlaylistSortField field) {
+    if (field == listSortField) {
+      isListSortDescending = !isListSortDescending;
+    } else {
+      listSortField = field;
+      isListSortDescending = field != PlaylistSortField.name;
+    }
+    playlists = inSortOrder(_library.playlists);
+    notifyListeners();
+  }
+
+  /// [source] in the order chosen on the playlists page, which the car's list of playlists follows too.
+  List<Playlist> inSortOrder(Iterable<Playlist> source) {
+    final list = List.of(source);
+    int compare(Playlist a, Playlist b) => switch (listSortField) {
+      PlaylistSortField.name => compareText(a.name, b.name),
+      PlaylistSortField.tracks => a.trackCount.compareTo(b.trackCount),
+      PlaylistSortField.added => a.createdAt.compareTo(b.createdAt),
+    };
+    sortStable(list, (a, b) {
+      final order = isListSortDescending ? compare(b, a) : compare(a, b);
+      return order != 0 ? order : compareText(a.name, b.name);
+    });
+    return list;
+  }
+
+  /// Where [track] stands in the open playlist (1 for the first added); null when it isn't in it.
+  int? positionOf(Track track) => _positions[track.id];
+
   void refreshPlaylists() {
     final selectedId = selectedPlaylist?.id;
-    playlists = _library.playlists;
+    playlists = inSortOrder(_library.playlists);
     _tracksOf = {for (final pl in playlists) pl.id: _library.getPlaylistTracks(pl)};
     for (final pl in playlists) {
       pl.applyQuality(_tracksOf[pl.id]!);
@@ -666,9 +732,20 @@ class PlaylistsViewModel extends ChangeNotifier {
 
   void _refreshSelectedTracks() {
     final selected = selectedPlaylist;
-    selectedPlaylistTracks = selected == null ? const [] : _library.getPlaylistTracks(selected);
+    _applySort();
     selectedPlaylistTotalDuration = selectedPlaylistTracks.isEmpty ? '' : formatTotal(selectedPlaylistTracks);
     selected?.applyQuality(selectedPlaylistTracks);
+  }
+
+  /// Added is the playlist's own order: the tracks were added in it, and it can't be rearranged.
+  @override
+  void _applySort() {
+    final selected = selectedPlaylist;
+    final tracks = selected == null ? const <Track>[] : _library.getPlaylistTracks(selected);
+    _positions = {for (var i = tracks.length - 1; i >= 0; i--) tracks[i].id: i + 1};
+    selectedPlaylistTracks = sortField != TrackSortField.added
+        ? _sorted(tracks)
+        : (isSortDescending ? tracks.reversed.toList() : tracks);
   }
 
   void _select(Playlist? playlist) {
@@ -779,18 +856,13 @@ class PlaylistsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Plays [playlist] in its own order, or the open one in the order shown.
   void playPlaylist([Playlist? playlist]) {
-    final target = playlist ?? selectedPlaylist;
-    if (target == null) return;
-    final tracks = _library.getPlaylistTracks(target);
+    final tracks = playlist == null ? selectedPlaylistTracks : _library.getPlaylistTracks(playlist);
     if (tracks.isNotEmpty) _player.playQueue(tracks);
   }
 
   void shufflePlaylist() => _player.shuffleQueue(selectedPlaylistTracks);
-
-  void playTrack(Track? track) {
-    if (track != null) _player.playQueue(selectedPlaylistTracks, track);
-  }
 
   Future<void> removeTrackFromSelected(Track? track) async {
     final selected = selectedPlaylist;

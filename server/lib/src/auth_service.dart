@@ -10,7 +10,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'jwt.dart';
 
-/// The identity a validated token carries.
+/// Who a request comes from: the account as the database has it now, and the kind of token it came with.
 class Principal {
   const Principal(this.userId, this.username, {this.isAdmin = false, this.isStreamToken = false, this.expiresAt});
 
@@ -23,6 +23,16 @@ class Principal {
 
   /// When the token runs out: a connection that outlives a request (remote control) ends then.
   final DateTime? expiresAt;
+}
+
+/// What [AuthService.authenticate] found: the account, or why the token doesn't open the API ([ErrorCodes.tokenInvalid],
+/// [ErrorCodes.sessionExpired], [ErrorCodes.passwordChanged] or [ErrorCodes.accountRemoved]).
+class TokenCheck {
+  const TokenCheck.valid(Principal this.principal) : refusal = null;
+  const TokenCheck.refused(String this.refusal) : principal = null;
+
+  final Principal? principal;
+  final String? refusal;
 }
 
 /// Accounts, passwords (bcrypt, work factor 12) and tokens (HS256 JWTs).
@@ -39,6 +49,10 @@ class AuthService {
 
   /// Long enough for a multi-hour track to be seeked in; the player asks for a new one well before that.
   static const Duration streamTokenLifetime = Duration(hours: 8);
+
+  /// A sign-in without "stay signed in", and one with it (the first administrator's is one with it).
+  static const Duration _sessionLifetime = Duration(hours: 24);
+  static const Duration _rememberedLifetime = Duration(days: 90);
   static const int _bcryptWorkFactor = 12;
 
   final DatabaseManager _db;
@@ -51,51 +65,74 @@ class AuthService {
     return base64.encode(List<int>.generate(64, (_) => random.nextInt(256)));
   }
 
-  /// Null when [username] and [password] may be used for an account, otherwise the reason.
-  static String? validateCredentials(String? username, String? password) {
-    if (isBlank(username) || password == null || password.isEmpty) return 'Username and password are required.';
+  /// Null when [username] and [password] may be used for an account, otherwise the rule they break.
+  static RuleViolation? validateCredentials(String? username, String? password) {
+    if (isBlank(username) || password == null || password.isEmpty) {
+      return const RuleViolation(ErrorCodes.credentialsRequired, 'Username and password are required.');
+    }
     final trimmed = username!.trim();
     if (trimmed.length > AuthRules.maxUsernameLength || hasControlCharacters(trimmed)) {
-      return 'Username must be at most ${AuthRules.maxUsernameLength} printable characters.';
+      return const RuleViolation(
+        ErrorCodes.usernameInvalid,
+        'Username must be at most ${AuthRules.maxUsernameLength} printable characters.',
+        {'max': AuthRules.maxUsernameLength},
+      );
     }
     return validatePassword(password);
   }
 
-  /// Null when [password] may be used, otherwise the reason.
-  static String? validatePassword(String password) {
+  /// Null when [password] may be used, otherwise the rule it breaks.
+  static RuleViolation? validatePassword(String password) {
     if (password.length < AuthRules.minPasswordLength) {
-      return 'Password must be at least ${AuthRules.minPasswordLength} characters.';
+      return const RuleViolation(
+        ErrorCodes.passwordTooShort,
+        'Password must be at least ${AuthRules.minPasswordLength} characters.',
+        {'min': AuthRules.minPasswordLength},
+      );
     }
     if (utf8.encode(password).length > AuthRules.maxPasswordBytes) {
-      return 'Password must be at most ${AuthRules.maxPasswordBytes} bytes.';
+      return const RuleViolation(
+        ErrorCodes.passwordTooLong,
+        'Password must be at most ${AuthRules.maxPasswordBytes} bytes.',
+        {'max': AuthRules.maxPasswordBytes},
+      );
     }
     return null;
   }
 
-  /// Sets a new password when [current] is the account's present one. False when it is not (or the account is gone).
-  /// Tokens already issued stay valid until they expire; the server has no token revocation.
-  Future<bool> changePassword(String userId, String current, String replacement) async {
-    final rows = _db.connection.select('SELECT password_hash FROM users WHERE id = ?', [userId]);
-    if (rows.isEmpty || !await _verify(current, rows.first['password_hash'] as String)) return false;
-    final hash = await _hash(replacement);
-    _db.connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
-    return _db.connection.updatedRows > 0;
+  /// Sets a new password when [current] is the caller's present one, and ends every session signed in before: their
+  /// tokens are refused from now on. The caller gets a new token in exchange for theirs, valid as long as the old one
+  /// was. Null when [current] is wrong (or the account is gone).
+  Future<AuthResponse?> changePassword(Principal caller, String current, String replacement) async {
+    final rows = _db.connection.select('SELECT password_hash FROM users WHERE id = ?', [caller.userId]);
+    if (rows.isEmpty || !await _verify(current, rows.first['password_hash'] as String)) return null;
+    final version = _setPasswordHash(caller.userId, await _hash(replacement));
+    final user = version == null ? null : getUser(caller.userId);
+    if (user == null) return null;
+    final expires = caller.expiresAt ?? DateTime.now().toUtc().add(_sessionLifetime);
+    return AuthResponse(_signInToken(user, version!, expires), user, expires);
   }
 
-  /// Sets a new password for [userId] directly (used by administrator).
+  /// Sets a new password for [userId] (an administrator's reset) and ends every session of the account. False when
+  /// there is no such account.
   Future<bool> resetPassword(String userId, String replacement) async {
-    final rows = _db.connection.select('SELECT id FROM users WHERE id = ?', [userId]);
-    if (rows.isEmpty) return false;
-    final hash = await _hash(replacement);
-    _db.connection.execute('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
-    return _db.connection.updatedRows > 0;
+    if (!userExists(userId)) return false;
+    return _setPasswordHash(userId, await _hash(replacement)) != null;
   }
+
+  /// Stores [hash] and moves the account to a new token version; returns that version, or null without the account.
+  int? _setPasswordHash(String userId, String hash) => _db.transaction((db) {
+    db.execute('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?', [hash, userId]);
+    if (db.updatedRows == 0) return null;
+    return db.select('SELECT token_version FROM users WHERE id = ?', [userId]).first['token_version'] as int;
+  });
 
   bool hasAnyUsers() => (_db.connection.select('SELECT COUNT(*) AS n FROM users').first['n'] as int) > 0;
 
   Future<AuthResponse?> login(String username, String password, {bool rememberMe = false}) async {
     final rows = _db.connection.select(
-      'SELECT id, username, password_hash, is_admin, created_at, last_login FROM users WHERE username = ? COLLATE NOCASE',
+      'SELECT id, username, password_hash, is_admin, created_at, last_login, token_version FROM users '
+      'WHERE username = ? COLLATE NOCASE',
       [username.trim()],
     );
 
@@ -112,8 +149,8 @@ class AuthService {
     _db.connection.execute('UPDATE users SET last_login = ? WHERE id = ?', [toDbTime(now), row['id']]);
 
     final user = _toUserInfo(row).copyWith(lastLogin: now);
-    final expiry = rememberMe ? const Duration(days: 90) : const Duration(hours: 24);
-    return AuthResponse(_generateToken(user, expiry), user, now.add(expiry));
+    final expires = now.add(rememberMe ? _rememberedLifetime : _sessionLifetime);
+    return AuthResponse(_signInToken(user, row['token_version'] as int, expires), user, expires);
   }
 
   /// Creates the first administrator. Null if any account already exists (checked atomically).
@@ -127,8 +164,8 @@ class AuthService {
     );
     if (_db.connection.updatedRows == 0) return null;
 
-    const expiry = Duration(days: 90);
-    return AuthResponse(_generateToken(user, expiry), user, DateTime.now().toUtc().add(expiry));
+    final expires = DateTime.now().toUtc().add(_rememberedLifetime);
+    return AuthResponse(_signInToken(user, 0, expires), user, expires);
   }
 
   /// Creates a regular user. Null if the user name is taken (ignoring case).
@@ -169,44 +206,58 @@ class AuthService {
     return count > 0;
   });
 
-  /// A token for stream and cover URLs. It never carries the administrator role, and the server refuses it on every
-  /// other route, so a URL that leaks (process list, proxy log) cannot manage accounts or the library.
-  StreamTokenResponse createStreamToken(String userId, String username) {
+  /// A token for stream and cover URLs for the signed-in [caller]. The server refuses it on every route but those, so a
+  /// URL that leaks (process list, proxy log) cannot manage accounts or the library; and like every token it stops
+  /// working when the account's password changes.
+  StreamTokenResponse createStreamToken(Principal caller) {
+    final version = _tokenVersion(caller.userId) ?? 0;
     final expires = DateTime.now().toUtc().add(streamTokenLifetime);
-    final token = _jwt.sign({
-      'sub': userId,
-      'name': username,
-      'aud': streamAudience,
-      'exp': expires.millisecondsSinceEpoch ~/ 1000,
-    });
-    return StreamTokenResponse(token, expires);
+    return StreamTokenResponse(_sign(caller.userId, caller.username, streamAudience, version, expires), expires);
   }
 
-  /// The identity in [token] when it is valid; null otherwise. Does not check that the account still exists.
-  Principal? validate(String token) {
-    final claims = _jwt.verify(token, audiences: const {audience, streamAudience});
+  /// The account behind [token], when the token still stands: this server signed it, it has not expired, its account
+  /// exists, and it was issued since that account's password last changed. The name and the role are the account's
+  /// present ones, never what the token was issued with. Otherwise why not, in that order.
+  TokenCheck authenticate(String token) {
+    final claims = _jwt.verifySigned(token, audiences: const {audience, streamAudience});
     final id = claims?['sub'];
-    final name = claims?['name'];
-    if (id is! String || name is! String) return null;
-    final expires = claims!['exp'];
-    return Principal(
-      id,
-      name,
-      isAdmin: claims['role'] == 'admin',
-      isStreamToken: claims['aud'] == streamAudience,
-      expiresAt: expires is int ? DateTime.fromMillisecondsSinceEpoch(expires * 1000, isUtc: true) : null,
+    if (claims == null || id is! String) return const TokenCheck.refused(ErrorCodes.tokenInvalid);
+    if (Jwt.isExpired(claims)) return const TokenCheck.refused(ErrorCodes.sessionExpired);
+    final rows = _db.connection.select('SELECT username, is_admin, token_version FROM users WHERE id = ?', [id]);
+    if (rows.isEmpty) return const TokenCheck.refused(ErrorCodes.accountRemoved);
+    final row = rows.first;
+    // Tokens from before token versions existed carry none, which stands for the first one.
+    final version = claims['ver'];
+    if ((version is int ? version : 0) != row['token_version']) {
+      return const TokenCheck.refused(ErrorCodes.passwordChanged);
+    }
+    return TokenCheck.valid(
+      Principal(
+        id,
+        row['username'] as String,
+        isAdmin: (row['is_admin'] as int) != 0,
+        isStreamToken: claims['aud'] == streamAudience,
+        expiresAt: DateTime.fromMillisecondsSinceEpoch((claims['exp'] as int) * 1000, isUtc: true),
+      ),
     );
   }
+
+  int? _tokenVersion(String userId) =>
+      _db.connection.select('SELECT token_version FROM users WHERE id = ?', [userId]).firstOrNull?['token_version']
+          as int?;
 
   static UserInfo _newUser(String username, {required bool isAdmin}) =>
       UserInfo(newId(), username.trim(), isAdmin, DateTime.now().toUtc(), null);
 
-  String _generateToken(UserInfo user, Duration expiry) => _jwt.sign({
-    'sub': user.id,
-    'name': user.username,
-    'role': user.isAdmin ? 'admin' : 'user',
+  String _signInToken(UserInfo user, int version, DateTime expires) =>
+      _sign(user.id, user.username, audience, version, expires);
+
+  String _sign(String userId, String username, String audience, int version, DateTime expires) => _jwt.sign({
+    'sub': userId,
+    'name': username,
     'aud': audience,
-    'exp': DateTime.now().toUtc().add(expiry).millisecondsSinceEpoch ~/ 1000,
+    'ver': version,
+    'exp': expires.millisecondsSinceEpoch ~/ 1000,
   });
 
   static UserInfo _toUserInfo(Map<String, Object?> row) => UserInfo(

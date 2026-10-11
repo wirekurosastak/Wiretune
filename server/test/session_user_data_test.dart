@@ -107,13 +107,45 @@ void main() {
       expect(d.repo.settings['auth_token'], '');
     });
 
+    test('changing the password keeps this device signed in and signs the others out', () async {
+      final phone = await device('phone');
+      final desktop = await device('desktop');
+      await phone.signIn(server);
+      await desktop.signIn(server);
+      final before = phone.session.authToken;
+
+      await phone.session.changePassword(adminPassword, 'a-brand-new-password');
+      expect(phone.session.authToken, isNot(before));
+      expect(phone.repo.settings['auth_token'], phone.session.authToken); // "stay signed in" keeps the new one
+      await phone.session.refreshLibrary();
+      expect(phone.session.state, ServerConnectionState.connected);
+      expect(await phone.session.getStreamToken(), isNotNull);
+
+      await desktop.session.refreshLibrary();
+      expect(desktop.session.state, ServerConnectionState.loginRequired);
+      expect(desktop.repo.settings['auth_token'], '');
+      // The device that was signed out says why, in the user's language.
+      expect(desktop.session.statusMessage, Localizer.get('ErrorPasswordChanged'));
+      Localizer.instance.setLanguage('hu');
+      expect(desktop.session.statusMessage, Localizer.get('ErrorPasswordChanged'));
+      expect(desktop.session.statusMessage, contains('jelszavát'));
+      Localizer.instance.setLanguage('en');
+
+      // A wrong current password changes nothing.
+      await expectLater(
+        phone.session.changePassword('not-it', 'another-new-password'),
+        throwsA(isA<ServerRequestException>().having((e) => e.statusCode, 'status', 403)),
+      );
+      expect(phone.repo.settings['auth_token'], phone.session.authToken);
+    });
+
     test('a fresh server asks for setup, and setting it up signs in', () async {
       final fresh = await ServerFixture.start();
       addTearDown(fresh.close);
       final d = await device('fresh');
       await d.session.connect(fresh.baseUrl);
       expect(d.session.state, ServerConnectionState.setupRequired);
-      expect(await d.session.setupAdmin('owner', adminPassword, 'wrong'), contains('setup code'));
+      expect(await d.session.setupAdmin('owner', adminPassword, 'wrong'), Localizer.get('ErrorSetupCodeWrong'));
       expect(await d.session.setupAdmin('owner', adminPassword, setupCode), isNull);
       expect(d.session.isLoggedIn, isTrue);
       expect(d.session.currentUser!.isAdmin, isTrue);
@@ -183,6 +215,20 @@ void main() {
       await phone.session.refreshLibrary();
       expect(phone.library.tracks, hasLength(3));
       expect(phone.library.isTrackHidden(trackToHide), isFalse);
+
+      // The laptop restarts while the server is away: what the account hid stays hidden there.
+      await laptop.library.hideTrack(trackToHide.id);
+      await laptop.session.flushUserData();
+      laptop.session.dispose();
+      devices.remove(laptop);
+      final library = LibraryService(laptop.repo, MetadataScanner(), coverCacheDirectory: p.join(server.root, 'c2'));
+      final offline = ServerSession(library, laptop.repo);
+      addTearDown(offline.dispose);
+      await library.initialize();
+      await offline.initialize();
+      expect(offline.state, ServerConnectionState.offline);
+      expect(library.isTrackIdHidden(trackToHide.id), isTrue);
+      expect(library.tracks, hasLength(2));
     });
 
     test("signing out removes the account's data from the device, and signing in brings it back", () async {
@@ -193,11 +239,17 @@ void main() {
       await d.library.recordPlay(track.id);
       final playlist = await d.library.createPlaylist('List');
       await d.library.addTrackToPlaylist(playlist.id, track.id);
+      final hidden = d.library.tracks.last;
+      await d.library.hideTrack(hidden.id);
+      final account = d.session.currentUser!.id;
+      expect((await d.repo.getHiddenItems(account))['track'], {hidden.id});
 
       await d.session.logout();
       expect(d.library.tracks, isEmpty);
       expect(d.library.playlists.any((pl) => pl.isServer), isFalse);
       expect(d.library.serverConnected, isFalse);
+      expect((await d.repo.getHiddenItems(account))['track'], isEmpty);
+      expect(d.repo.settings['auth_user_id'], '');
 
       expect(await d.session.login('owner', adminPassword, true), isNull);
       final again = d.library.getTrack(track.id)!;
@@ -206,6 +258,7 @@ void main() {
       final restored = d.library.playlists.single;
       expect(restored.isServer, isTrue);
       expect(restored.trackIds, [track.id]);
+      expect(d.library.isTrackIdHidden(hidden.id), isTrue);
     });
 
     test('a change made just before a refresh is not undone by it', () async {

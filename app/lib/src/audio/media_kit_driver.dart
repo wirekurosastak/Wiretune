@@ -47,7 +47,10 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   Timer? _spectrumTimer;
   Timer? _startCheck;
   Timer? _releaseTimer;
-  AlsaCardReservation? _reservation;
+  final ExclusiveCardHolder _card = ExclusiveCardHolder();
+  // One output change at a time, applied in the order asked: the device, the exclusive switch and the card claim of
+  // one change are never mixed with those of another.
+  final AsyncLock _output = AsyncLock();
   AudioOutputDevice? _configuredDevice;
   bool _exclusive = false;
 
@@ -212,46 +215,46 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   @override
-  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect}) async {
-    _bitperfect = bitperfect;
-    _configuredDevice = device;
-    _exclusive = exclusive;
-    final native = _player.platform;
-    if (native is! NativePlayer) return;
+  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect}) =>
+      _output.synchronized(() async {
+        _bitperfect = bitperfect;
+        _configuredDevice = device;
+        _exclusive = exclusive;
+        final native = _player.platform;
+        if (native is! NativePlayer) return;
 
-    if (allowDeviceSelection) {
-      await _player.setAudioDevice(AudioDevice(device.id, device.name));
-      await native.setProperty('audio-exclusive', exclusive ? 'yes' : 'no');
-      if (exclusive) {
-        await _reserveCard(device);
-      } else {
-        await _reservation?.release();
-        _reservation = null;
-      }
-    }
+        if (allowDeviceSelection) {
+          // The sound server lets go of the card before mpv opens it, and gets it back only once mpv has let go. While
+          // nothing plays the card stays with the sound server: playing claims it.
+          final card = exclusive ? _cardOf(device) : null;
+          final inUse = _state == PlaybackState.playing || _state == PlaybackState.paused;
+          if (card != null && inUse) await _card.hold(card);
+          await _player.setAudioDevice(AudioDevice(device.id, device.name));
+          await native.setProperty('audio-exclusive', exclusive ? 'yes' : 'no');
+          if (_card.card != card) await _card.release();
+        }
 
-    // Bit-perfect: no gain, no filters, no replay gain, no resampling requested (mpv's `audio-format` is left unset,
-    // which keeps the decoder's sample format).
-    await native.setProperty('af', '');
-    await native.setProperty('replaygain', 'no');
-    await native.setProperty('audio-samplerate', '0');
-    await native.setProperty('audio-channels', bitperfect ? 'auto' : 'auto-safe');
-    await _applyVolume();
-  }
+        // Bit-perfect: no gain, no filters, no replay gain, no resampling requested (mpv's `audio-format` is left
+        // unset, which keeps the decoder's sample format).
+        await native.setProperty('af', '');
+        await native.setProperty('replaygain', 'no');
+        await native.setProperty('audio-samplerate', '0');
+        await native.setProperty('audio-channels', bitperfect ? 'auto' : 'auto-safe');
+        await _applyVolume();
+      });
 
-  /// On Linux an ALSA hardware device is usually held by the sound server (PipeWire, PulseAudio); the reservation asks
-  /// it to let go for as long as Wiretune uses the card, and the card goes back to it however Wiretune ends.
-  Future<void> _reserveCard(AudioOutputDevice device) async {
-    final card = Platform.isLinux && device.id.startsWith('alsa/hw:') ? _cardIndex(device.hardwareCard) : null;
-    if (card == _reservation?.card) return;
-    await _reservation?.release();
-    _reservation = null;
-    if (card == null) return;
+  /// On Linux an ALSA hardware device is usually held by the sound server (PipeWire, PulseAudio); claiming the card
+  /// ([ExclusiveCardHolder]) asks it to let go for as long as Wiretune plays exclusively, and the card goes back to it
+  /// however Wiretune ends. Null for every other device.
+  int? _cardOf(AudioOutputDevice device) =>
+      Platform.isLinux && device.id.startsWith('alsa/hw:') ? _cardIndex(device.hardwareCard) : null;
 
-    _reservation = await AlsaCardReservation.acquire(card);
-    // Give the sound server a moment to close the device before mpv opens it.
-    if (_reservation != null) await Future<void>.delayed(const Duration(milliseconds: 300));
-  }
+  /// Claims the card of the configured device when exclusive playback is about to use it.
+  Future<void> _claimCard() => _output.synchronized(() async {
+    final device = _configuredDevice;
+    final card = allowDeviceSelection && _exclusive && device != null ? _cardOf(device) : null;
+    if (card != null) await _card.hold(card);
+  });
 
   /// The index of the ALSA card with the given short name, from /proc/asound/cards (" 2 [AUDIO  ]: ...").
   static int? _cardIndex(String card) {
@@ -273,9 +276,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     final generation = ++_generation;
     _lastError = null;
     _setState(PlaybackState.playing);
-    if (allowDeviceSelection && _exclusive && _configuredDevice != null && _reservation == null) {
-      await _reserveCard(_configuredDevice!);
-    }
+    await _claimCard();
+    if (generation != _generation) return;
     try {
       await _player.open(Media(audioSource, start: startPosition > Duration.zero ? startPosition : null), play: true);
     } catch (e) {
@@ -330,8 +332,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _setState(PlaybackState.stopped);
     _pcm.cancelAndReset();
     await _player.stop();
-    await _reservation?.release();
-    _reservation = null;
+    await _card.release();
   }
 
   @override
@@ -353,15 +354,12 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _generation++;
     _setState(PlaybackState.stopped);
     _releaseTimer?.cancel();
-    _releaseTimer = Timer(const Duration(milliseconds: 1500), () async {
-      if (_state != PlaybackState.playing) {
-        await _reservation?.release();
-        _reservation = null;
-      }
+    // The next track usually starts at once and keeps the card; when none does, the sound server gets it back.
+    _releaseTimer = Timer(const Duration(milliseconds: 1500), () {
+      if (_state != PlaybackState.playing) unawaited(_card.release());
     });
     trackEnded.emit(null);
   }
-
 
   void _onPosition(Duration position) {
     final now = DateTime.now();
@@ -389,8 +387,15 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   void _fail(String? message) {
-    _generation++;
+    final generation = ++_generation;
     _setState(PlaybackState.error);
+    // A track that could not play must not keep the device: mpv lets go of it, then the sound server gets the card.
+    unawaited(() async {
+      try {
+        await _player.stop();
+      } catch (_) {}
+      if (generation == _generation) await _card.release();
+    }());
     playbackFailed.emit(
       message == null || message.isEmpty
           ? Localizer.format('DriverCannotStart', [Localizer.get('Unknown')])
@@ -442,7 +447,6 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     }
     _pcm.dispose();
     await _player.dispose();
-    await _reservation?.release();
-    _reservation = null;
+    await _card.release();
   }
 }

@@ -8,26 +8,41 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../localization/localizer.dart';
+import '../localization/strings.dart';
 import '../models/library_models.dart';
 import '../models/protocol.dart';
 
-/// The server rejected the credentials (HTTP 401).
+/// The server rejected the credentials (HTTP 401). [token] is the sign-in token the request carried, if any, and
+/// [code] why ([ErrorCodes]: none sent, expired, the password changed, the account removed …).
 class ServerUnauthorizedException implements Exception {
-  const ServerUnauthorizedException();
+  const ServerUnauthorizedException([this.token, this.code]);
+
+  final String? token;
+  final String? code;
 
   @override
-  String toString() => 'The server rejected the credentials.';
+  String toString() => describeServerError(code) ?? Localizer.get('ErrorSignInRequired');
 }
 
-/// A server call failed. [statusCode] is null when no answer arrived (unreachable, timed out, connection cut).
+/// A server call failed. [statusCode] is null when no answer arrived (unreachable, timed out, connection cut). The
+/// [message] is in the user's language when the server's [code] ([ErrorCodes]) is one this player knows.
 class ServerRequestException implements Exception {
-  const ServerRequestException(this.message, [this.statusCode]);
+  const ServerRequestException(this.message, [this.statusCode, this.code]);
 
   final String message;
   final int? statusCode;
+  final String? code;
 
   @override
   String toString() => message;
+}
+
+/// The text in the user's language for an error [code] of the server ([ErrorCodes]), with the one detail it names
+/// ([detail]: a path, a limit, a number of seconds); null for a code this player doesn't know.
+String? describeServerError(String? code, [Object? detail]) {
+  if (code == null || code.isEmpty) return null;
+  final key = 'Error${code[0].toUpperCase()}${code.substring(1)}';
+  return allStrings.containsKey(key) ? Localizer.format(key, [?detail]) : null;
 }
 
 /// Thin typed HTTP client for the Wiretune server REST API.
@@ -107,16 +122,20 @@ class ServerStreamingClient {
   Future<void> deleteUser(String baseUrl, String userId) =>
       _send('DELETE', baseUrl, '/api/users/${Uri.encodeComponent(userId)}');
 
-  Future<void> changePassword(String baseUrl, String currentPassword, String newPassword) =>
-      _send('POST', baseUrl, '/api/auth/change-password', body: {
-        'currentPassword': currentPassword,
-        'newPassword': newPassword,
-      });
+  /// Changes the signed-in account's password. The server ends the sessions signed in with the old one and answers
+  /// with a new token for this one.
+  Future<AuthResponse> changePassword(String baseUrl, String currentPassword, String newPassword) async => _parse(
+    AuthResponse.fromJson,
+    await _send(
+      'POST',
+      baseUrl,
+      '/api/auth/change-password',
+      body: {'currentPassword': currentPassword, 'newPassword': newPassword},
+    ),
+  );
 
   Future<void> adminResetPassword(String baseUrl, String userId, String newPassword) =>
-      _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/password', body: {
-        'newPassword': newPassword,
-      });
+      _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/password', body: {'newPassword': newPassword});
 
   Future<ServerConfigInfo> getServerConfig(String baseUrl) async =>
       _parse(ServerConfigInfo.fromJson, await _send('GET', baseUrl, '/api/config'));
@@ -254,9 +273,12 @@ class ServerStreamingClient {
       throw ServerRequestException(Localizer.format('ClientConnectionCutOff', ['$e']));
     }
 
-    if (response.statusCode == 401) throw const ServerUnauthorizedException();
+    if (response.statusCode == 401) {
+      throw ServerUnauthorizedException(authorize ? token : null, _errorBody(bytes)?['code'] as String?);
+    }
     if (response.statusCode < 200 || response.statusCode > 299) {
-      throw ServerRequestException(_errorMessage(response, bytes), response.statusCode);
+      final (message, code) = _error(response, bytes);
+      throw ServerRequestException(message, response.statusCode, code);
     }
 
     if (bytes.isEmpty) return null;
@@ -267,14 +289,27 @@ class ServerStreamingClient {
     }
   }
 
-  static String _errorMessage(http.StreamedResponse response, List<int> bytes) {
+  /// What went wrong, as the user should read it, and the server's code for it: the code's text in the user's
+  /// language, else the server's own text, else the HTTP status.
+  static (String, String?) _error(http.StreamedResponse response, List<int> bytes) {
+    final body = _errorBody(bytes);
+    final code = body?['code'] is String ? body!['code'] as String : null;
+    final detail = body?['path'] ?? body?['limit'] ?? body?['max'] ?? body?['min'] ?? body?['retryAfter'];
+    final message =
+        describeServerError(code, detail) ??
+        (body?['error'] is String ? body!['error'] as String : null) ??
+        'HTTP ${response.statusCode} ${response.reasonPhrase ?? ''}'.trim();
+    return (message, code);
+  }
+
+  /// The JSON object of an error answer (`{ "error", "code", … }`), or null.
+  static Map<Object?, Object?>? _errorBody(List<int> bytes) {
     try {
       final element = jsonDecode(utf8.decode(bytes, allowMalformed: true));
-      if (element is Map && element['error'] is String) return element['error'] as String;
+      return element is Map ? element : null;
     } catch (_) {
-      // Not a JSON error body.
+      return null; // not a JSON error body
     }
-    return 'HTTP ${response.statusCode} ${response.reasonPhrase ?? ''}'.trim();
   }
 
   void close() {

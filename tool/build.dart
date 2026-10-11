@@ -18,13 +18,16 @@ Usage: dart tool/build.dart <target>...
   server      the server for this system: bin/ and the lib/ it loads  → dist/server/
   linux       the Linux player, on Linux                               → dist/linux/
   windows     the Windows player, on Windows                           → dist/windows/
-  macos       the macOS player, on macOS                               → dist/macos/Wiretune.app
+  windows-installer  windows, and its installer (Inno Setup 6)         → dist/windows-installer/*.exe
+  macos       the macOS player and its disk image, on macOS            → dist/macos/Wiretune.app, Wiretune.dmg
   android     one APK per processor type                               → dist/android/*.apk
   appbundle   the Android App Bundle for Google Play                   → dist/android/*.aab
   ios         the .ipa, on a Mac with a signing team                   → dist/ios/*.ipa
   tizen       the .tpk for Samsung TVs, with flutter-tizen on the PATH → dist/tizen/*.tpk
 
-docs/building.md says what each target needs installed first.''';
+The macOS player is signed with the identity in WIRETUNE_MACOS_SIGN_IDENTITY and notarised with the notarytool
+keychain profile in WIRETUNE_NOTARY_PROFILE, when they are set. docs/building.md says what each target needs installed
+first.''';
 
 /// The repository: this script lives in its tool/ folder.
 final String _root = File.fromUri(Platform.script).parent.parent.path;
@@ -45,13 +48,15 @@ final Map<String, Future<void> Function()> _targets = {
     await _run('app', 'flutter', ['build', 'linux', '--release']);
     _publishFolder('app/build/linux/$_arch/release/bundle', 'linux');
   },
-  'windows': () async {
-    await _run('app', 'flutter', ['build', 'windows', '--release']);
-    _publishFolder('app/build/windows/$_arch/runner/Release', 'windows');
+  'windows': _buildWindows,
+  'windows-installer': () async {
+    await _buildWindows();
+    await _buildWindowsInstaller();
   },
   'macos': () async {
     await _run('app', 'flutter', ['build', 'macos', '--release']);
     _publishFolder('app/build/macos/Build/Products/Release/Wiretune.app', 'macos/Wiretune.app');
+    await _packageMacos();
   },
   'android': () => _buildPackages(
     'flutter',
@@ -97,6 +102,82 @@ class _BuildFailure implements Exception {
   const _BuildFailure(this.message);
 
   final String message;
+}
+
+Future<void> _buildWindows() async {
+  await _run('app', 'flutter', ['build', 'windows', '--release']);
+  _publishFolder('app/build/windows/$_arch/runner/Release', 'windows');
+}
+
+/// The installer of dist/windows, made by Inno Setup's compiler from app/windows/packaging/wiretune.iss, which takes
+/// the version, the processor and the folders from here.
+Future<void> _buildWindowsInstaller() async {
+  final (name, build) = _version();
+  final output = Directory(_path('dist/windows-installer'));
+  if (output.existsSync()) output.deleteSync(recursive: true);
+  output.createSync(recursive: true);
+  await _run('app', _innoSetupCompiler(), [
+    '/DAppVersion=$name',
+    '/DFileVersion=$name.$build',
+    '/DArch=${_arch == 'arm64' ? 'arm64' : 'x64compatible'}',
+    '/DArchName=$_arch',
+    '/DSourceDir=${_path('dist/windows')}',
+    '/DOutputDir=${output.path}',
+    '/DIconFile=${_path('app/windows/runner/resources/app_icon.ico')}',
+    '/DLicenseFile=${_path('LICENSE')}',
+    _path('app/windows/packaging/wiretune.iss'),
+  ]);
+  stdout.writeln('→ dist/windows-installer');
+}
+
+/// ISCC from the PATH, or where Inno Setup 6 installs itself.
+String _innoSetupCompiler() {
+  for (final folder in [Platform.environment['ProgramFiles(x86)'], Platform.environment['ProgramFiles']]) {
+    if (folder == null) continue;
+    final candidate = '$folder\\Inno Setup 6\\ISCC.exe';
+    if (File(candidate).existsSync()) return candidate;
+  }
+  return 'iscc';
+}
+
+/// dist/macos/Wiretune.dmg from the app: signed with a Developer ID and the hardened runtime, and notarised, when the
+/// environment names the identity and the notary profile; with the build's own ad-hoc signature otherwise.
+Future<void> _packageMacos() async {
+  final app = _path('dist/macos/Wiretune.app');
+  final dmg = _path('dist/macos/Wiretune.dmg');
+  final identity = Platform.environment['WIRETUNE_MACOS_SIGN_IDENTITY'] ?? '';
+  final notaryProfile = Platform.environment['WIRETUNE_NOTARY_PROFILE'] ?? '';
+  if (identity.isNotEmpty) {
+    await _run('app', 'codesign', [
+      '--force',
+      '--deep',
+      '--options',
+      'runtime',
+      '--timestamp',
+      '--entitlements',
+      _path('app/macos/Runner/Release.entitlements'),
+      '--sign',
+      identity,
+      app,
+    ]);
+  }
+  if (File(dmg).existsSync()) File(dmg).deleteSync();
+  await _run('app', 'hdiutil', ['create', '-volname', 'Wiretune', '-srcfolder', app, '-ov', '-format', 'UDZO', dmg]);
+  if (identity.isNotEmpty) await _run('app', 'codesign', ['--force', '--timestamp', '--sign', identity, dmg]);
+  if (notaryProfile.isNotEmpty) {
+    if (identity.isEmpty) throw const _BuildFailure('Notarising needs WIRETUNE_MACOS_SIGN_IDENTITY as well.');
+    await _run('app', 'xcrun', ['notarytool', 'submit', dmg, '--keychain-profile', notaryProfile, '--wait']);
+    await _run('app', 'xcrun', ['stapler', 'staple', dmg]);
+  }
+  stdout.writeln('→ dist/macos/Wiretune.dmg');
+}
+
+/// The version name and the build number from app/pubspec.yaml (`version: 1.0.2026+1`).
+(String, String) _version() {
+  final pubspec = File(_path('app/pubspec.yaml')).readAsStringSync();
+  final match = RegExp(r'^version:\s*([0-9.]+)\+([0-9]+)\s*$', multiLine: true).firstMatch(pubspec);
+  if (match == null) throw const _BuildFailure('app/pubspec.yaml has no version of the form 1.2.3+4.');
+  return (match.group(1)!, match.group(2)!);
 }
 
 /// [relative] (with forward slashes) inside the repository, in the form of the system.

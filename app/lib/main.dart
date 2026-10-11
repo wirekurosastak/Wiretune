@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -28,19 +27,13 @@ Future<void> main() async {
   final platform = await AppPlatform.detect();
 
   // A desktop keeps its data in the user's application data folder (AppPaths); the others in the app's private support
-  // folder.
+  // folder. Android downloads into the music folder the system lets the app write to without a permission.
   if (!platform.isDesktop) AppPaths.platformDataRoot = (await getApplicationSupportDirectory()).path;
+  AppPaths.platformMusicFolder = await platform.androidMusicDirectory();
   WiretuneLog.initialize();
 
   if (platform.isAndroid || platform.isIOS) {
     unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
-  }
-  if (platform.isAndroid) {
-    await [
-      Permission.storage,
-      Permission.audio,
-      Permission.manageExternalStorage,
-    ].request();
   }
   if (platform.isDesktop) await _prepareWindow(platform);
   // A TV is steered with the remote: the focused item is always highlighted, not only after a key press.
@@ -77,6 +70,7 @@ Future<void> main() async {
   };
   CoverArt.localCopy = vm.downloadService.localCover;
   unawaited(platform.excludeFromBackup(vm.downloadService.directory));
+  unawaited(platform.excludeFromBackup(vm.downloadService.workDirectory));
 
   // A failed command (locked database, full disk, ...) must not take the whole player down: log it with its stack
   // trace and show it in the player's error line instead. The line is updated after the frame that is being built,
@@ -137,7 +131,6 @@ class _DesktopWindowListener with WindowListener {
     await windowManager.destroy();
   }
 }
-
 
 /// What the account's other players see this one as. A phone or a tablet tells by its screen: a tablet's shorter side
 /// is at least 600 points.

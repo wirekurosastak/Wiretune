@@ -29,12 +29,30 @@ class RemoteChannel {
 typedef RemoteConnector = Future<RemoteChannel> Function(Uri uri, String token);
 
 class RemoteRefusedException implements Exception {
-  const RemoteRefusedException(this.message);
+  const RemoteRefusedException(this.message, [this.statusCode]);
 
   final String message;
 
+  /// The HTTP status of the refusal: 404 from a server without remote control, 401 or 403 for the token.
+  final int? statusCode;
+
   @override
   String toString() => message;
+}
+
+/// Why remote control isn't running although it is switched on and the session is signed in.
+enum RemoteProblem {
+  /// The server has no remote control (an older version).
+  unsupported,
+
+  /// The account has as many devices connected as it may.
+  tooManyDevices,
+
+  /// The same device connected again over another connection, which took over.
+  replaced,
+
+  /// The server ended it: the sign-in no longer stands, or it didn't accept a message.
+  ended,
 }
 
 /// This player's link to the other players of the signed-in account (docs/api.md#remote-control): it tells them what
@@ -96,6 +114,16 @@ class RemoteClient {
 
   RemoteDevice? device(String id) => _devices[id];
 
+  /// Why it isn't connected although it should be; null while it is, or is trying to be. Told through [devicesChanged].
+  RemoteProblem? get problem => _problem;
+  RemoteProblem? _problem;
+
+  void _setProblem(RemoteProblem? problem) {
+    if (_problem == problem) return;
+    _problem = problem;
+    devicesChanged.emit(null);
+  }
+
   /// Who this player is and whether it takes part; connects or disconnects as needed.
   void configure({required String id, required String name, required DeviceKind kind, required bool enabled}) {
     final changed = id != _deviceId || name != _deviceName || kind != _deviceKind;
@@ -153,8 +181,15 @@ class RemoteClient {
       channel = await _connector(_remoteUri(url), token);
     } on RemoteRefusedException catch (e) {
       _connecting = false;
-      _refusedFor = (url, token);
       WiretuneLog.warn('RemoteClient', 'The server refused remote control: $e');
+      if (e.statusCode == 429) {
+        // The account's connections are all taken; one may close, so asked again later.
+        _setProblem(RemoteProblem.tooManyDevices);
+        _retryLater();
+        return;
+      }
+      _refusedFor = (url, token);
+      _setProblem(e.statusCode == 404 ? RemoteProblem.unsupported : RemoteProblem.ended);
       return;
     } catch (e) {
       _connecting = false;
@@ -170,6 +205,7 @@ class RemoteClient {
     }
     _channel = channel;
     _channelUrl = url;
+    _setProblem(null);
     channel.messages.listen(_onMessage, onDone: () => _onClosed(channel, url, token), onError: (Object _) {});
     _sendHello();
     final playback = _playback;
@@ -186,7 +222,15 @@ class RemoteClient {
     if (_final.contains(code)) {
       // Until the session signs in again (or to another server): retrying would only be refused again.
       _refusedFor = (url, token);
+      _setProblem(switch (code) {
+        RemoteRules.closeReplaced => RemoteProblem.replaced,
+        RemoteRules.closeTooManyDevices => RemoteProblem.tooManyDevices,
+        _ => RemoteProblem.ended,
+      });
       WiretuneLog.info('RemoteClient', 'The server ended remote control (code $code).');
+      // A password change ends the connection and hands the session a new token at about the same time: with that
+      // one, connect again.
+      _update();
       return;
     }
     _retryLater();
@@ -208,6 +252,7 @@ class RemoteClient {
     _retry = null;
     _publishTimer?.cancel();
     _publishTimer = null;
+    _setProblem(null); // switched off, signed out or another server: what went wrong before no longer applies
     final channel = _channel;
     _channel = null;
     _channelUrl = null;
@@ -235,7 +280,8 @@ class RemoteClient {
     } on WebSocketException catch (e) {
       // The token turned away, or a server from before remote control: asking again would not change the answer.
       final status = e.httpStatusCode;
-      if (status == 401 || status == 403 || status == 404) throw RemoteRefusedException(e.message);
+      if (status == 401 || status == 403 || status == 404) throw RemoteRefusedException(e.message, status);
+      if (status == 429) throw RemoteRefusedException(e.message, status);
       rethrow;
     }
     socket.pingInterval = RemoteRules.pingInterval;

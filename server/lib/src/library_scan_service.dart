@@ -30,7 +30,15 @@ class LibraryScanService {
   Future<void>? _loop;
 
   DateTime? lastScanCompletedUtc;
+
+  /// Why the last scan didn't run or failed, in English and as a code ([ErrorCodes]); null after one that went well.
   String? lastScanError;
+  String? lastScanProblem;
+
+  void _problem(String code, String message) {
+    lastScanProblem = code;
+    lastScanError = message;
+  }
 
   void start() => _loop ??= _run();
 
@@ -65,7 +73,7 @@ class LibraryScanService {
     final root = _paths.libraryRoot;
     try {
       if (!Directory(root).existsSync()) {
-        lastScanError = 'Library folder does not exist: $root';
+        _problem(ErrorCodes.folderMissing, 'Library folder does not exist: $root');
         WiretuneLog.warn('LibraryScan', lastScanError!);
         return;
       }
@@ -75,7 +83,10 @@ class LibraryScanService {
       if (_library.tracks.isNotEmpty &&
           _library.libraryPath == AppPaths.fullPath(root) &&
           Directory(root).listSync().isEmpty) {
-        lastScanError = 'Library folder is empty (unmounted share?): $root. Keeping the existing index.';
+        _problem(
+          ErrorCodes.folderLooksUnmounted,
+          'Library folder is empty (unmounted share?): $root. Keeping the existing index.',
+        );
         WiretuneLog.warn('LibraryScan', lastScanError!);
         return;
       }
@@ -84,6 +95,7 @@ class LibraryScanService {
       if (await _library.scanFolder(root, cancellationToken: _cancellation)) {
         lastScanCompletedUtc = DateTime.now().toUtc();
         lastScanError = null;
+        lastScanProblem = null;
         final seconds = DateTime.now().difference(started).inMilliseconds / 1000;
         WiretuneLog.info(
           'LibraryScan',
@@ -91,7 +103,7 @@ class LibraryScanService {
         );
       }
     } catch (e, s) {
-      lastScanError = '$e';
+      _problem(ErrorCodes.scanFailed, '$e');
       WiretuneLog.error('LibraryScan', 'Scan failed: $e', e, s);
     }
   }

@@ -63,6 +63,18 @@ class ServerSettingsViewModel extends ChangeNotifier {
 
   String serverLibraryPath = '';
   bool isUpdatingServerConfig = false;
+
+  /// The outcome of saving the server's music folder or reindexing it, shown beside that field.
+  String serverFolderMessage = '';
+  bool serverFolderIsError = false;
+
+  /// What is wrong with the server's music folder right now (missing, empty, the last scan failed), for an
+  /// administrator; empty while all is well.
+  String serverFolderProblem = '';
+
+  /// The progress and outcome of scanning the local folder, shown beside that field.
+  String localFolderMessage = '';
+  bool localFolderIsError = false;
   List<UserInfo> serverUsers = const [];
   String newUsername = '';
   String newPassword = '';
@@ -84,6 +96,16 @@ class ServerSettingsViewModel extends ChangeNotifier {
   String get passwordHint => Localizer.format('PasswordHint', [AuthRules.minPasswordLength]);
   bool get isBusy => isConnecting || isAuthenticating || (isScanning && isLoggedIn);
   bool get canRescanServer => isLoggedIn && isAdmin && !isScanning;
+
+  /// Whether connecting to [address] means leaving the server this device is signed in to.
+  bool wouldSwitchServer(String address) {
+    if (!_session.isLoggedIn) return false;
+    final target = ServerSession.normalizeServerUrl(address);
+    return target != null && target.toLowerCase() != _session.serverUrl.toLowerCase();
+  }
+
+  /// The server this device is connected to.
+  String get connectedServerUrl => _session.serverUrl;
 
   /// Re-renders the texts that were computed in the previous language.
   void refreshLocalizedTexts() {
@@ -230,16 +252,39 @@ class ServerSettingsViewModel extends ChangeNotifier {
     syncWithSession();
   }
 
+  void _showServerFolder(String message, {bool isError = false}) {
+    serverFolderMessage = message;
+    serverFolderIsError = isError;
+    notifyListeners();
+  }
+
+  /// What the last scan's problem means for the administrator: the folder can't be reached (the library is kept), it
+  /// looks unmounted, or the scan failed. Empty when there is none.
+  String _scanProblemText(ServerLibraryStatus status) => switch (status.lastScanProblem) {
+    ErrorCodes.folderMissing => Localizer.format('ServerFolderUnavailable', [serverLibraryPath]),
+    null => status.lastScanError ?? '', // a server from before problem codes
+    final code => describeServerError(code) ?? status.lastScanError ?? '',
+  };
+
+  Future<void> _loadServerFolderProblem() async {
+    try {
+      serverFolderProblem = _scanProblemText(await _session.getLibraryStatus());
+    } on ServerRequestException catch (e) {
+      WiretuneLog.warn('Settings', "Could not read the server's library status: ${e.message}");
+    } on ServerUnauthorizedException catch (e) {
+      WiretuneLog.warn('Settings', "Could not read the server's library status: $e");
+    }
+    notifyListeners();
+  }
+
   Future<void> rescanServer() async {
     if (!_session.isLoggedIn) {
-      statusMessage = Localizer.get('ScanSignInFirst');
-      notifyListeners();
+      _showServerFolder(Localizer.get('ScanSignInFirst'), isError: true);
       return;
     }
 
     isScanning = true;
-    statusMessage = Localizer.get('ReindexStarted');
-    notifyListeners();
+    _showServerFolder(Localizer.get('ReindexStarted'));
     try {
       await _session.triggerServerScan();
 
@@ -249,55 +294,58 @@ class ServerSettingsViewModel extends ChangeNotifier {
       do {
         await Future<void>.delayed(const Duration(milliseconds: 1500));
         status = await _session.getLibraryStatus();
-        statusMessage = status.isScanning
-            ? Localizer.format('ReindexProgress', [status.trackCount])
-            : Localizer.get('ReindexFinished');
-        notifyListeners();
+        _showServerFolder(
+          status.isScanning
+              ? Localizer.format('ReindexProgress', [status.trackCount])
+              : Localizer.get('ReindexFinished'),
+        );
       } while (status.isScanning && DateTime.now().isBefore(deadline));
 
       await _session.refreshLibrary();
-      final error = status.lastScanError;
-      statusMessage = _session.state != ServerConnectionState.connected
-          ? _session.statusMessage ?? Localizer.get('LibraryRefreshFailed')
-          : (error != null && error.isNotEmpty
-                ? Localizer.format('ServerReported', [error])
-                : Localizer.format('ServerSynced', [_library.tracks.length]));
+      serverFolderProblem = _scanProblemText(status);
+      if (_session.state != ServerConnectionState.connected) {
+        _showServerFolder(_session.statusMessage ?? Localizer.get('LibraryRefreshFailed'), isError: true);
+      } else {
+        // A problem shows on its own line; this one says what the library now holds.
+        _showServerFolder(Localizer.format('ServerSynced', [_library.tracks.length]));
+      }
     } on ServerRequestException catch (e) {
-      statusMessage = e.statusCode == 403
-          ? Localizer.get('ReindexNeedsAdmin')
-          : Localizer.format('ReindexError', [e.message]);
+      _showServerFolder(Localizer.format('ReindexError', [e.message]), isError: true);
     } on ServerUnauthorizedException catch (e) {
-      statusMessage = Localizer.format('ReindexError', ['$e']);
+      _showServerFolder(Localizer.format('ReindexError', ['$e']), isError: true);
     } finally {
       isScanning = false;
       notifyListeners();
     }
   }
 
+  void _showLocalFolder(String message, {bool isError = false}) {
+    localFolderMessage = message;
+    localFolderIsError = isError;
+    notifyListeners();
+  }
+
   Future<void> startScanFolder() async {
     if (localLibraryPath.trim().isEmpty || !Directory(localLibraryPath).existsSync()) {
-      statusMessage = Localizer.get('FolderMissing');
-      notifyListeners();
+      _showLocalFolder(Localizer.get('FolderMissing'), isError: true);
       return;
     }
     if (_library.isScanning) {
-      statusMessage = Localizer.get('ScanAlreadyRunning');
-      notifyListeners();
+      _showLocalFolder(Localizer.get('ScanAlreadyRunning'), isError: true);
       return;
     }
 
     scanProgress = 0;
-    statusMessage = Localizer.get('ScanStarted');
-    notifyListeners();
+    _showLocalFolder(Localizer.get('ScanStarted'));
     try {
       final done = await _library.scanFolder(
         localLibraryPath,
         onProgress: (report) {
           scanProgress = report.progressPercentage;
-          statusMessage =
-              '[${report.scannedFiles}/${report.totalEstimatedFiles}] '
-              '${report.currentArtist.isEmpty ? '' : '${report.currentArtist} - '}${report.currentFile}';
-          notifyListeners();
+          _showLocalFolder(
+            '[${report.scannedFiles}/${report.totalEstimatedFiles}] '
+            '${report.currentArtist.isEmpty ? '' : '${report.currentArtist} - '}${report.currentFile}',
+          );
         },
       );
       if (done) {
@@ -305,42 +353,60 @@ class ServerSettingsViewModel extends ChangeNotifier {
         scanProgress = 100;
         final localCount = _library.tracks.where((t) => t.isLocal).length;
         final serverCount = _library.tracks.length - localCount;
-        statusMessage = serverCount > 0
-            ? Localizer.format('ScanDoneMixed', [localCount, serverCount, _library.tracks.length])
-            : Localizer.format('ScanDoneLocal', [_library.tracks.length]);
+        _showLocalFolder(
+          serverCount > 0
+              ? Localizer.format('ScanDoneMixed', [localCount, serverCount, _library.tracks.length])
+              : Localizer.format('ScanDoneLocal', [_library.tracks.length]),
+        );
       }
     } catch (e) {
-      statusMessage = Localizer.format('ScanError', ['$e']);
+      WiretuneLog.error('Settings', 'Scanning the local folder failed', e);
+      _showLocalFolder(Localizer.format('ScanError', ['$e']), isError: true);
     } finally {
       syncWithSession();
     }
   }
 
+  /// The server's music folder, and what is wrong with it if anything (administrators only).
   Future<void> loadServerConfig() async {
     if (!isLoggedIn || !isAdmin) return;
     try {
       serverLibraryPath = (await _session.getServerConfig()).libraryPath;
-    } catch (e) {
-      statusMessage = Localizer.format('ServerSettingsLoadError', ['$e']);
+      savedServerLibraryPath = serverLibraryPath;
+    } on ServerRequestException catch (e) {
+      _showServerFolder(Localizer.format('ServerSettingsLoadError', [e.message]), isError: true);
+    } on ServerUnauthorizedException catch (e) {
+      _showServerFolder(Localizer.format('ServerSettingsLoadError', ['$e']), isError: true);
     }
-    notifyListeners();
+    await _loadServerFolderProblem();
   }
+
+  /// The server's music folder as the server has it (what [serverLibraryPath] was before the administrator typed).
+  String savedServerLibraryPath = '';
+
+  /// Whether saving the folder field would change the server's music folder.
+  bool get serverFolderChanged => serverLibraryPath.trim() != savedServerLibraryPath;
 
   Future<void> updateServerLibraryPath() async {
     if (!isLoggedIn || !isAdmin) return;
     if (serverLibraryPath.trim().isEmpty) {
-      statusMessage = Localizer.get('EnterServerFolder');
-      notifyListeners();
+      _showServerFolder(Localizer.get('EnterServerFolder'), isError: true);
       return;
     }
 
     isUpdatingServerConfig = true;
     notifyListeners();
     try {
-      serverLibraryPath = (await _session.updateServerLibraryPath(serverLibraryPath)).libraryPath;
-      statusMessage = Localizer.get('ServerFolderUpdated');
-    } catch (e) {
-      statusMessage = Localizer.format('FolderSaveError', ['$e']);
+      serverLibraryPath = savedServerLibraryPath = (await _session.updateServerLibraryPath(
+        serverLibraryPath,
+      )).libraryPath;
+      serverFolderProblem = '';
+      _showServerFolder(Localizer.get('ServerFolderUpdated'));
+    } on ServerRequestException catch (e) {
+      // The server's reason is a whole sentence in the user's language when it is one the player knows.
+      _showServerFolder(e.code != null ? e.message : Localizer.format('FolderSaveError', [e.message]), isError: true);
+    } on ServerUnauthorizedException catch (e) {
+      _showServerFolder('$e', isError: true);
     } finally {
       isUpdatingServerConfig = false;
       notifyListeners();

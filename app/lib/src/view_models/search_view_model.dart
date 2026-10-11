@@ -160,10 +160,6 @@ class SearchViewModel extends ChangeNotifier {
     );
   }
 
-  void playTrack(Track? track) {
-    if (track != null) _player.playQueue(matchingTracks, track);
-  }
-
   void openAlbum(Album? album) {
     if (album != null) _openAlbum(album);
   }

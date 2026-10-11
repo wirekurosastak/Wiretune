@@ -39,7 +39,14 @@ void main() {
         used.addAll(literal.allMatches(file.readAsStringSync()).map((m) => m[1]!));
       }
     }
-    final unused = allStrings.keys.where((k) => !used.contains(k.endsWith('_One') ? k.substring(0, k.length - 4) : k));
-    expect(unused, isEmpty);
+    // The text of a server error code is `Error<Code>` (describeServerError): used when that code is.
+    bool isUsed(String key) {
+      final base = key.endsWith('_One') ? key.substring(0, key.length - 4) : key;
+      if (used.contains(base)) return true;
+      if (!base.startsWith('Error') || base.length <= 5) return false;
+      return used.contains('${base[5].toLowerCase()}${base.substring(6)}');
+    }
+
+    expect(allStrings.keys.where((k) => !isUsed(k)), isEmpty);
   });
 }

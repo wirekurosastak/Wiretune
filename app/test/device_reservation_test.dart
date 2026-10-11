@@ -122,6 +122,70 @@ void main() {
     final unreachable = DBusClient(DBusAddress('unix:path=/nonexistent/wiretune-test-bus'));
     expect(await AlsaCardReservation.acquire(card, bus: unreachable), isNull);
   });
+
+  group('the card the player holds', () {
+    late List<String> log;
+    late Set<int> refused;
+
+    /// Claims that take a while, as the sound server's answer does, and write down what happened in which order.
+    ExclusiveCardHolder holder() => ExclusiveCardHolder(
+      settle: Duration.zero,
+      claim: (card) async {
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        if (refused.contains(card)) {
+          log.add('refused $card');
+          return null;
+        }
+        log.add('claim $card');
+        return () async {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+          log.add('release $card');
+        };
+      },
+    );
+
+    setUp(() {
+      log = [];
+      refused = {};
+    });
+
+    test('overlapping requests run in order, and every claim but the last is given back', () async {
+      final cards = holder();
+      await Future.wait([cards.hold(1), cards.hold(2), cards.release(), cards.hold(1), cards.hold(1)]);
+      expect(log, ['claim 1', 'release 1', 'claim 2', 'release 2', 'claim 1']);
+      expect(cards.card, 1);
+
+      await cards.release();
+      await cards.release();
+      expect(log.last, 'release 1');
+      expect(log.where((e) => e.startsWith('claim')).length, log.where((e) => e.startsWith('release')).length);
+      expect(cards.card, isNull);
+    });
+
+    test('a card that cannot be had leaves nothing held, and the one before is given back', () async {
+      final cards = holder();
+      refused.add(2);
+      expect(await cards.hold(1), isTrue);
+      expect(await cards.hold(2), isFalse);
+      expect(cards.card, isNull);
+      expect(log, ['claim 1', 'release 1', 'refused 2']);
+    });
+
+    test('a release that fails does not block the next claim', () async {
+      var first = true;
+      final cards = ExclusiveCardHolder(
+        settle: Duration.zero,
+        claim: (card) async {
+          if (!first) return () async {};
+          first = false;
+          return () async => throw StateError('the bus is gone');
+        },
+      );
+      expect(await cards.hold(1), isTrue);
+      expect(await cards.hold(2), isTrue);
+      expect(cards.card, 2);
+    });
+  });
 }
 
 /// Answers `RequestRelease` the way the sound server does, and remembers the priorities it was asked with.

@@ -30,29 +30,33 @@ enum TrackTableKind {
   /// An artist: cover, title, album, quality, length, favourite, add to playlist.
   artist,
 
-  /// A playlist: cover, title, artist, album, quality, length, favourite, remove from the playlist.
+  /// A playlist: cover, title, artist, album, length, year, the place in the playlist, quality, favourite, remove from
+  /// the playlist.
   playlist,
 
   /// Search results: cover, title, artist, album, length, favourite, add to playlist.
   search,
 }
 
-enum _Column { title, artist, album, length, year, added, quality }
-
 /// A list of tracks as slivers: on a wide screen a table (a header row with sortable columns over rounded rows that
 /// light up under the mouse), on a phone rows of cover, title, the favourite and a menu. The track that is playing is
-/// washed in the accent and marked by bouncing bars; a downloaded one carries a tick.
+/// washed in the accent and marked by bouncing bars; a downloaded one carries a tick. Playing a track makes the list
+/// the queue, in the order it is shown.
 class TrackSliver extends StatefulWidget {
   const TrackSliver({
     super.key,
     required this.tracks,
-    required this.onPlay,
+    this.sorting,
     this.kind = TrackTableKind.tracks,
     this.horizontalPadding,
   });
 
   final List<Track> tracks;
-  final void Function(Track track) onPlay;
+
+  /// The page's sort (Tracks, Favourites), which [tracks] are already in: the column headers change it, as the sort
+  /// buttons do. Without one the list keeps its own order (an album's, a playlist's, the best match first) until a
+  /// header sorts this table alone.
+  final TrackSorting? sorting;
   final TrackTableKind kind;
   final double? horizontalPadding;
 
@@ -65,8 +69,9 @@ class TrackSliver extends StatefulWidget {
 }
 
 class _TrackSliverState extends State<TrackSliver> {
-  _Column? _sortColumn;
-  bool _descending = false;
+  // This table's own sort, for a list without a page's sort; null keeps the list's order.
+  TrackSortField? _ownField;
+  bool _ownDescending = false;
   List<Track>? _sortedSource;
   List<Track> _sorted = const [];
   double _tableWidth = 1200;
@@ -75,33 +80,24 @@ class _TrackSliverState extends State<TrackSliver> {
   static const double _phoneRowHeight = 76;
 
   @override
-  void initState() {
-    super.initState();
-    _initDefaultSort();
-  }
-
-  @override
   void didUpdateWidget(TrackSliver oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.kind != widget.kind) {
-      _initDefaultSort();
+      _ownField = null;
       _sortedSource = null;
     }
   }
 
-  void _initDefaultSort() {
-    switch (widget.kind) {
-      case TrackTableKind.tracks:
-        _sortColumn = _Column.title;
-        _descending = false;
-      case TrackTableKind.favorites:
-        _sortColumn = _Column.added;
-        _descending = true;
-      default:
-        _sortColumn = null;
-        _descending = false;
-    }
+  TrackSortField? get _sortField => widget.sorting?.sortField ?? _ownField;
+  bool get _descending => widget.sorting?.isSortDescending ?? _ownDescending;
+
+  /// When [track] was added: to the favourites on that page, otherwise to the library.
+  DateTime? _addedAt(Track track) {
+    final sorting = widget.sorting;
+    return sorting != null ? sorting.addedAt(track) : track.dateAdded;
   }
+
+  void _play(Track track) => context.vm.player.playQueue(_tracks, track);
 
   TrackTableKind get kind => widget.kind;
   bool get _leadIsNumber => kind == TrackTableKind.album;
@@ -114,9 +110,7 @@ class _TrackSliverState extends State<TrackSliver> {
           kind == TrackTableKind.playlist) &&
       _tableWidth >= 720;
   bool get _showAdded =>
-      (kind == TrackTableKind.tracks ||
-          kind == TrackTableKind.favorites ||
-          kind == TrackTableKind.playlist) &&
+      (kind == TrackTableKind.tracks || kind == TrackTableKind.favorites || kind == TrackTableKind.playlist) &&
       _tableWidth >= 880;
   bool get _showQuality => kind != TrackTableKind.search && _tableWidth >= 1060;
 
@@ -129,44 +123,31 @@ class _TrackSliverState extends State<TrackSliver> {
 
   int get _artistFlex => 4;
   int get _albumFlex => 4;
-  int get _lengthFlex => 3;
-  int get _yearFlex => 3;
-  int get _addedFlex => 3;
-  int get _qualityFlex => 4;
 
+  // The columns of figures are as wide as their longest header (German) and value; the text columns share the rest.
+  static const double _lengthWidth = 76;
+  static const double _yearWidth = 112;
+  static const double _addedWidth = 124;
+  static const double _qualityWidth = 168;
+
+  /// The tracks in the order shown: the page sorts its own, this table those of a list without a page's sort.
   List<Track> get _tracks {
-    final column = _sortColumn;
-    if (column == null) return widget.tracks;
+    final field = _ownField;
+    if (widget.sorting != null || field == null) return widget.tracks;
     if (identical(_sortedSource, widget.tracks)) return _sorted;
-    final list = List.of(widget.tracks);
-    int compare(Track a, Track b) => switch (column) {
-      _Column.title => compareText(a.title, b.title),
-      _Column.artist => compareText(a.artist, b.artist),
-      _Column.album => compareText(a.album, b.album),
-      _Column.length => a.duration.compareTo(b.duration),
-      _Column.year => () {
-        if ((a.year == null) != (b.year == null)) return a.year == null ? 1 : -1;
-        return (a.year ?? 0).compareTo(b.year ?? 0);
-      }(),
-      _Column.added => () {
-        final aTime = a.favoritedAt ?? a.dateAdded;
-        final bTime = b.favoritedAt ?? b.dateAdded;
-        return aTime.compareTo(bTime);
-      }(),
-      _Column.quality => compareFormatQuality(a.format, b.format),
-    };
-    sortStable(list, _descending ? (Track a, Track b) => compare(b, a) : compare);
     _sortedSource = widget.tracks;
-    return _sorted = list;
+    return _sorted = sortTracks(widget.tracks, field, descending: _ownDescending);
   }
 
-  void _sortBy(_Column column) {
+  void _sortBy(TrackSortField field) {
+    final sorting = widget.sorting;
+    if (sorting != null) return sorting.setSortField(field);
     setState(() {
-      if (_sortColumn == column) {
-        _descending = !_descending;
+      if (_ownField == field) {
+        _ownDescending = !_ownDescending;
       } else {
-        _sortColumn = column;
-        _descending = column == _Column.added || column == _Column.year || column == _Column.quality;
+        _ownField = field;
+        _ownDescending = startsDescending(field);
       }
       _sortedSource = null;
     });
@@ -218,15 +199,10 @@ class _TrackSliverState extends State<TrackSliver> {
 
   Widget _header(BuildContext context) {
     final colors = context.colors;
-    Widget cell(String label, _Column? column, {int flex = 0, double? width}) {
-      final active = column != null && _sortColumn == column;
+    Widget cell(String label, TrackSortField? column, {int flex = 0, double? width}) {
+      final active = column != null && _sortField == column;
       final content = column != null
-          ? _HeaderCell(
-              label: label,
-              active: active,
-              descending: _descending,
-              onTap: () => _sortBy(column),
-            )
+          ? _HeaderCell(label: label, active: active, descending: _descending, onTap: () => _sortBy(column))
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Align(
@@ -256,13 +232,13 @@ class _TrackSliverState extends State<TrackSliver> {
       child: Row(
         children: [
           cell(_leadIsNumber ? '#' : '', null, width: _leadIsNumber ? 48 : 56),
-          cell(context.tr('ColTitle'), _Column.title, flex: _titleFlex),
-          if (_showArtist) cell(context.tr('ColArtist'), _Column.artist, flex: _artistFlex),
-          if (_showAlbum) cell(context.tr('ColAlbum'), _Column.album, flex: _albumFlex),
-          cell(context.tr('ColLength'), _Column.length, flex: _lengthFlex),
-          if (_showYear) cell(context.tr('ColYear'), _Column.year, flex: _yearFlex),
-          if (_showAdded) cell(context.tr('ColAdded'), _Column.added, flex: _addedFlex),
-          if (_showQuality) cell(context.tr('ColQuality'), _Column.quality, flex: _qualityFlex),
+          cell(context.tr('ColTitle'), TrackSortField.title, flex: _titleFlex),
+          if (_showArtist) cell(context.tr('ColArtist'), TrackSortField.artist, flex: _artistFlex),
+          if (_showAlbum) cell(context.tr('ColAlbum'), TrackSortField.album, flex: _albumFlex),
+          cell(context.tr('ColLength'), TrackSortField.length, width: _lengthWidth),
+          if (_showYear) cell(context.tr('ColYear'), TrackSortField.year, width: _yearWidth),
+          if (_showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _addedWidth),
+          if (_showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _qualityWidth),
           const SizedBox(width: 4 * 44),
         ],
       ),
@@ -292,7 +268,7 @@ class _TableRowState extends State<_TableRow> {
     final track = widget.track;
     final state = widget.state;
     final playing = track.isPlaying;
-    final onPlay = state.widget.onPlay;
+    final onPlay = state._play;
     final kind = state.kind;
     final radius = BorderRadius.circular(Radii.small + 2);
     final Widget lead;
@@ -342,13 +318,8 @@ class _TableRowState extends State<_TableRow> {
                   ),
                   Expanded(
                     flex: state._titleFlex,
-                    child: _CellLink(
-                      track.title,
-                      hoverColor: colors.accent,
-                      color: playing ? colors.accent : colors.textMain,
-                      bold: true,
-                      onTap: () => onPlay(track),
-                    ),
+                    // The row plays the track; the title is no link of its own (one more stop for the keyboard).
+                    child: _CellLink(track.title, color: playing ? colors.accent : colors.textMain, bold: true),
                   ),
                   if (state._showArtist)
                     Expanded(
@@ -370,65 +341,22 @@ class _TableRowState extends State<_TableRow> {
                         onTap: () => vm.openAlbumOfTrack(track),
                       ),
                     ),
-                  Expanded(
-                    flex: state._lengthFlex,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          track.formattedDuration,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: colors.textMuted,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (state._showYear)
-                    Expanded(
-                      flex: state._yearFlex,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            track.year?.toString() ?? '—',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: colors.textMuted,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                  _FigureCell(track.formattedDuration, width: _TrackSliverState._lengthWidth),
+                  if (state._showYear) _FigureCell(track.year?.toString() ?? '—', width: _TrackSliverState._yearWidth),
                   if (state._showAdded)
-                    Expanded(
-                      flex: state._addedFlex,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _formatDate(track.favoritedAt ?? track.dateAdded),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: colors.textMuted,
-                              fontFeatures: const [FontFeature.tabularFigures()],
-                            ),
-                          ),
-                        ),
-                      ),
+                    _FigureCell(
+                      // A playlist knows no date of its tracks, only the order they were added in.
+                      kind == TrackTableKind.playlist
+                          ? '${vm.playlists.positionOf(track) ?? '—'}'
+                          : switch (state._addedAt(track)) {
+                              final date? => context.trf('DateShort', [date]),
+                              null => '—',
+                            },
+                      width: _TrackSliverState._addedWidth,
                     ),
                   if (state._showQuality)
-                    Expanded(
-                      flex: state._qualityFlex,
+                    SizedBox(
+                      width: _TrackSliverState._qualityWidth,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
@@ -491,11 +419,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
   final hide = _IconCell(
     width: size,
     tooltip: context.tr(isHidden ? 'Unhide' : 'HideTrack'),
-    icon: Icon(
-      isHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-      color: colors.textMuted,
-      size: 18,
-    ),
+    icon: Icon(isHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: colors.textMuted, size: 18),
     onPressed: () {
       if (isHidden) {
         vm.library.unhideTrack(track.id);
@@ -534,12 +458,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
 
 enum TrackAction { addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist, hideTrack }
 
-Future<void> _showTrackContextMenu(
-  BuildContext context,
-  Offset position,
-  Track track,
-  TrackTableKind kind,
-) async {
+Future<void> _showTrackContextMenu(BuildContext context, Offset position, Track track, TrackTableKind kind) async {
   final action = await showMenu<TrackAction>(
     context: context,
     position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
@@ -565,11 +484,7 @@ class TrackMenu extends StatelessWidget {
   /// The dots' colour; muted when not given.
   final Color? color;
 
-  static List<PopupMenuEntry<TrackAction>> buildMenuItems(
-    BuildContext context,
-    Track track,
-    TrackTableKind kind,
-  ) {
+  static List<PopupMenuEntry<TrackAction>> buildMenuItems(BuildContext context, Track track, TrackTableKind kind) {
     final vm = context.vm;
     final colors = context.colors;
     final downloads = vm.downloads;
@@ -604,13 +519,11 @@ class TrackMenu extends StatelessWidget {
           downloadTip(context, track),
           enabled: !downloads.isPinnedByList(track),
         ),
-      if (kind != TrackTableKind.album)
-        item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
-      if (kind != TrackTableKind.artist)
-        item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
+      if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
+      if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
       item(
         TrackAction.hideTrack,
-        Icons.visibility_off_outlined,
+        isHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
         context.tr(isHidden ? 'Unhide' : 'HideTrack'),
         color: colors.textMuted,
       ),
@@ -716,44 +629,29 @@ class _Cover extends StatelessWidget {
   );
 }
 
-/// A cell's text that is also a link: it takes [hoverColor] under the mouse.
-class _CellLink extends StatefulWidget {
-  const _CellLink(this.text, {required this.hoverColor, required this.onTap, this.color, this.bold = false});
+/// A cell's text that is also a link: it takes [hoverColor] under the mouse or the keyboard's focus.
+class _CellLink extends StatelessWidget {
+  const _CellLink(this.text, {this.hoverColor, this.onTap, this.color, this.bold = false});
 
   final String text;
-  final Color hoverColor;
+  final Color? hoverColor;
   final Color? color;
   final bool bold;
-  final VoidCallback onTap;
-
-  @override
-  State<_CellLink> createState() => _CellLinkState();
-}
-
-class _CellLinkState extends State<_CellLink> {
-  bool _hover = false;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 10),
     child: Align(
       alignment: Alignment.centerLeft,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: Text(
-            widget.text,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: widget.bold ? 14 : 13.5,
-              fontWeight: widget.bold ? FontWeight.w600 : FontWeight.w500,
-              color: _hover ? widget.hoverColor : (widget.color ?? context.colors.textMain),
-            ),
-          ),
+      child: LinkText(
+        text,
+        onTap: onTap,
+        hoverColor: hoverColor,
+        style: TextStyle(
+          fontSize: bold ? 14 : 13.5,
+          fontWeight: bold ? FontWeight.w600 : FontWeight.w500,
+          color: color ?? context.colors.textMain,
         ),
       ),
     ),
@@ -783,7 +681,7 @@ class _PhoneRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(Radii.card),
         child: InkWell(
           borderRadius: BorderRadius.circular(Radii.card),
-          onTap: () => state.widget.onPlay(track),
+          onTap: () => state._play(track),
           child: Row(
             children: [
               const SizedBox(width: 8),
@@ -847,21 +745,39 @@ class _PhoneRow extends StatelessWidget {
   }
 }
 
-String _formatDate(DateTime date) {
-  final local = date.toLocal();
-  final y = local.year;
-  final m = local.month.toString().padLeft(2, '0');
-  final d = local.day.toString().padLeft(2, '0');
-  return '$y.$m.$d';
+/// A table cell of figures (a length, a year, a date): muted, one line, the digits lined up.
+class _FigureCell extends StatelessWidget {
+  const _FigureCell(this.text, {required this.width});
+
+  final String text;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    width: width,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          text,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: context.colors.textMuted,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
-class _HeaderCell extends StatefulWidget {
-  const _HeaderCell({
-    required this.label,
-    required this.active,
-    required this.descending,
-    required this.onTap,
-  });
+class _HeaderCell extends StatelessWidget {
+  const _HeaderCell({required this.label, required this.active, required this.descending, required this.onTap});
 
   final String label;
   final bool active;
@@ -869,60 +785,44 @@ class _HeaderCell extends StatefulWidget {
   final VoidCallback onTap;
 
   @override
-  State<_HeaderCell> createState() => _HeaderCellState();
-}
-
-class _HeaderCellState extends State<_HeaderCell> {
-  bool _hover = false;
-
-  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final color = widget.active ? colors.accent : colors.textMain;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedScale(
-          scale: _hover ? 1.05 : 1.0,
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.centerLeft,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    widget.label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 0.9,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                      shadows: _hover
-                          ? [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 10)]
-                          : null,
-                    ),
+    final color = active ? colors.accent : colors.textMain;
+    return Pressable(
+      onPressed: onTap,
+      builder: (context, lit) => AnimatedScale(
+        scale: lit ? 1.05 : 1.0,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 0.9,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                    shadows: lit ? [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 10)] : null,
                   ),
                 ),
-                if (widget.active) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                    widget.descending ? Icons.south_rounded : Icons.north_rounded,
-                    size: 12,
-                    color: colors.accent,
-                    shadows: _hover
-                        ? [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 10)]
-                        : null,
-                  ),
-                ],
+              ),
+              if (active) ...[
+                const SizedBox(width: 4),
+                Icon(
+                  descending ? Icons.south_rounded : Icons.north_rounded,
+                  size: 12,
+                  color: colors.accent,
+                  shadows: lit ? [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 10)] : null,
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),

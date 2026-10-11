@@ -77,6 +77,55 @@ void main() {
     expect(AppPaths.isPathUnderRoot('', '/music'), isFalse);
   });
 
+  test("the music folder on Linux is the XDG one, in the system's language", () {
+    const config = '''
+# This file is written by xdg-user-dirs-update
+XDG_DESKTOP_DIR="\$HOME/Asztal"
+XDG_MUSIC_DIR="\$HOME/Zenék"
+XDG_VIDEOS_DIR="/srv/videos"
+XDG_PUBLICSHARE_DIR="\$HOME/"
+''';
+    expect(AppPaths.xdgUserDir(config, 'MUSIC', '/home/me'), '/home/me/Zenék');
+    expect(AppPaths.xdgUserDir(config, 'VIDEOS', '/home/me'), '/srv/videos');
+    expect(AppPaths.xdgUserDir(config, 'PUBLICSHARE', '/home/me'), isNull); // switched off
+    expect(AppPaths.xdgUserDir(config, 'PICTURES', '/home/me'), isNull);
+    expect(AppPaths.xdgUserDir('XDG_MUSIC_DIR="relative/path"', 'MUSIC', '/home/me'), isNull);
+  });
+
+  test("the server's error codes read in the user's language, and an unknown one in the server's words", () {
+    expect(
+      describeServerError(ErrorCodes.folderWholeDisk),
+      "A whole disk can't be the music folder: choose a folder on it.",
+    );
+    expect(describeServerError(ErrorCodes.favoritesLimit, 100000), contains('100'));
+    expect(describeServerError(ErrorCodes.rateLimited, 1), 'Too many attempts. Try again in 1 second.');
+    expect(describeServerError('somethingNew'), isNull);
+    expect(describeServerError(null), isNull);
+    Localizer.instance.setLanguage('hu');
+    expect(describeServerError(ErrorCodes.folderMissing, '/mnt/nas'), 'Ez a mappa nem létezik a szerveren: /mnt/nas');
+    Localizer.instance.setLanguage('en');
+
+    // Every code the server sends has its text.
+    const codes = [
+      ErrorCodes.invalidJson, ErrorCodes.bodyTooLarge, ErrorCodes.notFound, ErrorCodes.internalError, //
+      ErrorCodes.rateLimited, ErrorCodes.signInRequired, ErrorCodes.tokenInvalid, ErrorCodes.sessionExpired,
+      ErrorCodes.passwordChanged, ErrorCodes.accountRemoved, ErrorCodes.wrongCredentials, ErrorCodes.adminOnly,
+      ErrorCodes.credentialsRequired, ErrorCodes.usernameInvalid, ErrorCodes.passwordTooShort,
+      ErrorCodes.passwordTooLong, ErrorCodes.alreadySetUp, ErrorCodes.setupCodeWrong, ErrorCodes.currentPasswordWrong,
+      ErrorCodes.usernameTaken, ErrorCodes.userNotFound, ErrorCodes.cannotDeleteSelf,
+      ErrorCodes.cannotResetOwnPassword, ErrorCodes.folderRequired, ErrorCodes.folderInvalid,
+      ErrorCodes.folderMissing, ErrorCodes.folderUnreadable, ErrorCodes.folderWholeDisk, ErrorCodes.folderSystem,
+      ErrorCodes.folderServerData, ErrorCodes.folderLooksUnmounted, ErrorCodes.scanFailed, ErrorCodes.invalidId,
+      ErrorCodes.invalidItemType, ErrorCodes.favoritesLimit, ErrorCodes.playCountsLimit, ErrorCodes.playlistsLimit,
+      ErrorCodes.hiddenLimit, ErrorCodes.playlistInvalid, ErrorCodes.playlistNameRequired,
+      ErrorCodes.playlistNameTooLong, ErrorCodes.playlistDescriptionTooLong, ErrorCodes.playlistTooManyTracks,
+      ErrorCodes.playlistNotFound, ErrorCodes.notWebSocket, ErrorCodes.originRefused, ErrorCodes.tooManyConnections,
+    ];
+    for (final code in codes) {
+      expect(describeServerError(code, 1), isNotNull, reason: code);
+    }
+  });
+
   test('log lines never carry a token', () {
     expect(
       WiretuneLog.redact('GET http://h/api/stream/1?token=abc.def&x=1'),

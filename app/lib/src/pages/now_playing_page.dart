@@ -233,9 +233,7 @@ class _PlayerTab extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(28, 0, 28, 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 11),
-                ],
+                children: [PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 11)],
               ),
             ),
           Padding(

@@ -26,6 +26,7 @@ class WiretuneMediaSession extends BaseAudioHandler {
   final MainViewModel _vm;
   final DateTime Function() _now;
   String? _publishedTrackId;
+  List<String> _publishedQueue = const [];
   String? _streamToken;
 
   static Future<WiretuneMediaSession> start(MainViewModel vm) => AudioService.init(
@@ -75,10 +76,23 @@ class WiretuneMediaSession extends BaseAudioHandler {
       playbackState.add(state);
     }
 
-    final queueTracks = player.queueTracks;
-    if (queue.value.length != queueTracks.length) {
-      queue.add([for (final t in queueTracks.take(500)) _item(t, playable: true)]);
+    // Another queue of the same length (the next album) or a reordered one is a new queue too.
+    final queueTracks = player.queueTracks.take(_maxQueue).toList();
+    final ids = [for (final t in queueTracks) t.id];
+    if (!_sameIds(ids, _publishedQueue)) {
+      _publishedQueue = ids;
+      queue.add([for (final t in queueTracks) _item(t, playable: true)]);
     }
+  }
+
+  static const int _maxQueue = 500;
+
+  static bool _sameIds(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   /// A position that has drifted from where the system has carried it to (a seek, a stream that stalled) is published;
@@ -211,7 +225,8 @@ class WiretuneMediaSession extends BaseAudioHandler {
 
   // ── Browsing (Android Auto) ────────────────────────────────────────────────────────────────────
   // Media IDs: "albums", "artists", "playlists", "favorites", "tracks"; "album:ID", "artist:ID", "playlist:ID" for the
-  // lists; "LIST|TRACKID" for a track in a list, which plays the list from that track.
+  // lists, and "search:QUERY" for what a search found; "LIST|TRACKID" for a track in a list, which plays the list from
+  // that track.
 
   static const int _maxItems = 400;
 
@@ -236,7 +251,7 @@ class WiretuneMediaSession extends BaseAudioHandler {
         return current == null ? const [] : [_item(current, playable: true)];
       case 'albums':
         return [
-          for (final album in library.albums.take(_maxItems))
+          for (final album in _vm.albums.inSortOrder(library.albums).take(_maxItems))
             MediaItem(
               id: 'album:${album.id}',
               title: album.title,
@@ -248,7 +263,7 @@ class WiretuneMediaSession extends BaseAudioHandler {
         ];
       case 'artists':
         return [
-          for (final artist in library.artists.take(_maxItems))
+          for (final artist in _vm.artists.inSortOrder(library.artists).take(_maxItems))
             MediaItem(
               id: 'artist:${artist.id}',
               title: artist.name,
@@ -259,7 +274,7 @@ class WiretuneMediaSession extends BaseAudioHandler {
         ];
       case 'playlists':
         return [
-          for (final playlist in library.playlists)
+          for (final playlist in _vm.playlists.playlists)
             MediaItem(
               id: 'playlist:${playlist.id}',
               title: playlist.name,
@@ -290,11 +305,18 @@ class WiretuneMediaSession extends BaseAudioHandler {
         final p? => library.getPlaylistTracks(p),
         null => const [],
       },
-      'favorites' => library.favorites,
-      'tracks' => library.tracks,
+      // In the order chosen in the app (without its genre filter).
+      'favorites' => _vm.favorites.favoriteTracks,
+      'tracks' => _vm.tracks.displayedTracks,
+      'search' => _found(id),
       _ => const [],
     };
   }
+
+  /// What a search for [query] shows in the car, and plays from the result picked.
+  List<Track> _found(String query) => _vm.library.search(query).take(_maxSearchResults).toList();
+
+  static const int _maxSearchResults = 50;
 
   @override
   Future<MediaItem?> getMediaItem(String mediaId) async {
@@ -325,7 +347,7 @@ class WiretuneMediaSession extends BaseAudioHandler {
   @override
   Future<List<MediaItem>> search(String query, [Map<String, dynamic>? extras]) async {
     await _refreshTokenIfNeeded();
-    return [for (final t in _vm.library.search(query).take(50)) _item(t, playable: true, context: 'search:$query')];
+    return [for (final t in _found(query)) _item(t, playable: true, context: 'search:$query')];
   }
 
   /// "Play … on Wiretune": an artist, an album, or the tracks that match; nothing named plays everything.

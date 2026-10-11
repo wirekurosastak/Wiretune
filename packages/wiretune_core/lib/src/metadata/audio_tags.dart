@@ -56,11 +56,14 @@ class AudioTags {
 
   int? _pictureType;
 
+  /// A cover is a few megabytes at most; a length beyond this comes from a damaged tag and is not read into memory.
+  static const int maxPictureBytes = 32 * 1024 * 1024;
+
   /// The picture's bytes, read from [source] if they were only located.
   Uint8List? readPicture(ByteSource source) {
     if (pictureData != null) return pictureData;
     final location = pictureLocation;
-    if (location == null || location.length <= 0) return null;
+    if (location == null || location.length <= 0 || location.length > maxPictureBytes) return null;
     return source.readExact(location.offset, location.length);
   }
 

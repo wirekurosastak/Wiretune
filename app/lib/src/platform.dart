@@ -34,7 +34,7 @@ class AppPlatform {
   bool get hasCustomWindowFrame => isLinuxDesktop || isWindows;
 
   /// A phone or tablet: steered by touch and running on its battery. Nothing animates there on its own (the backdrop's
-  /// drift, the breathing logo and cover, the status light): every frame costs battery, and such an animation draws
+  /// drift, the breathing logo, the status light): every frame costs battery, and such an animation draws
   /// them for as long as the music lasts.
   bool get isMobile => (isAndroid && !isTv) || isIOS;
 
@@ -69,6 +69,20 @@ class AppPlatform {
     } catch (e, s) {
       WiretuneLog.error('Platform', 'Could not keep $folder out of backups', e, s);
     }
+  }
+
+  /// The music folder Android puts downloads in (the Android plugin knows which one the system lets the app write to
+  /// without asking); null elsewhere, or when there is none.
+  Future<String?> androidMusicDirectory() async {
+    if (!isAndroid) return null;
+    try {
+      return await _channel.invokeMethod<String>('musicDirectory');
+    } on PlatformException catch (e) {
+      WiretuneLog.warn('Platform', 'No music folder: $e');
+    } on MissingPluginException {
+      // An engine without the plugin: the app's own storage then.
+    }
+    return null;
   }
 
   static String get _hostSystem => kIsWeb ? 'web' : Platform.operatingSystem;

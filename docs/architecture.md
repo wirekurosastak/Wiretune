@@ -36,25 +36,28 @@ merges take turns through a commit gate.
 - **Writes are diffs**: one transaction per change, and rows that didn't change aren't touched.
 - **User data** of server tracks lives on the server account. While signed in (`LibraryService.serverConnected`), a
   change lands locally at once and `ServerSession` sends it on; while not, server tracks and server playlists are
-  read-only. The player's copy is a cache that every refresh overwrites.
+  read-only. The player's copy is a cache that every refresh overwrites. Hidden artists, albums and tracks work the same
+  way: the account's (cached under its ID, so they also apply when the app starts offline) change only while signed
+  in; without an account the device keeps its own.
 
 The services talk through synchronous `Event<T>`s: a handler has run by the time `emit` returns.
 
 ## Persistence
 
 SQLite in WAL mode, one synchronous connection per database, instants stored as microseconds since the epoch. The
-schema version is `PRAGMA user_version` (2). A database of version 1 is upgraded in place (it gains
-`tracks.favorited_at`); one of any other version is refused (`IncompatibleDatabaseException`) rather than misread. A
-change to the tables raises the version and adds the step that upgrades the previous one in place. Both sides create
-every table and use what they need:
+schema version is `PRAGMA user_version` (5). A database of an earlier version runs the upgrade steps after its own
+(`DatabaseManager._upgrades`, one per version) in one transaction; a newer one, or tables without a version, is refused
+(`IncompatibleDatabaseException`) rather than misread. A change to the tables raises the version and appends its step.
+Both sides create every table and use what they need:
 
 | Table | Used by | Holds |
 |---|---|---|
 | `tracks` | both | The index; in the player also the cached favourites (and when each was marked) and play counts |
 | `playlists` | player | Playlists; `is_server` marks a cached server one |
 | `settings` | both | Key/value pairs: the player's server address, token and preferences; the server's `jwt_secret` and music folder |
-| `users` | server | Accounts, with bcrypt hashes |
-| `user_favorites`, `user_plays`, `user_playlists` | server | Each account's data |
+| `users` | server | Accounts, with bcrypt hashes and the token version a password change raises |
+| `user_favorites`, `user_plays`, `user_playlists`, `user_hidden` | both | On the server each account's data; the player keeps its hidden items there too, its own (`local`) and a copy of the signed-in account's |
+| `downloads` | player | Which file in the downloads folder is the copy of which server track, and of which version of its file |
 
 ## Player and server
 
@@ -63,21 +66,31 @@ every table and use what they need:
 throw. Connecting probes `/api/auth/setup-required`, then loads `/api/auth/me`, all of `/api/tracks` (there's no
 incremental sync) and `/api/me/data`.
 
-The sign-in token only ever goes to the address that issued it. Stream URLs are stored without credentials: the engine
-appends a short-lived stream token at the moment it hands one to a driver, and `WiretuneLog` blanks every `token=`
-anyway.
+The sign-in token only ever goes to the address that issued it, and it is stored with the account's ID (`auth_user_id`).
+Stream URLs are stored without credentials: the engine appends a short-lived stream token at the moment it hands one
+to a driver, and `WiretuneLog` blanks every `token=` anyway. A password change swaps in the token the server answers
+with; a `401` for a token that has been replaced meanwhile doesn't sign the session out.
 
 Changes to the account's data go through one ordered queue, flushed before every refresh and sign-out so that a
 download can't undo them. A favourite the server refused is put back; a failed play or playlist edit isn't retried.
-`400`, `409` and `413` mean "reachable, but no" and keep the session connected; anything else marks it offline.
+`400`, `409` and `413` mean "reachable, but no" and keep the session connected; anything else marks it offline. Every
+error answer carries a code (`ErrorCodes`), which `describeServerError` turns into a sentence in the user's language;
+a `401` says why the token stopped working, and the session shows that.
 
 **Downloads** (`DownloadService`): what the user marked (tracks, albums, artists, playlists, the favourites) is a
 preference, and the tracks it covers are worked out again from the library after every change, so a playlist that grows
-grows on the device too. One file at a time comes from `/api/stream` with the sign-in token in the header, into
-the user's Music directory (`~/Music/Wiretune` on desktop, or platform support directory), and an interrupted one continues with a range request. A copy is named by hashes of
-the track's ID and of the server's size and modification time, followed by the sanitized artist and title: no ID a server sends becomes a path, and a copy of a file
-that has since changed is recognised by its name and replaced once the new one is there. The engine plays a copy instead
-of the stream (and asks for no stream token, which might hang without a server); covers and lyrics come from copies too.
+grows on the device too. With sync off, a mark adds only what it covers when it is made (kept as `pending` until it
+arrives), and nothing else is fetched on its own. One file at a time comes from `/api/stream` with the sign-in token in
+the header, into the app's own `DownloadCache/partial` (an interrupted one continues with a range request), and is
+moved into the downloads folder once it is complete and as long as the listing says: `Wiretune` in the music folder
+(`AppPaths.musicFolder`, the XDG one on Linux; on Android the folder the plugin names, which needs no permission),
+`Downloads` in the app's data on iOS and Tizen. Copies are named after the tags (`Album artist/Album/01 - Title.flac`,
+`DownloadService.safeFileName`), and the `downloads` table records which file is which track's copy and of which
+version of the server's file (size and modification time): two tracks with one name get two files, a file that isn't
+a copy is never taken for one or overwritten, a move cut short by the app's end is noticed (the record says "moving"),
+and a copy of a changed file is replaced in place once the new one is there. Copies named by hashes, from earlier
+versions, are moved into place. The engine plays a copy instead of the stream (and asks for no stream token, which might
+hang without a server); covers (in `DownloadCache/covers`) and lyrics come from copies too.
 
 **Remote control** (`RemoteClient`): while signed in, one WebSocket to `/api/remote`, reconnected with a growing pause
 and given up on a refusal until the sign-in changes. `PlayerViewModel` tells the others its state at every change and
@@ -93,9 +106,11 @@ the database, the library, `AuthService`, `UserDataService`, `SetupCode` and `Li
 where every route declares its access level (anonymous, user, admin, media) and its body limit.
 
 - **Auth**: bcrypt (cost 12) in an isolate, a dummy hash for unknown names so the timing gives nothing away,
-  HMAC-SHA256 JWTs (`sub`, `name`, `role`, and an `aud` that tells a sign-in token from a stream token), and
-  first-admin creation as one atomic `INSERT … WHERE NOT EXISTS`. Every token is checked against `users`, so deleting
-  an account locks it out at once. A stream token opens only the media routes, and it's the only kind `?token=` takes.
+  HMAC-SHA256 JWTs (`sub`, `name`, `ver`, and an `aud` that tells a sign-in token from a stream token), and
+  first-admin creation as one atomic `INSERT … WHERE NOT EXISTS`. Every token is checked against `users`
+  (`AuthService.authenticate`): deleting an account locks it out at once, a token whose `ver` isn't the account's
+  `token_version` (which a password change or reset raises) is refused, and the role and name are the account's present
+  ones. A stream token opens only the media routes, and it's the only kind `?token=` takes.
 - **User data**: every method takes the account from the token, so no route can reach another account's rows, and the
   limits are part of each insert's SQL, so parallel requests can't sneak past them.
 - **Scanning**: a loop that wakes for a request or the interval. Stopping the server cancels a running scan.
@@ -109,7 +124,11 @@ where every route declares its access level (anonymous, user, admin, media) and 
 
 `WiretuneAudioEngine` (core) owns the track, devices, modes and volume, and drives one `AudioDriver`:
 `MediaKitAudioDriver` (libmpv) everywhere but Tizen, `TizenAudioDriver` there. A *playback generation* counter makes
-the drivers ignore late callbacks from a source that has since been replaced. Around the engine, `MobileAudio`
+the drivers ignore late callbacks from a source that has since been replaced, and the engine doesn't start a track
+whose stream token arrived after another track was asked for. A device that disappears takes exclusive and bit-perfect
+with it. On Linux the ALSA card for exclusive playback is claimed through `ExclusiveCardHolder`, which carries out claims
+and releases one at a time, so overlapping output changes can't leave a claim behind; the card goes back when playback
+stops, ends or fails, or the app closes. Around the engine, `MobileAudio`
 handles audio focus and Android's CPU and Wi-Fi locks, and `WiretuneMediaSession` mirrors the player into the system's
 media controls; on Android it's also the `MediaBrowserService` that Android Auto browses. Per platform:
 [audio.md](audio.md).
@@ -130,11 +149,18 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
   decoded at 64 px and blurred once into a 96 px bitmap, so nothing is blurred per frame, and it turns only on a
   desktop while music plays (not with the system's reduced motion).
 - **Battery**: on a phone or tablet (`AppPlatform.isMobile`) nothing animates on its own: the backdrop doesn't turn,
-  the logo and the player's cover don't breathe, the bars beside the playing track don't bounce, and the progress
+  the logo doesn't breathe, the bars beside the playing track don't bounce, and the progress
   follows `PlayerViewModel.elapsedSeconds`, so music that plays on draws a frame a second; controlling another device,
   the position is counted on at that same pace.
   `WiretuneMediaSession` publishes changes, never a position that keeps pace: the system moves its own progress on from
   the last one.
+- **Telling the user**: a short notice over either layout (`MainViewModel.showNotice`, shown by the app root) for what
+  needs no answer: a change refused offline (`LibraryService.changeNotice`) or by the server
+  (`ServerSession.changeRefused`), something that went through. A banner while the server's music can't play
+  (unreachable, or signed out, with why). A question first (`confirmAction`) before what can't easily be undone:
+  signing out with downloads, switching servers, changing the server's music folder, deleting an account or a
+  playlist, showing all hidden items. A refusal next to the field it's about. A page of its own when the player can't
+  start.
 - **Lyrics** load only while they're on screen: the file's own (or the server's `/api/lyrics`), then LRCLIB if
   allowed, cached per track. A failed lookup isn't cached, so the panel can tell "couldn't reach" from "no lyrics".
 

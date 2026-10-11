@@ -4,6 +4,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/audio/media_session.dart';
+import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune_core/wiretune_core.dart' hide PlaybackState;
 
 import 'support.dart';
@@ -64,6 +65,57 @@ void main() {
     expect(published.last.playing, isFalse);
 
     session.playbackState.close();
+    vm.dispose();
+  });
+
+  test('another queue of the same length is published, and a search result in the car plays', () async {
+    final library = createLibrary([
+      TestSupport.makeTrack('a1', 'One', album: 'A'),
+      TestSupport.makeTrack('a2', 'Two', album: 'A'),
+      TestSupport.makeTrack('b1', 'Naima', album: 'B'),
+      TestSupport.makeTrack('b2', 'Giant Steps', album: 'B'),
+    ]);
+    await library.initialize();
+    final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    final session = WiretuneMediaSession(vm);
+    List<String> published() => [for (final item in session.queue.value) item.id];
+
+    List<String> idsOf(String album) => [
+      for (final t in library.albums.firstWhere((a) => a.title == album).tracks) 'track:${t.id}',
+    ];
+    vm.player.playQueue(library.albums.firstWhere((a) => a.title == 'A').tracks);
+    await pumpEventQueue();
+    expect(published(), idsOf('A'));
+    vm.player.playQueue(library.albums.firstWhere((a) => a.title == 'B').tracks);
+    await pumpEventQueue();
+    expect(published(), idsOf('B'));
+
+    final found = await session.search('giant');
+    expect(found.map((item) => item.id), ['search:giant|b2']);
+    await session.playFromMediaId(found.single.id);
+    await pumpEventQueue();
+    expect(vm.player.currentTrack?.id, 'b2');
+
+    vm.dispose();
+  });
+
+  test("the car's lists are in the order chosen in the app", () async {
+    final library = createLibrary([
+      TestSupport.makeTrack('1', 'Beta', artist: 'Zed', album: 'Old')..dateAdded = DateTime.utc(2025),
+      TestSupport.makeTrack('2', 'Alpha', artist: 'Abba', album: 'New')..dateAdded = DateTime.utc(2026),
+    ]);
+    await library.initialize();
+    final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    final session = WiretuneMediaSession(vm);
+    Future<List<String?>> titles(String id) async => [for (final item in await session.getChildren(id)) item.title];
+
+    expect(await titles('tracks'), ['Alpha', 'Beta']); // ABC, as the Tracks page starts
+    vm.tracks.setSortField(TrackSortField.artist);
+    vm.tracks.setSortField(TrackSortField.artist);
+    expect(await titles('tracks'), ['Beta', 'Alpha']);
+    vm.albums.setSortField(AlbumSortField.added);
+    expect(await titles('albums'), ['New', 'Old']);
+
     vm.dispose();
   });
 }

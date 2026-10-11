@@ -32,10 +32,12 @@ class ServerSession {
       _library.playlistRemoved.listen((id) => _enqueue(() => _pushPlaylistRemoved(id))),
       _library.hiddenToggled.listen((event) => _enqueue(() => _pushHidden(event.itemType, event.itemId, event.hidden))),
     ]);
-
   }
 
   static const String defaultServerUrl = 'http://localhost:5200';
+
+  /// The account the stored sign-in token belongs to.
+  static const String _userIdSetting = 'auth_user_id';
 
   /// A stream token is replaced once it has less than this left, so one handed out just now outlasts the longest track.
   static const Duration _streamTokenRefreshMargin = Duration(hours: 4);
@@ -61,6 +63,10 @@ class ServerSession {
 
   /// Raised whenever state, user or status message changes.
   final Event<void> stateChanged = Event<void>();
+
+  /// A change to the account's data that the server turned down (an account limit, a rule), with why, in the user's
+  /// language; the change is undone where it can be (a favourite, a hidden item).
+  final Event<String> changeRefused = Event<String>();
 
   /// The current status text in the active language; it follows language changes.
   String? get statusMessage => _statusKey == null ? null : Localizer.format(_statusKey!, _statusArgs);
@@ -94,6 +100,8 @@ class ServerSession {
 
     final token = await _settings.getSetting('auth_token');
     _client.authToken = token == null || token.isEmpty ? null : token;
+    // Until the server confirms the account, what the device kept of it (its hidden items) applies, also offline.
+    if (_client.authToken != null) await _library.setCurrentUser(await _settings.getSetting(_userIdSetting));
 
     final hasLocal = _library.tracks.any((t) => t.isLocal);
     final hasServerTracks = _library.tracks.any((t) => !t.isLocal);
@@ -163,8 +171,12 @@ class ServerSession {
         return;
       }
 
-      currentUser = await _client.getCurrentUser(serverUrl);
-      await _library.setCurrentUser(currentUser?.id);
+      final user = currentUser = await _client.getCurrentUser(serverUrl);
+      await _library.setCurrentUser(user.id);
+      // Kept next to a kept token; one an earlier version kept gets its account here.
+      if ((await _settings.getSetting('auth_token') ?? '').isNotEmpty) {
+        await _settings.setSetting(_userIdSetting, user.id);
+      }
       await _refreshLibraryCore();
     }),
   );
@@ -175,9 +187,18 @@ class ServerSession {
   Future<void> _guarded(Future<void> Function() operation) async {
     try {
       await operation();
-    } on ServerUnauthorizedException {
+    } on ServerUnauthorizedException catch (e) {
+      if (e.token != null && e.token != _client.authToken) {
+        // Refused for a token that has been replaced meanwhile (a password change): the session itself still stands.
+        WiretuneLog.info('ServerSession', 'A request with a replaced sign-in token was refused.');
+        return;
+      }
       await _forgetToken();
-      _setState(ServerConnectionState.loginRequired, 'SessionExpired');
+      _setState(ServerConnectionState.loginRequired, switch (e.code) {
+        ErrorCodes.passwordChanged => 'ErrorPasswordChanged',
+        ErrorCodes.accountRemoved => 'ErrorAccountRemoved',
+        _ => 'SessionExpired',
+      });
     } on ServerRequestException catch (e) {
       WiretuneLog.warn('ServerSession', "Server '$serverUrl' unavailable: ${e.message}");
       _setState(ServerConnectionState.offline, 'SessionUnreachable', [serverUrl, e.message]);
@@ -215,7 +236,10 @@ class ServerSession {
             _setState(ServerConnectionState.offline, 'SessionUnreachable', [serverUrl, e.message]);
             return e.message;
           }
-          return Localizer.format('SessionRejectedWith', [e.message]);
+          // A code the player knows is a whole sentence in the user's language already.
+          return e.code != null && e.message != e.code
+              ? e.message
+              : Localizer.format('SessionRejectedWith', [e.message]);
         }
 
         _streamToken = null;
@@ -224,6 +248,7 @@ class ServerSession {
         await _library.setCurrentUser(auth.user.id);
         await _guarded(() async {
           await _settings.setSetting('auth_token', rememberMe ? auth.token : '');
+          await _settings.setSetting(_userIdSetting, rememberMe ? auth.user.id : '');
           await _refreshLibraryCore();
         });
 
@@ -237,8 +262,9 @@ class ServerSession {
     await flushUserData(const Duration(seconds: 10));
 
     await _gate.synchronized(() async {
-      await _forgetToken();
+      // The account's tracks, playlists and hidden items go while the library still knows whose they are.
       await _library.removeServerTracks();
+      await _forgetToken();
       await _setSource(_library.tracks.any((t) => t.isLocal) ? LibrarySource.local : LibrarySource.none);
       _setState(ServerConnectionState.loginRequired, 'SessionSignedOut');
     });
@@ -254,8 +280,23 @@ class ServerSession {
 
   Future<void> deleteUser(String userId) => _client.deleteUser(serverUrl, userId);
 
-  Future<void> changePassword(String currentPassword, String newPassword) =>
-      _client.changePassword(serverUrl, currentPassword, newPassword);
+  /// Changes the account's password. The server signs out every other session of the account and hands this one a new
+  /// token, which replaces the stored one. Throws [ServerRequestException] or [ServerUnauthorizedException] when the
+  /// password could not be changed.
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    // What is on its way to the server goes with the old token, before it stops working.
+    await flushUserData(const Duration(seconds: 10));
+    await _gate.synchronized(() async {
+      final renewed = await _client.changePassword(serverUrl, currentPassword, newPassword);
+      _client.authToken = renewed.token;
+      _streamToken = null;
+      // Kept only when the old one was ("stay signed in").
+      if ((await _settings.getSetting('auth_token') ?? '').isNotEmpty) {
+        await _settings.setSetting('auth_token', renewed.token);
+      }
+      stateChanged.emit(null);
+    });
+  }
 
   Future<void> adminResetPassword(String userId, String newPassword) =>
       _client.adminResetPassword(serverUrl, userId, newPassword);
@@ -329,10 +370,10 @@ class ServerSession {
     _streamToken = null;
     _client.authToken = null;
     currentUser = null;
-    await _library.setCurrentUser('local');
+    await _library.setCurrentUser(null);
     await _settings.setSetting('auth_token', '');
+    await _settings.setSetting(_userIdSetting, '');
   }
-
 
   Future<void> _setSource(LibrarySource value) async {
     source = value;
@@ -400,6 +441,7 @@ class ServerSession {
       } on ServerRequestException catch (e) {
         if (!_isRefusal(e)) rethrow;
         WiretuneLog.warn('ServerSession', 'The server did not accept a change: ${e.message}');
+        changeRefused.emit(e.message);
       }
     });
     return sent;

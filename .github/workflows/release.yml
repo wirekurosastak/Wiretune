@@ -1,8 +1,8 @@
 name: Release
 
-# A tag v<version> (the version: line of app/pubspec.yaml, e.g. v2.0.0) builds everything that ships, signed where the
-# secrets allow, and leaves it in a draft GitHub release to read over and publish. docs/building.md#releases lists the
-# secrets.
+# A tag v<version> (the version: line of app/pubspec.yaml without its build number: v1.0.2026 for 1.0.2026+1) builds
+# everything that ships, signed where the secrets allow, and leaves it in a draft GitHub release to read over and
+# publish. docs/building.md#releases lists the secrets.
 on:
   push:
     tags: ['v*']

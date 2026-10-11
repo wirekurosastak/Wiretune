@@ -55,11 +55,7 @@ const Map<String, (String, String, String)> allStrings = {
     'Exclusive mode (direct DAC access, bypassing the system mixer)',
     'Exklusivmodus (direkter DAC-Zugriff am System-Mixer vorbei)',
   ),
-  'TipAccount': (
-    'Fiók és Bejelentkezés',
-    'Account and sign-in',
-    'Konto und Anmeldung',
-  ),
+  'AccountAndConnection': ('Fiók és kapcsolat', 'Account & connection', 'Konto & Verbindung'),
   'TipAccountSettings': ('Fiók és beállítások', 'Account and settings', 'Konto und Einstellungen'),
   'SettingsOnlineLyrics': ('Dalszöveg az internetről', 'Lyrics from the internet', 'Liedtexte aus dem Internet'),
   'SettingsOnlineLyricsHint': (
@@ -86,8 +82,6 @@ const Map<String, (String, String, String)> allStrings = {
   'BackToMusic': ('Vissza a zenékhez', 'Back to music', 'Zurück zur Musik'),
 
   // ── Counts and durations ────────────────────────────────────────────────────────────────────────────
-  'TrackCountInDatabase': ('{0} szám az adatbázisban', '{0} tracks in the database', '{0} Titel in der Datenbank'),
-  'TrackCountInDatabase_One': ('{0} szám az adatbázisban', '{0} track in the database', '{0} Titel in der Datenbank'),
   'TrackCount': ('{0} szám', '{0} tracks', '{0} Titel'),
   'TrackCount_One': ('{0} szám', '{0} track', '{0} Titel'),
   'ArtistCount': ('{0} előadó', '{0} artists', '{0} Künstler'),
@@ -97,6 +91,7 @@ const Map<String, (String, String, String)> allStrings = {
   'DurationHoursMinutes': ('{0} óra {1} perc', '{0} h {1} min', '{0} Std. {1} Min.'),
   'DurationMinutesSeconds': ('{0} perc {1} mp', '{0} min {1} s', '{0} Min. {1} Sek.'),
   'CreatedAt': ('Létrehozva: {0:yyyy.MM.dd HH:mm}', 'Created: {0:yyyy-MM-dd HH:mm}', 'Erstellt: {0:dd.MM.yyyy HH:mm}'),
+  'DateShort': ('{0:yyyy.MM.dd}', '{0:yyyy-MM-dd}', '{0:dd.MM.yyyy}'),
   'QuotedText': ('„{0}”', '“{0}”', '„{0}“'),
   'FooterLocalAndServer': ('({0} helyi, {1} szerver)', '({0} local, {1} server)', '({0} lokal, {1} Server)'),
   'FooterServerOnly': ('({0} szerver)', '({0} server)', '({0} Server)'),
@@ -116,10 +111,10 @@ const Map<String, (String, String, String)> allStrings = {
     'Connect to your Wiretune server, or scan a local music folder in Settings.',
     'Verbinde dich mit deinem Wiretune-Server oder lies in den Einstellungen einen lokalen Musikordner ein.',
   ),
-  'EmptyConnectHint': (
-    'Csatlakozz a szerveredhez vagy olvass be egy helyi mappát a Beállításokban.',
-    'Connect to your server or scan a local folder in Settings.',
-    'Verbinde dich mit deinem Server oder lies in den Einstellungen einen lokalen Ordner ein.',
+  'EmptyLibraryHintServer': (
+    'Csatlakozz a Wiretune szerveredhez.',
+    'Connect to your Wiretune server.',
+    'Verbinde dich mit deinem Wiretune-Server.',
   ),
   'LocalFolder': ('Helyi mappa', 'Local folder', 'Lokaler Ordner'),
   'ConnectToServer': ('Csatlakozás szerverhez', 'Connect to server', 'Mit Server verbinden'),
@@ -158,12 +153,12 @@ const Map<String, (String, String, String)> allStrings = {
   'SortQuality': ('Minőség', 'Quality', 'Qualität'),
   'SortArtist': ('Előadó', 'Artist', 'Künstler'),
   'SortAlbum': ('Album', 'Album', 'Album'),
+  'SortLength': ('Hossz', 'Length', 'Dauer'),
   'SortAlbums': ('Albumok', 'Albums', 'Alben'),
+  'SortTracks': ('Számok', 'Tracks', 'Titel'),
   'SortAdded': ('Hozzáadás', 'Added', 'Hinzugefügt'),
   'Genre': ('Műfaj', 'Genre', 'Genre'),
   'AllGenres': ('Minden műfaj', 'All genres', 'Alle Genres'),
-  'EmptyAlbumsTitle': ('Még nincsenek albumok', 'No albums yet', 'Noch keine Alben'),
-  'EmptyArtistsTitle': ('Még nincsenek előadók', 'No artists yet', 'Noch keine Künstler'),
   'EmptyFavoritesTitle': ('Még nincsenek kedvenceid', 'No favorites yet', 'Noch keine Favoriten'),
   'EmptyFavoritesHint': (
     'A számok melletti szív ikonnal jelölhetsz meg kedvenceket.',
@@ -274,19 +269,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Source: the track\'s own tags',
     'Quelle: Metadaten des Titels',
   ),
-  'TipQueueToggle': (
-    'Lejátszási sor',
-    'Queue',
-    'Warteschlange',
-  ),
+  'TipQueueToggle': ('Lejátszási sor', 'Queue', 'Warteschlange'),
   'TipShuffle': ('Véletlenszerű lejátszás', 'Shuffle', 'Zufallswiedergabe'),
   'TipPrevious': ('Előző szám', 'Previous track', 'Vorheriger Titel'),
   'TipNext': ('Következő szám', 'Next track', 'Nächster Titel'),
-  'TipRepeat': (
-    'Ismétlés',
-    'Repeat',
-    'Wiederholen',
-  ),
+  'TipRepeat': ('Ismétlés', 'Repeat', 'Wiederholen'),
   'TipSpectrum': (
     '32 sávos valós idejű spektrumanalizátor',
     '32-band real-time spectrum analyzer',
@@ -309,13 +296,10 @@ const Map<String, (String, String, String)> allStrings = {
     'Server, library, and audio output.',
     'Server, Bibliothek und Audioausgabe.',
   ),
-  'SettingsAudioSection': (
-    'HANG',
-    'AUDIO',
-    'AUDIO',
-  ),
-  'SettingsAppearanceSection': ('MEGJELENÉS', 'APPEARANCE', 'DARSTELLUNG'),
-  'SettingsAboutSection': ('NÉVJEGY', 'ABOUT', 'ÜBER'),
+  'SettingsAudioSection': ('Hang', 'Audio', 'Audio'),
+  'SettingsAppearanceSection': ('Megjelenés', 'Appearance', 'Darstellung'),
+  'SettingsLibrarySection': ('Könyvtár', 'Library', 'Bibliothek'),
+  'SettingsAboutSection': ('Névjegy', 'About', 'Über'),
   'AboutVersion': ('{0} verzió', 'Version {0}', 'Version {0}'),
   'AboutLicense': (
     'Szabad szoftver a GNU Affero General Public License 3. verziója szerint, a forráskód NOTICE.md fájljában álló további feltételekkel. Semmilyen garancia nem jár hozzá.',
@@ -324,23 +308,14 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'AboutSource': ('Forráskód', 'Source code', 'Quellcode'),
   'AboutLicenses': ('Licencek', 'Licenses', 'Lizenzen'),
-  'SettingsLanguageHint': (
-    'A felület nyelve.',
-    'Interface language.',
-    'Die Sprache der Oberfläche.',
-  ),
+  'SettingsLanguageHint': ('A felület nyelve.', 'Interface language.', 'Die Sprache der Oberfläche.'),
   'SettingsThemeHint': (
     'Sötét vagy világos megjelenés.',
     'Dark or light appearance.',
     'Dunkles oder helles Erscheinungsbild.',
   ),
-  'Connection': ('Kapcsolat', 'Connection', 'Verbindung'),
   'ServerUrlPlaceholder': ('http://szerver-ip:5200', 'http://server-ip:5200', 'http://server-ip:5200'),
-  'ServerFolderLabel': (
-    'Szerver mappa',
-    'Server folder',
-    'Serverordner',
-  ),
+  'ServerFolderLabel': ('Szerver mappa', 'Server folder', 'Serverordner'),
   'ServerFolderPlaceholder': (
     '/eleresi/ut/a/szerveren/zenek',
     '/path/on/the/server/music',
@@ -357,11 +332,7 @@ const Map<String, (String, String, String)> allStrings = {
   'LocalFolderPlaceholder': ('/eleresi/ut/zenek', '/path/to/music', '/pfad/zur/musik'),
   'Scan': ('Beolvasás', 'Scan', 'Einlesen'),
   'Reindex': ('Újraindexelés', 'Reindex', 'Neu indizieren'),
-  'TipReindex': (
-    'Szerver mappa újraolvasása.',
-    'Rescan server folder.',
-    'Serverordner neu einlesen.',
-  ),
+  'TipReindex': ('Szerver mappa újraolvasása.', 'Rescan server folder.', 'Serverordner neu einlesen.'),
   'TipCheckConnection': ('Kapcsolat ellenőrzése', 'Check connection', 'Verbindung prüfen'),
   'SignIn': ('Bejelentkezés', 'Sign in', 'Anmelden'),
   'SignOut': ('Kijelentkezés', 'Sign out', 'Abmelden'),
@@ -404,11 +375,14 @@ const Map<String, (String, String, String)> allStrings = {
   'ChangePassword': ('Jelszó módosítása', 'Change password', 'Passwort ändern'),
   'CurrentPassword': ('Jelenlegi jelszó', 'Current password', 'Aktuelles Passwort'),
   'NewPassword': ('Új jelszó', 'New password', 'Neues Passwort'),
-  'PasswordChanged': ('A jelszó sikeresen módosítva!', 'Password changed successfully!', 'Passwort erfolgreich geändert!'),
   'ResetPassword': ('Jelszó visszaállítása', 'Reset password', 'Passwort zurücksetzen'),
   'TipChangePassword': ('Jelszó módosítása', 'Change password', 'Passwort ändern'),
   'TipResetPassword': ('Jelszó visszaállítása', 'Reset password', 'Passwort zurücksetzen'),
-  'EnterCurrentPassword': ('Add meg a jelenlegi jelszót!', 'Enter your current password!', 'Aktuelles Passwort eingeben!'),
+  'EnterCurrentPassword': (
+    'Add meg a jelenlegi jelszót!',
+    'Enter your current password!',
+    'Aktuelles Passwort eingeben!',
+  ),
   'EnterNewPassword': ('Add meg az új jelszót!', 'Enter a new password!', 'Neues Passwort eingeben!'),
   'PasswordHint': (
     'Jelszó (legalább {0} karakter)',
@@ -421,11 +395,16 @@ const Map<String, (String, String, String)> allStrings = {
     'Continue without a server (local music)',
     'Ohne Server fortfahren (lokale Musik)',
   ),
-  'Users': ('Felhasználók', 'Users', 'Benutzer'),
   'NewUser': ('Új felhasználó', 'New user', 'Neuer Benutzer'),
   'RegisteredUsers': ('REGISZTRÁLT FELHASZNÁLÓK', 'REGISTERED USERS', 'REGISTRIERTE BENUTZER'),
   'TipRefreshList': ('Lista frissítése', 'Refresh list', 'Liste aktualisieren'),
   'TipDeleteUser': ('Felhasználó törlése', 'Delete user', 'Benutzer löschen'),
+  'DeleteUserConfirm': ('Törlöd: {0}?', 'Delete {0}?', '{0} löschen?'),
+  'DeleteUserConfirmHint': (
+    'A fiók kedvencei, lejátszásszámai, lejátszási listái és rejtett elemei is törlődnek. Ez nem vonható vissza.',
+    "The account's favourites, play counts, playlists and hidden items go with it. This can't be undone.",
+    'Die Favoriten, Wiedergabezahlen, Playlists und ausgeblendeten Inhalte des Kontos werden mitgelöscht. Das lässt sich nicht rückgängig machen.',
+  ),
   'StatusReady': ('Készenlétben', 'Ready', 'Bereit'),
   'StatusStarting': ('Indítás...', 'Starting…', 'Wird gestartet …'),
   'StartupError': ('Indítási hiba: {0}', 'Startup error: {0}', 'Startfehler: {0}'),
@@ -509,7 +488,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Indexing finished, refreshing library…',
     'Indizierung abgeschlossen, Bibliothek wird aktualisiert …',
   ),
-  'ServerReported': ('A szerver jelezte: {0}', 'The server reported: {0}', 'Der Server meldet: {0}'),
   'LibraryRefreshFailed': (
     'A könyvtár frissítése nem sikerült.',
     'Refreshing the library failed.',
@@ -524,11 +502,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Szerver szinkronizálva: {0} szám elérhető.',
     'Server synchronised: {0} track available.',
     'Server synchronisiert: {0} Titel verfügbar.',
-  ),
-  'ReindexNeedsAdmin': (
-    'Az újraindexeléshez adminisztrátori jogosultság kell.',
-    'Reindexing requires administrator rights.',
-    'Für die Neuindizierung sind Administratorrechte erforderlich.',
   ),
   'ReindexError': (
     'Hiba az újraindexelés közben: {0}',
@@ -790,11 +763,7 @@ const Map<String, (String, String, String)> allStrings = {
     'Downloaded items stay available offline.',
     'Heruntergeladene Elemente bleiben offline verfügbar.',
   ),
-  'DownloadsLocation': (
-    'Letöltési célmappa: {0}',
-    'Download destination: {0}',
-    'Download-Zielordner: {0}',
-  ),
+  'DownloadsLocation': ('Letöltési célmappa: {0}', 'Download destination: {0}', 'Download-Zielordner: {0}'),
   'DownloadsSize': ('{0} {1} ezen az eszközön', '{0} {1} on this device', '{0} {1} auf diesem Gerät'),
 
   'DownloadsProgress': (
@@ -822,11 +791,7 @@ const Map<String, (String, String, String)> allStrings = {
     '{0} track is downloaded and up to date.',
     '{0} Titel ist heruntergeladen und aktuell.',
   ),
-  'DownloadsNone': (
-    'Még nincsenek letöltések.',
-    'No downloads yet.',
-    'Noch keine Downloads.',
-  ),
+  'DownloadsNone': ('Még nincsenek letöltések.', 'No downloads yet.', 'Noch keine Downloads.'),
   'DownloadsRemoveAll': ('Összes letöltés törlése', 'Remove all downloads', 'Alle Downloads entfernen'),
   'DownloadsRemoveConfirm': ('Igen, mind törlődjön', 'Yes, remove them all', 'Ja, alle entfernen'),
   'DownloadsSyncMode': ('Letöltések szinkronizálása', 'Sync downloads', 'Downloads synchronisieren'),
@@ -862,11 +827,7 @@ const Map<String, (String, String, String)> allStrings = {
     'Hidden artists, albums, and tracks do not appear in library browsing and search.',
     'Ausgeblendete Künstler, Alben und Titel erscheinen nicht in der Bibliothek und Suche.',
   ),
-  'HiddenContentEmpty': (
-    'Nincsenek elrejtett tartalmak.',
-    'No hidden content.',
-    'Keine ausgeblendeten Inhalte.',
-  ),
+  'HiddenContentEmpty': ('Nincsenek elrejtett tartalmak.', 'No hidden content.', 'Keine ausgeblendeten Inhalte.'),
 
   'DownloadsFailed': ('Egy letöltés sikertelen: {0}', 'A download failed: {0}', 'Ein Download ist fehlgeschlagen: {0}'),
   'DownloadsDiskError': (
@@ -907,11 +868,7 @@ const Map<String, (String, String, String)> allStrings = {
   'TipDevices': ('Lejátszás másik eszközön', 'Play on another device', 'Auf einem anderen Gerät abspielen'),
   'DevicesTitle': ('Lejátszás itt', 'Play on', 'Wiedergabe auf'),
   'DevicesThisDevice': ('Ez az eszköz', 'This device', 'Dieses Gerät'),
-  'DevicesNone': (
-    'Nincs más eszköz online.',
-    'No other devices online.',
-    'Keine anderen Geräte online.',
-  ),
+  'DevicesNone': ('Nincs más eszköz online.', 'No other devices online.', 'Keine anderen Geräte online.'),
   'DeviceKindDesktop': ('Számítógép', 'Computer', 'Computer'),
   'DeviceKindPhone': ('Telefon', 'Phone', 'Telefon'),
   'DeviceKindTablet': ('Táblagép', 'Tablet', 'Tablet'),
@@ -929,5 +886,352 @@ const Map<String, (String, String, String)> allStrings = {
     '{0} most nem érhető el.',
     '{0} cannot be reached right now.',
     '{0} ist gerade nicht erreichbar.',
+  ),
+
+  // ── What the server answered (ErrorCodes), in the user's language ───────────────────────────────────
+  'ErrorInvalidJson': (
+    'A szerver nem értette a kérést.',
+    "The server couldn't read the request.",
+    'Der Server konnte die Anfrage nicht lesen.',
+  ),
+  'ErrorBodyTooLarge': (
+    'Ez túl nagy ahhoz, hogy a szerverre kerüljön.',
+    'This is too large to send to the server.',
+    'Das ist zu groß, um es an den Server zu senden.',
+  ),
+  'ErrorNotFound': (
+    'A szerveren ez nem található.',
+    "The server doesn't have that.",
+    'Das gibt es auf dem Server nicht.',
+  ),
+  'ErrorInternalError': (
+    'Hiba történt a szerveren. A részletek a szerver naplójában vannak.',
+    "Something went wrong on the server. The server's log has the details.",
+    'Auf dem Server ist ein Fehler aufgetreten. Die Einzelheiten stehen im Protokoll des Servers.',
+  ),
+  'ErrorRateLimited': (
+    'Túl sok próbálkozás. Próbáld újra {0} másodperc múlva.',
+    'Too many attempts. Try again in {0} seconds.',
+    'Zu viele Versuche. Versuche es in {0} Sekunden erneut.',
+  ),
+  'ErrorRateLimited_One': (
+    'Túl sok próbálkozás. Próbáld újra {0} másodperc múlva.',
+    'Too many attempts. Try again in {0} second.',
+    'Zu viele Versuche. Versuche es in {0} Sekunde erneut.',
+  ),
+  'ErrorSignInRequired': ('Jelentkezz be.', 'Please sign in.', 'Bitte melde dich an.'),
+  'ErrorTokenInvalid': (
+    'Ez a bejelentkezés nem érvényes ezen a szerveren. Jelentkezz be újra.',
+    "This sign-in isn't valid on this server. Please sign in again.",
+    'Diese Anmeldung gilt auf diesem Server nicht. Bitte melde dich erneut an.',
+  ),
+  'ErrorSessionExpired': (
+    'A munkamenet lejárt. Jelentkezz be újra.',
+    'Your session has expired. Please sign in again.',
+    'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
+  ),
+  'ErrorPasswordChanged': (
+    'A fiók jelszavát megváltoztatták, ezért ez az eszköz kijelentkezett. Jelentkezz be az új jelszóval.',
+    "The account's password was changed, so this device was signed out. Sign in with the new password.",
+    'Das Passwort des Kontos wurde geändert, deshalb wurde dieses Gerät abgemeldet. Melde dich mit dem neuen Passwort an.',
+  ),
+  'ErrorAccountRemoved': (
+    'Ez a fiók már nem létezik a szerveren. Kérj újat a rendszergazdától.',
+    'This account no longer exists on the server. Ask the administrator for a new one.',
+    'Dieses Konto gibt es auf dem Server nicht mehr. Bitte den Administrator um ein neues.',
+  ),
+  'ErrorWrongCredentials': (
+    'Hibás felhasználónév vagy jelszó.',
+    'Incorrect username or password.',
+    'Falscher Benutzername oder falsches Passwort.',
+  ),
+  'ErrorAdminOnly': (
+    'Ehhez rendszergazdai fiók kell.',
+    'Only an administrator can do this.',
+    'Das kann nur ein Administrator.',
+  ),
+  'ErrorCredentialsRequired': (
+    'Add meg a felhasználónevet és a jelszót.',
+    'Enter a user name and a password.',
+    'Gib einen Benutzernamen und ein Passwort ein.',
+  ),
+  'ErrorUsernameInvalid': (
+    'A felhasználónév legfeljebb {0} nyomtatható karakter lehet.',
+    'A user name can have at most {0} printable characters.',
+    'Ein Benutzername darf höchstens {0} druckbare Zeichen haben.',
+  ),
+  'ErrorPasswordTooShort': (
+    'A jelszónak legalább {0} karakter hosszúnak kell lennie.',
+    'A password needs at least {0} characters.',
+    'Ein Passwort braucht mindestens {0} Zeichen.',
+  ),
+  'ErrorPasswordTooLong': (
+    'A jelszó legfeljebb {0} bájt lehet (az ékezetes betűk és az emojik több bájtot foglalnak).',
+    'A password can be at most {0} bytes long (accented letters and emoji take more than one).',
+    'Ein Passwort darf höchstens {0} Bytes lang sein (Umlaute und Emoji belegen mehr als eins).',
+  ),
+  'ErrorAlreadySetUp': (
+    'A szerver már be van állítva. Jelentkezz be a meglévő fiókkal.',
+    'The server is already set up. Sign in with the existing account.',
+    'Der Server ist bereits eingerichtet. Melde dich mit dem vorhandenen Konto an.',
+  ),
+  'ErrorSetupCodeWrong': (
+    'A beállítókód hiányzik vagy hibás. A szerver induláskor kiírja a naplójába.',
+    'The setup code is missing or wrong. The server prints it in its log when it starts.',
+    'Der Einrichtungscode fehlt oder ist falsch. Der Server schreibt ihn beim Start in sein Protokoll.',
+  ),
+  'ErrorCurrentPasswordWrong': (
+    'A jelenlegi jelszó hibás.',
+    'The current password is wrong.',
+    'Das aktuelle Passwort ist falsch.',
+  ),
+  'ErrorUsernameTaken': (
+    'Ez a felhasználónév már foglalt.',
+    'That user name is already taken.',
+    'Dieser Benutzername ist bereits vergeben.',
+  ),
+  'ErrorUserNotFound': (
+    'Ez a felhasználó már nem létezik.',
+    'That user no longer exists.',
+    'Diesen Benutzer gibt es nicht mehr.',
+  ),
+  'ErrorCannotDeleteSelf': (
+    'A saját fiókodat nem törölheted.',
+    "You can't delete your own account.",
+    'Du kannst dein eigenes Konto nicht löschen.',
+  ),
+  'ErrorCannotResetOwnPassword': (
+    'A saját jelszavadat a jelenlegivel változtathatod meg.',
+    'Change your own password with your current one.',
+    'Ändere dein eigenes Passwort mit dem aktuellen.',
+  ),
+  'ErrorFolderRequired': (
+    'Add meg egy mappa útvonalát.',
+    'Enter the path of a folder.',
+    'Gib den Pfad eines Ordners ein.',
+  ),
+  'ErrorFolderInvalid': (
+    'Ez nem érvényes mappaútvonal.',
+    "That isn't a valid folder path.",
+    'Das ist kein gültiger Ordnerpfad.',
+  ),
+  'ErrorFolderMissing': (
+    'Ez a mappa nem létezik a szerveren: {0}',
+    "This folder doesn't exist on the server: {0}",
+    'Diesen Ordner gibt es auf dem Server nicht: {0}',
+  ),
+  'ErrorFolderUnreadable': (
+    'A szerver nem tudja olvasni ezt a mappát: {0}',
+    "The server can't read this folder: {0}",
+    'Der Server kann diesen Ordner nicht lesen: {0}',
+  ),
+  'ErrorFolderWholeDisk': (
+    'Egy teljes lemez nem lehet a zenemappa: válassz egy mappát rajta.',
+    "A whole disk can't be the music folder: choose a folder on it.",
+    'Eine ganze Festplatte kann nicht der Musikordner sein: Wähle einen Ordner darauf.',
+  ),
+  'ErrorFolderSystem': (
+    'Rendszermappa nem lehet a zenemappa.',
+    "A system folder can't be the music folder.",
+    'Ein Systemordner kann nicht der Musikordner sein.',
+  ),
+  'ErrorFolderServerData': (
+    'A zenemappa nem tartalmazhatja a szerver saját adatait, és nem is lehet azokon belül.',
+    "The music folder can't contain the server's own data or lie inside it.",
+    'Der Musikordner darf die Daten des Servers weder enthalten noch in ihnen liegen.',
+  ),
+  'ErrorFolderLooksUnmounted': (
+    'A zenemappa üres, talán nincs csatolva a meghajtó. A könyvtár változatlan marad, amíg a zenék vissza nem kerülnek.',
+    "The music folder is empty: maybe its drive isn't mounted. The library stays as it was until the music is back.",
+    'Der Musikordner ist leer: Vielleicht ist sein Laufwerk nicht eingehängt. Die Bibliothek bleibt, wie sie war, bis die Musik wieder da ist.',
+  ),
+  'ErrorScanFailed': (
+    'Az indexelés nem sikerült. A részletek a szerver naplójában vannak.',
+    "Indexing failed. The server's log has the details.",
+    'Die Indizierung ist fehlgeschlagen. Die Einzelheiten stehen im Protokoll des Servers.',
+  ),
+  'ErrorInvalidId': (
+    'A szerver érvénytelen azonosítót kapott.',
+    'The server received an invalid ID.',
+    'Der Server hat eine ungültige ID erhalten.',
+  ),
+  'ErrorInvalidItemType': (
+    'A szerver nem ismeri ezt a fajta elemet.',
+    "The server doesn't know this kind of item.",
+    'Der Server kennt diese Art von Element nicht.',
+  ),
+  'ErrorFavoritesLimit': (
+    'Egy fióknak legfeljebb {0} kedvence lehet.',
+    'An account can have at most {0} favourites.',
+    'Ein Konto kann höchstens {0} Favoriten haben.',
+  ),
+  'ErrorPlayCountsLimit': (
+    'Egy fiók legfeljebb {0} szám lejátszásait tartja nyilván.',
+    'An account keeps play counts for at most {0} tracks.',
+    'Ein Konto zählt Wiedergaben für höchstens {0} Titel.',
+  ),
+  'ErrorPlaylistsLimit': (
+    'Egy fióknak legfeljebb {0} lejátszási listája lehet.',
+    'An account can have at most {0} playlists.',
+    'Ein Konto kann höchstens {0} Playlists haben.',
+  ),
+  'ErrorHiddenLimit': (
+    'Egy fiók legfeljebb {0} elemet rejthet el.',
+    'An account can hide at most {0} items.',
+    'Ein Konto kann höchstens {0} Elemente ausblenden.',
+  ),
+  'ErrorPlaylistInvalid': (
+    'A szerver nem fogadta el a lejátszási listát.',
+    "The server didn't accept the playlist.",
+    'Der Server hat die Playlist nicht angenommen.',
+  ),
+  'ErrorPlaylistNameRequired': (
+    'A lejátszási listának kell egy név.',
+    'A playlist needs a name.',
+    'Eine Playlist braucht einen Namen.',
+  ),
+  'ErrorPlaylistNameTooLong': (
+    'A lejátszási lista neve legfeljebb {0} karakter lehet.',
+    'A playlist name can have at most {0} characters.',
+    'Ein Playlist-Name darf höchstens {0} Zeichen haben.',
+  ),
+  'ErrorPlaylistDescriptionTooLong': (
+    'A leírás legfeljebb {0} karakter lehet.',
+    'A description can have at most {0} characters.',
+    'Eine Beschreibung darf höchstens {0} Zeichen haben.',
+  ),
+  'ErrorPlaylistTooManyTracks': (
+    'Egy lejátszási listán legfeljebb {0} szám lehet.',
+    'A playlist can hold at most {0} tracks.',
+    'Eine Playlist kann höchstens {0} Titel enthalten.',
+  ),
+  'ErrorPlaylistNotFound': (
+    'Ez a lejátszási lista már nincs meg a szerveren.',
+    'This playlist is no longer on the server.',
+    'Diese Playlist gibt es auf dem Server nicht mehr.',
+  ),
+  'ErrorNotWebSocket': (
+    'A szerver nem tudott távvezérlő kapcsolatot nyitni.',
+    "The server couldn't open a remote-control connection.",
+    'Der Server konnte keine Fernsteuerungsverbindung öffnen.',
+  ),
+  'ErrorOriginRefused': (
+    'Weboldalról nem lehet vezérelni a lejátszókat.',
+    "Players can't be controlled from a web page.",
+    'Von einer Webseite aus lassen sich die Player nicht steuern.',
+  ),
+  'ErrorTooManyConnections': (
+    'Túl sok eszköz kapcsolódik ehhez a fiókhoz.',
+    'Too many devices are connected to this account.',
+    'Zu viele Geräte sind mit diesem Konto verbunden.',
+  ),
+
+  // ── Notices, confirmations and warnings ─────────────────────────────────────────────────────────────
+  'OfflineReadOnly': (
+    'Ez most nem módosítható: a szerver nem érhető el. Csatlakozz újra, és próbáld meg ismét.',
+    "This can't be changed right now: the server is out of reach. Reconnect and try again.",
+    'Das lässt sich gerade nicht ändern: Der Server ist nicht erreichbar. Verbinde dich erneut und versuche es noch einmal.',
+  ),
+  'OfflinePlaylistLocal': (
+    'A lejátszási lista csak ezen az eszközön jött létre, mert a szerver nem érhető el.',
+    'The playlist was created on this device only: the server is out of reach.',
+    'Die Playlist wurde nur auf diesem Gerät angelegt: Der Server ist nicht erreichbar.',
+  ),
+  'ChangeRefused': (
+    'A szerver nem fogadta el a módosítást: {0}',
+    "The server didn't accept the change: {0}",
+    'Der Server hat die Änderung nicht angenommen: {0}',
+  ),
+  'PasswordChangedOthersSignedOut': (
+    'A jelszó megváltozott. A többi eszközöd kijelentkezett.',
+    'Password changed. Your other devices were signed out.',
+    'Passwort geändert. Deine anderen Geräte wurden abgemeldet.',
+  ),
+  'PasswordResetDone': (
+    '{0} új jelszót kapott, és minden eszközén kijelentkezett.',
+    '{0} has a new password and was signed out on every device.',
+    '{0} hat ein neues Passwort und wurde auf allen Geräten abgemeldet.',
+  ),
+  'SignOutConfirm': ('Kijelentkezel?', 'Sign out?', 'Abmelden?'),
+  'SignOutConfirmDownloads': (
+    '{0} letöltött szám ({1}) törlődik erről az eszközről. Bejelentkezés után újra letölthetők.',
+    '{0} downloaded tracks ({1}) are deleted from this device. They can be downloaded again after signing in.',
+    '{0} heruntergeladene Titel ({1}) werden von diesem Gerät gelöscht. Nach der Anmeldung lassen sie sich erneut laden.',
+  ),
+  'SignOutConfirmDownloads_One': (
+    '{0} letöltött szám ({1}) törlődik erről az eszközről. Bejelentkezés után újra letölthető.',
+    '{0} downloaded track ({1}) is deleted from this device. It can be downloaded again after signing in.',
+    '{0} heruntergeladener Titel ({1}) wird von diesem Gerät gelöscht. Nach der Anmeldung lässt er sich erneut laden.',
+  ),
+  'SwitchServerConfirm': (
+    'Csatlakozol egy másik szerverhez?',
+    'Connect to another server?',
+    'Mit einem anderen Server verbinden?',
+  ),
+  'SwitchServerConfirmHint': (
+    'Kijelentkezel innen: {0}. Az onnan letöltött számok törlődnek, amint bejelentkezel az új szerverre.',
+    "You'll be signed out of {0}. The tracks downloaded from it are deleted once you sign in to the new server.",
+    'Du wirst von {0} abgemeldet. Die von dort geladenen Titel werden gelöscht, sobald du dich am neuen Server anmeldest.',
+  ),
+  'ServerFolderConfirm': (
+    'Megváltoztatod a szerver zenemappáját?',
+    "Change the server's music folder?",
+    'Den Musikordner des Servers ändern?',
+  ),
+  'ServerFolderConfirmHint': (
+    'Minden fiók ennek a mappának a zenéit fogja látni: {0}. Az ott nem található számok kedvencei és listabejegyzései nem jelennek meg, amíg vissza nem kerülnek.',
+    "Every account will see the music in {0}. Favourites and playlist entries of tracks that aren't there don't show until they're back.",
+    'Alle Konten sehen dann die Musik in {0}. Favoriten und Playlist-Einträge von Titeln, die dort fehlen, erscheinen erst wieder, wenn sie zurück sind.',
+  ),
+  'ServerFolderUnavailable': (
+    'A zenemappa most nem érhető el: {0}. A könyvtár változatlan marad, amíg vissza nem kerül.',
+    "The music folder can't be reached right now: {0}. The library stays as it was until it's back.",
+    'Der Musikordner ist gerade nicht erreichbar: {0}. Die Bibliothek bleibt, wie sie war, bis er wieder da ist.',
+  ),
+  'UnhideAllConfirm': (
+    'Megjeleníted az összes rejtett elemet?',
+    'Show all hidden items again?',
+    'Alle ausgeblendeten Inhalte wieder einblenden?',
+  ),
+  'UnhideAllConfirmHint': (
+    '{0} előadó, album és szám kerül vissza a könyvtárba és a keresésbe.',
+    '{0} artists, albums and tracks return to the library and to search.',
+    '{0} Künstler, Alben und Titel kehren in die Bibliothek und die Suche zurück.',
+  ),
+  'RemoteStatusSignedOut': (
+    'Jelentkezz be egy szerverre a távvezérléshez.',
+    'Sign in to a server to use remote control.',
+    'Melde dich an einem Server an, um die Fernsteuerung zu nutzen.',
+  ),
+  'RemoteStatusUnsupported': (
+    'Ez a szerver nem támogatja a távvezérlést (régebbi verzió?).',
+    "This server doesn't support remote control (an older version?).",
+    'Dieser Server unterstützt keine Fernsteuerung (eine ältere Version?).',
+  ),
+  'RemoteStatusTooManyDevices': (
+    'Túl sok eszköz kapcsolódik ehhez a fiókhoz (legfeljebb {0} lehet).',
+    'Too many devices are connected to this account (at most {0}).',
+    'Zu viele Geräte sind mit diesem Konto verbunden (höchstens {0}).',
+  ),
+  'RemoteStatusReplaced': (
+    'Ez az eszköz egy másik kapcsolaton keresztül csatlakozott újra; ott fut a távvezérlés.',
+    'This device connected again over another connection, where remote control now runs.',
+    'Dieses Gerät hat sich über eine andere Verbindung erneut verbunden; dort läuft jetzt die Fernsteuerung.',
+  ),
+  'RemoteStatusEnded': (
+    'A szerver lezárta a távvezérlést. Jelentkezz be újra a folytatáshoz.',
+    'The server ended remote control. Sign in again to continue.',
+    'Der Server hat die Fernsteuerung beendet. Melde dich erneut an, um fortzufahren.',
+  ),
+  'StartupFailedTitle': ('A Wiretune nem tudott elindulni', "Wiretune couldn't start", 'Wiretune konnte nicht starten'),
+  'StartupFailedLog': (
+    'A részletek a naplóban: {0}',
+    'The log has the details: {0}',
+    'Die Einzelheiten stehen im Protokoll: {0}',
+  ),
+  'StartupDatabaseIncompatible': (
+    'Ezt az adatbázist a Wiretune egy másik verziója készítette, ezért nem nyitható meg: {0}. Indítsd azt a verziót, vagy helyezd át a fájlt, és a Wiretune üres könyvtárral indul.',
+    "This database was made by another version of Wiretune, so it can't be opened: {0}. Start that version, or move the file away and Wiretune starts with an empty library.",
+    'Diese Datenbank stammt von einer anderen Wiretune-Version und lässt sich nicht öffnen: {0}. Starte jene Version, oder verschiebe die Datei, dann startet Wiretune mit einer leeren Bibliothek.',
   ),
 };

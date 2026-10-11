@@ -96,3 +96,57 @@ class _ReservationObject extends DBusObject {
   Future<DBusMethodResponse> getAllProperties(String interface) async =>
       DBusGetAllPropertiesResponse(interface == AlsaCardReservation._interface ? _properties : const {});
 }
+
+/// Claims a card and returns what gives it back, or null when it could not be had.
+typedef CardClaimer = Future<Future<void> Function()?> Function(int card);
+
+/// The one ALSA card the player holds for exclusive playback, if any. Requests are carried out one at a time in the
+/// order they were made, so output changes that overlap (a mode switched twice in a row, a device chosen while the
+/// mode changes) can never leave a claim behind that nobody gives back: whatever is held when a request runs is
+/// released before another card is claimed.
+class ExclusiveCardHolder {
+  ExclusiveCardHolder({CardClaimer? claim, this.settle = const Duration(milliseconds: 300)})
+    : _claim = claim ?? _reserve;
+
+  final CardClaimer _claim;
+
+  /// How long the sound server gets to close the card after letting go of it, before the player opens it.
+  final Duration settle;
+
+  final AsyncLock _lock = AsyncLock();
+  int? _card;
+  Future<void> Function()? _release;
+
+  /// The card held now.
+  int? get card => _card;
+
+  static Future<Future<void> Function()?> _reserve(int card) async =>
+      (await AlsaCardReservation.acquire(card))?.release;
+
+  /// Holds [card], giving back the one held before (if another). False when the card could not be claimed.
+  Future<bool> hold(int card) => _lock.synchronized(() async {
+    if (_card == card) return true;
+    await _giveBack();
+    final release = await _claim(card);
+    if (release == null) return false;
+    _card = card;
+    _release = release;
+    if (settle > Duration.zero) await Future<void>.delayed(settle);
+    return true;
+  });
+
+  /// Gives the held card back to the sound server.
+  Future<void> release() => _lock.synchronized(_giveBack);
+
+  Future<void> _giveBack() async {
+    final release = _release;
+    _card = null;
+    _release = null;
+    if (release == null) return;
+    try {
+      await release();
+    } catch (e) {
+      WiretuneLog.warn('DeviceReservation', 'Giving the card back failed: $e');
+    }
+  }
+}

@@ -26,50 +26,32 @@ class SettingsPage extends StatelessWidget {
       listenable: Listenable.merge([vm, vm.serverSettings, vm.audioSettings, vm.downloads.states]),
       builder: (context, _) {
         final server = vm.serverSettings;
+        // The music folders: the server's for its administrator, this computer's on a desktop.
+        final library = (server.isLoggedIn && server.isAdmin) || server.supportsLocalFolder;
         final left = <Widget>[
-          const _AccountAndUsersCard(),
+          const _AccountCard(),
           const SizedBox(height: 16),
-          const _ConnectionAndStorageCard(),
-          const SizedBox(height: 16),
+          if (library) ...[const _LibraryCard(), const SizedBox(height: 16)],
           const _AboutCard(),
         ];
         final right = <Widget>[
-          if (vm.audioSettings.hasDeviceChoice) ...[
-            const _AudioCard(),
-            const SizedBox(height: 16),
-          ],
+          if (vm.audioSettings.hasDeviceChoice) ...[const _AudioCard(), const SizedBox(height: 16)],
           const _AppearanceCard(),
           const SizedBox(height: 16),
           const _HiddenContentCard(),
-          if (server.isLoggedIn || vm.downloads.hasAnything) ...[
-            const SizedBox(height: 16),
-            const _DownloadsCard(),
-          ],
-          if (server.isLoggedIn) ...[
-            const SizedBox(height: 16),
-            const _RemoteCard(),
-          ],
+          if (server.isLoggedIn || vm.downloads.hasAnything) ...[const SizedBox(height: 16), const _DownloadsCard()],
+          if (server.isLoggedIn) ...[const SizedBox(height: 16), const _RemoteCard()],
         ];
         final singleColumn = <Widget>[
-          const _AccountAndUsersCard(),
+          const _AccountCard(),
           const SizedBox(height: 16),
-          const _ConnectionAndStorageCard(),
-          const SizedBox(height: 16),
-          if (vm.audioSettings.hasDeviceChoice) ...[
-            const _AudioCard(),
-            const SizedBox(height: 16),
-          ],
+          if (library) ...[const _LibraryCard(), const SizedBox(height: 16)],
+          if (vm.audioSettings.hasDeviceChoice) ...[const _AudioCard(), const SizedBox(height: 16)],
           const _AppearanceCard(),
           const SizedBox(height: 16),
           const _HiddenContentCard(),
-          if (server.isLoggedIn || vm.downloads.hasAnything) ...[
-            const SizedBox(height: 16),
-            const _DownloadsCard(),
-          ],
-          if (server.isLoggedIn) ...[
-            const SizedBox(height: 16),
-            const _RemoteCard(),
-          ],
+          if (server.isLoggedIn || vm.downloads.hasAnything) ...[const SizedBox(height: 16), const _DownloadsCard()],
+          if (server.isLoggedIn) ...[const SizedBox(height: 16), const _RemoteCard()],
           const SizedBox(height: 16),
           const _AboutCard(),
         ];
@@ -98,10 +80,7 @@ class SettingsPage extends StatelessWidget {
                             ),
                           ],
                         )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: singleColumn,
-                        ),
+                      : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: singleColumn),
                 ),
               ],
             );
@@ -214,21 +193,28 @@ class _FieldRow extends StatelessWidget {
   );
 }
 
-class _AccountAndUsersCard extends StatefulWidget {
-  const _AccountAndUsersCard();
+/// The server this device uses and the account signed in to it: the address and the connection's state, who is signed
+/// in (changing the password, signing out), and for an administrator the server's accounts.
+class _AccountCard extends StatefulWidget {
+  const _AccountCard();
 
   @override
-  State<_AccountAndUsersCard> createState() => _AccountAndUsersCardState();
+  State<_AccountCard> createState() => _AccountCardState();
 }
 
-class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
+class _AccountCardState extends State<_AccountCard> {
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
+  late final TextEditingController _url;
+  String _lastSyncedUrl = '';
 
   @override
   void initState() {
     super.initState();
+    final server = context.vm.serverSettings;
+    _url = TextEditingController(text: server.serverUrl);
+    _lastSyncedUrl = server.serverUrl;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         final server = context.vm.serverSettings;
@@ -244,7 +230,24 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
     _username.dispose();
     _password.dispose();
     _confirm.dispose();
+    _url.dispose();
     super.dispose();
+  }
+
+  /// Connects to the address typed; first asks when that leaves the server this device is signed in to.
+  Future<void> _connect(ServerSettingsViewModel server) async {
+    if (server.wouldSwitchServer(_url.text)) {
+      final confirmed = await confirmAction(
+        context,
+        title: context.tr('SwitchServerConfirm'),
+        message: context.trf('SwitchServerConfirmHint', [server.connectedServerUrl]),
+        confirmLabel: context.tr('ConnectShort'),
+        destructive: true,
+      );
+      if (!confirmed) return;
+    }
+    server.serverUrl = _url.text;
+    await server.connectServer();
   }
 
   Future<void> _add(ServerSettingsViewModel server) async {
@@ -315,10 +318,7 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: busy ? null : () => Navigator.of(ctx).pop(),
-                child: Text(ctx.tr('Cancel')),
-              ),
+              TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
               FilledButton(
                 onPressed: busy
                     ? null
@@ -335,11 +335,7 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
                           });
                         } else {
                           if (ctx.mounted) Navigator.of(ctx).pop();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(context.tr('PasswordChanged'))),
-                            );
-                          }
+                          if (context.mounted) context.vm.showNotice(context.tr('PasswordChangedOthersSignedOut'));
                         }
                       },
                 child: Text(ctx.tr('Save')),
@@ -395,10 +391,7 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: busy ? null : () => Navigator.of(ctx).pop(),
-                child: Text(ctx.tr('Cancel')),
-              ),
+              TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
               FilledButton(
                 onPressed: busy
                     ? null
@@ -416,9 +409,7 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
                         } else {
                           if (ctx.mounted) Navigator.of(ctx).pop();
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(context.tr('PasswordChanged'))),
-                            );
+                            context.vm.showNotice(context.trf('PasswordResetDone', [user.username]));
                           }
                         }
                       },
@@ -429,6 +420,18 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
         },
       ),
     );
+  }
+
+  /// Deleting an account takes its data with it, so it is asked once more.
+  Future<void> _confirmDeleteUser(BuildContext context, ServerSettingsViewModel server, UserInfo user) async {
+    final confirmed = await confirmAction(
+      context,
+      title: context.trf('DeleteUserConfirm', [user.username]),
+      message: context.tr('DeleteUserConfirmHint'),
+      confirmLabel: context.tr('Delete'),
+      destructive: true,
+    );
+    if (confirmed) await server.deleteUser(user.id);
   }
 
   @override
@@ -457,21 +460,65 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
 
     return ListenableBuilder(
       listenable: server,
-      builder: (context, _) => GlassCard(
-        opaque: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _CardTitle(
-              icon: Icons.person_rounded,
-              title: context.tr(server.isAdmin ? 'Users' : 'TipAccount'),
-            ),
-            if (server.isLoggedIn) ...[
-              Row(
-                children: [
+      builder: (context, _) {
+        if (server.serverUrl != _lastSyncedUrl && server.serverUrl != _url.text) {
+          _lastSyncedUrl = server.serverUrl;
+          _url.text = server.serverUrl;
+        }
+        final badgeColor = server.isLoggedIn
+            ? colors.palette.success
+            : (server.isServerOffline ? colors.danger : colors.palette.warning);
+        return GlassCard(
+          opaque: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _CardTitle(
+                icon: Icons.person_rounded,
+                title: context.tr('AccountAndConnection'),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    server.serverStatusBadge,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: badgeColor),
+                  ),
+                ),
+              ),
+              _FieldRow(
+                field: TextField(
+                  controller: _url,
+                  keyboardType: TextInputType.url,
+                  decoration: InputDecoration(
+                    hintText: context.tr('ServerUrlPlaceholder'),
+                    prefixIcon: const Icon(Icons.link_rounded, size: 18),
+                  ),
+                  onChanged: (v) => server.serverUrl = v,
+                  onSubmitted: (_) => _connect(server),
+                ),
+                actions: [
                   Tooltip(
-                    message: context.tr('TipAccount'),
-                    child: CircleAvatar(
+                    message: context.tr('TipCheckConnection'),
+                    child: FilledButton(
+                      onPressed: server.isConnecting ? null : () => _connect(server),
+                      child: server.isConnecting
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : Text(context.tr('ConnectShort')),
+                    ),
+                  ),
+                ],
+              ),
+              _StatusLine(server.statusMessage, isError: server.isServerOffline),
+              const SizedBox(height: 16),
+              Divider(color: colors.glassBorder, height: 1),
+              const SizedBox(height: 16),
+              if (server.isLoggedIn) ...[
+                Row(
+                  children: [
+                    CircleAvatar(
                       radius: 22,
                       backgroundColor: colors.surface2,
                       child: Icon(
@@ -479,199 +526,189 @@ class _AccountAndUsersCardState extends State<_AccountAndUsersCard> {
                         color: colors.textMain,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          server.currentUserName,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                        ),
-                        Text(
-                          '${server.currentUserRole} • ${server.serverUrl}',
-                          style: TextStyle(fontSize: 12, color: colors.textMuted),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Tooltip(
-                    message: context.tr('TipChangePassword'),
-                    child: OutlinedButton.icon(
-                      onPressed: () => _openChangePasswordDialog(context, server),
-                      icon: const Icon(Icons.key_rounded, size: 16),
-                      label: Text(context.tr('ChangePassword')),
-                    ),
-                  ),
-                  Tooltip(
-                    message: context.tr('TipSignOut'),
-                    child: OutlinedButton.icon(
-                      onPressed: vm.logout,
-                      icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
-                      label: Text(context.tr('SignOut')),
-                    ),
-                  ),
-                ],
-              ),
-            ]
-            else
-              Row(
-                children: [
-                  Tooltip(
-                    message: context.tr('TipAccount'),
-                    child: Icon(Icons.account_circle_outlined, size: 40, color: colors.textMuted),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          context.tr('NotSignedIn'),
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                        ),
-                        Text(context.tr('NotSignedInHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                      ],
-                    ),
-                  ),
-                  FilledButton.icon(
-                    onPressed: vm.showLoginScreen,
-                    icon: const Icon(Icons.login_rounded, size: 16),
-                    label: Text(context.tr('SignIn')),
-                  ),
-                ],
-              ),
-            if (server.isLoggedIn && server.isAdmin) ...[
-              const SizedBox(height: 20),
-              Divider(color: colors.glassBorder, height: 1),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: SectionLabel(context.tr('NewUser'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 8)),
-                  ),
-                  IconButton(
-                    tooltip: context.tr('TipRefreshList'),
-                    onPressed: server.loadUsers,
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final add = FilledButton.icon(
-                    onPressed: server.isAddingUser ? null : () => _add(server),
-                    icon: const Icon(Icons.person_add_alt_1_rounded),
-                    label: Text(context.tr('Add')),
-                  );
-                  if (constraints.maxWidth < 760) {
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 10), child: f),
-                        Align(alignment: Alignment.centerRight, child: add),
-                      ],
-                    );
-                  }
-                  return IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final f in fields) ...[Expanded(child: f), const SizedBox(width: 10)],
-                        add,
-                      ],
-                    ),
-                  );
-                },
-              ),
-              _StatusLine(server.userManagementErrorMessage, isError: true),
-              SectionLabel(context.tr('RegisteredUsers'), padding: const EdgeInsets.fromLTRB(0, 16, 0, 4)),
-              for (final user in server.serverUsers)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: colors.surface2,
-                        child: Icon(
-                          user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
-                          size: 18,
-                          color: colors.textMain,
-                        ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            server.currentUserName,
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                          ),
+                          Text(server.currentUserRole, style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user.username,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
-                            ),
-                            Text(
-                              '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • '
-                              '${context.trf('CreatedAt', [user.createdAt])}',
-                              style: TextStyle(fontSize: 12, color: colors.textMuted),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (user.username != server.currentUserName) ...[
-                        IconButton(
-                          tooltip: context.tr('TipResetPassword'),
-                          icon: Icon(Icons.lock_reset_rounded, color: colors.textMuted),
-                          onPressed: () => _openAdminResetPasswordDialog(context, server, user),
-                        ),
-                        IconButton(
-                          tooltip: context.tr('TipDeleteUser'),
-                          icon: Icon(Icons.delete_outline, color: colors.danger),
-                          onPressed: () => server.deleteUser(user.id),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    Tooltip(
+                      message: context.tr('TipChangePassword'),
+                      child: OutlinedButton.icon(
+                        onPressed: () => _openChangePasswordDialog(context, server),
+                        icon: const Icon(Icons.key_rounded, size: 16),
+                        label: Text(context.tr('ChangePassword')),
+                      ),
+                    ),
+                    Tooltip(
+                      message: context.tr('TipSignOut'),
+                      child: OutlinedButton.icon(
+                        onPressed: () => confirmAndSignOut(context),
+                        icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
+                        label: Text(context.tr('SignOut')),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else
+                Row(
+                  children: [
+                    Icon(Icons.account_circle_outlined, size: 40, color: colors.textMuted),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('NotSignedIn'),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                          ),
+                          Text(context.tr('NotSignedInHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                        ],
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: vm.showLoginScreen,
+                      icon: const Icon(Icons.login_rounded, size: 16),
+                      label: Text(context.tr('SignIn')),
+                    ),
+                  ],
+                ),
+              if (server.isLoggedIn && server.isAdmin) ...[
+                const SizedBox(height: 20),
+                Divider(color: colors.glassBorder, height: 1),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SectionLabel(context.tr('NewUser'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 8)),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('TipRefreshList'),
+                      onPressed: server.loadUsers,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final add = FilledButton.icon(
+                      onPressed: server.isAddingUser ? null : () => _add(server),
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: Text(context.tr('Add')),
+                    );
+                    if (constraints.maxWidth < 760) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 10), child: f),
+                          Align(alignment: Alignment.centerRight, child: add),
+                        ],
+                      );
+                    }
+                    return IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (final f in fields) ...[Expanded(child: f), const SizedBox(width: 10)],
+                          add,
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                _StatusLine(server.userManagementErrorMessage, isError: true),
+                SectionLabel(context.tr('RegisteredUsers'), padding: const EdgeInsets.fromLTRB(0, 16, 0, 4)),
+                for (final user in server.serverUsers)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: colors.surface2,
+                          child: Icon(
+                            user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
+                            size: 18,
+                            color: colors.textMain,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                user.username,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
+                              ),
+                              Text(
+                                '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • '
+                                '${context.trf('CreatedAt', [user.createdAt])}',
+                                style: TextStyle(fontSize: 12, color: colors.textMuted),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (user.username != server.currentUserName) ...[
+                          IconButton(
+                            tooltip: context.tr('TipResetPassword'),
+                            icon: Icon(Icons.lock_reset_rounded, color: colors.textMuted),
+                            onPressed: () => _openAdminResetPasswordDialog(context, server, user),
+                          ),
+                          IconButton(
+                            tooltip: context.tr('TipDeleteUser'),
+                            icon: Icon(Icons.delete_outline, color: colors.danger),
+                            onPressed: () => _confirmDeleteUser(context, server, user),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
             ],
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _ConnectionAndStorageCard extends StatefulWidget {
-  const _ConnectionAndStorageCard();
+/// Where the music is: the server's folder (for its administrator) and this computer's (on a desktop).
+class _LibraryCard extends StatefulWidget {
+  const _LibraryCard();
 
   @override
-  State<_ConnectionAndStorageCard> createState() => _ConnectionAndStorageCardState();
+  State<_LibraryCard> createState() => _LibraryCardState();
 }
 
-class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
-  late final TextEditingController _url;
+class _LibraryCardState extends State<_LibraryCard> {
   late final TextEditingController _serverFolder;
   late final TextEditingController _localPath;
-  String _lastSyncedUrl = '';
   String _lastLoadedServerFolder = '';
 
   @override
   void initState() {
     super.initState();
     final server = context.vm.serverSettings;
-    _url = TextEditingController(text: server.serverUrl);
     _serverFolder = TextEditingController(text: server.serverLibraryPath);
     _localPath = TextEditingController(text: server.localLibraryPath);
-    _lastSyncedUrl = server.serverUrl;
     _lastLoadedServerFolder = server.serverLibraryPath;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -683,13 +720,26 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
     });
   }
 
-
   @override
   void dispose() {
-    _url.dispose();
     _serverFolder.dispose();
     _localPath.dispose();
     super.dispose();
+  }
+
+  /// Saves the server's music folder; first asks, since every account's library changes with it.
+  Future<void> _saveServerFolder(ServerSettingsViewModel server) async {
+    server.serverLibraryPath = _serverFolder.text;
+    if (server.serverFolderChanged && server.serverLibraryPath.trim().isNotEmpty) {
+      final confirmed = await confirmAction(
+        context,
+        title: context.tr('ServerFolderConfirm'),
+        message: context.trf('ServerFolderConfirmHint', [server.serverLibraryPath.trim()]),
+        confirmLabel: context.tr('SaveFolder'),
+      );
+      if (!confirmed) return;
+    }
+    await server.updateServerLibraryPath();
   }
 
   Future<void> _browseLocal(ServerSettingsViewModel server) async {
@@ -707,10 +757,6 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
     return ListenableBuilder(
       listenable: server,
       builder: (context, _) {
-        if (server.serverUrl != _lastSyncedUrl && server.serverUrl != _url.text) {
-          _lastSyncedUrl = server.serverUrl;
-          _url.text = server.serverUrl;
-        }
         if (server.serverLibraryPath != _lastLoadedServerFolder) {
           _lastLoadedServerFolder = server.serverLibraryPath;
           _serverFolder.text = server.serverLibraryPath;
@@ -719,135 +765,89 @@ class _ConnectionAndStorageCardState extends State<_ConnectionAndStorageCard> {
           _localPath.text = server.localLibraryPath;
         }
 
-        final badgeColor = server.isLoggedIn
-            ? colors.palette.success
-            : (server.isServerOffline ? colors.danger : colors.palette.warning);
-
+        final admin = server.isLoggedIn && server.isAdmin;
         return GlassCard(
           opaque: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _CardTitle(
-              icon: Icons.dns_outlined,
-              title: context.tr('Connection'),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: badgeColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  server.serverStatusBadge,
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: badgeColor),
-                ),
-              ),
-            ),
-            _FieldRow(
-              field: TextField(
-                controller: _url,
-                keyboardType: TextInputType.url,
-                decoration: InputDecoration(
-                  hintText: context.tr('ServerUrlPlaceholder'),
-                  prefixIcon: const Icon(Icons.link_rounded, size: 18),
-                ),
-                onChanged: (v) => server.serverUrl = v,
-                onSubmitted: (_) => server.connectServer(),
-              ),
-              actions: [
-                Tooltip(
-                  message: context.tr('TipCheckConnection'),
-                  child: FilledButton(
-                    onPressed: server.isConnecting ? null : server.connectServer,
-                    child: server.isConnecting
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(context.tr('ConnectShort')),
-                  ),
-                ),
-              ],
-            ),
-            _StatusLine(server.statusMessage, isError: server.isServerOffline),
-
-            if (server.isLoggedIn && server.isAdmin) ...[
-              const SizedBox(height: 20),
-              Divider(color: colors.glassBorder, height: 1),
-              const SizedBox(height: 16),
-              _CardTitle(
-                icon: Icons.folder_shared_outlined,
-                title: context.tr('ServerFolderLabel'),
-              ),
-              _FieldRow(
-                field: TextField(
-                  controller: _serverFolder,
-                  decoration: InputDecoration(
-                    hintText: context.tr('ServerFolderPlaceholder'),
-                    helperText: context.tr('ServerFolderHelper'),
-                    helperMaxLines: 2,
-                    prefixIcon: const Icon(Icons.folder_outlined, size: 18),
-                  ),
-                  onChanged: (v) => server.serverLibraryPath = v,
-                  onSubmitted: (_) => server.updateServerLibraryPath(),
-                ),
-
-                actions: [
-                  Tooltip(
-                    message: context.tr('TipReindex'),
-                    child: OutlinedButton.icon(
-                      onPressed: server.canRescanServer ? server.rescanServer : null,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: Text(context.tr('Reindex')),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _CardTitle(icon: Icons.library_music_outlined, title: context.tr('SettingsLibrarySection')),
+              if (admin) ...[
+                SectionLabel(context.tr('ServerFolderLabel'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
+                _FieldRow(
+                  field: TextField(
+                    controller: _serverFolder,
+                    decoration: InputDecoration(
+                      hintText: context.tr('ServerFolderPlaceholder'),
+                      helperText: context.tr('ServerFolderHelper'),
+                      helperMaxLines: 2,
+                      prefixIcon: const Icon(Icons.folder_outlined, size: 18),
                     ),
+                    onChanged: (v) => server.serverLibraryPath = v,
+                    onSubmitted: (_) => _saveServerFolder(server),
                   ),
-                  FilledButton.icon(
-                    onPressed: server.isUpdatingServerConfig ? null : server.updateServerLibraryPath,
-                    icon: const Icon(Icons.save_rounded, size: 18),
-                    label: Text(context.tr('SaveFolder')),
-                  ),
-                ],
-              ),
-            ],
 
-            if (server.supportsLocalFolder) ...[
-              const SizedBox(height: 20),
-              Divider(color: colors.glassBorder, height: 1),
-              const SizedBox(height: 16),
-              _CardTitle(
-                icon: Icons.folder_open_rounded,
-                title: context.tr('LocalFolderLabel'),
-              ),
-              _FieldRow(
-                field: TextField(
-                  controller: _localPath,
-                  decoration: InputDecoration(
-                    hintText: context.tr('LocalFolderPlaceholder'),
-                    prefixIcon: const Icon(Icons.folder_outlined, size: 18),
-                  ),
-                  onChanged: (v) => server.localLibraryPath = v,
-                  onSubmitted: (_) => server.startScanFolder(),
+                  actions: [
+                    Tooltip(
+                      message: context.tr('TipReindex'),
+                      child: OutlinedButton.icon(
+                        onPressed: server.canRescanServer ? server.rescanServer : null,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                        label: Text(context.tr('Reindex')),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed: server.isUpdatingServerConfig ? null : () => _saveServerFolder(server),
+                      icon: const Icon(Icons.save_rounded, size: 18),
+                      label: Text(context.tr('SaveFolder')),
+                    ),
+                  ],
                 ),
-                actions: [
-                  OutlinedButton.icon(
-                    onPressed: () => _browseLocal(server),
-                    icon: const Icon(Icons.folder_open_rounded, size: 18),
-                    label: Text(context.tr('Browse')),
-                  ),
-                  FilledButton.icon(
-                    onPressed: server.isScanning ? null : server.startScanFolder,
-                    icon: const Icon(Icons.manage_search_rounded, size: 18),
-                    label: Text(context.tr('Scan')),
-                  ),
+                _StatusLine(server.serverFolderProblem, isError: true),
+                _StatusLine(server.serverFolderMessage, isError: server.serverFolderIsError),
+              ],
+
+              if (server.supportsLocalFolder) ...[
+                if (admin) ...[
+                  const SizedBox(height: 20),
+                  Divider(color: colors.glassBorder, height: 1),
+                  const SizedBox(height: 12),
                 ],
-              ),
-              if (server.isScanning) ...[
-                const SizedBox(height: 12),
-                LinearProgressIndicator(value: server.scanProgress > 0 ? server.scanProgress / 100 : null),
+                SectionLabel(context.tr('LocalFolderLabel'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
+                _FieldRow(
+                  field: TextField(
+                    controller: _localPath,
+                    decoration: InputDecoration(
+                      hintText: context.tr('LocalFolderPlaceholder'),
+                      prefixIcon: const Icon(Icons.folder_outlined, size: 18),
+                    ),
+                    onChanged: (v) => server.localLibraryPath = v,
+                    onSubmitted: (_) => server.startScanFolder(),
+                  ),
+                  actions: [
+                    OutlinedButton.icon(
+                      onPressed: () => _browseLocal(server),
+                      icon: const Icon(Icons.folder_open_rounded, size: 18),
+                      label: Text(context.tr('Browse')),
+                    ),
+                    FilledButton.icon(
+                      onPressed: server.isScanning ? null : server.startScanFolder,
+                      icon: const Icon(Icons.manage_search_rounded, size: 18),
+                      label: Text(context.tr('Scan')),
+                    ),
+                  ],
+                ),
+                if (server.isScanning) ...[
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(value: server.scanProgress > 0 ? server.scanProgress / 100 : null),
+                ],
+                _StatusLine(server.localFolderMessage, isError: server.localFolderIsError),
               ],
             ],
-          ],
-        ),
-      );
-    },
-  );
+          ),
+        );
+      },
+    );
   }
 }
 
@@ -907,10 +907,7 @@ class _DownloadsCardState extends State<_DownloadsCard> {
                     ],
                   ),
                 ),
-                Switch(
-                  value: downloads.isSyncModeEnabled,
-                  onChanged: (v) => downloads.setSyncModeEnabled(v),
-                ),
+                Switch(value: downloads.isSyncModeEnabled, onChanged: (v) => downloads.setSyncModeEnabled(v)),
               ],
             ),
 
@@ -981,11 +978,26 @@ class _RemoteCardState extends State<_RemoteCard> {
     final vm = context.vm;
     final player = vm.player;
     return ListenableBuilder(
-      listenable: player,
+      listenable: Listenable.merge([player, vm]),
       builder: (context, _) {
         final others = player.otherDevices.length;
+        final session = vm.session;
+        final waitingForServer =
+            session.state == ServerConnectionState.offline || session.state == ServerConnectionState.connecting;
+        final problem = vm.remote.problem;
         final status = !vm.isRemoteEnabled
             ? context.tr('RemoteStatusOff')
+            : !session.isLoggedIn && !waitingForServer
+            ? context.tr('RemoteStatusSignedOut')
+            : problem != null
+            ? switch (problem) {
+                RemoteProblem.unsupported => context.tr('RemoteStatusUnsupported'),
+                RemoteProblem.tooManyDevices => context.trf('RemoteStatusTooManyDevices', [
+                  RemoteRules.maxDevicesPerAccount,
+                ]),
+                RemoteProblem.replaced => context.tr('RemoteStatusReplaced'),
+                RemoteProblem.ended => context.tr('RemoteStatusEnded'),
+              }
             : (player.canReachDevices
                   ? context.trf('RemoteStatusConnected', [others])
                   : context.tr('RemoteStatusConnecting'));
@@ -1012,7 +1024,7 @@ class _RemoteCardState extends State<_RemoteCard> {
                 ),
                 onChanged: (value) => vm.deviceName = value,
               ),
-              _StatusLine(status),
+              _StatusLine(status, isError: vm.isRemoteEnabled && problem != null),
             ],
           ),
         );
@@ -1073,20 +1085,11 @@ class _AudioCard extends StatelessWidget {
                         ),
                         child: Text(
                           badgeText,
-                          style: TextStyle(
-                            color: fg,
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.6,
-                          ),
+                          style: TextStyle(color: fg, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.6),
                         ),
                       ),
                       const Spacer(),
-                      Switch(
-                        value: value,
-                        activeTrackColor: fg,
-                        onChanged: available ? onChanged : null,
-                      ),
+                      Switch(value: value, activeTrackColor: fg, onChanged: available ? onChanged : null),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -1104,127 +1107,127 @@ class _AudioCard extends StatelessWidget {
         return GlassCard(
           opaque: true,
           child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _CardTitle(
-            icon: Icons.volume_up_rounded,
-            title: context.tr('SettingsAudioSection'),
-            trailing: IconButton(
-              tooltip: context.tr('Refresh'),
-              onPressed: audio.refreshDevices,
-              icon: const Icon(Icons.refresh_rounded, size: 18),
-            ),
-          ),
-          Text(
-            context.tr('OutputDevice'),
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
-            isExpanded: true,
-            items: [
-              for (final d in devices)
-                DropdownMenuItem(
-                  value: d.id,
-                  child: Row(
-                    children: [
-                      Icon(Icons.speaker_outlined, size: 16, color: colors.textMain),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          d.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      if (d.driverType.isNotEmpty) ...[
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: Text(
-                            '[${d.driverType}]',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 11, color: colors.textMuted),
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _CardTitle(
+                icon: Icons.volume_up_rounded,
+                title: context.tr('SettingsAudioSection'),
+                trailing: IconButton(
+                  tooltip: context.tr('Refresh'),
+                  onPressed: audio.refreshDevices,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                ),
+              ),
+              Text(
+                context.tr('OutputDevice'),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
+                isExpanded: true,
+                items: [
+                  for (final d in devices)
+                    DropdownMenuItem(
+                      value: d.id,
+                      child: Row(
+                        children: [
+                          Icon(Icons.speaker_outlined, size: 16, color: colors.textMain),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              d.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
                           ),
-                        ),
-                      ],
+                          if (d.driverType.isNotEmpty) ...[
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                '[${d.driverType}]',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11, color: colors.textMuted),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
+                onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
+              ),
+              const SizedBox(height: 8),
+              Text(audio.hardwareStatusText, style: TextStyle(fontSize: 11.5, color: colors.textMuted)),
+
+              const SizedBox(height: 18),
+              Divider(color: colors.glassBorder, height: 1),
+              const SizedBox(height: 14),
+
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final exclusive = mode(
+                    context.tr('ExclusiveLabel'),
+                    'EXCLUSIVE',
+                    QualityTier.silver,
+                    context.tr('ExclusiveDescription'),
+                    audio.isExclusiveMode,
+                    audio.isExclusiveAvailable,
+                    audio.setExclusiveMode,
+                    'TipExclusive',
+                  );
+                  final bitperfect = mode(
+                    context.tr('ModeBitPerfect'),
+                    'BIT-PERFECT',
+                    QualityTier.gold,
+                    context.tr('BitPerfectDescription'),
+                    audio.isBitperfect,
+                    audio.isBitperfectAvailable,
+                    audio.setBitperfect,
+                    'TipBitPerfect',
+                  );
+                  if (constraints.maxWidth < 420) {
+                    return Column(children: [exclusive, const SizedBox(height: 10), bitperfect]);
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: exclusive),
+                      const SizedBox(width: 10),
+                      Expanded(child: bitperfect),
                     ],
+                  );
+                },
+              ),
+
+              const SizedBox(height: 18),
+              Divider(color: colors.glassBorder, height: 1),
+              const SizedBox(height: 14),
+
+              Text(
+                context.tr('SignalPath'),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small + 2)),
+                child: Text(
+                  audio.signalPath,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontFamilyFallback: const ['JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'],
+                    fontSize: 11.5,
+                    height: 18 / 11.5,
+                    color: palette.lime,
                   ),
                 ),
-            ],
-            onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
-          ),
-          const SizedBox(height: 8),
-          Text(audio.hardwareStatusText, style: TextStyle(fontSize: 11.5, color: colors.textMuted)),
-
-          const SizedBox(height: 18),
-          Divider(color: colors.glassBorder, height: 1),
-          const SizedBox(height: 14),
-
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final exclusive = mode(
-                context.tr('ExclusiveLabel'),
-                'EXCLUSIVE',
-                QualityTier.silver,
-                context.tr('ExclusiveDescription'),
-                audio.isExclusiveMode,
-                audio.isExclusiveAvailable,
-                audio.setExclusiveMode,
-                'TipExclusive',
-              );
-              final bitperfect = mode(
-                context.tr('ModeBitPerfect'),
-                'BIT-PERFECT',
-                QualityTier.gold,
-                context.tr('BitPerfectDescription'),
-                audio.isBitperfect,
-                audio.isBitperfectAvailable,
-                audio.setBitperfect,
-                'TipBitPerfect',
-              );
-              if (constraints.maxWidth < 420) {
-                return Column(children: [exclusive, const SizedBox(height: 10), bitperfect]);
-              }
-              return Row(
-                children: [
-                  Expanded(child: exclusive),
-                  const SizedBox(width: 10),
-                  Expanded(child: bitperfect),
-                ],
-              );
-            },
-          ),
-
-          const SizedBox(height: 18),
-          Divider(color: colors.glassBorder, height: 1),
-          const SizedBox(height: 14),
-
-          Text(
-            context.tr('SignalPath'),
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small + 2)),
-            child: Text(
-              audio.signalPath,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontFamilyFallback: const ['JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'],
-                fontSize: 11.5,
-                height: 18 / 11.5,
-                color: palette.lime,
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
-  },
-);
   }
 }
 
@@ -1240,122 +1243,119 @@ class _AppearanceCard extends StatelessWidget {
       builder: (context, _) => GlassCard(
         opaque: true,
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _CardTitle(
-            icon: Icons.palette_outlined,
-            title: context.tr('SettingsAppearanceSection'),
-          ),
-          Text(
-            context.tr('Language'),
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-          ),
-          const SizedBox(height: 2),
-          Text(context.tr('SettingsLanguageHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final l in Localizer.languages)
-                Tooltip(
-                  message: context.tr('TipLanguage'),
-                  child: l.code == vm.language
-                      ? FilledButton(
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 32),
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _CardTitle(icon: Icons.palette_outlined, title: context.tr('SettingsAppearanceSection')),
+            Text(
+              context.tr('Language'),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+            ),
+            const SizedBox(height: 2),
+            Text(context.tr('SettingsLanguageHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final l in Localizer.languages)
+                  Tooltip(
+                    message: context.tr('TipLanguage'),
+                    child: l.code == vm.language
+                        ? FilledButton(
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(0, 32),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                            ),
+                            onPressed: () => vm.changeLanguage(l.code),
+                            child: Text(l.nativeName),
+                          )
+                        : OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 32),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                            ),
+                            onPressed: () => vm.changeLanguage(l.code),
+                            child: Text(l.nativeName),
                           ),
-                          onPressed: () => vm.changeLanguage(l.code),
-                          child: Text(l.nativeName),
-                        )
-                      : OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 32),
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                          ),
-                          onPressed: () => vm.changeLanguage(l.code),
-                          child: Text(l.nativeName),
-                        ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr('Theme'),
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                    ),
-                    Text(context.tr('SettingsThemeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                  ],
-                ),
-              ),
-              Tooltip(
-                message: context.tr('TipToggleTheme'),
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 32),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
                   ),
-                  onPressed: vm.toggleTheme,
-                  icon: Icon(vm.isLight ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 16),
-                  label: Text(context.tr('Theme')),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr('Theme'),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                      ),
+                      Text(context.tr('SettingsThemeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Divider(color: colors.glassBorder, height: 1),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr('SettingsOnlineLyrics'),
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                Tooltip(
+                  message: context.tr('TipToggleTheme'),
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                     ),
-                    Text(context.tr('SettingsOnlineLyricsHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                  ],
+                    onPressed: vm.toggleTheme,
+                    icon: Icon(vm.isLight ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 16),
+                    label: Text(context.tr('Theme')),
+                  ),
                 ),
-              ),
-              Switch(
-                value: vm.useOnlineLyrics,
-                onChanged: (v) => vm.useOnlineLyrics = v,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      context.tr('SettingsPerformanceStats'),
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                    ),
-                    Text(context.tr('SettingsPerformanceStatsHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                  ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            Divider(color: colors.glassBorder, height: 1),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr('SettingsOnlineLyrics'),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                      ),
+                      Text(
+                        context.tr('SettingsOnlineLyricsHint'),
+                        style: TextStyle(fontSize: 12, color: colors.textMuted),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Switch(
-                value: vm.showPerformanceStats,
-                onChanged: (v) => vm.showPerformanceStats = v,
-              ),
-            ],
-          ),
-        ],
+                Switch(value: vm.useOnlineLyrics, onChanged: (v) => vm.useOnlineLyrics = v),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr('SettingsPerformanceStats'),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                      ),
+                      Text(
+                        context.tr('SettingsPerformanceStatsHint'),
+                        style: TextStyle(fontSize: 12, color: colors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(value: vm.showPerformanceStats, onChanged: (v) => vm.showPerformanceStats = v),
+              ],
+            ),
+          ],
+        ),
       ),
-    ),
     );
   }
 }
@@ -1460,10 +1460,13 @@ class _HiddenContentCard extends StatelessWidget {
                         _hiddenRow(
                           context,
                           icon: Icons.person_outline_rounded,
-                          label: lib.rawTracks
-                                  .where((t) =>
-                                      stableId(t.artist.toLowerCase()) == id ||
-                                      stableId(t.effectiveAlbumArtist.toLowerCase()) == id)
+                          label:
+                              lib.rawTracks
+                                  .where(
+                                    (t) =>
+                                        stableId(t.artist.toLowerCase()) == id ||
+                                        stableId(t.effectiveAlbumArtist.toLowerCase()) == id,
+                                  )
                                   .firstOrNull
                                   ?.effectiveAlbumArtist ??
                               id,
@@ -1503,7 +1506,15 @@ class _HiddenContentCard extends StatelessWidget {
                   Align(
                     alignment: Alignment.centerRight,
                     child: OutlinedButton.icon(
-                      onPressed: () => lib.unhideAll(),
+                      onPressed: () async {
+                        final confirmed = await confirmAction(
+                          context,
+                          title: context.tr('UnhideAllConfirm'),
+                          message: context.trf('UnhideAllConfirmHint', [totalHidden]),
+                          confirmLabel: context.tr('UnhideAll'),
+                        );
+                        if (confirmed) await lib.unhideAll();
+                      },
                       icon: const Icon(Icons.visibility_rounded, size: 16),
                       label: Text(context.tr('UnhideAll')),
                     ),
@@ -1547,5 +1558,3 @@ class _HiddenContentCard extends StatelessWidget {
     );
   }
 }
-
-

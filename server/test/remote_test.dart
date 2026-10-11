@@ -232,6 +232,27 @@ void main() {
     expect(server.server.remote.devicesOf(info.id), 0);
   });
 
+  test("a password change ends the account's connections, and the new token opens one again", () async {
+    final (guest, info) = await registerGuest(server, admin);
+    final peer = await Peer.connect(server, guest.token!, 'phone');
+    await until(() => server.server.remote.devicesOf(info.id) == 1);
+
+    final changed = await guest.post('/api/auth/change-password', {
+      'currentPassword': guestPassword,
+      'newPassword': 'another-password',
+    });
+    expect(changed.statusCode, 200);
+    expect(await closedWith(peer.socket), RemoteRules.closeSignedOut);
+    await expectLater(
+      openSocket(server, guest.token!),
+      throwsA(isA<WebSocketException>().having((e) => e.httpStatusCode, 'status', 401)),
+    );
+
+    final again = await Peer.connect(server, AuthResponse.fromJson(json(changed)).token, 'phone');
+    await until(() => server.server.remote.devicesOf(info.id) == 1);
+    await again.close();
+  });
+
   test('a connection ends when the token it was opened with expires', () async {
     final me = UserInfo.fromJson(json(await admin.get('/api/auth/me')));
     final secret = (await server.server.repository.getSetting('jwt_secret'))!;

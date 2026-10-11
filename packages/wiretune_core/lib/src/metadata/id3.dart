@@ -354,15 +354,49 @@ AudioTags? readId3v2(ByteSource source, int offset, {bool wantLyrics = true}) {
     body = Uint8List.sublistView(body, start);
     if (frameUnsync) body = _removeUnsynchronisation(body);
     if (compressed) {
-      try {
-        body = Uint8List.fromList(ZLibCodec().decode(body));
-      } catch (_) {
-        continue;
-      }
+      final inflated = inflateFrame(body);
+      if (inflated == null) continue;
+      body = inflated;
     }
     _readFrame(id, body, major, tags);
   }
   return tags;
+}
+
+/// The most a compressed frame may inflate to: far beyond any real tag, and far below what would exhaust the memory.
+const int _maxInflatedFrame = 16 * 1024 * 1024;
+
+/// A compressed frame's [data] inflated, or null when it is not zlib data or inflates to more than
+/// [_maxInflatedFrame] bytes: a few kilobytes of a damaged or hostile frame can inflate to gigabytes, so the output is
+/// counted as it comes, a small piece of input at a time.
+Uint8List? inflateFrame(Uint8List data) {
+  final output = _LimitedSink(_maxInflatedFrame);
+  try {
+    final input = ZLibDecoder().startChunkedConversion(output);
+    for (var i = 0; i < data.length; i += 4096) {
+      input.add(Uint8List.sublistView(data, i, i + 4096 < data.length ? i + 4096 : data.length));
+    }
+    input.close();
+    return output.bytes.takeBytes();
+  } catch (_) {
+    return null;
+  }
+}
+
+class _LimitedSink implements Sink<List<int>> {
+  _LimitedSink(this.limit);
+
+  final int limit;
+  final BytesBuilder bytes = BytesBuilder(copy: false);
+
+  @override
+  void add(List<int> chunk) {
+    if (bytes.length + chunk.length > limit) throw const FormatException('The frame inflates too far.');
+    bytes.add(chunk);
+  }
+
+  @override
+  void close() {}
 }
 
 bool _isWanted(String id, int major, bool wantLyrics) {
@@ -390,11 +424,9 @@ void _readFramesInMemory(Uint8List data, int major, int flags, AudioTags tags, b
     if (start > body.length) continue;
     body = Uint8List.sublistView(body, start);
     if (major == 3 && (formatFlags & 0x80) != 0) {
-      try {
-        body = Uint8List.fromList(ZLibCodec().decode(body));
-      } catch (_) {
-        continue;
-      }
+      final inflated = inflateFrame(body);
+      if (inflated == null) continue;
+      body = inflated;
     }
     _readFrame(id, body, major, tags);
   }

@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
+
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -64,6 +66,56 @@ void main() {
     await engine.setExclusiveMode(true);
     expect(engine.isExclusiveMode, isTrue);
     expect(engine.isBitperfect, isFalse);
+  });
+
+  test(
+    'when the device of exclusive and bit-perfect is gone, the default output takes over without the modes',
+    () async {
+      const systemDefault = AudioOutputDevice(id: 'auto', name: 'Default', driverType: 'System', isDefault: true);
+      final driver = FakeAudioDriver();
+      var devices = [systemDefault, TestSupport.capableDevice];
+      final engine = WiretuneAudioEngine(driver, deviceDetector: () async => devices);
+      await engine.ready;
+      engine.setVolume(0.4);
+      await engine.setBitperfectMode(true);
+      expect((engine.isExclusiveMode, engine.isBitperfect, driver.device?.id), (true, true, 'hw:1,0'));
+
+      devices = [systemDefault]; // the DAC was unplugged
+      await engine.refreshDevices();
+      expect(engine.currentDevice?.id, 'auto');
+      expect((engine.isExclusiveMode, engine.isBitperfect), (false, false));
+      expect((driver.isExclusive, driver.isBitperfect), (false, false));
+      expect(driver.volume, closeTo(0.4, 0.001)); // the volume from before bit-perfect is back
+    },
+  );
+
+  test('a track that waits for its stream token does not start after the one skipped to', () async {
+    final driver = FakeAudioDriver();
+    final engine = TestSupport.createEngine(driver);
+    final token = Completer<String?>();
+    final streamed = TestSupport.makeServerTrack('s1', 'Streamed');
+    final downloaded = TestSupport.makeServerTrack('s2', 'Downloaded');
+    engine
+      ..setStreamTokenProvider(() => token.future)
+      ..setOfflineCopyProvider((t) => t.id == 's2' ? '/copies/s2.flac' : null);
+
+    final first = engine.playTrack(streamed);
+    await engine.playTrack(downloaded); // skipped to before the token arrived
+    token.complete('stream-token');
+    await first;
+
+    expect(driver.playCalls, 1);
+    expect(driver.lastSource, '/copies/s2.flac');
+    expect(engine.currentTrack?.id, 's2');
+
+    // Stopping while a token is on its way: nothing starts either.
+    final again = Completer<String?>();
+    engine.setStreamTokenProvider(() => again.future);
+    final pending = engine.playTrack(streamed);
+    await engine.stop();
+    again.complete('stream-token');
+    await pending;
+    expect(driver.playCalls, 1);
   });
 
   test('a mode no device supports stays off and is reported', () async {
@@ -188,7 +240,11 @@ void main() {
       isExclusiveSupported: true,
       isBitperfectSupported: false,
     );
-    final engine = TestSupport.createEngine(null, [TestSupport.capableDevice, exclusiveOnlyDevice, TestSupport.sharedOnlyDevice]);
+    final engine = TestSupport.createEngine(null, [
+      TestSupport.capableDevice,
+      exclusiveOnlyDevice,
+      TestSupport.sharedOnlyDevice,
+    ]);
     await engine.ready;
     engine.setVolume(0.7);
     await engine.setBitperfectMode(true);

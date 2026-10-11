@@ -3,7 +3,9 @@
 The JSON API under `/api` that the players speak. It isn't versioned: if you build on it, pin a server version.
 
 - camelCase JSON, dates in ISO 8601 (UTC), durations in milliseconds.
-- Errors look like `{ "error": "message" }`; `401` and `403` come with an empty body.
+- Errors look like `{ "error": "message", "code": "code" }`, plus the one number or path the message names (`limit`,
+  `max`, `min`, `path` or `retryAfter`). `error` is English, for people; a player shows its own text for the `code`
+  ([below](#error-codes)) and falls back to `error` for one it doesn't know.
 - Send `Authorization: Bearer <token>`. Players that can't send headers may put a **stream token**
   (`POST /api/auth/stream-token`) into the URL as `?token=` on `/api/stream/…` and `/api/cover/…`. That's the only
   place a token is read from a URL, and the only kind of token accepted there: URLs end up in logs. The players
@@ -20,9 +22,10 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` for a missing field, `401` for wrong credentials. Rate limited |
 | `POST /api/auth/register` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` when the name is taken |
 | `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't get another one |
-| `POST /api/auth/change-password` | user | Body `{ "currentPassword", "newPassword" }`. `200` `{ "changed": true }`, `400` for a password that breaks the rules, `403` when the current one is wrong. Rate limited. Tokens issued earlier stay valid until they expire |
+| `POST /api/auth/change-password` | user | Body `{ "currentPassword", "newPassword" }`. `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, which expires when the old one would have. `400` for a password that breaks the rules, `403` when the current one is wrong. Rate limited. Every token issued before (the caller's, other devices', stream tokens) stops working, and the account's remote-control connections close with `4401` |
 | `GET /api/auth/me` | user | The caller's `UserInfo` |
 | `GET /api/users` | admin | Every account |
+| `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions, as a change does. `200` `{ "changed": true }`, `400` for a password that breaks the rules or for your own account (change that with the current one), `404` for an unknown one |
 | `DELETE /api/users/{userId}` | admin | Deletes an account and its data. `400` for your own account, `404` for an unknown one |
 
 `AuthResponse`: `{ "token", "user": UserInfo, "expiresAt" }`.
@@ -33,11 +36,11 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanCompletedUtc", "lastScanError" }` |
+| `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanCompletedUtc", "lastScanError", "lastScanProblem" }`. Why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`); both `null` when it went well, and for anyone but an administrator, since they name the server's folders |
 | `POST /api/library/scan` | admin | Asks for a scan: `202 { "message": "Scan requested." }`. Poll the status route |
 | `GET /api/tracks` | user | Every track; `?q=text` filters by title, artist, album, album artist or genre |
 | `GET /api/config` | admin | `{ "libraryPath" }` |
-| `POST /api/config/library-path` | admin | Body `{ "newPath" }`. Switches the music folder (kept in the database) and asks for a scan. `400` for an empty or missing folder |
+| `POST /api/config/library-path` | admin | Body `{ "newPath" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
 A **track** has `id`, `title`, `artist`, `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `year`,
 `genre`, `durationMs`, `fileSizeBytes`, `fileModifiedUtc`, `hasCoverArt`, `dateAdded` and `format` (`codec`,
@@ -100,12 +103,33 @@ players find them in their own library.
 
 A **command** has an `action`: `play`, `pause`, `toggle`, `stop`, `next`, `previous`, `seek` (with `positionMs`),
 `volume` (`volume`), `mute` and `shuffle` (`on`), `repeat` (`repeat`), `playTracks` (`trackIds`, the `index` to start
-at or -1 for the player's own choice, and `positionMs` there) or `playIndex` (`index` in its queue). A player checks
-what it gets and ignores a command it doesn't understand.
+at or -1 for the player's own choice, and `positionMs` there), `playIndex` (`index` in its queue), `moveTrack` (from
+`index` to `toIndex` in its queue), `removeTrack` (`index`) or `clearQueue`. A player checks what it gets and ignores a
+command it doesn't understand.
 
 The server closes a connection with `4000` when the same device connects again, `4001` beyond 20 devices on one
 account, `4401` when the token expires or the account is deleted, `1008` for a message it doesn't accept (or more than
 200 in 10 seconds), and `1009` for one that is too long. Both sides ping every 25 seconds.
+
+## Error codes
+
+| Code | Status | |
+|---|---|---|
+| `signInRequired`, `tokenInvalid`, `sessionExpired`, `passwordChanged`, `accountRemoved` | 401 | No token; one this server didn't sign or that doesn't belong here; expired; issued before the password changed; of a deleted account |
+| `wrongCredentials` | 401 | The sign-in's user name or password |
+| `adminOnly` | 403 | An administrator's route |
+| `rateLimited` | 429 | With `retryAfter` (seconds), also as the `Retry-After` header |
+| `credentialsRequired`, `usernameInvalid` (`max`), `passwordTooShort` (`min`), `passwordTooLong` (`max`, in bytes) | 400 | Account rules |
+| `alreadySetUp` (409), `setupCodeWrong` (403), `currentPasswordWrong` (403), `usernameTaken` (409), `userNotFound` (404), `cannotDeleteSelf` (400), `cannotResetOwnPassword` (400) | | Accounts |
+| `folderRequired`, `folderInvalid`, `folderMissing` (`path`), `folderUnreadable` (`path`), `folderWholeDisk`, `folderSystem`, `folderServerData` | 400 | The music folder |
+| `invalidId`, `invalidItemType`, `playlistInvalid`, `playlistNameRequired`, `playlistNameTooLong` (`max`), `playlistDescriptionTooLong` (`max`), `playlistTooManyTracks` (`max`) | 400 | The account's data |
+| `favoritesLimit`, `playCountsLimit`, `playlistsLimit`, `hiddenLimit` (all with `limit`) | 409 | The account's limits |
+| `playlistNotFound`, `notFound` | 404 | |
+| `invalidJson` (400), `bodyTooLarge` (413), `internalError` (500) | | Any route |
+| `notWebSocket` (400, 426), `originRefused` (403), `tooManyConnections` (429) | | `/api/remote` |
+
+The list lives in `ErrorCodes` (`packages/wiretune_core/lib/src/models/protocol.dart`), shared by the server and the
+players; a new code gets its text in `strings.dart` as `Error<Code>`.
 
 ## Example
 

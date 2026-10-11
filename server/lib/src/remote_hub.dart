@@ -51,10 +51,10 @@ class RemoteHub {
     );
   }
 
-  /// Ends the connections of an account, e.g. one that was deleted.
-  void disconnectAccount(String userId) {
+  /// Ends the connections of an account whose tokens no longer stand: it was deleted, or its password changed.
+  void disconnectAccount(String userId, String reason) {
     for (final peer in _peers.where((p) => p.userId == userId).toList()) {
-      _close(peer, RemoteRules.closeSignedOut, 'The account was removed.');
+      _close(peer, RemoteRules.closeSignedOut, reason);
     }
   }
 

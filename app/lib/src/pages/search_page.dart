@@ -131,7 +131,6 @@ class SearchResults extends StatelessWidget {
                                       slivers: [
                                         TrackSliver(
                                           tracks: search.matchingTracks,
-                                          onPlay: search.playTrack,
                                           kind: TrackTableKind.search,
                                           horizontalPadding: 0,
                                         ),
@@ -165,7 +164,7 @@ class SearchResults extends StatelessWidget {
                       child: SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.fromLTRB(0, 24, 0, 14)),
                     ),
                   ),
-                  TrackSliver(tracks: search.matchingTracks, onPlay: search.playTrack, kind: TrackTableKind.search),
+                  TrackSliver(tracks: search.matchingTracks, kind: TrackTableKind.search),
                 ],
                 if (search.hasArtists) ...[
                   SliverToBoxAdapter(
@@ -226,47 +225,47 @@ class _BestMatchCard extends StatelessWidget {
         onTap: match.open,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CoverImage(
-            path: match.coverPath,
-            size: 116,
-            radius: Radii.card,
-            circle: match.kind == BestMatchKind.artist,
-            placeholderColor: typeColor,
-            placeholderIcon: switch (match.kind) {
-              BestMatchKind.artist => Icons.person,
-              BestMatchKind.album => Icons.album,
-              BestMatchKind.track => Icons.music_note,
-            },
-          ),
-          const SizedBox(height: 14),
-          TagBadge(match.typeLabel, color: typeColor),
-          const SizedBox(height: 4),
-          Text(
-            match.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 24, letterSpacing: -0.6, fontWeight: FontWeight.w800, color: colors.textMain),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            match.subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textMuted),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            match.meta,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, color: colors.textMuted),
-          ),
-          const SizedBox(height: 18),
-          TilePlayButton(color: typeColor, onPressed: match.play, tooltip: context.tr('Play'), size: 48),
-        ],
+          children: [
+            CoverImage(
+              path: match.coverPath,
+              size: 116,
+              radius: Radii.card,
+              circle: match.kind == BestMatchKind.artist,
+              placeholderColor: typeColor,
+              placeholderIcon: switch (match.kind) {
+                BestMatchKind.artist => Icons.person,
+                BestMatchKind.album => Icons.album,
+                BestMatchKind.track => Icons.music_note,
+              },
+            ),
+            const SizedBox(height: 14),
+            TagBadge(match.typeLabel, color: typeColor),
+            const SizedBox(height: 4),
+            Text(
+              match.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 24, letterSpacing: -0.6, fontWeight: FontWeight.w800, color: colors.textMain),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              match.subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textMuted),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              match.meta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: colors.textMuted),
+            ),
+            const SizedBox(height: 18),
+            TilePlayButton(color: typeColor, onPressed: match.play, tooltip: context.tr('Play'), size: 48),
+          ],
+        ),
       ),
-    ),
-  );
+    );
   }
 }

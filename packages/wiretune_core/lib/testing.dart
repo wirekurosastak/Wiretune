@@ -102,11 +102,7 @@ class MockRepository extends LibraryRepository {
 
   @override
   Future<Map<String, Set<String>>> getHiddenItems([String userId = 'local']) async {
-    final userMap = _hidden.putIfAbsent(userId, () => {
-      'artist': <String>{},
-      'album': <String>{},
-      'track': <String>{},
-    });
+    final userMap = _hidden.putIfAbsent(userId, () => {'artist': <String>{}, 'album': <String>{}, 'track': <String>{}});
     return {
       'artist': Set<String>.from(userMap['artist'] ?? const {}),
       'album': Set<String>.from(userMap['album'] ?? const {}),
@@ -116,11 +112,7 @@ class MockRepository extends LibraryRepository {
 
   @override
   Future<void> setHiddenItem(String itemType, String itemId, bool hidden, [String userId = 'local']) async {
-    final userMap = _hidden.putIfAbsent(userId, () => {
-      'artist': <String>{},
-      'album': <String>{},
-      'track': <String>{},
-    });
+    final userMap = _hidden.putIfAbsent(userId, () => {'artist': <String>{}, 'album': <String>{}, 'track': <String>{}});
     final set = userMap.putIfAbsent(itemType, () => <String>{});
     if (hidden) {
       set.add(itemId);
@@ -130,11 +122,31 @@ class MockRepository extends LibraryRepository {
   }
 
   @override
+  Future<void> replaceHiddenItems(
+    String userId, {
+    required Iterable<String> artists,
+    required Iterable<String> albums,
+    required Iterable<String> tracks,
+  }) async {
+    _hidden[userId] = {'artist': artists.toSet(), 'album': albums.toSet(), 'track': tracks.toSet()};
+  }
+
+  @override
   Future<void> clearHiddenItems([String userId = 'local']) async {
     _hidden.remove(userId);
   }
-}
 
+  final Map<String, (String, String)> downloads = {};
+
+  @override
+  Future<Map<String, (String version, String path)>> getDownloads() async => Map.of(downloads);
+
+  @override
+  Future<void> saveDownload(String trackId, String version, String path) async => downloads[trackId] = (version, path);
+
+  @override
+  Future<void> deleteDownload(String trackId) async => downloads.remove(trackId);
+}
 
 Track copyTrack(Track t) => Track(
   id: t.id,
@@ -347,14 +359,19 @@ bool hasTool(String tool) {
 }
 
 /// A session signed in to a server that answers just enough for that: no tracks of its own unless [tracks] are given,
-/// an account with nothing in it. Its token is "sign-in-token"; [serverUrl] is the address the session believes in.
+/// an account with nothing in it. Its token is "sign-in-token"; [serverUrl] is the address the session believes in, and
+/// [respond] may answer any request in place of that stand-in.
 Future<ServerSession> signedInSession(
   LibraryService library, {
   List<Track> tracks = const [],
   String serverUrl = 'http://server:5200',
+  http.Response? Function(http.Request request)? respond,
 }) async {
   final user = UserInfo('user-1', 'owner', true, DateTime.utc(2026), null);
   final client = MockClient((request) async {
+    // A test's own answer for a request comes first; null leaves it to the stand-in below.
+    final own = respond?.call(request);
+    if (own != null) return own;
     final body = switch (request.url.path) {
       '/api/auth/setup-required' => {'setupRequired': false},
       '/api/auth/login' => AuthResponse('sign-in-token', user, DateTime.utc(2099)).toJson(),

@@ -3,6 +3,7 @@
 
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +16,7 @@ import 'package:wiretune/src/pages/playlists_page.dart';
 import 'package:wiretune/src/pages/queue_panel.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
+import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/widgets/ambient.dart';
 import 'package:wiretune/src/widgets/common.dart';
@@ -112,10 +114,7 @@ void main() {
     expect(find.text(navFavorites), findsOneWidget);
     expect(vm.serverSettings.totalFavoritesCount, 0);
 
-    final favoritesItem = find.ancestor(
-      of: find.text(navFavorites),
-      matching: find.byType(InkWell),
-    );
+    final favoritesItem = find.ancestor(of: find.text(navFavorites), matching: find.byType(InkWell));
     expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
 
     await vm.library.toggleFavorite('1');
@@ -457,7 +456,11 @@ void main() {
       final (vm, driver) = await playWithCover(tester);
       vm.openNowPlaying();
       await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
-      expect(tester.binding.hasScheduledFrame, isFalse, reason: 'full-screen player, before'); // everything has come to rest
+      expect(
+        tester.binding.hasScheduledFrame,
+        isFalse,
+        reason: 'full-screen player, before',
+      ); // everything has come to rest
       final second = vm.player.position.value.inSeconds + 1;
       driver.positionChanged.emit(Duration(seconds: second, milliseconds: 100)); // a new second: drawn
       expect(tester.binding.hasScheduledFrame, isTrue, reason: 'full-screen player');
@@ -671,6 +674,288 @@ void main() {
     await settle(tester);
     expect(signedIn.isRemoteEnabled, isTrue);
     signedIn.dispose();
+  });
+
+  testWidgets('a back link and a sortable column take a click anywhere they light up, not just on the letters', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+
+    // The gap between the back arrow and its text.
+    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+    await settle(tester);
+    expect(vm.albums.isAlbumDetailOpen, isTrue);
+    final arrow = tester.getRect(
+      find.descendant(of: find.byType(BackLink), matching: find.byIcon(Icons.arrow_back_rounded)),
+    );
+    await tester.tapAt(Offset(arrow.right + 4, arrow.center.dy));
+    await settle(tester);
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+
+    // The padding beside a column's name.
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final arrows = find.byWidgetPredicate(
+      (w) => w is Icon && (w.icon == Icons.north_rounded || w.icon == Icons.south_rounded),
+    );
+    final artist = tester.getRect(find.text(Localizer.get('ColArtist')).first);
+    final before = tester.widgetList<Icon>(arrows).map((i) => i.icon).toList();
+    await tester.tapAt(Offset(artist.left - 6, artist.center.dy));
+    await settle(tester);
+    final artistArrow = find.descendant(
+      of: find.ancestor(of: find.text(Localizer.get('ColArtist')).first, matching: find.byType(Row)).first,
+      matching: arrows,
+    );
+    expect(artistArrow, findsOneWidget, reason: 'sorted by artist now (before: $before)');
+  });
+
+  testWidgets('a column header and the sort buttons are one setting, kept from the wide layout to the phone', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+
+    await tester.tap(find.text(Localizer.get('ColArtist')).first);
+    await settle(tester);
+    expect(vm.tracks.sortField, TrackSortField.artist);
+    expect(find.text(Localizer.get('SortBy')), findsNothing); // the headers are the wide table's sort buttons
+
+    tester.view.physicalSize = const Size(400, 860);
+    await settle(tester);
+    expect(find.byType(PhoneLayout), findsOneWidget);
+    expect(find.text('${Localizer.get('SortArtist')} ↑'), findsOneWidget); // the phone's button, with the direction
+    expect([for (final t in vm.tracks.displayedTracks) t.artist], ['Daft Punk', 'Miles Davis', 'Miles Davis']);
+  });
+
+  testWidgets('the keyboard and a remote reach what the mouse clicks: the queue cover, a column header', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    Future<void> press(Finder target) async {
+      final pressable = find.ancestor(of: target, matching: find.byType(Pressable)).first;
+      Focus.of(
+        tester.element(find.descendant(of: pressable, matching: find.byType(GestureDetector)).first),
+      ).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await settle(tester);
+    }
+
+    await press(find.text(Localizer.get('ColAlbum')).first);
+    expect(vm.tracks.sortField, TrackSortField.album);
+
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    final cover = find.descendant(
+      of: find.byTooltip(Localizer.get('TipQueueToggle')),
+      matching: find.byType(CoverImage),
+    );
+    await press(cover);
+    expect(vm.player.isQueueOpen, isTrue);
+  });
+
+  testWidgets("an artist's albums and tracks are counted alike on its tile, its phone row and its page", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final albums = Localizer.format('AlbumCount', [1]);
+    final tracks = Localizer.format('TrackCount', [2]);
+    vm.navigateTo(AppSection.artists);
+    await settle(tester);
+    expect(find.text('$albums  •  $tracks'), findsOneWidget); // Miles Davis's tile
+
+    vm.openArtist(vm.library.artists.firstWhere((a) => a.name == 'Miles Davis'));
+    await settle(tester);
+    final header = find.byType(DetailHeader);
+    expect(find.descendant(of: header, matching: find.text(albums)), findsOneWidget);
+    expect(find.descendant(of: header, matching: find.text(tracks)), findsOneWidget);
+
+    vm.artists.closeArtistDetail();
+    tester.view.physicalSize = const Size(400, 860);
+    await settle(tester);
+    expect(find.text('$albums  •  $tracks'), findsOneWidget);
+  });
+
+  testWidgets('a playlist sorts by its headers on a wide screen and not on a phone; delete is an icon', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final mix = (await tester.runAsync(() async {
+      final created = await vm.library.createPlaylist('Mix');
+      for (final id in ['3', '1']) {
+        await vm.library.addTrackToPlaylist(created.id, id);
+      }
+      return created;
+    }))!;
+    vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    expect(find.text(Localizer.get('SortBy')), findsOneWidget); // the playlists page's sort buttons
+    vm.playlists.openPlaylist(vm.library.getPlaylist(mix.id));
+    await settle(tester);
+
+    expect(find.byTooltip(Localizer.get('PlaylistDeleteAction')), findsOneWidget);
+    expect(find.text(Localizer.get('PlaylistDeleteAction')), findsNothing);
+    expect(find.text(Localizer.get('SortBy')), findsNothing);
+    await tester.tap(find.text(Localizer.get('ColTitle')).first);
+    await settle(tester);
+    expect([for (final t in vm.playlists.selectedPlaylistTracks) t.title], ['Opening', 'So What']);
+
+    tester.view.physicalSize = const Size(400, 860);
+    await settle(tester);
+    expect(find.text(Localizer.get('SortBy')), findsNothing);
+    expect(find.text('ABC ↑'), findsNothing);
+
+    // The phone's play and shuffle are icons alone, on one line with the download and the delete.
+    expect(find.text(Localizer.get('Play')), findsNothing);
+    expect(find.text(Localizer.get('Shuffle')), findsNothing);
+    final play = tester.getCenter(find.byTooltip(Localizer.get('Play')).first);
+    final delete = tester.getCenter(find.byTooltip(Localizer.get('PlaylistDeleteAction')));
+    expect(delete.dy, moreOrLessEquals(play.dy, epsilon: 1));
+  });
+
+  testWidgets("a phone's play and shuffle are the same pills without words, on one line with the sort", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final play = find.ancestor(of: find.byIcon(Icons.play_arrow_rounded), matching: find.byType(FilledButton));
+    final shuffle = find.ancestor(of: find.byIcon(Icons.shuffle_rounded), matching: find.byType(OutlinedButton));
+    expect(play, findsOneWidget);
+    expect(shuffle, findsOneWidget);
+    expect(find.descendant(of: play, matching: find.byType(Text)), findsNothing);
+    expect(find.byTooltip(Localizer.get('Play')), findsWidgets);
+    final sort = tester.getCenter(find.text('ABC ↑'));
+    expect(sort.dy, moreOrLessEquals(tester.getCenter(play).dy, epsilon: 1));
+  });
+
+  testWidgets("a phone's header buttons are one height, the sort first, and it carries no sort icon", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    await tester.runAsync(() => vm.library.createPlaylist('Mix'));
+    final sortLabel = {AppSection.playlists: '${Localizer.get('SortAdded')} ↓', AppSection.tracks: 'ABC ↑'};
+    for (final MapEntry(key: section, value: label) in sortLabel.entries) {
+      vm.navigateTo(section);
+      await settle(tester);
+      final sort = find.ancestor(of: find.text(label), matching: find.byType(OutlinedButton)).first;
+      final other = switch (section) {
+        AppSection.playlists => find.ancestor(
+          of: find.text(Localizer.get('PlaylistNew')),
+          matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+        ),
+        _ => find.ancestor(of: find.byIcon(Icons.play_arrow_rounded), matching: find.byType(FilledButton)),
+      }.first;
+      expect(tester.getSize(sort).height, PhoneChrome.controlHeight, reason: section.name);
+      expect(tester.getSize(other).height, PhoneChrome.controlHeight, reason: section.name);
+      expect(tester.getRect(sort).right, lessThan(tester.getRect(other).left), reason: '${section.name}: sort first');
+      expect(find.byIcon(Icons.swap_vert_rounded), findsNothing);
+    }
+  });
+
+  testWidgets("the phone's navigation has no ripple or bounce, and the desktop's cover holds still", (tester) async {
+    await pumpApp(tester, const Size(400, 860));
+    final nav = find.ancestor(of: find.text(Localizer.get('NavAlbums')).last, matching: find.byType(InkWell)).first;
+    expect(tester.widget<InkWell>(nav).splashFactory, NoSplash.splashFactory);
+    expect(find.descendant(of: nav, matching: find.byType(AnimatedScale)), findsNothing);
+
+    tester.view.physicalSize = const Size(1400, 900);
+    await settle(tester);
+    expect(
+      find.descendant(of: find.byTooltip(Localizer.get('TipQueueToggle')), matching: find.byType(ScaleTransition)),
+      findsNothing,
+    );
+  });
+
+  testWidgets('the settings hold the server and the account on one card, the music folders on another', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    final account = find.ancestor(
+      of: find.text(Localizer.get('AccountAndConnection')),
+      matching: find.byType(GlassCard),
+    );
+    expect(account, findsOneWidget);
+    expect(find.descendant(of: account, matching: find.text(Localizer.get('ServerUrlPlaceholder'))), findsOneWidget);
+    expect(find.descendant(of: account, matching: find.text(Localizer.get('NotSignedIn'))), findsOneWidget);
+    // Neither the server's folder (not signed in) nor one of this device (it can't scan one): no card for them.
+    expect(find.text(Localizer.get('SettingsLibrarySection')), findsNothing);
+  });
+
+  testWidgets('an empty library says so alike on every page of it, with the way to fill it', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary(const []);
+      await library.initialize();
+      return createMainViewModel(library);
+    });
+    vm.continueOffline();
+    for (final section in [AppSection.tracks, AppSection.albums, AppSection.artists]) {
+      vm.navigateTo(section);
+      await settle(tester);
+      expect(find.text(Localizer.get('EmptyLibraryTitle')), findsOneWidget, reason: section.name);
+      expect(find.text(Localizer.get('ConnectToServer')), findsOneWidget, reason: section.name);
+    }
+  });
+
+  testWidgets("an album's tile and its phone row offer what its page does, in the same order", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), createWithServer);
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    final expected = [
+      Localizer.get('Play'),
+      Localizer.get('Shuffle'),
+      Localizer.get('TipDownload'),
+      Localizer.get('HideAlbum'),
+    ];
+    List<String> entries() => [
+      for (final item in tester.widgetList<PopupMenuItem<Object?>>(find.byWidgetPredicate((w) => w is PopupMenuItem)))
+        tester
+            .widgetList<Text>(find.descendant(of: find.byWidget(item), matching: find.byType(Text)))
+            .map((t) => t.data)
+            .join(),
+    ];
+
+    await tester.tap(find.text('Giant Steps').first, buttons: kSecondaryButton);
+    await settle(tester);
+    expect(entries(), expected);
+    await tester.tapAt(const Offset(5, 5)); // closes the menu
+    await settle(tester);
+
+    tester.view.physicalSize = const Size(400, 860);
+    await settle(tester);
+    final row = find.ancestor(of: find.text('Giant Steps'), matching: find.byType(Row)).first;
+    await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
+    await settle(tester);
+    expect(entries(), expected);
+  });
+
+  testWidgets("the table's dates stay on one line, written the language's way", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    for (final t in vm.library.tracks) {
+      t.dateAdded = DateTime(2026, 10, 11);
+    }
+    for (final (language, date) in [('en', '2026-10-11'), ('hu', '2026.10.11'), ('de', '11.10.2026')]) {
+      vm.changeLanguage(language);
+      vm.navigateTo(AppSection.albums);
+      await settle(tester);
+      vm.navigateTo(AppSection.tracks);
+      await settle(tester);
+      final dates = find.descendant(of: find.byType(TrackSliver), matching: find.text(date));
+      expect(dates, findsNWidgets(3), reason: language);
+      // (The test font's square glyphs are wider than any real font's, so how much of it shows proves nothing.)
+      for (final element in dates.evaluate()) {
+        expect(tester.getSize(find.byWidget(element.widget)).height, lessThan(13 * 1.5), reason: '$language: $date');
+      }
+    }
+  });
+
+  testWidgets('a track played from a list sorted by its header queues the list in the order shown', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+    await settle(tester);
+
+    await tester.tap(find.text(Localizer.get('ColTitle')).first);
+    await settle(tester);
+    await tester.tap(find.text('So What').last);
+    await settle(tester);
+    expect([for (final t in vm.player.queueTracks) t.title], ['Blue in Green', 'So What']);
   });
 
   testWidgets('the sign-in page covers the app while it is active', (tester) async {

@@ -30,6 +30,9 @@ abstract final class WiretuneLog {
   /// The settings a background isolate needs to log like this one (isolates do not share static state).
   static (String?, LogLevel, bool) get isolateSettings => (_logFilePath, minimumLevel, writeToConsole);
 
+  /// The log file, once [initialize] opened one.
+  static String? get logPath => _logFilePath;
+
   /// Applies [isolateSettings] of the spawning isolate; call it first thing in a background isolate.
   static void adoptIsolateSettings((String?, LogLevel, bool) settings) {
     _logFilePath = settings.$1;

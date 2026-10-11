@@ -211,7 +211,9 @@ class AmbientBackdrop extends StatelessWidget {
       final path = vm.albums.selectedAlbum?.coverArtPath;
       if (path != null && path.isNotEmpty) return path;
     }
-    if (vm.selectedSection == AppSection.artists && vm.artists.isArtistDetailOpen && vm.artists.selectedArtist != null) {
+    if (vm.selectedSection == AppSection.artists &&
+        vm.artists.isArtistDetailOpen &&
+        vm.artists.selectedArtist != null) {
       final artist = vm.artists.selectedArtist;
       final path = artist?.picturePath ?? vm.artists.selectedArtistAlbums.firstOrNull?.coverArtPath;
       if (path != null && path.isNotEmpty) return path;
@@ -276,10 +278,7 @@ class AmbientBackdrop extends StatelessWidget {
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 450),
-              decoration: BoxDecoration(
-                color: base,
-                gradient: fallbackGradient,
-              ),
+              decoration: BoxDecoration(color: base, gradient: fallbackGradient),
             ),
             AmbientArtwork(
               path: cover,

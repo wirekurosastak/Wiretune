@@ -28,6 +28,17 @@ void main() {
 
   String dbPath() => p.join(dir.path, 'wiretune.db');
 
+  /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
+  void downgrade(DatabaseManager db, int version) {
+    final c = db.connection;
+    if (version < 5) c.execute('ALTER TABLE users DROP COLUMN token_version; DROP TABLE downloads;');
+    if (version < 4) c.execute('DROP TABLE user_hidden');
+    if (version < 3) c.execute('ALTER TABLE tracks DROP COLUMN bpm');
+    if (version < 2) c.execute('ALTER TABLE tracks DROP COLUMN favorited_at');
+    c.execute('PRAGMA user_version = $version');
+    db.close();
+  }
+
   Future<(LibraryRepository, DatabaseManager)> open() async {
     final db = DatabaseManager(dbPath());
     opened.add(db);
@@ -174,11 +185,7 @@ void main() {
   test('a database of the previous schema is upgraded in place, and favourites get their time from then on', () async {
     final (repo, db) = await open();
     await repo.replaceAllTracks([make('a')..isFavorite = true]);
-    // Back to what schema 1 was: no time for a favourite, no bpm.
-    db.connection.execute('ALTER TABLE tracks DROP COLUMN favorited_at');
-    db.connection.execute('ALTER TABLE tracks DROP COLUMN bpm');
-    db.connection.execute('PRAGMA user_version = 1');
-    db.close();
+    downgrade(db, 1); // no time for a favourite, no bpm, no hidden items, no token versions
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
@@ -193,13 +200,10 @@ void main() {
     expect((unmarked.isFavorite, unmarked.favoritedAt), (false, null));
   });
 
-  test('a database of schema 2 is upgraded to schema 3 adding bpm', () async {
+  test('a database of schema 2 is upgraded, gaining bpm', () async {
     final (repo, db) = await open();
     await repo.replaceAllTracks([make('a')]);
-    // Back to schema 2: no bpm.
-    db.connection.execute('ALTER TABLE tracks DROP COLUMN bpm');
-    db.connection.execute('PRAGMA user_version = 2');
-    db.close();
+    downgrade(db, 2);
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
@@ -207,13 +211,10 @@ void main() {
     expect((kept.id, kept.bpm), ('a', null));
   });
 
-  test('a database of schema 3 is upgraded to schema 4 adding user_hidden table', () async {
+  test('a database of schema 3 is upgraded, gaining the hidden items', () async {
     final (repo, db) = await open();
     await repo.replaceAllTracks([make('a')]);
-    // Drop user_hidden and set schema to 3
-    db.connection.execute('DROP TABLE user_hidden');
-    db.connection.execute('PRAGMA user_version = 3');
-    db.close();
+    downgrade(db, 3);
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
@@ -221,6 +222,20 @@ void main() {
     expect(hidden['track'], isEmpty);
     expect(hidden['album'], isEmpty);
     expect(hidden['artist'], isEmpty);
+  });
+
+  test("a database of schema 4 is upgraded, and its accounts' tokens keep the version they were signed with", () async {
+    final (_, db) = await open();
+    db.connection.execute(
+      "INSERT INTO users (id, username, password_hash, is_admin, created_at) VALUES ('u1', 'owner', 'hash', 1, 0)",
+    );
+    downgrade(db, 4);
+
+    final (_, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    final row = again.connection.select('SELECT username, is_admin, token_version FROM users').single;
+    expect((row['username'], row['is_admin'], row['token_version']), ('owner', 1, 0));
+    expect(again.connection.select('SELECT * FROM downloads'), isEmpty);
   });
 
   test('user_hidden items persist, isolate users, and clear correctly', () async {

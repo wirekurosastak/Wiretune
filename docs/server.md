@@ -27,7 +27,7 @@ For a server that stays up, build the standalone executable with `dart tool/buil
 
 | Option | Default | |
 |---|---|---|
-| `--library <folder>` | your Music folder | The music folder, absolute or relative to the working directory. A folder an administrator picks in the player is saved, and wins after a restart as long as it exists. |
+| `--library <folder>` | your Music folder | The music folder, absolute or relative to the working directory. A folder an administrator picks in the player is saved and wins after a restart, even while it's missing (a share that mounts late), so that the index isn't replaced by another folder's. |
 | `--data-dir <folder>` | [see below](#data-directory) | Where the database, cover cache and log live. |
 | `--host <address>` | `0.0.0.0` | Where to listen: `0.0.0.0` for every IPv4 interface, `::` for every interface, `127.0.0.1` for this machine only. |
 | `--port <number>` | `5200` | |
@@ -67,6 +67,9 @@ incremental: files with the same path, size and modification time aren't read ag
 hidden and unreadable ones are skipped. A music folder that doesn't exist (yet) is reported by every scan until it
 appears, so a share that mounts late is picked up by the next one.
 
+An administrator can pick another music folder in the player (*Settings → Server folder*); the player says why the
+server turns one down, and warns the administrator while the folder is missing or looks unmounted.
+
 The extension decides what's indexed: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis and
 Opus. A file whose extension lies is recognised by its content. Missing tags fall back to the file name,
 `Unknown artist` and `Unknown album`. Whether a file also *plays* depends on the player ([audio.md](audio.md)).
@@ -88,14 +91,30 @@ playlist entries of the old one point at nothing.
   quietly ignore anything longer, so longer ones are refused.
 - **Tokens** last 24 hours, or 90 days with *Keep me signed in*. Audio URLs carry a separate 8-hour stream token that
   the players renew themselves. Deleting a user locks them out at once.
-- **Per-account data**: favourites, play counts and playlists live on the server, are the same on every device, and go
-  when the account goes. Limits: 100,000 favourites, 100,000 tracks with play counts, 500 playlists.
+- **Per-account data**: favourites, play counts, playlists and hidden artists, albums and tracks live on the server,
+  are the same on every device, and go when the account goes. Limits: 100,000 favourites, 100,000 tracks with play
+  counts, 500 playlists, 50,000 hidden items.
 - **Rate limit**: setup, sign-in and password changes share 10 requests a minute per address, then `429`.
-- **Changing a password**: `POST /api/auth/change-password` with the current one; the players have no screen for it
-  yet. Earlier tokens keep working until they expire, so to cut a device off right now, delete the account.
+- **Changing a password** (in the player, with the current one) signs out the account's other devices; an
+  administrator's reset of another account (*Settings → Users*) signs it out everywhere: the way to cut off a lost
+  phone.
 - **Lost the admin password?** There's no reset. Stop the server, delete the rows of the `users` table in
   `wiretune-server.db`, start it again and set it up afresh. Everyone starts over, and the old accounts' favourites and
   playlists become unreachable.
+
+## Docker
+
+The image (`server/Dockerfile`, built from the repository's root, which holds the core package too) runs the server as
+an unprivileged user, with the music at `/music` and the data at `/data`:
+
+```bash
+docker build -f server/Dockerfile -t wiretune-server .
+docker run -d --name wiretune -p 5200:5200 -v /srv/music:/music:ro -v wiretune-data:/data wiretune-server
+docker logs wiretune        # the setup code, on the first start
+```
+
+Releases publish it as `ghcr.io/<owner>/wiretune-server`. The other options are `WIRETUNE_*` variables (`-e
+WIRETUNE_SCAN_INTERVAL=0`). Keep `/data` on a volume: without one, every new container starts with an empty database.
 
 ## Running it as a service
 
@@ -157,13 +176,11 @@ told to put the client's there (nginx's `real_ip` module, for example).
 
 | Symptom | Cause and fix |
 |---|---|
-| The log says the music folder doesn't exist | `--library` (or the folder picked in the player) is wrong, or the drive isn't mounted yet. The next scan after it appears picks it up. |
 | The library is empty, but the folder has music | Check the extensions, hidden (dot) folders and the service account's permissions; the log lists unreadable files. |
-| *Library folder is empty (unmounted share?)* | The folder the index came from is empty now. Mount the share again. |
 | *… was made by another version of Wiretune* | The data directory holds a database this version doesn't read. Restore the matching version, or move the file away to start afresh. |
 | *Cannot listen on …: Address already in use* | Something else (another Wiretune?) holds the port. Stop it, or pick another `--port`. |
 | The player says it isn't a Wiretune server | Something answered, but not Wiretune: a wrong port, or a proxy's error page. |
-| `429 Too many attempts` | More than 10 sign-ins, setups or password changes in a minute from one address. Wait a minute, or see [above](#reverse-proxy-and-tls) if there's a proxy. |
-| Someone has to sign in again | The account was re-created, the token expired, or the database (and with it the signing key) was replaced. |
+| Everyone shares one sign-in limit behind a proxy | Run the server with `--trust-proxy` ([above](#reverse-proxy-and-tls)). |
+| Every player had to sign in again after a restart | The database, and with it the token-signing key, was replaced. |
 | The setup screen is back, or favourites vanished after a restart | The server is using a different data directory. Compare the one named at the top of the log with the one you expect. |
 | `Failed to load dynamic library … sqlite3` | The executable was copied without the `lib/` folder of its bundle. Copy the whole bundle. |

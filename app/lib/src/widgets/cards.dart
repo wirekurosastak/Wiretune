@@ -9,6 +9,7 @@ import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
+import '../view_models/main_view_model.dart';
 import 'common.dart';
 import 'cover_image.dart';
 import 'quality_tag.dart';
@@ -38,49 +39,7 @@ class AlbumCard extends StatelessWidget {
     return _DesktopTile(
       accent: purple,
       onTap: onOpen,
-      onSecondaryTap: (pos) async {
-        final action = await showMenu<String>(
-          context: context,
-          position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx, pos.dy),
-          items: [
-            PopupMenuItem(
-              value: 'open',
-              child: Row(
-                children: [
-                  Icon(Icons.album_rounded, size: 20, color: colors.textMuted),
-                  const SizedBox(width: 14),
-                  Text(context.tr('NavAlbums')),
-                ],
-              ),
-            ),
-            if (onPlay != null)
-              PopupMenuItem(
-                value: 'play',
-                child: Row(
-                  children: [
-                    Icon(Icons.play_arrow_rounded, size: 20, color: colors.textMuted),
-                    const SizedBox(width: 14),
-                    Text(context.tr('Play')),
-                  ],
-                ),
-              ),
-            PopupMenuItem(
-              value: 'hide',
-              child: Row(
-                children: [
-                  Icon(Icons.visibility_off_outlined, size: 20, color: colors.textMuted),
-                  const SizedBox(width: 14),
-                  Text(context.tr('HideAlbum')),
-                ],
-              ),
-            ),
-          ],
-        );
-        if (!context.mounted) return;
-        if (action == 'open') onOpen();
-        if (action == 'play') onPlay?.call();
-        if (action == 'hide') context.vm.library.hideAlbum(album.id);
-      },
+      onSecondaryTap: (position) => CollectionMenu.album(album, onPlay: onPlay).showAt(context, position),
       cover: cover,
       lines: [
         _line(album.title, 14, FontWeight.w700, colors.textMain),
@@ -114,58 +73,126 @@ class ArtistCard extends StatelessWidget {
     return _DesktopTile(
       accent: coral,
       onTap: onOpen,
-      onSecondaryTap: (pos) async {
-        final action = await showMenu<String>(
-          context: context,
-          position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx, pos.dy),
-          items: [
-            PopupMenuItem(
-              value: 'open',
-              child: Row(
-                children: [
-                  Icon(Icons.person_rounded, size: 20, color: colors.textMuted),
-                  const SizedBox(width: 14),
-                  Text(context.tr('NavArtists')),
-                ],
-              ),
-            ),
-            if (onPlay != null)
-              PopupMenuItem(
-                value: 'play',
-                child: Row(
-                  children: [
-                    Icon(Icons.play_arrow_rounded, size: 20, color: colors.textMuted),
-                    const SizedBox(width: 14),
-                    Text(context.tr('Play')),
-                  ],
-                ),
-              ),
-            PopupMenuItem(
-              value: 'hide',
-              child: Row(
-                children: [
-                  Icon(Icons.visibility_off_outlined, size: 20, color: colors.textMuted),
-                  const SizedBox(width: 14),
-                  Text(context.tr('HideArtist')),
-                ],
-              ),
-            ),
-          ],
-        );
-        if (!context.mounted) return;
-        if (action == 'open') onOpen();
-        if (action == 'play') onPlay?.call();
-        if (action == 'hide') context.vm.library.hideArtist(artist.id);
-      },
+      onSecondaryTap: (position) => CollectionMenu.artist(artist, onPlay: onPlay).showAt(context, position),
       circle: true,
       cover: picture,
       lines: [
         _line(artist.name, 14, FontWeight.w700, colors.textMain, center: true),
-        _line(context.trf('TrackCount', [artist.trackCount]), 12.5, FontWeight.w500, colors.textMuted, center: true),
+        _line(artistCounts(context, artist), 12.5, FontWeight.w500, colors.textMuted, center: true),
       ],
       play: TilePlayButton(color: coral, onPressed: onPlay, tooltip: context.tr('Play')),
     );
   }
+}
+
+/// How many albums and tracks an artist has, as its tile and its row say it.
+String artistCounts(BuildContext context, Artist artist) =>
+    '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}';
+
+enum _CollectionAction { play, shuffle, download, hide }
+
+/// The menu of an album or an artist, on its tile (a right click) and its phone row (the ⋮): what the header of its page
+/// offers, in the same order: play, shuffle, download (when a track of it can be), hide.
+class CollectionMenu {
+  CollectionMenu._(
+    this.tracks, {
+    required this.downloadable,
+    required this.onPlay,
+    required this.isPinned,
+    required this.onDownload,
+    required this.hideKey,
+    required this.onHide,
+  });
+
+  factory CollectionMenu.album(Album album, {required VoidCallback? onPlay}) => CollectionMenu._(
+    album.tracks,
+    downloadable: album.tracks,
+    onPlay: onPlay,
+    isPinned: (vm) => vm.downloads.isAlbumPinned(album),
+    onDownload: (vm) => vm.downloads.toggleAlbum(album),
+    hideKey: 'HideAlbum',
+    onHide: (vm) => vm.library.hideAlbum(album.id),
+  );
+
+  factory CollectionMenu.artist(Artist artist, {required VoidCallback? onPlay}) => CollectionMenu._(
+    artist.tracks,
+    // The download keeps the artist's albums, as the button on its page does.
+    downloadable: [for (final album in artist.albums) ...album.tracks],
+    onPlay: onPlay,
+    isPinned: (vm) => vm.downloads.isArtistPinned(artist),
+    onDownload: (vm) => vm.downloads.toggleArtist(artist),
+    hideKey: 'HideArtist',
+    onHide: (vm) => vm.library.hideArtist(artist.id),
+  );
+
+  /// What playing and shuffling start.
+  final List<Track> tracks;
+  final List<Track> downloadable;
+  final VoidCallback? onPlay;
+  final bool Function(MainViewModel vm) isPinned;
+  final void Function(MainViewModel vm) onDownload;
+  final String hideKey;
+  final void Function(MainViewModel vm) onHide;
+
+  List<PopupMenuEntry<_CollectionAction>> _items(BuildContext context) {
+    final vm = context.vm;
+    final muted = context.colors.textMuted;
+    PopupMenuItem<_CollectionAction> item(_CollectionAction action, IconData icon, String text) => PopupMenuItem(
+      value: action,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: muted),
+          const SizedBox(width: 14),
+          Flexible(child: Text(text)),
+        ],
+      ),
+    );
+    final pinned = isPinned(vm);
+    return [
+      if (onPlay != null) item(_CollectionAction.play, Icons.play_arrow_rounded, context.tr('Play')),
+      item(_CollectionAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
+      if (downloadable.any(vm.downloads.canDownload))
+        item(
+          _CollectionAction.download,
+          pinned ? Icons.download_done_rounded : Icons.download_rounded,
+          context.tr(pinned ? 'TipRemoveDownload' : 'TipDownload'),
+        ),
+      item(_CollectionAction.hide, Icons.visibility_off_outlined, context.tr(hideKey)),
+    ];
+  }
+
+  void _run(BuildContext context, _CollectionAction? action) {
+    if (action == null || !context.mounted) return;
+    final vm = context.vm;
+    switch (action) {
+      case _CollectionAction.play:
+        onPlay?.call();
+      case _CollectionAction.shuffle:
+        vm.player.shuffleQueue(tracks);
+      case _CollectionAction.download:
+        onDownload(vm);
+      case _CollectionAction.hide:
+        onHide(vm);
+    }
+  }
+
+  /// Opens the menu at [position] (a right click on a tile).
+  Future<void> showAt(BuildContext context, Offset position) async {
+    final action = await showMenu<_CollectionAction>(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
+      items: _items(context),
+    );
+    if (context.mounted) _run(context, action);
+  }
+
+  /// The ⋮ button of a phone row.
+  Widget button(BuildContext context) => PopupMenuButton<_CollectionAction>(
+    icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
+    tooltip: context.tr('TipMore'),
+    onSelected: (action) => _run(context, action),
+    itemBuilder: _items,
+  );
 }
 
 /// Albums as a sliver: on a phone a list of rows (the cover, the title, the artist and the year), on a wide screen a grid
@@ -206,39 +233,7 @@ class AlbumsSliver extends StatelessWidget {
           fontSize: 9.5,
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
         ),
-        trailing: PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
-          tooltip: context.tr('TipMore'),
-          onSelected: (value) async {
-            if (value == 'play') {
-              onPlay(album);
-            } else if (value == 'hide') {
-              await context.vm.library.hideAlbum(album.id);
-            }
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'play',
-              child: Row(
-                children: [
-                  Icon(Icons.play_arrow_rounded, size: 20, color: context.colors.textMuted),
-                  const SizedBox(width: 12),
-                  Text(context.tr('Play')),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 'hide',
-              child: Row(
-                children: [
-                  Icon(Icons.visibility_off_outlined, size: 20, color: context.colors.textMuted),
-                  const SizedBox(width: 12),
-                  Text(context.tr('HideAlbum')),
-                ],
-              ),
-            ),
-          ],
-        ),
+        trailing: CollectionMenu.album(album, onPlay: () => onPlay(album)).button(context),
       );
     });
   }
@@ -279,41 +274,8 @@ class ArtistsSliver extends StatelessWidget {
           placeholderColor: coral,
         ),
         title: artist.name,
-        subtitle:
-            '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}',
-        trailing: PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
-          tooltip: context.tr('TipMore'),
-          onSelected: (value) async {
-            if (value == 'play') {
-              onPlay(artist);
-            } else if (value == 'hide') {
-              await context.vm.library.hideArtist(artist.id);
-            }
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'play',
-              child: Row(
-                children: [
-                  Icon(Icons.play_arrow_rounded, size: 20, color: context.colors.textMuted),
-                  const SizedBox(width: 12),
-                  Text(context.tr('Play')),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 'hide',
-              child: Row(
-                children: [
-                  Icon(Icons.visibility_off_outlined, size: 20, color: context.colors.textMuted),
-                  const SizedBox(width: 12),
-                  Text(context.tr('HideArtist')),
-                ],
-              ),
-            ),
-          ],
-        ),
+        subtitle: artistCounts(context, artist),
+        trailing: CollectionMenu.artist(artist, onPlay: () => onPlay(artist)).button(context),
       );
     });
   }
@@ -364,10 +326,7 @@ class PlaylistsSliver extends StatelessWidget {
             );
       return _ListRow(
         onTap: () => onOpen(playlist),
-        picture: PlaylistCover(
-          covers: covers,
-          radius: Radii.small + 2,
-        ),
+        picture: PlaylistCover(covers: covers, radius: Radii.small + 2),
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
         badge: badge,

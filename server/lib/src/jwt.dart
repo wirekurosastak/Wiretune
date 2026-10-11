@@ -21,6 +21,13 @@ class Jwt {
   /// The claims of [token] when it carries this key's signature, its `aud` is one of [audiences] and its `exp` is still
   /// ahead of [now]; null otherwise.
   Map<String, Object?>? verify(String token, {required Set<String> audiences, DateTime? now}) {
+    final claims = verifySigned(token, audiences: audiences);
+    return claims != null && !isExpired(claims, now: now) ? claims : null;
+  }
+
+  /// The claims of [token] when it carries this key's signature, its `aud` is one of [audiences] and it has an `exp`,
+  /// whether that has passed or not ([isExpired]); null otherwise.
+  Map<String, Object?>? verifySigned(String token, {required Set<String> audiences}) {
     final parts = token.split('.');
     if (parts.length != 3) return null;
     try {
@@ -29,14 +36,16 @@ class Jwt {
       if (!_constantTimeEquals(_signature('${parts[0]}.${parts[1]}'), _decode(parts[2]))) return null;
 
       final claims = jsonDecode(utf8.decode(_decode(parts[1])));
-      if (claims is! Map<String, Object?> || !audiences.contains(claims['aud'])) return null;
-      final expires = claims['exp'];
-      final seconds = (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000;
-      return expires is int && seconds < expires ? claims : null;
+      if (claims is! Map<String, Object?> || !audiences.contains(claims['aud']) || claims['exp'] is! int) return null;
+      return claims;
     } catch (_) {
       return null;
     }
   }
+
+  /// Whether the `exp` of [claims] (from [verifySigned]) is not ahead of [now].
+  static bool isExpired(Map<String, Object?> claims, {DateTime? now}) =>
+      (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000 >= (claims['exp'] as int);
 
   List<int> _signature(String signed) => Hmac(sha256, _key).convert(utf8.encode(signed)).bytes;
 

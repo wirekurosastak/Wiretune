@@ -1,8 +1,11 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:wiretune_core/wiretune_core.dart';
 
 import 'app_scope.dart';
 import 'debug/ui_automation_server.dart';
@@ -88,7 +91,14 @@ class _WiretuneAppState extends State<WiretuneApp> {
                     onPopInvokedWithResult: (didPop, _) {
                       if (!didPop) _goBack();
                     },
-                    child: const _LayoutSwitch(),
+                    child: vm.startupError != null
+                        ? _StartupErrorPage(message: vm.startupError!)
+                        : Stack(
+                            children: [
+                              const Positioned.fill(child: _LayoutSwitch()),
+                              _NoticeHost(vm: vm),
+                            ],
+                          ),
                   ),
                 ),
               ),
@@ -135,6 +145,177 @@ class _LayoutSwitch extends StatelessWidget {
     final phone =
         !platform.isTv && (size.width < WiretuneApp.phoneLayoutWidth || (platform.isMobile && size.shortestSide < 600));
     return phone ? const PhoneLayout() : const WideLayout();
+  }
+}
+
+/// Shows the latest [AppNotice] at the top of the screen for a few seconds (an error a little longer), over either
+/// layout. It takes no focus, so a TV remote stays where it was; a tap or its close button dismisses it.
+class _NoticeHost extends StatefulWidget {
+  const _NoticeHost({required this.vm});
+
+  final MainViewModel vm;
+
+  @override
+  State<_NoticeHost> createState() => _NoticeHostState();
+}
+
+class _NoticeHostState extends State<_NoticeHost> {
+  AppNotice? _notice;
+  Timer? _hide;
+
+  void Function()? _unsubscribe;
+
+  @override
+  void initState() {
+    super.initState();
+    _unsubscribe = widget.vm.notices.listen(_show);
+  }
+
+  @override
+  void didUpdateWidget(_NoticeHost old) {
+    super.didUpdateWidget(old);
+    if (identical(old.vm, widget.vm)) return;
+    _unsubscribe?.call();
+    _unsubscribe = widget.vm.notices.listen(_show);
+  }
+
+  void _show(AppNotice notice) {
+    _hide?.cancel();
+    setState(() => _notice = notice);
+    _hide = Timer(Duration(seconds: notice.isError ? 7 : 4), _dismiss);
+  }
+
+  void _dismiss() {
+    _hide?.cancel();
+    if (mounted) setState(() => _notice = null);
+  }
+
+  @override
+  void dispose() {
+    _hide?.cancel();
+    _unsubscribe?.call();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notice = _notice;
+    final colors = context.colors;
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      child: SafeArea(
+        bottom: false,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: notice == null
+                ? const SizedBox.shrink()
+                : Padding(
+                    key: ObjectKey(notice),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 560),
+                      child: Semantics(
+                        liveRegion: true,
+                        child: ExcludeFocus(
+                          child: Material(
+                            color: colors.palette.panel,
+                            elevation: 6,
+                            borderRadius: BorderRadius.circular(Radii.card),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(Radii.card),
+                              onTap: _dismiss,
+                              child: Container(
+                                padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(Radii.card),
+                                  border: Border.all(
+                                    color: (notice.isError ? colors.danger : colors.glassBorder).withValues(alpha: 0.6),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      notice.isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+                                      size: 20,
+                                      color: notice.isError ? colors.danger : colors.palette.lime,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        notice.message,
+                                        style: TextStyle(fontSize: 13, color: colors.textMain),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: context.tr('TipDismissNotice'),
+                                      onPressed: _dismiss,
+                                      iconSize: 16,
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// All the player shows when it could not start: why, and where the log is.
+class _StartupErrorPage extends StatelessWidget {
+  const _StartupErrorPage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final log = WiretuneLog.logPath;
+    return Material(
+      color: colors.palette.background,
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.error_outline_rounded, size: 40, color: colors.danger),
+                  const SizedBox(height: 12),
+                  Text(
+                    context.tr('StartupFailedTitle'),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colors.textMain),
+                  ),
+                  const SizedBox(height: 12),
+                  SelectableText(message, style: TextStyle(fontSize: 14, color: colors.textMain)),
+                  if (log != null) ...[
+                    const SizedBox(height: 12),
+                    SelectableText(
+                      context.trf('StartupFailedLog', [log]),
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

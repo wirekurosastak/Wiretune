@@ -46,7 +46,7 @@ native shells.
 | App logic and layouts | View-model and widget tests: every section in both layouts, light and dark, a small phone at 150 % font size, a 1080p TV |
 | Downloads, remote control | Against the real server in the tests: copies byte for byte, played with the server switched off, and two players of one account over real WebSockets. The player's side in view-model and widget tests. **Not yet tried between two real devices** |
 | Linux desktop | Built and run against a real server and library (1,288 tracks), every screen checked at 1280×820, 900×700 and phone width, and playback, the queue, the spectrum, MPRIS and the device list driven through UI automation. Exclusive and bit-perfect not tried on a DAC |
-| Android | Debug and release APKs build, with the TV, media service and Android Auto entries in the manifest. **Not yet run on a phone, a TV or in a car** |
+| Android | Debug and release APKs build, with the TV, media service and Android Auto entries in the manifest, and no storage permission. **Not yet run on a phone, a TV or in a car**; in particular, downloading into the shared *Music* folder without a permission (Android 11 and later) follows the scoped-storage rules but hasn't been tried on a device |
 | Windows, macOS, iOS | Not yet built (they need their own hosts) |
 | Tizen | Dependencies resolve with flutter-tizen. **Not yet built** or run on a TV |
 | Bit-perfect, exclusive | Not measured on any platform ([audio.md](audio.md#known-limitations)) |
@@ -78,7 +78,7 @@ curl 'http://127.0.0.1:5201/api/ui/screenshot?name=albums'        # saved to the
 curl 'http://127.0.0.1:5201/api/ui/resize?width=400&height=820'   # down to phone width
 ```
 
-The rest of the routes (search, playback, sign-in, playlists…) are in `app/lib/src/debug/ui_automation_server.dart`.
+The rest of the routes (search, playback, sign-in, playlists, language, theme, sorting…) are in `app/lib/src/debug/ui_automation_server.dart`.
 Release and profile builds contain none of it, and it only starts when the variable is exactly `1`. It listens on
 loopback only and turns away anything that looks like a web page's request, but it has no authentication (`login`
 takes the password in the query string, `logout` signs out for real), so keep it to a development machine and a

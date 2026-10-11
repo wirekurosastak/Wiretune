@@ -154,18 +154,12 @@ class WiretuneServer {
     database.initializeSchema();
     final repository = LibraryRepository(database);
 
-    // A library folder chosen through the admin API wins over the configured one, so it survives restarts.
+    // A library folder chosen through the admin API wins over the configured one, so it survives restarts. One that is
+    // missing right now (a share not mounted yet) is kept like a configured one: the scans wait for it, where falling
+    // back to another folder would replace the index with that folder's tracks.
     final saved = await repository.getSetting(_chosenLibraryPathKey);
-    String? savedRoot;
-    if (saved != null && saved.trim().isNotEmpty) {
-      if (Directory(saved).existsSync()) {
-        savedRoot = saved;
-      } else {
-        WiretuneLog.warn('Server', "Saved library path '$saved' no longer exists; using the configured one instead.");
-      }
-    }
     final paths = ServerPaths(
-      savedRoot ?? options.resolveLibraryRoot(),
+      saved != null && saved.trim().isNotEmpty ? saved : options.resolveLibraryRoot(),
       dataDirectory,
       p.join(dataDirectory, 'Covers'),
     );
@@ -227,12 +221,12 @@ class WiretuneServer {
     } on HijackException {
       rethrow; // a WebSocket took the connection over (remote control)
     } on BodyTooLargeException {
-      return errorResponse(413, 'The request body is too large.');
+      return errorResponse(413, ErrorCodes.bodyTooLarge, 'The request body is too large.');
     } on FormatException catch (e) {
-      return errorResponse(400, 'The request body is not valid JSON: ${e.message}');
+      return errorResponse(400, ErrorCodes.invalidJson, 'The request body is not valid JSON: ${e.message}');
     } catch (e, s) {
       WiretuneLog.error('Server', 'Unhandled error on ${request.method} /${request.url.path}: $e', e, s);
-      return errorResponse(500, 'An internal error occurred.');
+      return errorResponse(500, ErrorCodes.internalError, 'An internal error occurred.');
     }
   }
 
@@ -260,19 +254,19 @@ class WiretuneServer {
 
     Principal? principal;
     if (route.access != Access.anonymous) {
-      principal = _authenticate(request, route.access == Access.media);
-      if (principal == null) return unauthorized();
+      final check = _authenticate(request, route.access == Access.media);
+      principal = check.principal;
+      if (principal == null) return unauthorized(check.refusal!);
       if (route.access == Access.admin && !principal.isAdmin) return forbidden();
     }
 
     if (route.rateLimited) {
       final wait = _authLimiter.acquire(_clientAddress(request));
       if (wait != null) {
-        return jsonResponse(
-          {'error': 'Too many attempts. Try again in a minute.'},
-          status: 429,
-          headers: {'retry-after': '${(wait.inMilliseconds / 1000).ceil()}'},
-        );
+        final seconds = (wait.inMilliseconds / 1000).ceil();
+        return errorResponse(429, ErrorCodes.rateLimited, 'Too many attempts. Try again in a minute.', {
+          'retryAfter': seconds,
+        }).change(headers: {'retry-after': '$seconds'});
       }
     }
 
@@ -281,8 +275,9 @@ class WiretuneServer {
 
   /// The account behind the request's token, or null. A stream token opens the media routes and nothing else, and it is
   /// the only kind a query string may carry (URLs end up in logs). Tokens live for up to 90 days, so every one is checked
-  /// against the accounts: deleting an account ends its access immediately.
-  Principal? _authenticate(Request request, bool isMediaRoute) {
+  /// against the accounts ([AuthService.authenticate]): deleting an account or changing its password ends the access
+  /// of the tokens issued before, and the role is always the account's present one.
+  TokenCheck _authenticate(Request request, bool isMediaRoute) {
     String? token;
     var fromQuery = false;
     final header = request.headers['authorization'];
@@ -292,13 +287,13 @@ class WiretuneServer {
       token = request.url.queryParameters['token'];
       fromQuery = true;
     }
-    if (token == null || token.isEmpty) return null;
+    if (token == null || token.isEmpty) return const TokenCheck.refused(ErrorCodes.signInRequired);
 
-    final principal = auth.validate(token);
-    if (principal == null) return null;
-    if (principal.isStreamToken ? !isMediaRoute : fromQuery) return null;
-    if (!auth.userExists(principal.userId)) return null;
-    return principal;
+    final check = auth.authenticate(token);
+    final principal = check.principal;
+    if (principal == null) return check;
+    if (principal.isStreamToken ? !isMediaRoute : fromQuery) return const TokenCheck.refused(ErrorCodes.tokenInvalid);
+    return check;
   }
 
   String _clientAddress(Request request) {
@@ -331,22 +326,22 @@ class WiretuneServer {
       'POST',
       '/api/auth/stream-token',
       Access.user,
-      (call) => jsonResponse(auth.createStreamToken(call.principal!.userId, call.principal!.username).toJson()),
+      (call) => jsonResponse(auth.createStreamToken(call.principal!).toJson()),
     ),
     _Route('POST', '/api/auth/change-password', Access.user, _changePassword, rateLimited: true),
     _Route('GET', '/api/auth/me', Access.user, (call) {
       final user = auth.getUser(call.userId);
-      return user == null ? unauthorized() : jsonResponse(user.toJson());
+      return user == null ? unauthorized(ErrorCodes.accountRemoved) : jsonResponse(user.toJson());
     }),
     _Route('GET', '/api/users', Access.admin, (_) => jsonResponse(auth.getAllUsers().map((u) => u.toJson()).toList())),
     _Route('POST', '/api/users/{userId}/password', Access.admin, _adminResetPassword),
     _Route('DELETE', '/api/users/{userId}', Access.admin, (call) {
       final userId = call.params['userId']!;
       if (call.userId == userId) {
-        return errorResponse(400, 'You cannot delete your own account.');
+        return errorResponse(400, ErrorCodes.cannotDeleteSelf, 'You cannot delete your own account.');
       }
-      if (!auth.deleteUser(userId)) return errorResponse(404, 'User not found.');
-      remote.disconnectAccount(userId);
+      if (!auth.deleteUser(userId)) return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
+      remote.disconnectAccount(userId, 'The account was removed.');
       return Response.ok(null);
     }),
     _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson())),
@@ -357,14 +352,16 @@ class WiretuneServer {
       'GET',
       '/api/library/status',
       Access.user,
-      (_) => jsonResponse(
+      (call) => jsonResponse(
         ServerLibraryStatus(
           library.tracks.length,
           library.albums.length,
           library.artists.length,
           library.isScanning,
           scanner.lastScanCompletedUtc,
-          scanner.lastScanError,
+          // The reason names the server's folders, which only an administrator sees.
+          call.principal!.isAdmin ? scanner.lastScanError : null,
+          call.principal!.isAdmin ? scanner.lastScanProblem : null,
         ).toJson(),
       ),
     ),
@@ -404,17 +401,22 @@ class WiretuneServer {
     _Route('POST', '/api/me/plays/{trackId}', Access.user, (call) {
       final trackId = call.params['trackId']!;
       final error = UserDataRules.validateId(trackId);
-      if (error != null) return errorResponse(400, error);
+      if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
       final stats = userData.recordPlay(call.userId, trackId);
       return stats == null
-          ? errorResponse(409, 'An account can keep statistics for at most ${UserDataRules.maxTrackStats} tracks.')
+          ? errorResponse(
+              409,
+              ErrorCodes.playCountsLimit,
+              'An account can keep statistics for at most ${UserDataRules.maxTrackStats} tracks.',
+              {'limit': UserDataRules.maxTrackStats},
+            )
           : jsonResponse(stats.toJson());
     }),
     _Route('PUT', '/api/me/playlists/{playlistId}', Access.user, _savePlaylist, bodyLimit: _playlistBodyLimit),
     _Route('DELETE', '/api/me/playlists/{playlistId}', Access.user, (call) {
       return userData.deletePlaylist(call.userId, call.params['playlistId']!)
           ? jsonResponse({'deleted': true})
-          : errorResponse(404, 'Playlist not found.');
+          : errorResponse(404, ErrorCodes.playlistNotFound, 'Playlist not found.');
     }),
   ];
 
@@ -423,18 +425,21 @@ class WiretuneServer {
     final username = body?['username'] is String ? body!['username'] as String : null;
     final password = body?['password'] is String ? body!['password'] as String : null;
     final error = AuthService.validateCredentials(username, password);
-    if (error != null) return errorResponse(400, error);
+    if (error != null) return violationResponse(error);
 
-    if (auth.hasAnyUsers()) return errorResponse(409, 'The server is already set up. Sign in instead.');
+    const setUp = 'The server is already set up. Sign in instead.';
+    if (auth.hasAnyUsers()) return errorResponse(409, ErrorCodes.alreadySetUp, setUp);
     final code = body?['setupCode'];
     if (!setupCode.matches(code is String ? code : null)) {
-      return errorResponse(403, 'The setup code is missing or wrong. The server prints it in its log when it starts.');
+      return errorResponse(
+        403,
+        ErrorCodes.setupCodeWrong,
+        'The setup code is missing or wrong. The server prints it in its log when it starts.',
+      );
     }
 
     final result = await auth.createAdmin(username!, password!);
-    return result == null
-        ? errorResponse(409, 'The server is already set up. Sign in instead.')
-        : jsonResponse(result.toJson());
+    return result == null ? errorResponse(409, ErrorCodes.alreadySetUp, setUp) : jsonResponse(result.toJson());
   }
 
   Future<Response> _login(_Call call) async {
@@ -442,10 +447,10 @@ class WiretuneServer {
     final username = body?['username'];
     final password = body?['password'];
     if (username is! String || username.trim().isEmpty || password is! String || password.isEmpty) {
-      return errorResponse(400, 'Username and password are required.');
+      return errorResponse(400, ErrorCodes.credentialsRequired, 'Username and password are required.');
     }
     final result = await auth.login(username, password, rememberMe: body?['rememberMe'] == true);
-    return result == null ? unauthorized() : jsonResponse(result.toJson());
+    return result == null ? unauthorized(ErrorCodes.wrongCredentials) : jsonResponse(result.toJson());
   }
 
   Future<Response> _changePassword(_Call call) async {
@@ -453,25 +458,36 @@ class WiretuneServer {
     final current = body?['currentPassword'];
     final replacement = body?['newPassword'];
     if (current is! String || current.isEmpty || replacement is! String) {
-      return errorResponse(400, 'The current and the new password are required.');
+      return errorResponse(400, ErrorCodes.credentialsRequired, 'The current and the new password are required.');
     }
     final error = AuthService.validatePassword(replacement);
-    if (error != null) return errorResponse(400, error);
-    return await auth.changePassword(call.userId, current, replacement)
-        ? jsonResponse({'changed': true})
-        : errorResponse(403, 'The current password is wrong.');
+    if (error != null) return violationResponse(error);
+    final renewed = await auth.changePassword(call.principal!, current, replacement);
+    if (renewed == null) return errorResponse(403, ErrorCodes.currentPasswordWrong, 'The current password is wrong.');
+    // The account's open remote-control connections were signed in with the old password; this player reconnects with
+    // the token it gets here.
+    remote.disconnectAccount(call.userId, 'The password changed.');
+    return jsonResponse({'changed': true, ...renewed.toJson()});
   }
 
   Future<Response> _adminResetPassword(_Call call) async {
+    final userId = call.params['userId']!;
+    // Resetting would sign the administrator out everywhere, this request's token included.
+    if (userId == call.userId) {
+      return errorResponse(400, ErrorCodes.cannotResetOwnPassword, 'Change your own password with your current one.');
+    }
     final body = await call.jsonObject();
     final replacement = body?['newPassword'];
-    if (replacement is! String) return errorResponse(400, 'A new password is required.');
+    if (replacement is! String) {
+      return errorResponse(400, ErrorCodes.credentialsRequired, 'A new password is required.');
+    }
     final error = AuthService.validatePassword(replacement);
-    if (error != null) return errorResponse(400, error);
-    final userId = call.params['userId']!;
-    return await auth.resetPassword(userId, replacement)
-        ? jsonResponse({'changed': true})
-        : errorResponse(404, 'User not found.');
+    if (error != null) return violationResponse(error);
+    if (!await auth.resetPassword(userId, replacement)) {
+      return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
+    }
+    remote.disconnectAccount(userId, 'The password was reset.');
+    return jsonResponse({'changed': true});
   }
 
   Future<Response> _register(_Call call) async {
@@ -479,33 +495,31 @@ class WiretuneServer {
     final username = body?['username'] is String ? body!['username'] as String : null;
     final password = body?['password'] is String ? body!['password'] as String : null;
     final error = AuthService.validateCredentials(username, password);
-    if (error != null) return errorResponse(400, error);
+    if (error != null) return violationResponse(error);
     final user = await auth.register(username!, password!);
-    return user == null ? errorResponse(409, 'Username already taken.') : jsonResponse(user.toJson());
+    return user == null
+        ? errorResponse(409, ErrorCodes.usernameTaken, 'Username already taken.')
+        : jsonResponse(user.toJson());
   }
 
   Future<Response> _updateLibraryPath(_Call call) async {
     final body = await call.jsonObject();
     final newPath = body?['newPath'];
-    if (newPath is! String || newPath.trim().isEmpty) return errorResponse(400, 'The folder path must not be empty.');
+    if (newPath is! String || newPath.trim().isEmpty) {
+      return errorResponse(400, ErrorCodes.folderRequired, 'The folder path must not be empty.');
+    }
 
-    String fullPath;
+    final String fullPath;
     try {
-      fullPath = AppPaths.fullPath(newPath);
+      fullPath = AppPaths.fullPath(newPath.trim());
     } catch (_) {
-      return errorResponse(400, 'The folder path is not valid.');
+      return errorResponse(400, ErrorCodes.folderInvalid, 'The folder path is not valid.');
     }
-    if (!Directory(fullPath).existsSync()) return errorResponse(400, 'The folder does not exist: $fullPath');
-
-    if (Platform.isLinux) {
-      const forbiddenRoots = ['/proc', '/sys', '/dev'];
-      if (forbiddenRoots.any((b) => fullPath == b || p.isWithin(b, fullPath))) {
-        return errorResponse(400, 'System directory cannot be used as library folder.');
-      }
+    if (!Directory(fullPath).existsSync()) {
+      return errorResponse(400, ErrorCodes.folderMissing, 'The folder does not exist: $fullPath', {'path': fullPath});
     }
-    if (AppPaths.isPathUnderRoot(fullPath, paths.dataDirectory)) {
-      return errorResponse(400, 'Server data directory cannot be used as library folder.');
-    }
+    final problem = _libraryRootProblem(fullPath);
+    if (problem != null) return violationResponse(problem);
 
     await repository.setSetting(_chosenLibraryPathKey, fullPath);
     paths.libraryRoot = fullPath;
@@ -513,12 +527,38 @@ class WiretuneServer {
     return jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson());
   }
 
+  /// Why the existing folder [fullPath] cannot be the music folder, or null. It must not be a whole disk or a system's
+  /// virtual file system (a scan of either never ends), nor hold or lie inside the server's own data. Judged by where
+  /// symbolic links lead, so a link cannot dress one up as an ordinary folder.
+  RuleViolation? _libraryRootProblem(String fullPath) {
+    final String real;
+    try {
+      real = AppPaths.fullPath(Directory(fullPath).resolveSymbolicLinksSync());
+    } on FileSystemException {
+      return RuleViolation(ErrorCodes.folderUnreadable, 'The folder cannot be read: $fullPath', {'path': fullPath});
+    }
+    if (p.rootPrefix(real) == real || p.dirname(real) == real) {
+      return const RuleViolation(ErrorCodes.folderWholeDisk, 'A whole disk cannot be the music folder.');
+    }
+    const virtualRoots = ['/proc', '/sys', '/dev', '/run'];
+    if (!Platform.isWindows && virtualRoots.any((root) => AppPaths.isPathUnderRoot(real, root))) {
+      return const RuleViolation(ErrorCodes.folderSystem, 'A system folder cannot be the music folder.');
+    }
+    if (AppPaths.isPathUnderRoot(real, paths.dataDirectory) || AppPaths.isPathUnderRoot(paths.dataDirectory, real)) {
+      return const RuleViolation(
+        ErrorCodes.folderServerData,
+        "The music folder cannot hold or lie inside the server's data folder.",
+      );
+    }
+    return null;
+  }
+
   Future<Response> _stream(_Call call) async {
     final track = library.getTrack(call.params['trackId']!);
     if (track == null ||
         !AppPaths.isPathUnderRoot(track.filePath, paths.libraryRoot) ||
         !File(track.filePath).existsSync()) {
-      return errorResponse(404, 'Track not found.');
+      return errorResponse(404, ErrorCodes.notFound, 'Track not found.');
     }
     return fileResponse(call.request, File(track.filePath), AudioFileTypes.mimeType(track.filePath));
   }
@@ -549,20 +589,24 @@ class WiretuneServer {
     final headers = request.headers;
     final connection = headers['connection']?.toLowerCase().split(',').map((t) => t.trim()) ?? const [];
     if (headers['upgrade']?.toLowerCase() != 'websocket' || !connection.contains('upgrade')) {
-      return jsonResponse(
-        {'error': 'This route speaks WebSocket only.'},
-        status: 426,
-        headers: {'upgrade': 'websocket', 'connection': 'Upgrade'},
-      );
+      return errorResponse(
+        426,
+        ErrorCodes.notWebSocket,
+        'This route speaks WebSocket only.',
+      ).change(headers: {'upgrade': 'websocket', 'connection': 'Upgrade'});
     }
-    if (headers.containsKey('origin')) return forbidden();
+    if (headers.containsKey('origin')) {
+      return errorResponse(403, ErrorCodes.originRefused, 'Web pages cannot control the players.');
+    }
     final key = headers['sec-websocket-key'];
     if (key == null || key.trim().isEmpty || headers['sec-websocket-version'] != '13') {
-      return errorResponse(400, 'This is not a valid WebSocket handshake.');
+      return errorResponse(400, ErrorCodes.notWebSocket, 'This is not a valid WebSocket handshake.');
     }
 
     final principal = call.principal!;
-    if (!remote.canJoin(principal.userId)) return errorResponse(429, 'Too many connections for this account.');
+    if (!remote.canJoin(principal.userId)) {
+      return errorResponse(429, ErrorCodes.tooManyConnections, 'Too many connections for this account.');
+    }
     request.hijack((channel) {
       final socket = channel.sink as Socket;
       final accept = base64.encode(sha1.convert(utf8.encode('${key.trim()}$_webSocketGuid')).bytes);
@@ -589,23 +633,37 @@ class WiretuneServer {
   Response _favorite(_Call call, bool favorite) {
     final trackId = call.params['trackId']!;
     final error = UserDataRules.validateId(trackId);
-    if (error != null) return errorResponse(400, error);
+    if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
     return userData.setFavorite(call.userId, trackId, favorite)
         ? jsonResponse({'trackId': trackId, 'isFavorite': favorite})
-        : errorResponse(409, 'An account can have at most ${UserDataRules.maxFavorites} favourites.');
+        : errorResponse(
+            409,
+            ErrorCodes.favoritesLimit,
+            'An account can have at most ${UserDataRules.maxFavorites} favourites.',
+            {'limit': UserDataRules.maxFavorites},
+          );
   }
 
   Response _setHidden(_Call call, bool hidden) {
     final type = call.params['type']!;
     final itemId = call.params['itemId']!;
     if (type != 'artist' && type != 'album' && type != 'track') {
-      return errorResponse(400, 'Invalid item type: $type. Must be artist, album, or track.');
+      return errorResponse(
+        400,
+        ErrorCodes.invalidItemType,
+        'Invalid item type: $type. Must be artist, album, or track.',
+      );
     }
     final error = UserDataRules.validateId(itemId);
-    if (error != null) return errorResponse(400, error);
+    if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
     return userData.setHidden(call.userId, type, itemId, hidden)
-        ? jsonResponse({'type': type, 'itemId': itemId, 'hidden': hidden})
-        : errorResponse(409, 'An account can have at most ${UserDataRules.maxHidden} hidden items.');
+        ? jsonResponse({'itemType': type, 'itemId': itemId, 'hidden': hidden})
+        : errorResponse(
+            409,
+            ErrorCodes.hiddenLimit,
+            'An account can have at most ${UserDataRules.maxHidden} hidden items.',
+            {'limit': UserDataRules.maxHidden},
+          );
   }
 
   Future<Response> _savePlaylist(_Call call) async {
@@ -615,14 +673,19 @@ class WiretuneServer {
     try {
       update = body == null ? null : PlaylistUpdate.fromJson(body);
     } on Object {
-      return errorResponse(400, 'The playlist is not valid.');
+      return errorResponse(400, ErrorCodes.playlistInvalid, 'The playlist is not valid.');
     }
     final error = UserDataService.validatePlaylist(playlistId, update);
-    if (error != null) return errorResponse(400, error);
+    if (error != null) return violationResponse(error);
 
     final saved = userData.savePlaylist(call.userId, playlistId, update!);
     return saved == null
-        ? errorResponse(409, 'An account can have at most ${UserDataRules.maxPlaylists} playlists.')
+        ? errorResponse(
+            409,
+            ErrorCodes.playlistsLimit,
+            'An account can have at most ${UserDataRules.maxPlaylists} playlists.',
+            {'limit': UserDataRules.maxPlaylists},
+          )
         : jsonResponse(saved.toJson());
   }
 }

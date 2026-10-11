@@ -27,6 +27,15 @@ class DeviceCapabilities {
 
 /// The whole app's state: the services, one view model per area, the navigation and the status lines. The wide and
 /// the phone layout are two views of this one model.
+/// A short message that needs no answer: a change that wasn't made, one the server turned down, something that went
+/// through. The app shows the latest for a few seconds.
+class AppNotice {
+  const AppNotice(this.message, {this.isError = false});
+
+  final String message;
+  final bool isError;
+}
+
 class MainViewModel extends ChangeNotifier {
   MainViewModel(
     this.audioEngine,
@@ -76,6 +85,13 @@ class MainViewModel extends ChangeNotifier {
       library.scanningStateChanged.listen((_) => _updateStatusText()),
       session.stateChanged.listen((_) => _onSessionStateChanged()),
       Localizer.instance.languageChanged.listen((_) => _refreshLocalizedTexts()),
+      library.changeNotice.listen(
+        (notice) => switch (notice) {
+          ChangeNotice.readOnlyOffline => showNotice(Localizer.get('OfflineReadOnly'), isError: true),
+          ChangeNotice.playlistKeptOnDevice => showNotice(Localizer.get('OfflinePlaylistLocal')),
+        },
+      ),
+      session.changeRefused.listen((reason) => showNotice(Localizer.format('ChangeRefused', [reason]), isError: true)),
     ]);
 
     _updateAuthDisplay();
@@ -107,6 +123,11 @@ class MainViewModel extends ChangeNotifier {
 
   /// Called whenever the session's address or token changes, so cover requests to the server carry the token.
   void Function(String serverUrl, String? token)? onServerCredentialsChanged;
+
+  /// What the app shows the user for a few seconds ([showNotice]).
+  final Event<AppNotice> notices = Event<AppNotice>();
+
+  void showNotice(String message, {bool isError = false}) => notices.emit(AppNotice(message, isError: isError));
 
   // ── Navigation ─────────────────────────────────────────────────────────────────────────────────
 
@@ -402,8 +423,13 @@ class MainViewModel extends ChangeNotifier {
 
   // ── Server and sign-in ─────────────────────────────────────────────────────────────────────────
 
+  /// The banner over the library while the server's tracks can't play: the server is out of reach, or this device is
+  /// no longer signed in to it (the sign-in expired, the password changed, the account was removed).
   bool isServerOfflineBannerVisible = false;
   String serverBannerMessage = '';
+
+  /// The banner's way out: sign in again, rather than reconnect.
+  bool serverBannerNeedsSignIn = false;
   bool _isLoginViewActive = false;
   bool isUserLoggedIn = false;
   String currentUserBadge = Localizer.get('SignIn');
@@ -438,10 +464,13 @@ class MainViewModel extends ChangeNotifier {
 
   void _onSessionStateChanged() {
     onServerCredentialsChanged?.call(session.serverUrl, session.authToken);
-    isServerOfflineBannerVisible =
-        (session.source == LibrarySource.server || session.source == LibrarySource.hybrid) &&
-        session.state == ServerConnectionState.offline;
-    serverBannerMessage = session.source == LibrarySource.hybrid && session.state == ServerConnectionState.offline
+    final usesServer = session.source == LibrarySource.server || session.source == LibrarySource.hybrid;
+    final offline = session.state == ServerConnectionState.offline;
+    serverBannerNeedsSignIn = session.state == ServerConnectionState.loginRequired && session.authToken == null;
+    isServerOfflineBannerVisible = usesServer && (offline || serverBannerNeedsSignIn);
+    serverBannerMessage = serverBannerNeedsSignIn
+        ? session.statusMessage ?? Localizer.get('SessionLoginRequired')
+        : session.source == LibrarySource.hybrid && offline
         ? Localizer.format('ServerBannerOffline', [session.serverUrl])
         : session.statusMessage ?? Localizer.format('ServerBannerUnreachable', [session.serverUrl]);
 
@@ -458,6 +487,9 @@ class MainViewModel extends ChangeNotifier {
   // ── Status lines ───────────────────────────────────────────────────────────────────────────────
 
   bool isStarting = true;
+
+  /// Why the player could not start (its database can't be opened, say); it then shows only this.
+  String? startupError;
   bool isLibraryEmpty = false;
   String statusText = Localizer.get('StatusStarting');
   String rightFooterStatusText = Localizer.get('FooterLoading');
@@ -637,7 +669,10 @@ class MainViewModel extends ChangeNotifier {
       serverSettings.syncWithSession();
     } catch (e, s) {
       WiretuneLog.error('MainViewModel', 'Start-up failed: $e', e, s);
-      statusText = Localizer.format('StartupError', ['$e']);
+      startupError = e is IncompatibleDatabaseException
+          ? Localizer.format('StartupDatabaseIncompatible', [e.path ?? ''])
+          : Localizer.format('StartupError', ['$e']);
+      statusText = startupError!;
       isStarting = false;
       notifyListeners();
       return;

@@ -208,7 +208,7 @@ class _LoginPageState extends State<LoginPage> {
           Expanded(
             child: OutlinedButton.icon(
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42)),
-              onPressed: vm.logout,
+              onPressed: () => confirmAndSignOut(context),
               icon: Icon(Icons.logout_rounded, size: 18, color: colors.danger),
               label: Text(context.tr('SignOut'), style: const TextStyle(fontWeight: FontWeight.w600)),
             ),

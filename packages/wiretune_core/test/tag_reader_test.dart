@@ -7,6 +7,7 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
+import 'package:wiretune_core/src/metadata/id3.dart' show inflateFrame;
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -284,6 +285,16 @@ void main() {
     expect((tags.sampleRate, tags.bitsPerSample, tags.channels), (44100, 16, 2));
     expect(tags.duration.inMicroseconds / 1e6, closeTo((294912 + 100000) / 44100, 0.001));
     expect(TagReader.readPicture(file), [1, 2, 3, 4]);
+  });
+
+  test('a compressed ID3 frame is inflated, but never beyond what a tag can need', () {
+    final text = utf8.encode('\u0000A compressed title');
+    expect(inflateFrame(Uint8List.fromList(zlib.encode(text))), text);
+    // 64 MB of zeros squeezes into about 64 KB: read as it inflates, it is given up on, not held in memory.
+    final bomb = Uint8List.fromList(zlib.encode(Uint8List(64 * 1024 * 1024)));
+    expect(bomb.length, lessThan(1024 * 1024));
+    expect(inflateFrame(bomb), isNull);
+    expect(inflateFrame(Uint8List.fromList([1, 2, 3, 4])), isNull);
   });
 
   test('a file that is not audio is not read, and a file with a wrong extension is sniffed', () {

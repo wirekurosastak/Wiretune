@@ -11,6 +11,55 @@ import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import 'devices.dart';
 
+/// Asks before an action that can't easily be taken back. True when the user confirmed it. Cancel has the focus, so a
+/// stray press of a remote's OK button doesn't confirm a [destructive] action.
+Future<bool> confirmAction(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmLabel,
+  bool destructive = false,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          autofocus: destructive,
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(ctx.tr('Cancel')),
+        ),
+        FilledButton(
+          autofocus: !destructive,
+          style: destructive ? FilledButton.styleFrom(backgroundColor: ctx.colors.danger) : null,
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
+/// Signs out of the server; first asks when that deletes the downloads on this device.
+Future<void> confirmAndSignOut(BuildContext context) async {
+  final vm = context.vm;
+  final downloads = vm.downloads;
+  if (downloads.copyCount > 0) {
+    final confirmed = await confirmAction(
+      context,
+      title: context.tr('SignOutConfirm'),
+      message: context.trf('SignOutConfirmDownloads', [downloads.copyCount, downloads.sizeLabel]),
+      confirmLabel: context.tr('SignOut'),
+      destructive: true,
+    );
+    if (!confirmed) return;
+  }
+  await vm.logout();
+}
+
 /// A page's title block: a big title, a line of details, and the page's actions.
 class PageHeader extends StatelessWidget {
   const PageHeader({super.key, required this.title, this.subtitle, this.actions = const []});
@@ -64,14 +113,14 @@ class PageHeader extends StatelessWidget {
                 ),
             ],
           ),
-          if (actions.isNotEmpty) Wrap(spacing: 10, runSpacing: 8, children: actions),
+          if (actions.isNotEmpty)
+            Wrap(spacing: 10, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: actions),
         ],
       ),
     );
   }
 }
 
-/// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner, and after them [trailing] (a list's
 /// Adds a smooth lift, scale, and optional glow hover pop-up effect to any action widget.
 class PopEffect extends StatefulWidget {
   const PopEffect({
@@ -121,11 +170,7 @@ class _PopEffectState extends State<PopEffect> {
                 shape: widget.borderRadius != null ? BoxShape.rectangle : BoxShape.circle,
                 borderRadius: widget.borderRadius,
                 boxShadow: [
-                  BoxShadow(
-                    color: effectiveGlowColor.withValues(alpha: 0.45),
-                    blurRadius: 18,
-                    spreadRadius: -2,
-                  ),
+                  BoxShadow(color: effectiveGlowColor.withValues(alpha: 0.45), blurRadius: 18, spreadRadius: -2),
                 ],
               )
             : null,
@@ -136,7 +181,7 @@ class _PopEffectState extends State<PopEffect> {
 }
 
 /// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner, and after them [trailing] (a list's
-/// download button).
+/// download button); on a phone the pills show their icons alone.
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({
     super.key,
@@ -156,11 +201,16 @@ class PlayShuffleButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    // On a phone the same pills without their words (the tooltips name them), so the page's other buttons fit beside.
     final phone = PhoneChrome.isPhone(context);
-    // The phone's two full-width buttons are a little taller.
-    final size = Size(0, phone ? 48 : 46);
+    final size = Size(phone ? 64 : 0, phone ? PhoneChrome.controlHeight : 46);
     const text = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.1);
-    final padding = EdgeInsets.symmetric(horizontal: phone ? 12 : 24);
+    final padding = EdgeInsets.symmetric(horizontal: phone ? 18 : 24);
+    Widget label(String value) => FittedBox(fit: BoxFit.scaleDown, child: Text(value, maxLines: 1, softWrap: false));
+    const playIcon = Icon(Icons.play_arrow_rounded, size: 22);
+    final shuffleIcon = Icon(Icons.shuffle_rounded, size: 20, color: onShuffle == null ? null : colors.accent);
+    final playStyle = FilledButton.styleFrom(minimumSize: size, padding: padding, textStyle: text);
+    final shuffleStyle = OutlinedButton.styleFrom(minimumSize: size, padding: padding, textStyle: text);
     final play = PopEffect(
       enabled: onPlay != null,
       child: DecoratedBox(
@@ -168,39 +218,35 @@ class PlayShuffleButtons extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           boxShadow: onPlay == null ? const [] : colors.accentGlow(),
         ),
-        child: FilledButton.icon(
-          style: FilledButton.styleFrom(minimumSize: size, padding: padding, textStyle: text),
-          onPressed: onPlay,
-          icon: const Icon(Icons.play_arrow_rounded, size: 22),
-          label: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(playLabel, maxLines: 1, softWrap: false),
-          ),
-        ),
+        child: phone
+            ? Tooltip(
+                message: playLabel,
+                child: FilledButton(style: playStyle, onPressed: onPlay, child: playIcon),
+              )
+            : FilledButton.icon(style: playStyle, onPressed: onPlay, icon: playIcon, label: label(playLabel)),
       ),
     );
     final shuffle = PopEffect(
       enabled: onShuffle != null,
-      child: OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(
-          minimumSize: size,
-          padding: padding,
-          textStyle: text,
-        ),
-        onPressed: onShuffle,
-        icon: Icon(Icons.shuffle_rounded, size: 20, color: onShuffle == null ? null : colors.accent),
-        label: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(shuffleLabel, maxLines: 1, softWrap: false),
-        ),
-      ),
+      child: phone
+          ? Tooltip(
+              message: shuffleLabel,
+              child: OutlinedButton(style: shuffleStyle, onPressed: onShuffle, child: shuffleIcon),
+            )
+          : OutlinedButton.icon(
+              style: shuffleStyle,
+              onPressed: onShuffle,
+              icon: shuffleIcon,
+              label: label(shuffleLabel),
+            ),
     );
     if (phone) {
       return Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(child: play),
+          play,
           const SizedBox(width: 10),
-          Expanded(child: shuffle),
+          shuffle,
           if (trailing != null) ...[const SizedBox(width: 10), trailing!],
         ],
       );
@@ -340,11 +386,7 @@ class GlassCard extends StatelessWidget {
           type: MaterialType.transparency,
           shape: RoundedRectangleBorder(
             borderRadius: radius,
-            side: BorderSide(
-              color: opaque
-                  ? (isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000))
-                  : border,
-            ),
+            side: BorderSide(color: opaque ? (isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)) : border),
           ),
           clipBehavior: Clip.antiAlias,
           child: Padding(padding: padding ?? EdgeInsets.all(PhoneChrome.isPhone(context) ? 18 : 24), child: child),
@@ -385,22 +427,76 @@ class PageEndSpace extends StatelessWidget {
       SliverToBoxAdapter(child: SizedBox(height: 28 + MediaQuery.paddingOf(context).bottom));
 }
 
-/// A text that acts as a link (artist and album names in lists).
+/// Something to press that isn't a Material button (a link, a column header, a back link, the player's cover): the
+/// whole area [builder] draws takes the click, Tab or a TV remote's arrows reach it and Enter or select presses it,
+/// and the keyboard's focus lights it up as the mouse does ([builder]'s `lit`).
+class Pressable extends StatefulWidget {
+  const Pressable({super.key, required this.onPressed, required this.builder});
+
+  /// Null leaves it inert: no click, no focus.
+  final VoidCallback? onPressed;
+  final Widget Function(BuildContext context, bool lit) builder;
+
+  @override
+  State<Pressable> createState() => _PressableState();
+}
+
+class _PressableState extends State<Pressable> {
+  bool _hover = false;
+  bool _focus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final onPressed = widget.onPressed;
+    return FocusableActionDetector(
+      enabled: onPressed != null,
+      mouseCursor: onPressed != null ? SystemMouseCursors.click : MouseCursor.defer,
+      onShowHoverHighlight: (value) => setState(() => _hover = value),
+      onShowFocusHighlight: (value) => setState(() => _focus = value),
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            onPressed?.call();
+            return null;
+          },
+        ),
+      },
+      child: Semantics(
+        button: onPressed != null,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: widget.builder(context, onPressed != null && (_hover || _focus)),
+        ),
+      ),
+    );
+  }
+}
+
+/// A text that acts as a link (artist and album names): [hoverColor] under the mouse or the keyboard's focus, else
+/// underlined.
 class LinkText extends StatelessWidget {
-  const LinkText(this.text, {super.key, this.onTap, this.style});
+  const LinkText(this.text, {super.key, this.onTap, this.style, this.hoverColor});
 
   final String text;
   final VoidCallback? onTap;
   final TextStyle? style;
+  final Color? hoverColor;
 
   @override
   Widget build(BuildContext context) {
     final base = style ?? TextStyle(fontSize: 13, color: context.colors.textMuted);
-    final label = Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: base);
-    if (onTap == null) return label;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(onTap: onTap, child: label),
+    Text label(TextStyle style) => Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    if (onTap == null) return label(base);
+    return Pressable(
+      onPressed: onTap,
+      builder: (context, lit) => label(
+        !lit
+            ? base
+            : hoverColor != null
+            ? base.copyWith(color: hoverColor)
+            : base.copyWith(decoration: TextDecoration.underline, decorationColor: base.color),
+      ),
     );
   }
 }
@@ -620,13 +716,15 @@ class _VerticalSwipeState extends State<VerticalSwipe> with SingleTickerProvider
       widget.onSwipe();
       setState(() => _distance = 0);
     } else if (_distance != 0) {
-      _resetAnimation = Tween<double>(begin: _distance, end: 0).animate(
-        CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic),
-      )..addListener(() {
-          setState(() {
-            _distance = _resetAnimation!.value;
+      _resetAnimation =
+          Tween<double>(
+            begin: _distance,
+            end: 0,
+          ).animate(CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic))..addListener(() {
+            setState(() {
+              _distance = _resetAnimation!.value;
+            });
           });
-        });
       _resetController.forward(from: 0);
     }
   }
@@ -639,10 +737,7 @@ class _VerticalSwipeState extends State<VerticalSwipe> with SingleTickerProvider
       onVerticalDragStart: _onDragStart,
       onVerticalDragUpdate: _onDragUpdate,
       onVerticalDragEnd: _onDragEnd,
-      child: Transform.translate(
-        offset: Offset(0, offset),
-        child: widget.child,
-      ),
+      child: Transform.translate(offset: Offset(0, offset), child: widget.child),
     );
   }
 }
@@ -652,6 +747,10 @@ class PhoneChrome extends InheritedWidget {
   const PhoneChrome({super.key, required super.child});
 
   static bool isPhone(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PhoneChrome>() != null;
+
+  /// The height of every button in a phone's page and detail headers (play, shuffle, the sort, a filter, a download,
+  /// hide or delete), so a line of them is even and the lists below start at the same place.
+  static const double controlHeight = 44;
 
   @override
   bool updateShouldNotify(PhoneChrome oldWidget) => false;
@@ -737,24 +836,19 @@ class _PhonePageHeader extends StatelessWidget {
           if (actions.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-              child: Builder(
-                builder: (context) {
-                  final ordered = List<Widget>.from(actions);
-                  final playIndex = ordered.indexWhere((w) => w is PlayShuffleButtons);
-                  if (playIndex != -1) {
-                    final play = ordered.removeAt(playIndex);
-                    ordered.add(play);
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (int i = 0; i < ordered.length; i++) ...[
-                        if (i > 0) const SizedBox(height: 8),
-                        ordered[i],
-                      ],
+              // One line, all one height: the play and shuffle pills (with a list's download) at their size, the other
+              // buttons (the sort first, a genre filter, a new playlist) sharing the rest.
+              child: SizedBox(
+                height: PhoneChrome.controlHeight,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (i, action) in actions.indexed) ...[
+                      if (i > 0) const SizedBox(width: 10),
+                      if (action is PlayShuffleButtons) Center(child: action) else Expanded(child: action),
                     ],
-                  );
-                },
+                  ],
+                ),
               ),
             ),
         ],
@@ -795,4 +889,3 @@ class PlayerMetaBadge extends StatelessWidget {
     );
   }
 }
-

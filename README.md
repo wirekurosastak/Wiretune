@@ -82,8 +82,8 @@ dart tool/build.dart server linux android
 |---|---|---|
 | `server` | Linux, Windows or macOS, for that system | `dist/server/`: `bin/wiretune_server` and the SQLite library in `lib/` |
 | `linux` | Linux | `dist/linux/`: `wiretune` with its `lib/` and `data/` |
-| `windows` | Windows | `dist/windows/`: `wiretune.exe` with its DLLs and `data/` |
-| `macos` | macOS | `dist/macos/Wiretune.app` |
+| `windows` | Windows | `dist/windows/`: `wiretune.exe` with its DLLs and `data/` (`windows-installer` adds a setup `.exe`) |
+| `macos` | macOS | `dist/macos/Wiretune.app` and `Wiretune.dmg` |
 | `android` (phone, tablet, TV, Auto) | anywhere | `dist/android/`: one APK per processor type |
 | `ios` | macOS, with a signing team set in Xcode | `dist/ios/`: the `.ipa` |
 | `tizen` (Samsung TV) | anywhere, with [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) | `dist/tizen/`: the `.tpk` |

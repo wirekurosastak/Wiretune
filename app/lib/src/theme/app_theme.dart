@@ -206,9 +206,7 @@ ThemeData buildTheme({
               (s) => s.contains(WidgetState.hovered) ? palette.surface2 : palette.surface1,
             ),
             side: WidgetStateProperty.resolveWith(
-              (s) => BorderSide(
-                color: s.contains(WidgetState.hovered) ? palette.glassHighlight : palette.glassBorder,
-              ),
+              (s) => BorderSide(color: s.contains(WidgetState.hovered) ? palette.glassHighlight : palette.glassBorder),
             ),
           ),
     ),
