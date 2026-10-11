@@ -61,7 +61,7 @@ void main() {
     vm.player.playQueue([track]);
     await pumpEventQueue();
     expect(driver.lastSource, copy);
-    expect(vm.player.signalPath, contains('Downloaded copy'));
+    expect(vm.audioSettings.signalPath, contains('Downloaded copy'));
 
     CoverArt.localCopy = downloads.localCover;
     addTearDown(() => CoverArt.localCopy = null);

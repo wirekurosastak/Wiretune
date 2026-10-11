@@ -406,15 +406,6 @@ const Map<String, (String, String, String)> allStrings = {
   'BadgeLoginRequired': ('Bejelentkezés szükséges', 'Sign-in required', 'Anmeldung erforderlich'),
   'BadgeSetupRequired': ('Beállítás szükséges', 'Setup required', 'Einrichtung erforderlich'),
   'BadgeNoConnection': ('Nincs kapcsolat', 'No connection', 'Keine Verbindung'),
-  'SourceHybrid': (
-    'Egyesített (szerver + helyi mappa)',
-    'Combined (server + local folder)',
-    'Kombiniert (Server + lokaler Ordner)',
-  ),
-  'SourceServer': ('Szerver', 'Server', 'Server'),
-  'SourceLocal': ('Helyi mappa ({0})', 'Local folder ({0})', 'Lokaler Ordner ({0})'),
-  'SourceNone': ('Nincs aktív forrás', 'No active source', 'Keine aktive Quelle'),
-  'SourceNoneSelected': ('Nincs kiválasztott könyvtár', 'No library selected', 'Keine Bibliothek ausgewählt'),
   'ServerBannerOffline': (
     'A Wiretune szerver ({0}) nem érhető el. A helyi zeneszámok továbbra is elérhetők offline módban.',
     'The Wiretune server ({0}) is unreachable. Local tracks are still available offline.',
@@ -662,7 +653,6 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'AudioModesShared': ('csak megosztott mód', 'shared mode only', 'nur gemeinsamer Modus'),
   'AudioSystemDefaultOutput': ('Rendszer alapértelmezett kimenet', 'System default output', 'Systemstandardausgabe'),
-  'ExclusiveLabel': ('Kizárólagos', 'Exclusive', 'Exklusiv'),
   'ExclusiveDescription': (
     'Közvetlen DAC hozzáférés (ALSA / WASAPI / Core Audio)',
     'Direct DAC access (ALSA / WASAPI / Core Audio)',

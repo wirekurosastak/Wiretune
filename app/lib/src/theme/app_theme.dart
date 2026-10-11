@@ -8,11 +8,10 @@ import 'palette.dart';
 
 /// The palette and the active section's accent, reachable from any widget through `context.colors`.
 class WiretuneColors extends ThemeExtension<WiretuneColors> {
-  const WiretuneColors(this.palette, this.accent, this.section);
+  const WiretuneColors(this.palette, this.accent);
 
   final Palette palette;
   final Color accent;
-  final AppSection section;
 
   Color get hover => palette.hoverOf(accent);
   Color get textMain => palette.textMain;
@@ -22,7 +21,6 @@ class WiretuneColors extends ThemeExtension<WiretuneColors> {
   Color get glassBorder => palette.glassBorder;
   Color get danger => palette.danger;
   Color get onAccent => palette.onAccent;
-  Gradient get windowGradient => palette.gradientFor(section);
 
   /// The accent as a gradient, from its lighter hover shade to the accent itself (filled buttons, the active slider).
   Gradient get accentGradient =>
@@ -39,17 +37,13 @@ class WiretuneColors extends ThemeExtension<WiretuneColors> {
   ];
 
   @override
-  WiretuneColors copyWith({Palette? palette, Color? accent, AppSection? section}) =>
-      WiretuneColors(palette ?? this.palette, accent ?? this.accent, section ?? this.section);
+  WiretuneColors copyWith({Palette? palette, Color? accent}) =>
+      WiretuneColors(palette ?? this.palette, accent ?? this.accent);
 
   @override
   WiretuneColors lerp(WiretuneColors? other, double t) {
     if (other == null) return this;
-    return WiretuneColors(
-      t < 0.5 ? palette : other.palette,
-      Color.lerp(accent, other.accent, t)!,
-      t < 0.5 ? section : other.section,
-    );
+    return WiretuneColors(t < 0.5 ? palette : other.palette, Color.lerp(accent, other.accent, t)!);
   }
 }
 
@@ -222,7 +216,7 @@ ThemeData buildTheme({
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: light ? Colors.white : const Color(0xFF000000),
+      color: palette.modal,
       elevation: 12,
       shadowColor: const Color(0x80000000),
       shape: RoundedRectangleBorder(
@@ -230,7 +224,7 @@ ThemeData buildTheme({
         side: BorderSide(color: palette.glassBorder),
       ),
     ),
-    extensions: [WiretuneColors(palette, accent, section)],
+    extensions: [WiretuneColors(palette, accent)],
   );
 }
 
@@ -297,9 +291,9 @@ class GlowTrackShape extends RoundedRectSliderTrackShape {
 
 /// The slider's knob: a white dot with a soft shadow, a little larger while it is held.
 class KnobThumbShape extends SliderComponentShape {
-  const KnobThumbShape({this.radius = 7});
+  const KnobThumbShape();
 
-  final double radius;
+  static const double radius = 7;
 
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) => Size.fromRadius(radius + 2);

@@ -7,7 +7,6 @@ import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune/src/view_models/player_view_model.dart';
-import 'package:wiretune/src/view_models/settings_view_models.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -309,25 +308,24 @@ void main() {
     playlists.dispose();
   });
 
-  test('totalFavoritesCount updates when a track is toggled in favorites', () async {
+  test('the favourites follow a track toggled anywhere, and tell their listeners', () async {
     final t1 = track('1', 'Album');
     final lib = await library([t1]);
-    final session = ServerSession(lib, MockRepository());
-    final vm = ServerSettingsViewModel(lib, session, supportsLocalFolder: true);
-    addTearDown(vm.dispose);
+    final favorites = FavoritesViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    addTearDown(favorites.dispose);
 
-    expect(vm.totalFavoritesCount, 0);
+    expect(favorites.favoriteTracks, isEmpty);
 
     var notified = 0;
-    vm.addListener(() => notified++);
+    favorites.addListener(() => notified++);
 
     await lib.toggleFavorite(t1.id);
-    expect(vm.totalFavoritesCount, 1);
+    expect([for (final t in favorites.favoriteTracks) t.id], [t1.id]);
     expect(notified, greaterThan(0));
 
     final countAfterAdd = notified;
     await lib.toggleFavorite(t1.id);
-    expect(vm.totalFavoritesCount, 0);
+    expect(favorites.favoriteTracks, isEmpty);
     expect(notified, greaterThan(countAfterAdd));
   });
 }

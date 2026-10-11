@@ -6,7 +6,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import '../view_models/app_section.dart';
 
-/// The colours of one theme (dark or light). Each section has an accent family and a tint for the window's backdrop.
+/// The colours of one theme (dark or light). Each section has an accent family.
 class Palette {
   const Palette({
     required this.isDark,
@@ -24,14 +24,13 @@ class Palette {
     required this.warning,
     required this.danger,
     required this.modal,
+    required this.panelBorder,
     required this.coral,
     required this.purple,
     required this.cyan,
     required this.lime,
     required this.hover,
     required this.pressed,
-    required this.gradientMid,
-    required this.gradients,
     required this.onAccent,
     required this.shadow,
   });
@@ -39,7 +38,8 @@ class Palette {
   final bool isDark;
   final Color background;
 
-  /// The floating panels (sidebar, page, player bar): translucent, so the backdrop's colours glow through.
+  /// A translucent surface over the backdrop (the sign-in card, a notice, the empty state's orb), so that the
+  /// backdrop's colours glow through.
   final Color panel;
   final Color surface1;
   final Color surface2;
@@ -52,7 +52,12 @@ class Palette {
   final Color success;
   final Color warning;
   final Color danger;
+
+  /// The solid surfaces: the floating panels and bars, the opaque cards, dialogs, menus and sheets.
   final Color modal;
+
+  /// The hairline edge of the floating panels, the bars and the opaque cards.
+  final Color panelBorder;
   final Color coral;
   final Color purple;
   final Color cyan;
@@ -61,8 +66,6 @@ class Palette {
   /// Hover and pressed shades of each accent family, by the accent's ARGB value.
   final Map<int, Color> hover;
   final Map<int, Color> pressed;
-  final Color gradientMid;
-  final Map<AppSection, Color> gradients;
 
   /// Text and icons on an accent-filled surface.
   final Color onAccent;
@@ -86,6 +89,7 @@ class Palette {
     warning: Color(0xFFFFC53D),
     danger: Color(0xFFFF3B6B),
     modal: Color(0xFF000000),
+    panelBorder: Color(0x2EFFFFFF),
     coral: Color(0xFFFB7185),
     purple: Color(0xFFC084FC),
     cyan: Color(0xFF22D3EE),
@@ -104,15 +108,6 @@ class Palette {
     },
     onAccent: Color(0xFF07070B),
     shadow: Color(0x99000000),
-    gradientMid: Color(0xFF060609),
-    gradients: {
-      AppSection.tracks: Color(0xFF060609),
-      AppSection.albums: Color(0xFF060609),
-      AppSection.artists: Color(0xFF060609),
-      AppSection.playlists: Color(0xFF060609),
-      AppSection.favorites: Color(0xFF060609),
-      AppSection.settings: Color(0xFF060609),
-    },
   );
 
   static const light = Palette(
@@ -131,6 +126,7 @@ class Palette {
     warning: Color(0xFFD97706),
     danger: Color(0xFFE11D48),
     modal: Color(0xFFFFFFFF),
+    panelBorder: Color(0x22000000),
     coral: Color(0xFFE11D48),
     purple: Color(0xFF9333EA),
     cyan: Color(0xFF0891B2),
@@ -149,15 +145,6 @@ class Palette {
     },
     onAccent: Color(0xFFFFFFFF),
     shadow: Color(0x2E1A1A33),
-    gradientMid: Color(0xFFF2F3F7),
-    gradients: {
-      AppSection.tracks: Color(0xFFF2F3F7),
-      AppSection.albums: Color(0xFFF2F3F7),
-      AppSection.artists: Color(0xFFF2F3F7),
-      AppSection.playlists: Color(0xFFF2F3F7),
-      AppSection.favorites: Color(0xFFF2F3F7),
-      AppSection.settings: Color(0xFFF2F3F7),
-    },
   );
 
   /// The accent family a section is drawn in.
@@ -171,14 +158,6 @@ class Palette {
 
   Color hoverOf(Color accent) => hover[accent.toARGB32()] ?? accent;
   Color pressedOf(Color accent) => pressed[accent.toARGB32()] ?? accent;
-
-  /// The window gradient of a section: its tint in two corners, the neutral middle between them.
-  Gradient gradientFor(AppSection section) => LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [gradients[section]!, gradientMid, gradients[section]!],
-    stops: const [0, 0.5, 1],
-  );
 }
 
 /// The quality tag's own colours, the same in both themes so the medals keep their contrast.

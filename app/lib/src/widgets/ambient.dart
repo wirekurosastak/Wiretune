@@ -196,9 +196,9 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
   );
 }
 
-/// The window's backdrop: a neutral dark base and, over it, the colours of the cover that is playing or viewed (flowing while it
-/// plays, on a desktop), under a veil that keeps what is on top readable. [colour] sets how much of the cover shows: a little behind
-/// the phone's pages, more behind the wide layout, all of it behind the full-screen player.
+/// The window's backdrop: a neutral base and, over it, the colours of the cover that is playing or viewed (flowing
+/// while it plays, on a desktop), under a veil that keeps what is on top readable. [colour] sets how much of the cover
+/// shows: a little behind the phone's pages, more behind the wide layout, all of it behind the full-screen player.
 class AmbientBackdrop extends StatelessWidget {
   const AmbientBackdrop({super.key, this.colour = 0.55});
 
@@ -215,7 +215,7 @@ class AmbientBackdrop extends StatelessWidget {
         vm.artists.isArtistDetailOpen &&
         vm.artists.selectedArtist != null) {
       final artist = vm.artists.selectedArtist;
-      final path = artist?.picturePath ?? vm.artists.selectedArtistAlbums.firstOrNull?.coverArtPath;
+      final path = artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath;
       if (path != null && path.isNotEmpty) return path;
     }
 
@@ -256,30 +256,13 @@ class AmbientBackdrop extends StatelessWidget {
     final artworkOpacity = isDark ? colour : (colour * 0.42).clamp(0.0, 0.36);
 
     return ListenableBuilder(
-      listenable: Listenable.merge([vm, player, vm.albums, vm.artists, vm.playlists]),
+      listenable: Listenable.merge([vm, player, vm.albums, vm.artists]),
       builder: (context, _) {
         final cover = activeCoverPath(vm);
-        // Only use section or artist/album tint when there is no cover image to illuminate the backdrop.
-        final Gradient? fallbackGradient;
-        if (cover == null) {
-          if (vm.selectedSection == AppSection.albums && vm.albums.isAlbumDetailOpen) {
-            fallbackGradient = colors.palette.gradientFor(AppSection.albums);
-          } else if (vm.selectedSection == AppSection.artists && vm.artists.isArtistDetailOpen) {
-            fallbackGradient = colors.palette.gradientFor(AppSection.artists);
-          } else {
-            fallbackGradient = colors.windowGradient;
-          }
-        } else {
-          fallbackGradient = null;
-        }
-
         return Stack(
           fit: StackFit.expand,
           children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 450),
-              decoration: BoxDecoration(color: base, gradient: fallbackGradient),
-            ),
+            AnimatedContainer(duration: const Duration(milliseconds: 450), color: base),
             AmbientArtwork(
               path: cover,
               drift: player.isPlaying && !platform.isTv && !platform.isMobile,

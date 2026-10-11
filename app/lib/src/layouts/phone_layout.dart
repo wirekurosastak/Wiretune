@@ -145,20 +145,16 @@ class _BottomBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.vm;
-    final player = vm.player;
     final colors = context.colors;
-    final isDark = colors.palette.isDark;
-
     return SafeArea(
       top: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+            color: colors.palette.modal,
             borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000), width: 1.0),
+            border: Border.all(color: colors.palette.panelBorder),
             boxShadow: [
               BoxShadow(color: colors.palette.shadow, blurRadius: 24, spreadRadius: -4, offset: const Offset(0, 8)),
             ],
@@ -171,20 +167,7 @@ class _BottomBars extends StatelessWidget {
                 duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
                 alignment: Alignment.bottomCenter,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    ListenableBuilder(
-                      listenable: player,
-                      builder: (context, _) {
-                        final track = player.currentTrack;
-                        if (track == null) return const SizedBox.shrink();
-                        return const _MiniPlayerContent();
-                      },
-                    ),
-                    const _BottomNavigation(),
-                  ],
-                ),
+                child: const Column(mainAxisSize: MainAxisSize.min, children: [_MiniPlayer(), _BottomNavigation()]),
               ),
             ),
           ),
@@ -221,10 +204,7 @@ class _BottomNavigation extends StatelessWidget {
                 label: context.tr(label),
                 color: color,
                 active: !vm.isSearchOpen && vm.selectedSection == section,
-                onTap: () {
-                  vm.closeSearch();
-                  vm.navigateTo(section);
-                },
+                onTap: () => vm.navigateTo(section),
               ),
             ),
         ],
@@ -312,8 +292,12 @@ class _SearchBarState extends State<_SearchBar> {
     super.dispose();
   }
 
+  // It follows the query itself (its clear button the typing): as a const child it isn't rebuilt with the page.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
     return Padding(
@@ -354,7 +338,6 @@ class _SearchBarState extends State<_SearchBar> {
                         onPressed: () {
                           _controller.clear();
                           vm.clearSearch();
-                          setState(() {});
                         },
                         icon: const Icon(Icons.cancel_rounded, size: 18),
                       ),
@@ -413,9 +396,9 @@ class _OfflineBanner extends StatelessWidget {
   }
 }
 
-/// The mini player content embedded in the upper part of the floating pill.
-class _MiniPlayerContent extends StatelessWidget {
-  const _MiniPlayerContent();
+/// The mini player in the upper part of the floating pill, while a track is loaded.
+class _MiniPlayer extends StatelessWidget {
+  const _MiniPlayer();
 
   @override
   Widget build(BuildContext context) {
@@ -443,17 +426,14 @@ class _MiniPlayerContent extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
                       child: Row(
                         children: [
-                          Hero(
-                            tag: 'now-playing-cover',
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(Radii.small + 2),
-                                boxShadow: [
-                                  BoxShadow(color: colors.palette.shadow, blurRadius: 8, offset: const Offset(0, 3)),
-                                ],
-                              ),
-                              child: CoverImage(path: track.coverArtPath, size: 44, radius: Radii.small + 2),
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(Radii.small + 2),
+                              boxShadow: [
+                                BoxShadow(color: colors.palette.shadow, blurRadius: 8, offset: const Offset(0, 3)),
+                              ],
                             ),
+                            child: CoverImage(path: track.coverArtPath, size: 44, radius: Radii.small + 2),
                           ),
                           const SizedBox(width: 12),
                           Expanded(

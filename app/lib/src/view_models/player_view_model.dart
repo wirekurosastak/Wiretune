@@ -58,9 +58,6 @@ typedef LyricsProvider = Future<String?> Function(Track track);
 /// this device's own playback carries on underneath, untouched.
 class PlayerViewModel extends ChangeNotifier {
   PlayerViewModel(this._engine, this._library) {
-    isExclusiveMode = _engine.isExclusiveMode;
-    isBitperfect = _engine.isBitperfect;
-
     _subscriptions.addAll([
       _engine.stateChanged.listen((state) {
         _state = state;
@@ -88,16 +85,10 @@ class PlayerViewModel extends ChangeNotifier {
       }),
       _engine.trackChanged.listen(_onEngineTrackChanged),
       _engine.bitperfectChanged.listen((value) {
-        isBitperfect = value;
         _volume = value ? 100 : (_engine.volume * 100).roundToDouble();
-        signalPath = _engine.signalPathDescription;
         notifyListeners();
       }),
-      _engine.exclusiveModeChanged.listen((value) {
-        isExclusiveMode = value;
-        signalPath = _engine.signalPathDescription;
-        notifyListeners();
-      }),
+      _engine.exclusiveModeChanged.listen((_) => notifyListeners()),
       _engine.spectrumDataAvailable.listen((bands) {
         if (_state == PlaybackState.playing && !isRemote) spectrum.value = bands;
       }),
@@ -170,9 +161,8 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isShuffle => isRemote ? (_remoteState?.shuffle ?? false) : _shuffle;
   RepeatMode get repeatMode => isRemote ? (_remoteState?.repeat ?? RepeatMode.off) : _repeat;
 
-  bool isExclusiveMode = false;
-  bool isBitperfect = false;
-  String signalPath = '';
+  bool get isExclusiveMode => _engine.isExclusiveMode;
+  bool get isBitperfect => _engine.isBitperfect;
   String? errorMessage;
 
   QualityTier get currentTier => currentTrack?.format.tier ?? QualityTier.silver;
@@ -212,9 +202,6 @@ class PlayerViewModel extends ChangeNotifier {
   List<Track> get queueTracks => isRemote ? [for (final item in _remoteQueue) item.track] : _queueTracks;
   List<QueueItem> get queueItems => isRemote ? _remoteQueue : _queueItems;
   int get currentQueueIndex => isRemote ? _remoteQueue.indexWhere((item) => item.isCurrent) : _queueIndex;
-
-  /// The queue can be reordered and edited (both locally and when casting to another device).
-  bool get canEditQueue => true;
 
   void toggleQueue() => isQueueOpen = !isQueueOpen;
 
@@ -623,7 +610,6 @@ class PlayerViewModel extends ChangeNotifier {
     currentTrack = track;
     if (!isRemote) _setPosition(_localPosition);
     if (track != null) {
-      signalPath = _engine.signalPathDescription;
       // Bookkeeping only: no error banner when it fails.
       unawaited(
         _library.recordPlay(track.id).catchError((Object e) {
@@ -1227,11 +1213,8 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Re-renders the texts that were computed in the previous language.
-  void refreshLocalizedTexts() {
-    if (_currentTrack != null) signalPath = _engine.signalPathDescription;
-    notifyListeners();
-  }
+  /// Re-renders the texts that are read in the active language.
+  void refreshLocalizedTexts() => notifyListeners();
 
   Future<void> _runSafe(Future<void> Function() action) async {
     try {

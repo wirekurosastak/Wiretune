@@ -13,8 +13,8 @@ import '../widgets/cover_image.dart';
 import '../widgets/equalizer_bars.dart';
 import '../widgets/quality_tag.dart';
 
-/// The queue: jump to an entry, drag entries (or use the arrows) to reorder them, remove them. The queue of another
-/// device (remote control) is only shown, as far as this library knows its tracks.
+/// The queue: jump to an entry, drag entries (or use the arrows) to reorder them, remove them. Another device's queue
+/// (remote control) shows as far as this library knows its tracks, and its changes go to that device.
 class QueueList extends StatelessWidget {
   const QueueList({super.key, this.padding = const EdgeInsets.all(16)});
 
@@ -44,9 +44,8 @@ class QueueList extends StatelessWidget {
             item: items[index],
             index: index,
             itemCount: items.length,
-            editable: player.canEditQueue,
             // A remote or a keyboard cannot drag: they get buttons. A phone drags by the handle.
-            showMoveButtons: player.canEditQueue && !AppPlatform.current.isMobile,
+            showMoveButtons: !AppPlatform.current.isMobile,
           ),
         );
       },
@@ -63,14 +62,12 @@ class _QueueRow extends StatefulWidget {
     required this.item,
     required this.index,
     required this.itemCount,
-    required this.editable,
     required this.showMoveButtons,
   });
 
   final QueueItem item;
   final int index;
   final int itemCount;
-  final bool editable;
   final bool showMoveButtons;
 
   @override
@@ -123,19 +120,17 @@ class _QueueRowState extends State<_QueueRow> {
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 child: Row(
                   children: [
-                    if (widget.editable) ...[
-                      ReorderableDragStartListener(
-                        index: widget.index,
-                        child: Tooltip(
-                          message: context.tr('TipDragToReorder'),
-                          child: SizedBox(
-                            width: 20,
-                            child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
-                          ),
+                    ReorderableDragStartListener(
+                      index: widget.index,
+                      child: Tooltip(
+                        message: context.tr('TipDragToReorder'),
+                        child: SizedBox(
+                          width: 20,
+                          child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
                         ),
                       ),
-                      const SizedBox(width: 6),
-                    ],
+                    ),
+                    const SizedBox(width: 6),
                     SizedBox(
                       width: 42,
                       height: 42,
@@ -229,13 +224,12 @@ class _QueueRowState extends State<_QueueRow> {
                       ),
                       const SizedBox(width: 8),
                     ],
-                    if (widget.editable)
-                      small(
-                        Icons.close_rounded,
-                        'TipRemoveFromQueue',
-                        () => player.removeQueueTrack(track),
-                        color: colors.danger,
-                      ),
+                    small(
+                      Icons.close_rounded,
+                      'TipRemoveFromQueue',
+                      () => player.removeQueueTrack(track),
+                      color: colors.danger,
+                    ),
                   ],
                 ),
               ),
@@ -557,23 +551,20 @@ class QueueLyricsPanel extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (player.canEditQueue)
-                    PopEffect(
-                      enabled: count > 0,
-                      glow: true,
-                      glowColor: colors.danger,
-                      borderRadius: BorderRadius.circular(999),
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: colors.danger,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          overlayColor: Colors.transparent,
-                        ),
-                        onPressed: count == 0 ? null : player.clearQueue,
-                        icon: Icon(Icons.delete_outline_rounded, size: 18, color: count == 0 ? null : colors.danger),
-                        label: Text(context.tr('ClearQueue')),
+                  PopEffect(
+                    enabled: count > 0,
+                    glowColor: colors.danger,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: colors.danger,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        overlayColor: Colors.transparent,
                       ),
+                      onPressed: count == 0 ? null : player.clearQueue,
+                      icon: Icon(Icons.delete_outline_rounded, size: 18, color: count == 0 ? null : colors.danger),
+                      label: Text(context.tr('ClearQueue')),
                     ),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),

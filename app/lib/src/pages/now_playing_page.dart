@@ -7,6 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
+import '../view_models/app_section.dart';
 import '../widgets/ambient.dart';
 import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
@@ -33,8 +34,8 @@ class NowPlayingPage extends StatelessWidget {
       builder: (context, _) {
         final tab = vm.nowPlayingTab;
         // The three tabs as one segmented glass pill; the selected segment is filled with the accent.
-        Widget segment(int index, String key) {
-          final selected = tab == index;
+        Widget segment(NowPlayingTab value, String key) {
+          final selected = tab == value;
           return AnimatedContainer(
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutCubic,
@@ -47,7 +48,7 @@ class NowPlayingPage extends StatelessWidget {
               type: MaterialType.transparency,
               child: InkWell(
                 customBorder: const StadiumBorder(),
-                onTap: () => vm.nowPlayingTab = index,
+                onTap: () => vm.nowPlayingTab = value,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
                   child: Text(
@@ -128,7 +129,11 @@ class NowPlayingPage extends StatelessWidget {
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
-                                  children: [segment(0, 'TabPlayer'), segment(1, 'Queue'), segment(2, 'TabLyrics')],
+                                  children: [
+                                    segment(NowPlayingTab.player, 'TabPlayer'),
+                                    segment(NowPlayingTab.queue, 'Queue'),
+                                    segment(NowPlayingTab.lyrics, 'TabLyrics'),
+                                  ],
                                 ),
                               ),
                             ),
@@ -142,9 +147,9 @@ class NowPlayingPage extends StatelessWidget {
                         child: KeyedSubtree(
                           key: ValueKey(tab),
                           child: switch (tab) {
-                            1 => const _QueueTab(),
-                            2 => const _LyricsTab(),
-                            _ => const _PlayerTab(),
+                            NowPlayingTab.player => const _PlayerTab(),
+                            NowPlayingTab.queue => const _QueueTab(),
+                            NowPlayingTab.lyrics => const _LyricsTab(),
                           },
                         ),
                       ),
@@ -208,10 +213,7 @@ class _PlayerTab extends StatelessWidget {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            Hero(
-                              tag: 'now-playing-cover',
-                              child: CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
-                            ),
+                            CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
                             // On the cover, as on the album tiles.
                             if (player.currentTagSpec.isNotEmpty)
                               Positioned(
@@ -324,28 +326,23 @@ class _QueueTab extends StatelessWidget {
                   ),
                 ),
               ),
-              if (player.canEditQueue)
-                PopEffect(
-                  enabled: player.queueItems.isNotEmpty,
-                  glow: true,
-                  glowColor: colors.palette.coral,
-                  borderRadius: BorderRadius.circular(999),
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      foregroundColor: colors.palette.coral,
-                      minimumSize: const Size(0, 40),
-                      overlayColor: Colors.transparent,
-                    ),
-                    onPressed: player.queueItems.isEmpty ? null : player.clearQueue,
-                    icon: const Icon(Icons.playlist_remove_rounded, size: 20),
-                    label: Text(
-                      context.tr('ClearQueue'),
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
+              PopEffect(
+                enabled: player.queueItems.isNotEmpty,
+                glowColor: colors.palette.coral,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    foregroundColor: colors.palette.coral,
+                    minimumSize: const Size(0, 40),
+                    overlayColor: Colors.transparent,
                   ),
-                )
-              else
-                const SizedBox(height: 40),
+                  onPressed: player.queueItems.isEmpty ? null : player.clearQueue,
+                  icon: const Icon(Icons.playlist_remove_rounded, size: 20),
+                  label: Text(
+                    context.tr('ClearQueue'),
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -386,7 +383,7 @@ class _LyricsTab extends StatelessWidget {
   }
 }
 
-/// The seek bar with its times, and the five transport buttons with the big square play button.
+/// The seek bar with its times, and the five transport buttons with the big round play button.
 class _Transport extends StatelessWidget {
   const _Transport();
 

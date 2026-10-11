@@ -129,9 +129,8 @@ key, add the constant, a `languages` entry and the case in `Localizer.lookup`, a
 
 A new section is a new `AppSection` value, a page registered in `pages/section_page.dart`, an entry in the wide
 layout's sidebar (and the phone's bottom bar, if it belongs there), a place in `navVisualOrder` (the animated logo's
-order), and an accent and gradient in `theme/palette.dart`. A persistent player setting is a key in the `settings`
-table, read and written through `LibraryService`. Anything the back button has to respect goes into
-`MainViewModel.tryNavigateBack()`.
+order), and an accent in `theme/palette.dart`. A persistent player setting is a key in the `settings` table, read and
+written through `LibraryService`. Anything the back button has to respect goes into `MainViewModel.tryNavigateBack()`.
 
 ## CI
 

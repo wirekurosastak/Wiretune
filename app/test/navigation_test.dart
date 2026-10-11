@@ -124,7 +124,7 @@ void main() {
     final artist = vm.library.artists.firstWhere((a) => a.name == 'Miles Davis');
     vm.openArtist(artist);
     expect(vm.selectedSection, AppSection.artists);
-    expect(vm.artists.selectedArtistTracks, hasLength(2));
+    expect(vm.artists.selectedArtist?.tracks, hasLength(2));
 
     vm.openAlbum(artist.albums.first);
     expect(vm.selectedSection, AppSection.albums);
@@ -162,18 +162,16 @@ void main() {
     final vm = await create();
     showTrack(vm);
     vm.openNowPlaying();
-    expect(vm.nowPlayingTab, 0);
+    expect(vm.nowPlayingTab, NowPlayingTab.player);
     expect(vm.player.isQueueOpen, isFalse);
 
-    vm.nowPlayingTab = 1;
+    vm.nowPlayingTab = NowPlayingTab.queue;
     expect(vm.player.isQueueOpen, isTrue);
-    vm.nowPlayingTab = 2;
+    vm.nowPlayingTab = NowPlayingTab.lyrics;
     expect(vm.player.isQueueOpen, isTrue);
-    vm.nowPlayingTab = 7; // not a tab
-    expect(vm.nowPlayingTab, 2);
 
     vm.closeNowPlaying();
-    expect(vm.nowPlayingTab, 0);
+    expect(vm.nowPlayingTab, NowPlayingTab.player);
     expect(vm.player.isQueueOpen, isFalse);
   });
 
@@ -204,7 +202,6 @@ void main() {
     final vm = createMainViewModel(library);
     await vm.start();
     expect(vm.isLoginViewActive, isTrue);
-    expect(vm.isLibraryEmpty, isTrue);
     expect(vm.tryNavigateBack(), isFalse); // leaving it would be a dead end
   });
 

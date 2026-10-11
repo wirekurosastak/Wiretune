@@ -12,9 +12,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
   ServerSettingsViewModel(this._library, this._session, {required this.supportsLocalFolder}) {
     localLibraryPath = _library.libraryPath.trim().isNotEmpty ? _library.libraryPath : AppPaths.musicFolder();
     _unsubscribers.addAll([
-      _library.libraryChanged.listen((_) => _updateStats()),
-      _library.playlistsChanged.listen((_) => _updateStats()),
-      _library.favoriteChanged.listen((_) => _updateStats()),
       _library.scanningStateChanged.listen((scanning) {
         isScanning = scanning;
         notifyListeners();
@@ -22,7 +19,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
       _session.stateChanged.listen((_) => syncWithSession()),
     ]);
     syncWithSession();
-    _updateStats();
   }
 
   final LibraryService _library;
@@ -40,13 +36,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
   double scanProgress = 0;
   String _statusMessage = Localizer.get('StatusReady');
   bool _statusIsIdle = true;
-  int totalTracksCount = 0;
-  int totalAlbumsCount = 0;
-  int totalArtistsCount = 0;
-  int totalFavoritesCount = 0;
-  int totalPlaylistsCount = 0;
   String serverStatusBadge = Localizer.get('BadgeNoConnection');
-  String librarySourceText = Localizer.get('SourceNoneSelected');
 
   String username = '';
   String password = '';
@@ -145,13 +135,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
       ServerConnectionState.notConfigured => 'BadgeNoConnection',
     });
 
-    librarySourceText = switch (_session.source) {
-      LibrarySource.hybrid => Localizer.get('SourceHybrid'),
-      LibrarySource.server => Localizer.get('SourceServer'),
-      LibrarySource.local => Localizer.format('SourceLocal', [_library.libraryPath]),
-      LibrarySource.none => Localizer.get('SourceNone'),
-    };
-
     // The administrator's data is fetched once per administrator sign-in, not on every state change.
     final adminKey = isLoggedIn && isAdmin ? '${_session.serverUrl}|$currentUserName' : null;
     if (adminKey != _adminDataKey) {
@@ -161,15 +144,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
         unawaited(loadUsers());
       }
     }
-    notifyListeners();
-  }
-
-  void _updateStats() {
-    totalTracksCount = _library.tracks.length;
-    totalAlbumsCount = _library.albums.length;
-    totalArtistsCount = _library.artists.length;
-    totalFavoritesCount = _library.favorites.length;
-    totalPlaylistsCount = _library.playlists.length;
     notifyListeners();
   }
 

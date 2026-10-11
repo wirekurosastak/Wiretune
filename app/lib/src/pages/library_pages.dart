@@ -64,12 +64,7 @@ class TracksPage extends StatelessWidget {
                 subtitle: '${context.trf('TrackCount', [tracks.totalTracksCount])}  •  ${tracks.totalTracksDuration}',
                 actions: [
                   if (PhoneChrome.isPhone(context)) TrackSortButtons(tracks), // a wide table sorts by its headers
-                  PlayShuffleButtons(
-                    playLabel: context.tr('Play'),
-                    shuffleLabel: context.tr('Shuffle'),
-                    onPlay: tracks.playAll,
-                    onShuffle: tracks.shuffleAll,
-                  ),
+                  PlayShuffleButtons(onPlay: tracks.playAll, onShuffle: tracks.shuffleAll),
                 ],
               ),
             ),
@@ -109,8 +104,6 @@ class FavoritesPage extends StatelessWidget {
                 actions: [
                   if (PhoneChrome.isPhone(context)) TrackSortButtons(favorites), // a wide table sorts by its headers
                   PlayShuffleButtons(
-                    playLabel: context.tr('Play'),
-                    shuffleLabel: context.tr('Shuffle'),
                     onPlay: favorites.playAll,
                     onShuffle: favorites.shuffleAll,
                     trailing: DownloadListButton.forTracks(
@@ -122,7 +115,7 @@ class FavoritesPage extends StatelessWidget {
                 ],
               ),
             ),
-            TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites, kind: TrackTableKind.favorites),
+            TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites),
             const PageEndSpace(),
           ],
         );
@@ -176,9 +169,8 @@ class BackLink extends StatelessWidget {
         ),
       );
     }
-    final narrow = MediaQuery.sizeOf(context).width < 600;
     return Padding(
-      padding: EdgeInsets.fromLTRB(narrow ? 16 : 26, narrow ? 12 : 22, narrow ? 16 : 26, 12),
+      padding: const EdgeInsets.fromLTRB(26, 22, 26, 12),
       child: Align(
         alignment: Alignment.centerLeft,
         child: Pressable(
@@ -221,9 +213,9 @@ class BackLink extends StatelessWidget {
   }
 }
 
-/// The header of a detail page, over a wash of its own artwork's colours that fades into the page: the [back] button,
-/// then the large artwork (with its [artworkBadge]) beside the labels, the title, a line of details and the buttons (on
-/// a phone the artwork sits above, centred, and the labels are left out).
+/// The header of a detail page: the [back] button, then the large artwork (with its [artworkBadge]) beside the labels,
+/// the title, a line of details and the buttons (on a phone the artwork sits above, centred, and the labels are left
+/// out).
 class DetailHeader extends StatelessWidget {
   const DetailHeader({
     super.key,
@@ -231,7 +223,6 @@ class DetailHeader extends StatelessWidget {
     required this.tags,
     required this.title,
     this.artworkBadge,
-    this.artworkPath,
     this.back,
     this.details = const [],
     this.actions = const [],
@@ -242,9 +233,6 @@ class DetailHeader extends StatelessWidget {
 
   /// Shown on the artwork's corner, as on the tiles: an album's or a playlist's quality tag.
   final Widget? artworkBadge;
-
-  /// The picture whose colours wash the header; none leaves a glow of the accent.
-  final String? artworkPath;
   final Widget? back;
 
   /// The labels above the title on a wide screen ("ALBUM", "PLAYLIST").
@@ -380,8 +368,9 @@ class DetailHeader extends StatelessWidget {
   }
 }
 
-class _Detail extends StatelessWidget {
-  const _Detail(this.text);
+/// One of the details under a detail page's title: a count, a year, a length.
+class DetailText extends StatelessWidget {
+  const DetailText(this.text, {super.key});
 
   final String text;
 
@@ -390,64 +379,6 @@ class _Detail extends StatelessWidget {
     text,
     style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: context.colors.textMuted),
   );
-}
-
-/// A round icon button beside a detail page's play and shuffle (hide, delete), named by its tooltip; [color] tints it
-/// (the danger colour for a deletion), else it is muted until the mouse is over it.
-class HeaderIconButton extends StatefulWidget {
-  const HeaderIconButton({super.key, required this.tooltip, required this.icon, required this.onPressed, this.color});
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onPressed;
-  final Color? color;
-
-  @override
-  State<HeaderIconButton> createState() => HeaderIconButtonState();
-}
-
-class HeaderIconButtonState extends State<HeaderIconButton> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    final dimension = PhoneChrome.isPhone(context) ? PhoneChrome.controlHeight : 46.0;
-    final iconColor = widget.color ?? (_hover ? colors.textMain : colors.textMuted);
-    return PopEffect(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: SizedBox.square(
-          dimension: dimension,
-          child: IconButton(
-            tooltip: widget.tooltip,
-            hoverColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            splashColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            style: IconButton.styleFrom(
-              side: BorderSide.none,
-              backgroundColor: Colors.transparent,
-              hoverColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              focusColor: Colors.transparent,
-              overlayColor: Colors.transparent,
-              splashFactory: NoSplash.splashFactory,
-            ),
-            onPressed: widget.onPressed,
-            icon: Icon(
-              widget.icon,
-              size: 22,
-              color: iconColor,
-              shadows: _hover ? [BoxShadow(color: iconColor.withValues(alpha: 0.7), blurRadius: 14)] : null,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// The sort buttons of a list page ("Sort by: ABC ↑ | Year") as one segmented pill; the active segment is filled with
@@ -460,7 +391,6 @@ class SortButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final isDark = colors.palette.isDark;
     if (PhoneChrome.isPhone(context)) {
       // The active field with its direction, as on every other sort control.
       final active = buttons.firstWhere((b) => b.$2, orElse: () => buttons.first);
@@ -478,13 +408,9 @@ class SortButtons extends StatelessWidget {
               shape: const StadiumBorder(),
             ),
             onPressed: () {
-              if (buttons.length == 1) {
-                buttons.first.$3();
-                return;
-              }
               showModalBottomSheet<void>(
                 context: context,
-                backgroundColor: isDark ? const Color(0xFF000000) : Colors.white,
+                backgroundColor: colors.palette.modal,
                 shape: RoundedRectangleBorder(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   side: BorderSide(color: colors.palette.glassBorder),
@@ -754,7 +680,6 @@ class AlbumDetail extends StatelessWidget {
         SliverToBoxAdapter(
           child: DetailHeader(
             back: BackLink(text: albums.backText, onPressed: albums.closeAlbumDetail),
-            artworkPath: album.coverArtPath,
             artwork: CoverImage(
               path: album.coverArtPath,
               radius: Radii.card,
@@ -771,14 +696,12 @@ class AlbumDetail extends StatelessWidget {
                 onTap: () => vm.openArtistByName(album.artist),
                 style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.coral),
               ),
-              if (album.year != null) _Detail('${album.year}'),
-              _Detail(context.trf('TrackCount', [album.trackCount])),
-              _Detail(album.formattedTotalDuration),
+              if (album.year != null) DetailText('${album.year}'),
+              DetailText(context.trf('TrackCount', [album.trackCount])),
+              DetailText(album.formattedTotalDuration),
             ],
             actions: [
               PlayShuffleButtons(
-                playLabel: context.tr('Play'),
-                shuffleLabel: context.tr('Shuffle'),
                 onPlay: () => albums.playAlbum(),
                 onShuffle: () => albums.shuffleAlbum(),
                 trailing: DownloadListButton.forTracks(
@@ -863,7 +786,7 @@ class ArtistDetail extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final artists = vm.artists;
-    final albums = artists.selectedArtistAlbums;
+    final albums = artist.albums; // the newest first, as the library orders them
     final colors = context.colors;
     final narrow = MediaQuery.sizeOf(context).width < 600;
     final albumTracks = [for (final album in albums) ...album.tracks];
@@ -873,7 +796,6 @@ class ArtistDetail extends StatelessWidget {
         SliverToBoxAdapter(
           child: DetailHeader(
             back: BackLink(text: artists.backText, onPressed: artists.closeArtistDetail),
-            artworkPath: artist.picturePath ?? albums.firstOrNull?.coverArtPath,
             artwork: CoverImage(
               path: artist.picturePath,
               circle: true,
@@ -883,13 +805,11 @@ class ArtistDetail extends StatelessWidget {
             tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
             title: artist.name,
             details: [
-              _Detail(context.trf('AlbumCount', [artist.albumCount])),
-              _Detail(context.trf('TrackCount', [artist.trackCount])),
+              DetailText(context.trf('AlbumCount', [artist.albumCount])),
+              DetailText(context.trf('TrackCount', [artist.trackCount])),
             ],
             actions: [
               PlayShuffleButtons(
-                playLabel: context.tr('Play'),
-                shuffleLabel: context.tr('Shuffle'),
                 onPlay: () => artists.playArtist(),
                 onShuffle: () => artists.shuffleArtist(),
                 // The artist's albums, also the ones that arrive later.
@@ -930,7 +850,7 @@ class ArtistDetail extends StatelessWidget {
             child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
           ),
         ),
-        TrackSliver(tracks: artists.selectedArtistTracks, kind: TrackTableKind.artist),
+        TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist),
         const PageEndSpace(),
       ],
     );

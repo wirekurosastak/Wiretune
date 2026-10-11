@@ -39,6 +39,9 @@ class WideLayout extends StatelessWidget {
   /// The space between the floating panels and around them.
   static const double gap = 10;
 
+  /// Below this width the sidebar shows icons alone, and the header and the player bar leave out what they can spare.
+  static const double compactWidth = 1000;
+
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
@@ -95,7 +98,7 @@ class WideLayout extends StatelessWidget {
   }
 }
 
-/// A floating panel: rounded, pitch dark and non-transparent in dark mode, with a hairline edge.
+/// A floating panel: rounded, solid, with a hairline edge.
 class _Panel extends StatelessWidget {
   const _Panel({required this.child});
 
@@ -103,14 +106,13 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-    final isDark = colors.palette.isDark;
+    final palette = context.colors.palette;
     final radius = BorderRadius.circular(Radii.panel);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF000000) : colors.palette.modal,
+        color: palette.modal,
         borderRadius: radius,
-        border: Border.all(color: isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)),
+        border: Border.all(color: palette.panelBorder),
       ),
       child: ClipRRect(borderRadius: radius, child: child),
     );
@@ -162,7 +164,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
-    final compact = MediaQuery.sizeOf(context).width < MainViewModel.compactLayoutWidth;
+    final compact = MediaQuery.sizeOf(context).width < WideLayout.compactWidth;
     final frameless = AppPlatform.current.hasCustomWindowFrame;
     final content = CustomMultiChildLayout(
       delegate: _HeaderLayout(),
@@ -308,8 +310,13 @@ class _SearchFieldState extends State<_SearchField> {
     super.dispose();
   }
 
+  // It follows the query itself: as a const child it isn't rebuilt with the header around it, and the query also
+  // changes elsewhere (cleared by back, a result opened, another section).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
     if (_controller.text != vm.searchQuery) {
@@ -346,7 +353,7 @@ class _SearchFieldState extends State<_SearchField> {
           decoration: InputDecoration(
             hintText: context.tr('SearchPlaceholder'),
             filled: true,
-            fillColor: colors.palette.isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+            fillColor: colors.palette.modal,
             prefixIcon: Padding(
               padding: const EdgeInsets.only(left: 16, right: 8),
               child: Icon(Icons.search_rounded, size: 19, color: focused ? colors.accent : colors.textMuted),
@@ -361,13 +368,8 @@ class _SearchFieldState extends State<_SearchField> {
                   )
                 : null,
             contentPadding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
-            border: border(colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000), 1),
-            enabledBorder: border(
-              _hover
-                  ? colors.palette.glassHighlight
-                  : (colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)),
-              1,
-            ),
+            border: border(colors.palette.panelBorder, 1),
+            enabledBorder: border(_hover ? colors.palette.glassHighlight : colors.palette.panelBorder, 1),
             focusedBorder: border(colors.accent, 1.5),
           ),
         ),
@@ -561,8 +563,7 @@ class _WindowButtonState extends State<_WindowButton> {
   }
 }
 
-/// A small dot that slowly fades in and out (the "live" mark of an active mode and of the status line); a steady one on
-/// a phone or tablet.
+/// The small dot of the status line, slowly fading in and out; a steady one on a phone or tablet.
 class _PulsingDot extends StatefulWidget {
   const _PulsingDot({required this.color, required this.size});
 
@@ -684,14 +685,15 @@ class _Sidebar extends StatelessWidget {
     final vm = context.vm;
     final colors = context.colors;
     final palette = colors.palette;
-    final compact = MediaQuery.sizeOf(context).width < MainViewModel.compactLayoutWidth;
+    final compact = MediaQuery.sizeOf(context).width < WideLayout.compactWidth;
     return SizedBox(
       width: compact ? 68 : 232,
       child: _Panel(
         child: ListenableBuilder(
-          listenable: Listenable.merge([vm, vm.serverSettings, vm.player]),
+          // The counts follow the library (the view model tells of its changes), the favourites and the playlists.
+          listenable: Listenable.merge([vm, vm.player, vm.favorites, vm.playlists]),
           builder: (context, _) {
-            final stats = vm.serverSettings;
+            final library = vm.library;
             Widget item(
               AppSection section,
               IconData icon,
@@ -719,16 +721,16 @@ class _Sidebar extends StatelessWidget {
                     Icons.person_rounded,
                     palette.coral,
                     context.tr('NavArtists'),
-                    stats.totalArtistsCount,
+                    library.artists.length,
                     autofocus: AppPlatform.current.isTv,
                   ),
-                  item(AppSection.albums, Icons.album, palette.purple, context.tr('NavAlbums'), stats.totalAlbumsCount),
+                  item(AppSection.albums, Icons.album, palette.purple, context.tr('NavAlbums'), library.albums.length),
                   item(
                     AppSection.tracks,
                     Icons.music_note_rounded,
                     palette.cyan,
                     context.tr('NavTracks'),
-                    stats.totalTracksCount,
+                    library.tracks.length,
                   ),
                   const SizedBox(height: 22),
                   if (!compact) _GroupTitle(context.tr('SectionCollection')),
@@ -737,14 +739,14 @@ class _Sidebar extends StatelessWidget {
                     Icons.favorite_rounded,
                     palette.coral,
                     context.tr('NavFavorites'),
-                    stats.totalFavoritesCount,
+                    vm.favorites.favoriteTracks.length,
                   ),
                   item(
                     AppSection.playlists,
                     Icons.queue_music_rounded,
                     palette.lime,
                     context.tr('NavPlaylists'),
-                    stats.totalPlaylistsCount,
+                    vm.playlists.playlists.length,
                   ),
                   const SizedBox(height: 22),
                   if (!compact) _GroupTitle(context.tr('SectionSettings')),
@@ -921,7 +923,7 @@ class _PlayerBar extends StatelessWidget {
     final colors = context.colors;
     final platform = AppPlatform.current;
     final width = MediaQuery.sizeOf(context).width;
-    final compact = width < MainViewModel.compactLayoutWidth;
+    final compact = width < WideLayout.compactWidth;
     // A 540 px middle, narrower when the window is (its two sides keep at least 180 px each).
     final centerWidth = math.min(540.0, math.max(300.0, width - 64 - 2 * 280));
     return Container(
@@ -930,9 +932,9 @@ class _PlayerBar extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: WideLayout.gap),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: colors.palette.isDark ? const Color(0xFF000000) : colors.palette.modal,
+        color: colors.palette.modal,
         borderRadius: BorderRadius.circular(Radii.panel + 2),
-        border: Border.all(color: colors.palette.isDark ? const Color(0x2EFFFFFF) : const Color(0x22000000)),
+        border: Border.all(color: colors.palette.panelBorder),
         boxShadow: [
           BoxShadow(color: colors.palette.shadow, blurRadius: 30, spreadRadius: -8, offset: const Offset(0, 12)),
         ],
@@ -1195,7 +1197,7 @@ class _Footer extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
-    final compact = MediaQuery.sizeOf(context).width < MainViewModel.compactLayoutWidth;
+    final compact = MediaQuery.sizeOf(context).width < WideLayout.compactWidth;
     return SizedBox(
       height: 30,
       child: Padding(

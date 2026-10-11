@@ -28,33 +28,20 @@ class SettingsPage extends StatelessWidget {
         final server = vm.serverSettings;
         // The music folders: the server's for its administrator, this computer's on a desktop.
         final library = (server.isLoggedIn && server.isAdmin) || server.supportsLocalFolder;
-        final left = <Widget>[
-          const _AccountCard(),
-          const SizedBox(height: 16),
-          if (library) ...[const _LibraryCard(), const SizedBox(height: 16)],
-          const _AboutCard(),
-        ];
-        final right = <Widget>[
-          if (vm.audioSettings.hasDeviceChoice) ...[const _AudioCard(), const SizedBox(height: 16)],
+        final account = [const _AccountCard(), if (library) const _LibraryCard()];
+        final options = [
+          if (vm.audioSettings.hasDeviceChoice) const _AudioCard(),
           const _AppearanceCard(),
-          const SizedBox(height: 16),
           const _HiddenContentCard(),
-          if (server.isLoggedIn || vm.downloads.hasAnything) ...[const SizedBox(height: 16), const _DownloadsCard()],
-          if (server.isLoggedIn) ...[const SizedBox(height: 16), const _RemoteCard()],
+          if (server.isLoggedIn || vm.downloads.hasAnything) const _DownloadsCard(),
+          if (server.isLoggedIn) const _RemoteCard(),
         ];
-        final singleColumn = <Widget>[
-          const _AccountCard(),
-          const SizedBox(height: 16),
-          if (library) ...[const _LibraryCard(), const SizedBox(height: 16)],
-          if (vm.audioSettings.hasDeviceChoice) ...[const _AudioCard(), const SizedBox(height: 16)],
-          const _AppearanceCard(),
-          const SizedBox(height: 16),
-          const _HiddenContentCard(),
-          if (server.isLoggedIn || vm.downloads.hasAnything) ...[const SizedBox(height: 16), const _DownloadsCard()],
-          if (server.isLoggedIn) ...[const SizedBox(height: 16), const _RemoteCard()],
-          const SizedBox(height: 16),
-          const _AboutCard(),
-        ];
+        Widget column(List<Widget> cards) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (i, card) in cards.indexed) ...[if (i > 0) const SizedBox(height: 16), card],
+          ],
+        );
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -71,16 +58,12 @@ class SettingsPage extends StatelessWidget {
                       ? Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: left),
-                            ),
+                            Expanded(child: column([...account, const _AboutCard()])),
                             const SizedBox(width: 24),
-                            Expanded(
-                              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: right),
-                            ),
+                            Expanded(child: column(options)),
                           ],
                         )
-                      : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: singleColumn),
+                      : column([...account, ...options, const _AboutCard()]),
                 ),
               ],
             );
@@ -1034,22 +1017,18 @@ class _AudioCard extends StatelessWidget {
     final colors = context.colors;
     final palette = colors.palette;
 
-    final player = context.vm.player;
-
     return ListenableBuilder(
-      listenable: Listenable.merge([audio, player]),
+      listenable: audio,
       builder: (context, _) {
         final devices = audio.availableDevices;
 
         Widget mode(
-          String title,
           String badgeText,
           QualityTier tier,
           String description,
           bool value,
           bool available,
           ValueChanged<bool> onChanged,
-          String tip,
         ) {
           final fg = MedalColors.fg(tier);
           final border = value ? fg.withValues(alpha: 0.6) : colors.glassBorder;
@@ -1156,24 +1135,20 @@ class _AudioCard extends StatelessWidget {
               LayoutBuilder(
                 builder: (context, constraints) {
                   final exclusive = mode(
-                    context.tr('ExclusiveLabel'),
                     'EXCLUSIVE',
                     QualityTier.silver,
                     context.tr('ExclusiveDescription'),
                     audio.isExclusiveMode,
                     audio.isExclusiveAvailable,
                     audio.setExclusiveMode,
-                    'TipExclusive',
                   );
                   final bitperfect = mode(
-                    context.tr('ModeBitPerfect'),
                     'BIT-PERFECT',
                     QualityTier.gold,
                     context.tr('BitPerfectDescription'),
                     audio.isBitperfect,
                     audio.isBitperfectAvailable,
                     audio.setBitperfect,
-                    'TipBitPerfect',
                   );
                   if (constraints.maxWidth < 420) {
                     return Column(children: [exclusive, const SizedBox(height: 10), bitperfect]);

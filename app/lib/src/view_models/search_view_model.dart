@@ -160,14 +160,6 @@ class SearchViewModel extends ChangeNotifier {
     );
   }
 
-  void openAlbum(Album? album) {
-    if (album != null) _openAlbum(album);
-  }
-
-  void openArtist(Artist? artist) {
-    if (artist != null) _openArtist(artist);
-  }
-
   @override
   void dispose() {
     _unsubscribe();

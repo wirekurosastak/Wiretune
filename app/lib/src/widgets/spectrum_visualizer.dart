@@ -9,14 +9,9 @@ import 'package:flutter/material.dart';
 /// Spectrum bars: one per band, centred on the middle line and growing up and down, softer at the centre and lit in
 /// [highlight] at the tips, over a faint glow of the same colours.
 class SpectrumVisualizer extends StatelessWidget {
-  const SpectrumVisualizer({
-    super.key,
-    required this.bands,
-    required this.color,
-    this.highlight,
-    this.width = 260,
-    this.height = 36,
-  });
+  const SpectrumVisualizer({super.key, required this.bands, required this.color, this.highlight, this.width = 260});
+
+  static const double height = 36;
 
   final ValueListenable<Float32List> bands;
   final Color color;
@@ -24,7 +19,6 @@ class SpectrumVisualizer extends StatelessWidget {
   /// The colour of the tips; [color] when not given.
   final Color? highlight;
   final double width;
-  final double height;
 
   @override
   Widget build(BuildContext context) => RepaintBoundary(

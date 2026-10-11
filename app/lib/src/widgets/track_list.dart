@@ -18,11 +18,8 @@ import 'quality_tag.dart';
 /// Which list a track table shows; each has its own columns and buttons. Every table ends in the download button of a
 /// server track; a phone row has the favourite and a menu with the rest.
 enum TrackTableKind {
-  /// The library: cover, title, artist, album, quality, length, favourite, add to playlist.
+  /// The library, and the favourites: cover, title, artist, album, quality, length, favourite, add to playlist.
   tracks,
-
-  /// Favourites: the same, the heart a filled one that removes the track from the favourites.
-  favorites,
 
   /// An album: track number, title, quality, length, favourite, add to playlist.
   album,
@@ -70,8 +67,7 @@ class TrackSliver extends StatefulWidget {
 
 class _TrackSliverState extends State<TrackSliver> {
   // This table's own sort, for a list without a page's sort; null keeps the list's order.
-  TrackSortField? _ownField;
-  bool _ownDescending = false;
+  SortOrder<TrackSortField>? _own;
   List<Track>? _sortedSource;
   List<Track> _sorted = const [];
   double _tableWidth = 1200;
@@ -83,13 +79,13 @@ class _TrackSliverState extends State<TrackSliver> {
   void didUpdateWidget(TrackSliver oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.kind != widget.kind) {
-      _ownField = null;
+      _own = null;
       _sortedSource = null;
     }
   }
 
-  TrackSortField? get _sortField => widget.sorting?.sortField ?? _ownField;
-  bool get _descending => widget.sorting?.isSortDescending ?? _ownDescending;
+  TrackSortField? get _sortField => widget.sorting?.sortField ?? _own?.field;
+  bool get _descending => widget.sorting?.isSortDescending ?? _own?.descending ?? false;
 
   /// When [track] was added: to the favourites on that page, otherwise to the library.
   DateTime? _addedAt(Track track) {
@@ -104,19 +100,13 @@ class _TrackSliverState extends State<TrackSliver> {
   bool get _showArtist => kind != TrackTableKind.album && kind != TrackTableKind.artist;
   bool get _showAlbum => kind != TrackTableKind.album && _tableWidth >= 560;
   bool get _showYear =>
-      (kind == TrackTableKind.tracks ||
-          kind == TrackTableKind.favorites ||
-          kind == TrackTableKind.artist ||
-          kind == TrackTableKind.playlist) &&
+      (kind == TrackTableKind.tracks || kind == TrackTableKind.artist || kind == TrackTableKind.playlist) &&
       _tableWidth >= 720;
-  bool get _showAdded =>
-      (kind == TrackTableKind.tracks || kind == TrackTableKind.favorites || kind == TrackTableKind.playlist) &&
-      _tableWidth >= 880;
+  bool get _showAdded => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && _tableWidth >= 880;
   bool get _showQuality => kind != TrackTableKind.search && _tableWidth >= 1060;
 
   int get _titleFlex {
-    if (kind == TrackTableKind.album) return 8;
-    if (!_showArtist && !_showAlbum) return 8;
+    if (!_showArtist && !_showAlbum) return 8; // an album's table shows neither
     if (!_showArtist || !_showAlbum) return 7;
     return 6;
   }
@@ -132,22 +122,22 @@ class _TrackSliverState extends State<TrackSliver> {
 
   /// The tracks in the order shown: the page sorts its own, this table those of a list without a page's sort.
   List<Track> get _tracks {
-    final field = _ownField;
-    if (widget.sorting != null || field == null) return widget.tracks;
+    final own = _own;
+    if (widget.sorting != null || own == null) return widget.tracks;
     if (identical(_sortedSource, widget.tracks)) return _sorted;
     _sortedSource = widget.tracks;
-    return _sorted = sortTracks(widget.tracks, field, descending: _ownDescending);
+    return _sorted = sortTracks(widget.tracks, own.field, descending: own.descending);
   }
 
   void _sortBy(TrackSortField field) {
     final sorting = widget.sorting;
     if (sorting != null) return sorting.setSortField(field);
     setState(() {
-      if (_ownField == field) {
-        _ownDescending = !_ownDescending;
+      final own = _own;
+      if (own == null) {
+        _own = SortOrder(field, startsDescending: startsDescending);
       } else {
-        _ownField = field;
-        _ownDescending = startsDescending(field);
+        own.select(field);
       }
       _sortedSource = null;
     });
@@ -429,18 +419,6 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
     },
   );
   return switch (kind) {
-    // The heart first and "add to playlist" after it, as in every other list.
-    TrackTableKind.favorites => [
-      _IconCell(
-        width: size,
-        tooltip: context.tr('TipRemoveFromFavorites'),
-        icon: Icon(Icons.favorite_rounded, color: colors.palette.coral, size: 18),
-        onPressed: () => vm.favorites.removeFavorite(track),
-      ),
-      add,
-      download,
-      hide,
-    ],
     TrackTableKind.playlist => [
       favorite,
       _IconCell(

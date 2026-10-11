@@ -112,7 +112,7 @@ void main() {
     final vm = await pumpApp(tester, const Size(1400, 900));
     final navFavorites = Localizer.get('NavFavorites');
     expect(find.text(navFavorites), findsOneWidget);
-    expect(vm.serverSettings.totalFavoritesCount, 0);
+    expect(vm.favorites.favoriteTracks, isEmpty);
 
     final favoritesItem = find.ancestor(of: find.text(navFavorites), matching: find.byType(InkWell));
     expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
@@ -121,14 +121,14 @@ void main() {
     await tester.pump();
     await settle(tester);
 
-    expect(vm.serverSettings.totalFavoritesCount, 1);
+    expect(vm.favorites.favoriteTracks, hasLength(1));
     expect(find.descendant(of: favoritesItem, matching: find.text('1')), findsOneWidget);
 
     await vm.library.toggleFavorite('1');
     await tester.pump();
     await settle(tester);
 
-    expect(vm.serverSettings.totalFavoritesCount, 0);
+    expect(vm.favorites.favoriteTracks, isEmpty);
     expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
   });
 
@@ -142,6 +142,34 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await settle(tester);
     expect(vm.isSearchActive, isFalse);
+  });
+
+  testWidgets('the search fields follow the query: the clear button comes with the typing, back empties them', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final clear = find.byTooltip(Localizer.get('TipClearSearch'));
+    Finder field() => find.byType(TextField).first;
+    expect(clear, findsNothing);
+
+    await tester.enterText(field(), 'daft');
+    await settle(tester);
+    expect(clear, findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    expect(clear, findsNothing);
+    expect(tester.widget<TextField>(field()).controller!.text, isEmpty);
+
+    tester.view.physicalSize = const Size(400, 860);
+    vm.openSearch();
+    await settle(tester);
+    await tester.enterText(field(), 'miles');
+    await settle(tester);
+    expect(clear, findsOneWidget);
+    await tester.tap(clear);
+    await settle(tester);
+    expect(clear, findsNothing);
+    expect(vm.searchQuery, isEmpty);
   });
 
   testWidgets('a narrow window gets the phone layout with the bottom navigation', (tester) async {
@@ -171,14 +199,14 @@ void main() {
 
     await tester.tap(find.text(Localizer.get('Queue')));
     await settle(tester);
-    expect(vm.nowPlayingTab, 1);
+    expect(vm.nowPlayingTab, NowPlayingTab.queue);
 
     // The system back button (Android) arrives as a pop of the route: from the queue it returns to the player, then
     // closes it.
     await tester.binding.handlePopRoute();
     await settle(tester);
     expect(vm.isNowPlayingOpen, isTrue);
-    expect(vm.nowPlayingTab, 0);
+    expect(vm.nowPlayingTab, NowPlayingTab.player);
 
     await tester.binding.handlePopRoute();
     await settle(tester);
@@ -193,9 +221,7 @@ void main() {
     }
     final page = find.byType(NowPlayingPage);
     Finder onPage(Finder finder) => find.descendant(of: page, matching: finder);
-    String? coverOnPage() => tester
-        .widget<CoverImage>(onPage(find.descendant(of: find.byType(Hero), matching: find.byType(CoverImage))))
-        .path;
+    String? coverOnPage() => tester.widget<CoverImage>(onPage(find.byType(CoverImage))).path;
 
     vm.player.playQueue(tracks, tracks.first);
     vm.openNowPlaying();
@@ -241,7 +267,7 @@ void main() {
 
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
-    vm.nowPlayingTab = 2;
+    vm.nowPlayingTab = NowPlayingTab.lyrics;
     await tester.runAsync(() async {
       await waitUntil(() => vm.player.hasSyncedLyrics);
       await driver.seek(const Duration(seconds: 1));
@@ -336,7 +362,7 @@ void main() {
 
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
-    vm.nowPlayingTab = 1;
+    vm.nowPlayingTab = NowPlayingTab.queue;
     await settle(tester);
     expect(find.byType(QueueList), findsOneWidget);
     expect(find.descendant(of: find.byType(QueueList), matching: find.byType(QualityTag)), findsNothing);
@@ -403,7 +429,7 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'artist detail at $size');
       if (!tv) {
         vm.openNowPlaying();
-        for (final tab in [0, 1, 2]) {
+        for (final tab in NowPlayingTab.values) {
           vm.nowPlayingTab = tab;
           await settle(tester);
           expect(tester.takeException(), isNull, reason: 'now playing tab $tab at $size');

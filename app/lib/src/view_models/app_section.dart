@@ -5,6 +5,9 @@
 /// order of the values is the order they were added in, not the order they are drawn in (see [navVisualOrder]).
 enum AppSection { tracks, albums, artists, playlists, favorites, settings }
 
+/// The pages of the phone's full-screen player.
+enum NowPlayingTab { player, queue, lyrics }
+
 /// Which way the animated logo's wave runs: downwards / inwards, or upwards / back.
 enum NavWaveDirection { leftToRight, rightToLeft }
 

@@ -166,7 +166,6 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
         SliverToBoxAdapter(
           child: DetailHeader(
             back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),
-            artworkPath: playlistCovers(tracks).firstOrNull,
             artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
             artworkBadge: playlist.formatSpec.isEmpty
                 ? null
@@ -175,20 +174,12 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             title: playlist.name,
             titleWidget: title,
             details: [
-              Text(
-                context.trf('TrackCount', [playlist.trackCount]),
-                style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
-              ),
+              DetailText(context.trf('TrackCount', [playlist.trackCount])),
               if (playlists.selectedPlaylistTotalDuration.isNotEmpty)
-                Text(
-                  playlists.selectedPlaylistTotalDuration,
-                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
-                ),
+                DetailText(playlists.selectedPlaylistTotalDuration),
             ],
             actions: [
               PlayShuffleButtons(
-                playLabel: context.tr('Play'),
-                shuffleLabel: context.tr('Shuffle'),
                 onPlay: tracks.isEmpty ? null : () => playlists.playPlaylist(),
                 onShuffle: tracks.isEmpty ? null : () => playlists.shufflePlaylist(),
                 trailing: DownloadListButton.forTracks(

@@ -144,10 +144,10 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
   the tab history for the back button and Escape alike; it needs no platform API, so it's unit-tested.
 - **Big libraries** stay smooth: track lists are slivers, and covers are decoded at the size they're shown, into a 120
   MB image cache (160 MB on a TV). The token for server covers travels in a header, never in the URL.
-- **Theme**: an accent and a window gradient per section (`theme/palette.dart`), built once per section. Over the
-  gradient the backdrop washes in the colours of the cover that's playing (`widgets/ambient.dart`): the cover is
-  decoded at 64 px and blurred once into a 96 px bitmap, so nothing is blurred per frame, and it turns only on a
-  desktop while music plays (not with the system's reduced motion).
+- **Theme**: an accent per section (`theme/palette.dart`), built once per section. Over the window's neutral base
+  the backdrop washes in the colours of the cover that's playing (`widgets/ambient.dart`): the cover is decoded at 64
+  px and blurred once into a 96 px bitmap, so nothing is blurred per frame, and it turns only on a desktop while music
+  plays (not with the system's reduced motion).
 - **Battery**: on a phone or tablet (`AppPlatform.isMobile`) nothing animates on its own: the backdrop doesn't turn,
   the logo doesn't breathe, the bars beside the playing track don't bounce, and the progress
   follows `PlayerViewModel.elapsedSeconds`, so music that plays on draws a frame a second; controlling another device,

@@ -63,7 +63,7 @@ void main() {
     expect((player.isPlaying, player.volume, player.isShuffle, player.repeatMode), (true, 70.0, true, RepeatMode.all));
     expect(player.position.value.inMilliseconds, inInclusiveRange(30000, 31000));
     expect([for (final item in player.queueItems) item.track.title], ['Song 1', 'Song 2', 'Song 3']);
-    expect((player.currentQueueIndex, player.canEditQueue), (1, true));
+    expect(player.currentQueueIndex, 1);
 
     player.nextTrack();
     await player.togglePlayPause();

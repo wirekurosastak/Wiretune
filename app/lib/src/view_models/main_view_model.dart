@@ -25,8 +25,6 @@ class DeviceCapabilities {
   final String name;
 }
 
-/// The whole app's state: the services, one view model per area, the navigation and the status lines. The wide and
-/// the phone layout are two views of this one model.
 /// A short message that needs no answer: a change that wasn't made, one the server turned down, something that went
 /// through. The app shows the latest for a few seconds.
 class AppNotice {
@@ -36,6 +34,8 @@ class AppNotice {
   final bool isError;
 }
 
+/// The whole app's state: the services, one view model per area, the navigation and the status lines. The wide and
+/// the phone layout are two views of this one model.
 class MainViewModel extends ChangeNotifier {
   MainViewModel(
     this.audioEngine,
@@ -94,11 +94,8 @@ class MainViewModel extends ChangeNotifier {
       session.changeRefused.listen((reason) => showNotice(Localizer.format('ChangeRefused', [reason]), isError: true)),
     ]);
 
-    _updateAuthDisplay();
     _updateStatusText();
   }
-
-  static const double compactLayoutWidth = 1000;
 
   final WiretuneAudioEngine audioEngine;
   final LibraryService library;
@@ -132,7 +129,6 @@ class MainViewModel extends ChangeNotifier {
   // ── Navigation ─────────────────────────────────────────────────────────────────────────────────
 
   AppSection _selectedSection = AppSection.artists;
-  AppSection _previousSection = AppSection.artists;
 
   // The tabs the user came from, the latest last; the tab that is open is never in it. Back walks it backwards.
   final List<AppSection> _tabHistory = [];
@@ -145,19 +141,13 @@ class MainViewModel extends ChangeNotifier {
   set selectedSection(AppSection value) {
     if (_selectedSection == value) return;
     player.closeQueue();
+    final previous = _selectedSection;
     _selectedSection = value;
-
-    if (_previousSection != value) {
-      if (!_isRestoringTab) _rememberTab(_previousSection, value);
-      final oldOrder = navVisualOrder(_previousSection);
-      final newOrder = navVisualOrder(value);
-      if (newOrder > oldOrder) {
-        triggerNavWave(NavWaveDirection.leftToRight); // downwards
-      } else if (newOrder < oldOrder) {
-        triggerNavWave(NavWaveDirection.rightToLeft); // upwards
-      }
-    }
-    _previousSection = value;
+    if (!_isRestoringTab) _rememberTab(previous, value);
+    // The wave runs downwards to a section drawn below the one left, upwards to one above it.
+    triggerNavWave(
+      navVisualOrder(value) > navVisualOrder(previous) ? NavWaveDirection.leftToRight : NavWaveDirection.rightToLeft,
+    );
     notifyListeners();
   }
 
@@ -235,22 +225,21 @@ class MainViewModel extends ChangeNotifier {
   // ── Full-screen player (phone) ─────────────────────────────────────────────────────────────────
 
   bool _isNowPlayingOpen = false;
-  int _nowPlayingTab = 0;
+  NowPlayingTab _nowPlayingTab = NowPlayingTab.player;
 
   bool get isNowPlayingOpen => _isNowPlayingOpen;
   set isNowPlayingOpen(bool value) {
     if (_isNowPlayingOpen == value) return;
     _isNowPlayingOpen = value;
-    if (!value) nowPlayingTab = 0;
+    if (!value) nowPlayingTab = NowPlayingTab.player;
     notifyListeners();
   }
 
-  /// 0 = player, 1 = queue, 2 = lyrics.
-  int get nowPlayingTab => _nowPlayingTab;
-  set nowPlayingTab(int value) {
-    if (value < 0 || value > 2) return;
+  /// The queue and the lyrics are the player's queue panel: open while either is shown.
+  NowPlayingTab get nowPlayingTab => _nowPlayingTab;
+  set nowPlayingTab(NowPlayingTab value) {
     _nowPlayingTab = value;
-    player.isQueueOpen = value != 0;
+    player.isQueueOpen = value != NowPlayingTab.player;
     notifyListeners();
   }
 
@@ -281,8 +270,8 @@ class MainViewModel extends ChangeNotifier {
 
     if (_isNowPlayingOpen) {
       // The queue and the lyrics are pages of the full-screen player: back returns to the player, then closes it.
-      if (_nowPlayingTab != 0) {
-        nowPlayingTab = 0;
+      if (_nowPlayingTab != NowPlayingTab.player) {
+        nowPlayingTab = NowPlayingTab.player;
       } else {
         isNowPlayingOpen = false;
       }
@@ -431,8 +420,8 @@ class MainViewModel extends ChangeNotifier {
   /// The banner's way out: sign in again, rather than reconnect.
   bool serverBannerNeedsSignIn = false;
   bool _isLoginViewActive = false;
-  bool isUserLoggedIn = false;
-  String currentUserBadge = Localizer.get('SignIn');
+
+  bool get isUserLoggedIn => session.isLoggedIn;
 
   bool get isLoginViewActive => _isLoginViewActive;
   set isLoginViewActive(bool value) {
@@ -457,7 +446,6 @@ class MainViewModel extends ChangeNotifier {
     player.releaseRemote();
     await serverSettings.logout();
     await downloadService.removeAll();
-    _updateAuthDisplay();
     isLoginViewActive = library.tracks.isEmpty;
     notifyListeners();
   }
@@ -475,29 +463,18 @@ class MainViewModel extends ChangeNotifier {
         : session.statusMessage ?? Localizer.format('ServerBannerUnreachable', [session.serverUrl]);
 
     if (session.isLoggedIn) _isLoginViewActive = false;
-    _updateAuthDisplay();
     _updateStatusText();
-  }
-
-  void _updateAuthDisplay() {
-    isUserLoggedIn = session.isLoggedIn;
-    currentUserBadge = session.currentUser?.username ?? Localizer.get('SignIn');
   }
 
   // ── Status lines ───────────────────────────────────────────────────────────────────────────────
 
-  bool isStarting = true;
-
   /// Why the player could not start (its database can't be opened, say); it then shows only this.
   String? startupError;
-  bool isLibraryEmpty = false;
   String statusText = Localizer.get('StatusStarting');
   String rightFooterStatusText = Localizer.get('FooterLoading');
 
   void _updateStatusText() {
     if (_disposed) return;
-    isLibraryEmpty = !isStarting && library.tracks.isEmpty;
-
     final device = audioEngine.currentDevice;
     final mode = Localizer.get(
       audioEngine.isBitperfect ? 'ModeBitPerfect' : (audioEngine.isExclusiveMode ? 'ModeExclusive' : 'ModeShared'),
@@ -603,9 +580,6 @@ class MainViewModel extends ChangeNotifier {
 
   String get language => Localizer.instance.language;
 
-  /// Text of the language picker's button: the active language's code, e.g. "EN".
-  String get languageBadge => Localizer.instance.language.toUpperCase();
-
   /// Switches the interface language and remembers the choice.
   void changeLanguage(String? code) {
     if (!Localizer.instance.setLanguage(code)) return;
@@ -673,12 +647,10 @@ class MainViewModel extends ChangeNotifier {
           ? Localizer.format('StartupDatabaseIncompatible', [e.path ?? ''])
           : Localizer.format('StartupError', ['$e']);
       statusText = startupError!;
-      isStarting = false;
       notifyListeners();
       return;
     }
     // The cached library is usable now; the server connection below may take a while.
-    isStarting = false;
     _updateStatusText();
 
     if (session.source == LibrarySource.server || session.source == LibrarySource.hybrid) await session.connect();

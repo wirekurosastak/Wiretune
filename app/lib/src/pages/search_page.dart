@@ -175,7 +175,7 @@ class SearchResults extends StatelessWidget {
                   ),
                   ArtistsSliver(
                     artists: search.matchingArtists,
-                    onOpen: search.openArtist,
+                    onOpen: context.vm.openArtist,
                     onPlay: context.vm.artists.playArtist,
                   ),
                 ],
@@ -188,7 +188,7 @@ class SearchResults extends StatelessWidget {
                   ),
                   AlbumsSliver(
                     albums: search.matchingAlbums,
-                    onOpen: search.openAlbum,
+                    onOpen: context.vm.openAlbum,
                     onPlay: context.vm.albums.playAlbum,
                   ),
                 ],
@@ -262,7 +262,7 @@ class _BestMatchCard extends StatelessWidget {
               style: TextStyle(fontSize: 11, color: colors.textMuted),
             ),
             const SizedBox(height: 18),
-            TilePlayButton(color: typeColor, onPressed: match.play, tooltip: context.tr('Play'), size: 48),
+            TilePlayButton(color: typeColor, onPressed: match.play, size: 48),
           ],
         ),
       ),
