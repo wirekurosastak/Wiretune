@@ -94,6 +94,7 @@ Every message is a JSON object with a `type`, sent as text, at most 64 K charact
 | `{ "type": "devices", "devices": [{ "id", "name", "kind" }] }` | server | The account's other players that are online, every time that changes |
 | `{ "type": "state", "device", "state" }` | server | Another player's state |
 | `{ "type": "command", "from", "command" }` | server | A command for this player |
+| `{ "type": "dataChanged" }` | server | The account's favourites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change when it named itself in an `X-Wiretune-Device` header (its device ID) on that request |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
 "queueIndex" }`: the track as `/api/tracks` lists it (or `null`), the position when the state was sent (the others
@@ -104,7 +105,8 @@ players find them in their own library.
 A **command** has an `action`: `play`, `pause`, `toggle`, `stop`, `next`, `previous`, `seek` (with `positionMs`),
 `volume` (`volume`), `mute` and `shuffle` (`on`), `repeat` (`repeat`), `playTracks` (`trackIds`, the `index` to start
 at or -1 for the player's own choice, and `positionMs` there), `playIndex` (`index` in its queue), `moveTrack` (from
-`index` to `toIndex` in its queue), `removeTrack` (`index`) or `clearQueue`. A player checks what it gets and ignores a
+`index` to `toIndex` in its queue), `removeTrack` (`index`), `clearQueue`, `playNext` (`trackIds` right after the
+current track) or `addToQueue` (`trackIds` at the end; with nothing queued both start playing). A player checks what it gets and ignores a
 command it doesn't understand.
 
 The server closes a connection with `4000` when the same device connects again, `4001` beyond 20 devices on one

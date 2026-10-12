@@ -9,6 +9,7 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
+import '../view_models/main_view_model.dart';
 import '../view_models/settings_view_models.dart';
 import '../widgets/common.dart';
 import '../widgets/devices.dart';
@@ -198,13 +199,10 @@ class _AccountCardState extends State<_AccountCard> {
     final server = context.vm.serverSettings;
     _url = TextEditingController(text: server.serverUrl);
     _lastSyncedUrl = server.serverUrl;
+    // The accounts as they are now, also when another device changed them since the sign-in loaded them; after the
+    // frame, as loading tells the listeners at once. It does nothing for anyone but an administrator.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final server = context.vm.serverSettings;
-        if (server.isLoggedIn && server.isAdmin) {
-          server.loadUsers();
-        }
-      }
+      if (mounted) context.vm.serverSettings.loadUsers();
     });
   }
 
@@ -684,13 +682,10 @@ class _LibraryCardState extends State<_LibraryCard> {
     _serverFolder = TextEditingController(text: server.serverLibraryPath);
     _localPath = TextEditingController(text: server.localLibraryPath);
     _lastLoadedServerFolder = server.serverLibraryPath;
+    // The folder, and what is wrong with it, as they are now (a drive may have gone since the sign-in); after the
+    // frame, as loading tells the listeners at once. It does nothing for anyone but an administrator.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final vm = context.vm.serverSettings;
-        if (vm.isLoggedIn && vm.isAdmin) {
-          vm.loadServerConfig();
-        }
-      }
+      if (mounted) context.vm.serverSettings.loadServerConfig();
     });
   }
 
@@ -953,28 +948,8 @@ class _RemoteCardState extends State<_RemoteCard> {
     final player = vm.player;
     return ListenableBuilder(
       listenable: Listenable.merge([player, vm]),
+      // The status follows the session (the view model) and the devices in reach (the player).
       builder: (context, _) {
-        final others = player.otherDevices.length;
-        final session = vm.session;
-        final waitingForServer =
-            session.state == ServerConnectionState.offline || session.state == ServerConnectionState.connecting;
-        final problem = vm.remote.problem;
-        final status = !vm.isRemoteEnabled
-            ? context.tr('RemoteStatusOff')
-            : !session.isLoggedIn && !waitingForServer
-            ? context.tr('RemoteStatusSignedOut')
-            : problem != null
-            ? switch (problem) {
-                RemoteProblem.unsupported => context.tr('RemoteStatusUnsupported'),
-                RemoteProblem.tooManyDevices => context.trf('RemoteStatusTooManyDevices', [
-                  RemoteRules.maxDevicesPerAccount,
-                ]),
-                RemoteProblem.replaced => context.tr('RemoteStatusReplaced'),
-                RemoteProblem.ended => context.tr('RemoteStatusEnded'),
-              }
-            : (player.canReachDevices
-                  ? context.trf('RemoteStatusConnected', [others])
-                  : context.tr('RemoteStatusConnecting'));
         return GlassCard(
           opaque: true,
           child: Column(
@@ -998,7 +973,7 @@ class _RemoteCardState extends State<_RemoteCard> {
                 ),
                 onChanged: (value) => vm.deviceName = value,
               ),
-              _StatusLine(status, isError: vm.isRemoteEnabled && problem != null),
+              _StatusLine(vm.remoteStatus, isError: vm.hasRemoteProblem),
             ],
           ),
         );
@@ -1381,17 +1356,12 @@ class _HiddenContentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
-    final lib = vm.library;
     final colors = context.colors;
 
     return ListenableBuilder(
       listenable: vm,
       builder: (context, _) {
-        final hiddenTracks = lib.hiddenTracks;
-        final hiddenAlbums = lib.hiddenAlbums;
-        final hiddenArtists = lib.hiddenArtists;
-        final totalHidden = hiddenTracks.length + hiddenAlbums.length + hiddenArtists.length;
-
+        final hidden = vm.hiddenItems;
         return GlassCard(
           opaque: true,
           child: Column(
@@ -1402,7 +1372,7 @@ class _HiddenContentCard extends StatelessWidget {
                 title: context.tr('HiddenContent'),
                 subtitle: context.tr('HiddenContentHint'),
               ),
-              if (totalHidden == 0)
+              if (hidden.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Text(
@@ -1416,52 +1386,23 @@ class _HiddenContentCard extends StatelessWidget {
                   child: ListView(
                     shrinkWrap: true,
                     children: [
-                      for (final id in hiddenArtists) ...[
+                      for (final item in hidden) ...[
                         _hiddenRow(
                           context,
-                          icon: Icons.person_outline_rounded,
-                          label:
-                              lib.rawTracks
-                                  .where(
-                                    (t) =>
-                                        stableId(t.artist.toLowerCase()) == id ||
-                                        stableId(t.effectiveAlbumArtist.toLowerCase()) == id,
-                                  )
-                                  .firstOrNull
-                                  ?.effectiveAlbumArtist ??
-                              id,
-                          onUnhide: () => lib.unhideArtist(id),
-                        ),
-                        Divider(color: colors.glassBorder, height: 1),
-                      ],
-                      for (final id in hiddenAlbums) ...[
-                        _hiddenRow(
-                          context,
-                          icon: Icons.album_outlined,
-                          label: () {
-                            final track = lib.rawTracks.where((t) => t.albumId == id).firstOrNull;
-                            return track != null ? '${track.album} • ${track.effectiveAlbumArtist}' : id;
-                          }(),
-                          onUnhide: () => lib.unhideAlbum(id),
-                        ),
-                        Divider(color: colors.glassBorder, height: 1),
-                      ],
-                      for (final id in hiddenTracks) ...[
-                        _hiddenRow(
-                          context,
-                          icon: Icons.music_note_outlined,
-                          label: () {
-                            final track = lib.getTrack(id);
-                            return track != null ? '${track.title} • ${track.artist}' : id;
-                          }(),
-                          onUnhide: () => lib.unhideTrack(id),
+                          icon: switch (item.kind) {
+                            HiddenKind.artist => Icons.person_outline_rounded,
+                            HiddenKind.album => Icons.album_outlined,
+                            HiddenKind.track => Icons.music_note_outlined,
+                          },
+                          label: item.label,
+                          onUnhide: () => vm.unhide(item),
                         ),
                         Divider(color: colors.glassBorder, height: 1),
                       ],
                     ],
                   ),
                 ),
-                if (totalHidden > 1) ...[
+                if (hidden.length > 1) ...[
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerRight,
@@ -1470,10 +1411,10 @@ class _HiddenContentCard extends StatelessWidget {
                         final confirmed = await confirmAction(
                           context,
                           title: context.tr('UnhideAllConfirm'),
-                          message: context.trf('UnhideAllConfirmHint', [totalHidden]),
+                          message: context.trf('UnhideAllConfirmHint', [hidden.length]),
                           confirmLabel: context.tr('UnhideAll'),
                         );
-                        if (confirmed) await lib.unhideAll();
+                        if (confirmed) await vm.library.unhideAll();
                       },
                       icon: const Icon(Icons.visibility_rounded, size: 16),
                       label: Text(context.tr('UnhideAll')),

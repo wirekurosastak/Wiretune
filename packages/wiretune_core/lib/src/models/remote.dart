@@ -37,6 +37,10 @@ abstract final class RemoteRules {
   static const int closeTooManyDevices = 4001;
   static const int closeSignedOut = 4401;
 
+  /// The header a player names itself in (its remote-control device ID) when it changes the account's data, so that the
+  /// server tells only the account's other players.
+  static const String deviceHeader = 'X-Wiretune-Device';
+
   /// [value] as a device name: without control characters, trimmed, at most [maxDeviceNameLength] characters.
   static String cleanName(Object? value) {
     if (value is! String) return '';
@@ -159,11 +163,18 @@ enum RemoteAction {
   moveTrack,
   removeTrack,
   clearQueue,
+
+  /// [RemoteCommand.trackIds] go right after the current track.
+  playNext,
+
+  /// [RemoteCommand.trackIds] go to the end of the queue.
+  addToQueue,
 }
 
 /// A command for another player. Each action reads only its own fields: [position] (seek; where playTracks starts),
-/// [volume] (0 to 100), [on] (mute, shuffle), [repeat], [trackIds] and [index] (playTracks, where -1 lets the player
-/// choose the first track as it would itself; playIndex; moveTrack from-index; removeTrack index), and [toIndex] (moveTrack to-index).
+/// [volume] (0 to 100), [on] (mute, shuffle), [repeat], [trackIds] (playTracks, playNext, addToQueue) and [index]
+/// (playTracks, where -1 lets the player choose the first track as it would itself; playIndex; moveTrack from-index;
+/// removeTrack index), and [toIndex] (moveTrack to-index).
 class RemoteCommand {
   const RemoteCommand(
     this.action, {
@@ -191,7 +202,8 @@ class RemoteCommand {
     if (action == RemoteAction.volume) 'volume': volume,
     if (action == RemoteAction.mute || action == RemoteAction.shuffle) 'on': on,
     if (action == RemoteAction.repeat) 'repeat': repeat.name,
-    if (action == RemoteAction.playTracks) 'trackIds': trackIds,
+    if (action == RemoteAction.playTracks || action == RemoteAction.playNext || action == RemoteAction.addToQueue)
+      'trackIds': trackIds,
     if (action == RemoteAction.playTracks ||
         action == RemoteAction.playIndex ||
         action == RemoteAction.moveTrack ||
@@ -242,6 +254,9 @@ class RemoteCommand {
         return index is int && index >= 0 ? RemoteCommand(action, index: index) : null;
       case RemoteAction.clearQueue:
         return RemoteCommand(action);
+      case RemoteAction.playNext || RemoteAction.addToQueue:
+        final ids = _ids(json['trackIds']);
+        return ids == null || ids.isEmpty ? null : RemoteCommand(action, trackIds: ids);
       default:
         return RemoteCommand(action);
     }

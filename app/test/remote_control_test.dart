@@ -107,6 +107,63 @@ void main() {
     expect(hub.commandsTo('desk'), hasLength(9));
   });
 
+  test("another device's queue is edited by its own places, also around tracks this library doesn't know", () async {
+    // The desk plays a file of its own between the shared ones: the phone lists Song 1, 2 and 3 only.
+    hub.state(
+      'desk',
+      RemotePlayback(
+        track: tracks[1],
+        playing: true,
+        position: Duration.zero,
+        volume: 70,
+        shuffle: false,
+        repeat: RepeatMode.off,
+        queue: [tracks[0].id, 'desk-only', tracks[1].id, tracks[2].id],
+        queueIndex: 2,
+      ),
+    );
+    await pumpEventQueue();
+    player.selectDevice('desk');
+    expect([for (final item in player.queueItems) item.track.title], ['Song 1', 'Song 2', 'Song 3']);
+
+    player.removeQueueTrack(tracks[2]); // Song 3: the desk's fourth
+    player.moveQueueTrackUp(player.queueItems[1]); // Song 2 above Song 1
+    player.moveQueueTrack(0, 1); // and back below it, by dragging
+
+    expect([for (final item in player.queueItems) item.track.title], ['Song 1', 'Song 2']);
+    expect(hub.commandsTo('desk'), [
+      {'action': 'removeTrack', 'index': 3},
+      {'action': 'moveTrack', 'index': 2, 'toIndex': 0},
+      {'action': 'moveTrack', 'index': 0, 'toIndex': 1},
+    ]);
+  });
+
+  test('play next and add to queue go to the device being controlled, and are done when asked of this one', () async {
+    hub.state('desk', deskPlaying(0, Duration.zero));
+    await pumpEventQueue();
+    player.selectDevice('desk');
+    player.playNext([tracks[3]]);
+    player.addToQueue([tracks[2], tracks[3]]);
+    expect(hub.commandsTo('desk'), [
+      {
+        'action': 'playNext',
+        'trackIds': ['t4'],
+      },
+      {
+        'action': 'addToQueue',
+        'trackIds': ['t3', 't4'],
+      },
+    ]);
+    expect(driver.playCalls, 0);
+
+    player.selectDevice(null);
+    player.playQueue(tracks.take(2), tracks[0]);
+    hub.command('desk', const RemoteCommand(RemoteAction.playNext, trackIds: ['t4', 'not-here']));
+    hub.command('desk', const RemoteCommand(RemoteAction.addToQueue, trackIds: ['t3']));
+    await pumpEventQueue();
+    expect([for (final t in player.queueTracks) t.id], ['t1', 't4', 't2', 't3']);
+  });
+
   test('this device tells the others what it plays, at changes only, and does what they ask', () async {
     player.playQueue(tracks, tracks[0]);
     await Future<void>.delayed(const Duration(milliseconds: 200)); // states go out at most every 150 ms

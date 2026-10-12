@@ -51,6 +51,14 @@ class RemoteHub {
     );
   }
 
+  /// Tells the players of [userId] that the account's favourites, playlists or hidden items changed, so that each
+  /// downloads them again; [except] is the one that made the change (it already shows it).
+  void dataChanged(String userId, {String? except}) {
+    for (final peer in _accounts[userId]?.values ?? const <_Peer>[]) {
+      if (peer.id != except) _send(peer, const {'type': 'dataChanged'});
+    }
+  }
+
   /// Ends the connections of an account whose tokens no longer stand: it was deleted, or its password changed.
   void disconnectAccount(String userId, String reason) {
     for (final peer in _peers.where((p) => p.userId == userId).toList()) {

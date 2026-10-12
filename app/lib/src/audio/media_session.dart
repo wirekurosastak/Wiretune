@@ -194,8 +194,8 @@ class WiretuneMediaSession extends BaseAudioHandler {
 
   @override
   Future<void> skipToQueueItem(int index) async {
-    final queue = _vm.player.queueTracks;
-    if (index >= 0 && index < queue.length) _vm.player.playQueueTrack(queue[index]);
+    final queue = _vm.player.queueItems;
+    if (index >= 0 && index < queue.length) _vm.player.playQueueItem(queue[index]);
   }
 
   @override

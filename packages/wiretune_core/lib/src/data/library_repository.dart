@@ -174,10 +174,6 @@ class LibraryRepository {
     ]);
   }
 
-  Future<void> updateTrackBpm(String trackId, int bpm) async {
-    _db.connection.execute('UPDATE tracks SET bpm = ? WHERE id = ?', [bpm, trackId]);
-  }
-
   Future<List<Playlist>> getAllPlaylists() async {
     final rows = _db.connection.select('SELECT * FROM playlists ORDER BY name');
     return [

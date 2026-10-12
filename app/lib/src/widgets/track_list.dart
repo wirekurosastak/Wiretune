@@ -434,7 +434,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
   };
 }
 
-enum TrackAction { addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist, hideTrack }
+enum TrackAction { playNext, addToQueue, addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist, hideTrack }
 
 Future<void> _showTrackContextMenu(BuildContext context, Offset position, Track track, TrackTableKind kind) async {
   final action = await showMenu<TrackAction>(
@@ -447,8 +447,9 @@ Future<void> _showTrackContextMenu(BuildContext context, Offset position, Track 
   }
 }
 
-/// The "⋮" menu of a track, on a phone's rows and its full-screen player: what the table has as buttons (a playlist,
-/// the download), and the way to the album and the artist.
+/// The "⋮" menu of a track, on a phone's rows and its full-screen player (and a right click on a table row): play next
+/// and add to the queue, what the table has as buttons (a playlist, the download), and the way to the album and the
+/// artist.
 class TrackMenu extends StatelessWidget {
   const TrackMenu({super.key, required this.track, required this.kind, required this.width, this.color});
 
@@ -482,6 +483,8 @@ class TrackMenu extends StatelessWidget {
           ),
         );
     return [
+      item(TrackAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
+      item(TrackAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
       item(TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
       if (kind == TrackTableKind.playlist)
         item(
@@ -511,6 +514,10 @@ class TrackMenu extends StatelessWidget {
   static void handleAction(BuildContext context, TrackAction action, Track track) {
     final vm = context.vm;
     switch (action) {
+      case TrackAction.playNext:
+        vm.queue([track], next: true, name: track.title);
+      case TrackAction.addToQueue:
+        vm.queue([track], next: false, name: track.title);
       case TrackAction.addToPlaylist:
         vm.addToPlaylist(track);
       case TrackAction.removeFromPlaylist:

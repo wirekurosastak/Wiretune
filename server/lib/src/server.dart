@@ -414,9 +414,11 @@ class WiretuneServer {
     }),
     _Route('PUT', '/api/me/playlists/{playlistId}', Access.user, _savePlaylist, bodyLimit: _playlistBodyLimit),
     _Route('DELETE', '/api/me/playlists/{playlistId}', Access.user, (call) {
-      return userData.deletePlaylist(call.userId, call.params['playlistId']!)
-          ? jsonResponse({'deleted': true})
-          : errorResponse(404, ErrorCodes.playlistNotFound, 'Playlist not found.');
+      if (!userData.deletePlaylist(call.userId, call.params['playlistId']!)) {
+        return errorResponse(404, ErrorCodes.playlistNotFound, 'Playlist not found.');
+      }
+      _dataChanged(call);
+      return jsonResponse({'deleted': true});
     }),
   ];
 
@@ -630,18 +632,25 @@ class WiretuneServer {
     return lyrics == null ? notFound() : jsonResponse({'lyrics': lyrics});
   }
 
+  /// Tells the account's other players (not the one that names itself in [RemoteRules.deviceHeader]) that its data
+  /// changed. Play counts aren't announced: they change with every track and nothing shows them at once.
+  void _dataChanged(_Call call) =>
+      remote.dataChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
+
   Response _favorite(_Call call, bool favorite) {
     final trackId = call.params['trackId']!;
     final error = UserDataRules.validateId(trackId);
     if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
-    return userData.setFavorite(call.userId, trackId, favorite)
-        ? jsonResponse({'trackId': trackId, 'isFavorite': favorite})
-        : errorResponse(
-            409,
-            ErrorCodes.favoritesLimit,
-            'An account can have at most ${UserDataRules.maxFavorites} favourites.',
-            {'limit': UserDataRules.maxFavorites},
-          );
+    if (!userData.setFavorite(call.userId, trackId, favorite)) {
+      return errorResponse(
+        409,
+        ErrorCodes.favoritesLimit,
+        'An account can have at most ${UserDataRules.maxFavorites} favourites.',
+        {'limit': UserDataRules.maxFavorites},
+      );
+    }
+    _dataChanged(call);
+    return jsonResponse({'trackId': trackId, 'isFavorite': favorite});
   }
 
   Response _setHidden(_Call call, bool hidden) {
@@ -656,14 +665,16 @@ class WiretuneServer {
     }
     final error = UserDataRules.validateId(itemId);
     if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
-    return userData.setHidden(call.userId, type, itemId, hidden)
-        ? jsonResponse({'itemType': type, 'itemId': itemId, 'hidden': hidden})
-        : errorResponse(
-            409,
-            ErrorCodes.hiddenLimit,
-            'An account can have at most ${UserDataRules.maxHidden} hidden items.',
-            {'limit': UserDataRules.maxHidden},
-          );
+    if (!userData.setHidden(call.userId, type, itemId, hidden)) {
+      return errorResponse(
+        409,
+        ErrorCodes.hiddenLimit,
+        'An account can have at most ${UserDataRules.maxHidden} hidden items.',
+        {'limit': UserDataRules.maxHidden},
+      );
+    }
+    _dataChanged(call);
+    return jsonResponse({'itemType': type, 'itemId': itemId, 'hidden': hidden});
   }
 
   Future<Response> _savePlaylist(_Call call) async {
@@ -679,13 +690,15 @@ class WiretuneServer {
     if (error != null) return violationResponse(error);
 
     final saved = userData.savePlaylist(call.userId, playlistId, update!);
-    return saved == null
-        ? errorResponse(
-            409,
-            ErrorCodes.playlistsLimit,
-            'An account can have at most ${UserDataRules.maxPlaylists} playlists.',
-            {'limit': UserDataRules.maxPlaylists},
-          )
-        : jsonResponse(saved.toJson());
+    if (saved == null) {
+      return errorResponse(
+        409,
+        ErrorCodes.playlistsLimit,
+        'An account can have at most ${UserDataRules.maxPlaylists} playlists.',
+        {'limit': UserDataRules.maxPlaylists},
+      );
+    }
+    _dataChanged(call);
+    return jsonResponse(saved.toJson());
   }
 }

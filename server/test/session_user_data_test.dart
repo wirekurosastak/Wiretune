@@ -35,6 +35,14 @@ class Device {
   }
 }
 
+/// Waits (up to three seconds) until [condition] holds.
+Future<void> waitFor(bool Function() condition) async {
+  for (var i = 0; i < 300 && !condition(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+  expect(condition(), isTrue);
+}
+
 /// The player keeps the signed-in account's favourites, play counts and playlists on the server: what it shows is what
 /// the server holds, so it follows the account to other devices and survives a sign-out.
 void main() {
@@ -187,6 +195,40 @@ void main() {
       await phone.session.refreshLibrary();
       expect(phone.library.playlists.single.name, 'Renamed');
       expect(phone.library.getTrack(track.id)!.isFavorite, isFalse);
+    });
+
+    test("a change on one device shows on the account's others at once, without signing in again", () async {
+      final phone = await device('phone');
+      final laptop = await device('laptop');
+      await phone.signIn(server);
+      await laptop.signIn(server);
+
+      // Each with its remote-control connection, as the player wires it: the server's word refreshes the data.
+      final told = {'phone': 0, 'laptop': 0};
+      RemoteClient online(Device d, String id) {
+        final remote = RemoteClient(d.session)..configure(id: id, name: id, kind: DeviceKind.phone, enabled: true);
+        d.session.deviceId = id;
+        remote.accountDataChanged.listen((_) {
+          told[id] = told[id]! + 1;
+          d.session.refreshUserData();
+        });
+        addTearDown(remote.dispose);
+        return remote;
+      }
+
+      final phoneRemote = online(phone, 'phone');
+      final laptopRemote = online(laptop, 'laptop');
+      await waitFor(() => phoneRemote.devices.length == 1 && laptopRemote.devices.length == 1);
+
+      final track = phone.library.tracks.first;
+      await phone.library.toggleFavorite(track.id);
+      await waitFor(() => laptop.library.getTrack(track.id)!.isFavorite);
+      expect(laptop.library.favorites.single.id, track.id);
+
+      await laptop.library.createPlaylist('Shared');
+      await waitFor(() => phone.library.playlists.any((pl) => pl.name == 'Shared'));
+      expect(phone.library.getTrack(track.id)!.isFavorite, isTrue, reason: 'the refresh keeps what the phone holds');
+      expect(told, {'phone': 1, 'laptop': 1}, reason: "each is told of the other's change, not of its own");
     });
 
     test('hidden content syncs to the server and follows the account to another device', () async {

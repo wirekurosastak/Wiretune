@@ -99,6 +99,12 @@ another device instead: its track (this library's copy, for the cover and lyrics
 knows it, and its position counted on once a second; every command then goes there, and this device's playback carries
 on underneath, untouched.
 
+The same connection keeps the account's data in step: when the server stores a favourite, a playlist or a hidden item,
+it says `dataChanged` to the account's other players (each names itself in an `X-Wiretune-Device` header), and so does
+the client to itself after a reconnection. `ServerSession.refreshUserData` then downloads only `/api/me/data` and merges
+it into the track list it downloaded last, unless a change made here meanwhile is still on its way (its own
+announcement brings the next refresh). With remote control switched off, the data follows at the next connection.
+
 ## Server
 
 `WiretuneServer.start` wires the options (`ServerOptions`: command-line flags, each also a `WIRETUNE_*` variable),
@@ -117,7 +123,8 @@ where every route declares its access level (anonymous, user, admin, media) and 
 - **Streaming** checks that the file lies inside the library root by whole path segments (`/music2` isn't inside
   `/music`) before it serves a byte.
 - **Remote control**: `/api/remote` upgrades by hand to `dart:io`'s `WebSocket`, and `RemoteHub` keeps each account's
-  connections, passes states and commands between them only, and stores nothing. A connection ends when its token
+  connections, passes states and commands between them only (and tells them when the account's data changed), and
+  stores nothing. A connection ends when its token
   expires or its account is deleted.
 
 ## Audio

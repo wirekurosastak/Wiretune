@@ -34,6 +34,18 @@ class AppNotice {
   final bool isError;
 }
 
+/// What kind of thing the user hid.
+enum HiddenKind { artist, album, track }
+
+/// An artist, album or track the user hid, and the name the settings list it by.
+class HiddenItem {
+  const HiddenItem(this.kind, this.id, this.label);
+
+  final HiddenKind kind;
+  final String id;
+  final String label;
+}
+
 /// The whole app's state: the services, one view model per area, the navigation and the status lines. The wide and
 /// the phone layout are two views of this one model.
 class MainViewModel extends ChangeNotifier {
@@ -81,7 +93,10 @@ class MainViewModel extends ChangeNotifier {
       audioEngine.exclusiveModeChanged.listen((_) => _updateStatusText()),
       audioEngine.stateChanged.listen((_) => _updateStatusText()),
       audioEngine.devicesChanged.listen((_) => _updateStatusText()),
-      library.libraryChanged.listen((_) => _updateStatusText()),
+      library.libraryChanged.listen((_) {
+        _hidden = null; // the hidden items, and the tracks that name them, may have changed
+        _updateStatusText();
+      }),
       library.scanningStateChanged.listen((_) => _updateStatusText()),
       session.stateChanged.listen((_) => _onSessionStateChanged()),
       Localizer.instance.languageChanged.listen((_) => _refreshLocalizedTexts()),
@@ -92,6 +107,8 @@ class MainViewModel extends ChangeNotifier {
         },
       ),
       session.changeRefused.listen((reason) => showNotice(Localizer.format('ChangeRefused', [reason]), isError: true)),
+      // Another player of the account changed its favourites, playlists or hidden items: this one shows them too.
+      this.remote.accountDataChanged.listen((_) => unawaited(session.refreshUserData())),
     ]);
 
     _updateStatusText();
@@ -410,6 +427,15 @@ class MainViewModel extends ChangeNotifier {
     if (track != null) playlists.beginAddTrack(track);
   }
 
+  /// Puts [tracks] right after the current track ([next]) or at the end of the queue, and says so, naming them by
+  /// [name] (a track's title, an album's, an artist's name). With nothing queued they simply play, which says enough.
+  void queue(List<Track> tracks, {required bool next, required String name}) {
+    if (tracks.isEmpty) return;
+    final says = player.queueItems.isNotEmpty;
+    next ? player.playNext(tracks) : player.addToQueue(tracks);
+    if (says) showNotice(Localizer.format(next ? 'QueuedNext' : 'QueuedLast', [name]));
+  }
+
   // ── Server and sign-in ─────────────────────────────────────────────────────────────────────────
 
   /// The banner over the library while the server's tracks can't play: the server is out of reach, or this device is
@@ -564,12 +590,39 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _configureRemote({String? id, String? name, bool? enabled}) => remote.configure(
-    id: id ?? remote.deviceId,
-    name: name ?? remote.deviceName,
-    kind: capabilities.kind,
-    enabled: enabled ?? remote.isEnabled,
-  );
+  /// What remote control is doing, in a sentence: off, signed out, why it can't connect, or how many of the account's
+  /// other players it reaches.
+  String get remoteStatus {
+    if (!isRemoteEnabled) return Localizer.get('RemoteStatusOff');
+    final waitingForServer =
+        session.state == ServerConnectionState.offline || session.state == ServerConnectionState.connecting;
+    if (!session.isLoggedIn && !waitingForServer) return Localizer.get('RemoteStatusSignedOut');
+    return switch (remote.problem) {
+      RemoteProblem.unsupported => Localizer.get('RemoteStatusUnsupported'),
+      RemoteProblem.tooManyDevices => Localizer.format('RemoteStatusTooManyDevices', [
+        RemoteRules.maxDevicesPerAccount,
+      ]),
+      RemoteProblem.replaced => Localizer.get('RemoteStatusReplaced'),
+      RemoteProblem.ended => Localizer.get('RemoteStatusEnded'),
+      null =>
+        player.canReachDevices
+            ? Localizer.format('RemoteStatusConnected', [player.otherDevices.length])
+            : Localizer.get('RemoteStatusConnecting'),
+    };
+  }
+
+  /// Whether [remoteStatus] tells why remote control doesn't work.
+  bool get hasRemoteProblem => isRemoteEnabled && remote.problem != null;
+
+  void _configureRemote({String? id, String? name, bool? enabled}) {
+    remote.configure(
+      id: id ?? remote.deviceId,
+      name: name ?? remote.deviceName,
+      kind: capabilities.kind,
+      enabled: enabled ?? remote.isEnabled,
+    );
+    session.deviceId = remote.deviceId;
+  }
 
   /// The lyrics a track carries: a local file's tags, a downloaded copy's, or the server's copy of them.
   Future<String?> _ownLyrics(Track track) async {
@@ -629,6 +682,50 @@ class MainViewModel extends ChangeNotifier {
     audioSettings.refreshLocalizedTexts();
     serverSettings.refreshLocalizedTexts();
     notifyListeners();
+  }
+
+  // ── Hidden artists, albums and tracks ──────────────────────────────────────────────────────────
+
+  List<HiddenItem>? _hidden;
+
+  /// What the user hid, the artists first, then the albums and the tracks, each with the name it goes by. Worked out
+  /// again only when the library changes: the names come from the tracks, as artists and albums are hidden by hashes.
+  List<HiddenItem> get hiddenItems => _hidden ??= _describeHidden();
+
+  Future<void> unhide(HiddenItem item) => switch (item.kind) {
+    HiddenKind.artist => library.unhideArtist(item.id),
+    HiddenKind.album => library.unhideAlbum(item.id),
+    HiddenKind.track => library.unhideTrack(item.id),
+  };
+
+  List<HiddenItem> _describeHidden() {
+    final artists = library.hiddenArtists;
+    final albums = library.hiddenAlbums;
+    // An artist goes by the album artist of its first track (hidden as either the track's artist or its album
+    // artist), an album by its title and album artist.
+    final artistNames = <String, String>{};
+    final albumNames = <String, String>{};
+    if (artists.isNotEmpty || albums.isNotEmpty) {
+      for (final track in library.rawTracks) {
+        for (final name in artists.isEmpty ? const <String>[] : [track.artist, track.effectiveAlbumArtist]) {
+          final id = stableId(name.toLowerCase());
+          if (artists.contains(id)) artistNames.putIfAbsent(id, () => track.effectiveAlbumArtist);
+        }
+        final albumId = albums.isEmpty ? null : track.albumId;
+        if (albumId != null && albums.contains(albumId)) {
+          albumNames.putIfAbsent(albumId, () => '${track.album} • ${track.effectiveAlbumArtist}');
+        }
+      }
+    }
+    return [
+      for (final id in artists) HiddenItem(HiddenKind.artist, id, artistNames[id] ?? id),
+      for (final id in albums) HiddenItem(HiddenKind.album, id, albumNames[id] ?? id),
+      for (final id in library.hiddenTracks)
+        HiddenItem(HiddenKind.track, id, switch (library.getTrack(id)) {
+          final track? => '${track.title} • ${track.artist}',
+          null => id,
+        }),
+    ];
   }
 
   // ── Start-up ───────────────────────────────────────────────────────────────────────────────────

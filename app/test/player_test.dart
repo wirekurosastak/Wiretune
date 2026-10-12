@@ -30,6 +30,45 @@ void main() {
       expect(tracks[2].isPlaying, isTrue);
     });
 
+    test('play next goes right after the current track, add to queue at the end; nothing queued, they play', () {
+      final (player, tracks, _) = createQueue(count: 3, startAt: 0);
+      final extra = [TestSupport.makeTrack('x1', 'Extra 1'), TestSupport.makeTrack('x2', 'Extra 2')];
+      player.playNext(extra);
+      player.addToQueue([extra[0]]);
+      expect(player.queueTracks.map((t) => t.title), ['Song 1', 'Extra 1', 'Extra 2', 'Song 2', 'Song 3', 'Extra 1']);
+      expect(player.currentQueueIndex, 0, reason: 'the track that plays goes on');
+      player.nextTrack();
+      expect(player.currentTrack, extra[0]);
+
+      final driver = FakeAudioDriver();
+      final fresh = PlayerViewModel(TestSupport.createEngine(driver), createLibrary());
+      fresh.addToQueue(extra);
+      expect(fresh.currentTrack, extra[0]);
+      expect(driver.lastSource, extra[0].filePath);
+    });
+
+    test('while shuffling, play next still plays next, and unshuffling keeps it after the current track', () {
+      final (player, tracks, _) = createQueue(count: 5, startAt: 1);
+      player.setShuffle(true);
+      final next = TestSupport.makeTrack('n', 'Next');
+      player.playNext([next]);
+      expect(player.queueTracks[player.currentQueueIndex + 1], next);
+      player.setShuffle(false);
+      expect(player.queueTracks.map((t) => t.title).take(2), ['Song 2', 'Next']);
+    });
+
+    test('a track queued twice is played and removed as the entry chosen, not its first copy', () {
+      final (player, tracks, _) = createQueue(count: 3, startAt: 0);
+      player.addToQueue([tracks[1]]); // Song 1, Song 2, Song 3, Song 2
+      player.playQueueItem(player.queueItems[3]);
+      expect(player.currentQueueIndex, 3);
+      player.removeQueueItem(player.queueItems[1]);
+      expect(player.queueTracks.map((t) => t.title), ['Song 1', 'Song 3', 'Song 2']);
+      expect(player.currentQueueIndex, 2, reason: 'still the copy that plays');
+      player.moveQueueTrack(2, 0);
+      expect(player.currentQueueIndex, 0);
+    });
+
     test('removing the playing track continues with the next one, not the first', () {
       final (player, tracks, _) = createQueue(startAt: 1);
       player.removeQueueTrack(tracks[1]);

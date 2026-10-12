@@ -214,8 +214,8 @@ class BackLink extends StatelessWidget {
 }
 
 /// The header of a detail page: the [back] button, then the large artwork (with its [artworkBadge]) beside the labels,
-/// the title, a line of details and the buttons (on a phone the artwork sits above, centred, and the labels are left
-/// out).
+/// the title, a line of details and the buttons (on a phone held upright the artwork sits above, centred, and the
+/// labels are left out).
 class DetailHeader extends StatelessWidget {
   const DetailHeader({
     super.key,
@@ -244,6 +244,13 @@ class DetailHeader extends StatelessWidget {
   final List<Widget> details;
   final List<Widget> actions;
 
+  /// Below this width the artwork sits above the title; from it on (a phone held sideways, a narrow window) beside it,
+  /// where the height it saves keeps the tracks in view.
+  static const double sideBySideWidth = 600;
+
+  /// Whether the page is narrower than [sideBySideWidth]: the header, and the page around it, are the upright phone's.
+  static bool isNarrow(BuildContext context) => MediaQuery.sizeOf(context).width < sideBySideWidth;
+
   /// The wide header's title style; a playlist's editable title uses it too.
   static TextStyle titleStyle(BuildContext context) => TextStyle(
     fontSize: 46,
@@ -256,7 +263,7 @@ class DetailHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final narrow = isNarrow(context);
     final dot = Text('•', style: TextStyle(color: colors.textMuted));
     final shadow = [
       BoxShadow(color: colors.palette.shadow, blurRadius: 40, spreadRadius: -8, offset: const Offset(0, 20)),
@@ -343,7 +350,7 @@ class DetailHeader extends StatelessWidget {
         if (actions.isNotEmpty) ...[const SizedBox(height: 22), Wrap(spacing: 12, runSpacing: 8, children: actions)],
       ],
     );
-    return Column(
+    final header = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ?back,
@@ -365,6 +372,9 @@ class DetailHeader extends StatelessWidget {
         ),
       ],
     );
+    // The phone's pages reach under the status bar (and, held sideways, a camera's cutout); the wide layout's page
+    // never does.
+    return PhoneChrome.isPhone(context) ? SafeArea(bottom: false, child: header) : header;
   }
 }
 
@@ -598,16 +608,19 @@ class _GenreFilter extends StatelessWidget {
           children: [
             Icon(Icons.filter_list_rounded, size: 16, color: color),
             const SizedBox(width: 6),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 180),
-              child: Text(
-                selected ?? context.tr('AllGenres'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: active ? colors.accent : colors.textMain,
+            // A long genre is cut short, also where the phone's header leaves the pill less than its 180 px.
+            Flexible(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 180),
+                child: Text(
+                  selected ?? context.tr('AllGenres'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: active ? colors.accent : colors.textMain,
+                  ),
                 ),
               ),
             ),
@@ -788,7 +801,7 @@ class ArtistDetail extends StatelessWidget {
     final artists = vm.artists;
     final albums = artist.albums; // the newest first, as the library orders them
     final colors = context.colors;
-    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final narrow = DetailHeader.isNarrow(context);
     final albumTracks = [for (final album in albums) ...album.tracks];
     return CustomScrollView(
       key: PageStorageKey('artist-${artist.id}'),

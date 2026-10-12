@@ -204,41 +204,19 @@ class AmbientBackdrop extends StatelessWidget {
 
   final double colour;
 
+  /// The cover whose colours wash the backdrop: the album's or the artist's whose page is open, else the cover of the
+  /// track that plays, the one the player shows (none when it has none).
   static String? activeCoverPath(MainViewModel vm) {
-    // 1. Only navigating inside an album or artist overrides the playing track's cover,
-    // and only while that section is currently selected.
-    if (vm.selectedSection == AppSection.albums && vm.albums.isAlbumDetailOpen && vm.albums.selectedAlbum != null) {
-      final path = vm.albums.selectedAlbum?.coverArtPath;
-      if (path != null && path.isNotEmpty) return path;
-    }
-    if (vm.selectedSection == AppSection.artists &&
-        vm.artists.isArtistDetailOpen &&
-        vm.artists.selectedArtist != null) {
-      final artist = vm.artists.selectedArtist;
-      final path = artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath;
-      if (path != null && path.isNotEmpty) return path;
-    }
-
-    // 2. Default: always current playing song's cover.
-    final track = vm.player.currentTrack;
-    if (track != null) {
-      if (track.coverArtPath != null && track.coverArtPath!.isNotEmpty) {
-        return track.coverArtPath;
-      }
-      for (final album in vm.albums.displayedAlbums) {
-        if (album.id == track.albumId || (album.title == track.album && album.artist == track.artist)) {
-          if (album.coverArtPath != null && album.coverArtPath!.isNotEmpty) {
-            return album.coverArtPath;
-          }
-        }
-      }
-      for (final t in vm.tracks.displayedTracks) {
-        if (t.id == track.id && t.coverArtPath != null && t.coverArtPath!.isNotEmpty) {
-          return t.coverArtPath;
-        }
-      }
-    }
-    return null;
+    String? cover(String? path) => path == null || path.isEmpty ? null : path;
+    final artist = vm.artists.selectedArtist;
+    final viewed = switch (vm.selectedSection) {
+      AppSection.albums when vm.albums.isAlbumDetailOpen => cover(vm.albums.selectedAlbum?.coverArtPath),
+      AppSection.artists when vm.artists.isArtistDetailOpen => cover(
+        artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath,
+      ),
+      _ => null,
+    };
+    return viewed ?? cover(vm.player.currentTrack?.coverArtPath);
   }
 
   @override

@@ -114,7 +114,7 @@ class _QueueRowState extends State<_QueueRow> {
           ),
           child: InkWell(
             borderRadius: radius,
-            onTap: () => player.playQueueTrack(item.track),
+            onTap: () => player.playQueueItem(item),
             child: LayoutBuilder(
               builder: (context, constraints) => Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
@@ -214,20 +214,20 @@ class _QueueRowState extends State<_QueueRow> {
                       small(
                         Icons.keyboard_arrow_up_rounded,
                         'TipMoveUp',
-                        item.index > 0 ? () => player.moveQueueTrackUp(item) : null,
+                        widget.index > 0 ? () => player.moveQueueTrackUp(item) : null,
                       ),
                       const SizedBox(width: 4),
                       small(
                         Icons.keyboard_arrow_down_rounded,
                         'TipMoveDown',
-                        item.index < widget.itemCount - 1 ? () => player.moveQueueTrackDown(item) : null,
+                        widget.index < widget.itemCount - 1 ? () => player.moveQueueTrackDown(item) : null,
                       ),
                       const SizedBox(width: 8),
                     ],
                     small(
                       Icons.close_rounded,
                       'TipRemoveFromQueue',
-                      () => player.removeQueueTrack(track),
+                      () => player.removeQueueItem(item),
                       color: colors.danger,
                     ),
                   ],

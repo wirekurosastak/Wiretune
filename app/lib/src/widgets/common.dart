@@ -163,7 +163,7 @@ class _PopEffectState extends State<PopEffect> {
 }
 
 /// The accent-filled, glowing "Play" pill and its glass "Shuffle" partner, and after them [trailing] (a list's
-/// download button); on a phone the pills show their icons alone.
+/// download button); on a phone the two are round and show their icons alone.
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({super.key, this.onPlay, this.onShuffle, this.trailing});
 
@@ -176,16 +176,32 @@ class PlayShuffleButtons extends StatelessWidget {
     final colors = context.colors;
     final playLabel = context.tr('Play');
     final shuffleLabel = context.tr('Shuffle');
-    // On a phone the same pills without their words (the tooltips name them), so the page's other buttons fit beside.
+    // On a phone the same buttons as round icons, as tall as the header's other buttons (the tooltips name them), so
+    // that those fit beside.
     final phone = PhoneChrome.isPhone(context);
-    final size = Size(phone ? 64 : 0, phone ? PhoneChrome.controlHeight : 46);
+    final size = phone ? const Size.square(PhoneChrome.controlHeight) : const Size(0, 46);
+    final padding = phone ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 24);
+    final OutlinedBorder? round = phone ? const CircleBorder() : null;
     const text = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.1);
-    final padding = EdgeInsets.symmetric(horizontal: phone ? 18 : 24);
     Widget label(String value) => FittedBox(fit: BoxFit.scaleDown, child: Text(value, maxLines: 1, softWrap: false));
     const playIcon = Icon(Icons.play_arrow_rounded, size: 22);
     final shuffleIcon = Icon(Icons.shuffle_rounded, size: 20, color: onShuffle == null ? null : colors.accent);
-    final playStyle = FilledButton.styleFrom(minimumSize: size, padding: padding, textStyle: text);
-    final shuffleStyle = OutlinedButton.styleFrom(minimumSize: size, padding: padding, textStyle: text);
+    final playStyle = FilledButton.styleFrom(
+      minimumSize: size,
+      fixedSize: phone ? size : null,
+      padding: padding,
+      textStyle: text,
+      shape: round,
+      tapTargetSize: phone ? MaterialTapTargetSize.shrinkWrap : null,
+    );
+    final shuffleStyle = OutlinedButton.styleFrom(
+      minimumSize: size,
+      fixedSize: phone ? size : null,
+      padding: padding,
+      textStyle: text,
+      shape: round,
+      tapTargetSize: phone ? MaterialTapTargetSize.shrinkWrap : null,
+    );
     final play = PopEffect(
       enabled: onPlay != null,
       child: DecoratedBox(

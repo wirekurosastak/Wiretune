@@ -26,11 +26,11 @@ class ServerSession {
     : _client = client ?? ServerStreamingClient() {
     _unsubscribers.addAll([
       Localizer.instance.languageChanged.listen((_) => stateChanged.emit(null)),
-      _library.favoriteToggled.listen((track) => _enqueue(() => _pushFavorite(track))),
-      _library.playRecorded.listen((track) => _enqueue(() => _pushPlay(track))),
-      _library.playlistEdited.listen((playlist) => _enqueue(() => _pushPlaylist(playlist.id))),
-      _library.playlistRemoved.listen((id) => _enqueue(() => _pushPlaylistRemoved(id))),
-      _library.hiddenToggled.listen((event) => _enqueue(() => _pushHidden(event.itemType, event.itemId, event.hidden))),
+      _library.favoriteToggled.listen((track) => _change(() => _pushFavorite(track))),
+      _library.playRecorded.listen((track) => _change(() => _pushPlay(track))),
+      _library.playlistEdited.listen((playlist) => _change(() => _pushPlaylist(playlist.id))),
+      _library.playlistRemoved.listen((id) => _change(() => _pushPlaylistRemoved(id))),
+      _library.hiddenToggled.listen((event) => _change(() => _pushHidden(event.itemType, event.itemId, event.hidden))),
     ]);
   }
 
@@ -52,6 +52,14 @@ class ServerSession {
   // Changes to the account's data go to the server one at a time, in the order they were made.
   final Queue<Future<void> Function()> _pushQueue = Queue();
   bool _pushLoopRunning = false;
+
+  // How many changes were made here, so that a refresh can tell one made while it downloaded.
+  int _localChanges = 0;
+
+  /// The server's track list as last downloaded, for [refreshUserData].
+  List<Track> _serverTracks = const [];
+  bool _userDataRefreshing = false;
+  bool _userDataRefreshAgain = false;
   (String token, DateTime expiresUtc)? _streamToken;
   String? _statusKey;
   List<Object?> _statusArgs = const [];
@@ -72,6 +80,10 @@ class ServerSession {
   String? get statusMessage => _statusKey == null ? null : Localizer.format(_statusKey!, _statusArgs);
 
   String? get authToken => _client.authToken;
+
+  /// This player's remote-control device ID; the server leaves it out when it tells the account's players of a change
+  /// this one made.
+  set deviceId(String value) => _client.deviceId = value;
 
   bool get isLoggedIn => state == ServerConnectionState.connected && currentUser != null;
 
@@ -264,6 +276,7 @@ class ServerSession {
     await _gate.synchronized(() async {
       // The account's tracks, playlists and hidden items go while the library still knows whose they are.
       await _library.removeServerTracks();
+      _serverTracks = const [];
       await _forgetToken();
       await _setSource(_library.tracks.any((t) => t.isLocal) ? LibrarySource.local : LibrarySource.none);
       _setState(ServerConnectionState.loginRequired, 'SessionSignedOut');
@@ -272,6 +285,37 @@ class ServerSession {
 
   /// Downloads the server's track list again.
   Future<void> refreshLibrary() => _gate.synchronized(() => _guarded(_refreshLibraryCore));
+
+  /// Downloads the account's favourites, play counts, playlists and hidden items again, when another of its players
+  /// changed them, and applies them to the track list as it was last downloaded (which isn't downloaded again). A
+  /// change made here meanwhile wins: the downloaded data is then dropped, and the server's word on that change brings
+  /// the next refresh.
+  Future<void> refreshUserData() async {
+    if (_userDataRefreshing) {
+      _userDataRefreshAgain = true;
+      return;
+    }
+    _userDataRefreshing = true;
+    try {
+      do {
+        _userDataRefreshAgain = false;
+        await _gate.synchronized(() => _guarded(_refreshUserDataCore));
+      } while (_userDataRefreshAgain);
+    } finally {
+      _userDataRefreshing = false;
+    }
+  }
+
+  Future<void> _refreshUserDataCore() async {
+    if (!isLoggedIn) return;
+    await flushUserData(const Duration(seconds: 10));
+    final changes = _localChanges;
+    final userData = await _client.getUserData(serverUrl);
+    if (changes != _localChanges || !isLoggedIn) return;
+    // Fresh copies: the library's own tracks carry this device's state of them.
+    final tracks = [for (final track in _serverTracks) _client.serverTrack(serverUrl, track.toJson())];
+    await _library.mergeServerTracks(tracks, userData);
+  }
 
   Future<List<UserInfo>> getUsers() => _client.getUsers(serverUrl);
 
@@ -329,6 +373,7 @@ class ServerSession {
     _setState(ServerConnectionState.connecting, 'SessionDownloading');
     final tracks = await _client.fetchTracks(serverUrl);
     final userData = await _client.getUserData(serverUrl);
+    _serverTracks = tracks;
     await _library.mergeServerTracks(tracks, userData);
 
     final hasLocal = _library.tracks.any((t) => t.isLocal);
@@ -394,6 +439,12 @@ class ServerSession {
   /// Whether changes can be sent to the server now. Deliberately independent of [state]: a change made while connected
   /// is still sent when the session briefly shows "connecting" because of a refresh.
   bool get _canPush => currentUser != null && (_client.authToken ?? '').isNotEmpty;
+
+  /// A change of the account's data made here, for the server.
+  void _change(Future<void> Function() job) {
+    _localChanges++;
+    _enqueue(job);
+  }
 
   void _enqueue(Future<void> Function() job) {
     _pushQueue.add(job);

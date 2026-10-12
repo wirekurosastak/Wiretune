@@ -589,6 +589,25 @@ void main() {
     expect(vm.isNowPlayingOpen, isFalse);
   });
 
+  testWidgets("a track's menu puts it next in the queue, and says so", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.tracks);
+    vm.player.playQueue(vm.library.tracks.where((t) => t.title != 'Opening'));
+    await settle(tester);
+    final menu = find.descendant(
+      of: find.ancestor(of: find.text('Opening'), matching: find.byType(InkWell)).first,
+      matching: find.byIcon(Icons.more_vert_rounded),
+    );
+
+    await tester.tap(menu);
+    await settle(tester);
+    expect(find.text(Localizer.get('AddToQueue')), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('PlayNext')));
+    await settle(tester);
+    expect(vm.player.queueTracks[vm.player.currentQueueIndex + 1].title, 'Opening');
+    expect(find.text(Localizer.format('QueuedNext', ['Opening'])), findsOneWidget);
+  });
+
   testWidgets("on a phone a track's menu downloads it, and the row shows that it is kept", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860), createWithServer);
     vm.navigateTo(AppSection.tracks);
@@ -840,7 +859,7 @@ void main() {
     expect(delete.dy, moreOrLessEquals(play.dy, epsilon: 1));
   });
 
-  testWidgets("a phone's play and shuffle are the same pills without words, on one line with the sort", (tester) async {
+  testWidgets("a phone's play and shuffle are round buttons without words, on one line with the sort", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
@@ -848,10 +867,44 @@ void main() {
     final shuffle = find.ancestor(of: find.byIcon(Icons.shuffle_rounded), matching: find.byType(OutlinedButton));
     expect(play, findsOneWidget);
     expect(shuffle, findsOneWidget);
+    for (final button in [play, shuffle]) {
+      expect(tester.getSize(button), const Size.square(PhoneChrome.controlHeight));
+      expect(tester.widget<ButtonStyleButton>(button).style?.shape?.resolve({}), isA<CircleBorder>());
+    }
     expect(find.descendant(of: play, matching: find.byType(Text)), findsNothing);
     expect(find.byTooltip(Localizer.get('Play')), findsWidgets);
     final sort = tester.getCenter(find.text('ABC ↑'));
     expect(sort.dy, moreOrLessEquals(tester.getCenter(play).dy, epsilon: 1));
+  });
+
+  testWidgets("a phone held sideways shows a detail page's header beside its artwork, clear of the status bar", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'android');
+    tester.view.padding = const FakeViewPadding(top: 24);
+    final vm = await pumpApp(tester, const Size(850, 390));
+    expect(find.byType(PhoneLayout), findsOneWidget);
+    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+    await settle(tester);
+    final artwork = tester.getRect(find.descendant(of: find.byType(DetailHeader), matching: find.byType(CoverImage)));
+    expect(artwork.right, lessThan(tester.getRect(find.text('Kind of Blue').first).left), reason: 'side by side');
+    expect(tester.getTopLeft(find.byType(BackLink)).dy, greaterThanOrEqualTo(24));
+  });
+
+  testWidgets("a phone's genre filter cuts a long genre short instead of overflowing the header", (tester) async {
+    const genre = 'Progressive Electronic Dance Music';
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue')..genre = genre,
+      ]);
+      await library.initialize();
+      return createMainViewModel(library);
+    });
+    vm.navigateTo(AppSection.albums);
+    vm.albums.setGenre(genre);
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(find.text(genre), findsOneWidget);
   });
 
   testWidgets("a phone's header buttons are one height, the sort first, and it carries no sort icon", (tester) async {
@@ -961,13 +1014,17 @@ void main() {
     }
   });
 
-  testWidgets("an album's tile and its phone row offer what its page does, in the same order", (tester) async {
+  testWidgets("an album's tile and its phone row offer what its page does and the queue's two, in the same order", (
+    tester,
+  ) async {
     final vm = await pumpApp(tester, const Size(1400, 900), createWithServer);
     vm.navigateTo(AppSection.albums);
     await settle(tester);
     final expected = [
       Localizer.get('Play'),
       Localizer.get('Shuffle'),
+      Localizer.get('PlayNext'),
+      Localizer.get('AddToQueue'),
       Localizer.get('TipDownload'),
       Localizer.get('HideAlbum'),
     ];

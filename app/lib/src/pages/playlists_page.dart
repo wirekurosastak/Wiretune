@@ -143,7 +143,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                       playlist.name,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: MediaQuery.sizeOf(context).width < 600
+                      style: DetailHeader.isNarrow(context)
                           ? TextStyle(
                               fontSize: 24,
                               letterSpacing: -0.6,

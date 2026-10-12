@@ -89,13 +89,15 @@ class ArtistCard extends StatelessWidget {
 String artistCounts(BuildContext context, Artist artist) =>
     '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}';
 
-enum _CollectionAction { play, shuffle, download, hide }
+enum _CollectionAction { play, shuffle, playNext, addToQueue, download, hide }
 
 /// The menu of an album or an artist, on its tile (a right click) and its phone row (the ⋮): what the header of its page
-/// offers, in the same order: play, shuffle, download (when a track of it can be), hide.
+/// offers, in the same order (play, shuffle, download when a track of it can be, hide), and after play and shuffle the
+/// queue's two.
 class CollectionMenu {
   CollectionMenu._(
-    this.tracks, {
+    this.tracks,
+    this.name, {
     required this.downloadable,
     required this.onPlay,
     required this.isPinned,
@@ -106,6 +108,7 @@ class CollectionMenu {
 
   factory CollectionMenu.album(Album album, {required VoidCallback onPlay}) => CollectionMenu._(
     album.tracks,
+    album.title,
     downloadable: album.tracks,
     onPlay: onPlay,
     isPinned: (vm) => vm.downloads.isAlbumPinned(album),
@@ -116,6 +119,7 @@ class CollectionMenu {
 
   factory CollectionMenu.artist(Artist artist, {required VoidCallback onPlay}) => CollectionMenu._(
     artist.tracks,
+    artist.name,
     // The download keeps the artist's albums, as the button on its page does.
     downloadable: [for (final album in artist.albums) ...album.tracks],
     onPlay: onPlay,
@@ -125,8 +129,9 @@ class CollectionMenu {
     onHide: (vm) => vm.library.hideArtist(artist.id),
   );
 
-  /// What playing and shuffling start.
+  /// What playing, shuffling and queueing start.
   final List<Track> tracks;
+  final String name;
   final List<Track> downloadable;
   final VoidCallback onPlay;
   final bool Function(MainViewModel vm) isPinned;
@@ -151,6 +156,8 @@ class CollectionMenu {
     return [
       item(_CollectionAction.play, Icons.play_arrow_rounded, context.tr('Play')),
       item(_CollectionAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
+      item(_CollectionAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
+      item(_CollectionAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
       if (downloadable.any(vm.downloads.canDownload))
         item(
           _CollectionAction.download,
@@ -169,6 +176,10 @@ class CollectionMenu {
         onPlay();
       case _CollectionAction.shuffle:
         vm.player.shuffleQueue(tracks);
+      case _CollectionAction.playNext:
+        vm.queue(tracks, next: true, name: name);
+      case _CollectionAction.addToQueue:
+        vm.queue(tracks, next: false, name: name);
       case _CollectionAction.download:
         onDownload(vm);
       case _CollectionAction.hide:

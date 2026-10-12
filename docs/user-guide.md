@@ -61,6 +61,9 @@ so and offers to reconnect or sign in.
   in the order it's shown.
 - *Previous* restarts the track once you're 3 seconds in. *Repeat* cycles off → all → one. *Shuffle* reorders what's
   left without interrupting the current track, and switching it off brings the order back.
+- **Play next** and **Add to queue** are in a track's menu (⋮ on a phone, a right click in a table) and an album's or
+  an artist's (⋮ on its phone row, a right click on its tile). *Play next* puts it right after the current track, also
+  while shuffling; with nothing queued, either one simply plays.
 - The **queue panel** reorders (drag the handle, or the arrows on a desktop or a TV), removes and clears.
 - **Lyrics** load only while the queue or the *Lyrics* tab is open. The file's own come first, and timed (LRC) ones
   follow the song: tap a line to jump there. Otherwise the player asks [LRCLIB](https://lrclib.net), a free, open
@@ -106,8 +109,9 @@ when another device plays while this one is idle. Pick one, and this player beco
 there, and play, pause, skip, seek, shuffle, repeat, the volume and whatever you start from your library go there.
 Music that was playing here moves along, and stops here; picking *This device* again brings what plays there back.
 
-- Its queue is shown as far as your library knows the tracks, and isn't edited from here. Its exclusive and
-  bit-perfect modes are its own.
+- Its queue is shown as far as your library knows the tracks (a file only that device has isn't listed, but stays in
+  its queue); moving, removing and clearing entries works on that device. Its exclusive and bit-perfect modes are its
+  own.
 - A call or unplugged headphones pause the phone's own sound, never the other device's. The notification and the lock
   screen control the device being controlled.
 - If the other device drops off the network, this one waits 15 seconds for it, then takes control back and says so.

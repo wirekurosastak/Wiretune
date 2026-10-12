@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -42,6 +41,9 @@ class QueueItem {
   QueueItem(this.track, this.index, this.isCurrent);
 
   final Track track;
+
+  /// Where the entry stands in the queue of the device that plays it. Another device's queue is shown only as far as
+  /// this library knows its tracks, so there this is not always the entry's place in [PlayerViewModel.queueItems].
   int index;
   bool isCurrent;
 
@@ -63,6 +65,17 @@ class PlayerViewModel extends ChangeNotifier {
         _state = state;
         if (state == PlaybackState.playing) errorMessage = null;
         if (state != PlaybackState.playing) spectrum.value = Float32List(SpectrumAnalyzer.numBands);
+        notifyListeners();
+      }),
+      // A refresh (the account's data changed on another device) replaces the library's tracks while the player keeps
+      // the one it started with: its heart follows the library's.
+      _library.libraryChanged.listen((_) {
+        final current = _currentTrack;
+        final inLibrary = current == null ? null : _library.getTrack(current.id);
+        if (inLibrary == null || identical(inLibrary, current) || inLibrary.isFavorite == current!.isFavorite) return;
+        current
+          ..isFavorite = inLibrary.isFavorite
+          ..favoritedAt = inLibrary.favoritedAt;
         notifyListeners();
       }),
       // The player keeps the Track instance it started with; a favourite toggled elsewhere changes the library's one.
@@ -208,6 +221,19 @@ class PlayerViewModel extends ChangeNotifier {
   void closeQueue() => isQueueOpen = false;
 
   /// Plays a track of the queue; a track that is not queued yet starts the library.
+  /// Plays [item], the entry itself: the same track may be queued more than once.
+  void playQueueItem(QueueItem item) {
+    if (isRemote) {
+      _sendRemote(RemoteCommand(RemoteAction.playIndex, index: item.index));
+    } else if (_isEntry(item)) {
+      _playAt(item.index);
+    }
+  }
+
+  /// Whether [item] is still the entry of this device's queue it was made for.
+  bool _isEntry(QueueItem item) =>
+      item.index >= 0 && item.index < _playbackQueue.length && identical(_playbackQueue[item.index], item.track);
+
   void playQueueTrack(Track track) {
     if (isRemote) {
       final item = _remoteQueue.where((item) => identical(item.track, track)).firstOrNull;
@@ -226,16 +252,23 @@ class PlayerViewModel extends ChangeNotifier {
     }
   }
 
+  /// Moves the entry at [oldIndex] of [queueItems] to [newIndex], counted after it has been taken out.
   void moveQueueTrack(int oldIndex, int newIndex) {
     if (oldIndex < 0 || newIndex < 0) return;
     if (oldIndex == newIndex) return;
 
     if (isRemote) {
       if (oldIndex >= _remoteQueue.length || newIndex >= _remoteQueue.length) return;
+      // The device counts in its whole queue, with the tracks this library doesn't know (and doesn't list): the entry
+      // goes to where the one listed at [newIndex] stands there.
+      final from = _remoteQueue[oldIndex].index;
+      final to = _remoteQueue[newIndex].index;
       final item = _remoteQueue.removeAt(oldIndex);
       _remoteQueue.insert(newIndex, item);
+      _shiftRemoteIndices(removed: from, inserted: to);
+      item.index = to;
       notifyListeners();
-      _sendRemote(RemoteCommand(RemoteAction.moveTrack, index: oldIndex, toIndex: newIndex));
+      _sendRemote(RemoteCommand(RemoteAction.moveTrack, index: from, toIndex: to));
       return;
     }
 
@@ -249,9 +282,8 @@ class PlayerViewModel extends ChangeNotifier {
         ..addAll(_playbackQueue);
     }
 
-    if (_currentTrack != null) {
-      _queueIndex = _playbackQueue.indexOf(_currentTrack!);
-    } else if (_queueIndex >= 0) {
+    // By position: the same track may be queued more than once.
+    if (_queueIndex >= 0) {
       if (oldIndex == _queueIndex) {
         _queueIndex = newIndex;
       } else if (oldIndex < _queueIndex && newIndex >= _queueIndex) {
@@ -265,32 +297,37 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void moveQueueTrackUp(QueueItem? item) {
-    if (item == null || item.index <= 0) return;
-    moveQueueTrack(item.index, item.index - 1);
+    final at = item == null ? -1 : queueItems.indexOf(item);
+    if (at > 0) moveQueueTrack(at, at - 1);
   }
 
   void moveQueueTrackDown(QueueItem? item) {
-    final count = isRemote ? _remoteQueue.length : _playbackQueue.length;
-    if (item == null || item.index >= count - 1) return;
-    moveQueueTrack(item.index, item.index + 1);
+    final at = item == null ? -1 : queueItems.indexOf(item);
+    if (at >= 0 && at < queueItems.length - 1) moveQueueTrack(at, at + 1);
   }
 
+  /// Takes the first entry of [track] out of the queue.
   void removeQueueTrack(Track? track) {
     if (track == null) return;
-    if (isRemote) {
-      final index = _remoteQueue.indexWhere((item) => item.track.id == track.id);
-      if (index >= 0) {
-        _remoteQueue.removeAt(index);
-        notifyListeners();
-        _sendRemote(RemoteCommand(RemoteAction.removeTrack, index: index));
-      }
-      return;
-    }
-    final index = _playbackQueue.indexOf(track);
-    if (index < 0) return;
+    final item = queueItems.where((item) => item.track.id == track.id).firstOrNull;
+    if (item != null) removeQueueItem(item);
+  }
 
+  /// Takes [item], the entry itself, out of the queue.
+  void removeQueueItem(QueueItem item) {
+    if (isRemote) {
+      if (!_remoteQueue.remove(item)) return;
+      _shiftRemoteIndices(removed: item.index);
+      notifyListeners();
+      _sendRemote(RemoteCommand(RemoteAction.removeTrack, index: item.index));
+    } else if (_isEntry(item)) {
+      _removeAt(item.index);
+    }
+  }
+
+  void _removeAt(int index) {
     final removedCurrent = index == _queueIndex;
-    _playbackQueue.removeAt(index);
+    final track = _playbackQueue.removeAt(index);
     _originalQueue.remove(track); // also while shuffled, or turning shuffle off would bring the track back
 
     if (removedCurrent) {
@@ -309,6 +346,15 @@ class PlayerViewModel extends ChangeNotifier {
     if (index < _queueIndex) _queueIndex--;
     _updateQueueState();
     notifyListeners();
+  }
+
+  /// Counts the other device's queue as it will after taking out the entry at [removed] (and putting it back at
+  /// [inserted]), so that a second change before its next state still names the right entries.
+  void _shiftRemoteIndices({required int removed, int? inserted}) {
+    for (final other in _remoteQueue) {
+      if (other.index > removed) other.index--;
+      if (inserted != null && other.index >= inserted) other.index++;
+    }
   }
 
   void clearQueue() {
@@ -360,6 +406,43 @@ class PlayerViewModel extends ChangeNotifier {
     if (tracks.isEmpty) return;
     setShuffle(true);
     playQueue(tracks);
+  }
+
+  /// Puts [tracks] right after the current track, also while shuffling; with nothing queued they simply play.
+  void playNext(List<Track> tracks) => _addToQueue(tracks, next: true);
+
+  /// Puts [tracks] at the end of the queue; with nothing queued they simply play.
+  void addToQueue(List<Track> tracks) => _addToQueue(tracks, next: false);
+
+  void _addToQueue(List<Track> tracks, {required bool next}) {
+    if (tracks.isEmpty) return;
+    if (isRemote) {
+      final ids = [for (final track in tracks.take(RemoteRules.maxQueueLength)) _library.sharedId(track)];
+      _sendRemote(RemoteCommand(next ? RemoteAction.playNext : RemoteAction.addToQueue, trackIds: ids));
+      return;
+    }
+    _queueLocal(tracks, next: next);
+  }
+
+  void _queueLocal(List<Track> tracks, {required bool next}) {
+    if (_playbackQueue.isEmpty) {
+      _playQueueInternal(tracks, null);
+      notifyListeners();
+      return;
+    }
+    if (next) {
+      // After the current entry (or, past the end, where playing goes on); in the unshuffled order after its track.
+      final at = math.min(_queueIndex + 1, _playbackQueue.length);
+      _playbackQueue.insertAll(math.max(0, at), tracks);
+      final current = _queueIndex >= 0 && _queueIndex < _playbackQueue.length ? _playbackQueue[_queueIndex] : null;
+      final original = current == null ? -1 : _originalQueue.indexOf(current);
+      _originalQueue.insertAll(original < 0 ? _originalQueue.length : original + 1, tracks);
+    } else {
+      _playbackQueue.addAll(tracks);
+      _originalQueue.addAll(tracks);
+    }
+    _updateQueueState();
+    notifyListeners();
   }
 
   void _playQueueInternal(Iterable<Track> tracks, Track? startTrack, {Duration start = Duration.zero}) {
@@ -649,9 +732,6 @@ class PlayerViewModel extends ChangeNotifier {
         shown.isPlaying = true;
         final inLibrary = _library.getTrack(shown.id);
         if (inLibrary != null && !identical(inLibrary, shown)) inLibrary.isPlaying = true;
-        if (shown.bpm == null || shown.bpm == 0) {
-          _loadTrackBpm(shown);
-        }
       }
     }
     if (_lyricsTrackId != shown?.id) {
@@ -659,26 +739,6 @@ class PlayerViewModel extends ChangeNotifier {
       _refreshLyrics();
     }
     notifyListeners();
-  }
-
-  void _loadTrackBpm(Track track) {
-    final path = track.filePath;
-    if (path.isEmpty) return;
-    try {
-      final file = File(path);
-      if (!file.existsSync()) return;
-      final tags = TagReader.read(path);
-      final bpm = tags?.bpm;
-      if (bpm != null && bpm > 0) {
-        track.bpm = bpm;
-        final inLibrary = _library.getTrack(track.id);
-        if (inLibrary != null && !identical(inLibrary, track)) {
-          inLibrary.bpm = bpm;
-        }
-        _library.updateTrackBpm(track.id, bpm);
-        notifyListeners();
-      }
-    } catch (_) {}
   }
 
   Track? _marked;
@@ -974,11 +1034,12 @@ class PlayerViewModel extends ChangeNotifier {
       case RemoteAction.moveTrack:
         moveQueueTrack(command.index, command.toIndex);
       case RemoteAction.removeTrack:
-        if (command.index >= 0 && command.index < _playbackQueue.length) {
-          removeQueueTrack(_playbackQueue[command.index]);
-        }
+        if (command.index >= 0 && command.index < _playbackQueue.length) _removeAt(command.index);
       case RemoteAction.clearQueue:
         clearQueue();
+      case RemoteAction.playNext || RemoteAction.addToQueue:
+        // The tracks this library has, in their order; one it lacks is left out.
+        _queueLocal(_library.resolveTracks(command.trackIds), next: command.action == RemoteAction.playNext);
     }
   }
 

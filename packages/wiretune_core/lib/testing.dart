@@ -66,12 +66,6 @@ class MockRepository extends LibraryRepository {
   }
 
   @override
-  Future<void> updateTrackBpm(String trackId, int bpm) async {
-    for (final t in tracks.where((t) => t.id == trackId)) {
-      t.bpm = bpm;
-    }
-  }
-
   @override
   Future<List<Playlist>> getAllPlaylists() async => List.of(playlists);
 

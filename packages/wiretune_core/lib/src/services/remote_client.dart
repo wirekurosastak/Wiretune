@@ -104,6 +104,11 @@ class RemoteClient {
   /// A command from another player, for this one.
   final Event<(String from, RemoteCommand command)> commandReceived = Event();
 
+  /// The account's favourites, playlists or hidden items may have changed elsewhere: another player changed them, or
+  /// the connection was lost for a while (and with it what was said meanwhile).
+  final Event<void> accountDataChanged = Event<void>();
+  bool _connectedBefore = false;
+
   String get deviceId => _deviceId;
   String get deviceName => _deviceName;
   bool get isEnabled => _enabled;
@@ -210,6 +215,8 @@ class RemoteClient {
     _sendHello();
     final playback = _playback;
     if (playback != null) _sendState(playback);
+    if (_connectedBefore) accountDataChanged.emit(null);
+    _connectedBefore = true;
   }
 
   void _onClosed(RemoteChannel channel, String url, String token) {
@@ -329,6 +336,8 @@ class RemoteClient {
         _onState(message['device'], message['state']);
       case 'command':
         _onCommand(message['from'], message['command']);
+      case 'dataChanged':
+        accountDataChanged.emit(null);
     }
   }
 

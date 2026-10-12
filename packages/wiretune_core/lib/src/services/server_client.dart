@@ -11,6 +11,7 @@ import '../localization/localizer.dart';
 import '../localization/strings.dart';
 import '../models/library_models.dart';
 import '../models/protocol.dart';
+import '../models/remote.dart';
 
 /// The server rejected the credentials (HTTP 401). [token] is the sign-in token the request carried, if any, and
 /// [code] why ([ErrorCodes]: none sent, expired, the password changed, the account removed …).
@@ -57,6 +58,10 @@ class ServerStreamingClient {
   final bool _ownsClient;
 
   String? authToken;
+
+  /// This player's remote-control device ID, sent with each request ([RemoteRules.deviceHeader]): the server then tells
+  /// the account's other players of the changes it makes, and not this one.
+  String? deviceId;
 
   static String _notWiretune() => Localizer.get('ClientNotWiretune');
 
@@ -198,14 +203,15 @@ class ServerStreamingClient {
   Future<List<Track>> fetchTracks(String baseUrl) async {
     final list = await _send('GET', baseUrl, '/api/tracks', timeout: libraryTimeout);
     if (list is! List) throw ServerRequestException(_notWiretune(), 200);
-    final tracks = <Track>[];
-    for (final item in list) {
-      final track = _parse(Track.fromJson, item);
-      track.streamUrl = buildStreamUrl(baseUrl, track.id);
-      track.coverArtPath = track.hasCoverArt ? buildAlbumCoverUrl(baseUrl, track.albumId) : null;
-      tracks.add(track);
-    }
-    return tracks;
+    return [for (final item in list) serverTrack(baseUrl, item)];
+  }
+
+  /// A track of the server's listing ([Track.toJson]'s form), with its stream and cover URLs.
+  Track serverTrack(String baseUrl, Object? json) {
+    final track = _parse(Track.fromJson, json);
+    track.streamUrl = buildStreamUrl(baseUrl, track.id);
+    track.coverArtPath = track.hasCoverArt ? buildAlbumCoverUrl(baseUrl, track.albumId) : null;
+    return track;
   }
 
   static T _parse<T>(T Function(Object?) parse, Object? json) {
@@ -243,6 +249,8 @@ class ServerStreamingClient {
     }
     final token = authToken;
     if (authorize && token != null && token.isNotEmpty) request.headers['Authorization'] = 'Bearer $token';
+    final device = deviceId;
+    if (authorize && device != null && device.isNotEmpty) request.headers[RemoteRules.deviceHeader] = device;
 
     final deadline = DateTime.now().add(timeout);
     http.StreamedResponse response;
