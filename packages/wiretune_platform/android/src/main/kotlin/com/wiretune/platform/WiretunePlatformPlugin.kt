@@ -3,7 +3,9 @@
 
 package com.wiretune.platform
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.app.UiModeManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -13,17 +15,25 @@ import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.PluginRegistry
 
 /**
- * Answers `wiretune/platform` (is this a television? where do downloads go?) and `wiretune/power` (playback started or
- * stopped).
+ * Answers `wiretune/platform` (is this a television? where do downloads go? may the app read the music on the device?)
+ * and `wiretune/power` (playback started or stopped).
+ *
+ * The permission to read audio files is asked for only when the user scans a folder of the phone's own, never at start:
+ * a player that streams from its server needs none.
  *
  * While music plays, the app holds a CPU lock and a Wi-Fi lock, so a stream from the server keeps flowing with the screen
  * off: without the Wi-Fi lock many phones put the radio to sleep and the stream stalls after a few minutes.
  */
-class WiretunePlatformPlugin : FlutterPlugin {
+class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.RequestPermissionsResultListener {
     private var platformChannel: MethodChannel? = null
+    private var activityBinding: ActivityPluginBinding? = null
+    private var pendingAccess: MethodChannel.Result? = null
     private var powerChannel: MethodChannel? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
@@ -35,6 +45,7 @@ class WiretunePlatformPlugin : FlutterPlugin {
                 when (call.method) {
                     "isTelevision" -> result.success(isTelevision(context))
                     "musicDirectory" -> result.success(musicDirectory(context))
+                    "requestAudioAccess" -> requestAudioAccess(context, result)
                     else -> result.notImplemented()
                 }
             }
@@ -58,6 +69,53 @@ class WiretunePlatformPlugin : FlutterPlugin {
         platformChannel = null
         powerChannel = null
         release()
+    }
+
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activityBinding = binding
+        binding.addRequestPermissionsResultListener(this)
+    }
+
+    override fun onDetachedFromActivity() {
+        activityBinding?.removeRequestPermissionsResultListener(this)
+        activityBinding = null
+        pendingAccess?.success(false)
+        pendingAccess = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) = onAttachedToActivity(binding)
+
+    override fun onDetachedFromActivityForConfigChanges() = onDetachedFromActivity()
+
+    /** Reading other apps' audio files: READ_MEDIA_AUDIO from Android 13 on, the whole shared storage before. */
+    private val audioPermission =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Manifest.permission.READ_MEDIA_AUDIO
+        else Manifest.permission.READ_EXTERNAL_STORAGE
+
+    /** True when the app may read the audio files on the device, asking the user first if need be. */
+    private fun requestAudioAccess(context: Context, result: MethodChannel.Result) {
+        if (context.checkSelfPermission(audioPermission) == PackageManager.PERMISSION_GRANTED) {
+            result.success(true)
+            return
+        }
+        val activity: Activity? = activityBinding?.activity
+        if (activity == null || pendingAccess != null) {
+            result.success(false)
+            return
+        }
+        pendingAccess = result
+        activity.requestPermissions(arrayOf(audioPermission), AUDIO_REQUEST)
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ): Boolean {
+        if (requestCode != AUDIO_REQUEST) return false
+        pendingAccess?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
+        pendingAccess = null
+        return true
     }
 
     private fun isTelevision(context: Context): Boolean {
@@ -104,5 +162,9 @@ class WiretunePlatformPlugin : FlutterPlugin {
     private fun release() {
         wakeLock?.takeIf { it.isHeld }?.release()
         wifiLock?.takeIf { it.isHeld }?.release()
+    }
+
+    private companion object {
+        const val AUDIO_REQUEST = 0x5754 // "WT"
     }
 }

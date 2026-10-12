@@ -14,8 +14,12 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- No storage permission: downloads go into the shared Music folder as the app's own audio files (Android 11 and
-         later), or into the app's own folder on the shared storage (earlier), neither of which needs one. -->
+    <!-- Downloads need no storage permission: they go into the shared Music folder as the app's own audio files (Android
+         11 and later), or into the app's own folder on the shared storage (earlier). Reading a music folder of the
+         phone's own does: the audio files from Android 13 on, the shared storage before. It is asked for only when the
+         user scans such a folder (wiretune_platform's requestAudioAccess). -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <!-- One APK for phones, tablets and Android TV: neither a touch screen nor the TV interface is required. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

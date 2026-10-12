@@ -7,6 +7,10 @@ import '../models/audio_format.dart';
 import '../models/library_models.dart';
 import '../util/event.dart';
 
+/// Volume normalization from the files' ReplayGain tags: each track at the same loudness, or each album (keeping the
+/// differences between its tracks). A file without the tags plays unchanged.
+enum VolumeNormalization { off, track, album }
+
 /// Plays audio on one platform. The engine ([WiretuneAudioEngine]) keeps the track, mode and volume and gives this
 /// the commands; a driver reports back through its events.
 abstract class AudioDriver {
@@ -19,6 +23,10 @@ abstract class AudioDriver {
   /// 64 band levels (0..1), about 30 times a second while playing; drivers without an analyser never raise it.
   Event<Float32List> get spectrumDataAvailable;
   Event<void> get trackEnded;
+
+  /// The track ended and the one given to [setNext] took over without a gap; drivers that can't do that never raise it
+  /// (theirs ends with [trackEnded]).
+  Event<void> get advanced;
 
   /// Playback could not start or stopped unexpectedly; the argument is a user-facing message.
   Event<String> get playbackFailed;
@@ -33,6 +41,13 @@ abstract class AudioDriver {
   Future<void> seek(Duration position);
   Future<void> stop();
   void setVolume(double volume);
+
+  /// What to play right when the current track ends, without a gap ([advanced] tells when it did); null for nothing. A
+  /// new [play] forgets it. A driver that can't play gaplessly ignores it.
+  Future<void> setNext(String? audioSource);
+
+  /// Applies [mode] from now on; a driver that cannot normalize ignores it, and bit-perfect output never normalizes.
+  void setNormalization(VolumeNormalization mode);
   Future<void> dispose();
 }
 
@@ -46,6 +61,8 @@ mixin AudioDriverEvents implements AudioDriver {
   final Event<Float32List> spectrumDataAvailable = Event<Float32List>();
   @override
   final Event<void> trackEnded = Event<void>();
+  @override
+  final Event<void> advanced = Event<void>();
   @override
   final Event<String> playbackFailed = Event<String>();
 }

@@ -15,10 +15,18 @@ import 'settings_view_models.dart';
 
 /// What the device the app runs on can do; decided once at start-up.
 class DeviceCapabilities {
-  const DeviceCapabilities({this.supportsLocalFolder = false, this.kind = DeviceKind.desktop, this.name = ''});
+  const DeviceCapabilities({
+    this.supportsLocalFolder = false,
+    this.requestFolderAccess,
+    this.kind = DeviceKind.desktop,
+    this.name = '',
+  });
 
-  /// Scanning a folder of the device's own (desktop).
+  /// Scanning a folder of the device's own (desktop, Android phones).
   final bool supportsLocalFolder;
+
+  /// Asks for the permission to read that folder (Android), true when given; null when there is nothing to ask.
+  final Future<bool> Function()? requestFolderAccess;
 
   /// What the other players of the account see this one as, and the name it has until the user gives it another.
   final DeviceKind kind;
@@ -79,7 +87,12 @@ class MainViewModel extends ChangeNotifier {
     favorites = FavoritesViewModel(library, player);
     downloads = DownloadsViewModel(this.downloadService);
     audioSettings = AudioSettingsViewModel(audioEngine);
-    serverSettings = ServerSettingsViewModel(library, session, supportsLocalFolder: capabilities.supportsLocalFolder);
+    serverSettings = ServerSettingsViewModel(
+      library,
+      session,
+      supportsLocalFolder: capabilities.supportsLocalFolder,
+      requestFolderAccess: capabilities.requestFolderAccess,
+    );
     search = SearchViewModel(library, player, openAlbum, openArtist);
 
     // The full-screen player has nothing to show once nothing is loaded.
@@ -191,6 +204,8 @@ class MainViewModel extends ChangeNotifier {
     artists.closeArtistDetail();
     searchQuery = '';
     isSearchOpen = false;
+    // The automatic playlists follow what was played since.
+    if (section == AppSection.playlists) playlists.refreshPlaylists();
     selectedSection = section;
   }
 
@@ -233,6 +248,15 @@ class MainViewModel extends ChangeNotifier {
   void clearSearch() => searchQuery = '';
 
   void openSearch() => isSearchOpen = true;
+
+  /// Counts the requests for the cursor in the search field (Ctrl+F); the search field follows it.
+  final ValueNotifier<int> searchFocusRequests = ValueNotifier(0);
+
+  /// Opens the search (the phone layout's page) and puts the cursor in its field.
+  void focusSearch() {
+    openSearch();
+    searchFocusRequests.value++;
+  }
 
   void closeSearch() {
     searchQuery = '';
@@ -539,6 +563,8 @@ class MainViewModel extends ChangeNotifier {
   static const String _remoteIdPreference = 'remote_device_id';
   static const String _remoteNamePreference = 'remote_device_name';
   static const String _remoteEnabledPreference = 'remote_enabled';
+  static const String _normalizationPreference = 'volume_normalization';
+  static const String _gaplessPreference = 'gapless';
 
   bool _isLight = false;
   bool _showPerformanceStats = false;
@@ -568,6 +594,23 @@ class MainViewModel extends ChangeNotifier {
     _useOnlineLyrics = value;
     player.isOnlineLyricsEnabled = value;
     _remember(library.setPreference(_onlineLyricsPreference, value ? '1' : '0'));
+    notifyListeners();
+  }
+
+  /// Volume normalization from the ReplayGain tags; off by default (the files play as they are).
+  VolumeNormalization get normalization => audioEngine.normalization;
+  set normalization(VolumeNormalization value) {
+    audioEngine.setNormalization(value);
+    audioSettings.refreshDeviceList(); // the signal path mentions it
+    _remember(library.setPreference(_normalizationPreference, value.name));
+    notifyListeners();
+  }
+
+  /// Gapless playback (the next track starts the moment the current one ends); on by default.
+  bool get isGaplessEnabled => player.isGaplessEnabled;
+  set isGaplessEnabled(bool value) {
+    player.isGaplessEnabled = value;
+    _remember(library.setPreference(_gaplessPreference, value ? '1' : '0'));
     notifyListeners();
   }
 
@@ -656,6 +699,9 @@ class MainViewModel extends ChangeNotifier {
     _showPerformanceStats = await library.getPreference(_performanceStatsPreference) == '1';
     _useOnlineLyrics = await library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     player.isOnlineLyricsEnabled = _useOnlineLyrics;
+    final normalization = VolumeNormalization.values.asNameMap()[await library.getPreference(_normalizationPreference)];
+    if (normalization != null) audioEngine.setNormalization(normalization);
+    player.isGaplessEnabled = await library.getPreference(_gaplessPreference) != '0'; // on unless turned off
 
     // A lasting ID of its own, so the others know it again after a restart; it connects once signed in.
     var id = await library.getPreference(_remoteIdPreference);
@@ -735,6 +781,7 @@ class MainViewModel extends ChangeNotifier {
     try {
       await library.initialize();
       await _applyPreferences();
+      await player.restoreSession();
       await session.initialize();
       await downloadService.initialize();
       serverSettings.syncWithSession();
@@ -787,6 +834,7 @@ class MainViewModel extends ChangeNotifier {
     downloadService.dispose();
     session.dispose();
     _onlineLyrics?.close();
+    searchFocusRequests.dispose();
     super.dispose();
   }
 }

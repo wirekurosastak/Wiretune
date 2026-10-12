@@ -183,6 +183,99 @@ void main() {
       expect(player.repeatMode, RepeatMode.off);
     });
 
+    test('after a restart the queue is back, paused where it was, and play goes on from there', () async {
+      final library = createLibrary([for (var i = 1; i <= 4; i++) TestSupport.makeTrack('t$i', 'Song $i')]);
+      await library.initialize();
+      final driver = FakeAudioDriver();
+      final before = PlayerViewModel(TestSupport.createEngine(driver), library);
+      await before.restoreSession(); // nothing saved yet
+      final tracks = [for (var i = 1; i <= 4; i++) library.getTrack('t$i')!];
+      before.playQueue(tracks.reversed, tracks[2]);
+      before.setRepeatMode(RepeatMode.all);
+      driver.positionChanged.emit(const Duration(seconds: 75));
+      await before.pause();
+      await before.saveSession();
+
+      final after = FakeAudioDriver();
+      final player = PlayerViewModel(TestSupport.createEngine(after), library);
+      await player.restoreSession();
+      expect(player.queueTracks.map((t) => t.title), ['Song 4', 'Song 3', 'Song 2', 'Song 1']);
+      expect(player.currentTrack?.title, 'Song 3');
+      expect(player.currentQueueIndex, 1);
+      expect(player.position.value, const Duration(seconds: 75));
+      expect(player.repeatMode, RepeatMode.all);
+      expect(player.isPlaying, isFalse);
+      expect(after.playCalls, 0, reason: 'nothing plays by itself');
+
+      await player.play();
+      expect(after.lastSource, tracks[2].filePath);
+      expect(after.currentPosition, const Duration(seconds: 75));
+    });
+
+    test('the sleep timer pauses after its time, or at the end of the track with the next one waiting', () async {
+      final (player, tracks, driver) = createQueue(count: 3, startAt: 0);
+      player.setSleepTimer(const Duration(milliseconds: 1));
+      expect(player.isSleepTimerSet, isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+      expect(player.isPlaying, isFalse);
+      expect(player.isSleepTimerSet, isFalse);
+
+      await player.play();
+      player.sleepAtTrackEnd();
+      final calls = driver.playCalls;
+      driver.simulateTrackEnded();
+      expect(driver.playCalls, calls, reason: 'nothing more plays');
+      expect(player.currentTrack, tracks[1], reason: 'the next track waits');
+      expect(player.isSleepTimerSet, isFalse);
+      await player.play();
+      expect(driver.lastSource, tracks[1].filePath);
+    });
+
+    test('the next entry is ready before the track ends and takes over without a new start', () async {
+      final (player, tracks, driver) = createQueue(count: 3, startAt: 0);
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.nextSource, tracks[1].filePath);
+
+      final calls = driver.playCalls;
+      driver.simulateGaplessEnd();
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.playCalls, calls, reason: 'nothing was opened anew');
+      expect(player.currentTrack, tracks[1]);
+      expect(player.currentQueueIndex, 1);
+      expect(driver.nextSource, tracks[2].filePath);
+
+      player.setRepeatMode(RepeatMode.one);
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.nextSource, tracks[1].filePath, reason: 'repeat one plays it again');
+      player.setRepeatMode(RepeatMode.off);
+      player.moveQueueTrack(2, 0); // the last one to the front: nothing follows the current one now
+      await Future<void>.delayed(Duration.zero);
+      expect(player.queueTracks.last, tracks[1]);
+      expect(driver.nextSource, isNull);
+      player.moveQueueTrack(0, 2);
+      player.sleepAtTrackEnd();
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.nextSource, isNull, reason: 'the sleep timer stops at the end of the track');
+    });
+
+    test('with gapless playback off nothing is offered ahead and the next track opens after the end', () async {
+      final (player, tracks, driver) = createQueue(count: 3, startAt: 0);
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.nextSource, tracks[1].filePath);
+
+      player.isGaplessEnabled = false;
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.nextSource, isNull);
+      driver.simulateTrackEnded();
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.lastSource, tracks[1].filePath);
+      expect(driver.nextSource, isNull);
+
+      player.isGaplessEnabled = true;
+      await Future<void>.delayed(Duration.zero);
+      expect(driver.nextSource, tracks[2].filePath);
+    });
+
     test('shuffle starting from a track plays it first and still plays every track', () {
       final driver = FakeAudioDriver();
       final player = PlayerViewModel(TestSupport.createEngine(driver), createLibrary());

@@ -352,6 +352,77 @@ class VolumeControl extends StatelessWidget {
 }
 
 /// The heart of the current track.
+/// The sleep timer: a menu of times after which the music pauses (or the end of the track), and the moon lit while one
+/// is set. Its tooltip and the menu's title say when.
+class SleepTimerButton extends StatelessWidget {
+  const SleepTimerButton({super.key, this.iconSize = 22, this.dimension = 44});
+
+  final double iconSize;
+  final double dimension;
+
+  static const List<int> _minutes = [15, 30, 45, 60];
+
+  // The menu's values: minutes, or these two.
+  static const int _trackEnd = -1;
+  static const int _off = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.vm.player;
+    final colors = context.colors;
+    return ListenableBuilder(
+      listenable: player,
+      builder: (context, _) {
+        final at = player.sleepAt;
+        final status = at != null
+            ? context.trf('SleepTimerAt', [
+                MaterialLocalizations.of(context).formatTimeOfDay(
+                  TimeOfDay.fromDateTime(at),
+                  alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+                ),
+              ])
+            : (player.sleepsAtTrackEnd ? context.tr('SleepTimerAtTrackEnd') : null);
+        return SizedBox.square(
+          dimension: dimension,
+          child: PopupMenuButton<int>(
+            tooltip: status ?? context.tr('SleepTimer'),
+            iconSize: iconSize,
+            icon: Icon(
+              status != null ? Icons.bedtime_rounded : Icons.bedtime_outlined,
+              color: status != null ? colors.accent : colors.textMain,
+            ),
+            onSelected: (value) => switch (value) {
+              _trackEnd => player.sleepAtTrackEnd(),
+              _off => player.setSleepTimer(null),
+              _ => player.setSleepTimer(Duration(minutes: value)),
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem<int>(
+                enabled: false,
+                height: 32,
+                child: Text(
+                  (status ?? context.tr('SleepTimer')).toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w800,
+                    color: colors.textMuted,
+                  ),
+                ),
+              ),
+              for (final minutes in _minutes)
+                PopupMenuItem(value: minutes, child: Text(context.trf('SleepTimerMinutes', [minutes]))),
+              // A track's end is this device's to see; another one is paused by time only.
+              if (!player.isRemote) PopupMenuItem(value: _trackEnd, child: Text(context.tr('SleepTimerTrackEnd'))),
+              if (status != null) PopupMenuItem(value: _off, child: Text(context.tr('SleepTimerOff'))),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 class FavoriteCurrentButton extends StatelessWidget {
   const FavoriteCurrentButton({super.key, this.size = 20, this.visualDensity});
 

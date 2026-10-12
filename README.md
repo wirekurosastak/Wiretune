@@ -34,7 +34,7 @@ pictures and lyrics for tracks that have none, and you can turn both off ([SECUR
 | | Linux | Windows | macOS | Android | Android TV | Android Auto | iOS | Tizen TV |
 |---|---|---|---|---|---|---|---|---|
 | Play a server library | Yes | Yes | Yes | Yes | Yes | Browse and play | Yes | Yes |
-| Play a local folder | Yes | Yes | Yes | No | No | No | No | No |
+| Play a local folder | Yes | Yes | Yes | Yes, **not tried on a phone** | No | No | No | No |
 | Exclusive / bit-perfect | Yes (ALSA `hw:` devices) | Written, **not tried on a DAC** | Written, **not tried on a DAC** | No | No | No | No | No |
 | Spectrum analyser | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | No | No | No | No | No |
 | System media controls | MPRIS | No | Media keys, Now Playing | Notification, lock screen | Remote | The car | Lock screen, Control Center | Remote, in the app |
@@ -68,7 +68,7 @@ In the player, enter `http://<server-ip>:5200` and press **Connect**. A fresh se
 account, which becomes the administrator, and for the **setup code** the server printed in its log. There are no
 default passwords.
 
-Only want to play a folder on this computer? Choose **Continue without a server** and point *Settings* at your music.
+Only want to play a folder on this computer or Android phone? Choose **Continue without a server** and point *Settings* at your music.
 
 ## Building
 

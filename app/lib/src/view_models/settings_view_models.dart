@@ -9,7 +9,12 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 /// The server connection, the account (sign-in, first-run setup), the local folder, and the administrator's tools.
 class ServerSettingsViewModel extends ChangeNotifier {
-  ServerSettingsViewModel(this._library, this._session, {required this.supportsLocalFolder}) {
+  ServerSettingsViewModel(
+    this._library,
+    this._session, {
+    required this.supportsLocalFolder,
+    Future<bool> Function()? requestFolderAccess,
+  }) : _requestFolderAccess = requestFolderAccess {
     localLibraryPath = _library.libraryPath.trim().isNotEmpty ? _library.libraryPath : AppPaths.musicFolder();
     _unsubscribers.addAll([
       _library.scanningStateChanged.listen((scanning) {
@@ -25,8 +30,11 @@ class ServerSettingsViewModel extends ChangeNotifier {
   final ServerSession _session;
   final List<void Function()> _unsubscribers = [];
 
-  /// Whether this device can scan a folder of its own (desktop); phones and TVs play from a server.
+  /// Whether this device can scan a folder of its own (desktop, Android phones); TVs and iPhones play from a server.
   final bool supportsLocalFolder;
+
+  /// Asks for the permission to read the folder before a scan (Android); null when nothing needs asking.
+  final Future<bool> Function()? _requestFolderAccess;
 
   String serverUrl = ServerSession.defaultServerUrl;
   String localLibraryPath = '';
@@ -300,6 +308,12 @@ class ServerSettingsViewModel extends ChangeNotifier {
   }
 
   Future<void> startScanFolder() async {
+    // Asked here, when the user wants their music read, rather than at start.
+    final request = _requestFolderAccess;
+    if (request != null && !await request()) {
+      _showLocalFolder(Localizer.get('FolderAccessDenied'), isError: true);
+      return;
+    }
     if (localLibraryPath.trim().isEmpty || !Directory(localLibraryPath).existsSync()) {
       _showLocalFolder(Localizer.get('FolderMissing'), isError: true);
       return;

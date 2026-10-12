@@ -15,23 +15,23 @@ import 'equalizer_bars.dart';
 import 'player_controls.dart';
 import 'quality_tag.dart';
 
-/// Which list a track table shows; each has its own columns and buttons. Every table ends in the download button of a
-/// server track; a phone row has the favourite and a menu with the rest.
+/// Which list a track table shows; each has its own columns, as far as the width allows. Every row ends in the
+/// favourite and a menu with the rest.
 enum TrackTableKind {
-  /// The library, and the favourites: cover, title, artist, album, quality, length, favourite, add to playlist.
+  /// The library, and the favourites: cover, title, artist, album, length, year, added, quality, bitrate.
   tracks,
 
-  /// An album: track number, title, quality, length, favourite, add to playlist.
+  /// An album: track number, title, length, quality, bitrate; a heading over each disc of several.
   album,
 
-  /// An artist: cover, title, album, quality, length, favourite, add to playlist.
+  /// An artist: cover, title, album, length, year, quality, bitrate.
   artist,
 
-  /// A playlist: cover, title, artist, album, length, year, the place in the playlist, quality, favourite, remove from
-  /// the playlist.
+  /// A playlist: cover, title, artist, album, length, year, the place in the playlist, quality, bitrate; its menu also
+  /// removes the track and, in the playlist's own order, moves it.
   playlist,
 
-  /// Search results: cover, title, artist, album, length, favourite, add to playlist.
+  /// Search results: cover, title, artist, album, length.
   search,
 }
 
@@ -46,6 +46,7 @@ class TrackSliver extends StatefulWidget {
     this.sorting,
     this.kind = TrackTableKind.tracks,
     this.horizontalPadding,
+    this.onReorder,
   });
 
   final List<Track> tracks;
@@ -56,6 +57,10 @@ class TrackSliver extends StatefulWidget {
   final TrackSorting? sorting;
   final TrackTableKind kind;
   final double? horizontalPadding;
+
+  /// Moves the track shown at `from` to `to` (counted after it has been taken out): a playlist in its own order. Its
+  /// rows then move under a long press, or (in a table) by the handle at their start.
+  final void Function(int from, int to)? onReorder;
 
   /// The heights of the wide table's header and of its rows.
   static const double tableHeaderHeight = 40;
@@ -74,6 +79,9 @@ class _TrackSliverState extends State<TrackSliver> {
 
   // As large as the music apps' rows.
   static const double _phoneRowHeight = 76;
+
+  // The drag handle at the start of a row that can be moved.
+  static const double _handleWidth = 24;
 
   @override
   void didUpdateWidget(TrackSliver oldWidget) {
@@ -119,6 +127,7 @@ class _TrackSliverState extends State<TrackSliver> {
   static const double _yearWidth = 112;
   static const double _addedWidth = 124;
   static const double _qualityWidth = 168;
+  static const double _bitrateWidth = 104;
 
   /// The tracks in the order shown: the page sorts its own, this table those of a list without a page's sort.
   List<Track> get _tracks {
@@ -158,14 +167,43 @@ class _TrackSliverState extends State<TrackSliver> {
           listenable: listenable,
           builder: (context, _) {
             final tracks = _tracks;
-            final list = SliverFixedExtentList(
-              itemExtent: table ? TrackSliver.tableRowHeight : _phoneRowHeight,
-              delegate: SliverChildBuilderDelegate(
-                (context, index) =>
-                    table ? _TableRow(track: tracks[index], state: this) : _PhoneRow(track: tracks[index], state: this),
-                childCount: tracks.length,
-              ),
+            Widget row(int index) => table
+                ? _TableRow(track: tracks[index], index: index, state: this)
+                : _PhoneRow(track: tracks[index], state: this);
+            final reorder = widget.onReorder;
+            final extent = table ? TrackSliver.tableRowHeight : _phoneRowHeight;
+            Widget rows(int start, int end) => SliverFixedExtentList(
+              itemExtent: extent,
+              delegate: SliverChildBuilderDelegate((context, index) => row(start + index), childCount: end - start),
             );
+            final discs = _discStarts(tracks);
+            final Widget list = discs != null
+                ? SliverMainAxisGroup(
+                    slivers: [
+                      for (final (i, start) in discs.indexed) ...[
+                        SliverToBoxAdapter(child: _DiscHeader(disc: tracks[start].discNumber ?? 1)),
+                        rows(start, i + 1 < discs.length ? discs[i + 1] : tracks.length),
+                      ],
+                    ],
+                  )
+                : reorder == null
+                ? rows(0, tracks.length)
+                : SliverReorderableList(
+                    itemExtent: extent,
+                    itemCount: tracks.length,
+                    onReorderItem: reorder,
+                    proxyDecorator: (child, index, animation) => Material(
+                      color: context.colors.palette.modal,
+                      elevation: 8,
+                      borderRadius: BorderRadius.circular(Radii.card),
+                      child: child,
+                    ),
+                    itemBuilder: (context, index) => ReorderableDelayedDragStartListener(
+                      key: ValueKey(tracks[index].id),
+                      index: index,
+                      child: row(index),
+                    ),
+                  );
             if (!table) {
               return SliverPadding(
                 padding: EdgeInsets.symmetric(horizontal: padding),
@@ -185,6 +223,20 @@ class _TrackSliverState extends State<TrackSliver> {
         );
       },
     );
+  }
+
+  /// Where each disc of an album of several starts among [tracks] while they are in the album's own order; null for
+  /// any other list or order.
+  List<int>? _discStarts(List<Track> tracks) {
+    if (kind != TrackTableKind.album || _sortField != null || tracks.isEmpty) return null;
+    final starts = <int>[0];
+    for (var i = 1; i < tracks.length; i++) {
+      final previous = tracks[i - 1].discNumber ?? 1;
+      final disc = tracks[i].discNumber ?? 1;
+      if (disc < previous) return null;
+      if (disc != previous) starts.add(i);
+    }
+    return starts.length > 1 ? starts : null;
   }
 
   Widget _header(BuildContext context) {
@@ -221,6 +273,7 @@ class _TrackSliverState extends State<TrackSliver> {
       ),
       child: Row(
         children: [
+          if (widget.onReorder != null) const SizedBox(width: _handleWidth),
           cell(_leadIsNumber ? '#' : '', null, width: _leadIsNumber ? 48 : 56),
           cell(context.tr('ColTitle'), TrackSortField.title, flex: _titleFlex),
           if (_showArtist) cell(context.tr('ColArtist'), TrackSortField.artist, flex: _artistFlex),
@@ -229,7 +282,8 @@ class _TrackSliverState extends State<TrackSliver> {
           if (_showYear) cell(context.tr('ColYear'), TrackSortField.year, width: _yearWidth),
           if (_showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _addedWidth),
           if (_showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _qualityWidth),
-          const SizedBox(width: 4 * 44),
+          if (_showQuality) cell(context.tr('ColBitrate'), null, width: _bitrateWidth),
+          const SizedBox(width: 2 * 44),
         ],
       ),
     );
@@ -239,9 +293,10 @@ class _TrackSliverState extends State<TrackSliver> {
 /// A table row: rounded, lit under the mouse (where the number or the cover turns into a play button) and washed in
 /// the accent while its track plays.
 class _TableRow extends StatefulWidget {
-  const _TableRow({required this.track, required this.state});
+  const _TableRow({required this.track, required this.index, required this.state});
 
   final Track track;
+  final int index;
   final _TrackSliverState state;
 
   @override
@@ -302,14 +357,45 @@ class _TableRowState extends State<_TableRow> {
               onSecondaryTapUp: (details) => _showTrackContextMenu(context, details.globalPosition, track, kind),
               child: Row(
                 children: [
+                  if (state.widget.onReorder != null)
+                    ReorderableDragStartListener(
+                      index: widget.index,
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.grab,
+                        child: SizedBox(
+                          width: _TrackSliverState._handleWidth,
+                          height: TrackSliver.tableRowHeight,
+                          child: Tooltip(
+                            message: context.tr('TipDragToReorder'),
+                            child: Icon(
+                              Icons.drag_indicator_rounded,
+                              size: 16,
+                              color: _hover ? colors.textMuted : colors.palette.textDisabled.withValues(alpha: 0),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   SizedBox(
                     width: state._leadIsNumber ? 48 : 56,
                     child: Center(child: lead),
                   ),
                   Expanded(
                     flex: state._titleFlex,
-                    // The row plays the track; the title is no link of its own (one more stop for the keyboard).
-                    child: _CellLink(track.title, color: playing ? colors.accent : colors.textMain, bold: true),
+                    // The row plays the track; the title is no link of its own (one more stop for the keyboard). A kept
+                    // track carries the download's mark after it, as on a phone.
+                    child: Row(
+                      children: [
+                        Flexible(
+                          child: _CellLink(track.title, color: playing ? colors.accent : colors.textMain, bold: true),
+                        ),
+                        if (downloadIcon(vm.downloads.stateOf(track)) case final icon?)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 10),
+                            child: Icon(icon, size: 14, color: colors.accent),
+                          ),
+                      ],
+                    ),
                   ),
                   if (state._showArtist)
                     Expanded(
@@ -355,6 +441,21 @@ class _TableRowState extends State<_TableRow> {
                         ),
                       ),
                     ),
+                  // The file's average bitrate, in the quality's colours.
+                  if (state._showQuality)
+                    SizedBox(
+                      width: _TrackSliverState._bitrateWidth,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: QualityTag(
+                            tier: track.format.tier,
+                            spec: context.trf('BitrateKbps', [track.format.bitrateKbps]),
+                          ),
+                        ),
+                      ),
+                    ),
                   ..._trailing(context, kind, track),
                 ],
               ),
@@ -366,90 +467,54 @@ class _TableRowState extends State<_TableRow> {
   }
 }
 
-/// The buttons at the end of a row, per kind of list: on a phone the favourite and the menu, in the table the
-/// favourite, the list's own button and the download.
+/// The buttons at the end of a row: the favourite, and the menu with the rest (in a table and on a phone alike).
 List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {bool phone = false}) {
-  final vm = context.vm;
   final colors = context.colors;
   final size = phone ? 48.0 : 44.0;
-  final favorite = _IconCell(
-    width: size,
-    tooltip: context.tr(track.isFavorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
-    icon: HeartIcon(
-      filled: track.isFavorite,
-      color: track.isFavorite ? colors.palette.coral : colors.textMuted,
-      size: phone ? 22 : 18,
-    ),
-    onPressed: () => vm.library.toggleFavorite(track.id),
-  );
-  if (phone) return [favorite, TrackMenu(track: track, kind: kind, width: size)];
-
-  final add = _IconCell(
-    width: size,
-    tooltip: context.tr('TipAddToPlaylist'),
-    icon: Icon(Icons.playlist_add_rounded, color: colors.textMuted, size: 18),
-    onPressed: () => vm.addToPlaylist(track),
-  );
-  final downloads = vm.downloads;
-  final state = downloads.stateOf(track);
-  final download = !downloads.canDownload(track)
-      ? SizedBox(width: size)
-      : _IconCell(
-          width: size,
-          tooltip: downloadTip(context, track),
-          icon: Icon(
-            downloadIcon(state) ?? Icons.download_rounded,
-            color: state == DownloadState.none ? colors.textMuted : colors.accent,
-            size: 18,
-          ),
-          // Kept because its album, playlist or the favourites are: those buttons let it go.
-          onPressed: downloads.isPinnedByList(track) ? null : () => downloads.toggleTrack(track),
-        );
-  final isHidden = vm.library.isTrackExplicitlyHidden(track.id);
-  final hide = _IconCell(
-    width: size,
-    tooltip: context.tr(isHidden ? 'Unhide' : 'HideTrack'),
-    icon: Icon(isHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined, color: colors.textMuted, size: 18),
-    onPressed: () {
-      if (isHidden) {
-        vm.library.unhideTrack(track.id);
-      } else {
-        vm.library.hideTrack(track.id);
-      }
-    },
-  );
-  return switch (kind) {
-    TrackTableKind.playlist => [
-      favorite,
-      _IconCell(
-        width: size,
-        tooltip: context.tr('TipRemoveFromPlaylist'),
-        icon: Icon(Icons.playlist_remove_rounded, color: colors.danger, size: 18),
-        onPressed: () => vm.playlists.removeTrackFromSelected(track),
+  return [
+    _IconCell(
+      width: size,
+      tooltip: context.tr(track.isFavorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+      icon: HeartIcon(
+        filled: track.isFavorite,
+        color: track.isFavorite ? colors.palette.coral : colors.textMuted,
+        size: phone ? 22 : 18,
       ),
-      download,
-      hide,
-    ],
-    _ => [favorite, add, download, hide],
-  };
+      onPressed: () => context.vm.library.toggleFavorite(track.id),
+    ),
+    TrackMenu(track: track, kind: kind, width: size),
+  ];
 }
 
-enum TrackAction { playNext, addToQueue, addToPlaylist, removeFromPlaylist, download, openAlbum, openArtist, hideTrack }
+enum TrackAction {
+  favorite,
+  playNext,
+  addToQueue,
+  addToPlaylist,
+  removeFromPlaylist,
+  moveUp,
+  moveDown,
+  download,
+  openAlbum,
+  openArtist,
+  hideTrack,
+}
 
+/// A right click on a table row: the row's menu, with the favourite first.
 Future<void> _showTrackContextMenu(BuildContext context, Offset position, Track track, TrackTableKind kind) async {
   final action = await showMenu<TrackAction>(
     context: context,
     position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
-    items: TrackMenu.buildMenuItems(context, track, kind),
+    items: TrackMenu.buildMenuItems(context, track, kind, withFavorite: true),
   );
   if (action != null && context.mounted) {
     TrackMenu.handleAction(context, action, track);
   }
 }
 
-/// The "⋮" menu of a track, on a phone's rows and its full-screen player (and a right click on a table row): play next
-/// and add to the queue, what the table has as buttons (a playlist, the download), and the way to the album and the
-/// artist.
+/// The "⋮" menu of a track, on its row (a table's and a phone's) and in the phone's full-screen player: play next and
+/// add to the queue, a playlist (and, in one, moving and removing the track), the download, the way to the album and the
+/// artist, and hiding it.
 class TrackMenu extends StatelessWidget {
   const TrackMenu({super.key, required this.track, required this.kind, required this.width, this.color});
 
@@ -463,7 +528,13 @@ class TrackMenu extends StatelessWidget {
   /// The dots' colour; muted when not given.
   final Color? color;
 
-  static List<PopupMenuEntry<TrackAction>> buildMenuItems(BuildContext context, Track track, TrackTableKind kind) {
+  /// [withFavorite]: the right click's menu, which also has the favourite (the row's heart beside the dots has it).
+  static List<PopupMenuEntry<TrackAction>> buildMenuItems(
+    BuildContext context,
+    Track track,
+    TrackTableKind kind, {
+    bool withFavorite = false,
+  }) {
     final vm = context.vm;
     final colors = context.colors;
     final downloads = vm.downloads;
@@ -482,17 +553,35 @@ class TrackMenu extends StatelessWidget {
             ],
           ),
         );
+    // Moving needs the playlist in its own order; the arrows are the way to move it without dragging.
+    final playlists = vm.playlists;
+    final place = kind == TrackTableKind.playlist && playlists.canReorder ? playlists.positionOf(track) : null;
     return [
+      if (withFavorite)
+        item(
+          TrackAction.favorite,
+          track.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          context.tr(track.isFavorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+        ),
       item(TrackAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
       item(TrackAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
       item(TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
-      if (kind == TrackTableKind.playlist)
+      if (kind == TrackTableKind.playlist && playlists.selectedPlaylist?.isAutomatic == false)
         item(
           TrackAction.removeFromPlaylist,
           Icons.playlist_remove_rounded,
           context.tr('TipRemoveFromPlaylist'),
           color: colors.danger,
         ),
+      if (place != null) ...[
+        item(TrackAction.moveUp, Icons.arrow_upward_rounded, context.tr('TipMoveUp'), enabled: place > 1),
+        item(
+          TrackAction.moveDown,
+          Icons.arrow_downward_rounded,
+          context.tr('TipMoveDown'),
+          enabled: place < playlists.selectedPlaylistTracks.length,
+        ),
+      ],
       if (downloads.canDownload(track))
         item(
           TrackAction.download,
@@ -514,6 +603,8 @@ class TrackMenu extends StatelessWidget {
   static void handleAction(BuildContext context, TrackAction action, Track track) {
     final vm = context.vm;
     switch (action) {
+      case TrackAction.favorite:
+        vm.library.toggleFavorite(track.id);
       case TrackAction.playNext:
         vm.queue([track], next: true, name: track.title);
       case TrackAction.addToQueue:
@@ -522,6 +613,9 @@ class TrackMenu extends StatelessWidget {
         vm.addToPlaylist(track);
       case TrackAction.removeFromPlaylist:
         vm.playlists.removeTrackFromSelected(track);
+      case TrackAction.moveUp || TrackAction.moveDown:
+        final place = vm.playlists.positionOf(track);
+        if (place != null) vm.playlists.moveTrack(place - 1, place - 1 + (action == TrackAction.moveUp ? -1 : 1));
       case TrackAction.download:
         vm.downloads.toggleTrack(track);
       case TrackAction.openAlbum:
@@ -810,6 +904,31 @@ class _HeaderCell extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// The heading over one disc's tracks on the page of an album of several discs.
+class _DiscHeader extends StatelessWidget {
+  const _DiscHeader({required this.disc});
+
+  final int disc;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 14, 10, 6),
+      child: Row(
+        children: [
+          Icon(Icons.album_rounded, size: 16, color: colors.textMuted),
+          const SizedBox(width: 8),
+          Text(
+            context.trf('DiscNumber', [disc]),
+            style: TextStyle(fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: colors.textMuted),
+          ),
+        ],
       ),
     );
   }

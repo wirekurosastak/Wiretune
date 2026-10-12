@@ -308,6 +308,33 @@ void main() {
     playlists.dispose();
   });
 
+  test('the most and the recently played tracks are read-only playlists above the own ones', () async {
+    final now = DateTime.utc(2026, 10, 12);
+    Track played(String id, int count, int hoursAgo) => TestSupport.makeTrack(id, 'Song $id')
+      ..playCount = count
+      ..lastPlayed = now.subtract(Duration(hours: hoursAgo));
+    final lib = await library([
+      played('a', 3, 5),
+      played('b', 9, 30),
+      played('c', 3, 1),
+      TestSupport.makeTrack('d', 'Never played'),
+    ]);
+    final playlists = PlaylistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    List<String?> titles(Playlist playlist) => [for (final t in playlists.tracksOf(playlist)) t.title];
+
+    expect([for (final pl in playlists.automaticPlaylists) pl.name], ['Most played', 'Recently played']);
+    final [most, recent] = playlists.automaticPlaylists;
+    expect(titles(most), ['Song b', 'Song c', 'Song a'], reason: 'equal counts: the more recent first');
+    expect(titles(recent), ['Song c', 'Song a', 'Song b']);
+    expect(playlists.playlists, isEmpty, reason: 'not among the own playlists (the dialogs, the car)');
+    expect(playlists.hasPlaylists, isTrue);
+
+    playlists.openPlaylist(most);
+    expect(playlists.canReorder, isFalse);
+    playlists.startRename();
+    expect(playlists.isEditingName, isFalse);
+  });
+
   test('the favourites follow a track toggled anywhere, and tell their listeners', () async {
     final t1 = track('1', 'Album');
     final lib = await library([t1]);

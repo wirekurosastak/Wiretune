@@ -38,7 +38,11 @@ so and offers to reconnect or sign in.
   album and playlist tiles and of the covers of the full-screen player, an album and a playlist, in the track lists and
   the player bar of a wide screen, and in a wide queue. A phone's album and playlist lists show the format alone
   (`FLAC`, `MP3`), its colour telling the tier; a narrow queue leaves the tag out. Hover or long-press a tag for the
-  details.
+  details. A wide track table (from about 1060 pixels) adds a *Bitrate* column, in the colours of the quality.
+- **Menus**: a track, an album, an artist and a playlist each have a *⋮* (on a track's row, on a tile's cover beside
+  *Play*, on a phone row, and in a page's header) with what can be done with them: play, shuffle, *Play next*, *Add to
+  queue*, *Add to playlist*, *Download to this device*, and *Hide* or *Delete playlist*. Only the heart stays beside a
+  track. On a desktop a right click opens the same menu, with the heart's *Add to favorites* on top.
 - **Sorting and filtering**: artists, albums and tracks start A→Z, the favourites with the newest (by the time you
   marked them), your playlists with the newest, a playlist's tracks in the order they were added, and an album's and an
   artist's tracks in their own order. Each list's sort buttons offer *ABC* first, then its own fields, then the shared
@@ -50,6 +54,8 @@ so and offers to reconnect or sign in.
   or the search's table sorts by its headers too while it is open; on a phone those lists keep their own order. A choice
   lasts until the app closes, and Android Auto lists in the same order. When the files carry genre tags, a genre filter
   narrows the albums and the artists to those with a track of that genre.
+- An album of several discs shows each disc's heading (*Disc 1*, *Disc 2*) over its tracks while they're in the
+  album's own order.
 - **Covers** are the file's embedded picture, else a `cover`, `folder` or `front` image (`.jpg`, `.jpeg`, `.png`),
   `albumart.jpg` or `artwork.jpg` in its folder. **Artist pictures** are looked up online
   ([SECURITY.md](../SECURITY.md#players)); until one turns up, the artist's first album cover stands in.
@@ -61,9 +67,16 @@ so and offers to reconnect or sign in.
   in the order it's shown.
 - *Previous* restarts the track once you're 3 seconds in. *Repeat* cycles off → all → one. *Shuffle* reorders what's
   left without interrupting the current track, and switching it off brings the order back.
-- **Play next** and **Add to queue** are in a track's menu (⋮ on a phone, a right click in a table) and an album's or
-  an artist's (⋮ on its phone row, a right click on its tile). *Play next* puts it right after the current track, also
-  while shuffling; with nothing queued, either one simply plays.
+- **Play next** and **Add to queue** are in the *⋮* menus of tracks, albums, artists and playlists. *Play next* puts
+  it right after the current track, also while shuffling; with nothing queued, either one simply plays.
+- One track follows the other **without a gap** when both have the same format (sample rate, bit depth, channels); a
+  change of format still leaves a short pause, and on a Tizen TV each track opens when the previous one ends
+  ([audio.md](audio.md#gapless-playback)). It is on by default; *Settings → Audio → Gapless playback* turns it off.
+- The queue survives a restart: it comes back paused on the track that was playing, where it was, and *Play* goes on
+  from there.
+- The **sleep timer** (the moon in the player bar and in the full-screen player) pauses the music after 15, 30, 45 or
+  60 minutes, or at the end of the track (the next one then waits, paused at its start). While it runs the moon is lit,
+  and its tooltip and menu say when it pauses.
 - The **queue panel** reorders (drag the handle, or the arrows on a desktop or a TV), removes and clears.
 - **Lyrics** load only while the queue or the *Lyrics* tab is open. The file's own come first, and timed (LRC) ones
   follow the song: tap a line to jump there. Otherwise the player asks [LRCLIB](https://lrclib.net), a free, open
@@ -74,6 +87,9 @@ so and offers to reconnect or sign in.
   and says why, instead of skipping through everything after it.
 - The media keys work while Wiretune has the focus, and Escape goes back. On phones, tablets, Macs and Linux desktops
   the system's media controls work from anywhere.
+- **Keyboard** (desktop; ⌘ in place of Ctrl on a Mac): Space plays and pauses, Ctrl+→ and Ctrl+← skip, Shift+→ and
+  Shift+← seek 10 seconds, Ctrl+↑ and Ctrl+↓ set the volume, Ctrl+F goes to the search. While you type in a text field
+  only Ctrl+F applies, and Enter (not Space) presses a focused button.
 
 ## Favourites and playlists
 
@@ -85,12 +101,19 @@ server restarts. Other accounts have their own.
   server is a server playlist; one made without a server stays local.
 - Moving or renaming a file on the server gives its track a new ID, and its old favourite and playlist entries stop
   matching ([server.md](server.md#scanning)).
+- A whole album, an artist's tracks or another playlist go into a playlist at once through their *⋮ → Add to
+  playlist*.
+- A playlist in its own order (*Added* ↑) is rearranged by dragging its tracks: by the handle at the start of a row on
+  a desktop, after a long press on a phone, or with *Move up* and *Move down* in a track's menu.
+- **Most played** and **Recently played** sit above your own playlists once something was played: the 50 tracks with
+  the most plays (the more recent first among equals) and the last 50 played, from the play counts of your account (or
+  of the device, for local music). They put themselves together and can't be renamed, changed, downloaded or deleted.
 
 ## Downloads
 
-Music from a server can stay on the device, to play without the server or the network: a single track (its download
-button, or *⋮ → Download to this device* on a phone), an album, all of an artist's albums, a playlist or all your
-favourites (the button beside *Play* and *Shuffle*).
+Music from a server can stay on the device, to play without the server or the network: a single track (*⋮ → Download to this
+device*), an album, all of an artist's albums, a playlist or all your favourites (the button beside *Play* and
+*Shuffle*, or their *⋮*). A small icon after a track's title tells that it's on the device.
 
 - With **Sync downloads** on (the default, *Settings → Downloads*), what you marked stays in step: a track added to a
   downloaded playlist is fetched, one taken off is deleted, and a file that changed on the server is fetched again.
@@ -98,7 +121,7 @@ favourites (the button beside *Play* and *Shuffle*).
 - They run one track at a time while you're signed in, and one that was cut short continues where it stopped.
 - The copies are the server's files byte for byte, filed as `Album artist/Album/01 - Title.flac` in a `Wiretune`
   folder of your music folder (on iOS and Tizen, the app's own storage). *Settings → Downloads* shows where, how much
-  room they take, and what they're doing. No storage permission is asked for, and a file of your own is never
+  room they take, and what they're doing. Downloading asks for no storage permission, and a file of your own is never
   overwritten.
 
 ## Playing on another device
@@ -131,12 +154,14 @@ sign in again.
 
 - **Account & connection**: the server's address and whether it's reachable, who is signed in (change the password, sign
   out), and for administrators the server's accounts.
-- **Library**: the server's music folder and **Reindex** (administrators), and this computer's folder and **Scan**
-  (desktop).
+- **Library**: the server's music folder and **Reindex** (administrators), and this device's folder and **Scan**
+  (computers and Android phones).
 - **Downloads** and **Remote control** while signed in, and **Hidden content**.
-- **Audio** (desktop): *Exclusive*, *Bit-perfect* and *Output device*. The switches stay grey when no device can do
-  them.
-- **Appearance**: language, theme, and *Performance statistics* (Flutter's frame graphs).
+- **Audio**: *Gapless playback* (on by default) and *Volume normalization*, which plays tracks equally loud from their
+  ReplayGain tags, *Per track* or *Per album* (an album keeping its own dynamics); it is off by default and stays off in
+  bit-perfect mode ([audio.md](audio.md#volume-normalization)). On a desktop also *Exclusive*, *Bit-perfect* and
+  *Output device*; the switches stay grey when no device can do them. A Tizen TV has none of these.
+- **Appearance**: language, theme, *Lyrics from the internet* and *Performance statistics* (Flutter's frame graphs).
 - **About**: the version, the license, where the source code is, and the licenses of the libraries Wiretune is built
   from.
 
@@ -144,6 +169,10 @@ sign in again.
 
 - **Android and iPhone** play from a server, also with the screen off; the notification and the lock screen control
   it.
+- **An Android phone** also plays a folder of its own (*Settings → Library*, *Browse* and *Scan*). The first *Scan* asks
+  for the permission to read music files; it isn't asked at install or start, and a server alone never needs it. Turned
+  down, the scan stops with a hint where the system settings allow it. From Android 13 on the permission covers audio
+  files only, so a cover picture beside the files (`cover.jpg`) isn't seen; covers inside the files are.
 - **TVs** (Android TV and Samsung's Tizen) get the wide layout and the remote: the arrows move, the centre button opens
   or plays, Back goes back. Some formats may not play on Tizen ([audio.md](audio.md#tizen)).
 - **Android Auto** lists Wiretune among the car's media apps once the phone is signed in, with albums, artists,

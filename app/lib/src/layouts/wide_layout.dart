@@ -297,14 +297,23 @@ class _SearchFieldState extends State<_SearchField> {
   final FocusNode _focus = FocusNode();
   bool _hover = false;
 
+  late final ValueNotifier<int> _focusRequests = context.vm.searchFocusRequests;
+
   @override
   void initState() {
     super.initState();
     _focus.addListener(() => setState(() {}));
+    _focusRequests.addListener(_focusField);
+  }
+
+  void _focusField() {
+    _focus.requestFocus();
+    _controller.selection = TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
   }
 
   @override
   void dispose() {
+    _focusRequests.removeListener(_focusField);
     _controller.dispose();
     _focus.dispose();
     super.dispose();
@@ -1086,7 +1095,7 @@ class _PlayerBar extends StatelessWidget {
                     // The devices button (while there are other devices to reach) takes its place first.
                     final devices = player.canReachDevices || player.isRemote;
                     final volume = platform.isDesktop && constraints.maxWidth >= 12 + 36 + 8 + 95;
-                    var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0);
+                    var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0) - 40;
                     final showTag = !compact && track != null && room >= 125 * scale;
                     if (showTag) room -= 125 * scale + 8;
                     final spectrumWidth = math.min(260.0, room - 14);
@@ -1111,6 +1120,7 @@ class _PlayerBar extends StatelessWidget {
                             ),
                             const SizedBox(width: 8),
                           ],
+                          const SleepTimerButton(iconSize: 19, dimension: 40),
                           if (devices) const DevicesButton(iconSize: 19, dimension: 40),
                           if (volume) const VolumeControl(sliderWidth: 95),
                         ],

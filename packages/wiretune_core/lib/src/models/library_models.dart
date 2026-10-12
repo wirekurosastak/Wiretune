@@ -225,6 +225,7 @@ class Playlist {
     DateTime? createdAt,
     DateTime? modifiedAt,
     this.isServer = false,
+    this.isAutomatic = false,
     List<String>? trackIds,
   }) : id = id ?? newId(),
        name = name ?? Localizer.get('PlaylistNew'),
@@ -241,6 +242,9 @@ class Playlist {
   /// True for a playlist that belongs to the signed-in server account: the server holds the original and this player's
   /// copy is a cache that is dropped on sign-out. False for a playlist that only exists on this device.
   bool isServer;
+
+  /// One the player puts together itself from the play counts (most played, recently played): read-only, never stored.
+  final bool isAutomatic;
 
   /// Replaced (never mutated in place) by the library service, so readers can iterate it safely.
   List<String> trackIds;

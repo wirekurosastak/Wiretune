@@ -6,7 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
-import 'package:wiretune_core/wiretune_core.dart';
+import 'package:wiretune_core/wiretune_core.dart' hide Playlist;
 
 import 'device_reservation.dart';
 
@@ -21,6 +21,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _subscriptions.addAll([
       _player.stream.playing.listen(_onPlaying),
       _player.stream.completed.listen(_onCompleted),
+      _player.stream.playlist.listen(_onPlaylist),
       _player.stream.position.listen(_onPosition),
       _player.stream.error.listen(_onError),
       _player.stream.log.listen(_onLog),
@@ -46,17 +47,28 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   final Float32List _window = Float32List(SpectrumAnalyzer.fftSize);
   Timer? _spectrumTimer;
   Timer? _startCheck;
+  Timer? _endCheck;
   Timer? _releaseTimer;
   final ExclusiveCardHolder _card = ExclusiveCardHolder();
   // One output change at a time, applied in the order asked: the device, the exclusive switch and the card claim of
   // one change are never mixed with those of another.
   final AsyncLock _output = AsyncLock();
+  // The next track's entry in mpv's playlist: added, replaced and the finished one taken out one at a time.
+  final AsyncLock _queue = AsyncLock();
+
+  /// The entry after the current one in mpv's playlist ([setNext]) and its source; mpv opens it ahead and moves on to it
+  /// gaplessly.
+  (Media, String)? _next;
+
+  /// The entry mpv went on to, until it plays (its first position) or turns out unplayable (an error).
+  (Media, String)? _arriving;
   AudioOutputDevice? _configuredDevice;
   bool _exclusive = false;
 
   PlaybackState _state = PlaybackState.stopped;
   bool _bitperfect = false;
   double _volume = 1.0;
+  VolumeNormalization _normalization = VolumeNormalization.off;
   int _generation = 0;
   String? _lastError;
   DateTime _lastPositionEvent = DateTime.fromMillisecondsSinceEpoch(0);
@@ -237,7 +249,11 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
         // Bit-perfect: no gain, no filters, no replay gain, no resampling requested (mpv's `audio-format` is left
         // unset, which keeps the decoder's sample format).
         await native.setProperty('af', '');
-        await native.setProperty('replaygain', 'no');
+        await _applyNormalization();
+        // The next track is opened before the current one ends, and plays on the output as it is when its format is the
+        // same (otherwise the output is set up again, with a short gap).
+        await native.setProperty('prefetch-playlist', 'yes');
+        await native.setProperty('gapless-audio', 'weak');
         await native.setProperty('audio-samplerate', '0');
         await native.setProperty('audio-channels', bitperfect ? 'auto' : 'auto-safe');
         await _applyVolume();
@@ -275,6 +291,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _releaseTimer = null;
     final generation = ++_generation;
     _lastError = null;
+    _next = null;
+    _arriving = null;
+    _endCheck?.cancel();
     _setState(PlaybackState.playing);
     await _claimCard();
     if (generation != _generation) return;
@@ -326,7 +345,10 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   @override
   Future<void> stop() async {
     _generation++;
+    _next = null;
+    _arriving = null;
     _startCheck?.cancel();
+    _endCheck?.cancel();
     _releaseTimer?.cancel();
     _releaseTimer = null;
     _setState(PlaybackState.stopped);
@@ -336,9 +358,64 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   @override
+  Future<void> setNext(String? audioSource) => _queue.synchronized(() async {
+    final playlist = _player.state.playlist;
+    _next = null;
+    for (var i = playlist.medias.length - 1; i > playlist.index; i--) {
+      await _player.remove(i);
+    }
+    // Stopped, the next play opens a playlist of its own; the engine gives the next track again then.
+    if (audioSource == null || _state == PlaybackState.stopped || _state == PlaybackState.error) return;
+    final media = Media(audioSource);
+    _next = (media, audioSource);
+    await _player.add(media);
+  });
+
+  /// mpv went on to the next entry; it is the current track once it plays.
+  void _onPlaylist(Playlist playlist) {
+    final next = _next;
+    if (next == null || playlist.index < 1 || playlist.medias.elementAtOrNull(playlist.index)?.uri != next.$1.uri) {
+      return;
+    }
+    _next = null;
+    _arriving = next;
+  }
+
+  /// The next entry plays: it is the current track now, and the finished one leaves the playlist.
+  void _arrived() {
+    final (_, source) = _arriving!;
+    _arriving = null;
+    _generation++;
+    unawaited(
+      _queue.synchronized(() async {
+        for (var i = _player.state.playlist.index - 1; i >= 0; i--) {
+          await _player.remove(i);
+        }
+      }),
+    );
+    if (enableSpectrum) unawaited(_pcm.loadTrack(source));
+    advanced.emit(null);
+  }
+
+  @override
   void setVolume(double volume) {
     _volume = volume.clamp(0.0, 1.0);
     unawaited(_applyVolume());
+  }
+
+  @override
+  void setNormalization(VolumeNormalization mode) {
+    _normalization = mode;
+    unawaited(_output.synchronized(_applyNormalization));
+  }
+
+  /// mpv's ReplayGain is a gain on its software volume (clipping prevented, a file without the tags plays unchanged),
+  /// so it is left off for bit-perfect output.
+  Future<void> _applyNormalization() async {
+    final native = _player.platform;
+    if (native is! NativePlayer) return;
+    final mode = _bitperfect ? VolumeNormalization.off : _normalization;
+    await native.setProperty('replaygain', mode == VolumeNormalization.off ? 'no' : mode.name);
   }
 
   Future<void> _applyVolume() => _player.setVolume(_bitperfect ? 100 : _volume * 100);
@@ -351,6 +428,21 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
 
   void _onCompleted(bool completed) {
     if (!completed || _state != PlaybackState.playing) return;
+    // mpv reports the end of each file, also on its way to the next entry: that one plays on ([_onPlaylist] tells),
+    // unless it can't be opened, which ends the playback after all.
+    if (_next != null) {
+      final generation = _generation;
+      _endCheck?.cancel();
+      _endCheck = Timer(const Duration(seconds: 2), () {
+        if (generation == _generation && _arriving == null && _state == PlaybackState.playing) _end();
+      });
+      return;
+    }
+    _end();
+  }
+
+  void _end() {
+    _endCheck?.cancel();
     _generation++;
     _setState(PlaybackState.stopped);
     _releaseTimer?.cancel();
@@ -362,6 +454,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   void _onPosition(Duration position) {
+    // The next entry's first position (the finished one's last ones are near its end).
+    if (_arriving != null && position > Duration.zero && position < const Duration(seconds: 2)) _arrived();
     final now = DateTime.now();
     if (now.difference(_lastPositionEvent) < const Duration(milliseconds: 150)) return;
     _lastPositionEvent = now;
@@ -371,6 +465,12 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   void _onError(String message) {
     _lastError = WiretuneLog.redact(message);
     WiretuneLog.warn('MediaKitDriver', 'mpv: $_lastError');
+    // The next entry can't be played: playback stops there with the error, as when a track is started that can't be.
+    if (_arriving != null) {
+      _arriving = null;
+      _fail(_lastError);
+      return;
+    }
     // An error before anything was heard means the track cannot be played; later ones are glitches mpv recovers from.
     if (_state == PlaybackState.playing && _player.state.position == Duration.zero && !_player.state.playing) {
       final generation = _generation;
@@ -439,6 +539,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   @override
   Future<void> dispose() async {
     _startCheck?.cancel();
+    _endCheck?.cancel();
     _releaseTimer?.cancel();
     _releaseTimer = null;
     _spectrumTimer?.cancel();

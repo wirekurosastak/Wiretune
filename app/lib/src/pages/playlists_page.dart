@@ -61,7 +61,7 @@ class PlaylistsPage extends StatelessWidget {
               ),
             ),
             PlaylistsSliver(
-              playlists: playlists.playlists,
+              playlists: [...playlists.automaticPlaylists, ...playlists.playlists],
               tracksOf: playlists.tracksOf,
               onOpen: playlists.openPlaylist,
               onPlay: playlists.playPlaylist,
@@ -99,7 +99,9 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
     final colors = context.colors;
     final tracks = playlists.selectedPlaylistTracks;
 
-    final title = playlists.isEditingName
+    final title = playlist.isAutomatic
+        ? null
+        : playlists.isEditingName
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -170,7 +172,12 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             artworkBadge: playlist.formatSpec.isEmpty
                 ? null
                 : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, fontSize: 11),
-            tags: [TagBadge(context.tr('LabelPlaylist'), color: colors.palette.lime)],
+            tags: [
+              TagBadge(
+                context.tr(playlist.isAutomatic ? 'LabelAutoPlaylist' : 'LabelPlaylist'),
+                color: colors.palette.lime,
+              ),
+            ],
             title: playlist.name,
             titleWidget: title,
             details: [
@@ -182,19 +189,15 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               PlayShuffleButtons(
                 onPlay: tracks.isEmpty ? null : () => playlists.playPlaylist(),
                 onShuffle: tracks.isEmpty ? null : () => playlists.shufflePlaylist(),
-                trailing: DownloadListButton.forTracks(
-                  tracks,
-                  isPinned: () => context.vm.downloads.isPlaylistPinned(playlist),
-                  onPressed: () => context.vm.downloads.togglePlaylist(playlist),
-                ),
+                trailing: playlist.isAutomatic
+                    ? null
+                    : DownloadListButton.forTracks(
+                        tracks,
+                        isPinned: () => context.vm.downloads.isPlaylistPinned(playlist),
+                        onPressed: () => context.vm.downloads.togglePlaylist(playlist),
+                      ),
               ),
-              // Where an album's and an artist's page have their hide button.
-              HeaderIconButton(
-                tooltip: context.tr('PlaylistDeleteAction'),
-                icon: Icons.delete_outline_rounded,
-                color: colors.danger,
-                onPressed: () => playlists.requestDeletePlaylist(playlist),
-              ),
+              CollectionMenu.playlist(playlist, tracks, onPlay: playlists.playPlaylist).headerButton(),
             ],
           ),
         ),
@@ -207,7 +210,12 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             ),
           )
         else
-          TrackSliver(tracks: tracks, sorting: playlists, kind: TrackTableKind.playlist),
+          TrackSliver(
+            tracks: tracks,
+            sorting: playlists,
+            kind: TrackTableKind.playlist,
+            onReorder: playlists.canReorder ? playlists.moveTrack : null,
+          ),
         const PageEndSpace(),
       ],
     );
@@ -247,9 +255,9 @@ class _PlaylistDialogsLayerState extends State<PlaylistDialogsLayer> {
           dialog = _DialogCard(
             title: context.tr('PlaylistNew'),
             onClose: playlists.closeCreateDialog,
-            subtitle: playlists.trackToAdd == null
+            subtitle: playlists.tracksToAdd.isEmpty
                 ? null
-                : context.trf('PlaylistAlsoAddsTrack', [playlists.trackToAdd!.title]),
+                : context.trf('PlaylistAlsoAddsTrack', [playlists.addingName]),
             content: TextField(
               controller: _name,
               autofocus: true,
@@ -263,10 +271,9 @@ class _PlaylistDialogsLayerState extends State<PlaylistDialogsLayer> {
             ],
           );
         } else if (playlists.isAddToPlaylistDialogOpen) {
-          final track = playlists.trackToAdd;
           dialog = _DialogCard(
             title: context.tr('TipAddToPlaylist'),
-            subtitle: track == null ? null : '${track.title} • ${track.artist}',
+            subtitle: playlists.addingName,
             onClose: playlists.cancelAddTrack,
             content: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 320),

@@ -723,19 +723,7 @@ class AlbumDetail extends StatelessWidget {
                   onPressed: () => vm.downloads.toggleAlbum(album),
                 ),
               ),
-              HeaderIconButton(
-                tooltip: context.tr(vm.library.isAlbumHidden(album.id) ? 'Unhide' : 'HideAlbum'),
-                icon: vm.library.isAlbumHidden(album.id) ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                onPressed: () {
-                  final isHidden = vm.library.isAlbumHidden(album.id);
-                  if (isHidden) {
-                    vm.library.unhideAlbum(album.id);
-                  } else {
-                    vm.library.hideAlbum(album.id);
-                    albums.closeAlbumDetail();
-                  }
-                },
-              ),
+              CollectionMenu.album(album, onPlay: albums.playAlbum).headerButton(),
             ],
           ),
         ),
@@ -832,19 +820,7 @@ class ArtistDetail extends StatelessWidget {
                   onPressed: () => vm.downloads.toggleArtist(artist),
                 ),
               ),
-              HeaderIconButton(
-                tooltip: context.tr(vm.library.isArtistHidden(artist.id) ? 'Unhide' : 'HideArtist'),
-                icon: vm.library.isArtistHidden(artist.id) ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                onPressed: () {
-                  final isHidden = vm.library.isArtistHidden(artist.id);
-                  if (isHidden) {
-                    vm.library.unhideArtist(artist.id);
-                  } else {
-                    vm.library.hideArtist(artist.id);
-                    artists.closeArtistDetail();
-                  }
-                },
-              ),
+              CollectionMenu.artist(artist, onPlay: artists.playArtist).headerButton(),
             ],
           ),
         ),

@@ -176,6 +176,41 @@ void main() {
     expect(engine.signalPathDescription, contains('Local file'));
   });
 
+  test('the next track is handed to the driver ahead, again after a new start, and takes over gaplessly', () async {
+    final driver = FakeAudioDriver();
+    final engine = TestSupport.createEngine(driver);
+    await engine.ready;
+    final a = TestSupport.makeTrack('a', 'A');
+    final b = TestSupport.makeTrack('b', 'B');
+    final changes = <Track?>[];
+    engine.trackChanged.listen(changes.add);
+
+    await engine.setNextTrack(b);
+    await engine.playTrack(a);
+    expect(driver.nextSource, b.filePath, reason: 'given again once the new track started');
+
+    driver.simulateGaplessEnd();
+    expect(engine.currentTrack, b);
+    expect(changes, [a, b]);
+    expect(driver.playCalls, 1);
+
+    await engine.setNextTrack(null);
+    expect(driver.nextSource, isNull);
+  });
+
+  test('volume normalization reaches the driver and the signal path, which leaves it out for bit-perfect', () async {
+    final driver = FakeAudioDriver();
+    final engine = TestSupport.createEngine(driver);
+    await engine.ready;
+    await engine.playTrack(TestSupport.makeTrack('a', 'A'));
+    expect(engine.signalPathDescription, isNot(contains('normalization')));
+    engine.setNormalization(VolumeNormalization.album);
+    expect(driver.normalization, VolumeNormalization.album);
+    expect(engine.signalPathDescription, contains('volume normalization: Per album'));
+    await engine.setBitperfectMode(true);
+    expect(engine.signalPathDescription, isNot(contains('normalization')));
+  });
+
   test('changing the device mid-track restarts the track at the current position', () async {
     final driver = FakeAudioDriver();
     final engine = TestSupport.createEngine(driver, [TestSupport.sharedOnlyDevice, TestSupport.capableDevice]);

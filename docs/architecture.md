@@ -135,7 +135,11 @@ the drivers ignore late callbacks from a source that has since been replaced, an
 whose stream token arrived after another track was asked for. A device that disappears takes exclusive and bit-perfect
 with it. On Linux the ALSA card for exclusive playback is claimed through `ExclusiveCardHolder`, which carries out claims
 and releases one at a time, so overlapping output changes can't leave a claim behind; the card goes back when playback
-stops, ends or fails, or the app closes. Around the engine, `MobileAudio`
+stops, ends or fails, or the app closes. For gapless playback `PlayerViewModel` keeps the engine told of the queue's
+next entry (`setNextTrack`); the engine hands its source to the driver ahead (`AudioDriver.setNext`), the driver
+reports `advanced` once mpv plays it, and the engine passes that on as the new track without a new start. The queue
+itself (track IDs, the place in it, shuffle and repeat) is saved as a preference when it changes and every 30 seconds
+while playing, and picked up paused at start-up. Around the engine, `MobileAudio`
 handles audio focus and Android's CPU and Wi-Fi locks, and `WiretuneMediaSession` mirrors the player into the system's
 media controls; on Android it's also the `MediaBrowserService` that Android Auto browses. Per platform:
 [audio.md](audio.md).
@@ -168,6 +172,9 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
   signing out with downloads, switching servers, changing the server's music folder, deleting an account or a
   playlist, showing all hidden items. A refusal next to the field it's about. A page of its own when the player can't
   start.
+- **Automatic playlists** (*Most played*, *Recently played*) are `Playlist`s with `isAutomatic`, put together by
+  `PlaylistsViewModel` from the tracks' play counts on each refresh and opening of the section; never stored, synced or
+  offered as a target.
 - **Lyrics** load only while they're on screen: the file's own (or the server's `/api/lyrics`), then LRCLIB if
   allowed, cached per track. A failed lookup isn't cached, so the panel can tell "couldn't reach" from "no lyrics".
 

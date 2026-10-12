@@ -448,6 +448,32 @@ class LibraryService {
   Future<void> addTrackToPlaylist(String playlistId, String trackId) =>
       _updatePlaylist(playlistId, (ids) => ids.contains(trackId) ? null : [...ids, trackId]);
 
+  /// Adds [trackIds] to the end of the playlist, those not in it yet and in their order, as one change.
+  Future<void> addTracksToPlaylist(String playlistId, Iterable<String> trackIds) => _updatePlaylist(playlistId, (ids) {
+    final present = ids.toSet();
+    final added = [
+      for (final id in trackIds)
+        if (present.add(id)) id,
+    ];
+    return added.isEmpty ? null : [...ids, ...added];
+  });
+
+  /// Moves the entry shown at [from] among the playlist's tracks ([getPlaylistTracks]) to [to], counted after it has
+  /// been taken out. Entries of tracks this library doesn't have (which aren't shown) keep their places among the rest.
+  Future<void> movePlaylistTrack(String playlistId, int from, int to) => _updatePlaylist(playlistId, (ids) {
+    final byId = _rawTrackById.isNotEmpty ? _rawTrackById : _snapshot.trackById;
+    final aliases = _serverAliases;
+    final shown = [
+      for (var i = 0; i < ids.length; i++)
+        if (byId[ids[i]] != null || byId[aliases[ids[i]]] != null) i,
+    ];
+    if (from == to || from < 0 || to < 0 || from >= shown.length || to >= shown.length) return null;
+    final at = shown[to];
+    final list = List.of(ids);
+    list.insert(at, list.removeAt(shown[from]));
+    return list;
+  });
+
   Future<void> removeTrackFromPlaylist(String playlistId, String trackId) =>
       _updatePlaylist(playlistId, (ids) => ids.contains(trackId) ? ids.where((id) => id != trackId).toList() : null);
 

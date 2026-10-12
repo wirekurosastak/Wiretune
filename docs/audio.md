@@ -40,9 +40,10 @@ exclusive and bit-perfect; mpv tends to leave the hardware out of its list, so W
 `/proc/asound`. On Windows the WASAPI endpoints, and on macOS the Core Audio devices, are offered for exclusive and
 bit-perfect without probing their formats first. The list is built at start-up and on **Refresh**.
 
-**What Wiretune tells mpv**, in every mode: no filters, `replaygain=no`, `audio-samplerate=0` (keep the file's rate),
-`audio-format` left alone (keep the decoder's sample format), and `audio-channels=auto-safe` (`auto`, so no downmix, in
-bit-perfect mode). Exclusive adds `audio-exclusive=yes`: WASAPI exclusive mode on Windows, Core Audio hog mode on macOS.
+**What Wiretune tells mpv**, in every mode: no filters, `audio-samplerate=0` (keep the file's rate), `audio-format`
+left alone (keep the decoder's sample format), `audio-channels=auto-safe` (`auto`, so no downmix, in bit-perfect mode),
+`replaygain` as [volume normalization](#volume-normalization) is set (always `no` in bit-perfect mode), and
+`prefetch-playlist=yes` with `gapless-audio=weak` for [gapless playback](#gapless-playback). Exclusive adds `audio-exclusive=yes`: WASAPI exclusive mode on Windows, Core Audio hog mode on macOS.
 An ALSA `hw:` device is exclusive by nature: it bypasses the sound server, and nothing else can use the card meanwhile.
 
 **Linux and PipeWire.** PipeWire normally holds the card, so before opening a `hw:` device Wiretune claims it in the
@@ -59,7 +60,8 @@ be busy and playback fails with mpv's message. Three things to know:
 
 **When a track won't play.** mpv reports some failures only in its log, and a source it can't open can leave it idle
 without an error. So a track that hasn't started after 3 seconds, or fails before you heard anything, counts as
-failed: the player says why and stops there instead of skipping ahead.
+failed: the player says why and stops there instead of skipping ahead. The same goes for the next track that was
+waiting for a gapless start: when mpv can't open it, playback stops after the current one with mpv's message.
 
 ## Android and iOS
 
@@ -82,6 +84,26 @@ The TV's own media player does the work, so what decodes depends on the firmware
 Vorbis, while ALAC, APE, WavPack, DSD and Opus may well fail with an error. The TV's own output and volume apply, and
 there's no device choice or exclusive mode. Not tried on a real TV yet.
 
+## Gapless playback
+
+On by default; *Settings → Audio → Gapless playback* turns it off, and each track then opens when the previous one
+ends. While a track plays, the player gives mpv the entry that comes after it in the queue (the same track again with repeat
+one, the first with repeat all, nothing while the sleep timer waits for the end of the track) and gives it again
+whenever the queue, shuffle, repeat or the sleep timer change. mpv opens it ahead (`prefetch-playlist`, which for a
+server track means the stream is requested early) and goes on to it without reopening the output when the sample
+format, rate and channels are the same (`gapless-audio=weak`). When they differ, mpv sets the output up again, which
+leaves a short gap, as does exclusive output changing its format. The player counts the next track as playing once mpv
+reports its first position. Tried on Linux with mpv's PipeWire output; Windows, macOS and the phones run the same code
+untried. On Tizen each track still opens when the previous one ends.
+
+## Volume normalization
+
+*Settings → Audio → Volume normalization* (*Off*, the default, *Per track* or *Per album*) is mpv's ReplayGain: it reads the
+files' `REPLAYGAIN_TRACK_GAIN` or `REPLAYGAIN_ALBUM_GAIN` tags and turns the gain into mpv's software volume, lowered
+where it would clip (mpv's default `replaygain-clip`). A file without the tags plays as it is. It is a gain, so
+bit-perfect mode leaves it out whatever the setting; exclusive mode without bit-perfect, and the phones, apply it. The
+signal path says when it's on. Tizen's player reads no ReplayGain tags, so the TV doesn't offer it.
+
 ## Volume and the spectrum
 
 The desktop volume slider is mpv's software volume, applied to the decoded samples; the system mixer and the card's
@@ -99,7 +121,7 @@ stay dark, and the log says why.
   welcome.
 - **The signal-path readout shows what Wiretune asked for, not what it measured.** In bit-perfect mode it says
   *Bit-perfect requested (PCM, no gain, exclusive device access)* (or *Bit-perfect requested (lossy source decoded to PCM, no gain, exclusive device access)* when playing a lossy file), and means exactly that.
-- **No gapless playback, no crossfade**: each track opens when the previous one ends, with a short gap.
-- **No equaliser and no ReplayGain** (mpv's is switched off on purpose).
+- **No crossfade**, and gapless only between tracks of the same format ([above](#gapless-playback)).
+- **No equaliser.**
 - **Windows and Tizen have no system media controls.** Windows media keys work while the window has the focus; on a
   Tizen TV the remote's media keys work inside the app.

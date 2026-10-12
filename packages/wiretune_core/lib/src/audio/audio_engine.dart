@@ -25,6 +25,7 @@ class WiretuneAudioEngine {
       _driver.positionChanged.listen(positionChanged.emit),
       _driver.spectrumDataAvailable.listen(spectrumDataAvailable.emit),
       _driver.trackEnded.listen(trackEnded.emit),
+      _driver.advanced.listen((_) => _onAdvanced()),
       _driver.playbackFailed.listen(playbackFailed.emit),
     ]);
     _initialDeviceScan = refreshDevices();
@@ -37,12 +38,17 @@ class WiretuneAudioEngine {
 
   List<AudioOutputDevice> _availableDevices = const [];
   Track? _currentTrack;
+
+  /// What follows the current track without a gap ([setNextTrack]), and what the driver was given for it.
+  Track? _nextTrack;
+  String? _nextSource;
   AudioOutputDevice? _currentDevice;
   bool _isExclusiveMode = false;
   bool _isBitperfect = false;
   double _volume = 1.0;
   double _volumeBeforeBitperfect = 1.0;
   bool _isMuted = false;
+  VolumeNormalization _normalization = VolumeNormalization.off;
   String? _streamToken;
   Future<String?> Function()? _streamTokenProvider;
   String? Function(Track track)? _offlineCopy;
@@ -59,6 +65,9 @@ class WiretuneAudioEngine {
   final Event<bool> exclusiveModeChanged = Event<bool>();
   final Event<Float32List> spectrumDataAvailable = Event<Float32List>();
   final Event<void> trackEnded = Event<void>();
+
+  /// The track ended and the one given to [setNextTrack] took over without a gap (it is in [trackChanged] too).
+  final Event<Track> advanced = Event<Track>();
   final Event<void> devicesChanged = Event<void>();
   final Event<String> playbackFailed = Event<String>();
 
@@ -70,6 +79,9 @@ class WiretuneAudioEngine {
   bool get isMuted => _isMuted;
   bool get isExclusiveMode => _isExclusiveMode;
   bool get isBitperfect => _isBitperfect;
+
+  /// The chosen volume normalization; bit-perfect output skips it.
+  VolumeNormalization get normalization => _normalization;
   AudioOutputDevice? get currentDevice => _currentDevice;
   List<AudioOutputDevice> get availableDevices => _availableDevices;
 
@@ -83,11 +95,17 @@ class WiretuneAudioEngine {
 
     final isLossless = track.format.isLossless;
     final device = _currentDevice?.displayTitle ?? Localizer.get('DefaultOutput');
-    final processing = Localizer.get(
+    var processing = Localizer.get(
       _isBitperfect
           ? (isLossless ? 'SignalProcessingBitPerfect' : 'SignalProcessingBitPerfectLossy')
           : 'SignalProcessingMixer',
     );
+    if (!_isBitperfect && _normalization != VolumeNormalization.off) {
+      processing = Localizer.format('SignalProcessingNormalized', [
+        processing,
+        Localizer.get(_normalization == VolumeNormalization.album ? 'NormalizationAlbum' : 'NormalizationTrack'),
+      ]);
+    }
     final access = Localizer.get(_isExclusiveMode ? 'SignalAccessExclusive' : 'SignalAccessShared');
     final transport = Localizer.get(
       track.isLocal
@@ -163,6 +181,40 @@ class WiretuneAudioEngine {
 
     WiretuneLog.info('AudioEngine', "PlayTrack: '${track.artist} - ${track.title}' (${track.format.tagSpec})");
     await _driver.play(source, track.format, start);
+    // The driver forgot the next track: it is given again for this one.
+    _nextSource = null;
+    if (request == _request) await _offerNext();
+  }
+
+  /// Has [track] start right when the current one ends, without a gap (the driver permitting); null for nothing. It
+  /// stays until changed, also across new tracks: the player keeps it up to date.
+  Future<void> setNextTrack(Track? track) async {
+    _nextTrack = track;
+    await _offerNext();
+  }
+
+  Future<void> _offerNext() async {
+    final track = _nextTrack;
+    if (track != null && !track.isLocal && _streamTokenProvider != null && _offlineCopy?.call(track) == null) {
+      await _refreshStreamToken();
+      if (_disposed || !identical(track, _nextTrack)) return;
+    }
+    final source = track == null ? null : resolveSource(track);
+    if (source == _nextSource) return;
+    _nextSource = source;
+    await _driver.setNext(source);
+  }
+
+  void _onAdvanced() {
+    final track = _nextTrack;
+    if (track == null) return;
+    _request++;
+    _currentTrack = track;
+    _nextTrack = null;
+    _nextSource = null;
+    WiretuneLog.info('AudioEngine', "Gapless: '${track.artist} - ${track.title}' (${track.format.tagSpec})");
+    trackChanged.emit(track);
+    advanced.emit(track);
   }
 
   Future<void> pause() => _driver.pause();
@@ -185,6 +237,11 @@ class WiretuneAudioEngine {
     }
     _volume = volume.clamp(0.0, 1.0);
     _driver.setVolume(_isMuted ? 0.0 : _volume);
+  }
+
+  void setNormalization(VolumeNormalization mode) {
+    _normalization = mode;
+    _driver.setNormalization(mode);
   }
 
   void setMuted(bool muted) {
@@ -314,7 +371,11 @@ class WiretuneAudioEngine {
     final track = _currentTrack;
     if (track != null && state == PlaybackState.playing) {
       final source = resolveSource(track);
-      if (source != null) await _driver.play(source, track.format, currentPosition);
+      if (source != null) {
+        await _driver.play(source, track.format, currentPosition);
+        _nextSource = null;
+        await _offerNext();
+      }
     }
   }
 

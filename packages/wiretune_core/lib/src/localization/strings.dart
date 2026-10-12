@@ -61,6 +61,30 @@ const Map<String, (String, String, String)> allStrings = {
     'Search lrclib.net when track lyrics are missing.',
     'Fehlende Liedtexte auf lrclib.net suchen.',
   ),
+  'SleepTimer': ('Elalvási időzítő', 'Sleep timer', 'Sleep-Timer'),
+  'SleepTimerAt': ('Megáll ekkor: {0}', 'Pauses at {0}', 'Pausiert um {0}'),
+  'SleepTimerAtTrackEnd': ('Megáll a szám végén', 'Pauses at the end of the track', 'Pausiert am Ende des Titels'),
+  'SleepTimerMinutes': ('{0} perc', '{0} minutes', '{0} Minuten'),
+  'SleepTimerTrackEnd': ('A szám végén', 'At the end of the track', 'Am Ende des Titels'),
+  'SleepTimerOff': ('Kikapcsolás', 'Turn off', 'Ausschalten'),
+  'SettingsNormalization': ('Hangerő-kiegyenlítés', 'Volume normalization', 'Lautstärkeangleichung'),
+  'SettingsNormalizationHint': (
+    'A fájlok ReplayGain-címkéi alapján egyforma hangerő: számonként, vagy albumonként az album saját dinamikájával. '
+        'Bit-perfect módban ki van kapcsolva.',
+    "Equal loudness from the files' ReplayGain tags: per track, or per album keeping the album's own dynamics. "
+        'Off in bit-perfect mode.',
+    'Gleiche Lautheit anhand der ReplayGain-Tags der Dateien: pro Titel oder pro Album mit der Dynamik des Albums. '
+        'Im Bit-Perfect-Modus aus.',
+  ),
+  'SettingsGapless': ('Szünet nélküli lejátszás', 'Gapless playback', 'Lückenlose Wiedergabe'),
+  'SettingsGaplessHint': (
+    'A következő szám azonnal indul, ha az előző véget ér (élő és folyamatos albumokhoz).',
+    'The next track starts the moment the current one ends (for live and continuous albums).',
+    'Der nächste Titel beginnt, sobald der aktuelle endet (für Live- und durchgehende Alben).',
+  ),
+  'NormalizationOff': ('Ki', 'Off', 'Aus'),
+  'NormalizationTrack': ('Számonként', 'Per track', 'Pro Titel'),
+  'NormalizationAlbum': ('Albumonként', 'Per album', 'Pro Album'),
   'SettingsPerformanceStats': ('Teljesítménystatisztika', 'Performance statistics', 'Leistungsstatistik'),
   'SettingsPerformanceStatsHint': (
     'Képkocka-grafikonok a hibakereséshez.',
@@ -117,6 +141,8 @@ const Map<String, (String, String, String)> allStrings = {
   'ColArtist': ('ELŐADÓ', 'ARTIST', 'KÜNSTLER'),
   'ColAlbum': ('ALBUM', 'ALBUM', 'ALBUM'),
   'ColQuality': ('MINŐSÉG', 'QUALITY', 'QUALITÄT'),
+  'ColBitrate': ('BITRÁTA', 'BITRATE', 'BITRATE'),
+  'BitrateKbps': ('{0} kbps', '{0} kbps', '{0} kbps'),
   'QualityGold': ('ARANY', 'GOLD', 'GOLD'),
   'QualitySilver': ('EZÜST', 'SILVER', 'SILBER'),
   'QualityBronze': ('BRONZ', 'BRONZE', 'BRONZE'),
@@ -143,6 +169,10 @@ const Map<String, (String, String, String)> allStrings = {
   'LabelTracks': ('SZÁMOK', 'TRACKS', 'TITEL'),
   'LabelAllTracks': ('ÖSSZES SZÁM', 'ALL TRACKS', 'ALLE TITEL'),
   'LabelPlaylist': ('LEJÁTSZÁSI LISTA', 'PLAYLIST', 'PLAYLIST'),
+  'LabelAutoPlaylist': ('AUTOMATIKUS LISTA', 'AUTOMATIC PLAYLIST', 'AUTOMATISCHE PLAYLIST'),
+  'DiscNumber': ('{0}. LEMEZ', 'DISC {0}', 'DISC {0}'),
+  'AutoMostPlayed': ('Legtöbbet játszott', 'Most played', 'Meistgespielt'),
+  'AutoRecentlyPlayed': ('Nemrég játszott', 'Recently played', 'Zuletzt gespielt'),
   'SortBy': ('Rendezés:', 'Sort by:', 'Sortieren nach:'),
   'SortYear': ('Megjelenés', 'Released', 'Erschienen'),
   'SortQuality': ('Minőség', 'Quality', 'Qualität'),
@@ -191,9 +221,9 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'PlaylistNamePlaceholder': ('Lista neve', 'Playlist name', 'Name der Playlist'),
   'PlaylistAlsoAddsTrack': (
-    'A(z) „{0}” szám is bekerül az új listába.',
-    'The track “{0}” will also be added to the new playlist.',
-    'Der Titel „{0}“ wird auch zur neuen Playlist hinzugefügt.',
+    'Az új listába ez is bekerül: {0}',
+    'The new playlist starts with: {0}',
+    'Die neue Playlist beginnt mit: {0}',
   ),
   'PlaylistDeleteAction': ('Lista törlése', 'Delete playlist', 'Playlist löschen'),
   'PlaylistDeleteConfirm': (
@@ -494,6 +524,14 @@ const Map<String, (String, String, String)> allStrings = {
     'Error while reindexing: {0}',
     'Fehler bei der Neuindizierung: {0}',
   ),
+  'FolderAccessDenied': (
+    'A Wiretune nem kapott engedélyt a zenefájlok olvasására. A rendszer beállításaiban adhatod meg '
+        '(Alkalmazások → Wiretune → Engedélyek → Zene és hang).',
+    "Wiretune wasn't allowed to read your music files. You can allow it in the system settings "
+        '(Apps → Wiretune → Permissions → Music and audio).',
+    'Wiretune darf deine Musikdateien nicht lesen. Du kannst es in den Systemeinstellungen erlauben '
+        '(Apps → Wiretune → Berechtigungen → Musik und Audio).',
+  ),
   'FolderMissing': (
     'A megadott mappa nem létezik!',
     'The specified folder does not exist!',
@@ -689,6 +727,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Közvetlen kimenet kérve (Veszteséges forrás PCM-re dekódolva, erősítés nélkül, kizárólagos hozzáférés)',
     'Direct output requested (lossy source decoded to PCM, no gain, exclusive device access)',
     'Direkte Ausgabe angefordert (verlustbehaftete Quelle zu PCM decodiert, ohne Verstärkung, exklusiver Gerätezugriff)',
+  ),
+  'SignalProcessingNormalized': (
+    '{0}, hangerő-kiegyenlítés: {1}',
+    '{0}, volume normalization: {1}',
+    '{0}, Lautstärkeangleichung: {1}',
   ),
   'SignalProcessingMixer': (
     'Rendszerkeverő (megosztott kimenet)',

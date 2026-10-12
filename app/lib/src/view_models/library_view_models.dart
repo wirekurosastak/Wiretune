@@ -650,6 +650,10 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   );
 
   List<Playlist> playlists = const [];
+
+  /// The most played and the recently played tracks, as read-only playlists above the user's own; each only once
+  /// something was played.
+  List<Playlist> automaticPlaylists = const [];
   Map<String, List<Track>> _tracksOf = const {};
   Playlist? selectedPlaylist;
 
@@ -659,13 +663,16 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   String selectedPlaylistTotalDuration = '';
   bool isPlaylistDetailOpen = false;
 
-  // "New playlist" dialog, optionally adding a pending track once created.
+  // "New playlist" dialog, optionally adding the pending tracks once created.
   bool isCreateDialogOpen = false;
   String newPlaylistName = '';
 
-  // "Add to playlist" dialog.
+  // "Add to playlist" dialog: what goes in (a track, an album, an artist's tracks, a playlist), what the dialogs call it,
+  // and the name a new playlist for it starts with.
   bool isAddToPlaylistDialogOpen = false;
-  Track? trackToAdd;
+  List<Track> tracksToAdd = const [];
+  String addingName = '';
+  String _suggestedName = '';
 
   // Delete confirmation.
   Playlist? playlistPendingDelete;
@@ -674,7 +681,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   bool isEditingName = false;
   String editingPlaylistName = '';
 
-  bool get hasPlaylists => playlists.isNotEmpty;
+  bool get hasPlaylists => playlists.isNotEmpty || automaticPlaylists.isNotEmpty;
   bool get isDeleteConfirmOpen => playlistPendingDelete != null;
   bool get isAnyDialogOpen => isCreateDialogOpen || isAddToPlaylistDialogOpen || isDeleteConfirmOpen;
 
@@ -715,23 +722,55 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   /// Where [track] stands in the open playlist (1 for the first added); null when it isn't in it.
   int? positionOf(Track track) => _positions[track.id];
 
+  static const int _automaticLength = 50;
+  static const String _mostPlayedId = 'automatic:most-played';
+  static const String _recentlyPlayedId = 'automatic:recently-played';
+
+  /// The automatic playlists as the play counts stand now: the [_automaticLength] most played tracks (the more recent
+  /// first among equals), and the last played ones.
+  List<Playlist> _automatic() {
+    final played = _library.tracks.where((t) => t.playCount > 0 || t.lastPlayed != null).toList();
+    if (played.isEmpty) return const [];
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0);
+    int recent(Track a, Track b) => (b.lastPlayed ?? epoch).compareTo(a.lastPlayed ?? epoch);
+    final most = played.where((t) => t.playCount > 0).toList()
+      ..sort((a, b) {
+        final count = b.playCount.compareTo(a.playCount);
+        return count != 0 ? count : recent(a, b);
+      });
+    final last = played.where((t) => t.lastPlayed != null).toList()..sort(recent);
+    Playlist list(String id, String key, List<Track> tracks) => Playlist(
+      id: id,
+      name: Localizer.get(key),
+      isAutomatic: true,
+      trackIds: [for (final t in tracks.take(_automaticLength)) t.id],
+    );
+    return [
+      if (most.isNotEmpty) list(_mostPlayedId, 'AutoMostPlayed', most),
+      if (last.isNotEmpty) list(_recentlyPlayedId, 'AutoRecentlyPlayed', last),
+    ];
+  }
+
   void refreshPlaylists() {
     final selectedId = selectedPlaylist?.id;
     playlists = _inSortOrder(_library.playlists);
-    _tracksOf = {for (final pl in playlists) pl.id: _library.getPlaylistTracks(pl)};
-    for (final pl in playlists) {
+    automaticPlaylists = _automatic();
+    _tracksOf = {
+      for (final pl in [...automaticPlaylists, ...playlists]) pl.id: _library.getPlaylistTracks(pl),
+    };
+    for (final pl in [...automaticPlaylists, ...playlists]) {
       pl.applyQuality(_tracksOf[pl.id]!);
     }
-    selectedPlaylist = selectedId == null ? null : _library.getPlaylist(selectedId);
+    selectedPlaylist = selectedId == null
+        ? null
+        : (_library.getPlaylist(selectedId) ?? automaticPlaylists.where((pl) => pl.id == selectedId).firstOrNull);
     if (selectedPlaylist == null) isPlaylistDetailOpen = false;
     _refreshSelectedTracks();
     notifyListeners();
   }
 
-  void refreshLocalizedTexts() {
-    _refreshSelectedTracks();
-    notifyListeners();
-  }
+  /// The automatic playlists' names are in the language.
+  void refreshLocalizedTexts() => refreshPlaylists();
 
   void _refreshSelectedTracks() {
     final selected = selectedPlaylist;
@@ -781,7 +820,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
 
   void closeCreateDialog() {
     isCreateDialogOpen = false;
-    trackToAdd = null;
+    tracksToAdd = const [];
     notifyListeners();
   }
 
@@ -790,11 +829,11 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     if (newPlaylistName.trim().isEmpty) return;
 
     final playlist = await _library.createPlaylist(newPlaylistName);
-    final pending = trackToAdd;
-    if (pending != null) await _library.addTrackToPlaylist(playlist.id, pending.id);
+    final pending = tracksToAdd;
+    if (pending.isNotEmpty) await _library.addTracksToPlaylist(playlist.id, [for (final t in pending) t.id]);
 
     isCreateDialogOpen = false;
-    trackToAdd = null;
+    tracksToAdd = const [];
     refreshPlaylists();
     _select(_library.getPlaylist(playlist.id));
     isPlaylistDetailOpen = true;
@@ -830,7 +869,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
 
   void startRename() {
     final selected = selectedPlaylist;
-    if (selected == null) return;
+    if (selected == null || selected.isAutomatic) return;
     editingPlaylistName = selected.name;
     isEditingName = true;
     notifyListeners();
@@ -874,26 +913,48 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     refreshPlaylists();
   }
 
-  void beginAddTrack(Track track) {
-    trackToAdd = track;
+  void beginAddTrack(Track track) =>
+      beginAddTracks([track], name: '${track.title} • ${track.artist}', suggestedName: track.album);
+
+  /// Opens the "add to playlist" dialog for [tracks], called [name] there; a new playlist for them starts as
+  /// [suggestedName].
+  void beginAddTracks(List<Track> tracks, {required String name, required String suggestedName}) {
+    if (tracks.isEmpty) return;
+    tracksToAdd = tracks;
+    addingName = name;
+    _suggestedName = suggestedName;
     isAddToPlaylistDialogOpen = true;
     notifyListeners();
   }
 
   void cancelAddTrack() {
     isAddToPlaylistDialogOpen = false;
-    trackToAdd = null;
+    tracksToAdd = const [];
     notifyListeners();
   }
 
   Future<void> addPendingTrackTo(Playlist? playlist) async {
-    final track = trackToAdd;
-    if (playlist != null && track != null) await _library.addTrackToPlaylist(playlist.id, track.id);
+    final tracks = tracksToAdd;
+    if (playlist != null && tracks.isNotEmpty) {
+      await _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
+    }
     cancelAddTrack();
   }
 
+  /// Whether the open playlist shows its own order (Added ↑), the only one its tracks can be moved in.
+  bool get canReorder =>
+      selectedPlaylist?.isAutomatic == false && sortField == TrackSortField.added && !isSortDescending;
+
+  /// Moves the open playlist's track shown at [from] to [to] (counted after it has been taken out).
+  Future<void> moveTrack(int from, int to) async {
+    final selected = selectedPlaylist;
+    if (selected == null || !canReorder) return;
+    await _library.movePlaylistTrack(selected.id, from, to);
+    refreshPlaylists();
+  }
+
   void createPlaylistForPendingTrack() {
-    newPlaylistName = trackToAdd?.album ?? '';
+    newPlaylistName = _suggestedName;
     isAddToPlaylistDialogOpen = false;
     isCreateDialogOpen = true;
     notifyListeners();

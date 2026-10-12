@@ -38,8 +38,9 @@ class AppPlatform {
   /// them for as long as the music lasts.
   bool get isMobile => (isAndroid && !isTv) || isIOS;
 
-  /// The players that can scan a folder of the device's own; the others play from a server.
-  bool get supportsLocalFolder => isDesktop;
+  /// The players that can scan a folder of the device's own (computers and Android phones); the others play from a
+  /// server.
+  bool get supportsLocalFolder => isDesktop || (isAndroid && !isTv);
 
   /// The system's media controls through audio_service: the notification, lock screen and Android Auto (Android),
   /// Control Center (iOS, macOS) and MPRIS (Linux desktop, through audio_service_mpris).
@@ -84,6 +85,10 @@ class AppPlatform {
     }
     return null;
   }
+
+  /// Whether the app may read the audio files on an Android device, asking the user first if it hasn't been allowed
+  /// yet; elsewhere always true. Asked only when a folder is scanned, not at start.
+  Future<bool> requestAudioAccess() async => !isAndroid || await _ask('requestAudioAccess');
 
   static String get _hostSystem => kIsWeb ? 'web' : Platform.operatingSystem;
 

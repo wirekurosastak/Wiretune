@@ -123,6 +123,14 @@ class TizenAudioDriver with AudioDriverEvents implements AudioDriver {
     if (_created != null) unawaited(_platform.setVolume(_playerId, _volume));
   }
 
+  /// The TV's player plays one track at a time: each ends with [trackEnded] and the next one opens then.
+  @override
+  Future<void> setNext(String? audioSource) async {}
+
+  /// The TV's player reads no ReplayGain tags.
+  @override
+  void setNormalization(VolumeNormalization mode) {}
+
   void _setState(PlaybackState newState) {
     if (_state == newState) return;
     _state = newState;

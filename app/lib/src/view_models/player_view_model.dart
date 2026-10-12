@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -91,10 +92,16 @@ class PlayerViewModel extends ChangeNotifier {
         notifyListeners();
       }),
       _engine.trackEnded.listen((_) => _onTrackEnded()),
+      _engine.advanced.listen(_onAdvanced),
       _engine.positionChanged.listen((position) {
         _localPosition = position;
         if (!_isUserSeeking && !isRemote) _setPosition(position);
         _publishIfDrifted(position);
+        if (_sessionRestored &&
+            _state == PlaybackState.playing &&
+            DateTime.now().difference(_placeSavedAt) > _placeSaveInterval) {
+          unawaited(_savePlace().catchError(_saveFailed));
+        }
       }),
       _engine.trackChanged.listen(_onEngineTrackChanged),
       _engine.bitperfectChanged.listen((value) {
@@ -384,6 +391,54 @@ class PlayerViewModel extends ChangeNotifier {
     _queueVersion++;
     _queueTracks = List.unmodifiable(_playbackQueue);
     _queueItems = [for (var i = 0; i < _playbackQueue.length; i++) QueueItem(_playbackQueue[i], i, i == _queueIndex)];
+    _offerNext();
+  }
+
+  // ── Gapless ────────────────────────────────────────────────────────────────────────────────────
+  // The engine always knows the entry that comes after the current one, so the driver can start it the moment the
+  // current track ends; every change of the queue, repeat or sleep timer tells it again.
+
+  /// The entry given to the engine as the next one; -1 for none.
+  int _nextIndex = -1;
+  Track? _nextOffered;
+  bool _isGaplessEnabled = true;
+
+  /// Whether the next entry starts without a gap; on by default. Off, each track is opened after the last one ended.
+  bool get isGaplessEnabled => _isGaplessEnabled;
+  set isGaplessEnabled(bool value) {
+    if (_isGaplessEnabled == value) return;
+    _isGaplessEnabled = value;
+    _offerNext();
+  }
+
+  /// The entry that plays after the current one: the same one again with repeat one, the first after the last with
+  /// repeat all; none when gapless playback is off or the sleep timer waits for the end of the track.
+  int _followingIndex() {
+    if (!_isGaplessEnabled || _sleepAtTrackEnd || _queueIndex < 0 || _queueIndex >= _playbackQueue.length) return -1;
+    if (_repeat == RepeatMode.one) return _queueIndex;
+    if (_queueIndex + 1 < _playbackQueue.length) return _queueIndex + 1;
+    return _repeat == RepeatMode.all ? 0 : -1;
+  }
+
+  void _offerNext() {
+    _nextIndex = _followingIndex();
+    final track = _nextIndex < 0 ? null : _playbackQueue[_nextIndex];
+    if (identical(track, _nextOffered)) return;
+    _nextOffered = track;
+    _runSafe(() => _engine.setNextTrack(track));
+  }
+
+  /// The driver went on to the next entry without a gap: it is the current one now.
+  void _onAdvanced(Track track) {
+    // The entry offered, or (the queue changed in the same moment) the track's entry after the current one.
+    var index = _nextIndex >= 0 && identical(_playbackQueue[_nextIndex], track) ? _nextIndex : -1;
+    if (index < 0) index = _playbackQueue.indexWhere((t) => identical(t, track), math.max(0, _queueIndex + 1));
+    if (index < 0) index = _playbackQueue.indexWhere((t) => identical(t, track));
+    if (index < 0) return;
+    _queueIndex = index;
+    _nextOffered = null; // offered again for the new current entry
+    _updateQueueState();
+    notifyListeners();
   }
 
   /// Replaces the queue with [tracks] and starts [startTrack] (the first track, or a random one when shuffling).
@@ -473,6 +528,7 @@ class PlayerViewModel extends ChangeNotifier {
     _updateQueueState();
     errorMessage = null;
     final track = _playbackQueue[index];
+    _resumeAt = null;
     _startAt = start;
     _runSafe(() => _engine.playTrack(track, start: start));
     notifyListeners();
@@ -513,6 +569,7 @@ class PlayerViewModel extends ChangeNotifier {
       return;
     }
     _repeat = mode;
+    _offerNext();
     notifyListeners();
   }
 
@@ -524,7 +581,7 @@ class PlayerViewModel extends ChangeNotifier {
         await _engine.resume();
       default:
         if (_queueIndex >= 0 && _queueIndex < _playbackQueue.length) {
-          _playAt(_queueIndex);
+          _playAt(_queueIndex, start: _resumeAt ?? Duration.zero);
         } else if (_currentTrack != null) {
           _playQueueInternal([_currentTrack!], _currentTrack);
           notifyListeners();
@@ -620,6 +677,12 @@ class PlayerViewModel extends ChangeNotifier {
     if (currentTrack == null) return;
     if (target < Duration.zero) target = Duration.zero;
     _setPosition(target);
+    if (!isRemote && _resumeAt != null) {
+      // The queue picked up after a restart has not started yet: play will start from here.
+      _resumeAt = target;
+      _localPosition = target;
+      return;
+    }
     _isUserSeeking = true;
 
     _seekDebounce?.cancel();
@@ -679,6 +742,172 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Sleep timer ────────────────────────────────────────────────────────────────────────────────
+
+  Timer? _sleepTimer;
+  DateTime? _sleepAt;
+  bool _sleepAtTrackEnd = false;
+
+  /// When the sleep timer pauses the music; null while it is off or waits for the end of the track.
+  DateTime? get sleepAt => _sleepAt;
+
+  /// Whether the sleep timer pauses this device's music when its track ends.
+  bool get sleepsAtTrackEnd => _sleepAtTrackEnd;
+
+  bool get isSleepTimerSet => _sleepAt != null || _sleepAtTrackEnd;
+
+  /// Pauses the music (of the device being controlled, while one is) after [after]; null turns the timer off.
+  void setSleepTimer(Duration? after) {
+    _cancelSleep();
+    if (after != null) {
+      _sleepAt = DateTime.now().add(after);
+      _sleepTimer = Timer(after, () {
+        _cancelSleep();
+        unawaited(pause());
+        notifyListeners();
+      });
+    }
+    notifyListeners();
+  }
+
+  /// Pauses this device's music when the track that plays ends; the next one waits for play.
+  void sleepAtTrackEnd() {
+    _cancelSleep();
+    _sleepAtTrackEnd = true;
+    _offerNext();
+    notifyListeners();
+  }
+
+  void _cancelSleep() {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepAt = null;
+    if (!_sleepAtTrackEnd) return;
+    _sleepAtTrackEnd = false;
+    _offerNext();
+  }
+
+  // ── Resuming after a restart ───────────────────────────────────────────────────────────────────
+  // The queue (both orders, as track IDs) is saved when it changes, the place in it (the entry, its position, shuffle and
+  // repeat) when that changes and every half minute while playing: a restart, even one the system forced, picks up
+  // close to where the music was.
+
+  static const String _queuePreference = 'session_queue';
+  static const String _placePreference = 'session_place';
+  static const Duration _placeSaveInterval = Duration(seconds: 30);
+  int _savedQueueVersion = -1;
+  (int, bool, RepeatMode, PlaybackState)? _savedPlace;
+  DateTime _placeSavedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Nothing is saved before the saved queue was looked at, so that it is not overwritten by the empty one.
+  bool _sessionRestored = false;
+
+  /// Where the queue picked up after a restart starts when played; null once something played.
+  Duration? _resumeAt;
+
+  /// Picks up the queue saved before the app last closed, as far as this library still has its tracks: the entry that
+  /// played is shown paused where it was, and play goes on from there. Does nothing once something is queued.
+  Future<void> restoreSession() async {
+    try {
+      final queueJson = await _library.getPreference(_queuePreference);
+      final placeJson = await _library.getPreference(_placePreference);
+      if (queueJson == null || queueJson.isEmpty || _playbackQueue.isNotEmpty) return;
+      final queue = jsonDecode(queueJson) as Map<String, Object?>;
+      final place = placeJson == null || placeJson.isEmpty
+          ? const <String, Object?>{}
+          : jsonDecode(placeJson) as Map<String, Object?>;
+      List<String> ids(Object? list) => [for (final id in list as List? ?? const []) '$id'];
+      final playing = ids(queue['playing']);
+      final index = (place['index'] as num?)?.toInt() ?? -1;
+      // A track the library no longer has is left out; the entry that played keeps its place among the others.
+      final kept = <Track>[];
+      var at = index >= playing.length ? -2 : -1;
+      var keptCurrent = false;
+      for (var i = 0; i < playing.length; i++) {
+        final track = _library.getTrack(playing[i]);
+        if (i == index) {
+          at = kept.length;
+          keptCurrent = track != null;
+        }
+        if (track != null) kept.add(track);
+      }
+      if (kept.isEmpty) return;
+      final original = [for (final id in ids(queue['original'])) ?_library.getTrack(id)];
+
+      _shuffle = place['shuffle'] == true;
+      _repeat = RepeatMode.values.asNameMap()[place['repeat']] ?? RepeatMode.off;
+      _playbackQueue.addAll(kept);
+      _originalQueue.addAll(original.isEmpty ? kept : original);
+      // Past the end (the queue had finished), at its start when nothing was chosen.
+      _queueIndex = at == -2 ? kept.length : math.min(math.max(at, 0), kept.length - 1);
+      _updateQueueState();
+      _savedQueueVersion = _queueVersion;
+      if (_queueIndex < kept.length) {
+        final track = kept[_queueIndex];
+        final saved = Duration(milliseconds: (place['position'] as num?)?.toInt() ?? 0);
+        final start = keptCurrent && saved < track.duration - const Duration(seconds: 2) ? saved : Duration.zero;
+        _resumeAt = start;
+        _localPosition = start;
+        _setPosition(start);
+        currentTrack = track;
+      }
+      _savedPlace = _place;
+      notifyListeners();
+    } catch (e) {
+      WiretuneLog.warn('PlayerViewModel', 'The saved queue could not be picked up: $e');
+    } finally {
+      _sessionRestored = true;
+    }
+  }
+
+  /// Saves the queue and the place in it now (the window is closing).
+  Future<void> saveSession() async {
+    if (!_sessionRestored) return;
+    try {
+      await Future.wait([_saveQueue(), _savePlace()]);
+    } catch (e) {
+      WiretuneLog.warn('PlayerViewModel', 'The queue could not be saved: $e');
+    }
+  }
+
+  (int, bool, RepeatMode, PlaybackState) get _place => (_queueIndex, _shuffle, _repeat, _state);
+
+  /// Saves what changed since the last save; called at each change of the player's state.
+  void _saveChanges() {
+    if (!_sessionRestored) return;
+    if (_queueVersion != _savedQueueVersion) unawaited(_saveQueue().catchError(_saveFailed));
+    if (_place != _savedPlace) unawaited(_savePlace().catchError(_saveFailed));
+  }
+
+  void _saveFailed(Object e) => WiretuneLog.debug('PlayerViewModel', 'Saving the queue failed: $e');
+
+  Future<void> _saveQueue() {
+    _savedQueueVersion = _queueVersion;
+    return _library.setPreference(
+      _queuePreference,
+      _playbackQueue.isEmpty
+          ? ''
+          : jsonEncode({
+              'playing': [for (final track in _playbackQueue) track.id],
+              'original': [for (final track in _originalQueue) track.id],
+            }),
+    );
+  }
+
+  Future<void> _savePlace() {
+    _savedPlace = _place;
+    _placeSavedAt = DateTime.now();
+    return _library.setPreference(
+      _placePreference,
+      jsonEncode({
+        'index': _queueIndex,
+        'position': _localPosition.inMilliseconds,
+        'shuffle': _shuffle,
+        'repeat': _repeat.name,
+      }),
+    );
+  }
+
   // ── Engine callbacks ───────────────────────────────────────────────────────────────────────────
 
   void _onEngineTrackChanged(Track? track) {
@@ -704,6 +933,21 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void _onTrackEnded() {
+    if (_sleepAtTrackEnd) {
+      // The sleep timer: the next entry waits, shown paused at its start, for play.
+      _cancelSleep();
+      final next = _queueIndex + 1 < _playbackQueue.length ? _queueIndex + 1 : (_repeat == RepeatMode.all ? 0 : -1);
+      if (next >= 0 && _repeat != RepeatMode.one) {
+        _queueIndex = next;
+        _updateQueueState();
+        _resumeAt = Duration.zero;
+        _localPosition = Duration.zero;
+        _setPosition(Duration.zero);
+        currentTrack = _playbackQueue[next];
+      }
+      notifyListeners();
+      return;
+    }
     if (_repeat == RepeatMode.one && _queueIndex >= 0 && _queueIndex < _playbackQueue.length) {
       _playAt(_queueIndex);
     } else if (_queueIndex < _playbackQueue.length - 1 || _repeat == RepeatMode.all) {
@@ -1102,6 +1346,7 @@ class PlayerViewModel extends ChangeNotifier {
   @override
   void notifyListeners() {
     _publish();
+    _saveChanges();
     super.notifyListeners();
   }
 
@@ -1297,6 +1542,7 @@ class PlayerViewModel extends ChangeNotifier {
     _remoteTicker?.cancel();
     _remoteLost?.cancel();
     _remoteVolumeTimer?.cancel();
+    _sleepTimer?.cancel();
     position.dispose();
     elapsedSeconds.dispose();
     spectrum.dispose();

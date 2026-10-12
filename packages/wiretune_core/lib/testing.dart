@@ -181,7 +181,11 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   Duration currentPosition = Duration.zero;
 
   double volume = 1.0;
+  VolumeNormalization normalization = VolumeNormalization.off;
   String? lastSource;
+
+  /// What [setNext] was given and a new [play] has not dropped.
+  String? nextSource;
   int playCalls = 0;
   AudioOutputDevice? device;
   bool isExclusive = false;
@@ -201,6 +205,7 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   Future<void> play(String audioSource, AudioFormat format, Duration startPosition) async {
     playCalls++;
     lastSource = audioSource;
+    nextSource = null;
     currentPosition = startPosition;
     _setState(PlaybackState.playing);
   }
@@ -229,6 +234,22 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
 
   @override
   void setVolume(double volume) => this.volume = volume;
+
+  @override
+  void setNormalization(VolumeNormalization mode) => normalization = mode;
+
+  @override
+  Future<void> setNext(String? audioSource) async => nextSource = audioSource;
+
+  /// The track ends and the next one given takes over without a gap, as mpv does; without one it just ends.
+  void simulateGaplessEnd() {
+    final next = nextSource;
+    if (next == null) return simulateTrackEnded();
+    lastSource = next;
+    nextSource = null;
+    currentPosition = Duration.zero;
+    advanced.emit(null);
+  }
 
   void simulateTrackEnded() {
     _setState(PlaybackState.stopped);

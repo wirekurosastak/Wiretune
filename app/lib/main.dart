@@ -59,6 +59,7 @@ Future<void> main() async {
     onlineLyrics: OnlineLyrics.createDefault(),
     capabilities: DeviceCapabilities(
       supportsLocalFolder: platform.supportsLocalFolder,
+      requestFolderAccess: platform.requestAudioAccess,
       kind: _deviceKind(platform),
       // A computer goes by its host name; a phone's is "localhost", so it goes by "Phone" until it is given a name.
       name: platform.isDesktop ? Platform.localHostname : '',
@@ -123,6 +124,7 @@ class _DesktopWindowListener with WindowListener {
   @override
   void onWindowClose() async {
     try {
+      await _vm.player.saveSession();
       await _vm.audioEngine.dispose();
       _vm.dispose();
     } catch (e, s) {

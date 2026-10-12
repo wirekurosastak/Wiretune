@@ -7,6 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
+import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 import '../view_models/main_view_model.dart';
@@ -31,7 +32,8 @@ class SettingsPage extends StatelessWidget {
         final library = (server.isLoggedIn && server.isAdmin) || server.supportsLocalFolder;
         final account = [const _AccountCard(), if (library) const _LibraryCard()];
         final options = [
-          if (vm.audioSettings.hasDeviceChoice) const _AudioCard(),
+          // The TV has neither an output to choose nor gapless playback or normalization.
+          if (vm.audioSettings.hasDeviceChoice || !AppPlatform.current.isTizen) const _AudioCard(),
           const _AppearanceCard(),
           const _HiddenContentCard(),
           if (server.isLoggedIn || vm.downloads.hasAnything) const _DownloadsCard(),
@@ -988,14 +990,18 @@ class _AudioCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final audio = context.vm.audioSettings;
+    final vm = context.vm;
+    final audio = vm.audioSettings;
     final colors = context.colors;
     final palette = colors.palette;
 
     return ListenableBuilder(
-      listenable: audio,
+      listenable: Listenable.merge([vm, audio]),
       builder: (context, _) {
         final devices = audio.availableDevices;
+        final tv = AppPlatform.current.isTizen;
+        TextStyle heading() => TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain);
+        TextStyle hint() => TextStyle(fontSize: 12, color: colors.textMuted);
 
         Widget mode(
           String badgeText,
@@ -1054,89 +1060,136 @@ class _AudioCard extends StatelessWidget {
               _CardTitle(
                 icon: Icons.volume_up_rounded,
                 title: context.tr('SettingsAudioSection'),
-                trailing: IconButton(
-                  tooltip: context.tr('Refresh'),
-                  onPressed: audio.refreshDevices,
-                  icon: const Icon(Icons.refresh_rounded, size: 18),
-                ),
+                trailing: audio.hasDeviceChoice
+                    ? IconButton(
+                        tooltip: context.tr('Refresh'),
+                        onPressed: audio.refreshDevices,
+                        icon: const Icon(Icons.refresh_rounded, size: 18),
+                      )
+                    : null,
               ),
-              Text(
-                context.tr('OutputDevice'),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
-                isExpanded: true,
-                items: [
-                  for (final d in devices)
-                    DropdownMenuItem(
-                      value: d.id,
-                      child: Row(
+              // The TV's player starts each track on its own and reads no ReplayGain tags.
+              if (!tv) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.speaker_outlined, size: 16, color: colors.textMain),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              d.name,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          if (d.driverType.isNotEmpty) ...[
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                '[${d.driverType}]',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 11, color: colors.textMuted),
-                              ),
-                            ),
-                          ],
+                          Text(context.tr('SettingsGapless'), style: heading()),
+                          Text(context.tr('SettingsGaplessHint'), style: hint()),
                         ],
                       ),
                     ),
+                    Switch(value: vm.isGaplessEnabled, onChanged: (v) => vm.isGaplessEnabled = v),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Text(context.tr('SettingsNormalization'), style: heading()),
+                Text(context.tr('SettingsNormalizationHint'), style: hint()),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final (mode, key) in const [
+                      (VolumeNormalization.off, 'NormalizationOff'),
+                      (VolumeNormalization.track, 'NormalizationTrack'),
+                      (VolumeNormalization.album, 'NormalizationAlbum'),
+                    ])
+                      _choice(
+                        context.tr(key),
+                        selected: mode == vm.normalization,
+                        // Bit-perfect output is never normalized.
+                        onPressed: audio.isBitperfect ? null : () => vm.normalization = mode,
+                      ),
+                  ],
+                ),
+              ],
+              if (audio.hasDeviceChoice) ...[
+                if (!tv) ...[
+                  const SizedBox(height: 18),
+                  Divider(color: colors.glassBorder, height: 1),
+                  const SizedBox(height: 14),
                 ],
-                onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
-              ),
-              const SizedBox(height: 8),
-              Text(audio.hardwareStatusText, style: TextStyle(fontSize: 11.5, color: colors.textMuted)),
+                Text(
+                  context.tr('OutputDevice'),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
+                  isExpanded: true,
+                  items: [
+                    for (final d in devices)
+                      DropdownMenuItem(
+                        value: d.id,
+                        child: Row(
+                          children: [
+                            Icon(Icons.speaker_outlined, size: 16, color: colors.textMain),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                d.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            if (d.driverType.isNotEmpty) ...[
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: Text(
+                                  '[${d.driverType}]',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 11, color: colors.textMuted),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                  ],
+                  onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
+                ),
+                const SizedBox(height: 8),
+                Text(audio.hardwareStatusText, style: TextStyle(fontSize: 11.5, color: colors.textMuted)),
 
-              const SizedBox(height: 18),
-              Divider(color: colors.glassBorder, height: 1),
-              const SizedBox(height: 14),
+                const SizedBox(height: 18),
+                Divider(color: colors.glassBorder, height: 1),
+                const SizedBox(height: 14),
 
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final exclusive = mode(
-                    'EXCLUSIVE',
-                    QualityTier.silver,
-                    context.tr('ExclusiveDescription'),
-                    audio.isExclusiveMode,
-                    audio.isExclusiveAvailable,
-                    audio.setExclusiveMode,
-                  );
-                  final bitperfect = mode(
-                    'BIT-PERFECT',
-                    QualityTier.gold,
-                    context.tr('BitPerfectDescription'),
-                    audio.isBitperfect,
-                    audio.isBitperfectAvailable,
-                    audio.setBitperfect,
-                  );
-                  if (constraints.maxWidth < 420) {
-                    return Column(children: [exclusive, const SizedBox(height: 10), bitperfect]);
-                  }
-                  return Row(
-                    children: [
-                      Expanded(child: exclusive),
-                      const SizedBox(width: 10),
-                      Expanded(child: bitperfect),
-                    ],
-                  );
-                },
-              ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final exclusive = mode(
+                      'EXCLUSIVE',
+                      QualityTier.silver,
+                      context.tr('ExclusiveDescription'),
+                      audio.isExclusiveMode,
+                      audio.isExclusiveAvailable,
+                      audio.setExclusiveMode,
+                    );
+                    final bitperfect = mode(
+                      'BIT-PERFECT',
+                      QualityTier.gold,
+                      context.tr('BitPerfectDescription'),
+                      audio.isBitperfect,
+                      audio.isBitperfectAvailable,
+                      audio.setBitperfect,
+                    );
+                    if (constraints.maxWidth < 420) {
+                      return Column(children: [exclusive, const SizedBox(height: 10), bitperfect]);
+                    }
+                    return Row(
+                      children: [
+                        Expanded(child: exclusive),
+                        const SizedBox(width: 10),
+                        Expanded(child: bitperfect),
+                      ],
+                    );
+                  },
+                ),
+              ],
 
               const SizedBox(height: 18),
               Divider(color: colors.glassBorder, height: 1),
@@ -1169,6 +1222,17 @@ class _AudioCard extends StatelessWidget {
   }
 }
 
+/// One of a few options side by side: filled when chosen.
+Widget _choice(String label, {required bool selected, VoidCallback? onPressed}) {
+  final style = ButtonStyle(
+    minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14)),
+  );
+  return selected
+      ? FilledButton(style: style, onPressed: onPressed, child: Text(label))
+      : OutlinedButton(style: style, onPressed: onPressed, child: Text(label));
+}
+
 class _AppearanceCard extends StatelessWidget {
   const _AppearanceCard();
 
@@ -1196,23 +1260,7 @@ class _AppearanceCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 for (final l in Localizer.languages)
-                  l.code == vm.language
-                      ? FilledButton(
-                          style: FilledButton.styleFrom(
-                            minimumSize: const Size(0, 32),
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                          ),
-                          onPressed: () => vm.changeLanguage(l.code),
-                          child: Text(l.nativeName),
-                        )
-                      : OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size(0, 32),
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                          ),
-                          onPressed: () => vm.changeLanguage(l.code),
-                          child: Text(l.nativeName),
-                        ),
+                  _choice(l.nativeName, selected: l.code == vm.language, onPressed: () => vm.changeLanguage(l.code)),
               ],
             ),
             const SizedBox(height: 14),

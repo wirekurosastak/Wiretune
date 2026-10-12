@@ -61,7 +61,7 @@ class _WiretuneAppState extends State<WiretuneApp> {
                 theme: _theme(light, vm.selectedSection, platform.isTv),
                 themeAnimationDuration: const Duration(milliseconds: 350),
                 shortcuts: {
-                  ...WidgetsApp.defaultShortcuts,
+                  ..._defaultShortcuts(platform),
                   // TV remotes: the centre button and the media keys.
                   const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
                   const SingleActivator(LogicalKeyboardKey.gameButtonA): const ActivateIntent(),
@@ -74,11 +74,14 @@ class _WiretuneAppState extends State<WiretuneApp> {
                     _MediaCommand.previous,
                   ),
                   const SingleActivator(LogicalKeyboardKey.escape): const _BackIntent(),
+                  if (platform.isDesktop) ..._desktopShortcuts(platform),
                 },
                 actions: {
                   ...WidgetsApp.defaultActions,
                   _MediaIntent: CallbackAction<_MediaIntent>(onInvoke: (intent) => _runMedia(intent.command)),
                   _BackIntent: CallbackAction<_BackIntent>(onInvoke: (_) => _goBack()),
+                  _SearchIntent: CallbackAction<_SearchIntent>(onInvoke: (_) => vm.focusSearch()),
+                  _PlayerKeyIntent: _PlayerKeyAction(vm),
                 },
                 home: AnnotatedRegion<SystemUiOverlayStyle>(
                   value: (light ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
@@ -107,6 +110,44 @@ class _WiretuneAppState extends State<WiretuneApp> {
         );
       },
     );
+  }
+
+  /// Flutter's own shortcuts, less those of the same keys as the desktop's player controls (Space activates the focused
+  /// button there, Ctrl and an arrow scroll): the player's win.
+  static Map<ShortcutActivator, Intent> _defaultShortcuts(AppPlatform platform) {
+    if (!platform.isDesktop) return WidgetsApp.defaultShortcuts;
+    final player = _desktopShortcuts(platform).keys.whereType<SingleActivator>();
+    bool taken(ShortcutActivator key) =>
+        key is SingleActivator &&
+        player.any(
+          (own) =>
+              own.trigger == key.trigger &&
+              own.control == key.control &&
+              own.shift == key.shift &&
+              own.alt == key.alt &&
+              own.meta == key.meta,
+        );
+    return {
+      for (final entry in WidgetsApp.defaultShortcuts.entries)
+        if (!taken(entry.key)) entry.key: entry.value,
+    };
+  }
+
+  /// The keyboard's player controls on a desktop (⌘ in place of Ctrl on a Mac). While a text field has the focus only
+  /// the search shortcut applies: the keys type and move the cursor there.
+  static Map<ShortcutActivator, Intent> _desktopShortcuts(AppPlatform platform) {
+    final mac = platform.isMacOS;
+    SingleActivator command(LogicalKeyboardKey key) => SingleActivator(key, control: !mac, meta: mac);
+    return {
+      const SingleActivator(LogicalKeyboardKey.space): const _PlayerKeyIntent(_PlayerKey.toggle),
+      command(LogicalKeyboardKey.keyF): const _SearchIntent(),
+      command(LogicalKeyboardKey.arrowRight): const _PlayerKeyIntent(_PlayerKey.next),
+      command(LogicalKeyboardKey.arrowLeft): const _PlayerKeyIntent(_PlayerKey.previous),
+      const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): const _PlayerKeyIntent(_PlayerKey.forward),
+      const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): const _PlayerKeyIntent(_PlayerKey.back),
+      command(LogicalKeyboardKey.arrowUp): const _PlayerKeyIntent(_PlayerKey.louder),
+      command(LogicalKeyboardKey.arrowDown): const _PlayerKeyIntent(_PlayerKey.quieter),
+    };
   }
 
   void _runMedia(_MediaCommand command) {
@@ -221,42 +262,59 @@ class _NoticeHostState extends State<_NoticeHost> {
                       child: Semantics(
                         liveRegion: true,
                         child: ExcludeFocus(
-                          child: Material(
-                            color: colors.palette.panel,
-                            elevation: 6,
-                            borderRadius: BorderRadius.circular(Radii.card),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(Radii.card),
-                              onTap: _dismiss,
-                              child: Container(
-                                padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(Radii.card),
-                                  border: Border.all(
-                                    color: (notice.isError ? colors.danger : colors.glassBorder).withValues(alpha: 0.6),
-                                  ),
+                          // Solid and round, with the hairline edge of the floating bars (and their shadow).
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(30),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: colors.palette.shadow,
+                                  blurRadius: 24,
+                                  spreadRadius: -4,
+                                  offset: const Offset(0, 8),
                                 ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      notice.isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
-                                      size: 20,
-                                      color: notice.isError ? colors.danger : colors.palette.lime,
+                              ],
+                            ),
+                            child: Material(
+                              color: colors.palette.modal,
+                              borderRadius: BorderRadius.circular(30),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(30),
+                                onTap: _dismiss,
+                                child: Container(
+                                  padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(30),
+                                    border: Border.all(
+                                      color: notice.isError
+                                          ? colors.danger.withValues(alpha: 0.6)
+                                          : colors.palette.panelBorder,
                                     ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        notice.message,
-                                        style: TextStyle(fontSize: 13, color: colors.textMain),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        notice.isError
+                                            ? Icons.error_outline_rounded
+                                            : Icons.check_circle_outline_rounded,
+                                        size: 20,
+                                        color: notice.isError ? colors.danger : colors.palette.lime,
                                       ),
-                                    ),
-                                    IconButton(
-                                      tooltip: context.tr('TipDismissNotice'),
-                                      onPressed: _dismiss,
-                                      iconSize: 16,
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                                  ],
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          notice.message,
+                                          style: TextStyle(fontSize: 13, color: colors.textMain),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        tooltip: context.tr('TipDismissNotice'),
+                                        onPressed: _dismiss,
+                                        iconSize: 16,
+                                        icon: const Icon(Icons.close_rounded),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -329,4 +387,51 @@ class _MediaIntent extends Intent {
 
 class _BackIntent extends Intent {
   const _BackIntent();
+}
+
+class _SearchIntent extends Intent {
+  const _SearchIntent();
+}
+
+enum _PlayerKey { toggle, next, previous, forward, back, louder, quieter }
+
+class _PlayerKeyIntent extends Intent {
+  const _PlayerKeyIntent(this.key);
+
+  final _PlayerKey key;
+}
+
+/// A player key of the desktop: off while a text field has the focus, so the key reaches the field.
+class _PlayerKeyAction extends Action<_PlayerKeyIntent> {
+  _PlayerKeyAction(this._vm);
+
+  final MainViewModel _vm;
+
+  static const Duration _seekStep = Duration(seconds: 10);
+  static const double _volumeStep = 5;
+
+  @override
+  bool isEnabled(_PlayerKeyIntent intent) =>
+      FocusManager.instance.primaryFocus?.context?.findAncestorStateOfType<EditableTextState>() == null;
+
+  @override
+  void invoke(_PlayerKeyIntent intent) {
+    final player = _vm.player;
+    switch (intent.key) {
+      case _PlayerKey.toggle:
+        player.togglePlayPause();
+      case _PlayerKey.next:
+        player.nextTrack();
+      case _PlayerKey.previous:
+        player.previousTrack();
+      case _PlayerKey.forward || _PlayerKey.back:
+        if (player.currentTrack == null) return;
+        final step = intent.key == _PlayerKey.forward ? _seekStep : -_seekStep;
+        final target = player.position.value + step;
+        player.seekTo(target > player.duration ? player.duration : target);
+      case _PlayerKey.louder || _PlayerKey.quieter:
+        if (player.isVolumeLocked) return;
+        player.setVolume(player.volume + (intent.key == _PlayerKey.louder ? _volumeStep : -_volumeStep));
+    }
+  }
 }

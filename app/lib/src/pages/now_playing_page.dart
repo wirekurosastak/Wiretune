@@ -93,6 +93,8 @@ class NowPlayingPage extends StatelessWidget {
                                       icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
                                     ),
                                   ),
+                                  // As wide as the sleep timer on the other side, so the title stays centred.
+                                  const SizedBox(width: 44),
                                   Expanded(
                                     child: ListenableBuilder(
                                       listenable: vm.player,
@@ -110,6 +112,7 @@ class NowPlayingPage extends StatelessWidget {
                                             ),
                                     ),
                                   ),
+                                  const SleepTimerButton(),
                                   const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
                                 ],
                               ),

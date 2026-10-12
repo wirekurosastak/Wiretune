@@ -36,10 +36,12 @@ class AlbumCard extends StatelessWidget {
       context.trf('TrackCount', [album.trackCount]),
       if (album.year != null) '${album.year}',
     ].join('  •  ');
+    final menu = CollectionMenu.album(album, onPlay: onPlay);
     return _DesktopTile(
       accent: purple,
       onTap: onOpen,
-      onSecondaryTap: (position) => CollectionMenu.album(album, onPlay: onPlay).showAt(context, position),
+      onSecondaryTap: (position) => menu.showAt(context, position),
+      menu: menu.coverButton(context),
       cover: cover,
       lines: [
         _line(album.title, 14, FontWeight.w700, colors.textMain),
@@ -70,10 +72,12 @@ class ArtistCard extends StatelessWidget {
       placeholderIcon: Icons.person,
       placeholderColor: coral,
     );
+    final menu = CollectionMenu.artist(artist, onPlay: onPlay);
     return _DesktopTile(
       accent: coral,
       onTap: onOpen,
-      onSecondaryTap: (position) => CollectionMenu.artist(artist, onPlay: onPlay).showAt(context, position),
+      onSecondaryTap: (position) => menu.showAt(context, position),
+      menu: menu.coverButton(context),
       circle: true,
       cover: picture,
       lines: [
@@ -89,82 +93,125 @@ class ArtistCard extends StatelessWidget {
 String artistCounts(BuildContext context, Artist artist) =>
     '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}';
 
-enum _CollectionAction { play, shuffle, playNext, addToQueue, download, hide }
+enum _CollectionAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, remove }
 
-/// The menu of an album or an artist, on its tile (a right click) and its phone row (the ⋮): what the header of its page
-/// offers, in the same order (play, shuffle, download when a track of it can be, hide), and after play and shuffle the
-/// queue's two.
+/// The menu of an album, an artist or a playlist: on its tile (the ⋮ on the cover, or a right click), its phone row (the
+/// ⋮) and its page's header (the ⋮ beside play, shuffle and the download, which it then leaves out). Play, shuffle, the
+/// queue's two, a playlist, the download (when a track of it can be), and hiding it (deleting a playlist).
 class CollectionMenu {
   CollectionMenu._(
-    this.tracks,
-    this.name, {
+    this.tracks, {
+    required this.name,
+    required this.label,
     required this.downloadable,
     required this.onPlay,
     required this.isPinned,
     required this.onDownload,
-    required this.hideKey,
-    required this.onHide,
+    this.removeKey,
+    this.removeIcon = Icons.delete_outline_rounded,
+    this.onRemove,
+    this.removeIsDanger = false,
   });
 
   factory CollectionMenu.album(Album album, {required VoidCallback onPlay}) => CollectionMenu._(
     album.tracks,
-    album.title,
+    name: album.title,
+    label: '${album.title} • ${album.artist}',
     downloadable: album.tracks,
     onPlay: onPlay,
     isPinned: (vm) => vm.downloads.isAlbumPinned(album),
     onDownload: (vm) => vm.downloads.toggleAlbum(album),
-    hideKey: 'HideAlbum',
-    onHide: (vm) => vm.library.hideAlbum(album.id),
+    removeKey: 'HideAlbum',
+    removeIcon: Icons.visibility_off_outlined,
+    onRemove: (vm) {
+      vm.library.hideAlbum(album.id);
+      if (vm.albums.selectedAlbum?.id == album.id) vm.albums.closeAlbumDetail();
+    },
   );
 
   factory CollectionMenu.artist(Artist artist, {required VoidCallback onPlay}) => CollectionMenu._(
     artist.tracks,
-    artist.name,
+    name: artist.name,
+    label: artist.name,
     // The download keeps the artist's albums, as the button on its page does.
     downloadable: [for (final album in artist.albums) ...album.tracks],
     onPlay: onPlay,
     isPinned: (vm) => vm.downloads.isArtistPinned(artist),
     onDownload: (vm) => vm.downloads.toggleArtist(artist),
-    hideKey: 'HideArtist',
-    onHide: (vm) => vm.library.hideArtist(artist.id),
+    removeKey: 'HideArtist',
+    removeIcon: Icons.visibility_off_outlined,
+    onRemove: (vm) {
+      vm.library.hideArtist(artist.id);
+      if (vm.artists.selectedArtist?.id == artist.id) vm.artists.closeArtistDetail();
+    },
   );
 
-  /// What playing, shuffling and queueing start.
+  /// An automatic playlist (most played, recently played) can't be downloaded or deleted.
+  factory CollectionMenu.playlist(Playlist playlist, List<Track> tracks, {required VoidCallback onPlay}) =>
+      CollectionMenu._(
+        tracks,
+        name: playlist.name,
+        label: playlist.name,
+        downloadable: playlist.isAutomatic ? const [] : tracks,
+        onPlay: onPlay,
+        isPinned: (vm) => vm.downloads.isPlaylistPinned(playlist),
+        onDownload: (vm) => vm.downloads.togglePlaylist(playlist),
+        removeKey: playlist.isAutomatic ? null : 'PlaylistDeleteAction',
+        removeIsDanger: true,
+        // Asked first, in the playlists' own dialog.
+        onRemove: (vm) => vm.playlists.requestDeletePlaylist(playlist),
+      );
+
+  /// What playing, shuffling, queueing and a playlist take.
   final List<Track> tracks;
+
+  /// What a notice calls it (its title or name), and what the playlist dialog does (with the album's artist).
   final String name;
+  final String label;
   final List<Track> downloadable;
   final VoidCallback onPlay;
   final bool Function(MainViewModel vm) isPinned;
   final void Function(MainViewModel vm) onDownload;
-  final String hideKey;
-  final void Function(MainViewModel vm) onHide;
+  final String? removeKey;
+  final IconData removeIcon;
+  final bool removeIsDanger;
+  final void Function(MainViewModel vm)? onRemove;
 
-  List<PopupMenuEntry<_CollectionAction>> _items(BuildContext context) {
+  /// [header]: the page's header has play, shuffle and the download as buttons of their own.
+  List<PopupMenuEntry<_CollectionAction>> _items(BuildContext context, {bool header = false}) {
     final vm = context.vm;
-    final muted = context.colors.textMuted;
-    PopupMenuItem<_CollectionAction> item(_CollectionAction action, IconData icon, String text) => PopupMenuItem(
-      value: action,
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: muted),
-          const SizedBox(width: 14),
-          Flexible(child: Text(text)),
-        ],
-      ),
-    );
+    final colors = context.colors;
+    PopupMenuItem<_CollectionAction> item(_CollectionAction action, IconData icon, String text, {Color? color}) =>
+        PopupMenuItem(
+          value: action,
+          enabled: tracks.isNotEmpty || action == _CollectionAction.remove,
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: color ?? colors.textMuted),
+              const SizedBox(width: 14),
+              Flexible(
+                child: Text(text, style: TextStyle(color: color)),
+              ),
+            ],
+          ),
+        );
     final pinned = isPinned(vm);
     return [
-      item(_CollectionAction.play, Icons.play_arrow_rounded, context.tr('Play')),
-      item(_CollectionAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
+      if (!header) ...[
+        item(_CollectionAction.play, Icons.play_arrow_rounded, context.tr('Play')),
+        item(_CollectionAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
+      ],
       item(_CollectionAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
       item(_CollectionAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
-      if (downloadable.any(vm.downloads.canDownload))
+      item(_CollectionAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
+      if (!header && downloadable.any(vm.downloads.canDownload))
         item(
           _CollectionAction.download,
           pinned ? Icons.download_done_rounded : Icons.download_rounded,
           context.tr(pinned ? 'TipRemoveDownload' : 'TipDownload'),
         ),
-      item(_CollectionAction.hide, Icons.visibility_off_outlined, context.tr(hideKey)),
+      if (removeKey case final key?)
+        item(_CollectionAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
     ];
   }
 
@@ -180,22 +227,26 @@ class CollectionMenu {
         vm.queue(tracks, next: true, name: name);
       case _CollectionAction.addToQueue:
         vm.queue(tracks, next: false, name: name);
+      case _CollectionAction.addToPlaylist:
+        vm.playlists.beginAddTracks(tracks, name: label, suggestedName: name);
       case _CollectionAction.download:
         onDownload(vm);
-      case _CollectionAction.hide:
-        onHide(vm);
+      case _CollectionAction.remove:
+        onRemove?.call(vm);
     }
   }
 
-  /// Opens the menu at [position] (a right click on a tile).
-  Future<void> showAt(BuildContext context, Offset position) async {
+  Future<void> _show(BuildContext context, Offset position, {bool header = false}) async {
     final action = await showMenu<_CollectionAction>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
-      items: _items(context),
+      items: _items(context, header: header),
     );
     if (context.mounted) _run(context, action);
   }
+
+  /// Opens the menu at [position] (a right click on a tile).
+  Future<void> showAt(BuildContext context, Offset position) => _show(context, position);
 
   /// The ⋮ button of a phone row.
   Widget button(BuildContext context) => PopupMenuButton<_CollectionAction>(
@@ -203,6 +254,39 @@ class CollectionMenu {
     tooltip: context.tr('TipMore'),
     onSelected: (action) => _run(context, action),
     itemBuilder: _items,
+  );
+
+  /// The ⋮ on a tile's cover: a dark disc, for the white dots to show on any cover.
+  Widget coverButton(BuildContext context) => Tooltip(
+    message: context.tr('TipMore'),
+    child: Material(
+      color: const Color(0x99000000),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox.square(
+        dimension: 32,
+        child: PopupMenuButton<_CollectionAction>(
+          tooltip: '',
+          padding: EdgeInsets.zero,
+          iconSize: 18,
+          icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+          onSelected: (action) => _run(context, action),
+          itemBuilder: _items,
+        ),
+      ),
+    ),
+  );
+
+  /// The ⋮ of a page's header, beside play, shuffle and the download: the rest of the menu, opening below it.
+  Widget headerButton() => Builder(
+    builder: (context) => HeaderIconButton(
+      tooltip: context.tr('TipMore'),
+      icon: Icons.more_vert_rounded,
+      onPressed: () {
+        final box = context.findRenderObject()! as RenderBox;
+        _show(context, box.localToGlobal(box.size.bottomLeft(Offset.zero)), header: true);
+      },
+    ),
   );
 }
 
@@ -315,9 +399,11 @@ class PlaylistsSliver extends StatelessWidget {
         itemCount: playlists.length,
         itemBuilder: (context, index) {
           final playlist = playlists[index];
+          final tracks = tracksOf(playlist);
           return PlaylistCard(
             playlist: playlist,
-            covers: playlistCovers(tracksOf(playlist)),
+            covers: playlistCovers(tracks),
+            menu: CollectionMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)),
             onOpen: () => onOpen(playlist),
             onPlay: () => onPlay(playlist),
           );
@@ -326,7 +412,8 @@ class PlaylistsSliver extends StatelessWidget {
     }
     return _rows(playlists.length, (index) {
       final playlist = playlists[index];
-      final covers = playlistCovers(tracksOf(playlist));
+      final tracks = tracksOf(playlist);
+      final covers = playlistCovers(tracks);
       final badge = playlist.formatSpec.isEmpty
           ? null
           : QualityTag(
@@ -341,6 +428,7 @@ class PlaylistsSliver extends StatelessWidget {
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
         badge: badge,
+        trailing: CollectionMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)).button(context),
       );
     });
   }
@@ -482,12 +570,14 @@ class PlaylistCard extends StatelessWidget {
     super.key,
     required this.playlist,
     required this.covers,
+    required this.menu,
     required this.onOpen,
     required this.onPlay,
   });
 
   final Playlist playlist;
   final List<String> covers;
+  final CollectionMenu menu;
   final VoidCallback onOpen;
   final VoidCallback onPlay;
 
@@ -498,6 +588,8 @@ class PlaylistCard extends StatelessWidget {
     return _DesktopTile(
       accent: lime,
       onTap: onOpen,
+      onSecondaryTap: (position) => menu.showAt(context, position),
+      menu: menu.coverButton(context),
       cover: PlaylistCover(covers: covers, radius: Radii.small + 2),
       lines: [
         _line(playlist.name, 14, FontWeight.w700, colors.textMain),
@@ -519,7 +611,7 @@ Widget _line(String text, double size, FontWeight weight, Color color, {bool cen
 
 /// A wide screen's tile: a square cover with a soft shadow and the caption lines under it. Under the mouse, or while
 /// the remote's focus is on it or its play button, the tile lifts, its background lights up, the cover's shadow takes
-/// the [accent] and the play button rises onto the cover. On a touch screen the play button is always there.
+/// the [accent] and the play button rises onto the cover, its ⋮ with it. On a touch screen both are always there.
 class _DesktopTile extends StatefulWidget {
   const _DesktopTile({
     required this.accent,
@@ -528,6 +620,7 @@ class _DesktopTile extends StatefulWidget {
     required this.cover,
     required this.lines,
     required this.play,
+    required this.menu,
     this.badge,
     this.circle = false,
   });
@@ -544,6 +637,9 @@ class _DesktopTile extends StatefulWidget {
   final Widget cover;
   final List<Widget> lines;
   final Widget play;
+
+  /// The tile's ⋮, on the cover's top corner; it comes with the play button.
+  final Widget menu;
   final Widget? badge;
   final bool circle;
 
@@ -596,6 +692,11 @@ class _DesktopTileState extends State<_DesktopTile> {
                 child: FittedBox(fit: BoxFit.scaleDown, child: widget.badge!),
               ),
             ),
+          Positioned(
+            top: widget.circle ? 0 : 8,
+            right: widget.circle ? 0 : 8,
+            child: AnimatedOpacity(opacity: showPlay ? 1 : 0, duration: duration, child: widget.menu),
+          ),
           Positioned(
             right: widget.circle ? 4 : 8,
             bottom: widget.circle ? 4 : 8,

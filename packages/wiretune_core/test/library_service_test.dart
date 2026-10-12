@@ -77,6 +77,30 @@ void main() {
     expect(repo.playlists, isEmpty);
   });
 
+  test('a playlist takes many tracks in one change, and its shown entries move around the ones it lacks', () async {
+    final repo = MockRepository();
+    final service = _service(repo);
+    repo.saveTracks([
+      for (final id in ['a', 'b', 'c']) TestSupport.makeTrack(id, 'Song $id'),
+    ]);
+    await service.initialize();
+    final playlist = await service.createPlaylist('Mix');
+    var edits = 0;
+    service.playlistsChanged.listen((_) => edits++);
+
+    await service.addTracksToPlaylist(playlist.id, ['a', 'gone', 'b', 'a', 'c']);
+    expect(playlist.trackIds, ['a', 'gone', 'b', 'c']);
+    expect(edits, 1);
+
+    // Shown: a, b, c. Moving c to the top keeps the missing entry among the others.
+    await service.movePlaylistTrack(playlist.id, 2, 0);
+    expect([for (final t in service.getPlaylistTracks(playlist)) t.id], ['c', 'a', 'b']);
+    await service.movePlaylistTrack(playlist.id, 0, 2);
+    expect([for (final t in service.getPlaylistTracks(playlist)) t.id], ['a', 'b', 'c']);
+    await service.movePlaylistTrack(playlist.id, 0, 9); // out of range: nothing happens
+    expect(playlist.trackIds, hasLength(4));
+  });
+
   test('a compilation in one folder becomes Various Artists, and guests stay out of the artist list', () async {
     final repo = MockRepository();
     final service = _service(repo);
