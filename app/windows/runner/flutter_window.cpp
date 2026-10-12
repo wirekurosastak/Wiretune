@@ -27,8 +27,10 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  // The app shows the window itself (maximized, through window_manager) before its first frame; showing it again here
+  // with SW_SHOWNORMAL would restore it to its normal size. Kept as a fallback for when the app did not show it.
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
+    if (!IsWindowVisible(GetHandle())) this->Show();
   });
 
   // Flutter can complete the first frame before the "show window" callback is
