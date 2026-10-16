@@ -33,7 +33,7 @@ enum DownloadState {
 }
 
 /// Copies of server tracks kept on this device, so that they play without the server: a track, an album, an artist's
-/// albums, a playlist or the favourites at a time. What the user marked is kept in the settings. With sync on (the
+/// albums, a playlist or the favourites at a time. What the user chose to download is kept in the settings. With sync on (the
 /// default) the copies follow it whenever the library changes: a playlist that grows gets the new track, a copy deleted
 /// outside Wiretune comes back. With sync off, marking something downloads what it covers then, and nothing more is
 /// fetched on its own. Copies are downloaded again when the server's file changes, and deleted as soon as nothing wants
@@ -52,7 +52,7 @@ class DownloadService {
       _http = client ?? http.Client(),
       _ownsClient = client == null;
 
-  static const String _pinsPreference = 'downloads';
+  static const String _choicesPreference = 'downloads';
   static const String _syncModePreference = 'download_sync_mode';
 
   static const Duration _firstRetry = Duration(seconds: 15);
@@ -74,9 +74,9 @@ class DownloadService {
   bool _disposed = false;
   bool _syncModeEnabled = true;
 
-  _Pins _pins = _Pins();
+  _Choices _choices = _Choices();
 
-  // What the marks want right now, in download order: track ID -> the track.
+  // What the user's choices want right now, in download order: track ID -> the track.
   Map<String, Track> _wanted = const {};
   Set<String> _wantedCovers = const {};
 
@@ -101,7 +101,7 @@ class DownloadService {
   String? _errorKey;
   List<Object?> _errorArgs = const [];
 
-  /// Raised when the pins, the copies, the progress or the error change.
+  /// Raised when the choices, the copies, the progress or the error change.
   final Event<void> changed = Event<void>();
 
   /// Where the copies go unless the app says otherwise: `Wiretune` in the user's music folder on a computer (and on
@@ -121,87 +121,91 @@ class DownloadService {
   String get _coverDirectory => p.join(workDirectory, 'covers');
   LibraryRepository get _repository => _library.repository;
 
-  // ── What the user marked ───────────────────────────────────────────────────────────────────────
+  // ── What the user chose to download ───────────────────────────────────────────────────────────────────────
 
-  bool isTrackPinned(String trackId) => _pins.tracks.contains(trackId);
-  bool isAlbumPinned(String albumId) => _pins.albums.contains(albumId);
-  bool isArtistPinned(String artistId) => _pins.artists.contains(artistId);
-  bool isPlaylistPinned(String playlistId) => _pins.playlists.contains(playlistId);
-  bool get areFavoritesPinned => _pins.favorites;
+  bool isTrackDownloaded(String trackId) => _choices.tracks.contains(trackId);
+  bool isAlbumDownloaded(String albumId) => _choices.albums.contains(albumId);
+  bool isArtistDownloaded(String artistId) => _choices.artists.contains(artistId);
+  bool isPlaylistDownloaded(String playlistId) => _choices.playlists.contains(playlistId);
+  bool get areFavoritesDownloaded => _choices.favorites;
 
-  void pinTrack(String trackId, bool pinned) =>
-      _changePins((pins) => _toggle(pins.tracks, trackId, pinned), pinned ? [?_library.getTrack(trackId)] : const []);
+  void setTrackDownloaded(String trackId, bool downloaded) => _changeChoices(
+    (choices) => _toggle(choices.tracks, trackId, downloaded),
+    downloaded ? [?_library.getTrack(trackId)] : const [],
+  );
 
-  void pinAlbum(String albumId, bool pinned) => _changePins(
-    (pins) => _toggle(pins.albums, albumId, pinned),
-    pinned ? _library.getAlbum(albumId)?.tracks ?? const [] : const [],
+  void setAlbumDownloaded(String albumId, bool downloaded) => _changeChoices(
+    (choices) => _toggle(choices.albums, albumId, downloaded),
+    downloaded ? _library.getAlbum(albumId)?.tracks ?? const [] : const [],
   );
 
   /// Every album filed under the artist, also the ones that arrive later.
-  void pinArtist(String artistId, bool pinned) => _changePins(
-    (pins) => _toggle(pins.artists, artistId, pinned),
-    pinned ? [for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) ...album.tracks] : const [],
+  void setArtistDownloaded(String artistId, bool downloaded) => _changeChoices(
+    (choices) => _toggle(choices.artists, artistId, downloaded),
+    downloaded
+        ? [for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) ...album.tracks]
+        : const [],
   );
 
-  void pinPlaylist(String playlistId, bool pinned) {
+  void setPlaylistDownloaded(String playlistId, bool downloaded) {
     final playlist = _library.getPlaylist(playlistId);
-    _changePins(
-      (pins) => _toggle(pins.playlists, playlistId, pinned),
-      pinned && playlist != null ? _library.getPlaylistTracks(playlist) : const [],
+    _changeChoices(
+      (choices) => _toggle(choices.playlists, playlistId, downloaded),
+      downloaded && playlist != null ? _library.getPlaylistTracks(playlist) : const [],
     );
   }
 
-  void pinFavorites(bool pinned) =>
-      _changePins((pins) => pins.favorites = pinned, pinned ? _library.favorites : const []);
+  void setFavoritesDownloaded(bool downloaded) =>
+      _changeChoices((choices) => choices.favorites = downloaded, downloaded ? _library.favorites : const []);
 
-  /// Whether the copies follow the marks on their own: tracks that join a marked list later are downloaded, and so is a
-  /// copy that was deleted outside Wiretune. Off, a mark downloads what it covers when it is made, and nothing else.
+  /// Whether the copies follow the choices on their own: tracks that join a chosen list later are downloaded, and so is a
+  /// copy that was deleted outside Wiretune. Off, a choice downloads what it covers when it is made, and nothing else.
   bool get isSyncModeEnabled => _syncModeEnabled;
 
   void setSyncModeEnabled(bool enabled) {
     if (_syncModeEnabled == enabled) return;
     _syncModeEnabled = enabled;
-    // From now on only what is still to come for the present marks is fetched; with sync on, the marks decide.
-    _pins.pending
+    // From now on only what is still to come for the present choices is fetched; with sync on, the choices decide.
+    _choices.pending
       ..clear()
       ..addAll(enabled ? const [] : _covered().keys.where((id) => !_hasCurrentCopy(id)));
     _library.setPreference(_syncModePreference, enabled ? '1' : '0');
-    _savePins();
+    _saveChoices();
     _refreshWanted();
     changed.emit(null);
     _schedule();
   }
 
-  /// Forgets every mark and deletes every copy (also what a sign-out does).
-  void removeAll() => _changePins((pins) {
-    pins.tracks.clear();
-    pins.albums.clear();
-    pins.artists.clear();
-    pins.playlists.clear();
-    pins.favorites = false;
+  /// Forgets every choice and deletes every copy (also what a sign-out does).
+  void removeAll() => _changeChoices((choices) {
+    choices.tracks.clear();
+    choices.albums.clear();
+    choices.artists.clear();
+    choices.playlists.clear();
+    choices.favorites = false;
   });
 
-  static void _toggle(Set<String> set, String id, bool pinned) => pinned ? set.add(id) : set.remove(id);
+  static void _toggle(Set<String> set, String id, bool downloaded) => downloaded ? set.add(id) : set.remove(id);
 
-  /// Applies [change] to the marks; [marked] are the tracks a new mark covers.
-  void _changePins(void Function(_Pins pins) change, [Iterable<Track> marked = const []]) {
-    change(_pins);
+  /// Applies [change] to the choices; [chosen] are the tracks a new choice covers.
+  void _changeChoices(void Function(_Choices choices) change, [Iterable<Track> chosen = const []]) {
+    change(_choices);
     final covered = _covered();
-    _pins.pending.removeWhere((id) => !covered.containsKey(id));
-    // Without sync, a new mark still downloads what it covers now: that is the point of making it.
+    _choices.pending.removeWhere((id) => !covered.containsKey(id));
+    // Without sync, a new choice still downloads what it covers now: that is the point of making it.
     if (!_syncModeEnabled) {
-      _pins.pending.addAll([
-        for (final track in marked)
+      _choices.pending.addAll([
+        for (final track in chosen)
           if (!track.isLocal && !_hasCurrentCopy(track.id, track)) track.id,
       ]);
     }
-    _savePins();
+    _saveChoices();
     _refreshWanted();
     changed.emit(null);
     _schedule();
   }
 
-  void _savePins() => _library.setPreference(_pinsPreference, jsonEncode(_pins.toJson()));
+  void _saveChoices() => _library.setPreference(_choicesPreference, jsonEncode(_choices.toJson()));
 
   // ── What is on this device ─────────────────────────────────────────────────────────────────────
 
@@ -239,14 +243,14 @@ class DownloadService {
     return (done, total);
   }
 
-  /// The number of tracks the marks want, and how many of them are on this device and up to date.
+  /// The number of tracks the choices want, and how many of them are on this device and up to date.
   int get wantedCount => _wanted.length;
   int get doneCount => progressOf(_wanted.values).$1;
 
   /// The space the copies take, covers included.
   int get bytesOnDisk => _bytesOnDisk;
 
-  /// The copies on this device, whether the marks still want them or not.
+  /// The copies on this device, whether the choices still want them or not.
   int get copyCount => _copies.length;
 
   /// The track being downloaded and how far it is (0..1), or null.
@@ -269,22 +273,22 @@ class DownloadService {
 
   // ── Start-up ───────────────────────────────────────────────────────────────────────────────────
 
-  /// Reads the marks, the record of the copies and the files on disk, then keeps the copies in line with the library.
+  /// Reads the choices, the record of the copies and the files on disk, then keeps the copies in line with the library.
   Future<void> initialize() async {
     if (_initialized) return;
     _syncModeEnabled = _library.getPreference(_syncModePreference) != '0';
-    _pins = _Pins.fromJson(_decode(_library.getPreference(_pinsPreference)));
+    _choices = _Choices.fromJson(_decode(_library.getPreference(_choicesPreference)));
     await _loadCopies();
     await _loadCovers();
     await _adoptLegacyCopies();
-    if (!_syncModeEnabled) _dropEmptyMarks();
+    if (!_syncModeEnabled) _dropEmptyChoices();
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) {
         _unavailable.clear();
         _onListChanged(true);
       }),
-      _library.playlistsChanged.listen((_) => _onListChanged(_pins.playlists.isNotEmpty)),
-      _library.favoriteChanged.listen((_) => _onListChanged(_pins.favorites)),
+      _library.playlistsChanged.listen((_) => _onListChanged(_choices.playlists.isNotEmpty)),
+      _library.favoriteChanged.listen((_) => _onListChanged(_choices.favorites)),
       _session.stateChanged.listen((_) {
         if (!_session.isLoggedIn) return;
         _stopped = false;
@@ -397,26 +401,26 @@ class DownloadService {
     }
   }
 
-  /// With sync off, a mark none of whose tracks are on the device or still to come has nothing left to keep: the copies
+  /// With sync off, a choice none of whose tracks are on the device or still to come has nothing left to keep: the copies
   /// it downloaded were deleted outside Wiretune.
-  void _dropEmptyMarks() {
+  void _dropEmptyChoices() {
     bool keeps(Iterable<Track> tracks) =>
-        tracks.any((t) => !t.isLocal && (_copies.containsKey(t.id) || _pins.pending.contains(t.id)));
-    final before = jsonEncode(_pins.toJson());
-    _pins.tracks.removeWhere((id) => !_copies.containsKey(id) && !_pins.pending.contains(id));
-    _pins.albums.removeWhere((id) => !keeps(_library.getAlbum(id)?.tracks ?? const []));
-    _pins.artists.removeWhere((id) => !keeps(_library.getArtist(id)?.albums.expand((a) => a.tracks) ?? const []));
-    _pins.playlists.removeWhere((id) {
+        tracks.any((t) => !t.isLocal && (_copies.containsKey(t.id) || _choices.pending.contains(t.id)));
+    final before = jsonEncode(_choices.toJson());
+    _choices.tracks.removeWhere((id) => !_copies.containsKey(id) && !_choices.pending.contains(id));
+    _choices.albums.removeWhere((id) => !keeps(_library.getAlbum(id)?.tracks ?? const []));
+    _choices.artists.removeWhere((id) => !keeps(_library.getArtist(id)?.albums.expand((a) => a.tracks) ?? const []));
+    _choices.playlists.removeWhere((id) {
       final playlist = _library.getPlaylist(id);
       return !keeps(playlist == null ? const [] : _library.getPlaylistTracks(playlist));
     });
-    if (_pins.favorites && !keeps(_library.favorites)) _pins.favorites = false;
-    if (jsonEncode(_pins.toJson()) != before) _savePins();
+    if (_choices.favorites && !keeps(_library.favorites)) _choices.favorites = false;
+    if (jsonEncode(_choices.toJson()) != before) _saveChoices();
   }
 
-  // ── Keeping the copies in line with the marks ──────────────────────────────────────────────────
+  // ── Keeping the copies in line with the choices ──────────────────────────────────────────────────
 
-  /// Every server track the marks cover: the albums', the artists' albums', the playlists', the favourites and the
+  /// Every server track the choices cover: the albums', the artists' albums', the playlists', the favourites and the
   /// single tracks.
   Map<String, Track> _covered() {
     final covered = <String, Track>{};
@@ -424,30 +428,30 @@ class DownloadService {
       if (track != null && !track.isLocal) covered.putIfAbsent(track.id, () => track);
     }
 
-    for (final albumId in _pins.albums) {
+    for (final albumId in _choices.albums) {
       _library.getAlbum(albumId)?.tracks.forEach(add);
     }
-    for (final artistId in _pins.artists) {
+    for (final artistId in _choices.artists) {
       for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) {
         album.tracks.forEach(add);
       }
     }
-    for (final playlistId in _pins.playlists) {
+    for (final playlistId in _choices.playlists) {
       final playlist = _library.getPlaylist(playlistId);
       if (playlist != null) _library.getPlaylistTracks(playlist).forEach(add);
     }
-    if (_pins.favorites) _library.favorites.forEach(add);
-    for (final trackId in _pins.tracks) {
+    if (_choices.favorites) _library.favorites.forEach(add);
+    for (final trackId in _choices.tracks) {
       add(_library.getTrack(trackId));
     }
     return covered;
   }
 
-  /// What to keep and fetch: everything the marks cover with sync on; with it off, of that only what is on the device
-  /// already or still to come from a mark.
+  /// What to keep and fetch: everything the choices cover with sync on; with it off, of that only what is on the device
+  /// already or still to come from a choice.
   void _refreshWanted() {
     final wanted = _covered();
-    if (!_syncModeEnabled) wanted.removeWhere((id, _) => !_copies.containsKey(id) && !_pins.pending.contains(id));
+    if (!_syncModeEnabled) wanted.removeWhere((id, _) => !_copies.containsKey(id) && !_choices.pending.contains(id));
     _wanted = wanted;
     _wantedCovers = {
       for (final track in wanted.values)
@@ -539,7 +543,7 @@ class DownloadService {
     if (!await file.exists() || await file.length() != track.fileSizeBytes) return false;
     _record(track.id, _version(track), candidate);
     _bytesOnDisk += track.fileSizeBytes;
-    if (_pins.pending.remove(track.id)) _savePins();
+    if (_choices.pending.remove(track.id)) _saveChoices();
     return true;
   }
 
@@ -680,7 +684,7 @@ class DownloadService {
     }
     _record(track.id, _version(track), relative);
     _bytesOnDisk += await File(target).length() - previousSize;
-    if (_pins.pending.remove(track.id)) _savePins();
+    if (_choices.pending.remove(track.id)) _saveChoices();
   }
 
   void _record(String trackId, String version, String relative) {
@@ -884,8 +888,8 @@ class _Copy {
   bool get isMoving => version.isEmpty;
 }
 
-/// What the user marked for download, and (with sync off) the tracks the marks still have to fetch.
-class _Pins {
+/// What the user chose to download, and (with sync off) the tracks the choices still have to fetch.
+class _Choices {
   final Set<String> tracks = {};
   final Set<String> albums = {};
   final Set<String> artists = {};
@@ -902,17 +906,17 @@ class _Pins {
     if (pending.isNotEmpty) 'pending': pending.toList(),
   };
 
-  static _Pins fromJson(Object? json) {
-    final pins = _Pins();
-    if (json is! Map) return pins;
+  static _Choices fromJson(Object? json) {
+    final choices = _Choices();
+    if (json is! Map) return choices;
     Iterable<String> ids(Object? list) => list is List ? list.whereType<String>() : const [];
-    pins.tracks.addAll(ids(json['tracks']));
-    pins.albums.addAll(ids(json['albums']));
-    pins.artists.addAll(ids(json['artists']));
-    pins.playlists.addAll(ids(json['playlists']));
-    pins.favorites = json['favorites'] == true;
-    pins.pending.addAll(ids(json['pending']));
-    return pins;
+    choices.tracks.addAll(ids(json['tracks']));
+    choices.albums.addAll(ids(json['albums']));
+    choices.artists.addAll(ids(json['artists']));
+    choices.playlists.addAll(ids(json['playlists']));
+    choices.favorites = json['favorites'] == true;
+    choices.pending.addAll(ids(json['pending']));
+    return choices;
   }
 }
 

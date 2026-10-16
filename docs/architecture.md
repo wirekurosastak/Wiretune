@@ -85,9 +85,9 @@ download can't undo them. A favourite the server refused is put back; a failed p
 error answer carries a code (`ErrorCodes`), which `describeServerError` turns into a sentence in the user's language;
 a `401` says why the token stopped working, and the session shows that.
 
-**Downloads** (`DownloadService`): what the user marked (tracks, albums, artists, playlists, the favourites) is a
+**Downloads** (`DownloadService`): what the user chose to download (tracks, albums, artists, playlists, the favourites) is a
 preference, and the tracks it covers are worked out again from the library after every change, so a playlist that grows
-grows on the device too. With sync off, a mark adds only what it covers when it is made (kept as `pending` until it
+grows on the device too. With sync off, a choice adds only what it covers when it is made (kept as `pending` until it
 arrives), and nothing else is fetched on its own. One file at a time comes from `/api/stream` with the sign-in token in
 the header, into the app's own `DownloadCache/partial` (an interrupted one continues with a range request), and is
 moved into the downloads folder once it is complete and as long as the listing says: `Wiretune` in the music folder

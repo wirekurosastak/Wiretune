@@ -13,16 +13,19 @@ import 'common.dart';
 /// it go again. While the copies arrive a ring around it fills up (only as they do: nothing moves on its own). Not
 /// there for a list without server tracks, which has nothing to download.
 class DownloadListButton extends StatelessWidget {
-  const DownloadListButton({super.key, required this.tracks, required this.isPinned, required this.onPressed});
+  const DownloadListButton({super.key, required this.tracks, required this.isDownloaded, required this.onPressed});
 
   final List<Track> tracks;
-  final bool Function() isPinned;
+  final bool Function() isDownloaded;
   final VoidCallback onPressed;
 
   /// The button for [tracks]; null when none of them can be downloaded (the list gets no button).
-  static Widget? forTracks(List<Track> tracks, {required bool Function() isPinned, required VoidCallback onPressed}) =>
-      tracks.any(DownloadService.canDownload)
-      ? DownloadListButton(tracks: tracks, isPinned: isPinned, onPressed: onPressed)
+  static Widget? forTracks(
+    List<Track> tracks, {
+    required bool Function() isDownloaded,
+    required VoidCallback onPressed,
+  }) => tracks.any(DownloadService.canDownload)
+      ? DownloadListButton(tracks: tracks, isDownloaded: isDownloaded, onPressed: onPressed)
       : null;
 
   @override
@@ -33,15 +36,17 @@ class DownloadListButton extends StatelessWidget {
       builder: (context, _, _) {
         final (done, total) = downloads.progressOf(tracks);
         if (total == 0) return const SizedBox.shrink();
-        final pinned = isPinned();
-        final complete = pinned && done == total;
+        final downloaded = isDownloaded();
+        final complete = downloaded && done == total;
         return HeaderIconButton(
-          tooltip: !pinned
+          tooltip: !downloaded
               ? context.tr('TipDownload')
               : (complete ? context.tr('TipRemoveDownload') : context.trf('DownloadsListProgress', [done, total])),
-          icon: complete ? Icons.download_done_rounded : (pinned ? Icons.downloading_rounded : Icons.download_rounded),
-          color: pinned ? context.colors.accent : context.colors.textMain,
-          progress: pinned && !complete ? done / total : null,
+          icon: complete
+              ? Icons.download_done_rounded
+              : (downloaded ? Icons.downloading_rounded : Icons.download_rounded),
+          color: downloaded ? context.colors.accent : context.colors.textMain,
+          progress: downloaded && !complete ? done / total : null,
           onPressed: onPressed,
         );
       },
@@ -60,6 +65,6 @@ IconData? downloadIcon(DownloadState state) => switch (state) {
 /// The tooltip of a track's own download button: download, remove, or why it cannot be removed by itself.
 String downloadTip(BuildContext context, Track track) {
   final downloads = context.vm.downloads;
-  if (downloads.isPinnedByList(track)) return context.tr('TipDownloadedWithList');
-  return context.tr(downloads.isTrackPinned(track) ? 'TipRemoveDownload' : 'TipDownload');
+  if (downloads.isDownloadedWithList(track)) return context.tr('TipDownloadedWithList');
+  return context.tr(downloads.isTrackDownloaded(track) ? 'TipRemoveDownload' : 'TipDownload');
 }

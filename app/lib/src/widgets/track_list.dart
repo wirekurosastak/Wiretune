@@ -595,7 +595,7 @@ class TrackMenu extends StatelessWidget {
           TrackAction.download,
           downloadIcon(downloads.stateOf(track)) ?? Icons.download_rounded,
           downloadTip(context, track),
-          enabled: !downloads.isPinnedByList(track),
+          enabled: !downloads.isDownloadedWithList(track),
         ),
       if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
       if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),

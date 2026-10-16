@@ -39,7 +39,7 @@ void main() {
 
     // The fixture's files carry no tags: all three are tracks of "Unknown album".
     final album = library.albums.single;
-    downloads.pinAlbum(album.id, true);
+    downloads.setAlbumDownloaded(album.id, true);
     for (var i = 0; i < 500 && downloads.doneCount < 3; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }

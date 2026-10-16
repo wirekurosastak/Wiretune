@@ -613,7 +613,7 @@ void main() {
     await settle(tester);
     await tester.tap(inHeader('Download to this device'));
     await settle(tester);
-    expect(downloads.isAlbumPinned(album), isTrue);
+    expect(downloads.isAlbumDownloaded(album), isTrue);
     // On its way: the arrow in progress inside a ring that fills as the tracks arrive (none yet, out of two).
     expect(find.descendant(of: header, matching: find.byIcon(Icons.downloading_rounded)), findsOneWidget);
     final ring = tester.widget<CircularProgressIndicator>(
@@ -635,7 +635,7 @@ void main() {
     expect(tester.widget<PopupMenuItem<Object?>>(keptByAlbum).enabled, isFalse);
     await tester.tapAt(const Offset(5, 5)); // closes the menu
     await settle(tester);
-    expect(album.tracks.map(downloads.isTrackPinned), [false, false]);
+    expect(album.tracks.map(downloads.isTrackDownloaded), [false, false]);
     expect(album.tracks.map(downloads.stateOf), everyElement(DownloadState.queued));
     expect(
       find.descendant(of: find.byType(TrackSliver), matching: find.byIcon(Icons.downloading_rounded)),
@@ -643,13 +643,13 @@ void main() {
     );
     await tester.tap(inHeader('0 of 2 downloaded – click to remove'));
     await settle(tester);
-    expect(downloads.isAlbumPinned(album), isFalse);
+    expect(downloads.isAlbumDownloaded(album), isFalse);
 
     // One track, from its row's menu.
     await openRowMenu('Giant Steps');
     await tester.tap(find.text('Download to this device'));
     await settle(tester);
-    expect(downloads.isTrackPinned(vm.library.getTrack('s1')!), isTrue);
+    expect(downloads.isTrackDownloaded(vm.library.getTrack('s1')!), isTrue);
 
     // The favourites, from their page.
     vm.library.setFavorite('s2', true); // not signed in: as the server told it
@@ -659,7 +659,7 @@ void main() {
       find.descendant(of: find.byType(PlayShuffleButtons), matching: find.byTooltip(Localizer.get('TipDownload'))),
     );
     await settle(tester);
-    expect(downloads.areFavoritesPinned, isTrue);
+    expect(downloads.areFavoritesDownloaded, isTrue);
 
     // An artist's albums, from the artist's page.
     final coltrane = vm.library.getArtistByName('John Coltrane')!;
@@ -667,7 +667,7 @@ void main() {
     await settle(tester);
     await tester.tap(inHeader('Download to this device'));
     await settle(tester);
-    expect(downloads.isArtistPinned(coltrane), isTrue);
+    expect(downloads.isArtistDownloaded(coltrane), isTrue);
   });
 
   testWidgets('on a phone a swipe up opens the full-screen player, whose menu adds the track to a playlist', (
@@ -743,7 +743,7 @@ void main() {
     expect(find.text('Add to playlist'), findsOneWidget);
     await tester.tap(find.text('Download to this device'));
     await settle(tester);
-    expect(vm.downloads.isTrackPinned(vm.library.getTrack('s1')!), isTrue);
+    expect(vm.downloads.isTrackDownloaded(vm.library.getTrack('s1')!), isTrue);
     // Waiting for its turn (the downloads have not started in this test): the arrow in progress beside the artist.
     expect(
       find.descendant(of: find.byType(TrackSliver), matching: find.byIcon(Icons.downloading_rounded)),

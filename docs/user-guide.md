@@ -125,9 +125,9 @@ Music from a server can stay on the device, to play without the server or the ne
 device*), an album, all of an artist's albums, a playlist or all your favourites (the button beside *Play* and
 *Shuffle*, or their *⋮*). A small icon after a track's title tells that it's on the device.
 
-- With **Sync downloads** on (the default, *Settings → Downloads*), what you marked stays in step: a track added to a
+- With **Sync downloads** on (the default, *Settings → Downloads*), what you downloaded stays in step: a track added to a
   downloaded playlist is fetched, one taken off is deleted, and a file that changed on the server is fetched again.
-  Off, a mark fetches what it covers at that moment and nothing more comes on its own.
+  Off, a download fetches what it covers at that moment and nothing more comes on its own.
 - They run one track at a time while you're signed in, and one that was cut short continues where it stopped.
 - The copies are the server's files byte for byte, filed as `Album artist/Album/01 - Title.flac` in a `Wiretune`
   folder of your music folder (on iOS and Tizen, the app's own storage). *Settings → Downloads* shows where, how much

@@ -105,7 +105,7 @@ class CollectionMenu {
     required this.label,
     required this.downloadable,
     required this.onPlay,
-    required this.isPinned,
+    required this.isDownloaded,
     required this.onDownload,
     this.removeKey,
     this.removeIcon = Icons.delete_outline_rounded,
@@ -119,7 +119,7 @@ class CollectionMenu {
     label: '${album.title} • ${album.artist}',
     downloadable: album.tracks,
     onPlay: onPlay,
-    isPinned: (vm) => vm.downloads.isAlbumPinned(album),
+    isDownloaded: (vm) => vm.downloads.isAlbumDownloaded(album),
     onDownload: (vm) => vm.downloads.toggleAlbum(album),
     removeKey: 'HideAlbum',
     removeIcon: Icons.visibility_off_outlined,
@@ -136,7 +136,7 @@ class CollectionMenu {
     // The download keeps the artist's albums, as the button on its page does.
     downloadable: [for (final album in artist.albums) ...album.tracks],
     onPlay: onPlay,
-    isPinned: (vm) => vm.downloads.isArtistPinned(artist),
+    isDownloaded: (vm) => vm.downloads.isArtistDownloaded(artist),
     onDownload: (vm) => vm.downloads.toggleArtist(artist),
     removeKey: 'HideArtist',
     removeIcon: Icons.visibility_off_outlined,
@@ -154,7 +154,7 @@ class CollectionMenu {
         label: playlist.name,
         downloadable: playlist.isAutomatic ? const [] : tracks,
         onPlay: onPlay,
-        isPinned: (vm) => vm.downloads.isPlaylistPinned(playlist),
+        isDownloaded: (vm) => vm.downloads.isPlaylistDownloaded(playlist),
         onDownload: (vm) => vm.downloads.togglePlaylist(playlist),
         removeKey: playlist.isAutomatic ? null : 'PlaylistDeleteAction',
         removeIsDanger: true,
@@ -170,7 +170,7 @@ class CollectionMenu {
   final String label;
   final List<Track> downloadable;
   final VoidCallback onPlay;
-  final bool Function(MainViewModel vm) isPinned;
+  final bool Function(MainViewModel vm) isDownloaded;
   final void Function(MainViewModel vm) onDownload;
   final String? removeKey;
   final IconData removeIcon;
@@ -195,7 +195,7 @@ class CollectionMenu {
             ],
           ),
         );
-    final pinned = isPinned(vm);
+    final downloaded = isDownloaded(vm);
     return [
       if (!header) ...[
         item(_CollectionAction.play, Icons.play_arrow_rounded, context.tr('Play')),
@@ -207,8 +207,8 @@ class CollectionMenu {
       if (!header && downloadable.any(vm.downloads.canDownload))
         item(
           _CollectionAction.download,
-          pinned ? Icons.download_done_rounded : Icons.download_rounded,
-          context.tr(pinned ? 'TipRemoveDownload' : 'TipDownload'),
+          downloaded ? Icons.download_done_rounded : Icons.download_rounded,
+          context.tr(downloaded ? 'TipRemoveDownload' : 'TipDownload'),
         ),
       if (removeKey case final key?)
         item(_CollectionAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),

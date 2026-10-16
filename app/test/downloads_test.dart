@@ -69,7 +69,7 @@ void main() {
     expect((image.imageProvider as FileImage).file.path, downloads.localCover(track.coverArtPath!));
 
     await vm.logout();
-    expect(vm.downloads.isTrackPinned(track), isFalse);
+    expect(vm.downloads.isTrackDownloaded(track), isFalse);
     expect(await waitUntil(() => !File(copy).existsSync()), isTrue);
     expect(downloads.bytesOnDisk, 0);
   });

@@ -108,7 +108,7 @@ class FavoritesPage extends StatelessWidget {
                     onShuffle: favorites.shuffleAll,
                     trailing: DownloadListButton.forTracks(
                       favorites.favoriteTracks,
-                      isPinned: () => context.vm.downloads.areFavoritesPinned,
+                      isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
                       onPressed: context.vm.downloads.toggleFavorites,
                     ),
                   ),
@@ -719,7 +719,7 @@ class AlbumDetail extends StatelessWidget {
                 onShuffle: () => albums.shuffleAlbum(),
                 trailing: DownloadListButton.forTracks(
                   album.tracks,
-                  isPinned: () => vm.downloads.isAlbumPinned(album),
+                  isDownloaded: () => vm.downloads.isAlbumDownloaded(album),
                   onPressed: () => vm.downloads.toggleAlbum(album),
                 ),
               ),
@@ -816,7 +816,7 @@ class ArtistDetail extends StatelessWidget {
                 // The artist's albums, also the ones that arrive later.
                 trailing: DownloadListButton.forTracks(
                   albumTracks,
-                  isPinned: () => vm.downloads.isArtistPinned(artist),
+                  isDownloaded: () => vm.downloads.isArtistDownloaded(artist),
                   onPressed: () => vm.downloads.toggleArtist(artist),
                 ),
               ),

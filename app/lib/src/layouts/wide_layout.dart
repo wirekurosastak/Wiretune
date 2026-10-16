@@ -1278,13 +1278,13 @@ class _CurrentTrackDownloadButton extends StatelessWidget {
       builder: (context, _, _) {
         if (!downloads.canDownload(track)) return const SizedBox.shrink();
         final state = downloads.stateOf(track);
-        final pinned = downloads.isPinnedByList(track);
+        final withList = downloads.isDownloadedWithList(track);
         return Tooltip(
           message: downloadTip(context, track),
           child: IconButton(
             visualDensity: VisualDensity.compact,
             iconSize: 19,
-            onPressed: pinned ? null : () => downloads.toggleTrack(track),
+            onPressed: withList ? null : () => downloads.toggleTrack(track),
             icon: Icon(
               downloadIcon(state) ?? Icons.download_rounded,
               size: 19,

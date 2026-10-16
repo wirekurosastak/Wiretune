@@ -193,7 +193,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                     ? null
                     : DownloadListButton.forTracks(
                         tracks,
-                        isPinned: () => context.vm.downloads.isPlaylistPinned(playlist),
+                        isDownloaded: () => context.vm.downloads.isPlaylistDownloaded(playlist),
                         onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                       ),
               ),

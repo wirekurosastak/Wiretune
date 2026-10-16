@@ -824,9 +824,9 @@ const Map<String, (String, String, String)> allStrings = {
   'DownloadsRemoveConfirm': ('Igen, mind törlődjön', 'Yes, remove them all', 'Ja, alle entfernen'),
   'DownloadsSyncMode': ('Letöltések szinkronizálása', 'Sync downloads', 'Downloads synchronisieren'),
   'DownloadsSyncModeHint': (
-    'Automatikusan letölti az új albumokat és számokat a kijelölt előadóknál és listáknál.',
-    'Automatically downloads new albums and tracks for pinned artists and lists.',
-    'Lädt neue Alben und Titel für markierte Künstler und Listen automatisch herunter.',
+    'Automatikusan letölti az új albumokat és számokat a letöltött előadóknál és listáknál.',
+    'Automatically downloads new albums and tracks for downloaded artists and lists.',
+    'Lädt neue Alben und Titel für heruntergeladene Künstler und Listen automatisch herunter.',
   ),
   'DownloadsListProgress': (
     '{0} / {1} letöltve – kattints az eltávolításhoz',

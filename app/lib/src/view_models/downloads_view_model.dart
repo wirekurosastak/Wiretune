@@ -14,14 +14,14 @@ class DownloadsViewModel extends ChangeNotifier {
   final DownloadService _downloads;
   late final void Function() _unsubscribe;
   final ValueNotifier<Object?> _states = ValueNotifier(null);
-  int _pinChanges = 0;
+  int _changes = 0;
 
   /// Notifies when a track's or a list's download state changes, but not at every byte of progress: what the rows and
   /// the buttons follow. The view model itself notifies at every change, progress included (the settings card).
   ValueListenable<Object?> get states => _states;
 
   void _onChanged() {
-    final signature = (_downloads.doneCount, _downloads.wantedCount, _downloads.currentTrack?.id, _pinChanges);
+    final signature = (_downloads.doneCount, _downloads.wantedCount, _downloads.currentTrack?.id, _changes);
     if (signature != _states.value) _states.value = signature;
     notifyListeners();
   }
@@ -33,39 +33,40 @@ class DownloadsViewModel extends ChangeNotifier {
 
   DownloadState stateOf(Track track) => _downloads.stateOf(track);
 
-  /// The track itself was marked (not only the album, playlist or favourites it belongs to).
-  bool isTrackPinned(Track track) => _downloads.isTrackPinned(track.id);
+  /// The track itself was chosen for download (not only the album, playlist or favourites it belongs to).
+  bool isTrackDownloaded(Track track) => _downloads.isTrackDownloaded(track.id);
 
   /// Wanted because of a list it is on, not by itself: its own button cannot remove it.
-  bool isPinnedByList(Track track) => _downloads.isWanted(track) && !isTrackPinned(track);
+  bool isDownloadedWithList(Track track) => _downloads.isWanted(track) && !isTrackDownloaded(track);
 
-  void toggleTrack(Track track) => _pin(() => _downloads.pinTrack(track.id, !isTrackPinned(track)));
+  void toggleTrack(Track track) => _change(() => _downloads.setTrackDownloaded(track.id, !isTrackDownloaded(track)));
 
   // ── A list ─────────────────────────────────────────────────────────────────────────────────────
 
-  bool isAlbumPinned(Album album) => _downloads.isAlbumPinned(album.id);
+  bool isAlbumDownloaded(Album album) => _downloads.isAlbumDownloaded(album.id);
 
-  void toggleAlbum(Album album) => _pin(() => _downloads.pinAlbum(album.id, !isAlbumPinned(album)));
+  void toggleAlbum(Album album) => _change(() => _downloads.setAlbumDownloaded(album.id, !isAlbumDownloaded(album)));
 
   /// All the artist's albums, also the ones that arrive later.
-  bool isArtistPinned(Artist artist) => _downloads.isArtistPinned(artist.id);
+  bool isArtistDownloaded(Artist artist) => _downloads.isArtistDownloaded(artist.id);
 
-  void toggleArtist(Artist artist) => _pin(() => _downloads.pinArtist(artist.id, !isArtistPinned(artist)));
+  void toggleArtist(Artist artist) =>
+      _change(() => _downloads.setArtistDownloaded(artist.id, !isArtistDownloaded(artist)));
 
-  bool isPlaylistPinned(Playlist playlist) => _downloads.isPlaylistPinned(playlist.id);
+  bool isPlaylistDownloaded(Playlist playlist) => _downloads.isPlaylistDownloaded(playlist.id);
 
   void togglePlaylist(Playlist playlist) =>
-      _pin(() => _downloads.pinPlaylist(playlist.id, !isPlaylistPinned(playlist)));
+      _change(() => _downloads.setPlaylistDownloaded(playlist.id, !isPlaylistDownloaded(playlist)));
 
-  bool get areFavoritesPinned => _downloads.areFavoritesPinned;
+  bool get areFavoritesDownloaded => _downloads.areFavoritesDownloaded;
 
-  void toggleFavorites() => _pin(() => _downloads.pinFavorites(!areFavoritesPinned));
+  void toggleFavorites() => _change(() => _downloads.setFavoritesDownloaded(!areFavoritesDownloaded));
 
   /// How many of [tracks] are downloaded, of how many that can be.
   (int done, int total) progressOf(Iterable<Track> tracks) => _downloads.progressOf(tracks);
 
-  void _pin(void Function() change) {
-    _pinChanges++;
+  void _change(void Function() change) {
+    _changes++;
     try {
       change();
     } catch (e) {
@@ -114,8 +115,8 @@ class DownloadsViewModel extends ChangeNotifier {
 
   bool get hasError => _downloads.errorMessage != null;
 
-  /// Forgets every mark and deletes every copy.
-  void removeAll() => _pin(_downloads.removeAll);
+  /// Forgets every choice and deletes every copy.
+  void removeAll() => _change(_downloads.removeAll);
 
   /// [bytes] in the unit that reads best: 820 KB, 34 MB, 1.4 GB.
   static (double amount, String unit) sizeOf(int bytes) {
