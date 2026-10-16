@@ -64,21 +64,21 @@ void main() {
   });
 
   test('the library scan stores the folder and keeps user data across rescans', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final library = LibraryService(
       repo,
       MetadataScanner(),
       coverCacheDirectory: p.join(root.path, '..', 'covers_${p.basename(root.path)}'),
     );
-    await library.initialize();
+    library.initialize();
 
     expect(await library.scanFolder(root.path), isTrue);
     expect(library.tracks, hasLength(3));
     expect(library.libraryPath, AppPaths.fullPath(root.path));
-    expect(repo.settings['library_path'], AppPaths.fullPath(root.path));
+    expect(repo.getSetting('library_path'), AppPaths.fullPath(root.path));
 
     final id = library.tracks.first.id;
-    await library.toggleFavorite(id);
+    library.toggleFavorite(id);
     expect(await library.scanFolder(root.path), isTrue);
     expect(library.getTrack(id)!.isFavorite, isTrue);
 
@@ -86,9 +86,9 @@ void main() {
   });
 
   test('a cancelled scan leaves the library alone', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
-    await library.initialize();
+    library.initialize();
     final token = CancellationToken()..cancel();
     expect(await library.scanFolder(root.path, cancellationToken: token), isFalse);
     expect(library.tracks, isEmpty);

@@ -49,7 +49,7 @@ void main() {
   Future<LibraryService> library(WidgetTester tester, [List<Track> tracks = const []]) async =>
       (await tester.runAsync(() async {
         final created = createLibrary(tracks);
-        await created.initialize();
+        created.initialize();
         return created;
       }))!;
 
@@ -83,7 +83,7 @@ void main() {
     final vm = createMainViewModel(lib);
     await show(tester, vm, wide);
 
-    await tester.runAsync(() => lib.toggleFavorite('s1'));
+    lib.toggleFavorite('s1');
     await settle(tester);
     expect(find.text(Localizer.get('OfflineReadOnly')), findsOneWidget);
     expect(lib.getTrack('s1')!.isFavorite, isFalse);
@@ -124,10 +124,7 @@ void main() {
       ..createSync(recursive: true)
       ..writeAsBytesSync(List.filled(2048, 1));
     addTearDown(() => copy.existsSync() ? copy.deleteSync() : null);
-    (lib.repository as MockRepository).downloads['s1'] = (
-      'v1',
-      p.relative(copy.path, from: vm.downloadService.directory),
-    );
+    lib.repository.saveDownload('s1', 'v1', p.relative(copy.path, from: vm.downloadService.directory));
     await tester.runAsync(vm.downloadService.initialize);
     await show(tester, vm, wide);
 
@@ -264,8 +261,7 @@ Future<void> settle(WidgetTester tester) async {
 }
 
 /// The database of a newer Wiretune.
-class _NewerDatabase extends MockRepository {
+class _NewerDatabase extends LibraryRepository {
   @override
-  Future<void> initialize() async =>
-      throw const IncompatibleDatabaseException('made by another version', '/data/wiretune.db');
+  void initialize() => throw const IncompatibleDatabaseException('made by another version', '/data/wiretune.db');
 }

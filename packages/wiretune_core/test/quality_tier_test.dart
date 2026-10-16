@@ -109,7 +109,7 @@ void main() {
   });
 
   test('albums carry their tier and tag spec', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
     Track make(String id, String album, AudioFormat format) => Track(
       id: id,
@@ -120,7 +120,7 @@ void main() {
       filePath: '/music/$album/$id.x',
       format: format,
     );
-    repo.saveTracks([
+    repo.replaceAllTracks([
       make('g1', 'Gold album', _lossless(96000, 24)),
       make('g2', 'Gold album', _lossless(96000, 24)),
       make('s1', 'Silver album', _lossless(44100, 16)),
@@ -128,7 +128,7 @@ void main() {
       make('m1', 'Mixed album', _lossless(96000, 24)),
       make('m2', 'Mixed album', _lossy(256)),
     ]);
-    await service.initialize();
+    service.initialize();
 
     Album find(String title) => service.albums.singleWhere((a) => a.title == title);
     expect((find('Gold album').tier, find('Gold album').tagSpec), (QualityTier.gold, 'FLAC 24bit/96kHz'));

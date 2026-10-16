@@ -337,7 +337,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
         },
       );
       if (done) {
-        await _session.useLocalLibrary();
+        _session.useLocalLibrary();
         scanProgress = 100;
         final localCount = _library.tracks.where((t) => t.isLocal).length;
         final serverCount = _library.tracks.length - localCount;

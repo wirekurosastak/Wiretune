@@ -32,9 +32,17 @@ void main() {
     }
   });
 
-  test('live and studio versions of the same length are not duplicates', () {
+  test('the same song by the same artist is a duplicate', () {
+    final local = TestSupport.makeTrack('a', 'Hotel California', artist: 'Eagles', album: 'Hotel California');
+    final server = TestSupport.makeServerTrack('b', 'Hotel California', artist: 'Eagles', album: 'Hotel California');
+    expect(TrackDeduplication.isDuplicate(local, server), isTrue);
+  });
+
+  test('other songs, other artists, and live and studio versions of the same length are not duplicates', () {
     final studio = TestSupport.makeTrack('a', 'Song', artist: 'Band', album: 'Album');
-    final live = TestSupport.makeTrack('b', 'Song (Live Version)', artist: 'Band', album: 'Album');
+    expect(TrackDeduplication.isDuplicate(studio, TestSupport.makeTrack('b', 'Song', artist: 'Other Band')), isFalse);
+    expect(TrackDeduplication.isDuplicate(studio, TestSupport.makeTrack('c', 'Other Song', artist: 'Band')), isFalse);
+    final live = TestSupport.makeTrack('d', 'Song (Live Version)', artist: 'Band', album: 'Album');
     expect(TrackDeduplication.isDuplicate(studio, live), isFalse);
   });
 
@@ -76,16 +84,20 @@ void main() {
     final server = TestSupport.makeServerTrack('server', 'Song', artist: 'Band')
       ..isFavorite = true
       ..playCount = 7
-      ..lastPlayed = DateTime.utc(2024, 5, 1);
+      ..lastPlayed = DateTime.utc(2024, 5, 1)
+      ..hasCoverArt = true
+      ..coverArtPath = 'http://server/api/cover/album/x';
     final other = TestSupport.makeServerTrack('other', 'Other', artist: 'Band');
     final aliases = <String, String>{};
 
     final merged = TrackDeduplication.mergeTracks([local], [server, other], aliases);
 
     expect(merged.map((t) => t.id), ['local', 'other']);
+    expect(merged.first.isLocal, isTrue);
     expect(aliases, {'server': 'local'});
     expect(local.isFavorite, isTrue);
     expect(local.playCount, 7);
     expect(local.lastPlayed, DateTime.utc(2024, 5, 1));
+    expect(local.coverArtPath, 'http://server/api/cover/album/x'); // the local file had none
   });
 }

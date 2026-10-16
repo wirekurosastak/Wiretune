@@ -124,7 +124,7 @@ class _DesktopWindowListener with WindowListener {
   @override
   void onWindowClose() async {
     try {
-      await _vm.player.saveSession();
+      _vm.player.saveSession();
       await _vm.audioEngine.dispose();
       _vm.dispose();
     } catch (e, s) {

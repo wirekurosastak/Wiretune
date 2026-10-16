@@ -255,7 +255,7 @@ void main() {
 
   test('a connection ends when the token it was opened with expires', () async {
     final me = UserInfo.fromJson(json(await admin.get('/api/auth/me')));
-    final secret = (await server.server.repository.getSetting('jwt_secret'))!;
+    final secret = (server.server.repository.getSetting('jwt_secret'))!;
     final shortLived = Jwt(secret).sign({
       'sub': me.id,
       'name': me.username,
@@ -270,7 +270,7 @@ void main() {
 
   test('two signed-in players, through the client: each sees the other, its playback and its commands', () async {
     Future<(ServerSession, RemoteClient)> player(String id, String name, DeviceKind kind) async {
-      final repo = MockRepository();
+      final repo = testRepository();
       final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: p.join(server.root, '$id-covers'));
       final session = ServerSession(library, repo);
       final remote = RemoteClient(session);
@@ -278,8 +278,8 @@ void main() {
         remote.dispose();
         session.dispose();
       });
-      await library.initialize();
-      await session.initialize();
+      library.initialize();
+      session.initialize();
       await session.connect(server.baseUrl);
       expect(await session.login('owner', adminPassword, false), isNull);
       remote.configure(id: id, name: name, kind: kind, enabled: true);

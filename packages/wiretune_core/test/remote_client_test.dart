@@ -27,8 +27,8 @@ void main() {
   late ServerSession session;
 
   setUp(() async {
-    library = LibraryService(MockRepository(), MetadataScanner(), coverCacheDirectory: '/nonexistent');
-    await library.initialize();
+    library = LibraryService(testRepository(), MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    library.initialize();
     session = await signedInSession(library);
   });
   tearDown(() => session.dispose());

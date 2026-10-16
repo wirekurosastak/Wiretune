@@ -73,7 +73,7 @@ void main() {
     var asked = 0;
     final settings = ServerSettingsViewModel(
       library,
-      ServerSession(library, MockRepository()),
+      ServerSession(library, testRepository()),
       supportsLocalFolder: true,
       requestFolderAccess: () async {
         asked++;

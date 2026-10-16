@@ -495,7 +495,7 @@ class MainViewModel extends ChangeNotifier {
   Future<void> logout() async {
     player.releaseRemote();
     await serverSettings.logout();
-    await downloadService.removeAll();
+    downloadService.removeAll();
     isLoginViewActive = library.tracks.isEmpty;
     notifyListeners();
   }
@@ -576,7 +576,7 @@ class MainViewModel extends ChangeNotifier {
 
   void setTheme({required bool light, bool persist = true}) {
     _isLight = light;
-    if (persist) _remember(library.setPreference(_themePreference, light ? 'light' : 'dark'));
+    if (persist) _remember(_themePreference, light ? 'light' : 'dark');
     notifyListeners();
   }
 
@@ -584,7 +584,7 @@ class MainViewModel extends ChangeNotifier {
   bool get showPerformanceStats => _showPerformanceStats;
   set showPerformanceStats(bool value) {
     _showPerformanceStats = value;
-    _remember(library.setPreference(_performanceStatsPreference, value ? '1' : '0'));
+    _remember(_performanceStatsPreference, value ? '1' : '0');
     notifyListeners();
   }
 
@@ -593,7 +593,7 @@ class MainViewModel extends ChangeNotifier {
   set useOnlineLyrics(bool value) {
     _useOnlineLyrics = value;
     player.isOnlineLyricsEnabled = value;
-    _remember(library.setPreference(_onlineLyricsPreference, value ? '1' : '0'));
+    _remember(_onlineLyricsPreference, value ? '1' : '0');
     notifyListeners();
   }
 
@@ -602,7 +602,7 @@ class MainViewModel extends ChangeNotifier {
   set normalization(VolumeNormalization value) {
     audioEngine.setNormalization(value);
     audioSettings.refreshDeviceList(); // the signal path mentions it
-    _remember(library.setPreference(_normalizationPreference, value.name));
+    _remember(_normalizationPreference, value.name);
     notifyListeners();
   }
 
@@ -610,7 +610,7 @@ class MainViewModel extends ChangeNotifier {
   bool get isGaplessEnabled => player.isGaplessEnabled;
   set isGaplessEnabled(bool value) {
     player.isGaplessEnabled = value;
-    _remember(library.setPreference(_gaplessPreference, value ? '1' : '0'));
+    _remember(_gaplessPreference, value ? '1' : '0');
     notifyListeners();
   }
 
@@ -619,7 +619,7 @@ class MainViewModel extends ChangeNotifier {
   set isRemoteEnabled(bool value) {
     if (!value) player.releaseRemote();
     _configureRemote(enabled: value);
-    _remember(library.setPreference(_remoteEnabledPreference, value ? '1' : '0'));
+    _remember(_remoteEnabledPreference, value ? '1' : '0');
     notifyListeners();
   }
 
@@ -629,7 +629,7 @@ class MainViewModel extends ChangeNotifier {
     final name = RemoteRules.cleanName(value);
     if (name == remote.deviceName) return;
     _configureRemote(name: name);
-    _remember(library.setPreference(_remoteNamePreference, name));
+    _remember(_remoteNamePreference, name);
     notifyListeners();
   }
 
@@ -679,40 +679,42 @@ class MainViewModel extends ChangeNotifier {
   /// Switches the interface language and remembers the choice.
   void changeLanguage(String? code) {
     if (!Localizer.instance.setLanguage(code)) return;
-    _remember(library.setPreference(_languagePreference, Localizer.instance.language));
+    _remember(_languagePreference, Localizer.instance.language);
   }
 
-  void _remember(Future<void> write) => unawaited(
-    write.catchError((Object e) {
+  void _remember(String name, String value) {
+    try {
+      library.setPreference(name, value);
+    } catch (e) {
       WiretuneLog.warn('MainViewModel', 'Could not save a preference: $e');
-    }),
-  );
+    }
+  }
 
   /// Applies the language, theme and switches the user picked in an earlier session.
   Future<void> _applyPreferences() async {
-    final language = Localizer.normalize(await library.getPreference(_languagePreference));
+    final language = Localizer.normalize(library.getPreference(_languagePreference));
     if (language != null) Localizer.instance.setLanguage(language);
 
-    final theme = await library.getPreference(_themePreference);
+    final theme = library.getPreference(_themePreference);
     if (theme != null) _isLight = theme == 'light';
 
-    _showPerformanceStats = await library.getPreference(_performanceStatsPreference) == '1';
-    _useOnlineLyrics = await library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
+    _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
+    _useOnlineLyrics = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     player.isOnlineLyricsEnabled = _useOnlineLyrics;
-    final normalization = VolumeNormalization.values.asNameMap()[await library.getPreference(_normalizationPreference)];
+    final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
     if (normalization != null) audioEngine.setNormalization(normalization);
-    player.isGaplessEnabled = await library.getPreference(_gaplessPreference) != '0'; // on unless turned off
+    player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
 
     // A lasting ID of its own, so the others know it again after a restart; it connects once signed in.
-    var id = await library.getPreference(_remoteIdPreference);
+    var id = library.getPreference(_remoteIdPreference);
     if (id == null || id.isEmpty) {
       id = newId();
-      await library.setPreference(_remoteIdPreference, id);
+      library.setPreference(_remoteIdPreference, id);
     }
     _configureRemote(
       id: id,
-      name: await library.getPreference(_remoteNamePreference) ?? capabilities.name,
-      enabled: await library.getPreference(_remoteEnabledPreference) != '0',
+      name: library.getPreference(_remoteNamePreference) ?? capabilities.name,
+      enabled: library.getPreference(_remoteEnabledPreference) != '0',
     );
   }
 
@@ -738,7 +740,7 @@ class MainViewModel extends ChangeNotifier {
   /// again only when the library changes: the names come from the tracks, as artists and albums are hidden by hashes.
   List<HiddenItem> get hiddenItems => _hidden ??= _describeHidden();
 
-  Future<void> unhide(HiddenItem item) => switch (item.kind) {
+  void unhide(HiddenItem item) => switch (item.kind) {
     HiddenKind.artist => library.unhideArtist(item.id),
     HiddenKind.album => library.unhideAlbum(item.id),
     HiddenKind.track => library.unhideTrack(item.id),
@@ -779,10 +781,10 @@ class MainViewModel extends ChangeNotifier {
   /// Loads the local cache, then reconnects to the server if it is the library source.
   Future<void> start() async {
     try {
-      await library.initialize();
+      library.initialize();
       await _applyPreferences();
-      await player.restoreSession();
-      await session.initialize();
+      player.restoreSession();
+      session.initialize();
       await downloadService.initialize();
       serverSettings.syncWithSession();
     } catch (e, s) {

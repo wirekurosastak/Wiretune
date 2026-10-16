@@ -225,7 +225,9 @@ void main() {
 
     test('the scanner turns a tagged file into a track', () async {
       final covers = p.join(dir.path, 'covers');
-      final track = (await MetadataScanner().readTrackMetadata(path('t.flac'), coverCacheDirectory: covers))!;
+      final tracks = await MetadataScanner().scanDirectory(dir.path, coverCacheDirectory: covers);
+      Track scanned(String name) => tracks.firstWhere((t) => t.filePath == AppPaths.fullPath(path(name)));
+      final track = scanned('t.flac');
       expect(track.title, 'Tést Title');
       expect(track.albumArtist, 'Album Ärtist');
       expect(track.format.codec, 'FLAC');
@@ -235,7 +237,7 @@ void main() {
       expect(p.basename(track.coverArtPath!), endsWith('.png'));
       expect(track.id, MetadataScanner.computeTrackId(path('t.flac')));
 
-      final mp3 = (await MetadataScanner().readTrackMetadata(path('plain.mp3')))!;
+      final mp3 = scanned('plain.mp3');
       expect((mp3.format.codec, mp3.format.isLossless, mp3.format.bitsPerSample), ('MP3', false, 0));
 
       expect(await MetadataScanner.readLyrics(path('t.flac')), 'la la la');

@@ -898,7 +898,7 @@ class _DownloadsCardState extends State<_DownloadsCard> {
                           style: FilledButton.styleFrom(backgroundColor: colors.danger),
                           onPressed: () async {
                             setState(() => _confirming = false);
-                            await downloads.removeAll();
+                            downloads.removeAll();
                           },
                           icon: const Icon(Icons.delete_forever_rounded),
                           label: Text(context.tr('DownloadsRemoveConfirm')),
@@ -1462,7 +1462,7 @@ class _HiddenContentCard extends StatelessWidget {
                           message: context.trf('UnhideAllConfirmHint', [hidden.length]),
                           confirmLabel: context.tr('UnhideAll'),
                         );
-                        if (confirmed) await vm.library.unhideAll();
+                        if (confirmed) vm.library.unhideAll();
                       },
                       icon: const Icon(Icons.visibility_rounded, size: 16),
                       label: Text(context.tr('UnhideAll')),

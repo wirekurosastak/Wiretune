@@ -24,7 +24,10 @@ class _EndlessScanner extends MetadataScanner {
     Map<String, Track>? knownTracks,
   }) async {
     started.complete();
-    await (cancellationToken ?? CancellationToken.none).whenCancelled.timeout(const Duration(minutes: 1));
+    final token = cancellationToken ?? CancellationToken.none;
+    for (var i = 0; i < 6000 && !token.isCancelled; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
     throw const OperationCanceledException();
   }
 }
@@ -36,7 +39,7 @@ void main() {
   test('stopping cancels a running scan instead of waiting for it', () async {
     final root = Directory.systemTemp.createTempSync('wiretune_scan_').path;
     final scanner = _EndlessScanner();
-    final library = LibraryService(MockRepository(), scanner, coverCacheDirectory: p.join(root, 'Covers'));
+    final library = LibraryService(testRepository(), scanner, coverCacheDirectory: p.join(root, 'Covers'));
     final scans = LibraryScanService(library, ServerPaths(root, root, p.join(root, 'Covers')));
 
     scans.start();

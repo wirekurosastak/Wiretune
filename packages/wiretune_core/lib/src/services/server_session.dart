@@ -105,20 +105,20 @@ class ServerSession {
     return null;
   }
 
-  Future<void> initialize() async {
-    final url = await _settings.getSetting('server_url', defaultServerUrl);
+  void initialize() {
+    final url = _settings.getSetting('server_url', defaultServerUrl);
     serverUrl = url != null && url.isNotEmpty ? url : defaultServerUrl;
-    source = LibrarySource.values.asNameMap()[await _settings.getSetting('library_source')] ?? LibrarySource.none;
+    source = LibrarySource.values.asNameMap()[_settings.getSetting('library_source')] ?? LibrarySource.none;
 
-    final token = await _settings.getSetting('auth_token');
+    final token = _settings.getSetting('auth_token');
     _client.authToken = token == null || token.isEmpty ? null : token;
     // Until the server confirms the account, what the device kept of it (its hidden items) applies, also offline.
-    if (_client.authToken != null) await _library.setCurrentUser(await _settings.getSetting(_userIdSetting));
+    if (_client.authToken != null) _library.setCurrentUser(_settings.getSetting(_userIdSetting));
 
     final hasLocal = _library.tracks.any((t) => t.isLocal);
     final hasServerTracks = _library.tracks.any((t) => !t.isLocal);
     if (hasLocal && (hasServerTracks || source == LibrarySource.server || _client.authToken != null)) {
-      await _setSource(LibrarySource.hybrid);
+      _setSource(LibrarySource.hybrid);
     }
 
     _setState(
@@ -166,9 +166,9 @@ class ServerSession {
         }
         if (normalized.toLowerCase() != serverUrl.toLowerCase()) {
           serverUrl = normalized;
-          await _forgetToken(); // a token is never sent to a different server
+          _forgetToken(); // a token is never sent to a different server
         }
-        await _settings.setSetting('server_url', serverUrl);
+        _settings.setSetting('server_url', serverUrl);
       }
 
       _setState(ServerConnectionState.connecting, 'SessionConnecting');
@@ -184,10 +184,10 @@ class ServerSession {
       }
 
       final user = currentUser = await _client.getCurrentUser(serverUrl);
-      await _library.setCurrentUser(user.id);
+      _library.setCurrentUser(user.id);
       // Kept next to a kept token; one an earlier version kept gets its account here.
-      if ((await _settings.getSetting('auth_token') ?? '').isNotEmpty) {
-        await _settings.setSetting(_userIdSetting, user.id);
+      if ((_settings.getSetting('auth_token') ?? '').isNotEmpty) {
+        _settings.setSetting(_userIdSetting, user.id);
       }
       await _refreshLibraryCore();
     }),
@@ -205,7 +205,7 @@ class ServerSession {
         WiretuneLog.info('ServerSession', 'A request with a replaced sign-in token was refused.');
         return;
       }
-      await _forgetToken();
+      _forgetToken();
       _setState(ServerConnectionState.loginRequired, switch (e.code) {
         ErrorCodes.passwordChanged => 'ErrorPasswordChanged',
         ErrorCodes.accountRemoved => 'ErrorAccountRemoved',
@@ -257,10 +257,10 @@ class ServerSession {
         _streamToken = null;
         _client.authToken = auth.token;
         currentUser = auth.user;
-        await _library.setCurrentUser(auth.user.id);
+        _library.setCurrentUser(auth.user.id);
         await _guarded(() async {
-          await _settings.setSetting('auth_token', rememberMe ? auth.token : '');
-          await _settings.setSetting(_userIdSetting, rememberMe ? auth.user.id : '');
+          _settings.setSetting('auth_token', rememberMe ? auth.token : '');
+          _settings.setSetting(_userIdSetting, rememberMe ? auth.user.id : '');
           await _refreshLibraryCore();
         });
 
@@ -275,10 +275,10 @@ class ServerSession {
 
     await _gate.synchronized(() async {
       // The account's tracks, playlists and hidden items go while the library still knows whose they are.
-      await _library.removeServerTracks();
+      _library.removeServerTracks();
       _serverTracks = const [];
-      await _forgetToken();
-      await _setSource(_library.tracks.any((t) => t.isLocal) ? LibrarySource.local : LibrarySource.none);
+      _forgetToken();
+      _setSource(_library.tracks.any((t) => t.isLocal) ? LibrarySource.local : LibrarySource.none);
       _setState(ServerConnectionState.loginRequired, 'SessionSignedOut');
     });
   }
@@ -314,7 +314,7 @@ class ServerSession {
     if (changes != _localChanges || !isLoggedIn) return;
     // Fresh copies: the library's own tracks carry this device's state of them.
     final tracks = [for (final track in _serverTracks) _client.serverTrack(serverUrl, track.toJson())];
-    await _library.mergeServerTracks(tracks, userData);
+    _library.mergeServerTracks(tracks, userData);
   }
 
   Future<List<UserInfo>> getUsers() => _client.getUsers(serverUrl);
@@ -335,8 +335,8 @@ class ServerSession {
       _client.authToken = renewed.token;
       _streamToken = null;
       // Kept only when the old one was ("stay signed in").
-      if ((await _settings.getSetting('auth_token') ?? '').isNotEmpty) {
-        await _settings.setSetting('auth_token', renewed.token);
+      if ((_settings.getSetting('auth_token') ?? '').isNotEmpty) {
+        _settings.setSetting('auth_token', renewed.token);
       }
       stateChanged.emit(null);
     });
@@ -355,9 +355,9 @@ class ServerSession {
   Future<void> triggerServerScan() => _client.triggerScan(serverUrl);
 
   /// Marks the local folder as active, switching to hybrid when the server is also connected or has tracks.
-  Future<void> useLocalLibrary() async {
+  void useLocalLibrary() {
     final hasServer = isLoggedIn || _library.tracks.any((t) => !t.isLocal);
-    await _setSource(hasServer ? LibrarySource.hybrid : LibrarySource.local);
+    _setSource(hasServer ? LibrarySource.hybrid : LibrarySource.local);
 
     if (hasServer && state == ServerConnectionState.connected) {
       _setState(ServerConnectionState.connected, null);
@@ -374,10 +374,10 @@ class ServerSession {
     final tracks = await _client.fetchTracks(serverUrl);
     final userData = await _client.getUserData(serverUrl);
     _serverTracks = tracks;
-    await _library.mergeServerTracks(tracks, userData);
+    _library.mergeServerTracks(tracks, userData);
 
     final hasLocal = _library.tracks.any((t) => t.isLocal);
-    await _setSource(hasLocal ? LibrarySource.hybrid : LibrarySource.server);
+    _setSource(hasLocal ? LibrarySource.hybrid : LibrarySource.server);
 
     WiretuneLog.info(
       'ServerSession',
@@ -411,18 +411,18 @@ class ServerSession {
   static bool _isFresh((String, DateTime)? token) =>
       token != null && token.$2.difference(DateTime.now().toUtc()) > _streamTokenRefreshMargin;
 
-  Future<void> _forgetToken() async {
+  void _forgetToken() {
     _streamToken = null;
     _client.authToken = null;
     currentUser = null;
-    await _library.setCurrentUser(null);
-    await _settings.setSetting('auth_token', '');
-    await _settings.setSetting(_userIdSetting, '');
+    _library.setCurrentUser(null);
+    _settings.setSetting('auth_token', '');
+    _settings.setSetting(_userIdSetting, '');
   }
 
-  Future<void> _setSource(LibrarySource value) async {
+  void _setSource(LibrarySource value) {
     source = value;
-    await _settings.setSetting('library_source', value.name);
+    _settings.setSetting('library_source', value.name);
   }
 
   /// [messageKey] is the key of the status text; the text is rendered on demand so that it follows language changes.
@@ -503,7 +503,7 @@ class ServerSession {
     final favorite = track.isFavorite;
     final sent = await _sendChange(() => _client.setFavorite(serverUrl, track.id, favorite));
     // The server did not take it: show the star as it really is instead of pretending.
-    if (!sent) await _library.setFavorite(track.id, !favorite);
+    if (!sent) _library.setFavorite(track.id, !favorite);
   }
 
   Future<void> _pushPlay(Track track) async {
@@ -527,9 +527,7 @@ class ServerSession {
   Future<void> _pushHidden(String itemType, String itemId, bool hidden) async {
     if (!_canPush) return;
     final sent = await _sendChange(() => _client.setHidden(serverUrl, itemType, itemId, hidden));
-    if (!sent) {
-      await _library.setHiddenLocal(itemType, itemId, !hidden);
-    }
+    if (!sent) _library.setHiddenLocal(itemType, itemId, !hidden);
   }
 
   void dispose() {

@@ -38,7 +38,7 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 |---|---|---|
 | `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanCompletedUtc", "lastScanError", "lastScanProblem" }`. Why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`); both `null` when it went well, and for anyone but an administrator, since they name the server's folders |
 | `POST /api/library/scan` | admin | Asks for a scan: `202 { "message": "Scan requested." }`. Poll the status route |
-| `GET /api/tracks` | user | Every track; `?q=text` filters by title, artist, album, album artist or genre |
+| `GET /api/tracks` | user | Every track |
 | `GET /api/config` | admin | `{ "libraryPath" }` |
 | `POST /api/config/library-path` | admin | Body `{ "newPath" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
@@ -75,8 +75,7 @@ The server doesn't check that a track ID exists: libraries get rescanned and mov
 | Route | Role | |
 |---|---|---|
 | `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` when the track is unknown, outside the music folder, or gone |
-| `GET /api/cover/{trackId}` | user | The cover (`image/jpeg` or `image/png`), cacheable for a day. `404` when there is none |
-| `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one. The players use this one, so an album's tracks share one URL and one download |
+| `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` when there is none |
 | `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` when there are none. The server never looks online; the players ask LRCLIB themselves |
 
 ## Remote control
@@ -141,7 +140,7 @@ players; a new code gets its text in `strings.dart` as `Error<Code>`.
 TOKEN=$(curl -s http://localhost:5200/api/auth/login -H 'Content-Type: application/json' \
   -d '{"username":"alice","password":"correct horse battery"}' | jq -r .token)
 
-curl -s -H "Authorization: Bearer $TOKEN" 'http://localhost:5200/api/tracks?q=coltrane' | jq '.[].title'
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/api/tracks | jq '.[].title'
 
 STREAM=$(curl -s -X POST -H "Authorization: Bearer $TOKEN" http://localhost:5200/api/auth/stream-token | jq -r .token)
 mpv "http://localhost:5200/api/stream/<trackId>?token=$STREAM"

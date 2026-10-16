@@ -100,7 +100,7 @@ class PlayerViewModel extends ChangeNotifier {
         if (_sessionRestored &&
             _state == PlaybackState.playing &&
             DateTime.now().difference(_placeSavedAt) > _placeSaveInterval) {
-          unawaited(_savePlace().catchError(_saveFailed));
+          _save(_savePlace);
         }
       }),
       _engine.trackChanged.listen(_onEngineTrackChanged),
@@ -311,13 +311,6 @@ class PlayerViewModel extends ChangeNotifier {
   void moveQueueTrackDown(QueueItem? item) {
     final at = item == null ? -1 : queueItems.indexOf(item);
     if (at >= 0 && at < queueItems.length - 1) moveQueueTrack(at, at + 1);
-  }
-
-  /// Takes the first entry of [track] out of the queue.
-  void removeQueueTrack(Track? track) {
-    if (track == null) return;
-    final item = queueItems.where((item) => item.track.id == track.id).firstOrNull;
-    if (item != null) removeQueueItem(item);
   }
 
   /// Takes [item], the entry itself, out of the queue.
@@ -648,7 +641,7 @@ class PlayerViewModel extends ChangeNotifier {
   Future<void> toggleFavoriteCurrent() async {
     final current = currentTrack;
     if (current == null) return;
-    await _library.toggleFavorite(current.id);
+    _library.toggleFavorite(current.id);
     // A server refresh replaces the library's Track objects while the player keeps the one it started playing: mirror
     // the change so the heart in the player bar follows.
     final inLibrary = _library.getTrack(current.id);
@@ -754,8 +747,6 @@ class PlayerViewModel extends ChangeNotifier {
   /// Whether the sleep timer pauses this device's music when its track ends.
   bool get sleepsAtTrackEnd => _sleepAtTrackEnd;
 
-  bool get isSleepTimerSet => _sleepAt != null || _sleepAtTrackEnd;
-
   /// Pauses the music (of the device being controlled, while one is) after [after]; null turns the timer off.
   void setSleepTimer(Duration? after) {
     _cancelSleep();
@@ -807,10 +798,10 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// Picks up the queue saved before the app last closed, as far as this library still has its tracks: the entry that
   /// played is shown paused where it was, and play goes on from there. Does nothing once something is queued.
-  Future<void> restoreSession() async {
+  void restoreSession() {
     try {
-      final queueJson = await _library.getPreference(_queuePreference);
-      final placeJson = await _library.getPreference(_placePreference);
+      final queueJson = _library.getPreference(_queuePreference);
+      final placeJson = _library.getPreference(_placePreference);
       if (queueJson == null || queueJson.isEmpty || _playbackQueue.isNotEmpty) return;
       final queue = jsonDecode(queueJson) as Map<String, Object?>;
       final place = placeJson == null || placeJson.isEmpty
@@ -861,10 +852,11 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   /// Saves the queue and the place in it now (the window is closing).
-  Future<void> saveSession() async {
+  void saveSession() {
     if (!_sessionRestored) return;
     try {
-      await Future.wait([_saveQueue(), _savePlace()]);
+      _saveQueue();
+      _savePlace();
     } catch (e) {
       WiretuneLog.warn('PlayerViewModel', 'The queue could not be saved: $e');
     }
@@ -875,15 +867,22 @@ class PlayerViewModel extends ChangeNotifier {
   /// Saves what changed since the last save; called at each change of the player's state.
   void _saveChanges() {
     if (!_sessionRestored) return;
-    if (_queueVersion != _savedQueueVersion) unawaited(_saveQueue().catchError(_saveFailed));
-    if (_place != _savedPlace) unawaited(_savePlace().catchError(_saveFailed));
+    if (_queueVersion != _savedQueueVersion) _save(_saveQueue);
+    if (_place != _savedPlace) _save(_savePlace);
   }
 
-  void _saveFailed(Object e) => WiretuneLog.debug('PlayerViewModel', 'Saving the queue failed: $e');
+  /// Bookkeeping: a failure is logged, never shown.
+  static void _save(void Function() write) {
+    try {
+      write();
+    } catch (e) {
+      WiretuneLog.debug('PlayerViewModel', 'Saving the queue failed: $e');
+    }
+  }
 
-  Future<void> _saveQueue() {
+  void _saveQueue() {
     _savedQueueVersion = _queueVersion;
-    return _library.setPreference(
+    _library.setPreference(
       _queuePreference,
       _playbackQueue.isEmpty
           ? ''
@@ -894,10 +893,10 @@ class PlayerViewModel extends ChangeNotifier {
     );
   }
 
-  Future<void> _savePlace() {
+  void _savePlace() {
     _savedPlace = _place;
     _placeSavedAt = DateTime.now();
-    return _library.setPreference(
+    _library.setPreference(
       _placePreference,
       jsonEncode({
         'index': _queueIndex,
@@ -923,11 +922,11 @@ class PlayerViewModel extends ChangeNotifier {
     if (!isRemote) _setPosition(_localPosition);
     if (track != null) {
       // Bookkeeping only: no error banner when it fails.
-      unawaited(
-        _library.recordPlay(track.id).catchError((Object e) {
-          WiretuneLog.debug('PlayerViewModel', 'Recording a play failed: $e');
-        }),
-      );
+      try {
+        _library.recordPlay(track.id);
+      } catch (e) {
+        WiretuneLog.debug('PlayerViewModel', 'Recording a play failed: $e');
+      }
     }
     notifyListeners();
   }

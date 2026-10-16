@@ -22,8 +22,8 @@ Flutter engine without an activity, and plugins still get registered there. Shar
 ## The library
 
 `LibraryService` keeps the library in memory as an immutable `LibrarySnapshot` and swaps it wholesale after every
-change, so readers never see half a library and never take a lock. One scan runs at a time, and scans and server
-merges take turns through a commit gate.
+change, so readers never see half a library and never take a lock. One scan runs at a time. The database calls are
+synchronous (SQLite answers at once), so a scan's commit and a server refresh can't interleave.
 
 - **Track IDs** are the first 32 hex digits of the SHA-256 of the full path (lower-cased on Windows and macOS, whose
   file systems ignore case). Scans read in batches on 2 to 8 isolates and skip files whose path, size and modification

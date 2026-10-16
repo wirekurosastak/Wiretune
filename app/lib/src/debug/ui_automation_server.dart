@@ -189,7 +189,7 @@ class UiAutomationServer {
         case '/api/ui/toggle-favorite':
           final trackId = query['trackId'];
           if (trackId == null || trackId.isEmpty) break;
-          await _vm.library.toggleFavorite(trackId);
+          _vm.library.toggleFavorite(trackId);
           return await _json(request, 200, {'success': true, 'trackId': trackId});
         case '/api/ui/toggle-queue':
           _vm.player.toggleQueue();

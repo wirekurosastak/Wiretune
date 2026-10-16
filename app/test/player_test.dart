@@ -71,7 +71,7 @@ void main() {
 
     test('removing the playing track continues with the next one, not the first', () {
       final (player, tracks, _) = createQueue(startAt: 1);
-      player.removeQueueTrack(tracks[1]);
+      player.removeQueueItem(player.queueItems[1]);
       expect(player.queueTracks.map((t) => t.title), ['Song 1', 'Song 3', 'Song 4']);
       expect(player.currentQueueIndex, 1);
       expect(player.queueItems[1].isCurrent, isTrue);
@@ -79,7 +79,7 @@ void main() {
 
     test('removing the playing track when it is the last ends the playback instead of restarting', () {
       final (player, tracks, _) = createQueue(startAt: 3);
-      player.removeQueueTrack(tracks[3]);
+      player.removeQueueItem(player.queueItems[3]);
       expect(player.queueTracks, hasLength(3));
       expect(player.queueItems.any((item) => item.isCurrent), isFalse);
     });
@@ -87,13 +87,13 @@ void main() {
     test('removing the playing track with repeat-all wraps around to the first', () {
       final (player, tracks, _) = createQueue(startAt: 3);
       player.setRepeatMode(RepeatMode.all);
-      player.removeQueueTrack(tracks[3]);
+      player.removeQueueItem(player.queueItems[3]);
       expect(player.currentQueueIndex, 0);
     });
 
     test('removing the only track empties the queue', () {
       final (player, tracks, _) = createQueue(count: 1, startAt: 0);
-      player.removeQueueTrack(tracks[0]);
+      player.removeQueueItem(player.queueItems[0]);
       expect(player.queueTracks, isEmpty);
       expect(player.queueItems, isEmpty);
     });
@@ -101,7 +101,7 @@ void main() {
     test('removing another track keeps the playing one current', () {
       for (final (remove, expected) in [(0, 1), (3, 2)]) {
         final (player, tracks, _) = createQueue(startAt: 2);
-        player.removeQueueTrack(tracks[remove]);
+        player.removeQueueItem(player.queueItems[remove]);
         expect(player.currentQueueIndex, expected);
         expect(player.queueTracks[player.currentQueueIndex].title, 'Song 3');
       }
@@ -111,7 +111,7 @@ void main() {
       final (player, tracks, _) = createQueue(startAt: 0);
       player.setShuffle(true);
       final victim = player.queueTracks.last;
-      player.removeQueueTrack(victim);
+      player.removeQueueItem(player.queueItems.last);
       player.setShuffle(false);
       expect(player.queueTracks, isNot(contains(victim)));
       expect(player.queueTracks, hasLength(tracks.length - 1));
@@ -185,20 +185,20 @@ void main() {
 
     test('after a restart the queue is back, paused where it was, and play goes on from there', () async {
       final library = createLibrary([for (var i = 1; i <= 4; i++) TestSupport.makeTrack('t$i', 'Song $i')]);
-      await library.initialize();
+      library.initialize();
       final driver = FakeAudioDriver();
       final before = PlayerViewModel(TestSupport.createEngine(driver), library);
-      await before.restoreSession(); // nothing saved yet
+      before.restoreSession(); // nothing saved yet
       final tracks = [for (var i = 1; i <= 4; i++) library.getTrack('t$i')!];
       before.playQueue(tracks.reversed, tracks[2]);
       before.setRepeatMode(RepeatMode.all);
       driver.positionChanged.emit(const Duration(seconds: 75));
       await before.pause();
-      await before.saveSession();
+      before.saveSession();
 
       final after = FakeAudioDriver();
       final player = PlayerViewModel(TestSupport.createEngine(after), library);
-      await player.restoreSession();
+      player.restoreSession();
       expect(player.queueTracks.map((t) => t.title), ['Song 4', 'Song 3', 'Song 2', 'Song 1']);
       expect(player.currentTrack?.title, 'Song 3');
       expect(player.currentQueueIndex, 1);
@@ -215,10 +215,10 @@ void main() {
     test('the sleep timer pauses after its time, or at the end of the track with the next one waiting', () async {
       final (player, tracks, driver) = createQueue(count: 3, startAt: 0);
       player.setSleepTimer(const Duration(milliseconds: 1));
-      expect(player.isSleepTimerSet, isTrue);
+      expect(player.sleepAt != null || player.sleepsAtTrackEnd, isTrue);
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(player.isPlaying, isFalse);
-      expect(player.isSleepTimerSet, isFalse);
+      expect(player.sleepAt != null || player.sleepsAtTrackEnd, isFalse);
 
       await player.play();
       player.sleepAtTrackEnd();
@@ -226,7 +226,7 @@ void main() {
       driver.simulateTrackEnded();
       expect(driver.playCalls, calls, reason: 'nothing more plays');
       expect(player.currentTrack, tracks[1], reason: 'the next track waits');
-      expect(player.isSleepTimerSet, isFalse);
+      expect(player.sleepAt != null || player.sleepsAtTrackEnd, isFalse);
       await player.play();
       expect(driver.lastSource, tracks[1].filePath);
     });

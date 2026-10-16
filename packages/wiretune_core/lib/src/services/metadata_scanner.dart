@@ -68,10 +68,6 @@ class MetadataScanner {
   static String computeTrackId(String filePath) =>
       sha256.convert(utf8.encode(AppPaths.comparable(AppPaths.fullPath(filePath)))).toString().substring(0, 32);
 
-  /// Reads one file; null when it is not a readable audio file.
-  Future<Track?> readTrackMetadata(String filePath, {String? coverCacheDirectory}) =>
-      _readTrackInIsolate(filePath, coverCacheDirectory, WiretuneLog.isolateSettings);
-
   /// Scans [rootPath] recursively. Files whose path, size and modification time match [knownTracks] are not read
   /// again: the known track is returned instead. Hidden files and folders (names starting with a dot) are skipped.
   Future<List<Track>> scanDirectory(
@@ -195,11 +191,6 @@ Future<List<Object?>> _scanBatchInIsolate(
 ) => Isolate.run(() {
   WiretuneLog.adoptIsolateSettings(log);
   return _scanBatch(batch, known, coverCacheDirectory);
-});
-
-Future<Track?> _readTrackInIsolate(String filePath, String? coverCacheDirectory, _LogSettings log) => Isolate.run(() {
-  WiretuneLog.adoptIsolateSettings(log);
-  return _readTrack(filePath, coverCacheDirectory, null);
 });
 
 Future<String?> _readLyricsInIsolate(String filePath, _LogSettings log) => Isolate.run(() {

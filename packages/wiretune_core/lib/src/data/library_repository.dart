@@ -8,18 +8,16 @@ import '../models/library_models.dart';
 import '../util/time.dart';
 import 'database_manager.dart';
 
-/// The player's (and the server's) track index, playlists and settings in SQLite.
+/// The player's (and the server's) track index, playlists and settings in SQLite. SQLite answers at once, so every
+/// method does its work before it returns.
 class LibraryRepository {
-  LibraryRepository([DatabaseManager? dbManager]) : _dbManager = dbManager;
+  LibraryRepository([DatabaseManager? database]) : _db = database ?? DatabaseManager();
 
-  DatabaseManager? _dbManager;
+  final DatabaseManager _db;
 
-  /// Opened on first use, so a test double that overrides every method never creates a database.
-  DatabaseManager get _db => _dbManager ??= DatabaseManager();
+  void initialize() => _db.initializeSchema();
 
-  Future<void> initialize() async => _db.initializeSchema();
-
-  Future<List<Track>> getAllTracks() async {
+  List<Track> getAllTracks() {
     final rows = _db.connection.select('SELECT * FROM tracks');
     return [
       for (final r in rows)
@@ -100,7 +98,7 @@ class LibraryRepository {
   /// Makes the table hold exactly [tracks]. Rows that are gone are deleted and the others are inserted or updated in
   /// place, and a row whose values did not change is not written at all: a rescan or a refresh of an unchanged library
   /// leaves the database file as it is instead of rewriting every track.
-  Future<void> replaceAllTracks(Iterable<Track> tracks) async {
+  void replaceAllTracks(Iterable<Track> tracks) {
     final wanted = {for (final t in tracks) t.id: t}; // of two tracks with one ID, the last one wins
 
     _db.transaction((db) {
@@ -164,7 +162,7 @@ class LibraryRepository {
   }
 
   /// Marks a track as a favourite since [favoritedAt], or (null) as none.
-  Future<void> updateTrackFavorite(String trackId, DateTime? favoritedAt) async {
+  void updateTrackFavorite(String trackId, DateTime? favoritedAt) {
     _db.connection.execute('UPDATE tracks SET is_favorite = ?, favorited_at = ? WHERE id = ?', [
       favoritedAt == null ? 0 : 1,
       toDbTime(favoritedAt),
@@ -172,14 +170,14 @@ class LibraryRepository {
     ]);
   }
 
-  Future<void> incrementPlayCount(String trackId) async {
+  void incrementPlayCount(String trackId) {
     _db.connection.execute('UPDATE tracks SET play_count = play_count + 1, last_played = ? WHERE id = ?', [
       toDbTime(DateTime.now()),
       trackId,
     ]);
   }
 
-  Future<List<Playlist>> getAllPlaylists() async {
+  List<Playlist> getAllPlaylists() {
     final rows = _db.connection.select('SELECT * FROM playlists ORDER BY name');
     return [
       for (final r in rows)
@@ -195,7 +193,7 @@ class LibraryRepository {
     ];
   }
 
-  Future<void> savePlaylist(Playlist playlist) async {
+  void savePlaylist(Playlist playlist) {
     _db.connection.execute(
       'INSERT OR REPLACE INTO playlists (id, name, description, track_ids_json, created_at, modified_at, is_server) '
       'VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -211,27 +209,27 @@ class LibraryRepository {
     );
   }
 
-  Future<void> deletePlaylist(String playlistId) async {
+  void deletePlaylist(String playlistId) {
     _db.connection.execute('DELETE FROM playlists WHERE id = ?', [playlistId]);
   }
 
   /// Removes the cached copies of server playlists (on sign-out); playlists made on this device stay.
-  Future<void> deleteServerPlaylists() async {
+  void deleteServerPlaylists() {
     _db.connection.execute('DELETE FROM playlists WHERE is_server = 1');
   }
 
-  Future<String?> getSetting(String key, [String? defaultValue]) async {
+  String? getSetting(String key, [String? defaultValue]) {
     final rows = _db.connection.select('SELECT value FROM settings WHERE key = ?', [key]);
     return rows.isEmpty ? defaultValue : rows.first['value'] as String? ?? defaultValue;
   }
 
-  Future<void> setSetting(String key, String value) async {
+  void setSetting(String key, String value) {
     _db.connection.execute('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value]);
   }
 
   /// Returns the stored value, first storing the one [createValue] makes when there is none (or only an empty one). If
   /// two processes race on a new database, the value stored first wins and both return it.
-  Future<String> getOrAddSetting(String key, String Function() createValue) async {
+  String getOrAddSetting(String key, String Function() createValue) {
     final db = _db.connection;
     final existing = db.select('SELECT value FROM settings WHERE key = ?', [key]);
     if (existing.isNotEmpty && (existing.first['value'] as String? ?? '').isNotEmpty) {
@@ -245,7 +243,7 @@ class LibraryRepository {
     return db.select('SELECT value FROM settings WHERE key = ?', [key]).first['value'] as String;
   }
 
-  Future<Map<String, Set<String>>> getHiddenItems([String userId = 'local']) async {
+  Map<String, Set<String>> getHiddenItems([String userId = 'local']) {
     final rows = _db.connection.select('SELECT item_type, item_id FROM user_hidden WHERE user_id = ?', [userId]);
     final result = <String, Set<String>>{'artist': <String>{}, 'album': <String>{}, 'track': <String>{}};
     for (final r in rows) {
@@ -256,7 +254,7 @@ class LibraryRepository {
     return result;
   }
 
-  Future<void> setHiddenItem(String itemType, String itemId, bool hidden, [String userId = 'local']) async {
+  void setHiddenItem(String itemType, String itemId, bool hidden, [String userId = 'local']) {
     if (hidden) {
       _db.connection.execute(
         'INSERT OR REPLACE INTO user_hidden (user_id, item_type, item_id, hidden_at) VALUES (?, ?, ?, ?)',
@@ -272,12 +270,12 @@ class LibraryRepository {
   }
 
   /// Makes the hidden items of [userId] exactly these, in one transaction.
-  Future<void> replaceHiddenItems(
+  void replaceHiddenItems(
     String userId, {
     required Iterable<String> artists,
     required Iterable<String> albums,
     required Iterable<String> tracks,
-  }) async {
+  }) {
     final now = toDbTime(DateTime.now().toUtc());
     _db.transaction((db) {
       db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
@@ -296,23 +294,22 @@ class LibraryRepository {
     });
   }
 
-  Future<void> clearHiddenItems([String userId = 'local']) async {
+  void clearHiddenItems([String userId = 'local']) {
     _db.connection.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
   }
 
   /// The downloaded copies: track ID -> the version of the server's file and the path relative to the downloads folder.
-  Future<Map<String, (String version, String path)>> getDownloads() async => {
+  Map<String, (String version, String path)> getDownloads() => {
     for (final r in _db.connection.select('SELECT track_id, version, path FROM downloads'))
       r['track_id'] as String: (r['version'] as String, r['path'] as String),
   };
 
-  Future<void> saveDownload(String trackId, String version, String path) async => _db.connection.execute(
+  void saveDownload(String trackId, String version, String path) => _db.connection.execute(
     'INSERT OR REPLACE INTO downloads (track_id, version, path) VALUES (?, ?, ?)',
     [trackId, version, path],
   );
 
-  Future<void> deleteDownload(String trackId) async =>
-      _db.connection.execute('DELETE FROM downloads WHERE track_id = ?', [trackId]);
+  void deleteDownload(String trackId) => _db.connection.execute('DELETE FROM downloads WHERE track_id = ?', [trackId]);
 
   static int? _int(Object? value) => value == null ? null : (value as num).toInt();
 

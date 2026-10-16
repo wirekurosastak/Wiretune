@@ -44,7 +44,7 @@ void main() {
       TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2),
       TestSupport.makeTrack('3', 'Opening', artist: 'Daft Punk', album: 'Random Access Memories', trackNumber: 1),
     ]);
-    await library.initialize();
+    library.initialize();
     return createMainViewModel(library);
   }
 
@@ -55,7 +55,7 @@ void main() {
       TestSupport.makeServerTrack('s1', 'Giant Steps', artist: 'John Coltrane', album: 'Giant Steps'),
       TestSupport.makeServerTrack('s2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps')..trackNumber = 2,
     ]);
-    await library.initialize();
+    library.initialize();
     return createMainViewModel(library);
   }
 
@@ -118,14 +118,14 @@ void main() {
     final favoritesItem = find.ancestor(of: find.text(navFavorites), matching: find.byType(InkWell));
     expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
 
-    await vm.library.toggleFavorite('1');
+    vm.library.toggleFavorite('1');
     await tester.pump();
     await settle(tester);
 
     expect(vm.favorites.favoriteTracks, hasLength(1));
     expect(find.descendant(of: favoritesItem, matching: find.text('1')), findsOneWidget);
 
-    await vm.library.toggleFavorite('1');
+    vm.library.toggleFavorite('1');
     await tester.pump();
     await settle(tester);
 
@@ -142,7 +142,7 @@ void main() {
         TestSupport.makeTrack('1', 'So What'),
         TestSupport.makeTrack('2', 'Blue in Green'),
       ]);
-      await library.initialize();
+      library.initialize();
       return createMainViewModel(library, TestSupport.createEngine(driver));
     });
     final player = vm.player;
@@ -186,7 +186,7 @@ void main() {
           TestSupport.makeTrack('2', 'Closer', album: 'Double', trackNumber: 2),
           TestSupport.makeTrack('3', 'Second Start', album: 'Double', trackNumber: 1)..discNumber = 2,
         ]);
-        await library.initialize();
+        library.initialize();
         return createMainViewModel(library);
       });
       vm.openAlbum(vm.library.albums.single);
@@ -335,7 +335,7 @@ void main() {
     final driver = FakeAudioDriver();
     final vm = (await tester.runAsync(() async {
       final library = createLibrary([TestSupport.makeTrack('1', 'Song')]);
-      await library.initialize();
+      library.initialize();
       return createMainViewModel(library, TestSupport.createEngine(driver));
     }))!;
     const line = "(La, la, la) I'm caught up in the rapture of love, nothing else can compare";
@@ -363,7 +363,7 @@ void main() {
   ) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     final favorite = vm.library.tracks.first;
-    await tester.runAsync(() => vm.library.toggleFavorite(favorite.id));
+    vm.library.toggleFavorite(favorite.id);
     vm.navigateTo(AppSection.favorites);
     await settle(tester);
 
@@ -438,8 +438,8 @@ void main() {
     expectOnCover(header, find.descendant(of: header, matching: find.byType(CoverImage)));
 
     final playlist = (await tester.runAsync(() async {
-      final created = await vm.library.createPlaylist('Mix');
-      await vm.library.addTrackToPlaylist(created.id, vm.library.tracks.first.id);
+      final created = vm.library.createPlaylist('Mix');
+      vm.library.addTracksToPlaylist(created.id, [vm.library.tracks.first.id]);
       return vm.library.getPlaylist(created.id);
     }))!;
     vm.navigateTo(AppSection.playlists);
@@ -507,7 +507,7 @@ void main() {
       AppPlatform.forTesting(tv: tv);
       // A server's album too: its download button stands beside Play and Shuffle.
       final vm = await pumpApp(tester, size, createWithServer);
-      await tester.runAsync(() => vm.library.setFavorite('s1', true)); // not signed in: as the server told it
+      vm.library.setFavorite('s1', true); // not signed in: as the server told it
       vm.player.currentTrack = vm.library.tracks.first;
       for (final section in AppSection.values) {
         vm.navigateTo(section);
@@ -547,7 +547,7 @@ void main() {
           TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue'),
           TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2),
         ]);
-        await library.initialize();
+        library.initialize();
         return createMainViewModel(library, TestSupport.createEngine(driver));
       }))!;
       // The backdrop only has something to move once a cover is there.
@@ -652,7 +652,7 @@ void main() {
     expect(downloads.isTrackPinned(vm.library.getTrack('s1')!), isTrue);
 
     // The favourites, from their page.
-    await tester.runAsync(() => vm.library.setFavorite('s2', true)); // not signed in: as the server told it
+    vm.library.setFavorite('s2', true); // not signed in: as the server told it
     vm.navigateTo(AppSection.favorites);
     await settle(tester);
     await tester.tap(
@@ -938,9 +938,9 @@ void main() {
   ) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     final mix = (await tester.runAsync(() async {
-      final created = await vm.library.createPlaylist('Mix');
+      final created = vm.library.createPlaylist('Mix');
       for (final id in ['3', '1']) {
-        await vm.library.addTrackToPlaylist(created.id, id);
+        vm.library.addTracksToPlaylist(created.id, [id]);
       }
       return created;
     }))!;
@@ -977,8 +977,8 @@ void main() {
   testWidgets("a playlist's tracks move by their handle or the menu, while it shows its own order", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     final mix = (await tester.runAsync(() async {
-      final created = await vm.library.createPlaylist('Mix');
-      await vm.library.addTracksToPlaylist(created.id, ['1', '2', '3']);
+      final created = vm.library.createPlaylist('Mix');
+      vm.library.addTracksToPlaylist(created.id, ['1', '2', '3']);
       return created;
     }))!;
     vm.navigateTo(AppSection.playlists);
@@ -1048,7 +1048,7 @@ void main() {
       final library = createLibrary([
         TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue')..genre = genre,
       ]);
-      await library.initialize();
+      library.initialize();
       return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.albums);
@@ -1060,7 +1060,7 @@ void main() {
 
   testWidgets("a phone's header buttons are one height, the sort first, and it carries no sort icon", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
-    await tester.runAsync(() => vm.library.createPlaylist('Mix'));
+    vm.library.createPlaylist('Mix');
     final sortLabel = {AppSection.playlists: '${Localizer.get('SortAdded')} ↓', AppSection.tracks: 'ABC ↑'};
     for (final MapEntry(key: section, value: label) in sortLabel.entries) {
       vm.navigateTo(section);
@@ -1153,7 +1153,7 @@ void main() {
   testWidgets('an empty library says so alike on every page of it, with the way to fill it', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900), () async {
       final library = createLibrary(const []);
-      await library.initialize();
+      library.initialize();
       return createMainViewModel(library);
     });
     vm.continueOffline();

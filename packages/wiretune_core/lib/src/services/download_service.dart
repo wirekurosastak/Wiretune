@@ -129,51 +129,51 @@ class DownloadService {
   bool isPlaylistPinned(String playlistId) => _pins.playlists.contains(playlistId);
   bool get areFavoritesPinned => _pins.favorites;
 
-  Future<void> pinTrack(String trackId, bool pinned) =>
+  void pinTrack(String trackId, bool pinned) =>
       _changePins((pins) => _toggle(pins.tracks, trackId, pinned), pinned ? [?_library.getTrack(trackId)] : const []);
 
-  Future<void> pinAlbum(String albumId, bool pinned) => _changePins(
+  void pinAlbum(String albumId, bool pinned) => _changePins(
     (pins) => _toggle(pins.albums, albumId, pinned),
     pinned ? _library.getAlbum(albumId)?.tracks ?? const [] : const [],
   );
 
   /// Every album filed under the artist, also the ones that arrive later.
-  Future<void> pinArtist(String artistId, bool pinned) => _changePins(
+  void pinArtist(String artistId, bool pinned) => _changePins(
     (pins) => _toggle(pins.artists, artistId, pinned),
     pinned ? [for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) ...album.tracks] : const [],
   );
 
-  Future<void> pinPlaylist(String playlistId, bool pinned) {
+  void pinPlaylist(String playlistId, bool pinned) {
     final playlist = _library.getPlaylist(playlistId);
-    return _changePins(
+    _changePins(
       (pins) => _toggle(pins.playlists, playlistId, pinned),
       pinned && playlist != null ? _library.getPlaylistTracks(playlist) : const [],
     );
   }
 
-  Future<void> pinFavorites(bool pinned) =>
+  void pinFavorites(bool pinned) =>
       _changePins((pins) => pins.favorites = pinned, pinned ? _library.favorites : const []);
 
   /// Whether the copies follow the marks on their own: tracks that join a marked list later are downloaded, and so is a
   /// copy that was deleted outside Wiretune. Off, a mark downloads what it covers when it is made, and nothing else.
   bool get isSyncModeEnabled => _syncModeEnabled;
 
-  Future<void> setSyncModeEnabled(bool enabled) async {
+  void setSyncModeEnabled(bool enabled) {
     if (_syncModeEnabled == enabled) return;
     _syncModeEnabled = enabled;
     // From now on only what is still to come for the present marks is fetched; with sync on, the marks decide.
     _pins.pending
       ..clear()
       ..addAll(enabled ? const [] : _covered().keys.where((id) => !_hasCurrentCopy(id)));
-    await _library.setPreference(_syncModePreference, enabled ? '1' : '0');
-    await _savePins();
+    _library.setPreference(_syncModePreference, enabled ? '1' : '0');
+    _savePins();
     _refreshWanted();
     changed.emit(null);
     _schedule();
   }
 
   /// Forgets every mark and deletes every copy (also what a sign-out does).
-  Future<void> removeAll() => _changePins((pins) {
+  void removeAll() => _changePins((pins) {
     pins.tracks.clear();
     pins.albums.clear();
     pins.artists.clear();
@@ -184,7 +184,7 @@ class DownloadService {
   static void _toggle(Set<String> set, String id, bool pinned) => pinned ? set.add(id) : set.remove(id);
 
   /// Applies [change] to the marks; [marked] are the tracks a new mark covers.
-  Future<void> _changePins(void Function(_Pins pins) change, [Iterable<Track> marked = const []]) async {
+  void _changePins(void Function(_Pins pins) change, [Iterable<Track> marked = const []]) {
     change(_pins);
     final covered = _covered();
     _pins.pending.removeWhere((id) => !covered.containsKey(id));
@@ -195,13 +195,13 @@ class DownloadService {
           if (!track.isLocal && !_hasCurrentCopy(track.id, track)) track.id,
       ]);
     }
-    await _savePins();
+    _savePins();
     _refreshWanted();
     changed.emit(null);
     _schedule();
   }
 
-  Future<void> _savePins() => _library.setPreference(_pinsPreference, jsonEncode(_pins.toJson()));
+  void _savePins() => _library.setPreference(_pinsPreference, jsonEncode(_pins.toJson()));
 
   // ── What is on this device ─────────────────────────────────────────────────────────────────────
 
@@ -272,12 +272,12 @@ class DownloadService {
   /// Reads the marks, the record of the copies and the files on disk, then keeps the copies in line with the library.
   Future<void> initialize() async {
     if (_initialized) return;
-    _syncModeEnabled = await _library.getPreference(_syncModePreference) != '0';
-    _pins = _Pins.fromJson(_decode(await _library.getPreference(_pinsPreference)));
+    _syncModeEnabled = _library.getPreference(_syncModePreference) != '0';
+    _pins = _Pins.fromJson(_decode(_library.getPreference(_pinsPreference)));
     await _loadCopies();
     await _loadCovers();
     await _adoptLegacyCopies();
-    if (!_syncModeEnabled) await _dropEmptyMarks();
+    if (!_syncModeEnabled) _dropEmptyMarks();
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) {
         _unavailable.clear();
@@ -320,7 +320,7 @@ class DownloadService {
   Future<void> _loadCopies() async {
     _copies.clear();
     _bytesOnDisk = 0;
-    for (final MapEntry(key: id, value: (version, path)) in (await _repository.getDownloads()).entries) {
+    for (final MapEntry(key: id, value: (version, path)) in _repository.getDownloads().entries) {
       final file = File(_absolute(path));
       if (version.isNotEmpty && _isInside(path) && await file.exists()) {
         _copies[id] = _Copy(version, path);
@@ -328,7 +328,7 @@ class DownloadService {
         continue;
       }
       if (version.isEmpty && _isInside(path)) await _deleteFile(file.path);
-      await _repository.deleteDownload(id);
+      _repository.deleteDownload(id);
     }
   }
 
@@ -399,7 +399,7 @@ class DownloadService {
 
   /// With sync off, a mark none of whose tracks are on the device or still to come has nothing left to keep: the copies
   /// it downloaded were deleted outside Wiretune.
-  Future<void> _dropEmptyMarks() async {
+  void _dropEmptyMarks() {
     bool keeps(Iterable<Track> tracks) =>
         tracks.any((t) => !t.isLocal && (_copies.containsKey(t.id) || _pins.pending.contains(t.id)));
     final before = jsonEncode(_pins.toJson());
@@ -411,7 +411,7 @@ class DownloadService {
       return !keeps(playlist == null ? const [] : _library.getPlaylistTracks(playlist));
     });
     if (_pins.favorites && !keeps(_library.favorites)) _pins.favorites = false;
-    if (jsonEncode(_pins.toJson()) != before) await _savePins();
+    if (jsonEncode(_pins.toJson()) != before) _savePins();
   }
 
   // ── Keeping the copies in line with the marks ──────────────────────────────────────────────────
@@ -497,7 +497,7 @@ class DownloadService {
       if (_wanted.containsKey(id)) continue;
       if (await _deleteFile(_absolute(copy.path), counted: true, cleanParents: true)) {
         _copies.remove(id);
-        await _repository.deleteDownload(id);
+        _repository.deleteDownload(id);
       }
     }
     for (final MapEntry(key: stem, value: path) in _covers.entries.toList()) {
@@ -537,9 +537,9 @@ class DownloadService {
     final candidate = _freePath(track, adoptable: true);
     final file = File(_absolute(candidate));
     if (!await file.exists() || await file.length() != track.fileSizeBytes) return false;
-    await _record(track.id, _version(track), candidate);
+    _record(track.id, _version(track), candidate);
     _bytesOnDisk += track.fileSizeBytes;
-    if (_pins.pending.remove(track.id)) await _savePins();
+    if (_pins.pending.remove(track.id)) _savePins();
     return true;
   }
 
@@ -664,28 +664,28 @@ class DownloadService {
     final relative = previous?.path ?? _freePath(track);
     final target = _absolute(relative);
     final previousSize = previous == null ? 0 : await _sizeOf(target);
-    await _record(track.id, '', relative);
+    _record(track.id, '', relative);
     try {
       await Directory(p.dirname(target)).create(recursive: true);
       await _move(source, target);
     } on FileSystemException {
       // Nothing was moved (a full disk, a folder the app may not write to, a file still open on Windows).
       if (previous != null) {
-        await _record(track.id, previous.version, previous.path);
+        _record(track.id, previous.version, previous.path);
       } else {
         _copies.remove(track.id);
-        await _repository.deleteDownload(track.id);
+        _repository.deleteDownload(track.id);
       }
       rethrow;
     }
-    await _record(track.id, _version(track), relative);
+    _record(track.id, _version(track), relative);
     _bytesOnDisk += await File(target).length() - previousSize;
-    if (_pins.pending.remove(track.id)) await _savePins();
+    if (_pins.pending.remove(track.id)) _savePins();
   }
 
-  Future<void> _record(String trackId, String version, String relative) async {
+  void _record(String trackId, String version, String relative) {
     _copies[trackId] = _Copy(version, relative);
-    await _repository.saveDownload(trackId, version, relative);
+    _repository.saveDownload(trackId, version, relative);
   }
 
   /// A place for a new copy of [track]: its readable path, or with " (2)", " (3)" … when another copy has that name or

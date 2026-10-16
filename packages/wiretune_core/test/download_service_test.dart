@@ -102,8 +102,8 @@ class Player {
   final ServerSession session;
   final DownloadService downloads;
 
-  static Future<Player> start(FakeServer server, String directory, {MockRepository? repo}) async {
-    repo ??= MockRepository();
+  static Future<Player> start(FakeServer server, String directory, {LibraryRepository? repo}) async {
+    repo ??= testRepository();
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: p.join(directory, 'covers-cache'));
     final session = ServerSession(library, repo, ServerStreamingClient(server.client));
     final downloads = DownloadService(
@@ -113,8 +113,8 @@ class Player {
       workDirectory: p.join(directory, 'DownloadCache'),
       client: server.client,
     );
-    await library.initialize();
-    await session.initialize();
+    library.initialize();
+    session.initialize();
     await downloads.initialize();
     return Player._(library, session, downloads);
   }
@@ -160,7 +160,7 @@ void main() {
     Directory(directory).deleteSync(recursive: true);
   });
 
-  Future<Player> signedIn({MockRepository? repo}) async {
+  Future<Player> signedIn({LibraryRepository? repo}) async {
     final player = await Player.start(server, directory, repo: repo);
     players.add(player);
     await player.signIn();
@@ -190,7 +190,7 @@ void main() {
     final downloads = player.downloads;
     final album = player.library.albums.firstWhere((a) => a.title == 'Album A');
 
-    await downloads.pinAlbum(album.id, true);
+    downloads.pinAlbum(album.id, true);
     await until(() => downloads.doneCount == 2);
     expect(downloads.wantedCount, 2);
     for (final track in album.tracks) {
@@ -232,7 +232,7 @@ void main() {
     final downloads = player.downloads;
     final artist = player.library.getArtistByName('Artist')!;
 
-    await downloads.pinArtist(artist.id, true);
+    downloads.pinArtist(artist.id, true);
     await until(() => downloads.doneCount == 2);
     expect(downloads.isArtistPinned(artist.id), isTrue);
     expect(downloads.stateOf(player.library.getTrack('x1')!), DownloadState.none);
@@ -242,7 +242,7 @@ void main() {
     await player.session.refreshLibrary();
     await until(() => downloads.doneCount == 3);
 
-    await downloads.pinArtist(artist.id, false);
+    downloads.pinArtist(artist.id, false);
     await until(() => filesIn(downloads.directory).isEmpty);
   });
 
@@ -257,32 +257,32 @@ void main() {
     final library = player.library;
     Track track(String id) => library.getTrack(id)!;
 
-    await downloads.pinPlaylist('p1', true);
+    downloads.pinPlaylist('p1', true);
     await until(() => downloads.stateOf(track('t1')) == DownloadState.done);
 
     // The playlist grows: the new track follows; it shrinks: the copy goes.
-    await library.addTrackToPlaylist('p1', 't2');
+    library.addTracksToPlaylist('p1', ['t2']);
     await until(() => downloads.stateOf(track('t2')) == DownloadState.done);
     final t1Copy = downloads.localCopy(track('t1'))!;
-    await library.removeTrackFromPlaylist('p1', 't1');
+    library.removeTrackFromPlaylist('p1', 't1');
     await until(() => !File(t1Copy).existsSync());
     expect(downloads.localCopy(track('t1')), isNull);
 
     // The favourites, likewise.
-    await downloads.pinFavorites(true);
-    await library.toggleFavorite('t3');
+    downloads.pinFavorites(true);
+    library.toggleFavorite('t3');
     await until(() => downloads.stateOf(track('t3')) == DownloadState.done);
     final t3Copy = downloads.localCopy(track('t3'))!;
-    await library.toggleFavorite('t3');
+    library.toggleFavorite('t3');
     await until(() => !File(t3Copy).existsSync());
 
     // A single track that is also in the playlist keeps its copy when the playlist is unmarked.
-    await downloads.pinTrack('t2', true);
-    await downloads.pinPlaylist('p1', false);
+    downloads.pinTrack('t2', true);
+    downloads.pinPlaylist('p1', false);
     await settle();
     expect(downloads.stateOf(track('t2')), DownloadState.done);
 
-    await downloads.removeAll();
+    downloads.removeAll();
     await until(() => filesIn(downloads.directory).isEmpty);
     expect(filesIn(work('covers')), isEmpty);
     expect(downloads.bytesOnDisk, 0);
@@ -301,14 +301,14 @@ void main() {
     // Where the copy of t1 would go, a file of the user's own (another size than the server's).
     final mine = File(p.join(folder, '01 - Song.flac'))..writeAsStringSync('my own recording');
 
-    await downloads.pinAlbum(player.library.albums.single.id, true);
+    downloads.pinAlbum(player.library.albums.single.id, true);
     await until(() => downloads.doneCount == 2);
     final copy = downloads.localCopy(player.library.getTrack('t1')!)!;
     expect(p.basename(copy), '01 - Song (2).flac');
     expect(File(copy).readAsBytesSync(), audio(1));
     expect(mine.readAsStringSync(), 'my own recording');
 
-    await downloads.removeAll();
+    downloads.removeAll();
     await until(() => !File(copy).existsSync());
     expect(mine.readAsStringSync(), 'my own recording');
     expect(notes.readAsStringSync(), 'keep me');
@@ -319,7 +319,7 @@ void main() {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
     final player = await signedIn();
     final downloads = player.downloads;
-    await downloads.pinTrack('t1', true);
+    downloads.pinTrack('t1', true);
     await until(() => downloads.doneCount == 1);
     final first = downloads.localCopy(player.library.getTrack('t1')!)!;
 
@@ -344,7 +344,7 @@ void main() {
       ..cutAfter = 20000;
     final player = await signedIn();
     final downloads = player.downloads;
-    await downloads.pinTrack('t1', true);
+    downloads.pinTrack('t1', true);
     await until(() => downloads.errorMessage != null);
     expect(downloads.errorMessage, contains('Connection reset'));
     expect(downloads.doneCount, 0);
@@ -369,9 +369,9 @@ void main() {
 
     // The server forgets t2 between the listing and the download.
     final lost = server.tracks.remove('t2')!;
-    await downloads.pinAlbum(library.albums.single.id, true);
+    downloads.pinAlbum(library.albums.single.id, true);
     await until(() => downloads.doneCount == 1);
-    await downloads.pinTrack('t1', true); // another change: another pass over the wanted tracks
+    downloads.pinTrack('t1', true); // another change: another pass over the wanted tracks
     await settle();
     Iterable<http.BaseRequest> asksForT2() => server.streamRequests.where((r) => r.url.path.endsWith('/t2'));
     expect(asksForT2(), hasLength(1));
@@ -386,7 +386,7 @@ void main() {
 
   test('marks made while the server is out of reach wait for it', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
-    final repo = MockRepository();
+    final repo = testRepository();
     (await signedIn(repo: repo)).close();
     players.clear();
 
@@ -394,7 +394,7 @@ void main() {
     final player = await Player.start(server, directory, repo: repo);
     players.add(player);
     expect(player.session.isLoggedIn, isFalse);
-    await player.downloads.pinTrack('t1', true);
+    player.downloads.pinTrack('t1', true);
     await settle();
     expect(server.streamRequests, isEmpty);
     expect(player.downloads.isWaitingForServer, isTrue);
@@ -407,9 +407,9 @@ void main() {
 
   test('the marks and the copies survive a restart, with nothing downloaded twice', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
-    final repo = MockRepository();
+    final repo = testRepository();
     final first = await signedIn(repo: repo);
-    await first.downloads.pinTrack('t1', true);
+    first.downloads.pinTrack('t1', true);
     await until(() => first.downloads.doneCount == 1);
     first.close();
     players.remove(first);
@@ -428,7 +428,7 @@ void main() {
     server.add(serverTrack('../../outside', 'Sneaky', 'Album'), audio(1));
     final player = await signedIn();
     final downloads = player.downloads;
-    await downloads.pinTrack('../../outside', true);
+    downloads.pinTrack('../../outside', true);
     await until(() => downloads.doneCount == 1);
 
     final copy = downloads.localCopy(player.library.getTrack('../../outside')!)!;
@@ -450,7 +450,7 @@ void main() {
     final downloads = player.downloads;
     final album = player.library.albums.firstWhere((a) => a.title == 'Album A');
 
-    await downloads.pinAlbum(album.id, true);
+    downloads.pinAlbum(album.id, true);
     await until(() => downloads.doneCount == 2);
 
     final t1Copy = downloads.localCopy(album.tracks.first)!;
@@ -485,7 +485,7 @@ void main() {
       ..add(serverTrack('t1', 'Song', 'Album'), audio(1))
       ..coversFail = true;
     final player = await signedIn();
-    await player.downloads.pinTrack('t1', true);
+    player.downloads.pinTrack('t1', true);
     await until(() => player.downloads.doneCount == 1);
     expect(player.downloads.localCover(player.library.getTrack('t1')!.coverArtPath!), isNull);
     expect(player.downloads.errorMessage, isNull);
@@ -497,7 +497,7 @@ void main() {
       ..add(serverTrack('t2', 'Song', 'Album'), audio(2, 50001)); // the same album twice on the server, say
     final player = await signedIn();
     final downloads = player.downloads;
-    await downloads.pinAlbum(player.library.albums.single.id, true);
+    downloads.pinAlbum(player.library.albums.single.id, true);
     await until(() => downloads.doneCount == 2);
 
     final first = downloads.localCopy(player.library.getTrack('t1')!)!;
@@ -535,7 +535,7 @@ void main() {
     final player = await signedIn();
     final downloads = player.downloads;
     for (final album in player.library.albums) {
-      await downloads.pinAlbum(album.id, true);
+      downloads.pinAlbum(album.id, true);
     }
     await until(() => downloads.doneCount == 3);
     String place(String id) =>
@@ -547,15 +547,15 @@ void main() {
 
   test('a copy whose record was lost is found at its place instead of downloaded again', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
-    final repo = MockRepository();
+    final repo = testRepository();
     final first = await signedIn(repo: repo);
-    await first.downloads.pinTrack('t1', true);
+    first.downloads.pinTrack('t1', true);
     await until(() => first.downloads.doneCount == 1);
     final copy = first.downloads.localCopy(first.library.getTrack('t1')!)!;
     first.close();
     players.remove(first);
 
-    repo.downloads.clear(); // the app's data was lost, the music folder was not
+    repo.deleteDownload('t1'); // the app's data was lost, the music folder was not
     final again = await signedIn(repo: repo);
     await until(() => again.downloads.doneCount == 1);
     expect(again.downloads.localCopy(again.library.getTrack('t1')!), copy);
@@ -564,9 +564,9 @@ void main() {
 
   test('a copy that was still being moved into place when the app stopped is fetched again', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
-    final repo = MockRepository();
+    final repo = testRepository();
     final first = await signedIn(repo: repo);
-    await first.downloads.pinTrack('t1', true);
+    first.downloads.pinTrack('t1', true);
     await until(() => first.downloads.doneCount == 1);
     final copy = first.downloads.localCopy(first.library.getTrack('t1')!)!;
     first.close();
@@ -574,7 +574,7 @@ void main() {
 
     // As the app leaves it when it ends in the middle of the move: half a file, recorded as moving.
     File(copy).writeAsBytesSync(audio(1).sublist(0, 1000));
-    repo.downloads['t1'] = ('', p.relative(copy, from: first.downloads.directory));
+    repo.saveDownload('t1', '', p.relative(copy, from: first.downloads.directory));
     final again = await signedIn(repo: repo);
     await until(() => again.downloads.doneCount == 1);
     expect(File(again.downloads.localCopy(again.library.getTrack('t1')!)!).readAsBytesSync(), audio(1));
@@ -585,7 +585,7 @@ void main() {
   test('copies of an earlier version, named by hashes, move into place instead of being downloaded again', () async {
     final track = serverTrack('t1', 'Song', 'Album');
     server.add(track, audio(1));
-    final repo = MockRepository();
+    final repo = testRepository();
     final player = await signedIn(repo: repo);
     final version = stableId('${track.fileSizeBytes}\u001f${track.fileModifiedUtc!.millisecondsSinceEpoch ~/ 1000}');
     final legacy = File(
@@ -598,7 +598,7 @@ void main() {
 
     final again = await Player.start(server, directory, repo: repo);
     players.add(again);
-    await again.downloads.pinTrack('t1', true);
+    again.downloads.pinTrack('t1', true);
     await again.signIn();
     await until(() => again.downloads.doneCount == 1);
     expect(
@@ -617,21 +617,21 @@ void main() {
     }
     final now = DateTime.utc(2026);
     server.playlists.add(PlaylistData('p1', 'Road', null, ['t1'], now, now));
-    final repo = MockRepository();
+    final repo = testRepository();
     final player = await signedIn(repo: repo);
     final downloads = player.downloads;
     final library = player.library;
-    await downloads.setSyncModeEnabled(false);
+    downloads.setSyncModeEnabled(false);
 
-    await downloads.pinPlaylist('p1', true);
+    downloads.pinPlaylist('p1', true);
     await until(() => downloads.doneCount == 1);
-    await library.addTrackToPlaylist('p1', 't2');
+    library.addTracksToPlaylist('p1', ['t2']);
     await settle();
     expect(downloads.stateOf(library.getTrack('t2')!), DownloadState.none);
     expect(server.streamRequests, hasLength(1));
 
     // Marking the track itself is asking for it.
-    await downloads.pinTrack('t2', true);
+    downloads.pinTrack('t2', true);
     await until(() => downloads.doneCount == 2);
 
     // A mark made without the server waits for it, across a restart.
@@ -641,7 +641,7 @@ void main() {
     players.remove(player);
     final offline = await Player.start(server, directory, repo: repo);
     players.add(offline);
-    await offline.downloads.pinTrack('t3', true);
+    offline.downloads.pinTrack('t3', true);
     offline.close();
     players.remove(offline);
     final later = await signedIn(repo: repo);
@@ -654,12 +654,12 @@ void main() {
       ..add(serverTrack('t1', 'Track 1', 'Album A', number: 1), audio(1))
       ..add(serverTrack('t2', 'Track 2', 'Album A', number: 2), audio(2));
 
-    final repo = MockRepository();
+    final repo = testRepository();
     final first = await signedIn(repo: repo);
     final albumId = first.library.albums.single.id;
 
-    await first.downloads.setSyncModeEnabled(false);
-    await first.downloads.pinAlbum(albumId, true);
+    first.downloads.setSyncModeEnabled(false);
+    first.downloads.pinAlbum(albumId, true);
     await until(() => first.downloads.doneCount == 2);
     expect(server.streamRequests, hasLength(2));
 

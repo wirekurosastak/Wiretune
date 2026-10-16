@@ -22,7 +22,7 @@ void main() {
 
     // The player's files live apart from the server's, which go when the server is closed.
     final player = Directory.systemTemp.createTempSync('wiretune_player_');
-    final repo = MockRepository();
+    final repo = testRepository();
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: p.join(player.path, 'Covers'));
     final session = ServerSession(library, repo);
     final downloads = DownloadService(library, session, directory: p.join(player.path, 'Downloads'));
@@ -31,15 +31,15 @@ void main() {
       session.dispose();
       player.deleteSync(recursive: true);
     });
-    await library.initialize();
-    await session.initialize();
+    library.initialize();
+    session.initialize();
     await downloads.initialize();
     await session.connect(server.baseUrl);
     expect(await session.login('owner', adminPassword, true), isNull);
 
     // The fixture's files carry no tags: all three are tracks of "Unknown album".
     final album = library.albums.single;
-    await downloads.pinAlbum(album.id, true);
+    downloads.pinAlbum(album.id, true);
     for (var i = 0; i < 500 && downloads.doneCount < 3; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
     }

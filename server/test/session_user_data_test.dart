@@ -16,16 +16,16 @@ import 'support.dart';
 class Device {
   Device._(this.repo, this.library, this.session);
 
-  final MockRepository repo;
+  final LibraryRepository repo;
   final LibraryService library;
   final ServerSession session;
 
   static Future<Device> create(ServerFixture server, String name) async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: p.join(server.root, '$name-covers'));
     final session = ServerSession(library, repo);
-    await library.initialize();
-    await session.initialize();
+    library.initialize();
+    session.initialize();
     return Device._(repo, library, session);
   }
 
@@ -92,27 +92,27 @@ void main() {
         expect(t.streamUrl, startsWith('${server.baseUrl}/api/stream/'));
         expect(t.streamUrl, isNot(contains('token')));
       }
-      expect(d.repo.settings['auth_token'], session.authToken);
+      expect(d.repo.getSetting('auth_token'), session.authToken);
 
       // A favourite survives a refresh from the server.
       final favorite = d.library.tracks.first;
-      await d.library.toggleFavorite(favorite.id);
+      d.library.toggleFavorite(favorite.id);
       await session.refreshLibrary();
       expect(d.library.getTrack(favorite.id)!.isFavorite, isTrue);
 
       // Signing out forgets the token.
       await session.logout();
       expect(session.state, ServerConnectionState.loginRequired);
-      expect(d.repo.settings['auth_token'], '');
+      expect(d.repo.getSetting('auth_token'), '');
 
       // A stale token is dropped on reconnect instead of looping on 401s.
-      d.repo.settings['auth_token'] = 'not-a-valid-token';
+      d.repo.setSetting('auth_token', 'not-a-valid-token');
       final restarted = ServerSession(d.library, d.repo);
       addTearDown(restarted.dispose);
-      await restarted.initialize();
+      restarted.initialize();
       await restarted.connect();
       expect(restarted.state, ServerConnectionState.loginRequired);
-      expect(d.repo.settings['auth_token'], '');
+      expect(d.repo.getSetting('auth_token'), '');
     });
 
     test('changing the password keeps this device signed in and signs the others out', () async {
@@ -124,14 +124,14 @@ void main() {
 
       await phone.session.changePassword(adminPassword, 'a-brand-new-password');
       expect(phone.session.authToken, isNot(before));
-      expect(phone.repo.settings['auth_token'], phone.session.authToken); // "stay signed in" keeps the new one
+      expect(phone.repo.getSetting('auth_token'), phone.session.authToken); // "stay signed in" keeps the new one
       await phone.session.refreshLibrary();
       expect(phone.session.state, ServerConnectionState.connected);
       expect(await phone.session.getStreamToken(), isNotNull);
 
       await desktop.session.refreshLibrary();
       expect(desktop.session.state, ServerConnectionState.loginRequired);
-      expect(desktop.repo.settings['auth_token'], '');
+      expect(desktop.repo.getSetting('auth_token'), '');
       // The device that was signed out says why, in the user's language.
       expect(desktop.session.statusMessage, Localizer.get('ErrorPasswordChanged'));
       Localizer.instance.setLanguage('hu');
@@ -144,7 +144,7 @@ void main() {
         phone.session.changePassword('not-it', 'another-new-password'),
         throwsA(isA<ServerRequestException>().having((e) => e.statusCode, 'status', 403)),
       );
-      expect(phone.repo.settings['auth_token'], phone.session.authToken);
+      expect(phone.repo.getSetting('auth_token'), phone.session.authToken);
     });
 
     test('a fresh server asks for setup, and setting it up signs in', () async {
@@ -166,10 +166,10 @@ void main() {
       expect(phone.library.serverConnected, isTrue);
 
       final track = phone.library.tracks.first;
-      await phone.library.toggleFavorite(track.id);
-      await phone.library.recordPlay(track.id);
-      final playlist = await phone.library.createPlaylist('Road trip');
-      await phone.library.addTrackToPlaylist(playlist.id, track.id);
+      phone.library.toggleFavorite(track.id);
+      phone.library.recordPlay(track.id);
+      final playlist = phone.library.createPlaylist('Road trip');
+      phone.library.addTracksToPlaylist(playlist.id, [track.id]);
       await phone.session.flushUserData();
 
       final data = await serverData(admin);
@@ -188,8 +188,8 @@ void main() {
       expect(shared.name, 'Road trip');
       expect(shared.trackIds, [track.id]);
 
-      await laptop.library.renamePlaylist(shared.id, 'Renamed');
-      await laptop.library.toggleFavorite(track.id);
+      laptop.library.renamePlaylist(shared.id, 'Renamed');
+      laptop.library.toggleFavorite(track.id);
       await laptop.session.flushUserData();
 
       await phone.session.refreshLibrary();
@@ -221,11 +221,11 @@ void main() {
       await waitFor(() => phoneRemote.devices.length == 1 && laptopRemote.devices.length == 1);
 
       final track = phone.library.tracks.first;
-      await phone.library.toggleFavorite(track.id);
+      phone.library.toggleFavorite(track.id);
       await waitFor(() => laptop.library.getTrack(track.id)!.isFavorite);
       expect(laptop.library.favorites.single.id, track.id);
 
-      await laptop.library.createPlaylist('Shared');
+      laptop.library.createPlaylist('Shared');
       await waitFor(() => phone.library.playlists.any((pl) => pl.name == 'Shared'));
       expect(phone.library.getTrack(track.id)!.isFavorite, isTrue, reason: 'the refresh keeps what the phone holds');
       expect(told, {'phone': 1, 'laptop': 1}, reason: "each is told of the other's change, not of its own");
@@ -237,7 +237,7 @@ void main() {
       expect(phone.library.tracks, hasLength(3));
 
       final trackToHide = phone.library.tracks.first;
-      await phone.library.hideTrack(trackToHide.id);
+      phone.library.hideTrack(trackToHide.id);
       await phone.session.flushUserData();
 
       final data = await serverData(admin);
@@ -248,10 +248,10 @@ void main() {
       final laptop = await device('laptop-hidden');
       await laptop.signIn(server);
       expect(laptop.library.tracks, hasLength(2));
-      expect(laptop.library.isTrackIdHidden(trackToHide.id), isTrue);
+      expect(laptop.library.hiddenTracks, contains(trackToHide.id));
 
       // Unhide from laptop
-      await laptop.library.unhideTrack(trackToHide.id);
+      laptop.library.unhideTrack(trackToHide.id);
       await laptop.session.flushUserData();
 
       await phone.session.refreshLibrary();
@@ -259,17 +259,17 @@ void main() {
       expect(phone.library.isTrackHidden(trackToHide), isFalse);
 
       // The laptop restarts while the server is away: what the account hid stays hidden there.
-      await laptop.library.hideTrack(trackToHide.id);
+      laptop.library.hideTrack(trackToHide.id);
       await laptop.session.flushUserData();
       laptop.session.dispose();
       devices.remove(laptop);
       final library = LibraryService(laptop.repo, MetadataScanner(), coverCacheDirectory: p.join(server.root, 'c2'));
       final offline = ServerSession(library, laptop.repo);
       addTearDown(offline.dispose);
-      await library.initialize();
-      await offline.initialize();
+      library.initialize();
+      offline.initialize();
       expect(offline.state, ServerConnectionState.offline);
-      expect(library.isTrackIdHidden(trackToHide.id), isTrue);
+      expect(library.hiddenTracks, contains(trackToHide.id));
       expect(library.tracks, hasLength(2));
     });
 
@@ -277,21 +277,21 @@ void main() {
       final d = await device('device');
       await d.signIn(server);
       final track = d.library.tracks.first;
-      await d.library.toggleFavorite(track.id);
-      await d.library.recordPlay(track.id);
-      final playlist = await d.library.createPlaylist('List');
-      await d.library.addTrackToPlaylist(playlist.id, track.id);
+      d.library.toggleFavorite(track.id);
+      d.library.recordPlay(track.id);
+      final playlist = d.library.createPlaylist('List');
+      d.library.addTracksToPlaylist(playlist.id, [track.id]);
       final hidden = d.library.tracks.last;
-      await d.library.hideTrack(hidden.id);
+      d.library.hideTrack(hidden.id);
       final account = d.session.currentUser!.id;
-      expect((await d.repo.getHiddenItems(account))['track'], {hidden.id});
+      expect(d.repo.getHiddenItems(account)['track'], {hidden.id});
 
       await d.session.logout();
       expect(d.library.tracks, isEmpty);
       expect(d.library.playlists.any((pl) => pl.isServer), isFalse);
       expect(d.library.serverConnected, isFalse);
-      expect((await d.repo.getHiddenItems(account))['track'], isEmpty);
-      expect(d.repo.settings['auth_user_id'], '');
+      expect(d.repo.getHiddenItems(account)['track'], isEmpty);
+      expect(d.repo.getSetting('auth_user_id'), '');
 
       expect(await d.session.login('owner', adminPassword, true), isNull);
       final again = d.library.getTrack(track.id)!;
@@ -300,7 +300,7 @@ void main() {
       final restored = d.library.playlists.single;
       expect(restored.isServer, isTrue);
       expect(restored.trackIds, [track.id]);
-      expect(d.library.isTrackIdHidden(hidden.id), isTrue);
+      expect(d.library.hiddenTracks, contains(hidden.id));
     });
 
     test('a change made just before a refresh is not undone by it', () async {
@@ -309,7 +309,7 @@ void main() {
       final track = d.library.tracks.first;
 
       // No flush in between: the refresh itself has to send the pending change before it downloads.
-      await d.library.toggleFavorite(track.id);
+      d.library.toggleFavorite(track.id);
       await d.session.refreshLibrary();
 
       expect(d.library.getTrack(track.id)!.isFavorite, isTrue);
@@ -321,7 +321,7 @@ void main() {
       final d = await device('shared');
       await d.signIn(server);
       final track = d.library.tracks.first;
-      await d.library.toggleFavorite(track.id);
+      d.library.toggleFavorite(track.id);
       await d.session.flushUserData();
 
       // The owner's session ends without a sign-out (an expired token does that): the tracks and stars stay on show.
@@ -401,11 +401,11 @@ void main() {
           _ => more(request) ?? http.Response('', 404),
         };
       });
-      final repo = MockRepository();
+      final repo = testRepository();
       final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
-      await library.initialize();
+      library.initialize();
       final session = ServerSession(library, repo, ServerStreamingClient(client));
-      await session.initialize();
+      session.initialize();
       await session.connect('http://wiretune.test');
       expect(await session.login('owner', 'correct horse', true), isNull);
       return (session, library, requests);
@@ -422,7 +422,7 @@ void main() {
       );
       addTearDown(session.dispose);
 
-      await library.createPlaylist('One too many');
+      library.createPlaylist('One too many');
       await session.flushUserData();
       expect(requests.where((r) => r.startsWith('PUT /api/me/playlists/')), hasLength(1)); // sent, and refused
       expect(session.state, ServerConnectionState.connected);
@@ -439,7 +439,7 @@ void main() {
       addTearDown(session.dispose);
       expect(library.serverConnected, isTrue);
 
-      await library.toggleFavorite('s1');
+      library.toggleFavorite('s1');
       await session.flushUserData();
       expect(requests, contains('PUT /api/me/favorites/s1'));
       expect(library.getTrack('s1')!.isFavorite, isFalse);
@@ -455,15 +455,15 @@ void main() {
         }
         return http.StreamedResponse(Stream<List<int>>.error(const SocketException('Connection reset by peer')), 200);
       });
-      final repo = MockRepository()
-        ..settings['server_url'] = 'http://wiretune.test'
-        ..settings['library_source'] = 'server'
-        ..settings['auth_token'] = 'stored';
+      final repo = testRepository()
+        ..setSetting('server_url', 'http://wiretune.test')
+        ..setSetting('library_source', 'server')
+        ..setSetting('auth_token', 'stored');
       final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
-      await library.initialize();
+      library.initialize();
       final session = ServerSession(library, repo, ServerStreamingClient(client));
       addTearDown(session.dispose);
-      await session.initialize();
+      session.initialize();
       expect(session.state, ServerConnectionState.offline); // a stored server source starts offline
       await session.connect();
       expect(session.state, ServerConnectionState.offline);
@@ -472,13 +472,10 @@ void main() {
   });
 
   test("while the server cannot be reached its tracks cannot be changed, but local ones can", () async {
-    final repo = MockRepository();
+    final repo = testRepository()
+      ..replaceAllTracks([TestSupport.makeServerTrack('s1', 'Server song'), TestSupport.makeTrack('l1', 'Local song')]);
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
-    await library.initialize();
-    await library.replaceTracks([
-      TestSupport.makeServerTrack('s1', 'Server song'),
-      TestSupport.makeTrack('l1', 'Local song'),
-    ]);
+    library.initialize();
 
     final session = ServerSession(
       library,
@@ -486,15 +483,15 @@ void main() {
       ServerStreamingClient(MockClient((_) => throw StateError('no request expected'))),
     );
     addTearDown(session.dispose);
-    await session.initialize();
+    session.initialize();
     expect(library.serverConnected, isFalse);
 
-    await library.toggleFavorite('s1');
-    await library.recordPlay('s1');
+    library.toggleFavorite('s1');
+    library.recordPlay('s1');
     expect(library.getTrack('s1')!.isFavorite, isFalse);
     expect(library.getTrack('s1')!.playCount, 0);
 
-    await library.toggleFavorite('l1');
+    library.toggleFavorite('l1');
     expect(library.getTrack('l1')!.isFavorite, isTrue);
   });
 }

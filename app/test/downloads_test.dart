@@ -29,7 +29,7 @@ void main() {
   test('a downloaded track plays from its copy and shows its cover from it; signing out removes it', () async {
     final driver = FakeAudioDriver();
     final library = createLibrary();
-    await library.initialize();
+    library.initialize();
     final onServer = TestSupport.makeServerTrack('s1', 'Naima', artist: 'John Coltrane', album: 'Giant Steps')
       ..fileSizeBytes = audio.length
       ..hasCoverArt = true;

@@ -1,8 +1,6 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -66,13 +64,13 @@ class DownloadsViewModel extends ChangeNotifier {
   /// How many of [tracks] are downloaded, of how many that can be.
   (int done, int total) progressOf(Iterable<Track> tracks) => _downloads.progressOf(tracks);
 
-  void _pin(Future<void> Function() change) {
+  void _pin(void Function() change) {
     _pinChanges++;
-    unawaited(
-      change().catchError((Object e) {
-        WiretuneLog.warn('Downloads', 'Could not save the downloads: $e');
-      }),
-    );
+    try {
+      change();
+    } catch (e) {
+      WiretuneLog.warn('Downloads', 'Could not save the downloads: $e');
+    }
   }
 
   // ── The settings card ──────────────────────────────────────────────────────────────────────────
@@ -83,7 +81,7 @@ class DownloadsViewModel extends ChangeNotifier {
   String get destinationDirectory => _downloads.directory;
   bool get isSyncModeEnabled => _downloads.isSyncModeEnabled;
 
-  Future<void> setSyncModeEnabled(bool enabled) => _downloads.setSyncModeEnabled(enabled);
+  void setSyncModeEnabled(bool enabled) => _downloads.setSyncModeEnabled(enabled);
 
   /// "1.4 GB on this device" (with the language's decimal separator).
   String get sizeText {
@@ -117,10 +115,7 @@ class DownloadsViewModel extends ChangeNotifier {
   bool get hasError => _downloads.errorMessage != null;
 
   /// Forgets every mark and deletes every copy.
-  Future<void> removeAll() async {
-    _pinChanges++;
-    await _downloads.removeAll();
-  }
+  void removeAll() => _pin(_downloads.removeAll);
 
   /// [bytes] in the unit that reads best: 820 KB, 34 MB, 1.4 GB.
   static (double amount, String unit) sizeOf(int bytes) {

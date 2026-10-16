@@ -19,12 +19,12 @@ MainViewModel createMainViewModel(
 ]) => MainViewModel(
   engine ?? TestSupport.createEngine(),
   library,
-  session ?? ServerSession(library, MockRepository()),
+  session ?? ServerSession(library, testRepository()),
   remote: remote,
 );
 
 LibraryService createLibrary([List<Track> tracks = const []]) {
-  final repo = MockRepository()..saveTracks(tracks);
+  final repo = testRepository()..replaceAllTracks(tracks);
   return LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
 }
 

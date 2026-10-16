@@ -95,7 +95,11 @@ void main() {
     // Inject a track that points at a sibling folder sharing the root's name prefix ("library2").
     final outsidePath = p.join(server.root, 'library2', 'Outside.wav');
     final outside = Track(id: 'outside', title: 'Outside', filePath: outsidePath);
-    await server.server.library.replaceTracks([...server.server.library.tracks, outside]);
+    final library = server.server.library;
+    // As if the index held it from before (a restart reads the index back from the database).
+    void index(Track track) => server.server.repository.replaceAllTracks([...library.rawTracks, track]);
+    index(outside);
+    library.initialize();
 
     expect(File(outsidePath).existsSync(), isTrue);
     expect((await client.get('/api/stream/outside')).statusCode, 404);
@@ -103,8 +107,8 @@ void main() {
     // A symlink inside the library pointing outside must also be refused.
     final symlinkPath = p.join(server.libraryPath, 'symlink_outside.wav');
     Link(symlinkPath).createSync(outsidePath);
-    final symlinked = Track(id: 'symlinked', title: 'Symlinked', filePath: symlinkPath);
-    await server.server.library.replaceTracks([...server.server.library.tracks, symlinked]);
+    index(Track(id: 'symlinked', title: 'Symlinked', filePath: symlinkPath));
+    library.initialize();
     expect((await client.get('/api/stream/symlinked')).statusCode, 404);
   });
 
@@ -161,7 +165,8 @@ void main() {
     final stream = Uri.encodeComponent(issued.token);
 
     expect((await anonymous.get('/api/stream/${track['id']}?token=$stream')).statusCode, 200);
-    expect((await anonymous.get('/api/cover/${track['id']}?token=$stream')).statusCode, 404); // let in; no cover
+    final cover = '/api/cover/album/${Track.fromJson(track).albumId}?token=$stream';
+    expect((await anonymous.get(cover)).statusCode, 404); // let in; no cover
 
     // A token that leaked through a URL must not be usable against the rest of the API, whichever kind it is.
     for (final token in [stream, Uri.encodeComponent(auth.token)]) {

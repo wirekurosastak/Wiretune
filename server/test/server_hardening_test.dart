@@ -49,11 +49,9 @@ void main() {
       await server.waitForTracks(client, 3);
 
       final folderName = server.root.split('/').last;
-      for (final route in ['/api/tracks', '/api/tracks?q=first']) {
-        final body = (await client.get(route)).body;
-        expect(body, isNot(contains(folderName)));
-        expect(body.toLowerCase(), isNot(contains('path')));
-      }
+      final body = (await client.get('/api/tracks')).body;
+      expect(body, isNot(contains(folderName)));
+      expect(body.toLowerCase(), isNot(contains('path')));
     });
 
     test('tracks still carry everything a player needs', () async {
@@ -84,7 +82,8 @@ void main() {
       final media = server.client();
       final token = Uri.encodeComponent(issued.token);
       expect((await media.get('/api/stream/${track['id']}?token=$token')).statusCode, 200);
-      expect((await media.get('/api/cover/${track['id']}?token=$token')).statusCode, 404); // let in; no cover
+      final cover = '/api/cover/album/${Track.fromJson(track).albumId}?token=$token';
+      expect((await media.get(cover)).statusCode, 404); // let in; no cover
 
       // Not on the management API (even as a header), and not to mint more tokens.
       media.token = issued.token;
@@ -144,7 +143,7 @@ void main() {
 
     test('a token signed before token versions existed still opens the API', () async {
       final (admin, auth) = await setupAdmin(server);
-      final secret = (await server.server.repository.getSetting('jwt_secret'))!;
+      final secret = (server.server.repository.getSetting('jwt_secret'))!;
       final old = Jwt(secret).sign({
         'sub': auth.user.id,
         'name': 'owner',
@@ -220,7 +219,7 @@ void main() {
 
         expect(await me(null), (401, ErrorCodes.signInRequired));
         expect(await me('not.a.token'), (401, ErrorCodes.tokenInvalid));
-        final secret = (await server.server.repository.getSetting('jwt_secret'))!;
+        final secret = (server.server.repository.getSetting('jwt_secret'))!;
         final expired = Jwt(secret).sign({
           'sub': auth.user.id,
           'name': 'owner',

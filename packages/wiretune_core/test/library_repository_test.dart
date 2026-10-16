@@ -44,7 +44,7 @@ void main() {
     final db = DatabaseManager(dbPath());
     opened.add(db);
     final repo = LibraryRepository(db);
-    await repo.initialize();
+    repo.initialize();
     return (repo, db);
   }
 
@@ -71,8 +71,8 @@ void main() {
       ..trackNumber = 4
       ..fileModifiedUtc = DateTime.utc(2025, 1, 2, 3, 4, 5, 678, 901);
 
-    await repo.replaceAllTracks([track]);
-    final stored = (await repo.getAllTracks()).single;
+    repo.replaceAllTracks([track]);
+    final stored = (repo.getAllTracks()).single;
 
     expect(stored.id, 'a');
     expect(stored.duration, const Duration(milliseconds: 200500));
@@ -95,8 +95,8 @@ void main() {
       ..trackNumber = 3
       ..taggedAlbum = (album: 'Back In Black', albumArtist: null, trackNumber: 6, discNumber: 1);
 
-    await repo.replaceAllTracks([featuring, refiled, make('a')]);
-    final stored = {for (final t in await repo.getAllTracks()) t.id: t};
+    repo.replaceAllTracks([featuring, refiled, make('a')]);
+    final stored = {for (final t in repo.getAllTracks()) t.id: t};
 
     expect(stored['f']!.artist, 'Future, Lil Durk');
     expect(stored['f']!.artists, ['Future', 'Lil Durk']);
@@ -107,17 +107,17 @@ void main() {
 
   test('replacing the tracks deletes what is gone and updates what changed', () async {
     final (repo, _) = await open();
-    await repo.replaceAllTracks([make('a'), make('b'), make('c')]);
-    await repo.replaceAllTracks([make('a'), make('b', title: 'Renamed'), make('d')]);
+    repo.replaceAllTracks([make('a'), make('b'), make('c')]);
+    repo.replaceAllTracks([make('a'), make('b', title: 'Renamed'), make('d')]);
 
-    final stored = {for (final t in await repo.getAllTracks()) t.id: t};
+    final stored = {for (final t in repo.getAllTracks()) t.id: t};
     expect(stored.keys.toList()..sort(), ['a', 'b', 'd']);
     expect(stored['b']!.title, 'Renamed');
   });
 
   test('replacing the tracks with the same library writes nothing', () async {
     final (repo, db) = await open();
-    await repo.replaceAllTracks([make('a'), make('b')]);
+    repo.replaceAllTracks([make('a'), make('b')]);
 
     // A trigger records every update the table sees.
     db.connection.execute('CREATE TABLE audit (id TEXT NOT NULL)');
@@ -125,19 +125,19 @@ void main() {
       'CREATE TRIGGER tracks_audit AFTER UPDATE ON tracks BEGIN INSERT INTO audit VALUES (NEW.id); END',
     );
 
-    await repo.replaceAllTracks([make('a'), make('b')]);
+    repo.replaceAllTracks([make('a'), make('b')]);
     expect(count(db, 'SELECT COUNT(*) FROM audit'), 0);
 
-    await repo.replaceAllTracks([make('a'), make('b', title: 'Changed')]);
+    repo.replaceAllTracks([make('a'), make('b', title: 'Changed')]);
     expect(count(db, "SELECT COUNT(*) FROM audit WHERE id = 'b'"), 1);
     expect(count(db, 'SELECT COUNT(*) FROM audit'), 1);
   });
 
   test('tracks are keyed by ID: a new path updates the row, and server tracks need no path', () async {
     final (repo, _) = await open();
-    await repo.replaceAllTracks([make('a', path: '/music/old.flac')]);
-    await repo.replaceAllTracks([make('a', path: '/music/new.flac'), make('s1', path: ''), make('s2', path: '')]);
-    final stored = {for (final t in await repo.getAllTracks()) t.id: t};
+    repo.replaceAllTracks([make('a', path: '/music/old.flac')]);
+    repo.replaceAllTracks([make('a', path: '/music/new.flac'), make('s1', path: ''), make('s2', path: '')]);
+    final stored = {for (final t in repo.getAllTracks()) t.id: t};
     expect(stored['a']!.filePath, '/music/new.flac');
     expect(stored.keys, containsAll(['s1', 's2']));
   });
@@ -148,39 +148,39 @@ void main() {
     final inferred = make('b')
       ..albumArtist = 'Various Artists'
       ..albumArtistInferred = true;
-    await repo.replaceAllTracks([tagged, inferred]);
+    repo.replaceAllTracks([tagged, inferred]);
 
-    final stored = {for (final t in await repo.getAllTracks()) t.id: t};
+    final stored = {for (final t in repo.getAllTracks()) t.id: t};
     expect(stored['a']!.albumArtist, 'The Band');
     expect(stored['b']!.albumArtist, isNull);
   });
 
   test('server playlists are marked, and only they are removed on sign-out', () async {
     final (repo, _) = await open();
-    await repo.savePlaylist(Playlist(id: 'mine', name: 'Mine', trackIds: ['a']));
-    await repo.savePlaylist(Playlist(id: 'theirs', name: 'Theirs', isServer: true, trackIds: ['b', 'c']));
+    repo.savePlaylist(Playlist(id: 'mine', name: 'Mine', trackIds: ['a']));
+    repo.savePlaylist(Playlist(id: 'theirs', name: 'Theirs', isServer: true, trackIds: ['b', 'c']));
 
-    final stored = {for (final pl in await repo.getAllPlaylists()) pl.id: pl};
+    final stored = {for (final pl in repo.getAllPlaylists()) pl.id: pl};
     expect(stored['mine']!.isServer, isFalse);
     expect(stored['theirs']!.isServer, isTrue);
     expect(stored['theirs']!.trackIds, ['b', 'c']);
 
-    await repo.deleteServerPlaylists();
-    expect((await repo.getAllPlaylists()).single.id, 'mine');
+    repo.deleteServerPlaylists();
+    expect((repo.getAllPlaylists()).single.id, 'mine');
   });
 
   test('getOrAddSetting creates the value once and keeps it', () async {
     final (repo, _) = await open();
     var calls = 0;
-    final first = await repo.getOrAddSetting('secret', () => 'value-${++calls}');
-    final second = await repo.getOrAddSetting('secret', () => 'value-${++calls}');
+    final first = repo.getOrAddSetting('secret', () => 'value-${++calls}');
+    final second = repo.getOrAddSetting('secret', () => 'value-${++calls}');
     expect(first, 'value-1');
     expect(second, first);
     expect(calls, 1);
-    expect(await repo.getSetting('secret'), first);
+    expect(repo.getSetting('secret'), first);
 
-    await repo.setSetting('blank', ''); // an empty value is no value: a signing key must never be empty
-    expect(await repo.getOrAddSetting('blank', () => 'filled'), 'filled');
+    repo.setSetting('blank', ''); // an empty value is no value: a signing key must never be empty
+    expect(repo.getOrAddSetting('blank', () => 'filled'), 'filled');
   });
 
   test('a database of another schema version is refused instead of misread', () async {
@@ -204,41 +204,41 @@ void main() {
 
   test('a database of the previous schema is upgraded in place, and favourites get their time from then on', () async {
     final (repo, db) = await open();
-    await repo.replaceAllTracks([make('a')..isFavorite = true]);
+    repo.replaceAllTracks([make('a')..isFavorite = true]);
     downgrade(db, 1); // no time for a favourite, no bpm, no hidden items, no token versions
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
-    final kept = (await upgraded.getAllTracks()).single;
+    final kept = (upgraded.getAllTracks()).single;
     expect((kept.id, kept.isFavorite, kept.favoritedAt), ('a', true, null));
 
     final when = DateTime.utc(2026, 3, 4, 5, 6, 7);
-    await upgraded.updateTrackFavorite('a', when);
-    expect((await upgraded.getAllTracks()).single.favoritedAt, when);
-    await upgraded.updateTrackFavorite('a', null);
-    final unmarked = (await upgraded.getAllTracks()).single;
+    upgraded.updateTrackFavorite('a', when);
+    expect((upgraded.getAllTracks()).single.favoritedAt, when);
+    upgraded.updateTrackFavorite('a', null);
+    final unmarked = (upgraded.getAllTracks()).single;
     expect((unmarked.isFavorite, unmarked.favoritedAt), (false, null));
   });
 
   test('a database of schema 2 is upgraded, gaining bpm', () async {
     final (repo, db) = await open();
-    await repo.replaceAllTracks([make('a')]);
+    repo.replaceAllTracks([make('a')]);
     downgrade(db, 2);
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
-    final kept = (await upgraded.getAllTracks()).single;
+    final kept = (upgraded.getAllTracks()).single;
     expect((kept.id, kept.bpm), ('a', null));
   });
 
   test('a database of schema 3 is upgraded, gaining the hidden items', () async {
     final (repo, db) = await open();
-    await repo.replaceAllTracks([make('a')]);
+    repo.replaceAllTracks([make('a')]);
     downgrade(db, 3);
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
-    final hidden = await upgraded.getHiddenItems('user1');
+    final hidden = upgraded.getHiddenItems('user1');
     expect(hidden['track'], isEmpty);
     expect(hidden['album'], isEmpty);
     expect(hidden['artist'], isEmpty);
@@ -246,12 +246,12 @@ void main() {
 
   test('a database of schema 5 is upgraded, and its files are read again for their artists', () async {
     final (repo, db) = await open();
-    await repo.replaceAllTracks([make('a')..fileModifiedUtc = DateTime.utc(2025, 1, 2)]);
+    repo.replaceAllTracks([make('a')..fileModifiedUtc = DateTime.utc(2025, 1, 2)]);
     downgrade(db, 5);
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
-    final kept = (await upgraded.getAllTracks()).single;
+    final kept = (upgraded.getAllTracks()).single;
     expect((kept.id, kept.fileModifiedUtc), ('a', null));
     expect(kept.artists, isEmpty);
   });
@@ -272,40 +272,40 @@ void main() {
 
   test('user_hidden items persist, isolate users, and clear correctly', () async {
     final (repo, _) = await open();
-    await repo.setHiddenItem('track', 't1', true, 'u1');
-    await repo.setHiddenItem('album', 'al1', true, 'u1');
-    await repo.setHiddenItem('artist', 'ar1', true, 'u1');
-    await repo.setHiddenItem('track', 't2', true, 'u2');
+    repo.setHiddenItem('track', 't1', true, 'u1');
+    repo.setHiddenItem('album', 'al1', true, 'u1');
+    repo.setHiddenItem('artist', 'ar1', true, 'u1');
+    repo.setHiddenItem('track', 't2', true, 'u2');
 
-    final u1Hidden = await repo.getHiddenItems('u1');
+    final u1Hidden = repo.getHiddenItems('u1');
     expect(u1Hidden['track'], {'t1'});
     expect(u1Hidden['album'], {'al1'});
     expect(u1Hidden['artist'], {'ar1'});
 
-    final u2Hidden = await repo.getHiddenItems('u2');
+    final u2Hidden = repo.getHiddenItems('u2');
     expect(u2Hidden['track'], {'t2'});
     expect(u2Hidden['album'], isEmpty);
     expect(u2Hidden['artist'], isEmpty);
 
     // Unhide t1
-    await repo.setHiddenItem('track', 't1', false, 'u1');
-    final u1After = await repo.getHiddenItems('u1');
+    repo.setHiddenItem('track', 't1', false, 'u1');
+    final u1After = repo.getHiddenItems('u1');
     expect(u1After['track'], isEmpty);
     expect(u1After['album'], {'al1'});
 
     // Clear u1
-    await repo.clearHiddenItems('u1');
-    expect((await repo.getHiddenItems('u1'))['album'], isEmpty);
-    expect((await repo.getHiddenItems('u2'))['track'], {'t2'});
+    repo.clearHiddenItems('u1');
+    expect((repo.getHiddenItems('u1'))['album'], isEmpty);
+    expect((repo.getHiddenItems('u2'))['track'], {'t2'});
   });
 
   test('initializing the schema twice changes nothing', () async {
     final (repo, db) = await open();
-    await repo.replaceAllTracks([make('a')]);
+    repo.replaceAllTracks([make('a')]);
     final second = DatabaseManager(dbPath());
     opened.add(second);
     second.initializeSchema();
     db.initializeSchema();
-    expect(await repo.getAllTracks(), hasLength(1));
+    expect(repo.getAllTracks(), hasLength(1));
   });
 }

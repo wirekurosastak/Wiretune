@@ -828,9 +828,9 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     if (name != null) newPlaylistName = name;
     if (newPlaylistName.trim().isEmpty) return;
 
-    final playlist = await _library.createPlaylist(newPlaylistName);
+    final playlist = _library.createPlaylist(newPlaylistName);
     final pending = tracksToAdd;
-    if (pending.isNotEmpty) await _library.addTracksToPlaylist(playlist.id, [for (final t in pending) t.id]);
+    if (pending.isNotEmpty) _library.addTracksToPlaylist(playlist.id, [for (final t in pending) t.id]);
 
     isCreateDialogOpen = false;
     tracksToAdd = const [];
@@ -859,7 +859,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
 
   Future<void> deletePlaylist(Playlist? playlist) async {
     if (playlist == null) return;
-    await _library.deletePlaylist(playlist.id);
+    _library.deletePlaylist(playlist.id);
     if (selectedPlaylist?.id == playlist.id) {
       _select(null);
       isPlaylistDetailOpen = false;
@@ -885,7 +885,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     }
     final newName = editingPlaylistName.trim();
     if (newName != selected.name) {
-      await _library.renamePlaylist(selected.id, newName);
+      _library.renamePlaylist(selected.id, newName);
       selectedPlaylist = _library.getPlaylist(selected.id);
       refreshPlaylists();
     }
@@ -909,7 +909,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   Future<void> removeTrackFromSelected(Track? track) async {
     final selected = selectedPlaylist;
     if (track == null || selected == null) return;
-    await _library.removeTrackFromPlaylist(selected.id, track.id);
+    _library.removeTrackFromPlaylist(selected.id, track.id);
     refreshPlaylists();
   }
 
@@ -936,7 +936,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   Future<void> addPendingTrackTo(Playlist? playlist) async {
     final tracks = tracksToAdd;
     if (playlist != null && tracks.isNotEmpty) {
-      await _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
+      _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
     }
     cancelAddTrack();
   }
@@ -949,7 +949,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   Future<void> moveTrack(int from, int to) async {
     final selected = selectedPlaylist;
     if (selected == null || !canReorder) return;
-    await _library.movePlaylistTrack(selected.id, from, to);
+    _library.movePlaylistTrack(selected.id, from, to);
     refreshPlaylists();
   }
 

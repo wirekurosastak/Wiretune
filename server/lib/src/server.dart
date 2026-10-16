@@ -157,7 +157,7 @@ class WiretuneServer {
     // A library folder chosen through the admin API wins over the configured one, so it survives restarts. One that is
     // missing right now (a share not mounted yet) is kept like a configured one: the scans wait for it, where falling
     // back to another folder would replace the index with that folder's tracks.
-    final saved = await repository.getSetting(_chosenLibraryPathKey);
+    final saved = repository.getSetting(_chosenLibraryPathKey);
     final paths = ServerPaths(
       saved != null && saved.trim().isNotEmpty ? saved : options.resolveLibraryRoot(),
       dataDirectory,
@@ -169,8 +169,8 @@ class WiretuneServer {
     );
 
     final library = LibraryService(repository, MetadataScanner(), coverCacheDirectory: paths.coverCacheDirectory);
-    await library.initialize();
-    final auth = AuthService(database, await repository.getOrAddSetting('jwt_secret', AuthService.generateSecret));
+    library.initialize();
+    final auth = AuthService(database, repository.getOrAddSetting('jwt_secret', AuthService.generateSecret));
     final scanner = LibraryScanService(
       library,
       paths,
@@ -369,11 +369,7 @@ class WiretuneServer {
       scanner.requestScan();
       return jsonResponse({'message': 'Scan requested.'}, status: 202, headers: {'location': '/api/library/status'});
     }),
-    _Route('GET', '/api/tracks', Access.user, (call) {
-      final q = call.request.url.queryParameters['q'];
-      final tracks = isBlank(q) ? library.tracks : library.search(q!);
-      return jsonResponse(tracks.map((t) => t.toJson()).toList());
-    }),
+    _Route('GET', '/api/tracks', Access.user, (_) => jsonResponse([for (final t in library.tracks) t.toJson()])),
 
     // Media
     _Route('GET', '/api/stream/{trackId}', Access.media, _stream),
@@ -381,12 +377,6 @@ class WiretuneServer {
       final album = library.getAlbum(call.params['albumId']!);
       return _cover(call.request, album?.tracks.where((t) => t.hasCoverArt).firstOrNull);
     }),
-    _Route(
-      'GET',
-      '/api/cover/{trackId}',
-      Access.media,
-      (call) => _cover(call.request, library.getTrack(call.params['trackId']!)),
-    ),
     _Route('GET', '/api/lyrics/{trackId}', Access.user, _lyrics),
 
     // Remote control: a WebSocket per player
@@ -523,7 +513,7 @@ class WiretuneServer {
     final problem = _libraryRootProblem(fullPath);
     if (problem != null) return violationResponse(problem);
 
-    await repository.setSetting(_chosenLibraryPathKey, fullPath);
+    repository.setSetting(_chosenLibraryPathKey, fullPath);
     paths.libraryRoot = fullPath;
     scanner.requestScan();
     return jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson());

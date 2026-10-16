@@ -26,7 +26,7 @@ void main() {
     driver = FakeAudioDriver();
     tracks = [for (var i = 1; i <= 4; i++) TestSupport.makeTrack('t$i', 'Song $i', trackNumber: i)];
     final library = createLibrary(tracks);
-    await library.initialize();
+    library.initialize();
     final session = await signedInSession(library);
     hub = FakeRemoteHub();
     final remote = RemoteClient(session, connector: hub.connect);
@@ -78,7 +78,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 300));
 
     player.moveQueueTrack(0, 2);
-    player.removeQueueTrack(player.queueItems[0].track);
+    player.removeQueueItem(player.queueItems[0]);
     player.clearQueue();
 
     expect(hub.commandsTo('desk'), [
@@ -126,7 +126,7 @@ void main() {
     player.selectDevice('desk');
     expect([for (final item in player.queueItems) item.track.title], ['Song 1', 'Song 2', 'Song 3']);
 
-    player.removeQueueTrack(tracks[2]); // Song 3: the desk's fourth
+    player.removeQueueItem(player.queueItems[2]); // Song 3: the desk's fourth
     player.moveQueueTrackUp(player.queueItems[1]); // Song 2 above Song 1
     player.moveQueueTrack(0, 1); // and back below it, by dragging
 

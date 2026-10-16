@@ -19,7 +19,7 @@ void main() {
   test('the playback state is published at changes, not at every position update', () async {
     final driver = FakeAudioDriver();
     final library = createLibrary([TestSupport.makeTrack('1', 'One'), TestSupport.makeTrack('2', 'Two')]);
-    await library.initialize();
+    library.initialize();
     final vm = createMainViewModel(library, TestSupport.createEngine(driver));
     var now = DateTime(2026, 10, 5, 12);
     final session = WiretuneMediaSession(vm, now: () => now);
@@ -75,7 +75,7 @@ void main() {
       TestSupport.makeTrack('b1', 'Naima', album: 'B'),
       TestSupport.makeTrack('b2', 'Giant Steps', album: 'B'),
     ]);
-    await library.initialize();
+    library.initialize();
     final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
     final session = WiretuneMediaSession(vm);
     List<String> published() => [for (final item in session.queue.value) item.id];
@@ -104,7 +104,7 @@ void main() {
       TestSupport.makeTrack('1', 'Beta', artist: 'Zed', album: 'Old')..dateAdded = DateTime.utc(2025),
       TestSupport.makeTrack('2', 'Alpha', artist: 'Abba', album: 'New')..dateAdded = DateTime.utc(2026),
     ]);
-    await library.initialize();
+    library.initialize();
     final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
     final session = WiretuneMediaSession(vm);
     Future<List<String?>> titles(String id) async => [for (final item in await session.getChildren(id)) item.title];

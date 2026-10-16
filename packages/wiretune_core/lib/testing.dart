@@ -1,9 +1,9 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-/// Test doubles shared by the tests of the core, the server and the app: an in-memory repository, an audio driver
-/// that plays nothing, a signed-in session, a remote-control hub, sample tracks and a WAV writer. Not used by any
-/// shipped code.
+/// Test doubles shared by the tests of the core, the server and the app: a repository on a throw-away database, an
+/// audio driver that plays nothing, a signed-in session, a remote-control hub, sample tracks and a WAV writer. Not used
+/// by any shipped code.
 library;
 
 import 'dart:async';
@@ -14,6 +14,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:path/path.dart' as p;
 
 import 'wiretune_core.dart';
 
@@ -26,149 +27,11 @@ Directory useTempDataDirectory() {
   return dir;
 }
 
-/// An in-memory repository: the library service's storage without SQLite.
-class MockRepository extends LibraryRepository {
-  final List<Track> tracks = [];
-  final List<Playlist> playlists = [];
-  final Map<String, String> settings = {};
-
-  @override
-  Future<void> initialize() async {}
-
-  @override
-  Future<List<Track>> getAllTracks() async => [for (final t in tracks) copyTrack(t)];
-
-  /// Seeds stored tracks.
-  void saveTracks(Iterable<Track> list) => tracks.addAll(list);
-
-  @override
-  Future<void> replaceAllTracks(Iterable<Track> tracks) async {
-    final copy = tracks.toList();
-    this.tracks
-      ..clear()
-      ..addAll(copy);
-  }
-
-  @override
-  Future<void> updateTrackFavorite(String trackId, DateTime? favoritedAt) async {
-    for (final t in tracks.where((t) => t.id == trackId)) {
-      t
-        ..isFavorite = favoritedAt != null
-        ..favoritedAt = favoritedAt;
-    }
-  }
-
-  @override
-  Future<void> incrementPlayCount(String trackId) async {
-    for (final t in tracks.where((t) => t.id == trackId)) {
-      t.playCount++;
-    }
-  }
-
-  @override
-  @override
-  Future<List<Playlist>> getAllPlaylists() async => List.of(playlists);
-
-  @override
-  Future<void> savePlaylist(Playlist playlist) async {
-    playlists
-      ..removeWhere((p) => p.id == playlist.id)
-      ..add(playlist);
-  }
-
-  @override
-  Future<void> deletePlaylist(String playlistId) async => playlists.removeWhere((p) => p.id == playlistId);
-
-  @override
-  Future<void> deleteServerPlaylists() async => playlists.removeWhere((p) => p.isServer);
-
-  @override
-  Future<String?> getSetting(String key, [String? defaultValue]) async => settings[key] ?? defaultValue;
-
-  @override
-  Future<void> setSetting(String key, String value) async => settings[key] = value;
-
-  @override
-  Future<String> getOrAddSetting(String key, String Function() createValue) async =>
-      settings.putIfAbsent(key, createValue);
-
-  final Map<String, Map<String, Set<String>>> _hidden = {};
-
-  @override
-  Future<Map<String, Set<String>>> getHiddenItems([String userId = 'local']) async {
-    final userMap = _hidden.putIfAbsent(userId, () => {'artist': <String>{}, 'album': <String>{}, 'track': <String>{}});
-    return {
-      'artist': Set<String>.from(userMap['artist'] ?? const {}),
-      'album': Set<String>.from(userMap['album'] ?? const {}),
-      'track': Set<String>.from(userMap['track'] ?? const {}),
-    };
-  }
-
-  @override
-  Future<void> setHiddenItem(String itemType, String itemId, bool hidden, [String userId = 'local']) async {
-    final userMap = _hidden.putIfAbsent(userId, () => {'artist': <String>{}, 'album': <String>{}, 'track': <String>{}});
-    final set = userMap.putIfAbsent(itemType, () => <String>{});
-    if (hidden) {
-      set.add(itemId);
-    } else {
-      set.remove(itemId);
-    }
-  }
-
-  @override
-  Future<void> replaceHiddenItems(
-    String userId, {
-    required Iterable<String> artists,
-    required Iterable<String> albums,
-    required Iterable<String> tracks,
-  }) async {
-    _hidden[userId] = {'artist': artists.toSet(), 'album': albums.toSet(), 'track': tracks.toSet()};
-  }
-
-  @override
-  Future<void> clearHiddenItems([String userId = 'local']) async {
-    _hidden.remove(userId);
-  }
-
-  final Map<String, (String, String)> downloads = {};
-
-  @override
-  Future<Map<String, (String version, String path)>> getDownloads() async => Map.of(downloads);
-
-  @override
-  Future<void> saveDownload(String trackId, String version, String path) async => downloads[trackId] = (version, path);
-
-  @override
-  Future<void> deleteDownload(String trackId) async => downloads.remove(trackId);
+/// A repository on a database file of its own in the temporary folder, as the player keeps one.
+LibraryRepository testRepository() {
+  final folder = Directory.systemTemp.createTempSync('wiretune_db_');
+  return LibraryRepository(DatabaseManager(p.join(folder.path, 'wiretune.db')))..initialize();
 }
-
-/// A copy of [t] as the database keeps it: what the library filed under a folder's album goes back to its tags.
-Track copyTrack(Track t) => Track(
-  id: t.id,
-  title: t.title,
-  artist: t.artist,
-  artists: t.artists,
-  album: t.taggedAlbum?.album ?? t.album,
-  albumArtist: t.taggedAlbum == null ? t.albumArtist : t.taggedAlbum!.albumArtist,
-  trackNumber: t.taggedAlbum == null ? t.trackNumber : t.taggedAlbum!.trackNumber,
-  trackCount: t.trackCount,
-  discNumber: t.taggedAlbum == null ? t.discNumber : t.taggedAlbum!.discNumber,
-  year: t.year,
-  genre: t.genre,
-  duration: t.duration,
-  fileSizeBytes: t.fileSizeBytes,
-  fileModifiedUtc: t.fileModifiedUtc,
-  filePath: t.filePath,
-  streamUrl: t.streamUrl,
-  hasCoverArt: t.hasCoverArt,
-  coverArtPath: t.coverArtPath,
-  format: t.format,
-  dateAdded: t.dateAdded,
-  isFavorite: t.isFavorite,
-  favoritedAt: t.favoritedAt,
-  playCount: t.playCount,
-  lastPlayed: t.lastPlayed,
-);
 
 /// An audio driver that plays nothing, so engine and player tests never touch audio hardware.
 class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
@@ -399,8 +262,8 @@ Future<ServerSession> signedInSession(
     };
     return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
   });
-  final session = ServerSession(library, MockRepository(), ServerStreamingClient(client));
-  await session.initialize();
+  final session = ServerSession(library, testRepository(), ServerStreamingClient(client));
+  session.initialize();
   await session.connect(serverUrl);
   final error = await session.login('owner', 'password', false);
   if (error != null) throw StateError('signing in failed: $error');

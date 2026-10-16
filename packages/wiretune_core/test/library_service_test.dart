@@ -1,21 +1,23 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:io';
+
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
 
-LibraryService _service(MockRepository repo) =>
+LibraryService _service(LibraryRepository repo) =>
     LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
 
 void main() {
   setUpAll(useTempDataDirectory);
 
   test('indexes albums and artists', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([
+    repo.replaceAllTracks([
       Track(
         id: '1',
         title: 'Starboy',
@@ -41,7 +43,7 @@ void main() {
         format: const AudioFormat(sampleRate: 88200, bitsPerSample: 24),
       ),
     ]);
-    await service.initialize();
+    service.initialize();
 
     expect(service.tracks, hasLength(3));
     expect(service.albums, hasLength(2));
@@ -54,57 +56,57 @@ void main() {
   });
 
   test('playlists can be created and modified', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    await service.initialize();
+    service.initialize();
 
-    final playlist = await service.createPlaylist('Favorites Hi-Res', 'Best 24-bit FLAC tracks');
+    final playlist = service.createPlaylist('Favorites Hi-Res', 'Best 24-bit FLAC tracks');
     expect(playlist.name, 'Favorites Hi-Res');
 
-    await service.addTrackToPlaylist(playlist.id, 'track_123');
+    service.addTracksToPlaylist(playlist.id, ['track_123']);
     expect(playlist.trackCount, 1);
-    await service.addTrackToPlaylist(playlist.id, 'track_123'); // no duplicates
+    service.addTracksToPlaylist(playlist.id, ['track_123']); // no duplicates
     expect(playlist.trackCount, 1);
 
-    await service.renamePlaylist(playlist.id, '  Renamed ');
+    service.renamePlaylist(playlist.id, '  Renamed ');
     expect(service.getPlaylist(playlist.id)!.name, 'Renamed');
 
-    await service.removeTrackFromPlaylist(playlist.id, 'track_123');
+    service.removeTrackFromPlaylist(playlist.id, 'track_123');
     expect(playlist.trackCount, 0);
 
-    await service.deletePlaylist(playlist.id);
+    service.deletePlaylist(playlist.id);
     expect(service.playlists, isEmpty);
-    expect(repo.playlists, isEmpty);
+    expect(repo.getAllPlaylists(), isEmpty);
   });
 
   test('a playlist takes many tracks in one change, and its shown entries move around the ones it lacks', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([
+    repo.replaceAllTracks([
       for (final id in ['a', 'b', 'c']) TestSupport.makeTrack(id, 'Song $id'),
     ]);
-    await service.initialize();
-    final playlist = await service.createPlaylist('Mix');
+    service.initialize();
+    final playlist = service.createPlaylist('Mix');
     var edits = 0;
     service.playlistsChanged.listen((_) => edits++);
 
-    await service.addTracksToPlaylist(playlist.id, ['a', 'gone', 'b', 'a', 'c']);
+    service.addTracksToPlaylist(playlist.id, ['a', 'gone', 'b', 'a', 'c']);
     expect(playlist.trackIds, ['a', 'gone', 'b', 'c']);
     expect(edits, 1);
 
     // Shown: a, b, c. Moving c to the top keeps the missing entry among the others.
-    await service.movePlaylistTrack(playlist.id, 2, 0);
+    service.movePlaylistTrack(playlist.id, 2, 0);
     expect([for (final t in service.getPlaylistTracks(playlist)) t.id], ['c', 'a', 'b']);
-    await service.movePlaylistTrack(playlist.id, 0, 2);
+    service.movePlaylistTrack(playlist.id, 0, 2);
     expect([for (final t in service.getPlaylistTracks(playlist)) t.id], ['a', 'b', 'c']);
-    await service.movePlaylistTrack(playlist.id, 0, 9); // out of range: nothing happens
+    service.movePlaylistTrack(playlist.id, 0, 9); // out of range: nothing happens
     expect(playlist.trackIds, hasLength(4));
   });
 
   test('a compilation in one folder becomes Various Artists, and guests stay out of the artist list', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([
+    repo.replaceAllTracks([
       Track(
         id: '1',
         title: 'Song 1',
@@ -130,7 +132,7 @@ void main() {
         filePath: '/Music/Compilations/TopHits/03.flac',
       ),
     ]);
-    await service.initialize();
+    service.initialize();
 
     expect(service.albums.single.artist, 'Various Artists');
     expect(service.artists.single.name, 'Various Artists');
@@ -140,9 +142,9 @@ void main() {
   });
 
   test('the dominant artist of a folder becomes its album artist', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([
+    repo.replaceAllTracks([
       Track(
         id: '1',
         title: 'One More Time',
@@ -168,7 +170,7 @@ void main() {
         filePath: '/Music/DaftPunk/Discovery/03.flac',
       ),
     ]);
-    await service.initialize();
+    service.initialize();
 
     expect(service.albums.single.artist, 'Daft Punk');
     expect(service.artists.single.name, 'Daft Punk');
@@ -190,10 +192,10 @@ void main() {
     );
 
     Future<LibraryService> library(List<Track> tracks) async {
-      final repo = MockRepository()..settings['library_path'] = '/Music';
+      final repo = testRepository()..setSetting('library_path', '/Music');
       final service = _service(repo);
-      repo.saveTracks(tracks);
-      await service.initialize();
+      repo.replaceAllTracks(tracks);
+      service.initialize();
       return service;
     }
 
@@ -312,26 +314,28 @@ void main() {
         ]);
         expect(flat.albums.map((a) => a.title), unorderedEquals(['Discovery', 'Homework']));
 
-        final repo = MockRepository(); // no music folder known
+        final repo = testRepository(); // no music folder known
         final service = _service(repo);
-        repo.saveTracks([song('1', 'ACDC Essentials', 'Back In Black'), song('2', 'ACDC Essentials', 'POWER UP')]);
-        await service.initialize();
+        repo.replaceAllTracks([
+          song('1', 'ACDC Essentials', 'Back In Black'),
+          song('2', 'ACDC Essentials', 'POWER UP'),
+        ]);
+        service.initialize();
         expect(service.albums, hasLength(2));
       },
     );
 
     test('follows the tags again when the folder no longer qualifies, and stores only the tags', () async {
-      final repo = MockRepository()..settings['library_path'] = '/Music';
+      final repo = testRepository()..setSetting('library_path', '/Music');
       final service = _service(repo);
-      repo.saveTracks([song('1', 'GOLD', 'Gold: Greatest Hits', number: 3), song('2', 'GOLD', 'The Singles')]);
-      await service.initialize();
+      repo.replaceAllTracks([song('1', 'GOLD', 'Gold: Greatest Hits', number: 3), song('2', 'GOLD', 'The Singles')]);
+      service.initialize();
       expect(service.albums.single.title, 'GOLD');
+      service.recordPlay('1'); // a write of the library: what it stores is what the tags say
+      expect({for (final t in repo.getAllTracks()) t.album}, {'Gold: Greatest Hits', 'The Singles'});
 
-      await service.replaceTracks([service.getTrack('1')!, service.getTrack('2')!]);
-      expect(service.albums.single.title, 'GOLD');
-      expect({for (final t in await repo.getAllTracks()) t.album}, {'Gold: Greatest Hits', 'The Singles'});
-
-      await service.replaceTracks([service.getTrack('1')!]);
+      // With the other song hidden, the folder holds one album's song: it goes back to its tags.
+      service.hideTrack('2');
       final alone = service.albums.single;
       expect((alone.title, alone.tracks.single.trackNumber), ('Gold: Greatest Hits', 3));
     });
@@ -340,9 +344,9 @@ void main() {
   test(
     "featured artists are credited: their songs are on their pages, while the artist list keeps album artists",
     () async {
-      final repo = MockRepository();
+      final repo = testRepository();
       final service = _service(repo);
-      repo.saveTracks([
+      repo.replaceAllTracks([
         Track(
           id: '1',
           title: 'AFFILIATED (feat. Lil Durk)',
@@ -360,7 +364,7 @@ void main() {
           album: 'Dark Lane Demo Tapes',
         ),
       ]);
-      await service.initialize();
+      service.initialize();
 
       expect(service.artists.map((a) => a.name), ['Drake', 'Future']);
       expect(service.albums.firstWhere((a) => a.title == 'Dark Lane Demo Tapes').artist, 'Drake');
@@ -372,20 +376,20 @@ void main() {
   );
 
   test('colliding track numbers keep the folder apart', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([
+    repo.replaceAllTracks([
       Track(id: '1', title: 'A', artist: 'X', album: 'Same', trackNumber: 1, filePath: '/m/f/1.flac'),
       Track(id: '2', title: 'B', artist: 'Y', album: 'Same', trackNumber: 1, filePath: '/m/f/2.flac'),
     ]);
-    await service.initialize();
+    service.initialize();
     expect(service.albums, hasLength(2));
   });
 
   test('an album of hi-res and CD tracks is tagged MIXED, at the tier of its weakest track', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([
+    repo.replaceAllTracks([
       Track(
         id: 't1',
         title: 'Hi-Res',
@@ -405,94 +409,96 @@ void main() {
         format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
       ),
     ]);
-    await service.initialize();
+    service.initialize();
     final album = service.albums.single;
     expect((album.tier, album.tagSpec), (QualityTier.silver, QualitySummary.mixedSpec));
   });
 
   test('sorting ignores accents and case', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([
+    repo.replaceAllTracks([
       TestSupport.makeTrack('1', 'x', artist: 'zebra', album: 'Zulu'),
       TestSupport.makeTrack('2', 'y', artist: 'Ábel', album: 'Ébredés'),
       TestSupport.makeTrack('3', 'z', artist: 'bach', album: 'b'),
     ]);
-    await service.initialize();
+    service.initialize();
     expect(service.artists.map((a) => a.name), ['Ábel', 'bach', 'zebra']);
     expect(service.albums.map((a) => a.title), ['b', 'Ébredés', 'Zulu']);
   });
 
   test('server tracks change only while signed in to the server, local ones always', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
     final local = TestSupport.makeTrack('local', 'Local');
     final server = TestSupport.makeServerTrack('server', 'Server');
-    repo.saveTracks([local, server]);
-    await service.initialize();
+    repo.replaceAllTracks([local, server]);
+    service.initialize();
 
     final toggled = <String>[];
     service.favoriteToggled.listen((t) => toggled.add(t.id));
 
     service.serverConnected = true;
-    await service.toggleFavorite('server');
+    service.toggleFavorite('server');
     expect(service.getTrack('server')!.isFavorite, isTrue);
     expect(toggled, ['server']); // a change the server has to hear about
 
-    await service.toggleFavorite('local');
+    service.toggleFavorite('local');
     expect(toggled, ['server']); // local tracks stay on the device
 
     service.serverConnected = false;
-    await service.toggleFavorite('server');
+    service.toggleFavorite('server');
     expect(service.getTrack('server')!.isFavorite, isTrue); // cannot be changed while the server is away
-    await service.recordPlay('server');
+    service.recordPlay('server');
     expect(service.getTrack('server')!.playCount, 0);
-    await service.recordPlay('local');
+    service.recordPlay('local');
     expect(service.getTrack('local')!.playCount, 1);
   });
 
   test('a favourite remembers when it was marked: here, or on the server', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
-    repo.saveTracks([TestSupport.makeTrack('local', 'Local')]);
-    await service.initialize();
+    repo.replaceAllTracks([TestSupport.makeTrack('local', 'Local')]);
+    service.initialize();
 
     final before = DateTime.now().toUtc();
-    await service.toggleFavorite('local');
+    service.toggleFavorite('local');
     final marked = service.getTrack('local')!.favoritedAt;
     expect(marked != null && !marked.isBefore(before), isTrue);
-    expect(repo.tracks.single.favoritedAt, marked); // and stored
-    await service.toggleFavorite('local');
+    expect(repo.getAllTracks().single.favoritedAt, marked); // and stored
+    service.toggleFavorite('local');
     expect(service.getTrack('local')!.favoritedAt, isNull);
 
     // A server's favourites come with the time the account marked them.
     final when = DateTime.utc(2026, 2, 3);
-    await service.mergeServerTracks([
+    service.mergeServerTracks([
       TestSupport.makeServerTrack('s1', 'Server'),
     ], UserDataSnapshot(['s1'], const [], const [], {'s1': when}));
     expect(service.getTrack('s1')!.favoritedAt, when);
   });
 
-  test('a rescan keeps favourites, play counts and the date added', () async {
-    final repo = MockRepository();
-    final service = _service(repo);
-    final original = TestSupport.makeTrack('1', 'Song')..dateAdded = DateTime.utc(2020);
-    repo.saveTracks([original]);
-    await service.initialize();
-    await service.toggleFavorite('1');
-    await service.recordPlay('1');
+  test('a rescan that reads a changed file again keeps its favourite, play count and date added', () async {
+    final folder = Directory.systemTemp.createTempSync('wiretune_rescan_');
+    final file = '${folder.path}/Song.wav';
+    writeWav(file, 44100);
+    final service = _service(testRepository());
+    service.initialize();
+    expect(await service.scanFolder(folder.path), isTrue);
+    final id = service.tracks.single.id;
+    final added = service.tracks.single.dateAdded;
+    service.toggleFavorite(id);
+    service.recordPlay(id);
 
-    await service.replaceTracks([TestSupport.makeTrack('1', 'Song (retagged)')]);
+    writeWav(file, 44100, seconds: 2); // the file changed: the next scan reads it again
+    expect(await service.scanFolder(folder.path), isTrue);
 
-    final track = service.getTrack('1')!;
-    expect(track.title, 'Song (retagged)');
-    expect(track.isFavorite, isTrue);
-    expect(track.playCount, 1);
-    expect(track.dateAdded, DateTime.utc(2020));
+    final track = service.getTrack(id)!;
+    expect(track.duration, const Duration(seconds: 2));
+    expect((track.isFavorite, track.playCount, track.dateAdded), (true, 1, added));
   });
 
   test('content hiding: tracks, albums, artists, precedence, non-destructive hierarchy, and playback', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
     final t1 = Track(
       id: 't1',
@@ -518,8 +524,8 @@ void main() {
       duration: const Duration(seconds: 210),
       format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
     );
-    repo.saveTracks([t1, t2, t3]);
-    await service.initialize();
+    repo.replaceAllTracks([t1, t2, t3]);
+    service.initialize();
 
     expect(service.tracks, hasLength(3));
     expect(service.albums, hasLength(2));
@@ -527,7 +533,7 @@ void main() {
     expect(service.favorites, hasLength(1));
 
     // 1. Hide track 1
-    await service.hideTrack('t1');
+    service.hideTrack('t1');
     expect(service.isTrackHidden(t1), isTrue);
     expect(service.isTrackExplicitlyHidden('t1'), isTrue);
     expect(service.tracks.map((t) => t.id), ['t2', 't3']);
@@ -541,43 +547,43 @@ void main() {
 
     // 2. Hide Album 1 (precedence & hierarchy)
     final album1Id = t1.albumId;
-    await service.hideAlbum(album1Id);
-    expect(service.isAlbumHidden(album1Id), isTrue);
+    service.hideAlbum(album1Id);
+    expect(service.hiddenAlbums, contains(album1Id));
     expect(service.isTrackHidden(t2), isTrue); // t2 is hidden via album
     expect(service.albums.map((a) => a.id), [t3.albumId]);
     expect(service.tracks.map((t) => t.id), ['t3']);
 
     // 3. Unhide Album 1: Non-destructive hierarchy test!
     // t1 was explicitly hidden, so when Album 1 is unhidden, t1 MUST STILL be hidden, while t2 reappears.
-    await service.unhideAlbum(album1Id);
-    expect(service.isAlbumHidden(album1Id), isFalse);
+    service.unhideAlbum(album1Id);
+    expect(service.hiddenAlbums, isNot(contains(album1Id)));
     expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
     expect(service.isTrackHidden(t2), isFalse); // visible again
     expect(service.tracks.map((t) => t.id), ['t2', 't3']);
 
     // 4. Hide Artist A: hides Album 1 and all its tracks
     final artistAId = service.artists.firstWhere((a) => a.name == 'Artist A').id;
-    await service.hideArtist(artistAId);
-    expect(service.isArtistHidden(artistAId), isTrue);
+    service.hideArtist(artistAId);
+    expect(service.hiddenArtists, contains(artistAId));
     expect(service.isTrackHidden(t2), isTrue);
     expect(service.artists.map((a) => a.name), ['Artist B']);
     expect(service.tracks.map((t) => t.id), ['t3']);
 
     // 5. Unhide Artist A: non-destructive hierarchy
-    await service.unhideArtist(artistAId);
-    expect(service.isArtistHidden(artistAId), isFalse);
+    service.unhideArtist(artistAId);
+    expect(service.hiddenArtists, isNot(contains(artistAId)));
     expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
     expect(service.isTrackHidden(t2), isFalse); // visible again
 
     // 6. Unhide All
-    await service.unhideAll();
+    service.unhideAll();
     expect(service.isTrackHidden(t1), isFalse);
     expect(service.tracks, hasLength(3));
     expect(service.favorites, hasLength(1));
   });
 
   test('content hiding: user switching isolates hidden items', () async {
-    final repo = MockRepository();
+    final repo = testRepository();
     final service = _service(repo);
     final t1 = Track(
       id: 't1',
@@ -587,22 +593,22 @@ void main() {
       duration: const Duration(seconds: 180),
       format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
     );
-    repo.saveTracks([t1]);
-    await service.initialize();
+    repo.replaceAllTracks([t1]);
+    service.initialize();
 
     service.serverConnected = true; // an account's hidden items change only while signed in to its server
-    await service.setCurrentUser('user_alpha');
-    await service.hideTrack('t1');
+    service.setCurrentUser('user_alpha');
+    service.hideTrack('t1');
     expect(service.isTrackHidden(t1), isTrue);
     expect(service.tracks, isEmpty);
 
     // Switch to user_beta
-    await service.setCurrentUser('user_beta');
+    service.setCurrentUser('user_beta');
     expect(service.isTrackHidden(t1), isFalse);
     expect(service.tracks, hasLength(1));
 
     // Switch back to user_alpha
-    await service.setCurrentUser('user_alpha');
+    service.setCurrentUser('user_alpha');
     expect(service.isTrackHidden(t1), isTrue);
     expect(service.tracks, isEmpty);
   });
@@ -610,7 +616,7 @@ void main() {
   test(
     "the account's hidden items stay on the device for offline use, and cannot change while it is offline",
     () async {
-      final repo = MockRepository();
+      final repo = testRepository();
       final service = _service(repo);
       final track = Track(
         id: 's1',
@@ -621,17 +627,17 @@ void main() {
         duration: const Duration(seconds: 180),
         format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
       );
-      await service.initialize();
-      await service.setCurrentUser('account');
+      service.initialize();
+      service.setCurrentUser('account');
       service.serverConnected = true;
-      await service.mergeServerTracks([track], const UserDataSnapshot([], [], [], {}, [], [], ['s1']));
+      service.mergeServerTracks([track], const UserDataSnapshot([], [], [], {}, [], [], ['s1']));
       expect(service.tracks, isEmpty);
 
       // The next start, before the server answers (or when it cannot be reached): still hidden.
       final restarted = _service(repo);
-      await restarted.initialize();
-      await restarted.setCurrentUser('account');
-      expect(restarted.isTrackIdHidden('s1'), isTrue);
+      restarted.initialize();
+      restarted.setCurrentUser('account');
+      expect(restarted.hiddenTracks, contains('s1'));
       expect(restarted.tracks, isEmpty);
 
       // Offline, a change would be lost at the next refresh, so it is not made, nor sent; the user is told why.
@@ -640,36 +646,143 @@ void main() {
       restarted.hiddenToggled.listen(sent.add);
       restarted.changeNotice.listen(notices.add);
       expect(restarted.canChangeHidden, isFalse);
-      await restarted.unhideTrack('s1');
-      await restarted.hideArtist('artist-b');
-      expect(restarted.isTrackIdHidden('s1'), isTrue);
+      restarted.unhideTrack('s1');
+      restarted.hideArtist('artist-b');
+      expect(restarted.hiddenTracks, contains('s1'));
       expect(restarted.hiddenArtists, isEmpty);
       expect(sent, isEmpty);
       expect(notices, [ChangeNotice.readOnlyOffline, ChangeNotice.readOnlyOffline]);
 
       // So is a favourite of a server track; and a playlist made meanwhile stays on this device.
-      await restarted.toggleFavorite('s1');
+      restarted.toggleFavorite('s1');
       expect(restarted.getTrack('s1')!.isFavorite, isFalse);
-      expect((await restarted.createPlaylist('On the road')).isServer, isFalse);
+      expect((restarted.createPlaylist('On the road')).isServer, isFalse);
       expect(notices.skip(2), [ChangeNotice.readOnlyOffline, ChangeNotice.playlistKeptOnDevice]);
       notices.clear();
 
       // Signed in again, a change is made and sent on.
       restarted.serverConnected = true;
-      await restarted.unhideTrack('s1');
+      restarted.unhideTrack('s1');
       expect(restarted.tracks, hasLength(1));
       expect(sent.map((e) => (e.itemType, e.itemId, e.hidden)), [('track', 's1', false)]);
 
       // Without an account, hiding is the device's own business.
-      await restarted.removeServerTracks();
+      restarted.removeServerTracks();
       restarted.serverConnected = false;
       expect(restarted.canChangeHidden, isTrue);
-      await restarted.hideArtist('artist-b');
-      expect(restarted.isArtistHidden('artist-b'), isTrue);
+      restarted.hideArtist('artist-b');
+      expect(restarted.hiddenArtists, contains('artist-b'));
       expect(sent, hasLength(1));
-      await restarted.createPlaylist('Local');
+      restarted.createPlaylist('Local');
       expect(notices, isEmpty);
-      expect((await repo.getHiddenItems('account'))['track'], isEmpty); // the account's copy left with its tracks
+      expect(repo.getHiddenItems('account')['track'], isEmpty); // the account's copy left with its tracks
     },
   );
+
+  group('server and local music together', () {
+    Track local(String id, String title, String artist, {String album = 'Unknown Album', double seconds = 0}) => Track(
+      id: id,
+      title: title,
+      artist: artist,
+      album: album,
+      duration: Duration(milliseconds: (seconds * 1000).round()),
+      filePath: '/music/$id.flac',
+    );
+    Track server(String id, String title, String artist, {String album = 'Unknown Album', double seconds = 0}) => Track(
+      id: id,
+      title: title,
+      artist: artist,
+      album: album,
+      duration: Duration(milliseconds: (seconds * 1000).round()),
+      streamUrl: 'http://localhost:5200/api/stream/$id',
+    );
+    UserDataSnapshot account({List<String> favorites = const [], List<PlaylistData> playlists = const []}) =>
+        UserDataSnapshot(favorites, const [], playlists);
+
+    test('a server refresh keeps the local tracks, and a song in both places is the local file', () async {
+      final repo = testRepository()
+        ..replaceAllTracks([local('loc-1', 'Hey Jude', 'The Beatles', album: '1', seconds: 431)]);
+      final library = _service(repo)..initialize();
+
+      library.mergeServerTracks([
+        server('srv-jude', 'Hey Jude (Remastered 2015)', 'The Beatles', album: '1 (Remastered)', seconds: 431),
+        server('srv-letitbe', 'Let It Be', 'The Beatles', album: 'Let It Be', seconds: 243),
+      ], account(favorites: ['srv-jude']));
+
+      expect(library.tracks, hasLength(2));
+      final heyJude = library.tracks.firstWhere((t) => t.title.startsWith('Hey Jude'));
+      expect((heyJude.id, heyJude.isLocal, heyJude.isFavorite), ('loc-1', true, true)); // the favourite came along
+      expect(library.tracks.firstWhere((t) => t.title == 'Let It Be').isLocal, isFalse);
+    });
+
+    test("this device's playlists point at the local file, the account's keep the server's IDs", () async {
+      final repo = testRepository()
+        ..savePlaylist(Playlist(id: 'pl-1', name: 'Mine', trackIds: ['srv-jude']))
+        ..replaceAllTracks([local('loc-jude', 'Hey Jude', 'The Beatles', seconds: 431)]);
+      final library = _service(repo)..initialize();
+      final now = DateTime.now().toUtc();
+
+      library.mergeServerTracks(
+        [server('srv-jude', 'Hey Jude', 'The Beatles', seconds: 431)],
+        account(
+          playlists: [
+            PlaylistData('srv-pl', 'Account', null, const ['srv-jude'], now, now),
+          ],
+        ),
+      );
+
+      final own = library.getPlaylist('pl-1')!;
+      expect(own.trackIds, ['loc-jude']);
+      final accounts = library.getPlaylist('srv-pl')!;
+      expect(accounts.isServer, isTrue);
+      expect(accounts.trackIds, ['srv-jude']);
+      for (final playlist in [own, accounts]) {
+        expect(library.getPlaylistTracks(playlist).single.id, 'loc-jude');
+      }
+    });
+
+    test('another device names a matched track by its server ID, and this one finds its local file by it', () async {
+      final repo = testRepository()
+        ..replaceAllTracks([
+          local('loc-jude', 'Hey Jude', 'The Beatles', seconds: 431),
+          local('loc-only', 'Demo', 'Me', seconds: 100),
+        ]);
+      final library = _service(repo)..initialize();
+      library.mergeServerTracks([
+        server('srv-jude', 'Hey Jude', 'The Beatles', seconds: 431),
+        server('srv-help', 'Help!', 'The Beatles', seconds: 140),
+      ], account());
+
+      expect(library.sharedId(library.getTrack('loc-jude')!), 'srv-jude');
+      expect(library.sharedId(library.getTrack('srv-help')!), 'srv-help');
+      expect(library.sharedId(library.getTrack('loc-only')!), 'loc-only');
+      expect(library.resolveTracks(['srv-help', 'srv-jude', 'unknown', 'loc-only']).map((t) => t.id), [
+        'srv-help',
+        'loc-jude',
+        'loc-only',
+      ]);
+    });
+
+    test('the session moves between local, hybrid and back on sign-out', () async {
+      final repo = testRepository()..replaceAllTracks([local('loc-1', 'Local Song', 'Local Artist')]);
+      final library = _service(repo)..initialize();
+      final session = ServerSession(library, repo);
+      addTearDown(session.dispose);
+      session.initialize();
+      expect(session.source, LibrarySource.none);
+
+      session.useLocalLibrary();
+      expect(session.source, LibrarySource.local);
+
+      library.mergeServerTracks([server('srv-1', 'Server Song', 'Server Artist')], account());
+      session.useLocalLibrary();
+      expect(session.source, LibrarySource.hybrid);
+      expect(library.tracks, hasLength(2));
+
+      await session.logout();
+      expect(session.source, LibrarySource.local);
+      expect(library.tracks.single.id, 'loc-1');
+      expect(repo.getSetting('library_source'), 'local');
+    });
+  });
 }

@@ -20,7 +20,7 @@ void main() {
       TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2),
       TestSupport.makeTrack('3', 'Opening', artist: 'Daft Punk', album: 'Random Access Memories', trackNumber: 1),
     ]);
-    await library.initialize();
+    library.initialize();
     return createMainViewModel(library);
   }
 
@@ -206,10 +206,10 @@ void main() {
   });
 
   test('preferences are applied at start and remembered', () async {
-    final repo = MockRepository()
-      ..settings['preference.language'] = 'de'
-      ..settings['preference.theme'] = 'light'
-      ..settings['preference.online_lyrics'] = '0';
+    final repo = testRepository()
+      ..setSetting('preference.language', 'de')
+      ..setSetting('preference.theme', 'light')
+      ..setSetting('preference.online_lyrics', '0');
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
     final vm = MainViewModel(TestSupport.createEngine(), library, ServerSession(library, repo));
     await vm.start();
@@ -223,9 +223,9 @@ void main() {
     vm.toggleTheme();
     vm.showPerformanceStats = true;
     await Future<void>.delayed(Duration.zero);
-    expect(repo.settings['preference.language'], 'hu');
-    expect(repo.settings['preference.theme'], 'dark');
-    expect(repo.settings['preference.show_performance_stats'], '1');
+    expect(repo.getSetting('preference.language'), 'hu');
+    expect(repo.getSetting('preference.theme'), 'dark');
+    expect(repo.getSetting('preference.show_performance_stats'), '1');
     Localizer.instance.setLanguage('en');
   });
 }

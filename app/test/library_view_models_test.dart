@@ -34,7 +34,7 @@ void main() {
 
   Future<LibraryService> library(List<Track> tracks) async {
     final library = createLibrary(tracks);
-    await library.initialize();
+    library.initialize();
     return library;
   }
 
@@ -167,7 +167,7 @@ void main() {
     favorites.setSortField(TrackSortField.title);
     expect([for (final t in favorites.favoriteTracks) t.id], ['3', '2', '1']);
 
-    await lib.toggleFavorite('4'); // marked just now: the newest
+    lib.toggleFavorite('4'); // marked just now: the newest
     favorites.setSortField(TrackSortField.added);
     expect(favorites.favoriteTracks.first.id, '4');
   });
@@ -264,9 +264,9 @@ void main() {
     final engine = TestSupport.createEngine();
     final player = PlayerViewModel(engine, lib);
     final playlists = PlaylistsViewModel(lib, player);
-    final mix = await lib.createPlaylist('Mix');
+    final mix = lib.createPlaylist('Mix');
     for (final id in ['3', '1', '2']) {
-      await lib.addTrackToPlaylist(mix.id, id);
+      lib.addTracksToPlaylist(mix.id, [id]);
     }
     playlists.openPlaylist(lib.getPlaylist(mix.id));
     List<String> titles() => [for (final t in playlists.selectedPlaylistTracks) t.title];
@@ -290,10 +290,8 @@ void main() {
     final lib = await library([track('1', 'Album'), track('2', 'Album')]);
     final playlists = PlaylistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
     for (final (name, tracks) in [('Zed', 2), ('Alpha', 0), ('Mid', 1)]) {
-      final created = await lib.createPlaylist(name);
-      for (final id in ['1', '2'].take(tracks)) {
-        await lib.addTrackToPlaylist(created.id, id);
-      }
+      final created = lib.createPlaylist(name);
+      lib.addTracksToPlaylist(created.id, ['1', '2'].take(tracks));
       await Future<void>.delayed(const Duration(milliseconds: 2)); // a creation time of its own
     }
     List<String> names() => [for (final p in playlists.playlists) p.name];
@@ -346,12 +344,12 @@ void main() {
     var notified = 0;
     favorites.addListener(() => notified++);
 
-    await lib.toggleFavorite(t1.id);
+    lib.toggleFavorite(t1.id);
     expect([for (final t in favorites.favoriteTracks) t.id], [t1.id]);
     expect(notified, greaterThan(0));
 
     final countAfterAdd = notified;
-    await lib.toggleFavorite(t1.id);
+    lib.toggleFavorite(t1.id);
     expect(favorites.favoriteTracks, isEmpty);
     expect(notified, greaterThan(countAfterAdd));
   });

@@ -43,10 +43,6 @@ class LibraryService {
   final MetadataScanner _scanner;
   final String _coverCacheDirectory;
   final AsyncLock _scanGate = AsyncLock();
-
-  // Local scans and server merges each read the snapshot, combine it with new data and replace it; one at a time, so
-  // neither can overwrite the other's result with a stale view.
-  final AsyncLock _commitGate = AsyncLock();
   LibrarySnapshot _snapshot = LibrarySnapshot.empty;
   List<Playlist> _playlists = const [];
   bool _isScanning = false;
@@ -80,15 +76,15 @@ class LibraryService {
 
   /// Switches to the hidden items of the server account [userId] (null or empty: no account), as this device last saw
   /// them.
-  Future<void> setCurrentUser(String? userId) async {
+  void setCurrentUser(String? userId) {
     _currentUserId = (userId != null && userId.isNotEmpty) ? userId : _noAccount;
-    await _loadHidden();
+    _loadHidden();
     _rebuildSnapshot();
     libraryChanged.emit(null);
   }
 
-  Future<void> _loadHidden() async {
-    final stored = await _repository.getHiddenItems(_currentUserId);
+  void _loadHidden() {
+    final stored = _repository.getHiddenItems(_currentUserId);
     _setHiddenSets(stored['artist'] ?? const {}, stored['album'] ?? const {}, stored['track'] ?? const {});
   }
 
@@ -112,14 +108,6 @@ class LibraryService {
     return false;
   }
 
-  bool isTrackIdHidden(String trackId) {
-    final track = _rawTrackById[trackId];
-    if (track == null) return _hiddenTracks.contains(trackId);
-    return isTrackHidden(track);
-  }
-
-  bool isArtistHidden(String artistId) => _hiddenArtists.contains(artistId);
-  bool isAlbumHidden(String albumId) => _hiddenAlbums.contains(albumId);
   bool isTrackExplicitlyHidden(String trackId) => _hiddenTracks.contains(trackId);
 
   void _rebuildSnapshot() {
@@ -154,20 +142,20 @@ class LibraryService {
   LibraryRepository get repository => _repository;
 
   /// Reads a small persisted user preference (interface language, theme); null when it was never set.
-  Future<String?> getPreference(String name) => _repository.getSetting('preference.$name');
+  String? getPreference(String name) => _repository.getSetting('preference.$name');
 
-  Future<void> setPreference(String name, String value) => _repository.setSetting('preference.$name', value);
+  void setPreference(String name, String value) => _repository.setSetting('preference.$name', value);
 
-  Future<void> initialize() async {
-    await _repository.initialize();
-    libraryPath = await _repository.getSetting('library_path', '') ?? '';
+  void initialize() {
+    _repository.initialize();
+    libraryPath = _repository.getSetting('library_path', '') ?? '';
 
-    final storedTracks = await _repository.getAllTracks();
-    final storedPlaylists = await _repository.getAllPlaylists();
+    final storedTracks = _repository.getAllTracks();
+    final storedPlaylists = _repository.getAllPlaylists();
 
     _rawTracks = storedTracks;
     _rawTrackById = {for (final t in storedTracks) t.id: t};
-    await _loadHidden();
+    _loadHidden();
 
     _rebuildSnapshot();
     _playlists = _sortedPlaylists(storedPlaylists);
@@ -224,21 +212,20 @@ class LibraryService {
         if (cancellationToken?.isCancelled ?? false) return false;
 
         libraryPath = root;
-        await _repository.setSetting('library_path', root);
+        _repository.setSetting('library_path', root);
 
-        await _commitGate.synchronized(() async {
-          final existingServerTracks = _rawTracks.where((t) => !t.isLocal).toList();
-          List<Track> toSave;
-          if (existingServerTracks.isNotEmpty) {
-            final aliased = <String, String>{};
-            toSave = TrackDeduplication.mergeTracks(scanned, existingServerTracks, aliased);
-            _serverAliases = aliased;
-            await _updatePlaylistsWithAliases(aliased);
-          } else {
-            toSave = scanned;
-          }
-          await _replaceTracksCore(toSave);
-        });
+        // From here on nothing waits, so a server refresh can't interleave with this one.
+        final existingServerTracks = _rawTracks.where((t) => !t.isLocal).toList();
+        List<Track> toSave;
+        if (existingServerTracks.isNotEmpty) {
+          final aliased = <String, String>{};
+          toSave = TrackDeduplication.mergeTracks(scanned, existingServerTracks, aliased);
+          _serverAliases = aliased;
+          _updatePlaylistsWithAliases(aliased);
+        } else {
+          toSave = scanned;
+        }
+        _replaceTracksCore(toSave);
 
         WiretuneLog.info(
           'LibraryService',
@@ -256,59 +243,50 @@ class LibraryService {
     return result;
   }
 
-  Future<void> replaceTracks(Iterable<Track> tracks) async {
-    final list = tracks.toList();
-    await _commitGate.synchronized(() => _replaceTracksCore(list));
-  }
-
   /// Replaces the server part of the library, with the signed-in account's favourites, play counts and playlists as
   /// the server holds them (they replace whatever this device cached).
-  Future<void> mergeServerTracks(Iterable<Track> serverTracks, UserDataSnapshot userData) async {
+  void mergeServerTracks(Iterable<Track> serverTracks, UserDataSnapshot userData) {
     final incomingServer = serverTracks.toList();
     _applyUserData(incomingServer, userData);
 
-    await _commitGate.synchronized(() async {
-      _setHiddenSets(userData.hiddenArtists, userData.hiddenAlbums, userData.hiddenTracks);
-      // Never kept as the device's own: the session names the account before it downloads the account's data.
-      if (_currentUserId != _noAccount) {
-        await _repository.replaceHiddenItems(
-          _currentUserId,
-          artists: userData.hiddenArtists,
-          albums: userData.hiddenAlbums,
-          tracks: userData.hiddenTracks,
-        );
-      }
-      final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
+    _setHiddenSets(userData.hiddenArtists, userData.hiddenAlbums, userData.hiddenTracks);
+    // Never kept as the device's own: the session names the account before it downloads the account's data.
+    if (_currentUserId != _noAccount) {
+      _repository.replaceHiddenItems(
+        _currentUserId,
+        artists: userData.hiddenArtists,
+        albums: userData.hiddenAlbums,
+        tracks: userData.hiddenTracks,
+      );
+    }
+    final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
 
-      List<Track> merged;
-      if (existingLocalTracks.isNotEmpty) {
-        // Favourites and play counts of a server copy move to the local file (never the other way round).
-        final aliased = <String, String>{};
-        merged = TrackDeduplication.mergeTracks(existingLocalTracks, incomingServer, aliased);
-        _serverAliases = aliased;
-        await _updatePlaylistsWithAliases(aliased);
-      } else {
-        merged = incomingServer;
-        _serverAliases = const {};
-      }
+    List<Track> merged;
+    if (existingLocalTracks.isNotEmpty) {
+      // Favourites and play counts of a server copy move to the local file (never the other way round).
+      final aliased = <String, String>{};
+      merged = TrackDeduplication.mergeTracks(existingLocalTracks, incomingServer, aliased);
+      _serverAliases = aliased;
+      _updatePlaylistsWithAliases(aliased);
+    } else {
+      merged = incomingServer;
+      _serverAliases = const {};
+    }
 
-      await _replaceServerPlaylists(userData.playlists);
-      await _replaceTracksCore(merged, serverOwnsUserData: true);
-    });
+    _replaceServerPlaylists(userData.playlists);
+    _replaceTracksCore(merged, serverOwnsUserData: true);
   }
 
   /// Drops the server's tracks and the cached copies of its playlists (sign-out); local tracks and playlists stay.
-  Future<void> removeServerTracks() async {
-    await _commitGate.synchronized(() async {
-      final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
-      _serverAliases = const {};
-      if (_playlists.any((p) => p.isServer)) await _replaceServerPlaylists(const []);
-      // The account's hidden items leave the device with its tracks.
-      if (_currentUserId != _noAccount) await _repository.clearHiddenItems(_currentUserId);
-      _currentUserId = _noAccount;
-      await _loadHidden();
-      await _replaceTracksCore(existingLocalTracks);
-    });
+  void removeServerTracks() {
+    final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
+    _serverAliases = const {};
+    if (_playlists.any((p) => p.isServer)) _replaceServerPlaylists(const []);
+    // The account's hidden items leave the device with its tracks.
+    if (_currentUserId != _noAccount) _repository.clearHiddenItems(_currentUserId);
+    _currentUserId = _noAccount;
+    _loadHidden();
+    _replaceTracksCore(existingLocalTracks);
   }
 
   /// Copies the account's favourites and play statistics onto the freshly downloaded server tracks.
@@ -325,7 +303,7 @@ class LibraryService {
   }
 
   /// Replaces the cached server playlists with [playlists] (an empty list removes them).
-  Future<void> _replaceServerPlaylists(List<PlaylistData> playlists) async {
+  void _replaceServerPlaylists(List<PlaylistData> playlists) {
     final fromServer = [
       for (final pl in playlists)
         Playlist(
@@ -339,9 +317,9 @@ class LibraryService {
         ),
     ];
 
-    await _repository.deleteServerPlaylists();
+    _repository.deleteServerPlaylists();
     for (final playlist in fromServer) {
-      await _repository.savePlaylist(playlist);
+      _repository.savePlaylist(playlist);
     }
 
     _playlists = _sortedPlaylists([..._playlists.where((pl) => !pl.isServer), ...fromServer]);
@@ -349,7 +327,7 @@ class LibraryService {
   }
 
   /// Points playlist entries at the local copy of a track that also exists on the server.
-  Future<void> _updatePlaylistsWithAliases(Map<String, String> aliasedTrackIds) async {
+  void _updatePlaylistsWithAliases(Map<String, String> aliasedTrackIds) {
     if (aliasedTrackIds.isEmpty) return;
     // Server playlists keep the server's IDs (other devices resolve them); getPlaylistTracks follows the aliases.
     for (final playlist in _playlists.where((pl) => !pl.isServer).toList()) {
@@ -361,14 +339,14 @@ class LibraryService {
           if (seen.add(aliasedTrackIds[id] ?? id)) aliasedTrackIds[id] ?? id,
       ];
       playlist.modifiedAt = DateTime.now().toUtc();
-      await _repository.savePlaylist(playlist);
+      _repository.savePlaylist(playlist);
     }
   }
 
   /// [serverOwnsUserData]: the server's favourites and play counts were just applied to its tracks, so the cached ones
   /// must not overwrite them.
-  Future<void> _replaceTracksCore(List<Track> tracks, {bool serverOwnsUserData = false}) async {
-    final previous = _rawTrackById.isNotEmpty ? _rawTrackById : _snapshot.trackById;
+  void _replaceTracksCore(List<Track> tracks, {bool serverOwnsUserData = false}) {
+    final previous = _rawTrackById;
     for (final track in tracks) {
       final old = previous[track.id];
       if (old != null && !identical(old, track)) {
@@ -383,7 +361,7 @@ class LibraryService {
       }
     }
 
-    await _repository.replaceAllTracks(tracks);
+    _repository.replaceAllTracks(tracks);
     _rawTracks = tracks;
     _rawTrackById = {for (final t in tracks) t.id: t};
     _rebuildSnapshot();
@@ -393,24 +371,24 @@ class LibraryService {
   /// False for a server track while the server cannot be reached: its favourite and play count live there.
   bool _canChangeUserData(Track track) => track.isLocal || serverConnected;
 
-  Future<void> toggleFavorite(String trackId) async {
+  void toggleFavorite(String trackId) {
     final track = getTrack(trackId);
     if (track == null) return;
     if (!_canChangeUserData(track)) return changeNotice.emit(ChangeNotice.readOnlyOffline);
 
     _markFavorite(track, !track.isFavorite);
-    await _repository.updateTrackFavorite(track.id, track.favoritedAt);
+    _repository.updateTrackFavorite(track.id, track.favoritedAt);
     favoriteChanged.emit(track);
     if (!track.isLocal) favoriteToggled.emit(track);
   }
 
   /// Sets a favourite without telling the server, e.g. to undo a change the server did not take.
-  Future<void> setFavorite(String trackId, bool isFavorite) async {
+  void setFavorite(String trackId, bool isFavorite) {
     final track = getTrack(trackId);
     if (track == null || track.isFavorite == isFavorite) return;
 
     _markFavorite(track, isFavorite);
-    await _repository.updateTrackFavorite(track.id, track.favoritedAt);
+    _repository.updateTrackFavorite(track.id, track.favoritedAt);
     favoriteChanged.emit(track);
   }
 
@@ -420,17 +398,17 @@ class LibraryService {
       ..favoritedAt = favorite ? DateTime.now().toUtc() : null;
   }
 
-  Future<void> recordPlay(String trackId) async {
+  void recordPlay(String trackId) {
     final track = getTrack(trackId);
     if (track == null || !_canChangeUserData(track)) return;
 
     track.playCount++;
     track.lastPlayed = DateTime.now().toUtc();
-    await _repository.incrementPlayCount(track.id);
+    _repository.incrementPlayCount(track.id);
     if (!track.isLocal) playRecorded.emit(track);
   }
 
-  Future<Playlist> createPlaylist(String name, [String? description]) async {
+  Playlist createPlaylist(String name, [String? description]) {
     final playlist = Playlist(
       id: newId(),
       name: isBlank(name) ? Localizer.get('PlaylistNew') : name.trim(),
@@ -439,18 +417,15 @@ class LibraryService {
     );
     if (!serverConnected && _currentUserId != _noAccount) changeNotice.emit(ChangeNotice.playlistKeptOnDevice);
 
-    await _repository.savePlaylist(playlist);
+    _repository.savePlaylist(playlist);
     _playlists = _sortedPlaylists([..._playlists, playlist]);
     playlistsChanged.emit(null);
     if (playlist.isServer) playlistEdited.emit(playlist);
     return playlist;
   }
 
-  Future<void> addTrackToPlaylist(String playlistId, String trackId) =>
-      _updatePlaylist(playlistId, (ids) => ids.contains(trackId) ? null : [...ids, trackId]);
-
   /// Adds [trackIds] to the end of the playlist, those not in it yet and in their order, as one change.
-  Future<void> addTracksToPlaylist(String playlistId, Iterable<String> trackIds) => _updatePlaylist(playlistId, (ids) {
+  void addTracksToPlaylist(String playlistId, Iterable<String> trackIds) => _updatePlaylist(playlistId, (ids) {
     final present = ids.toSet();
     final added = [
       for (final id in trackIds)
@@ -461,8 +436,8 @@ class LibraryService {
 
   /// Moves the entry shown at [from] among the playlist's tracks ([getPlaylistTracks]) to [to], counted after it has
   /// been taken out. Entries of tracks this library doesn't have (which aren't shown) keep their places among the rest.
-  Future<void> movePlaylistTrack(String playlistId, int from, int to) => _updatePlaylist(playlistId, (ids) {
-    final byId = _rawTrackById.isNotEmpty ? _rawTrackById : _snapshot.trackById;
+  void movePlaylistTrack(String playlistId, int from, int to) => _updatePlaylist(playlistId, (ids) {
+    final byId = _rawTrackById;
     final aliases = _serverAliases;
     final shown = [
       for (var i = 0; i < ids.length; i++)
@@ -475,10 +450,10 @@ class LibraryService {
     return list;
   });
 
-  Future<void> removeTrackFromPlaylist(String playlistId, String trackId) =>
+  void removeTrackFromPlaylist(String playlistId, String trackId) =>
       _updatePlaylist(playlistId, (ids) => ids.contains(trackId) ? ids.where((id) => id != trackId).toList() : null);
 
-  Future<void> _updatePlaylist(String playlistId, List<String>? Function(List<String> ids) change) async {
+  void _updatePlaylist(String playlistId, List<String>? Function(List<String> ids) change) {
     final playlist = getPlaylist(playlistId);
     if (playlist == null) return;
     if (!_canChangePlaylist(playlist)) return changeNotice.emit(ChangeNotice.readOnlyOffline);
@@ -487,7 +462,7 @@ class LibraryService {
 
     playlist.trackIds = updated;
     playlist.modifiedAt = DateTime.now().toUtc();
-    await _repository.savePlaylist(playlist);
+    _repository.savePlaylist(playlist);
     playlistsChanged.emit(null);
     if (playlist.isServer) playlistEdited.emit(playlist);
   }
@@ -495,7 +470,7 @@ class LibraryService {
   /// A playlist of the server account cannot be changed while the server cannot be reached.
   bool _canChangePlaylist(Playlist playlist) => !playlist.isServer || serverConnected;
 
-  Future<void> renamePlaylist(String playlistId, String newName) async {
+  void renamePlaylist(String playlistId, String newName) {
     if (isBlank(newName)) return;
     final playlist = getPlaylist(playlistId);
     if (playlist == null) return;
@@ -503,19 +478,19 @@ class LibraryService {
     playlist.name = newName.trim();
     playlist.modifiedAt = DateTime.now().toUtc();
 
-    await _repository.savePlaylist(playlist);
+    _repository.savePlaylist(playlist);
     _playlists = _sortedPlaylists(_playlists);
     playlistsChanged.emit(null);
     if (playlist.isServer) playlistEdited.emit(playlist);
   }
 
-  Future<void> deletePlaylist(String playlistId) async {
+  void deletePlaylist(String playlistId) {
     final removed = getPlaylist(playlistId);
     if (removed == null) return;
     if (!_canChangePlaylist(removed)) return changeNotice.emit(ChangeNotice.readOnlyOffline);
     _playlists = _playlists.where((pl) => pl.id != playlistId).toList();
 
-    await _repository.deletePlaylist(playlistId);
+    _repository.deletePlaylist(playlistId);
     playlistsChanged.emit(null);
     if (removed.isServer) playlistRemoved.emit(playlistId);
   }
@@ -529,32 +504,32 @@ class LibraryService {
     return all.where((t) => has(t.title) || has(t.artist) || has(t.album) || has(t.albumArtist) || has(t.genre));
   }
 
-  Track? getTrack(String trackId) => _snapshot.trackById[trackId] ?? _rawTrackById[trackId];
+  Track? getTrack(String trackId) => _rawTrackById[trackId];
 
-  Future<void> hideTrack(String trackId) => _setHidden('track', trackId, true);
-  Future<void> unhideTrack(String trackId) => _setHidden('track', trackId, false);
-  Future<void> hideAlbum(String albumId) => _setHidden('album', albumId, true);
-  Future<void> unhideAlbum(String albumId) => _setHidden('album', albumId, false);
-  Future<void> hideArtist(String artistId) => _setHidden('artist', artistId, true);
-  Future<void> unhideArtist(String artistId) => _setHidden('artist', artistId, false);
+  void hideTrack(String trackId) => _setHidden('track', trackId, true);
+  void unhideTrack(String trackId) => _setHidden('track', trackId, false);
+  void hideAlbum(String albumId) => _setHidden('album', albumId, true);
+  void unhideAlbum(String albumId) => _setHidden('album', albumId, false);
+  void hideArtist(String artistId) => _setHidden('artist', artistId, true);
+  void unhideArtist(String artistId) => _setHidden('artist', artistId, false);
 
-  Future<void> unhideAll() async {
+  void unhideAll() {
     for (final (type, ids) in [('artist', _hiddenArtists), ('album', _hiddenAlbums), ('track', _hiddenTracks)]) {
       for (final id in ids.toList()) {
-        await _setHidden(type, id, false);
+        _setHidden(type, id, false);
       }
     }
   }
 
   /// Sets hidden state locally without emitting hiddenToggled event, e.g. to undo a change rejected by the server.
-  Future<void> setHiddenLocal(String itemType, String itemId, bool hidden) =>
+  void setHiddenLocal(String itemType, String itemId, bool hidden) =>
       _setHidden(itemType, itemId, hidden, fromServer: true);
 
   /// Whether hidden items can be changed now: always without an account; with one, like its favourites, only while
   /// signed in to the server, which holds them (a change made meanwhile would be undone by the next refresh).
   bool get canChangeHidden => _currentUserId == _noAccount || serverConnected;
 
-  Future<void> _setHidden(String itemType, String itemId, bool hidden, {bool fromServer = false}) async {
+  void _setHidden(String itemType, String itemId, bool hidden, {bool fromServer = false}) {
     final set = switch (itemType) {
       'artist' => _hiddenArtists,
       'album' => _hiddenAlbums,
@@ -564,7 +539,7 @@ class LibraryService {
     if (!fromServer && !canChangeHidden) return changeNotice.emit(ChangeNotice.readOnlyOffline);
     if (!(hidden ? set.add(itemId) : set.remove(itemId))) return;
 
-    await _repository.setHiddenItem(itemType, itemId, hidden, _currentUserId);
+    _repository.setHiddenItem(itemType, itemId, hidden, _currentUserId);
     if (!fromServer && _currentUserId != _noAccount) hiddenToggled.emit(HiddenChangeEvent(itemType, itemId, hidden));
     _rebuildSnapshot();
     libraryChanged.emit(null);
@@ -603,7 +578,7 @@ class LibraryService {
   /// The tracks with these IDs, in their order; a server ID also finds the local file it was matched to. Unknown IDs
   /// are left out.
   List<Track> resolveTracks(Iterable<String> trackIds) {
-    final byId = _rawTrackById.isNotEmpty ? _rawTrackById : _snapshot.trackById;
+    final byId = _rawTrackById;
     final aliases = _serverAliases;
     return [for (final id in trackIds) ?(byId[id] ?? byId[aliases[id]])];
   }
