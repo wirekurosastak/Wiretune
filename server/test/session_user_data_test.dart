@@ -98,7 +98,7 @@ void main() {
       final favorite = d.library.tracks.first;
       d.library.toggleFavorite(favorite.id);
       await session.refreshLibrary();
-      expect(d.library.getTrack(favorite.id)!.isFavorite, isTrue);
+      expect(d.library.isFavorite(favorite.id), isTrue);
 
       // Signing out forgets the token.
       await session.logout();
@@ -180,9 +180,8 @@ void main() {
 
       final laptop = await device('laptop');
       await laptop.signIn(server);
-      final same = laptop.library.getTrack(track.id)!;
-      expect(same.isFavorite, isTrue);
-      expect(same.playCount, 1);
+      expect(laptop.library.isFavorite(track.id), isTrue);
+      expect(laptop.library.playCount(track.id), 1);
       final shared = laptop.library.playlists.single;
       expect(shared.isServer, isTrue);
       expect(shared.name, 'Road trip');
@@ -194,7 +193,7 @@ void main() {
 
       await phone.session.refreshLibrary();
       expect(phone.library.playlists.single.name, 'Renamed');
-      expect(phone.library.getTrack(track.id)!.isFavorite, isFalse);
+      expect(phone.library.isFavorite(track.id), isFalse);
     });
 
     test("a change on one device shows on the account's others at once, without signing in again", () async {
@@ -222,12 +221,12 @@ void main() {
 
       final track = phone.library.tracks.first;
       phone.library.toggleFavorite(track.id);
-      await waitFor(() => laptop.library.getTrack(track.id)!.isFavorite);
+      await waitFor(() => laptop.library.isFavorite(track.id));
       expect(laptop.library.favorites.single.id, track.id);
 
       laptop.library.createPlaylist('Shared');
       await waitFor(() => phone.library.playlists.any((pl) => pl.name == 'Shared'));
-      expect(phone.library.getTrack(track.id)!.isFavorite, isTrue, reason: 'the refresh keeps what the phone holds');
+      expect(phone.library.isFavorite(track.id), isTrue, reason: 'the refresh keeps what the phone holds');
       expect(told, {'phone': 1, 'laptop': 1}, reason: "each is told of the other's change, not of its own");
     });
 
@@ -294,9 +293,8 @@ void main() {
       expect(d.repo.getSetting('auth_user_id'), '');
 
       expect(await d.session.login('owner', adminPassword, true), isNull);
-      final again = d.library.getTrack(track.id)!;
-      expect(again.isFavorite, isTrue);
-      expect(again.playCount, 1);
+      expect(d.library.isFavorite(track.id), isTrue);
+      expect(d.library.playCount(track.id), 1);
       final restored = d.library.playlists.single;
       expect(restored.isServer, isTrue);
       expect(restored.trackIds, [track.id]);
@@ -312,7 +310,7 @@ void main() {
       d.library.toggleFavorite(track.id);
       await d.session.refreshLibrary();
 
-      expect(d.library.getTrack(track.id)!.isFavorite, isTrue);
+      expect(d.library.isFavorite(track.id), isTrue);
       expect((await serverData(admin)).favorites, [track.id]);
     });
 
@@ -327,7 +325,7 @@ void main() {
       // The owner's session ends without a sign-out (an expired token does that): the tracks and stars stay on show.
       expect(await d.session.login('guest', guestPassword, false), isNull);
 
-      expect(d.library.getTrack(track.id)!.isFavorite, isFalse);
+      expect(d.library.isFavorite(track.id), isFalse);
       expect((await serverData(guest)).favorites, isEmpty);
     });
 
@@ -442,7 +440,7 @@ void main() {
       library.toggleFavorite('s1');
       await session.flushUserData();
       expect(requests, contains('PUT /api/me/favorites/s1'));
-      expect(library.getTrack('s1')!.isFavorite, isFalse);
+      expect(library.isFavorite('s1'), isFalse);
     });
 
     test('a connection cut in the middle of the library download is reported', () async {
@@ -488,10 +486,10 @@ void main() {
 
     library.toggleFavorite('s1');
     library.recordPlay('s1');
-    expect(library.getTrack('s1')!.isFavorite, isFalse);
-    expect(library.getTrack('s1')!.playCount, 0);
+    expect(library.isFavorite('s1'), isFalse);
+    expect(library.playCount('s1'), 0);
 
     library.toggleFavorite('l1');
-    expect(library.getTrack('l1')!.isFavorite, isTrue);
+    expect(library.isFavorite('l1'), isTrue);
   });
 }

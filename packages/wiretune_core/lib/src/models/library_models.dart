@@ -24,18 +24,25 @@ String newId() {
   return buffer.toString();
 }
 
+/// Where a track sits on an album: the album, the album's artist, its number on the album and the disc's.
+typedef AlbumPlace = ({String album, String? albumArtist, int? trackNumber, int? discNumber});
+
+/// How often a track was played, and when last.
+typedef PlayStats = ({int count, DateTime? lastPlayedAt});
+
+/// One audio file: what its tags and stream properties say. Whether it is a favourite and how often it was played the
+/// library keeps by track ID (`LibraryService.isFavorite`, `LibraryService.playCount`).
 class Track {
   Track({
     String? id,
     this.title = 'Unknown Title',
     this.artist = 'Unknown Artist',
     List<String>? artists,
-    this.album = 'Unknown Album',
-    this.albumArtist,
-    this.albumArtistInferred = false,
-    this.trackNumber,
+    String album = 'Unknown Album',
+    String? albumArtist,
+    int? trackNumber,
     this.trackCount,
-    this.discNumber,
+    int? discNumber,
     this.year,
     this.bpm,
     this.genre,
@@ -48,15 +55,12 @@ class Track {
     this.coverArtPath,
     this.format = const AudioFormat(),
     DateTime? dateAdded,
-    this.isFavorite = false,
-    this.favoritedAt,
-    this.playCount = 0,
-    this.lastPlayed,
   }) : id = id ?? newId(),
        artists = artists != null && artists.length > 1 ? List.unmodifiable(artists) : const [],
+       tagged = (album: album, albumArtist: albumArtist, trackNumber: trackNumber, discNumber: discNumber),
        dateAdded = dateAdded ?? DateTime.now().toUtc();
 
-  String id;
+  final String id;
   String title;
 
   /// The artist as shown: when the track has several ([artists]), their names joined by ", ".
@@ -65,15 +69,21 @@ class Track {
   /// Every artist of the track, main artist first, when the tags name more than one (featured artists); empty when
   /// there is one.
   final List<String> artists;
-  String album;
-  String? albumArtist;
 
-  /// True when [albumArtist] was filled in by the library from the other tracks of the folder rather than read from the
-  /// file's tag. Such a value is recomputed on every library build and never stored.
-  bool albumArtistInferred;
-  int? trackNumber;
+  /// Where the file's tags put the track. This is what is stored.
+  final AlbumPlace tagged;
+
+  /// Where the library files the track instead, worked out afresh from [tagged] at every build of the library (see
+  /// `LibrarySnapshot.build`): the album of a folder put together by hand, or an album artist taken from the folder's
+  /// other songs. Null: as tagged.
+  AlbumPlace? filed;
+
+  String get album => (filed ?? tagged).album;
+  String? get albumArtist => (filed ?? tagged).albumArtist;
+  int? get trackNumber => (filed ?? tagged).trackNumber;
+  int? get discNumber => (filed ?? tagged).discNumber;
+
   int? trackCount;
-  int? discNumber;
   int? year;
   int? bpm;
   String? genre;
@@ -86,15 +96,6 @@ class Track {
   String? coverArtPath;
   AudioFormat format;
   DateTime dateAdded;
-  bool isFavorite;
-
-  /// When the track became a favourite (null when it is none, or was marked before Wiretune kept the time).
-  DateTime? favoritedAt;
-  int playCount;
-  DateTime? lastPlayed;
-
-  /// Whether this is the track the player is on; the lists highlight it.
-  bool isPlaying = false;
 
   /// Each artist of the track on its own, main artist first: [artists], or [artist] alone.
   List<String> get artistNames => artists.isEmpty ? [artist] : artists;
@@ -105,11 +106,6 @@ class Track {
   /// The artist an album is filed under: the album artist when tagged, otherwise the track's main artist.
   String get effectiveAlbumArtist =>
       (albumArtist == null || albumArtist!.trim().isEmpty) ? primaryArtist : albumArtist!;
-
-  /// Set when the library filed the track under its folder's album rather than its own album tag (see
-  /// `LibrarySnapshot.build`): what the tags say. Recomputed on every library build and never stored; [album],
-  /// [albumArtist], [trackNumber] and [discNumber] hold what the library shows.
-  ({String album, String? albumArtist, int? trackNumber, int? discNumber})? taggedAlbum;
 
   /// Identifies the album the track is filed under (title and album artist, ignoring case). It is the same on every
   /// device and on the server, so it is also the key of `/api/cover/album/{id}`.

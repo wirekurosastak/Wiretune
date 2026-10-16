@@ -49,23 +49,63 @@ class LibraryRepository {
             bitrateKbps: _int(r['bitrate_kbps']) ?? 0,
             isLossless: _int(r['is_lossless']) == 1,
           ),
-          isFavorite: _int(r['is_favorite']) == 1,
-          favoritedAt: fromDbTime(r['favorited_at']),
-          playCount: _int(r['play_count']) ?? 0,
-          lastPlayed: fromDbTime(r['last_played']),
           dateAdded: fromDbTime(r['date_added']),
         ),
     ];
   }
 
+  /// The favourites (track ID -> when marked, null when that is unknown) and the play statistics kept with the tracks.
+  ({Map<String, DateTime?> favorites, Map<String, PlayStats> plays}) getUserData() {
+    final favorites = <String, DateTime?>{};
+    final plays = <String, PlayStats>{};
+    final rows = _db.connection.select(
+      'SELECT id, is_favorite, favorited_at, play_count, last_played FROM tracks '
+      'WHERE is_favorite = 1 OR play_count > 0 OR last_played IS NOT NULL',
+    );
+    for (final r in rows) {
+      final id = r['id'] as String;
+      if (_int(r['is_favorite']) == 1) favorites[id] = fromDbTime(r['favorited_at']);
+      final count = _int(r['play_count']) ?? 0;
+      final last = fromDbTime(r['last_played']);
+      if (count > 0 || last != null) plays[id] = (count: count, lastPlayedAt: last);
+    }
+    return (favorites: favorites, plays: plays);
+  }
+
+  /// Stores the favourite and the play statistics of each of [trackIds] as [favorites] and [plays] have them; rows that
+  /// already say so are not written.
+  void saveUserData(Iterable<String> trackIds, Map<String, DateTime?> favorites, Map<String, PlayStats> plays) {
+    _db.transaction((db) {
+      final update = db.prepare(
+        'UPDATE tracks SET is_favorite = ?1, favorited_at = ?2, play_count = ?3, last_played = ?4 WHERE id = ?5 '
+        'AND (is_favorite IS NOT ?1 OR favorited_at IS NOT ?2 OR play_count IS NOT ?3 OR last_played IS NOT ?4)',
+      );
+      try {
+        for (final id in trackIds) {
+          final stats = plays[id];
+          update.execute([
+            favorites.containsKey(id) ? 1 : 0,
+            toDbTime(favorites[id]),
+            stats?.count ?? 0,
+            toDbTime(stats?.lastPlayedAt),
+            id,
+          ]);
+        }
+      } finally {
+        update.close();
+      }
+    });
+  }
+
+  // The favourite and the play statistics of a row are not part of this: [saveUserData] keeps them.
   static const String _upsertSql = '''
     INSERT INTO tracks (
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
         year, bpm, genre, duration_ms, file_size_bytes, file_modified, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
-        bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added, favorited_at, artists
+        bitrate_kbps, is_lossless, date_added, artists
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-              ?24, ?25, ?26, ?27, ?28, ?29, ?30)
+              ?24, ?25, ?26)
     ON CONFLICT(id) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, artists = excluded.artists, album = excluded.album,
         album_artist = excluded.album_artist, track_number = excluded.track_number,
@@ -75,9 +115,7 @@ class LibraryRepository {
         file_path = excluded.file_path, stream_url = excluded.stream_url, has_cover_art = excluded.has_cover_art,
         cover_art_path = excluded.cover_art_path, codec = excluded.codec, sample_rate = excluded.sample_rate,
         bits_per_sample = excluded.bits_per_sample, channels = excluded.channels,
-        bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless,
-        is_favorite = excluded.is_favorite, play_count = excluded.play_count,
-        last_played = excluded.last_played, date_added = excluded.date_added, favorited_at = excluded.favorited_at
+        bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless, date_added = excluded.date_added
     WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR artists IS NOT excluded.artists
        OR album IS NOT excluded.album
        OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
@@ -90,9 +128,7 @@ class LibraryRepository {
        OR codec IS NOT excluded.codec OR sample_rate IS NOT excluded.sample_rate
        OR bits_per_sample IS NOT excluded.bits_per_sample OR channels IS NOT excluded.channels
        OR bitrate_kbps IS NOT excluded.bitrate_kbps OR is_lossless IS NOT excluded.is_lossless
-       OR is_favorite IS NOT excluded.is_favorite OR play_count IS NOT excluded.play_count
-       OR last_played IS NOT excluded.last_played OR date_added IS NOT excluded.date_added
-       OR favorited_at IS NOT excluded.favorited_at
+       OR date_added IS NOT excluded.date_added
     ''';
 
   /// Makes the table hold exactly [tracks]. Rows that are gone are deleted and the others are inserted or updated in
@@ -120,17 +156,16 @@ class LibraryRepository {
       final upsert = db.prepare(_upsertSql);
       try {
         for (final t in wanted.values) {
-          // Only what the file's tags say, not what the library inferred from the folder.
-          final tagged = t.taggedAlbum;
+          // What the file's tags say, not where the library filed the track.
           upsert.execute([
             t.id,
             t.title,
             t.artist,
-            tagged?.album ?? t.album,
-            tagged != null ? tagged.albumArtist : (t.albumArtistInferred ? null : t.albumArtist),
-            tagged == null ? t.trackNumber : tagged.trackNumber,
+            t.tagged.album,
+            t.tagged.albumArtist,
+            t.tagged.trackNumber,
             t.trackCount,
-            tagged == null ? t.discNumber : tagged.discNumber,
+            t.tagged.discNumber,
             t.year,
             t.bpm,
             t.genre,
@@ -147,11 +182,7 @@ class LibraryRepository {
             t.format.channels,
             t.format.bitrateKbps,
             t.format.isLossless ? 1 : 0,
-            t.isFavorite ? 1 : 0,
-            t.playCount,
-            toDbTime(t.lastPlayed),
             toDbTime(t.dateAdded),
-            toDbTime(t.favoritedAt),
             t.artists.isEmpty ? null : jsonEncode(t.artists),
           ]);
         }
@@ -159,22 +190,6 @@ class LibraryRepository {
         upsert.close();
       }
     });
-  }
-
-  /// Marks a track as a favourite since [favoritedAt], or (null) as none.
-  void updateTrackFavorite(String trackId, DateTime? favoritedAt) {
-    _db.connection.execute('UPDATE tracks SET is_favorite = ?, favorited_at = ? WHERE id = ?', [
-      favoritedAt == null ? 0 : 1,
-      toDbTime(favoritedAt),
-      trackId,
-    ]);
-  }
-
-  void incrementPlayCount(String trackId) {
-    _db.connection.execute('UPDATE tracks SET play_count = play_count + 1, last_played = ? WHERE id = ?', [
-      toDbTime(DateTime.now()),
-      trackId,
-    ]);
   }
 
   List<Playlist> getAllPlaylists() {

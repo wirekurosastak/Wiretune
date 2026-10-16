@@ -27,7 +27,7 @@ void main() {
       expect(player.currentTrack, tracks[2]);
       expect(driver.lastSource, tracks[2].filePath);
       expect(player.currentQueueIndex, 2);
-      expect(tracks[2].isPlaying, isTrue);
+      expect(player.isCurrent(tracks[2]), isTrue);
     });
 
     test('play next goes right after the current track, add to queue at the end; nothing queued, they play', () {

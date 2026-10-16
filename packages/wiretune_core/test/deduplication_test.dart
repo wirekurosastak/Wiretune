@@ -79,12 +79,9 @@ void main() {
     expect(TrackDeduplication.isDuplicate(local, far), isFalse); // 6 s apart
   });
 
-  test('merging folds the server copy into the local one and keeps its data', () {
+  test('merging folds the server copy into the local one, which takes its cover when it has none', () {
     final local = TestSupport.makeTrack('local', 'Song', artist: 'Band');
     final server = TestSupport.makeServerTrack('server', 'Song', artist: 'Band')
-      ..isFavorite = true
-      ..playCount = 7
-      ..lastPlayed = DateTime.utc(2024, 5, 1)
       ..hasCoverArt = true
       ..coverArtPath = 'http://server/api/cover/album/x';
     final other = TestSupport.makeServerTrack('other', 'Other', artist: 'Band');
@@ -95,9 +92,6 @@ void main() {
     expect(merged.map((t) => t.id), ['local', 'other']);
     expect(merged.first.isLocal, isTrue);
     expect(aliases, {'server': 'local'});
-    expect(local.isFavorite, isTrue);
-    expect(local.playCount, 7);
-    expect(local.lastPlayed, DateTime.utc(2024, 5, 1));
-    expect(local.coverArtPath, 'http://server/api/cover/album/x'); // the local file had none
+    expect(local.coverArtPath, 'http://server/api/cover/album/x');
   });
 }

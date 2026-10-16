@@ -59,7 +59,7 @@ void main() {
     player.selectDevice('desk');
     expect((player.isRemote, player.remoteDeviceName), (true, 'Desk'));
     expect(player.currentTrack, same(tracks[1]), reason: "this library's copy, with its cover and its lyrics");
-    expect(tracks[1].isPlaying, isTrue, reason: 'the lists highlight what plays there');
+    expect(player.isCurrent(tracks[1]), isTrue, reason: 'the lists highlight what plays there');
     expect((player.isPlaying, player.volume, player.isShuffle, player.repeatMode), (true, 70.0, true, RepeatMode.all));
     expect(player.position.value.inMilliseconds, inInclusiveRange(30000, 31000));
     expect([for (final item in player.queueItems) item.track.title], ['Song 1', 'Song 2', 'Song 3']);
@@ -98,7 +98,7 @@ void main() {
     hub.state('desk', deskPlaying(2, Duration.zero, playing: false));
     await pumpEventQueue();
     expect(player.currentTrack, same(tracks[2]));
-    expect((player.isPlaying, tracks[1].isPlaying, tracks[2].isPlaying), (false, false, true));
+    expect((player.isPlaying, player.isCurrent(tracks[1]), player.isCurrent(tracks[2])), (false, false, true));
 
     // Back to this device, with nothing playing there: nothing moves, and this device's state is shown again.
     player.selectDevice(null);

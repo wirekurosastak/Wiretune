@@ -174,8 +174,8 @@ void main() {
 
     expect(service.albums.single.artist, 'Daft Punk');
     expect(service.artists.single.name, 'Daft Punk');
-    // The inferred album artist is shown, never stored.
-    expect(service.tracks.every((t) => t.albumArtistInferred), isTrue);
+    // The inferred album artist is where the track is filed, not what its tags say (which is what is stored).
+    expect({for (final t in service.tracks) (t.albumArtist, t.tagged.albumArtist)}, {('Daft Punk', null)});
   });
 
   group("a folder of one artist's songs from several albums", () {
@@ -213,7 +213,7 @@ void main() {
         [('Song a', 1, null), ('Song b', 2, null), ('Song c', 3, null)],
       );
       // What the tags say is kept (and stored) as it is.
-      final tagged = service.getTrack('c')!.taggedAlbum!;
+      final tagged = service.getTrack('c')!.tagged;
       expect(
         (tagged.album, tagged.albumArtist, tagged.trackNumber, tagged.discNumber),
         ('Back In Black', 'AC/DC', 6, 1),
@@ -440,7 +440,7 @@ void main() {
 
     service.serverConnected = true;
     service.toggleFavorite('server');
-    expect(service.getTrack('server')!.isFavorite, isTrue);
+    expect(service.isFavorite('server'), isTrue);
     expect(toggled, ['server']); // a change the server has to hear about
 
     service.toggleFavorite('local');
@@ -448,11 +448,11 @@ void main() {
 
     service.serverConnected = false;
     service.toggleFavorite('server');
-    expect(service.getTrack('server')!.isFavorite, isTrue); // cannot be changed while the server is away
+    expect(service.isFavorite('server'), isTrue); // cannot be changed while the server is away
     service.recordPlay('server');
-    expect(service.getTrack('server')!.playCount, 0);
+    expect(service.playCount('server'), 0);
     service.recordPlay('local');
-    expect(service.getTrack('local')!.playCount, 1);
+    expect(service.playCount('local'), 1);
   });
 
   test('a favourite remembers when it was marked: here, or on the server', () async {
@@ -463,18 +463,18 @@ void main() {
 
     final before = DateTime.now().toUtc();
     service.toggleFavorite('local');
-    final marked = service.getTrack('local')!.favoritedAt;
+    final marked = service.favoritedAt('local');
     expect(marked != null && !marked.isBefore(before), isTrue);
-    expect(repo.getAllTracks().single.favoritedAt, marked); // and stored
+    expect(repo.getUserData().favorites, {'local': marked}); // and stored
     service.toggleFavorite('local');
-    expect(service.getTrack('local')!.favoritedAt, isNull);
+    expect(service.favoritedAt('local'), isNull);
 
     // A server's favourites come with the time the account marked them.
     final when = DateTime.utc(2026, 2, 3);
     service.mergeServerTracks([
       TestSupport.makeServerTrack('s1', 'Server'),
     ], UserDataSnapshot(['s1'], const [], const [], {'s1': when}));
-    expect(service.getTrack('s1')!.favoritedAt, when);
+    expect(service.favoritedAt('s1'), when);
   });
 
   test('a rescan that reads a changed file again keeps its favourite, play count and date added', () async {
@@ -494,7 +494,7 @@ void main() {
 
     final track = service.getTrack(id)!;
     expect(track.duration, const Duration(seconds: 2));
-    expect((track.isFavorite, track.playCount, track.dateAdded), (true, 1, added));
+    expect((service.isFavorite(id), service.playCount(id), track.dateAdded), (true, 1, added));
   });
 
   test('content hiding: tracks, albums, artists, precedence, non-destructive hierarchy, and playback', () async {
@@ -507,7 +507,7 @@ void main() {
       album: 'Album 1',
       duration: const Duration(seconds: 180),
       format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
-    )..isFavorite = true;
+    );
     final t2 = Track(
       id: 't2',
       title: 'Song 2',
@@ -524,7 +524,9 @@ void main() {
       duration: const Duration(seconds: 210),
       format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
     );
-    repo.replaceAllTracks([t1, t2, t3]);
+    repo
+      ..replaceAllTracks([t1, t2, t3])
+      ..saveUserData(['t1'], {'t1': null}, const {});
     service.initialize();
 
     expect(service.tracks, hasLength(3));
@@ -655,7 +657,7 @@ void main() {
 
       // So is a favourite of a server track; and a playlist made meanwhile stays on this device.
       restarted.toggleFavorite('s1');
-      expect(restarted.getTrack('s1')!.isFavorite, isFalse);
+      expect(restarted.isFavorite('s1'), isFalse);
       expect((restarted.createPlaylist('On the road')).isServer, isFalse);
       expect(notices.skip(2), [ChangeNotice.readOnlyOffline, ChangeNotice.playlistKeptOnDevice]);
       notices.clear();
@@ -701,17 +703,25 @@ void main() {
 
     test('a server refresh keeps the local tracks, and a song in both places is the local file', () async {
       final repo = testRepository()
-        ..replaceAllTracks([local('loc-1', 'Hey Jude', 'The Beatles', album: '1', seconds: 431)]);
+        ..replaceAllTracks([local('loc-1', 'Hey Jude', 'The Beatles', album: '1', seconds: 431)])
+        ..saveUserData(['loc-1'], const {}, {'loc-1': (count: 2, lastPlayedAt: DateTime.utc(2025))});
       final library = _service(repo)..initialize();
+      final played = DateTime.utc(2026, 4, 1);
 
       library.mergeServerTracks([
         server('srv-jude', 'Hey Jude (Remastered 2015)', 'The Beatles', album: '1 (Remastered)', seconds: 431),
         server('srv-letitbe', 'Let It Be', 'The Beatles', album: 'Let It Be', seconds: 243),
-      ], account(favorites: ['srv-jude']));
+      ], UserDataSnapshot(['srv-jude'], [TrackPlayStats('srv-jude', 7, played)], const []));
 
       expect(library.tracks, hasLength(2));
       final heyJude = library.tracks.firstWhere((t) => t.title.startsWith('Hey Jude'));
-      expect((heyJude.id, heyJude.isLocal, heyJude.isFavorite), ('loc-1', true, true)); // the favourite came along
+      expect((heyJude.id, heyJude.isLocal), ('loc-1', true));
+      // The favourite and the play statistics of the server's copy came along: the higher count, the later play.
+      expect(
+        (library.isFavorite('loc-1'), library.playCount('loc-1'), library.lastPlayedAt('loc-1')),
+        (true, 7, played),
+      );
+      expect(repo.getUserData().plays['loc-1'], (count: 7, lastPlayedAt: played)); // and stored
       expect(library.tracks.firstWhere((t) => t.title == 'Let It Be').isLocal, isFalse);
     });
 

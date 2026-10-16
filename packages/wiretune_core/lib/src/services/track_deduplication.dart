@@ -7,9 +7,9 @@ import '../util/text.dart';
 /// Handles track deduplication and merging between local files and remote server tracks. When the same song exists in
 /// both libraries, the local track is preferred, so it plays without the network.
 abstract final class TrackDeduplication {
-  /// Merges [localTracks] and [serverTracks] into one list. A server track that duplicates a local one is dropped; its
-  /// favourite flag, play count, last-played time and (when the local file has none) cover move to the local track.
-  /// [aliasedTrackIds] receives server track ID -> the local track ID it was folded into.
+  /// Merges [localTracks] and [serverTracks] into one list. A server track that duplicates a local one is dropped, and
+  /// its cover goes to the local track when the file has none. [aliasedTrackIds] receives server track ID -> the local
+  /// track ID it was folded into (the library moves its favourite and play statistics along).
   static List<Track> mergeTracks(
     Iterable<Track> localTracks,
     Iterable<Track> serverTracks,
@@ -35,7 +35,11 @@ abstract final class TrackDeduplication {
           localByTitleArtist['${cleanTitle(serverTrack.title)}|${cleanArtist(serverTrack.primaryArtist)}'];
       final duplicateLocal = candidates?.where((l) => isDuplicate(l, serverTrack)).firstOrNull;
       if (duplicateLocal != null) {
-        mergeMetadataIntoLocal(duplicateLocal, serverTrack);
+        if (!duplicateLocal.hasCoverArt && serverTrack.hasCoverArt && !isBlank(serverTrack.coverArtPath)) {
+          duplicateLocal
+            ..hasCoverArt = true
+            ..coverArtPath = serverTrack.coverArtPath;
+        }
         aliasedTrackIds[serverTrack.id] = duplicateLocal.id;
       } else {
         result.add(serverTrack);
@@ -66,27 +70,6 @@ abstract final class TrackDeduplication {
 
     // A length is missing: rely on the album.
     return albumsMatch(local.album, server.album);
-  }
-
-  /// Moves what the server copy knows onto the preferred local track.
-  static void mergeMetadataIntoLocal(Track localTrack, Track serverTrack) {
-    if (serverTrack.isFavorite) {
-      // The favourite counts from whichever copy was marked first.
-      final local = localTrack.isFavorite ? localTrack.favoritedAt : null;
-      final server = serverTrack.favoritedAt;
-      localTrack
-        ..isFavorite = true
-        ..favoritedAt = local != null && server != null && local.isBefore(server) ? local : server ?? local;
-    }
-    if (serverTrack.playCount > localTrack.playCount) localTrack.playCount = serverTrack.playCount;
-    final serverPlayed = serverTrack.lastPlayed;
-    if (serverPlayed != null && (localTrack.lastPlayed == null || serverPlayed.isAfter(localTrack.lastPlayed!))) {
-      localTrack.lastPlayed = serverPlayed;
-    }
-    if (!localTrack.hasCoverArt && serverTrack.hasCoverArt && !isBlank(serverTrack.coverArtPath)) {
-      localTrack.hasCoverArt = true;
-      localTrack.coverArtPath = serverTrack.coverArtPath;
-    }
   }
 
   static bool albumsMatch(String? a, String? b) {

@@ -28,17 +28,19 @@ synchronous (SQLite answers at once), so a scan's commit and a server refresh ca
 - **Track IDs** are the first 32 hex digits of the SHA-256 of the full path (lower-cased on Windows and macOS, whose
   file systems ignore case). Scans read in batches on 2 to 8 isolates and skip files whose path, size and modification
   time haven't changed.
-- **Albums** are keyed by title plus album artist (`Track.albumId`, shared with the server's cover route). A folder of
-  tracks with one album title gets one inferred album artist, which is shown but never stored
-  (`Track.albumArtistInferred`), so it can't outlive the files it came from. A folder inside the music folder whose
-  songs share one artist but carry several album tags (an "essentials" put together by hand) becomes one album the same
-  way: `LibrarySnapshot.build` refiles the tracks and keeps their own tags in `Track.taggedAlbum`, which is what's
-  stored.
+- **Albums** are keyed by title plus album artist (`Track.albumId`, shared with the server's cover route). A track's
+  tags (`Track.tagged`) never change and are what's stored; where the library files it (`Track.filed`) is worked out
+  from them at every `LibrarySnapshot.build`, so it can't outlive the files it came from. A folder of tracks with one
+  album title gets one inferred album artist, and a folder inside the music folder whose songs share one artist but
+  carry several album tags (an "essentials" put together by hand) becomes one album.
 - **Artists of a track**: `Track.artists` holds each one when the tags name several (repeated Vorbis `ARTIST`, `ARTISTS`,
   NUL-separated ID3v2.4 and APE values), and `Track.artist` joins them for display. Names are never split at `&`, `,`
   or `/`. Albums file under the main (first) artist; an artist's page also holds the songs they're featured on.
 - **Hybrid**: local tracks have no `streamUrl`, server tracks do. `TrackDeduplication.mergeTracks` folds a server
-  duplicate into the local copy, favourite, play count and playlist entries included.
+  duplicate into the local copy, and the library moves its favourite, play count and playlist entries along.
+- **Favourites and play counts** are the library's, by track ID (`LibraryService.isFavorite`, `playCount`), not fields
+  of a `Track`: a refresh replaces the tracks without anything to copy across, and "is playing" is the player's current
+  track ID (`PlayerViewModel.isCurrent`).
 - **Writes are diffs**: one transaction per change, and rows that didn't change aren't touched.
 - **User data** of server tracks lives on the server account. While signed in (`LibraryService.serverConnected`), a
   change lands locally at once and `ServerSession` sends it on; while not, server tracks and server playlists are

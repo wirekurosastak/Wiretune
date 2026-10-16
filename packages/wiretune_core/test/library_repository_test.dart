@@ -9,7 +9,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
 
-/// The repository against a real SQLite file (the other tests use a stand-in that never runs the SQL).
+/// The repository against a real SQLite file: what it stores, and the upgrades of older databases.
 void main() {
   late Directory dir;
   late List<DatabaseManager> opened;
@@ -48,11 +48,20 @@ void main() {
     return (repo, db);
   }
 
-  Track make(String id, {String title = 'Song', String? path}) => Track(
+  Track make(
+    String id, {
+    String title = 'Song',
+    String? path,
+    String album = 'Album',
+    String? albumArtist,
+    int? number,
+  }) => Track(
     id: id,
     title: title,
     artist: 'Artist',
-    album: 'Album',
+    album: album,
+    albumArtist: albumArtist,
+    trackNumber: number,
     duration: const Duration(milliseconds: 200500),
     filePath: path ?? '/music/$id.flac',
     format: const AudioFormat(codec: 'FLAC', sampleRate: 44100, bitsPerSample: 16, channels: 2, isLossless: true),
@@ -61,48 +70,50 @@ void main() {
 
   int count(DatabaseManager db, String sql) => db.connection.select(sql).first.values.first as int;
 
-  test('tracks round-trip with their user data', () async {
+  test('tracks round-trip, and their favourites and play statistics are kept beside them', () async {
     final (repo, _) = await open();
-    final track = make('a')
-      ..isFavorite = true
-      ..playCount = 3
-      ..lastPlayed = DateTime.utc(2026, 5, 6, 7, 8, 9)
+    final track = make('a', number: 4)
       ..genre = 'Jazz'
-      ..trackNumber = 4
       ..fileModifiedUtc = DateTime.utc(2025, 1, 2, 3, 4, 5, 678, 901);
+    final played = DateTime.utc(2026, 5, 6, 7, 8, 9);
 
-    repo.replaceAllTracks([track]);
-    final stored = (repo.getAllTracks()).single;
+    repo.replaceAllTracks([track, make('b')]);
+    repo.saveUserData(['a', 'b'], {'a': null}, {'a': (count: 3, lastPlayedAt: played)});
+    final stored = repo.getAllTracks().firstWhere((t) => t.id == 'a');
 
-    expect(stored.id, 'a');
     expect(stored.duration, const Duration(milliseconds: 200500));
     expect(stored.genre, 'Jazz');
     expect(stored.trackNumber, 4);
-    expect(stored.isFavorite, isTrue);
-    expect(stored.playCount, 3);
-    expect(stored.lastPlayed, track.lastPlayed);
     expect(stored.fileModifiedUtc, track.fileModifiedUtc); // microseconds survive, so an unchanged file is reused
     expect(stored.dateAdded, DateTime.utc(2026, 1, 2, 3, 4, 5));
     expect(stored.format.codec, 'FLAC');
+    final data = repo.getUserData();
+    expect(data.favorites, {'a': null});
+    expect(data.plays, {'a': (count: 3, lastPlayedAt: played)});
+
+    // Writing the tracks again leaves what was said about them alone.
+    repo.replaceAllTracks([make('a', title: 'Retagged'), make('b')]);
+    expect(repo.getUserData().plays['a']!.count, 3);
   });
 
-  test("a track's artists round-trip, and what the library filed under a folder's album is stored as tagged", () async {
+  test("a track's artists round-trip, and where the library filed a track is not stored, only its tags", () async {
     final (repo, _) = await open();
     final featuring = Track(id: 'f', title: 'Song', artist: 'Future, Lil Durk', artists: ['Future', 'Lil Durk']);
-    final refiled = make('r')
-      ..album = 'ACDC Essentials'
-      ..albumArtist = 'AC/DC'
-      ..trackNumber = 3
-      ..taggedAlbum = (album: 'Back In Black', albumArtist: null, trackNumber: 6, discNumber: 1);
+    final refiled = Track(id: 'r', title: 'Song', album: 'Back In Black', trackNumber: 6, discNumber: 1)
+      ..filed = (album: 'ACDC Essentials', albumArtist: 'AC/DC', trackNumber: 3, discNumber: null);
+    final inferred = make('i')
+      ..filed = (album: 'Album', albumArtist: 'Various Artists', trackNumber: null, discNumber: null);
 
-    repo.replaceAllTracks([featuring, refiled, make('a')]);
+    repo.replaceAllTracks([featuring, refiled, inferred, make('a', albumArtist: 'The Band')]);
     final stored = {for (final t in repo.getAllTracks()) t.id: t};
 
     expect(stored['f']!.artist, 'Future, Lil Durk');
     expect(stored['f']!.artists, ['Future', 'Lil Durk']);
     expect(stored['a']!.artists, isEmpty);
+    expect(stored['a']!.albumArtist, 'The Band');
+    expect(stored['i']!.albumArtist, isNull);
     final r = stored['r']!;
-    expect((r.album, r.albumArtist, r.trackNumber, r.discNumber, r.taggedAlbum), ('Back In Black', null, 6, 1, null));
+    expect((r.album, r.albumArtist, r.trackNumber, r.discNumber, r.filed), ('Back In Black', null, 6, 1, null));
   });
 
   test('replacing the tracks deletes what is gone and updates what changed', () async {
@@ -140,19 +151,6 @@ void main() {
     final stored = {for (final t in repo.getAllTracks()) t.id: t};
     expect(stored['a']!.filePath, '/music/new.flac');
     expect(stored.keys, containsAll(['s1', 's2']));
-  });
-
-  test('only what the tags say is stored as the album artist', () async {
-    final (repo, _) = await open();
-    final tagged = make('a')..albumArtist = 'The Band';
-    final inferred = make('b')
-      ..albumArtist = 'Various Artists'
-      ..albumArtistInferred = true;
-    repo.replaceAllTracks([tagged, inferred]);
-
-    final stored = {for (final t in repo.getAllTracks()) t.id: t};
-    expect(stored['a']!.albumArtist, 'The Band');
-    expect(stored['b']!.albumArtist, isNull);
   });
 
   test('server playlists are marked, and only they are removed on sign-out', () async {
@@ -204,20 +202,21 @@ void main() {
 
   test('a database of the previous schema is upgraded in place, and favourites get their time from then on', () async {
     final (repo, db) = await open();
-    repo.replaceAllTracks([make('a')..isFavorite = true]);
+    repo
+      ..replaceAllTracks([make('a')])
+      ..saveUserData(['a'], {'a': null}, const {});
     downgrade(db, 1); // no time for a favourite, no bpm, no hidden items, no token versions
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
-    final kept = (upgraded.getAllTracks()).single;
-    expect((kept.id, kept.isFavorite, kept.favoritedAt), ('a', true, null));
+    expect(upgraded.getAllTracks().single.id, 'a');
+    expect(upgraded.getUserData().favorites, {'a': null});
 
     final when = DateTime.utc(2026, 3, 4, 5, 6, 7);
-    upgraded.updateTrackFavorite('a', when);
-    expect((upgraded.getAllTracks()).single.favoritedAt, when);
-    upgraded.updateTrackFavorite('a', null);
-    final unmarked = (upgraded.getAllTracks()).single;
-    expect((unmarked.isFavorite, unmarked.favoritedAt), (false, null));
+    upgraded.saveUserData(['a'], {'a': when}, const {});
+    expect(upgraded.getUserData().favorites, {'a': when});
+    upgraded.saveUserData(['a'], const {}, const {});
+    expect(upgraded.getUserData().favorites, isEmpty);
   });
 
   test('a database of schema 2 is upgraded, gaining bpm', () async {

@@ -32,8 +32,12 @@ void main() {
   const hiResLow = AudioFormat(codec: 'FLAC', sampleRate: 48000, bitsPerSample: 24, isLossless: true);
   const mp3 = AudioFormat(codec: 'MP3', sampleRate: 44100, bitrateKbps: 320, isLossless: false);
 
-  Future<LibraryService> library(List<Track> tracks) async {
-    final library = createLibrary(tracks);
+  Future<LibraryService> library(
+    List<Track> tracks, {
+    Map<String, DateTime?> favorites = const {},
+    Map<String, PlayStats> plays = const {},
+  }) async {
+    final library = createLibrary(tracks, favorites, plays);
     library.initialize();
     return library;
   }
@@ -147,20 +151,15 @@ void main() {
   );
 
   test('the favourites can sort by date added with newest first', () async {
-    final lib = await library([
-      track('1', 'Album')
-        ..title = 'C'
-        ..isFavorite = true
-        ..favoritedAt = DateTime.utc(2026, 1, 1),
-      track('2', 'Album')
-        ..title = 'B'
-        ..isFavorite = true
-        ..favoritedAt = DateTime.utc(2026, 3, 1),
-      track('3', 'Album')
-        ..title = 'A'
-        ..isFavorite = true,
-      track('4', 'Album'),
-    ]);
+    final lib = await library(
+      [
+        track('1', 'Album')..title = 'C',
+        track('2', 'Album')..title = 'B',
+        track('3', 'Album')..title = 'A',
+        track('4', 'Album'),
+      ],
+      favorites: {'1': DateTime.utc(2026, 1, 1), '2': DateTime.utc(2026, 3, 1), '3': null},
+    );
     final favorites = FavoritesViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
     expect([for (final t in favorites.favoriteTracks) t.id], ['2', '1', '3']); // Date added newest first default
     expect(favorites.sortLabel(TrackSortField.added), 'Added ↓');
@@ -308,15 +307,14 @@ void main() {
 
   test('the most and the recently played tracks are read-only playlists above the own ones', () async {
     final now = DateTime.utc(2026, 10, 12);
-    Track played(String id, int count, int hoursAgo) => TestSupport.makeTrack(id, 'Song $id')
-      ..playCount = count
-      ..lastPlayed = now.subtract(Duration(hours: hoursAgo));
-    final lib = await library([
-      played('a', 3, 5),
-      played('b', 9, 30),
-      played('c', 3, 1),
-      TestSupport.makeTrack('d', 'Never played'),
-    ]);
+    PlayStats played(int count, int hoursAgo) => (count: count, lastPlayedAt: now.subtract(Duration(hours: hoursAgo)));
+    final lib = await library(
+      [
+        for (final id in ['a', 'b', 'c']) TestSupport.makeTrack(id, 'Song $id'),
+        TestSupport.makeTrack('d', 'Never played'),
+      ],
+      plays: {'a': played(3, 5), 'b': played(9, 30), 'c': played(3, 1)},
+    );
     final playlists = PlaylistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
     List<String?> titles(Playlist playlist) => [for (final t in playlists.tracksOf(playlist)) t.title];
 

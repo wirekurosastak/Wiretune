@@ -431,12 +431,14 @@ class FavoriteCurrentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final player = context.vm.player;
+    final vm = context.vm;
+    final player = vm.player;
     final colors = context.colors;
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        final favorite = player.currentTrack?.isFavorite ?? false;
+        final track = player.currentTrack;
+        final favorite = track != null && vm.library.isFavorite(track.id);
         return IconButton(
           visualDensity: visualDensity,
           tooltip: context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),

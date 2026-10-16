@@ -246,7 +246,7 @@ class UiAutomationServer {
               'title': track.title,
               'artist': track.artist,
               'album': track.album,
-              'isFavorite': track.isFavorite,
+              'isFavorite': _vm.library.isFavorite(track.id),
             },
       'currentPositionSeconds': engine.currentPosition.inMilliseconds / 1000,
       'volume': engine.volume,

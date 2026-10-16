@@ -68,25 +68,9 @@ class PlayerViewModel extends ChangeNotifier {
         if (state != PlaybackState.playing) spectrum.value = Float32List(SpectrumAnalyzer.numBands);
         notifyListeners();
       }),
-      // A refresh (the account's data changed on another device) replaces the library's tracks while the player keeps
-      // the one it started with: its heart follows the library's.
-      _library.libraryChanged.listen((_) {
-        final current = _currentTrack;
-        final inLibrary = current == null ? null : _library.getTrack(current.id);
-        if (inLibrary == null || identical(inLibrary, current) || inLibrary.isFavorite == current!.isFavorite) return;
-        current
-          ..isFavorite = inLibrary.isFavorite
-          ..favoritedAt = inLibrary.favoritedAt;
-        notifyListeners();
-      }),
-      // The player keeps the Track instance it started with; a favourite toggled elsewhere changes the library's one.
-      _library.favoriteChanged.listen((changed) {
-        final current = _currentTrack;
-        if (current != null && current.id == changed.id && !identical(current, changed)) {
-          current.isFavorite = changed.isFavorite;
-        }
-        notifyListeners();
-      }),
+      // The heart of the playing track follows the library's (a refresh brings another device's changes).
+      _library.libraryChanged.listen((_) => notifyListeners()),
+      _library.favoriteChanged.listen((_) => notifyListeners()),
       _engine.playbackFailed.listen((message) {
         errorMessage = message;
         notifyListeners();
@@ -642,11 +626,6 @@ class PlayerViewModel extends ChangeNotifier {
     final current = currentTrack;
     if (current == null) return;
     _library.toggleFavorite(current.id);
-    // A server refresh replaces the library's Track objects while the player keeps the one it started playing: mirror
-    // the change so the heart in the player bar follows.
-    final inLibrary = _library.getTrack(current.id);
-    if (inLibrary != null && !identical(inLibrary, current)) current.isFavorite = inLibrary.isFavorite;
-    notifyListeners();
   }
 
   Future<void> toggleBitperfect() => _engine.setBitperfectMode(!isBitperfect);
@@ -960,31 +939,18 @@ class PlayerViewModel extends ChangeNotifier {
     _updateLyricPosition(value);
   }
 
+  /// Whether [track] is the one playing (on the device being controlled): the lists highlight it.
+  bool isCurrent(Track track) => currentTrack?.id == track.id;
+
   /// The track shown changed: the lists highlight the new one, and its lyrics are looked for.
   void _showCurrentTrack() {
     final shown = currentTrack;
-    final old = _marked;
-    if (!identical(old, shown)) {
-      _marked = shown;
-      if (old != null) {
-        old.isPlaying = false;
-        final inLibrary = _library.getTrack(old.id);
-        if (inLibrary != null && !identical(inLibrary, old)) inLibrary.isPlaying = false;
-      }
-      if (shown != null) {
-        shown.isPlaying = true;
-        final inLibrary = _library.getTrack(shown.id);
-        if (inLibrary != null && !identical(inLibrary, shown)) inLibrary.isPlaying = true;
-      }
-    }
     if (_lyricsTrackId != shown?.id) {
       _lyricsTrackId = null;
       _refreshLyrics();
     }
     notifyListeners();
   }
-
-  Track? _marked;
 
   // ── Other devices (remote control) ─────────────────────────────────────────────────────────────
 

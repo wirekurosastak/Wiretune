@@ -23,8 +23,16 @@ MainViewModel createMainViewModel(
   remote: remote,
 );
 
-LibraryService createLibrary([List<Track> tracks = const []]) {
-  final repo = testRepository()..replaceAllTracks(tracks);
+/// A library over a throw-away database that holds [tracks], with [favorites] (track ID -> when marked) and [plays] as
+/// an earlier session left them.
+LibraryService createLibrary([
+  List<Track> tracks = const [],
+  Map<String, DateTime?> favorites = const {},
+  Map<String, PlayStats> plays = const {},
+]) {
+  final repo = testRepository()
+    ..replaceAllTracks(tracks)
+    ..saveUserData([for (final t in tracks) t.id], favorites, plays);
   return LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
 }
 

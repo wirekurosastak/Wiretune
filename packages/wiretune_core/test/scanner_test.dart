@@ -80,7 +80,7 @@ void main() {
     final id = library.tracks.first.id;
     library.toggleFavorite(id);
     expect(await library.scanFolder(root.path), isTrue);
-    expect(library.getTrack(id)!.isFavorite, isTrue);
+    expect(library.isFavorite(id), isTrue);
 
     expect(await library.scanFolder(p.join(root.path, 'missing')), isFalse);
   });

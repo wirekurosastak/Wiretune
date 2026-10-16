@@ -312,7 +312,7 @@ class _TableRowState extends State<_TableRow> {
     final colors = context.colors;
     final track = widget.track;
     final state = widget.state;
-    final playing = track.isPlaying;
+    final playing = vm.player.isCurrent(track);
     final onPlay = state._play;
     final kind = state.kind;
     final radius = BorderRadius.circular(Radii.small + 2);
@@ -477,13 +477,14 @@ class _TableRowState extends State<_TableRow> {
 List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {bool phone = false}) {
   final colors = context.colors;
   final size = phone ? 48.0 : 44.0;
+  final favorite = context.vm.library.isFavorite(track.id);
   return [
     _IconCell(
       width: size,
-      tooltip: context.tr(track.isFavorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+      tooltip: context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
       icon: HeartIcon(
-        filled: track.isFavorite,
-        color: track.isFavorite ? colors.palette.coral : colors.textMuted,
+        filled: favorite,
+        color: favorite ? colors.palette.coral : colors.textMuted,
         size: phone ? 22 : 18,
       ),
       onPressed: () => context.vm.library.toggleFavorite(track.id),
@@ -566,8 +567,8 @@ class TrackMenu extends StatelessWidget {
       if (withFavorite)
         item(
           TrackAction.favorite,
-          track.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          context.tr(track.isFavorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+          vm.library.isFavorite(track.id) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          context.tr(vm.library.isFavorite(track.id) ? 'TipRemoveFromFavorites' : 'TipFavorite'),
         ),
       item(TrackAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
       item(TrackAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
@@ -754,7 +755,7 @@ class _PhoneRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final playing = track.isPlaying;
+    final playing = context.vm.player.isCurrent(track);
     final subtitle = [
       track.artist,
       if (state._showAlbum && state.kind != TrackTableKind.artist) track.album,

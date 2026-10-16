@@ -29,13 +29,15 @@ abstract final class ImageFormat {
   static String mimeTypeFromPath(String path) => p.extension(path).toLowerCase() == '.png' ? 'image/png' : 'image/jpeg';
 }
 
-/// What a scan already knows about a file, so that an unchanged file is not read again.
+/// What a scan already knows about a file, so that an unchanged file is not read again, and one read again keeps the
+/// date it joined the library.
 class _Known {
-  const _Known(this.size, this.modifiedMicros, this.coverPath);
+  const _Known(this.size, this.modifiedMicros, this.coverPath, this.added);
 
   final int size;
-  final int modifiedMicros;
+  final int? modifiedMicros;
   final String? coverPath;
+  final DateTime added;
 }
 
 /// Turns audio files into [Track]s: tags, stream properties, cover art. Folder scans run in background isolates.
@@ -69,7 +71,8 @@ class MetadataScanner {
       sha256.convert(utf8.encode(AppPaths.comparable(AppPaths.fullPath(filePath)))).toString().substring(0, 32);
 
   /// Scans [rootPath] recursively. Files whose path, size and modification time match [knownTracks] are not read
-  /// again: the known track is returned instead. Hidden files and folders (names starting with a dot) are skipped.
+  /// again: the known track is returned instead; one that changed keeps its date added. Hidden files and folders (names
+  /// starting with a dot) are skipped.
   Future<List<Track>> scanDirectory(
     String rootPath, {
     String? coverCacheDirectory,
@@ -99,19 +102,16 @@ class MetadataScanner {
       while (next < batches.length) {
         ct.throwIfCancelled();
         final batch = batches[next++];
-        final known = <String, _Known>{};
-        if (knownTracks != null) {
-          for (final file in batch) {
-            final track = knownTracks[file];
-            if (track?.fileModifiedUtc != null) {
-              known[file] = _Known(
-                track!.fileSizeBytes,
-                track.fileModifiedUtc!.microsecondsSinceEpoch,
+        final known = <String, _Known>{
+          for (final file in batch)
+            if (knownTracks?[file] case final track?)
+              file: _Known(
+                track.fileSizeBytes,
+                track.fileModifiedUtc?.microsecondsSinceEpoch,
                 track.coverArtPath,
-              );
-            }
-          }
-        }
+                track.dateAdded,
+              ),
+        };
 
         final outcome = await _scanBatchInIsolate(batch, known, coverCacheDirectory, log);
         for (var i = 0; i < batch.length; i++) {
@@ -260,12 +260,13 @@ List<String> _enumerateAudioFiles(String root) {
 List<Object?> _scanBatch(List<String> batch, Map<String, _Known> known, String? coverCacheDirectory) {
   final folderCovers = <String, String?>{};
   return [
-    for (final file in batch) _tryReuse(file, known[file]) ? true : _readTrack(file, coverCacheDirectory, folderCovers),
+    for (final file in batch)
+      _tryReuse(file, known[file]) ? true : _readTrack(file, coverCacheDirectory, folderCovers, known[file]?.added),
   ];
 }
 
 bool _tryReuse(String file, _Known? known) {
-  if (known == null) return false;
+  if (known == null || known.modifiedMicros == null) return false;
   if (known.coverPath != null && known.coverPath!.isNotEmpty && !File(known.coverPath!).existsSync()) return false;
   try {
     final stat = File(file).statSync();
@@ -275,7 +276,12 @@ bool _tryReuse(String file, _Known? known) {
   }
 }
 
-Track? _readTrack(String filePath, String? coverCacheDirectory, Map<String, String?>? folderCoverCache) {
+Track? _readTrack(
+  String filePath,
+  String? coverCacheDirectory,
+  Map<String, String?>? folderCoverCache,
+  DateTime? added,
+) {
   try {
     if (!AudioFileTypes.isSupported(filePath)) return null;
     final file = File(filePath);
@@ -344,7 +350,7 @@ Track? _readTrack(String filePath, String? coverCacheDirectory, Map<String, Stri
         hasCoverArt: tags.hasPicture || coverArtPath != null,
         coverArtPath: coverArtPath,
         format: format,
-        dateAdded: DateTime.now().toUtc(),
+        dateAdded: added ?? DateTime.now().toUtc(),
       );
     } finally {
       source.close();

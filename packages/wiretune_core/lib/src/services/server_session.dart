@@ -312,9 +312,7 @@ class ServerSession {
     final changes = _localChanges;
     final userData = await _client.getUserData(serverUrl);
     if (changes != _localChanges || !isLoggedIn) return;
-    // Fresh copies: the library's own tracks carry this device's state of them.
-    final tracks = [for (final track in _serverTracks) _client.serverTrack(serverUrl, track.toJson())];
-    _library.mergeServerTracks(tracks, userData);
+    _library.mergeServerTracks(_serverTracks, userData);
   }
 
   Future<List<UserInfo>> getUsers() => _client.getUsers(serverUrl);
@@ -500,7 +498,7 @@ class ServerSession {
 
   Future<void> _pushFavorite(Track track) async {
     if (!_canPush) return;
-    final favorite = track.isFavorite;
+    final favorite = _library.isFavorite(track.id);
     final sent = await _sendChange(() => _client.setFavorite(serverUrl, track.id, favorite));
     // The server did not take it: show the star as it really is instead of pretending.
     if (!sent) _library.setFavorite(track.id, !favorite);

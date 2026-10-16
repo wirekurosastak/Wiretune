@@ -86,7 +86,7 @@ void main() {
     lib.toggleFavorite('s1');
     await settle(tester);
     expect(find.text(Localizer.get('OfflineReadOnly')), findsOneWidget);
-    expect(lib.getTrack('s1')!.isFavorite, isFalse);
+    expect(lib.isFavorite('s1'), isFalse);
     vm.dispose();
   });
 

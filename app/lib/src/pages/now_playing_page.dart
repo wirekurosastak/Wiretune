@@ -294,12 +294,7 @@ class _PlayerTab extends StatelessWidget {
                   children: [
                     const SizedBox.square(dimension: 48, child: FavoriteCurrentButton(size: 28)),
                     if (track != null)
-                      TrackMenu(
-                        track: vm.library.getTrack(track.id) ?? track,
-                        kind: TrackTableKind.tracks,
-                        width: 44,
-                        color: colors.textMain,
-                      ),
+                      TrackMenu(track: track, kind: TrackTableKind.tracks, width: 44, color: colors.textMain),
                   ],
                 ),
               ],

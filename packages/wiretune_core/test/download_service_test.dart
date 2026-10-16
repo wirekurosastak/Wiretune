@@ -167,10 +167,8 @@ void main() {
     return player;
   }
 
-  Track serverTrack(String id, String title, String album, {int number = 1}) =>
-      TestSupport.makeServerTrack(id, title, album: album)
-        ..trackNumber = number
-        ..hasCoverArt = true;
+  Track serverTrack(String id, String title, String album, {int number = 1, int? disc}) =>
+      TestSupport.makeServerTrack(id, title, album: album, trackNumber: number, discNumber: disc)..hasCoverArt = true;
 
   String work(String name) => p.join(directory, 'DownloadCache', name);
 
@@ -524,12 +522,17 @@ void main() {
 
   test('copies are filed by album artist, and by disc on an album of several discs', () async {
     server
-      ..add(serverTrack('d1', 'Intro', 'Live')..discNumber = 1, audio(1))
-      ..add(serverTrack('d2', 'Intro', 'Live')..discNumber = 2, audio(2))
+      ..add(serverTrack('d1', 'Intro', 'Live', disc: 1), audio(1))
+      ..add(serverTrack('d2', 'Intro', 'Live', disc: 2), audio(2))
       ..add(
-        TestSupport.makeServerTrack('c1', 'Duet', artist: 'Guest', album: 'Hits')
-          ..albumArtist = 'Various Artists'
-          ..trackNumber = 7,
+        TestSupport.makeServerTrack(
+          'c1',
+          'Duet',
+          artist: 'Guest',
+          album: 'Hits',
+          albumArtist: 'Various Artists',
+          trackNumber: 7,
+        ),
         audio(3),
       );
     final player = await signedIn();

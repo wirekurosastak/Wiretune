@@ -168,6 +168,7 @@ abstract final class TestSupport {
     int sampleRate = 44100,
     int bits = 16,
     int trackNumber = 1,
+    int? discNumber,
     double minutes = 4.0,
     String? albumArtist,
   }) => Track(
@@ -177,6 +178,7 @@ abstract final class TestSupport {
     album: album,
     albumArtist: albumArtist,
     trackNumber: trackNumber,
+    discNumber: discNumber,
     duration: Duration(microseconds: (minutes * 60 * 1000000).round()),
     filePath: '/music/$id.flac',
     format: AudioFormat(codec: 'FLAC', sampleRate: sampleRate, bitsPerSample: bits, isLossless: true),
@@ -187,9 +189,21 @@ abstract final class TestSupport {
     String title, {
     String artist = 'Artist',
     String album = 'Album',
+    String? albumArtist,
+    int trackNumber = 1,
+    int? discNumber,
     double minutes = 4.0,
   }) {
-    return makeTrack(id, title, artist: artist, album: album, minutes: minutes)
+    return makeTrack(
+        id,
+        title,
+        artist: artist,
+        album: album,
+        albumArtist: albumArtist,
+        trackNumber: trackNumber,
+        discNumber: discNumber,
+        minutes: minutes,
+      )
       ..filePath = ''
       ..streamUrl = 'http://server/api/stream/$id';
   }

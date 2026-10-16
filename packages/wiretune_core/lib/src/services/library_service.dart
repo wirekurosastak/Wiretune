@@ -49,6 +49,11 @@ class LibraryService {
 
   List<Track> _rawTracks = const [];
   Map<String, Track> _rawTrackById = const {};
+
+  // The favourites (track ID -> when marked; null when that is unknown) and the play statistics: the device's own for
+  // its files, the signed-in account's for the server's tracks as the server last told them.
+  final Map<String, DateTime?> _favorites = {};
+  final Map<String, PlayStats> _plays = {};
   final Set<String> _hiddenTracks = <String>{};
   final Set<String> _hiddenAlbums = <String>{};
   final Set<String> _hiddenArtists = <String>{};
@@ -68,7 +73,18 @@ class LibraryService {
   List<Artist> get artists => _snapshot.artists;
   List<String> get genres => _snapshot.genres;
   List<Playlist> get playlists => _playlists;
-  List<Track> get favorites => _snapshot.tracks.where((t) => t.isFavorite).toList();
+  List<Track> get favorites => [
+    for (final t in _snapshot.tracks)
+      if (_favorites.containsKey(t.id)) t,
+  ];
+
+  bool isFavorite(String trackId) => _favorites.containsKey(trackId);
+
+  /// When the track became a favourite; null when it is none, or the time is unknown (marked before Wiretune kept it).
+  DateTime? favoritedAt(String trackId) => _favorites[trackId];
+
+  int playCount(String trackId) => _plays[trackId]?.count ?? 0;
+  DateTime? lastPlayedAt(String trackId) => _plays[trackId]?.lastPlayedAt;
 
   Set<String> get hiddenTracks => Set.unmodifiable(_hiddenTracks);
   Set<String> get hiddenAlbums => Set.unmodifiable(_hiddenAlbums);
@@ -152,9 +168,16 @@ class LibraryService {
 
     final storedTracks = _repository.getAllTracks();
     final storedPlaylists = _repository.getAllPlaylists();
+    final userData = _repository.getUserData();
 
     _rawTracks = storedTracks;
     _rawTrackById = {for (final t in storedTracks) t.id: t};
+    _favorites
+      ..clear()
+      ..addAll(userData.favorites);
+    _plays
+      ..clear()
+      ..addAll(userData.plays);
     _loadHidden();
 
     _rebuildSnapshot();
@@ -221,6 +244,7 @@ class LibraryService {
           final aliased = <String, String>{};
           toSave = TrackDeduplication.mergeTracks(scanned, existingServerTracks, aliased);
           _serverAliases = aliased;
+          _foldServerData(aliased);
           _updatePlaylistsWithAliases(aliased);
         } else {
           toSave = scanned;
@@ -267,6 +291,7 @@ class LibraryService {
       final aliased = <String, String>{};
       merged = TrackDeduplication.mergeTracks(existingLocalTracks, incomingServer, aliased);
       _serverAliases = aliased;
+      _foldServerData(aliased);
       _updatePlaylistsWithAliases(aliased);
     } else {
       merged = incomingServer;
@@ -274,7 +299,7 @@ class LibraryService {
     }
 
     _replaceServerPlaylists(userData.playlists);
-    _replaceTracksCore(merged, serverOwnsUserData: true);
+    _replaceTracksCore(merged);
   }
 
   /// Drops the server's tracks and the cached copies of its playlists (sign-out); local tracks and playlists stay.
@@ -289,16 +314,52 @@ class LibraryService {
     _replaceTracksCore(existingLocalTracks);
   }
 
-  /// Copies the account's favourites and play statistics onto the freshly downloaded server tracks.
-  static void _applyUserData(Iterable<Track> serverTracks, UserDataSnapshot data) {
+  /// The account's favourites and play statistics, as the server holds them, for its tracks: they replace what this
+  /// device cached.
+  void _applyUserData(Iterable<Track> serverTracks, UserDataSnapshot data) {
     final favorites = data.favorites.toSet();
     final plays = {for (final stats in data.plays) stats.trackId: stats};
     for (final track in serverTracks) {
-      track.isFavorite = favorites.contains(track.id);
-      track.favoritedAt = track.isFavorite ? data.favoritedAt[track.id] : null;
-      final stats = plays[track.id];
-      track.playCount = stats?.playCount ?? 0;
-      track.lastPlayed = stats?.lastPlayed;
+      final id = track.id;
+      if (favorites.contains(id)) {
+        _favorites[id] = data.favoritedAt[id];
+      } else {
+        _favorites.remove(id);
+      }
+      final stats = plays[id];
+      if (stats != null) {
+        _plays[id] = (count: stats.playCount, lastPlayedAt: stats.lastPlayed);
+      } else {
+        _plays.remove(id);
+      }
+    }
+  }
+
+  /// A server track that is the same song as a local file is shown as the file: its favourite (marked whenever the
+  /// first of the two was) and play statistics (the higher count, the later play) move to the file, never back.
+  void _foldServerData(Map<String, String> aliases) {
+    for (final MapEntry(key: serverId, value: localId) in aliases.entries) {
+      if (_favorites.containsKey(serverId)) {
+        final local = _favorites[localId];
+        final server = _favorites[serverId];
+        _favorites[localId] = !_favorites.containsKey(localId)
+            ? server
+            : local != null && server != null && server.isBefore(local)
+            ? server
+            : local ?? server;
+      }
+      final server = _plays[serverId];
+      if (server != null) {
+        final local = _plays[localId];
+        final lastServer = server.lastPlayedAt;
+        final lastLocal = local?.lastPlayedAt;
+        _plays[localId] = (
+          count: local == null || server.count > local.count ? server.count : local.count,
+          lastPlayedAt: lastLocal == null || (lastServer != null && lastServer.isAfter(lastLocal))
+              ? lastServer
+              : lastLocal,
+        );
+      }
     }
   }
 
@@ -343,27 +404,14 @@ class LibraryService {
     }
   }
 
-  /// [serverOwnsUserData]: the server's favourites and play counts were just applied to its tracks, so the cached ones
-  /// must not overwrite them.
-  void _replaceTracksCore(List<Track> tracks, {bool serverOwnsUserData = false}) {
-    final previous = _rawTrackById;
-    for (final track in tracks) {
-      final old = previous[track.id];
-      if (old != null && !identical(old, track)) {
-        if (!(serverOwnsUserData && !track.isLocal)) {
-          track.isFavorite = old.isFavorite;
-          track.favoritedAt = old.favoritedAt;
-          track.playCount = old.playCount;
-          track.lastPlayed = old.lastPlayed;
-        }
-        track.dateAdded = old.dateAdded;
-        track.isPlaying = old.isPlaying; // the list keeps highlighting the track that is still playing
-      }
-    }
-
-    _repository.replaceAllTracks(tracks);
+  void _replaceTracksCore(List<Track> tracks) {
     _rawTracks = tracks;
     _rawTrackById = {for (final t in tracks) t.id: t};
+    // What tracks that are gone had goes with them, as their rows do.
+    _favorites.removeWhere((id, _) => !_rawTrackById.containsKey(id));
+    _plays.removeWhere((id, _) => !_rawTrackById.containsKey(id));
+    _repository.replaceAllTracks(tracks);
+    _repository.saveUserData(_rawTrackById.keys, _favorites, _plays);
     _rebuildSnapshot();
     libraryChanged.emit(null);
   }
@@ -376,35 +424,34 @@ class LibraryService {
     if (track == null) return;
     if (!_canChangeUserData(track)) return changeNotice.emit(ChangeNotice.readOnlyOffline);
 
-    _markFavorite(track, !track.isFavorite);
-    _repository.updateTrackFavorite(track.id, track.favoritedAt);
-    favoriteChanged.emit(track);
+    _markFavorite(track, !isFavorite(trackId));
     if (!track.isLocal) favoriteToggled.emit(track);
   }
 
   /// Sets a favourite without telling the server, e.g. to undo a change the server did not take.
-  void setFavorite(String trackId, bool isFavorite) {
+  void setFavorite(String trackId, bool favorite) {
     final track = getTrack(trackId);
-    if (track == null || track.isFavorite == isFavorite) return;
-
-    _markFavorite(track, isFavorite);
-    _repository.updateTrackFavorite(track.id, track.favoritedAt);
-    favoriteChanged.emit(track);
+    if (track == null || isFavorite(trackId) == favorite) return;
+    _markFavorite(track, favorite);
   }
 
-  static void _markFavorite(Track track, bool favorite) {
-    track
-      ..isFavorite = favorite
-      ..favoritedAt = favorite ? DateTime.now().toUtc() : null;
+  void _markFavorite(Track track, bool favorite) {
+    final at = favorite ? DateTime.now().toUtc() : null;
+    if (favorite) {
+      _favorites[track.id] = at;
+    } else {
+      _favorites.remove(track.id);
+    }
+    _repository.saveUserData([track.id], _favorites, _plays);
+    favoriteChanged.emit(track);
   }
 
   void recordPlay(String trackId) {
     final track = getTrack(trackId);
     if (track == null || !_canChangeUserData(track)) return;
 
-    track.playCount++;
-    track.lastPlayed = DateTime.now().toUtc();
-    _repository.incrementPlayCount(track.id);
+    _plays[trackId] = (count: playCount(trackId) + 1, lastPlayedAt: DateTime.now().toUtc());
+    _repository.saveUserData([trackId], _favorites, _plays);
     if (!track.isLocal) playRecorded.emit(track);
   }
 
@@ -625,17 +672,9 @@ class LibrarySnapshot {
       for (final t in source)
         if (seen.add(t.id)) t,
     ];
-    // Back to what the tags say before the folders are looked at again: the files may have changed since.
+    // Where to file each track is worked out from its tags alone, never from an earlier build.
     for (final t in tracks) {
-      final tagged = t.taggedAlbum;
-      if (tagged == null) continue;
-      t
-        ..album = tagged.album
-        ..albumArtist = tagged.albumArtist
-        ..albumArtistInferred = false
-        ..trackNumber = tagged.trackNumber
-        ..discNumber = tagged.discNumber
-        ..taggedAlbum = null;
+      t.filed = null;
     }
     final folderAlbums = _folderAlbums(tracks, libraryRoot);
     sortStable(
@@ -650,10 +689,9 @@ class LibrarySnapshot {
     );
 
     // Consolidate multi-artist albums where the album artist tag is missing or incomplete. Only tracks that share a
-    // folder on disk and have no colliding track numbers count. What is inferred here is kept apart from what the tags
-    // say (albumArtistInferred), recomputed on every build and never stored, so a value inferred from an earlier set of
-    // files cannot outlive them.
-    String? tagged(Track t) => t.albumArtistInferred ? null : t.albumArtist;
+    // folder on disk and have no colliding track numbers count. What is inferred here is where the track is filed, not
+    // what its tags say, so a value inferred from an earlier set of files cannot outlive them.
+    String? tagged(Track t) => t.tagged.albumArtist;
     final inferred = <Track, String>{};
 
     // Only files on this machine have a folder; the server already did this for its own tracks.
@@ -705,16 +743,8 @@ class LibrarySnapshot {
       }
     }
 
-    for (final t in tracks) {
-      final value = inferred[t];
-      if (value != null) {
-        t.albumArtist = value;
-        t.albumArtistInferred = true;
-      } else if (t.albumArtistInferred) {
-        // The files this was inferred from changed: back to what the tag says.
-        t.albumArtist = null;
-        t.albumArtistInferred = false;
-      }
+    for (final MapEntry(key: t, value: albumArtist) in inferred.entries) {
+      t.filed = (album: t.album, albumArtist: albumArtist, trackNumber: t.trackNumber, discNumber: t.discNumber);
     }
 
     final byAlbum = <String, List<Track>>{};
@@ -737,7 +767,7 @@ class LibrarySnapshot {
       final quality = QualitySummary.of(ordered.map((t) => t.format))!; // an album always has at least one track
       // A folder's collection gathers songs of many years: it is as new as its newest. An album that strays joined
       // keeps its own year.
-      final own = ordered.where((t) => t.taggedAlbum == null || equalsIgnoreCase(t.taggedAlbum!.album, t.album));
+      final own = ordered.where((t) => equalsIgnoreCase(t.tagged.album, t.album));
       final collection = own.isEmpty;
       final years = (collection ? ordered : own).map((t) => t.year).whereType<int>();
       albums.add(
@@ -859,12 +889,11 @@ class LibrarySnapshot {
       if (albums.length < 2) continue;
 
       // The artist every song shares: as album artist, main artist or featured artist.
-      String? taggedAlbumArtist(Track t) => t.albumArtistInferred ? null : t.albumArtist;
       bool credits(Track t, String name) =>
-          equalsIgnoreCase(taggedAlbumArtist(t), name) || t.artistNames.any((n) => equalsIgnoreCase(n, name));
+          equalsIgnoreCase(t.tagged.albumArtist, name) || t.artistNames.any((n) => equalsIgnoreCase(n, name));
       final first = folderTracks.first;
       final artist = [
-        ?cleanText(taggedAlbumArtist(first)),
+        ?cleanText(first.tagged.albumArtist),
         ...first.artistNames,
       ].where((name) => folderTracks.every((t) => credits(t, name))).firstOrNull;
       if (artist == null) continue;
@@ -879,21 +908,9 @@ class LibrarySnapshot {
       final ordered = List<Track>.of(folderTracks);
       if (matching == null) sortStable(ordered, (a, b) => compareText(a.title, b.title));
       for (final (index, t) in ordered.indexed) {
-        t.taggedAlbum = (
-          album: t.album,
-          albumArtist: t.albumArtistInferred ? null : t.albumArtist,
-          trackNumber: t.trackNumber,
-          discNumber: t.discNumber,
-        );
-        t
-          ..album = title
-          ..albumArtist = artist
-          ..albumArtistInferred = false;
-        if (matching == null) {
-          t
-            ..trackNumber = index + 1
-            ..discNumber = null;
-        }
+        t.filed = matching == null
+            ? (album: title, albumArtist: artist, trackNumber: index + 1, discNumber: null)
+            : (album: title, albumArtist: artist, trackNumber: t.trackNumber, discNumber: t.discNumber);
         refiled.add(t);
       }
     }

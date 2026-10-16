@@ -576,7 +576,7 @@ class FavoritesViewModel extends ChangeNotifier with TrackSorting {
 
   /// When the track became a favourite.
   @override
-  DateTime? addedAt(Track track) => track.favoritedAt;
+  DateTime? addedAt(Track track) => _library.favoritedAt(track.id);
 
   @override
   void _applySort() => favoriteTracks = _sorted(_library.favorites);
@@ -729,16 +729,18 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   /// The automatic playlists as the play counts stand now: the [_automaticLength] most played tracks (the more recent
   /// first among equals), and the last played ones.
   List<Playlist> _automatic() {
-    final played = _library.tracks.where((t) => t.playCount > 0 || t.lastPlayed != null).toList();
+    final library = _library;
+    final played = library.tracks.where((t) => library.playCount(t.id) > 0 || library.lastPlayedAt(t.id) != null);
     if (played.isEmpty) return const [];
     final epoch = DateTime.fromMillisecondsSinceEpoch(0);
-    int recent(Track a, Track b) => (b.lastPlayed ?? epoch).compareTo(a.lastPlayed ?? epoch);
-    final most = played.where((t) => t.playCount > 0).toList()
+    int recent(Track a, Track b) =>
+        (library.lastPlayedAt(b.id) ?? epoch).compareTo(library.lastPlayedAt(a.id) ?? epoch);
+    final most = played.where((t) => library.playCount(t.id) > 0).toList()
       ..sort((a, b) {
-        final count = b.playCount.compareTo(a.playCount);
+        final count = library.playCount(b.id).compareTo(library.playCount(a.id));
         return count != 0 ? count : recent(a, b);
       });
-    final last = played.where((t) => t.lastPlayed != null).toList()..sort(recent);
+    final last = played.where((t) => library.lastPlayedAt(t.id) != null).toList()..sort(recent);
     Playlist list(String id, String key, List<Track> tracks) => Playlist(
       id: id,
       name: Localizer.get(key),

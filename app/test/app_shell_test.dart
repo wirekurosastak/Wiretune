@@ -53,7 +53,7 @@ void main() {
     final library = createLibrary([
       TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 1),
       TestSupport.makeServerTrack('s1', 'Giant Steps', artist: 'John Coltrane', album: 'Giant Steps'),
-      TestSupport.makeServerTrack('s2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps')..trackNumber = 2,
+      TestSupport.makeServerTrack('s2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps', trackNumber: 2),
     ]);
     library.initialize();
     return createMainViewModel(library);
@@ -184,7 +184,7 @@ void main() {
         final library = createLibrary([
           TestSupport.makeTrack('1', 'Intro', album: 'Double', trackNumber: 1),
           TestSupport.makeTrack('2', 'Closer', album: 'Double', trackNumber: 2),
-          TestSupport.makeTrack('3', 'Second Start', album: 'Double', trackNumber: 1)..discNumber = 2,
+          TestSupport.makeTrack('3', 'Second Start', album: 'Double', trackNumber: 1, discNumber: 2),
         ]);
         library.initialize();
         return createMainViewModel(library);
@@ -386,7 +386,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.text(Localizer.get('TipRemoveFromFavorites')).last);
     await settle(tester);
-    expect(vm.library.getTrack(favorite.id)!.isFavorite, isFalse);
+    expect(vm.library.isFavorite(favorite.id), isFalse);
   });
 
   testWidgets('a phone lists albums and artists as rows, and a row opens its page', (tester) async {
