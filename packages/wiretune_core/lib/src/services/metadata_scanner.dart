@@ -29,8 +29,8 @@ abstract final class ImageFormat {
   static String mimeTypeFromPath(String path) => p.extension(path).toLowerCase() == '.png' ? 'image/png' : 'image/jpeg';
 }
 
-/// What a scan already knows about a file, so that an unchanged file is not read again, and one read again keeps the
-/// date it joined the library.
+/// What a scan already knows about a file, so that an unchanged file is not read again (unless its cover changed), and
+/// one read again keeps the date it joined the library.
 class _Known {
   const _Known(this.size, this.modifiedMicros, this.coverPath, this.added);
 
@@ -64,8 +64,8 @@ class MetadataScanner {
       sha256.convert(utf8.encode(AppPaths.comparable(AppPaths.fullPath(filePath)))).toString().substring(0, 32);
 
   /// Scans [rootPath] recursively. Files whose path, size and modification time match [knownTracks] are not read
-  /// again: the known track is returned instead; one that changed keeps its date added. Hidden files and folders (names
-  /// starting with a dot) are skipped.
+  /// again, unless a folder image was added, replaced or removed next to them: the known track is returned instead; one
+  /// that changed keeps its date added. Hidden files and folders (names starting with a dot) are skipped.
   Future<List<Track>> scanDirectory(
     String rootPath, {
     String? coverCacheDirectory,
@@ -254,19 +254,29 @@ List<Object?> _scanBatch(List<String> batch, Map<String, _Known> known, String? 
   final folderCovers = <String, String?>{};
   return [
     for (final file in batch)
-      _tryReuse(file, known[file]) ? true : _readTrack(file, coverCacheDirectory, folderCovers, known[file]?.added),
+      _tryReuse(file, known[file], folderCovers)
+          ? true
+          : _readTrack(file, coverCacheDirectory, folderCovers, known[file]?.added),
   ];
 }
 
-bool _tryReuse(String file, _Known? known) {
+/// Whether the known track of [file] still stands: the file is unchanged, and so is its cover. A picture cached from
+/// the file must still be there; a folder image may have been added, replaced or taken away next to the file since (an
+/// address, the cover a server lent the track, counts as none of its own).
+bool _tryReuse(String file, _Known? known, Map<String, String?> folderCovers) {
   if (known == null || known.modifiedMicros == null) return false;
-  if (known.coverPath != null && known.coverPath!.isNotEmpty && !File(known.coverPath!).existsSync()) return false;
   try {
     final stat = File(file).statSync();
-    return stat.size == known.size && stat.modified.toUtc().microsecondsSinceEpoch == known.modifiedMicros;
+    if (stat.size != known.size || stat.modified.toUtc().microsecondsSinceEpoch != known.modifiedMicros) return false;
   } catch (_) {
     return false;
   }
+  final cover = known.coverPath ?? '';
+  final ownCover = cover.isNotEmpty && !cover.contains('://');
+  final directory = p.dirname(file);
+  if (ownCover && p.dirname(cover) != directory) return File(cover).existsSync();
+  final folderCover = folderCovers.putIfAbsent(directory, () => MetadataScanner.findFolderCover(directory));
+  return (folderCover ?? '') == (ownCover ? cover : '');
 }
 
 Track? _readTrack(
@@ -354,7 +364,8 @@ Track? _readTrack(
   }
 }
 
-/// Writes the embedded picture to the cover cache (once per album) and returns its path.
+/// Writes the embedded picture to the cover cache (once per album and picture) and returns its path. The picture's size
+/// is part of the name, so a new picture in the files gets a file of its own instead of the old one's.
 String? _cacheEmbeddedCover(
   AudioTags tags,
   ByteSource source,
@@ -365,16 +376,17 @@ String? _cacheEmbeddedCover(
   if (!tags.hasPicture || cacheDirectory == null || cacheDirectory.trim().isEmpty) return null;
   try {
     Directory(cacheDirectory).createSync(recursive: true);
-    final hash = stableId('${albumArtist.toLowerCase()}\u001f${album.toLowerCase()}');
+    final size = tags.pictureData?.length ?? tags.pictureLocation?.length ?? 0;
+    final stem = 'cover_${stableId('${albumArtist.toLowerCase()}\u001f${album.toLowerCase()}')}_$size';
 
     for (final extension in const ['.jpg', '.png']) {
-      final existing = p.join(cacheDirectory, 'cover_$hash$extension');
+      final existing = p.join(cacheDirectory, '$stem$extension');
       if (File(existing).existsSync()) return existing;
     }
 
     final data = tags.readPicture(source);
     if (data == null || data.isEmpty) return null;
-    final path = p.join(cacheDirectory, 'cover_$hash${ImageFormat.isPng(data) ? '.png' : '.jpg'}');
+    final path = p.join(cacheDirectory, '$stem${ImageFormat.isPng(data) ? '.png' : '.jpg'}');
     // Tracks of one album may be read in parallel: write to a unique temporary file and move it into place.
     final temp = '$path.${newId()}.tmp';
     File(temp).writeAsBytesSync(data, flush: true);

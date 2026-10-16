@@ -294,6 +294,28 @@ void main() {
     expect((await client.get('/api/tracks', headers: {'If-None-Match': versions['/api/tracks']!})).statusCode, 200);
   });
 
+  test("a cover's version changes when the picture does, also when it keeps its name", () async {
+    final (client, _) = await setupAdmin(server);
+    await server.waitForTracks(client, 3);
+    Future<String?> coverVersion() async {
+      final scanned = server.server.scanner.lastScanAt;
+      await client.post('/api/library/scan');
+      for (var i = 0; i < 100 && server.server.scanner.lastScanAt == scanned; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      final tracks = (json(await client.get('/api/tracks')) as List).cast<Map<String, dynamic>>();
+      return tracks.firstWhere((t) => t['title'] == '01 First')['coverVersion'] as String?;
+    }
+
+    expect(await coverVersion(), isNull);
+    final cover = File(p.join(server.musicFolder, 'Artist A', 'Album 1', 'cover.jpg'));
+    cover.writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xE0]);
+    final first = await coverVersion();
+    expect(first, isNotNull);
+    cover.writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+    expect(await coverVersion(), allOf(isNotNull, isNot(first)));
+  });
+
   test('unknown routes are 404, known routes with another method 405', () async {
     final (client, _) = await setupAdmin(server);
     expect((await client.get('/api/nothing-here')).statusCode, 404);

@@ -8,6 +8,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -31,6 +32,13 @@ Future<void> main() async {
   if (!platform.isDesktop) AppPaths.platformDataRoot = (await getApplicationSupportDirectory()).path;
   AppPaths.platformMusicFolder = await platform.androidMusicDirectory();
   WiretuneLog.initialize();
+  // The server's covers are kept where the system keeps caches (and may clear them when space runs out).
+  try {
+    CoverArt.cacheDirectory = p.join((await getApplicationCacheDirectory()).path, 'Covers');
+    unawaited(CoverArt.trimCache());
+  } catch (e) {
+    WiretuneLog.warn('Main', 'No cache folder for covers, so they are kept in memory only: $e');
+  }
 
   if (platform.isAndroid || platform.isIOS) {
     unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));

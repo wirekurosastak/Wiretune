@@ -231,6 +231,7 @@ class LibraryService {
           toSave = scanned;
         }
         _replaceTracksCore(toSave);
+        _pruneCoverCache();
 
         WiretuneLog.info(
           'LibraryService',
@@ -246,6 +247,24 @@ class LibraryService {
       }
     });
     return result;
+  }
+
+  /// Deletes the covers cached from files that no track shows any more: an album that went, a picture that changed.
+  void _pruneCoverCache() {
+    final used = {
+      for (final t in _rawTracks)
+        if (t.coverArtPath case final path?) p.basename(path),
+    };
+    try {
+      final directory = Directory(_coverCacheDirectory);
+      if (!directory.existsSync()) return;
+      for (final file in directory.listSync().whereType<File>()) {
+        final name = p.basename(file.path);
+        if (name.startsWith('cover_') && !used.contains(name)) file.deleteSync();
+      }
+    } on FileSystemException catch (e) {
+      WiretuneLog.debug('LibraryService', 'Could not tidy the cover cache: $e');
+    }
   }
 
   /// Replaces the server part of the library, with the signed-in account's favourites, play counts and playlists as

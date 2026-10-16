@@ -209,8 +209,8 @@ abstract final class TestSupport {
   }
 }
 
-/// Writes a 16-bit stereo PCM WAV file with a 440 Hz tone.
-void writeWav(String path, int sampleRate, {double seconds = 1.0}) {
+/// Writes a 16-bit stereo PCM WAV file with a 440 Hz tone; with [picture], that as its embedded cover (an ID3 tag).
+void writeWav(String path, int sampleRate, {double seconds = 1.0, List<int>? picture}) {
   File(path).parent.createSync(recursive: true);
   final frames = (sampleRate * seconds).toInt();
   const channels = 2, bits = 16;
@@ -240,8 +240,23 @@ void writeWav(String path, int sampleRate, {double seconds = 1.0}) {
     data.setInt16(44 + i * 4, sample, Endian.little);
     data.setInt16(46 + i * 4, sample, Endian.little);
   }
-  File(path).writeAsBytesSync(data.buffer.asUint8List());
+  if (picture == null) return File(path).writeAsBytesSync(data.buffer.asUint8List());
+
+  // An `id3 ` chunk holding an ID3v2.3 tag with one APIC frame: the front cover.
+  final frame = [...latin1.encode('image/png'), 0, 3, 0, ...picture];
+  final tag = [...latin1.encode('APIC'), ..._bigEndian(frame.length + 1), 0, 0, 0, ...frame];
+  final id3 = [...latin1.encode('ID3'), 3, 0, 0, ..._syncSafe(tag.length), ...tag];
+  final chunk = [...latin1.encode('id3 '), ..._littleEndian(id3.length), ...id3, if (id3.length.isOdd) 0];
+  final bytes = [...data.buffer.asUint8List(), ...chunk];
+  bytes.setRange(4, 8, _littleEndian(bytes.length - 8));
+  File(path).writeAsBytesSync(bytes);
 }
+
+List<int> _bigEndian(int value) => [for (var shift = 24; shift >= 0; shift -= 8) (value >> shift) & 0xFF];
+
+List<int> _littleEndian(int value) => [for (var shift = 0; shift < 32; shift += 8) (value >> shift) & 0xFF];
+
+List<int> _syncSafe(int value) => [for (var shift = 21; shift >= 0; shift -= 7) (value >> shift) & 0x7F];
 
 /// True when [tool] can be started (tests that need it are skipped without it).
 bool hasTool(String tool) {

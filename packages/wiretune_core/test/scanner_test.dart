@@ -63,6 +63,57 @@ void main() {
     expect(retagged.format.sampleRate, 48000);
   });
 
+  test('a folder cover added, renamed or removed next to unchanged tracks is noticed', () async {
+    final scanner = MetadataScanner();
+    final album = p.join(root.path, 'Artist B', 'Album 2');
+    var known = {for (final t in await scanner.scanDirectory(root.path)) t.filePath: t};
+    Future<void> rescan() async =>
+        known = {for (final t in await scanner.scanDirectory(root.path, knownTracks: known)) t.filePath: t};
+    Track third() => known.values.firstWhere((t) => t.title == '01 Third');
+    final first = known.values.firstWhere((t) => t.title == '01 First');
+    expect(third().hasCoverArt, isFalse);
+
+    File(p.join(album, 'cover.jpg')).writeAsBytesSync([0xFF, 0xD8, 0xFF, 0xE0]);
+    await rescan();
+    expect(third().coverArtPath, endsWith('cover.jpg'));
+    expect(third().hasCoverArt, isTrue);
+
+    File(p.join(album, 'cover.jpg')).renameSync(p.join(album, 'folder.png'));
+    await rescan();
+    expect(third().coverArtPath, endsWith('folder.png'));
+
+    File(p.join(album, 'folder.png')).deleteSync();
+    await rescan();
+    expect(third().coverArtPath, isNull);
+    expect(third().hasCoverArt, isFalse);
+
+    // The album whose folder did not change was never read again.
+    expect(identical(known[first.filePath], first), isTrue);
+  });
+
+  test('a new picture in the files is cached anew, and the old one is tidied away', () async {
+    const png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    final music = Directory.systemTemp.createTempSync('wiretune_embedded_');
+    addTearDown(() => music.deleteSync(recursive: true));
+    final covers = p.join(music.path, '..', '${p.basename(music.path)}_covers');
+    addTearDown(() => Directory(covers).deleteSync(recursive: true));
+    final file = p.join(music.path, 'Album', '01 One.wav');
+    writeWav(file, 44100, picture: [...png, 1, 2, 3]);
+    final library = LibraryService(testRepository(), MetadataScanner(), coverCacheDirectory: covers);
+    library.initialize();
+
+    expect(await library.scanFolder(music.path), isTrue);
+    final before = library.tracks.single.coverArtPath!;
+    expect(File(before).readAsBytesSync(), [...png, 1, 2, 3]);
+
+    writeWav(file, 44100, picture: [...png, 4, 5, 6, 7]);
+    expect(await library.scanFolder(music.path), isTrue);
+    final after = library.tracks.single.coverArtPath!;
+    expect(after, isNot(before));
+    expect(File(after).readAsBytesSync(), [...png, 4, 5, 6, 7]);
+    expect(File(before).existsSync(), isFalse);
+  });
+
   test('the library scan stores the folder and keeps user data across rescans', () async {
     final repo = testRepository();
     final library = LibraryService(
