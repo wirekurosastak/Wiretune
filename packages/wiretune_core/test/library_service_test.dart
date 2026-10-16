@@ -50,7 +50,7 @@ void main() {
     expect(service.artists, hasLength(2));
     final starboy = service.albums.firstWhere((a) => a.title == 'Starboy');
     expect(starboy.trackCount, 2);
-    expect(starboy.tier, QualityTier.gold); // both of its tracks are hi-res
+    expect(starboy.quality.tier, QualityTier.gold); // both of its tracks are hi-res
     expect(service.search('Lucky').map((t) => t.title), ['Get Lucky']);
     expect(service.search('daft').map((t) => t.title), ['Get Lucky']); // ignoring case
   });
@@ -412,7 +412,7 @@ void main() {
     ]);
     service.initialize();
     final album = service.albums.single;
-    expect((album.tier, album.tagSpec), (QualityTier.silver, QualitySummary.mixedSpec));
+    expect((album.quality.tier, album.quality.spec), (QualityTier.silver, QualitySummary.mixedSpec));
   });
 
   test('sorting ignores accents and case', () async {

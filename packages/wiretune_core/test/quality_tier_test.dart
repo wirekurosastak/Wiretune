@@ -130,28 +130,30 @@ void main() {
     ]);
     service.initialize();
 
-    Album find(String title) => service.albums.singleWhere((a) => a.title == title);
-    expect((find('Gold album').tier, find('Gold album').tagSpec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
-    expect((find('Silver album').tier, find('Silver album').tagSpec), (QualityTier.silver, 'FLAC 16bit/44.1kHz'));
-    expect((find('Bronze album').tier, find('Bronze album').tagSpec), (QualityTier.bronze, 'MP3 320kbps'));
-    expect((find('Mixed album').tier, find('Mixed album').tagSpec), (QualityTier.bronze, 'MIXED'));
+    (QualityTier, String) tag(String title) {
+      final quality = service.albums.singleWhere((a) => a.title == title).quality;
+      return (quality.tier, quality.spec);
+    }
+
+    expect(tag('Gold album'), (QualityTier.gold, 'FLAC 24bit/96kHz'));
+    expect(tag('Silver album'), (QualityTier.silver, 'FLAC 16bit/44.1kHz'));
+    expect(tag('Bronze album'), (QualityTier.bronze, 'MP3 320kbps'));
+    expect(tag('Mixed album'), (QualityTier.bronze, 'MIXED'));
   });
 
-  test('playlist applyQuality sets tier and spec, and an empty playlist has no tag', () {
-    final playlist = Playlist(name: 'p');
-    playlist.applyQuality([
+  test("a playlist's tag is its tracks', and an empty playlist has none", () {
+    final hiRes = qualityOf([
       TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
       TestSupport.makeTrack('b', 'B', sampleRate: 96000, bits: 24),
-    ]);
-    expect((playlist.formatTier, playlist.formatSpec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
+    ])!;
+    expect((hiRes.tier, hiRes.spec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
 
-    playlist.applyQuality([
+    final mixed = qualityOf([
       TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
       TestSupport.makeTrack('c', 'C', sampleRate: 44100, bits: 16),
-    ]);
-    expect((playlist.formatTier, playlist.formatSpec), (QualityTier.silver, 'MIXED'));
+    ])!;
+    expect((mixed.tier, mixed.spec), (QualityTier.silver, 'MIXED'));
 
-    playlist.applyQuality(const []);
-    expect(playlist.formatSpec, isEmpty);
+    expect(qualityOf(const []), isNull);
   });
 }

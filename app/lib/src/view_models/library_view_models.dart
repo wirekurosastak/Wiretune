@@ -54,28 +54,33 @@ List<Track> sortTracks(
   DateTime? Function(Track track)? addedAt,
 }) {
   final added = addedAt ?? (Track t) => t.addedAt;
-  final Object? Function(Track t) value = switch (field) {
-    TrackSortField.released => (t) => t.releaseYear,
-    TrackSortField.added => added,
-    _ => (t) => t,
-  };
-  int compare(Track a, Track b) => switch (field) {
-    TrackSortField.title => compareText(a.title, b.title),
-    TrackSortField.artist => compareText(a.artist, b.artist),
-    TrackSortField.album => compareText(a.album, b.album),
-    TrackSortField.length => a.duration.compareTo(b.duration),
-    TrackSortField.released => a.releaseYear!.compareTo(b.releaseYear!),
-    TrackSortField.added => added(a)!.compareTo(added(b)!),
-    TrackSortField.quality => compareFormatQuality(a.format, b.format),
-  };
-  final list = List.of(tracks);
-  sortStable(list, (a, b) {
-    final (missingA, missingB) = (value(a) == null, value(b) == null);
-    if (missingA || missingB) return (missingA ? 1 : 0) - (missingB ? 1 : 0);
-    return descending ? compare(b, a) : compare(a, b);
-  });
-  return list;
+  return sortedBy(
+    tracks,
+    switch (field) {
+      TrackSortField.title => (a, b) => compareText(a.title, b.title),
+      TrackSortField.artist => (a, b) => compareText(a.artist, b.artist),
+      TrackSortField.album => (a, b) => compareText(a.album, b.album),
+      TrackSortField.length => (a, b) => a.duration.compareTo(b.duration),
+      TrackSortField.released => (a, b) => a.releaseYear!.compareTo(b.releaseYear!),
+      TrackSortField.added => (a, b) => added(a)!.compareTo(added(b)!),
+      TrackSortField.quality => (a, b) => compareFormatQuality(a.format, b.format),
+    },
+    descending: descending,
+    missing: switch (field) {
+      TrackSortField.released => (t) => t.releaseYear == null,
+      TrackSortField.added => (t) => added(t) == null,
+      _ => null,
+    },
+  );
 }
+
+/// When the newest of [tracks] was added (the epoch for none): how new an album or an artist is.
+DateTime latestAdded(Iterable<Track> tracks) =>
+    tracks.map((t) => t.addedAt).fold(DateTime.fromMillisecondsSinceEpoch(0), (a, b) => b.isAfter(a) ? b : a);
+
+/// The weakest format of [tracks]: an album is as good as its weakest track (the tier on its tag says the same).
+AudioFormat weakestFormat(Iterable<Track> tracks) =>
+    tracks.map((t) => t.format).reduce((w, f) => compareFormatQuality(f, w) < 0 ? f : w);
 
 /// The order of a page of tracks and the labels of its sort buttons, which the wide table's column headers share. As
 /// on the albums page, the active field flips its direction and another one starts in its natural one
@@ -290,59 +295,30 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
     ]);
   }
 
-  /// [source] in the order chosen on this page, which the car's list of albums follows too.
+  /// [source] in the order chosen on this page, which the car's list of albums follows too. Albums that tie go A to Z.
   List<Album> inSortOrder(Iterable<Album> source) {
     final albums = List.of(source);
-    switch (sortField) {
-      case AlbumSortField.released:
-        // Albums without a release year always go last, in either direction.
-        sortStable(albums, (a, b) {
-          if ((a.releaseYear == null) != (b.releaseYear == null)) return a.releaseYear == null ? 1 : -1;
-          final byYear = isSortDescending
-              ? (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0)
-              : (a.releaseYear ?? 0).compareTo(b.releaseYear ?? 0);
-          return byYear != 0 ? byYear : compareText(a.title, b.title);
-        });
-      case AlbumSortField.quality:
-        // An album is as good as its weakest track (the tier on its tag says the same); one without tracks ranks last.
-        final weakest = <Album, AudioFormat?>{
-          for (final album in albums)
-            album: album.tracks.isEmpty
-                ? null
-                : album.tracks.map((t) => t.format).reduce((w, f) => compareFormatQuality(f, w) < 0 ? f : w),
-        };
-        int compare(Album a, Album b) {
-          final (fa, fb) = (weakest[a], weakest[b]);
-          if (fa == null || fb == null) return (fa == null ? 0 : 1) - (fb == null ? 0 : 1);
-          return compareFormatQuality(fa, fb);
-        }
-
-        sortStable(albums, (a, b) {
-          final byQuality = compare(a, b);
-          return byQuality != 0 ? (isSortDescending ? -byQuality : byQuality) : compareText(a.title, b.title);
-        });
-      case AlbumSortField.artist:
-        sortStable(albums, (a, b) {
-          final byArtist = isSortDescending ? compareText(b.artist, a.artist) : compareText(a.artist, b.artist);
-          return byArtist != 0 ? byArtist : compareText(a.title, b.title);
-        });
-      case AlbumSortField.title:
-        sortStable(albums, (a, b) => isSortDescending ? compareText(b.title, a.title) : compareText(a.title, b.title));
-      case AlbumSortField.added:
-        final latestAdded = <Album, DateTime>{
-          for (final album in albums)
-            album: album.tracks.isEmpty
-                ? DateTime.fromMillisecondsSinceEpoch(0)
-                : album.tracks.map((t) => t.addedAt).reduce((a, b) => a.isAfter(b) ? a : b),
-        };
-        sortStable(albums, (a, b) {
-          final da = latestAdded[a]!;
-          final db = latestAdded[b]!;
-          final byAdded = isSortDescending ? db.compareTo(da) : da.compareTo(db);
-          return byAdded != 0 ? byAdded : compareText(a.title, b.title);
-        });
-    }
-    return albums;
+    final added = {
+      if (sortField == AlbumSortField.added)
+        for (final a in albums) a: latestAdded(a.tracks),
+    };
+    final weakest = {
+      if (sortField == AlbumSortField.quality)
+        for (final a in albums) a: weakestFormat(a.tracks),
+    };
+    return sortedBy(
+      albums,
+      switch (sortField) {
+        AlbumSortField.title => (a, b) => compareText(a.title, b.title),
+        AlbumSortField.artist => (a, b) => compareText(a.artist, b.artist),
+        AlbumSortField.released => (a, b) => a.releaseYear!.compareTo(b.releaseYear!),
+        AlbumSortField.added => (a, b) => added[a]!.compareTo(added[b]!),
+        AlbumSortField.quality => (a, b) => compareFormatQuality(weakest[a]!, weakest[b]!),
+      },
+      descending: isSortDescending,
+      missing: sortField == AlbumSortField.released ? (a) => a.releaseYear == null : null,
+      thenBy: sortField == AlbumSortField.title ? null : (a, b) => compareText(a.title, b.title),
+    );
   }
 
   void openAlbum(Album? album) => openAlbumWithOrigin(album, null, null, NavWaveDirection.leftToRight);
@@ -452,34 +428,23 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     ]);
   }
 
-  /// [source] in the order chosen on this page, which the car's list of artists follows too.
+  /// [source] in the order chosen on this page, which the car's list of artists follows too. Artists that tie go A to Z.
   List<Artist> inSortOrder(Iterable<Artist> source) {
     final artists = List.of(source);
-    switch (sortField) {
-      case ArtistSortField.name:
-        sortStable(artists, (a, b) => isSortDescending ? compareText(b.name, a.name) : compareText(a.name, b.name));
-      case ArtistSortField.added:
-        final latestAdded = <Artist, DateTime>{
-          for (final artist in artists)
-            artist: artist.tracks.isEmpty
-                ? DateTime.fromMillisecondsSinceEpoch(0)
-                : artist.tracks.map((t) => t.addedAt).reduce((a, b) => a.isAfter(b) ? a : b),
-        };
-        sortStable(artists, (a, b) {
-          final da = latestAdded[a]!;
-          final db = latestAdded[b]!;
-          final byAdded = isSortDescending ? db.compareTo(da) : da.compareTo(db);
-          return byAdded != 0 ? byAdded : compareText(a.name, b.name);
-        });
-      case ArtistSortField.albums:
-        sortStable(artists, (a, b) {
-          final byAlbums = isSortDescending
-              ? b.albumCount.compareTo(a.albumCount)
-              : a.albumCount.compareTo(b.albumCount);
-          return byAlbums != 0 ? byAlbums : compareText(a.name, b.name);
-        });
-    }
-    return artists;
+    final added = {
+      if (sortField == ArtistSortField.added)
+        for (final a in artists) a: latestAdded(a.tracks),
+    };
+    return sortedBy(
+      artists,
+      switch (sortField) {
+        ArtistSortField.name => (a, b) => compareText(a.name, b.name),
+        ArtistSortField.albums => (a, b) => a.albumCount.compareTo(b.albumCount),
+        ArtistSortField.added => (a, b) => added[a]!.compareTo(added[b]!),
+      },
+      descending: isSortDescending,
+      thenBy: sortField == ArtistSortField.name ? null : (a, b) => compareText(a.name, b.name),
+    );
   }
 
   void refreshArtists() {
@@ -707,19 +672,16 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   }
 
   /// [source] in the order chosen on the playlists page (which the car's list of playlists shows too).
-  List<Playlist> _inSortOrder(Iterable<Playlist> source) {
-    final list = List.of(source);
-    int compare(Playlist a, Playlist b) => switch (listSortField) {
-      PlaylistSortField.name => compareText(a.name, b.name),
-      PlaylistSortField.tracks => a.trackCount.compareTo(b.trackCount),
-      PlaylistSortField.added => a.createdAt.compareTo(b.createdAt),
-    };
-    sortStable(list, (a, b) {
-      final order = isListSortDescending ? compare(b, a) : compare(a, b);
-      return order != 0 ? order : compareText(a.name, b.name);
-    });
-    return list;
-  }
+  List<Playlist> _inSortOrder(Iterable<Playlist> source) => sortedBy(
+    source,
+    switch (listSortField) {
+      PlaylistSortField.name => (a, b) => compareText(a.name, b.name),
+      PlaylistSortField.tracks => (a, b) => a.trackCount.compareTo(b.trackCount),
+      PlaylistSortField.added => (a, b) => a.createdAt.compareTo(b.createdAt),
+    },
+    descending: isListSortDescending,
+    thenBy: (a, b) => compareText(a.name, b.name),
+  );
 
   /// Where [track] stands in the open playlist (1 for the first added); null when it isn't in it.
   int? positionOf(Track track) => _positions[track.id];
@@ -762,9 +724,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     _tracksOf = {
       for (final pl in [...automaticPlaylists, ...playlists]) pl.id: _library.getPlaylistTracks(pl),
     };
-    for (final pl in [...automaticPlaylists, ...playlists]) {
-      pl.applyQuality(_tracksOf[pl.id]!);
-    }
     selectedPlaylist = selectedId == null
         ? null
         : (_library.getPlaylist(selectedId) ?? automaticPlaylists.where((pl) => pl.id == selectedId).firstOrNull);
@@ -777,10 +736,8 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   void refreshLocalizedTexts() => refreshPlaylists();
 
   void _refreshSelectedTracks() {
-    final selected = selectedPlaylist;
     _applySort();
     selectedPlaylistTotalDuration = selectedPlaylistTracks.isEmpty ? '' : formatTotal(selectedPlaylistTracks);
-    selected?.applyQuality(selectedPlaylistTracks);
   }
 
   /// Added is the playlist's own order: the tracks were added in it, and it can't be rearranged.

@@ -129,6 +129,9 @@ class QualitySummary {
   /// The format of the tracks when they all share one, [mixedSpec] otherwise.
   final String spec;
 
+  /// What the tag of a small cover says: the format alone ([AudioFormat.compactSpec]).
+  String get compactSpec => AudioFormat.compactSpec(tier, spec);
+
   /// Summarises [formats], or returns null when there are none (an empty playlist has no tag). Two lossy files count
   /// as the same format only when their bitrate matches too.
   static QualitySummary? of(Iterable<AudioFormat> formats) {

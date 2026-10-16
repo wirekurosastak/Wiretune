@@ -175,6 +175,9 @@ class Track {
   String toString() => 'Track($artist - $title)';
 }
 
+/// The quality tag of [tracks] (an album's, a playlist's): their lowest tier and their format, or `MIXED`; null for none.
+QualitySummary? qualityOf(Iterable<Track> tracks) => QualitySummary.of(tracks.map((t) => t.format));
+
 class Album {
   Album({
     String? id,
@@ -182,10 +185,8 @@ class Album {
     this.artist = 'Unknown Artist',
     this.releaseYear,
     this.coverArtPath,
-    this.trackCount = 0,
     this.totalDuration = Duration.zero,
-    this.tier = QualityTier.silver,
-    this.tagSpec = '',
+    required this.quality,
     List<Track>? tracks,
   }) : id = id ?? newId(),
        tracks = tracks ?? [];
@@ -195,40 +196,27 @@ class Album {
   final String artist;
   final int? releaseYear;
   final String? coverArtPath;
-  final int trackCount;
   final Duration totalDuration;
 
-  /// The lowest [QualityTier] among the album's tracks (see [QualitySummary]).
-  final QualityTier tier;
-
-  /// What the quality tag says after the tier word, e.g. "FLAC 24bit/96kHz", or "MIXED".
-  final String tagSpec;
-
-  /// A compact representation of quality suitable for small thumbnails.
-  String get compactTagSpec => AudioFormat.compactSpec(tier, tagSpec);
+  /// The album's quality tag: the lowest tier of its tracks, and their format or `MIXED`.
+  final QualitySummary quality;
 
   final List<Track> tracks;
+  int get trackCount => tracks.length;
 
   String get formattedTotalDuration => Localizer.formatTotalDuration(totalDuration);
 }
 
 class Artist {
-  Artist({
-    String? id,
-    this.name = 'Unknown Artist',
-    this.albumCount = 0,
-    this.trackCount = 0,
-    this.picturePath,
-    List<Album>? albums,
-    List<Track>? tracks,
-  }) : id = id ?? newId(),
-       albums = albums ?? [],
-       tracks = tracks ?? [];
+  Artist({String? id, this.name = 'Unknown Artist', this.picturePath, List<Album>? albums, List<Track>? tracks})
+    : id = id ?? newId(),
+      albums = albums ?? [],
+      tracks = tracks ?? [];
 
   final String id;
   final String name;
-  final int albumCount;
-  final int trackCount;
+  int get albumCount => albums.length;
+  int get trackCount => tracks.length;
 
   /// An album cover at first; replaced by the artist's photo once the online lookup found one.
   String? picturePath;
@@ -271,22 +259,6 @@ class Playlist {
   List<String> trackIds;
 
   int get trackCount => trackIds.length;
-
-  /// The lowest tier among the playlist's tracks; only meaningful while [formatSpec] is not empty.
-  QualityTier formatTier = QualityTier.silver;
-
-  /// What the quality tag says, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty for an empty playlist, which has no tag.
-  String formatSpec = '';
-
-  /// A compact representation of quality suitable for small thumbnails.
-  String get compactFormatSpec => AudioFormat.compactSpec(formatTier, formatSpec);
-
-  /// Sets [formatTier] and [formatSpec] from the playlist's tracks.
-  void applyQuality(List<Track> tracks) {
-    final summary = QualitySummary.of(tracks.map((t) => t.format));
-    formatSpec = summary?.spec ?? '';
-    if (summary != null) formatTier = summary.tier;
-  }
 }
 
 enum PlaybackState { stopped, playing, paused, error }

@@ -48,7 +48,7 @@ class AlbumCard extends StatelessWidget {
         _line(album.artist, 12.5, FontWeight.w500, colors.textMuted),
         _line(details, 11, FontWeight.w500, colors.textMuted),
       ],
-      badge: QualityTag(tier: album.tier, spec: album.tagSpec),
+      badge: QualityTag(tier: album.quality.tier, spec: album.quality.spec),
       play: TilePlayButton(color: purple, onPressed: onPlay),
     );
   }
@@ -323,8 +323,8 @@ class AlbumsSliver extends StatelessWidget {
         title: album.title,
         subtitle: [album.artist, if (album.releaseYear != null) '${album.releaseYear}'].join('  •  '),
         badge: QualityTag(
-          tier: album.tier,
-          spec: album.compactTagSpec,
+          tier: album.quality.tier,
+          spec: album.quality.compactSpec,
           fontSize: 9.5,
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
         ),
@@ -403,6 +403,7 @@ class PlaylistsSliver extends StatelessWidget {
           return PlaylistCard(
             playlist: playlist,
             covers: playlistCovers(tracks),
+            quality: qualityOf(tracks),
             menu: CollectionMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)),
             onOpen: () => onOpen(playlist),
             onPlay: () => onPlay(playlist),
@@ -414,11 +415,12 @@ class PlaylistsSliver extends StatelessWidget {
       final playlist = playlists[index];
       final tracks = tracksOf(playlist);
       final covers = playlistCovers(tracks);
-      final badge = playlist.formatSpec.isEmpty
+      final quality = qualityOf(tracks);
+      final badge = quality == null
           ? null
           : QualityTag(
-              tier: playlist.formatTier,
-              spec: playlist.compactFormatSpec,
+              tier: quality.tier,
+              spec: quality.compactSpec,
               fontSize: 9.5,
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
             );
@@ -570,6 +572,7 @@ class PlaylistCard extends StatelessWidget {
     super.key,
     required this.playlist,
     required this.covers,
+    required this.quality,
     required this.menu,
     required this.onOpen,
     required this.onPlay,
@@ -577,6 +580,9 @@ class PlaylistCard extends StatelessWidget {
 
   final Playlist playlist;
   final List<String> covers;
+
+  /// The quality tag of its tracks; null for an empty playlist, which has none.
+  final QualitySummary? quality;
   final CollectionMenu menu;
   final VoidCallback onOpen;
   final VoidCallback onPlay;
@@ -595,7 +601,7 @@ class PlaylistCard extends StatelessWidget {
         _line(playlist.name, 14, FontWeight.w700, colors.textMain),
         _line(context.trf('TrackCount', [playlist.trackCount]), 12.5, FontWeight.w500, colors.textMuted),
       ],
-      badge: playlist.formatSpec.isEmpty ? null : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec),
+      badge: quality == null ? null : QualityTag(tier: quality!.tier, spec: quality!.spec),
       play: TilePlayButton(color: lime, onPressed: playlist.trackCount > 0 ? onPlay : null),
     );
   }

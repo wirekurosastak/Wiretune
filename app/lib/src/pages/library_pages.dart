@@ -700,7 +700,7 @@ class AlbumDetail extends StatelessWidget {
               placeholderIcon: Icons.album,
               placeholderColor: colors.palette.purple,
             ),
-            artworkBadge: QualityTag(tier: album.tier, spec: album.tagSpec, fontSize: 11),
+            artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
             tags: [TagBadge(context.tr('ColAlbum'), color: colors.palette.purple)],
             title: album.title,
             details: [

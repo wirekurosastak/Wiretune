@@ -8,7 +8,6 @@ import 'package:path/path.dart' as p;
 
 import '../data/library_repository.dart';
 import '../localization/localizer.dart';
-import '../models/audio_format.dart';
 import '../models/library_models.dart';
 import '../models/protocol.dart';
 import '../util/async_lock.dart';
@@ -574,13 +573,7 @@ class LibraryService {
         .where((t) => t.artistNames.any((n) => equalsIgnoreCase(n, trimmed)))
         .toList();
     if (matchingTracks.isEmpty) return null;
-    return Artist(
-      id: stableId(trimmed.toLowerCase()),
-      name: trimmed,
-      trackCount: matchingTracks.length,
-      albumCount: 0,
-      tracks: matchingTracks,
-    );
+    return Artist(id: stableId(trimmed.toLowerCase()), name: trimmed, tracks: matchingTracks);
   }
 
   Playlist? getPlaylist(String playlistId) => _playlists.where((pl) => pl.id == playlistId).firstOrNull;
@@ -729,7 +722,6 @@ class LibrarySnapshot {
         ]),
       );
       final first = ordered.first;
-      final quality = QualitySummary.of(ordered.map((t) => t.format))!; // an album always has at least one track
       // A folder's collection gathers songs of many years: it is as new as its newest. An album that strays joined
       // keeps its own release year.
       final own = ordered.where((t) => equalsIgnoreCase(t.tagged.album, t.album));
@@ -742,10 +734,8 @@ class LibrarySnapshot {
           artist: first.effectiveAlbumArtist,
           releaseYear: collection && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
           coverArtPath: ordered.where((t) => !isBlank(t.coverArtPath)).firstOrNull?.coverArtPath,
-          trackCount: ordered.length,
           totalDuration: ordered.fold(Duration.zero, (sum, t) => sum + t.duration),
-          tier: quality.tier,
-          tagSpec: quality.spec,
+          quality: qualityOf(ordered)!, // an album always has a track
           tracks: ordered,
         ),
       );
@@ -797,8 +787,6 @@ class LibrarySnapshot {
         Artist(
           id: stableId(name.toLowerCase()),
           name: name,
-          albumCount: artistAlbums.length,
-          trackCount: artistTracks.length,
           picturePath: artistAlbums.where((a) => !isBlank(a.coverArtPath)).firstOrNull?.coverArtPath,
           albums: artistAlbums,
           tracks: artistTracks,

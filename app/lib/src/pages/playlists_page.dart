@@ -169,9 +169,10 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
           child: DetailHeader(
             back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),
             artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
-            artworkBadge: playlist.formatSpec.isEmpty
-                ? null
-                : QualityTag(tier: playlist.formatTier, spec: playlist.formatSpec, fontSize: 11),
+            artworkBadge: switch (qualityOf(tracks)) {
+              final quality? => QualityTag(tier: quality.tier, spec: quality.spec, fontSize: 11),
+              null => null,
+            },
             tags: [
               TagBadge(
                 context.tr(playlist.isAutomatic ? 'LabelAutoPlaylist' : 'LabelPlaylist'),

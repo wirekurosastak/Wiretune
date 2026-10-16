@@ -47,3 +47,26 @@ int Function(T, T) thenBy<T>(List<int Function(T, T)> comparators) => (a, b) {
   }
   return 0;
 };
+
+/// [items] in the order of [compare] (A to Z, the lowest or the oldest first), turned round when [descending]. What
+/// [missing] says has no value goes last in either direction. What ties goes in [thenBy]'s order, which is never turned
+/// round, or else keeps its place.
+List<T> sortedBy<T>(
+  Iterable<T> items,
+  int Function(T a, T b) compare, {
+  bool descending = false,
+  bool Function(T item)? missing,
+  int Function(T a, T b)? thenBy,
+}) {
+  final list = List<T>.of(items);
+  sortStable(list, (a, b) {
+    if (missing != null) {
+      final (noA, noB) = (missing(a), missing(b));
+      if (noA != noB) return noA ? 1 : -1;
+      if (noA) return thenBy?.call(a, b) ?? 0;
+    }
+    final order = descending ? compare(b, a) : compare(a, b);
+    return order != 0 ? order : thenBy?.call(a, b) ?? 0;
+  });
+  return list;
+}
