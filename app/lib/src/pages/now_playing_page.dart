@@ -9,11 +9,12 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../widgets/ambient.dart';
-import '../widgets/common.dart';
+import '../widgets/badges.dart';
+import '../widgets/buttons.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
+import '../widgets/links.dart';
 import '../widgets/player_controls.dart';
-import '../widgets/quality_tag.dart';
 import '../widgets/track_list.dart';
 import 'queue_panel.dart';
 
@@ -365,10 +366,10 @@ class _LyricsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      ListenableBuilder(listenable: context.vm.player, builder: (context, _) => _build(context));
+      ListenableBuilder(listenable: context.vm.lyrics, builder: (context, _) => _build(context));
 
   Widget _build(BuildContext context) {
-    final player = context.vm.player;
+    final lyrics = context.vm.lyrics;
     final colors = context.colors;
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 0),
@@ -376,11 +377,11 @@ class _LyricsTab extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Expanded(child: LyricsView(showHeader: false, centered: true)),
-          if (player.hasLyrics && player.lyricsSourceText.isNotEmpty)
+          if (lyrics.hasLyrics && lyrics.sourceText.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                player.lyricsSourceText,
+                lyrics.sourceText,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: colors.textMuted),
               ),

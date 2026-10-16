@@ -10,10 +10,11 @@ import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
 import '../view_models/main_view_model.dart';
-import 'common.dart';
+import 'badges.dart';
+import 'buttons.dart';
 import 'cover_image.dart';
-import 'playlist_dialogs.dart';
-import 'quality_tag.dart';
+import 'dialogs.dart';
+import 'page_parts.dart';
 
 /// An album: cover (with its format on it), title, artist, track count and release year, and a play button.
 class AlbumCard extends StatelessWidget {
@@ -823,6 +824,65 @@ class TileGridSliver extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// The round play button of a tile: filled with a gradient of [color], over a glow of it.
+class TilePlayButton extends StatelessWidget {
+  const TilePlayButton({super.key, required this.color, required this.onPressed, this.size = 44});
+
+  final Color color;
+  final VoidCallback? onPressed;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: context.tr('Play'),
+      child: PopEffect(
+        enabled: enabled,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: enabled ? null : colors.palette.modal,
+            gradient: enabled
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [colors.palette.hoverOf(color), color],
+                  )
+                : null,
+            boxShadow: [
+              BoxShadow(
+                color: enabled ? color.withValues(alpha: 0.5) : colors.palette.shadow,
+                blurRadius: 16,
+                spreadRadius: -2,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Material(
+            type: MaterialType.transparency,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: SizedBox.square(
+                dimension: size,
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  size: size * 0.58,
+                  color: enabled ? colors.onAccent : colors.textMuted,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

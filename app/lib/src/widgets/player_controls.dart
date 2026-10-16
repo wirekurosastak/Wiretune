@@ -450,3 +450,75 @@ class FavoriteCurrentButton extends StatelessWidget {
     );
   }
 }
+
+/// Calls [onSwipe] when a vertical swipe over [child] goes far or fast enough [upwards] (or downwards). Taps, and
+/// horizontal drags such as a slider's, still reach the child.
+class VerticalSwipe extends StatefulWidget {
+  const VerticalSwipe({super.key, required this.upwards, required this.onSwipe, required this.child});
+
+  final bool upwards;
+  final VoidCallback onSwipe;
+  final Widget child;
+
+  @override
+  State<VerticalSwipe> createState() => _VerticalSwipeState();
+}
+
+class _VerticalSwipeState extends State<VerticalSwipe> with SingleTickerProviderStateMixin {
+  double _distance = 0;
+  late final AnimationController _resetController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+  );
+  Animation<double>? _resetAnimation;
+
+  @override
+  void dispose() {
+    _resetController.dispose();
+    super.dispose();
+  }
+
+  void _onDragStart(DragStartDetails _) {
+    _resetController.stop();
+    _distance = 0;
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _distance += details.delta.dy;
+    });
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    final direction = widget.upwards ? -1 : 1;
+    final velocity = (details.primaryVelocity ?? 0) * direction;
+    final traveled = _distance * direction;
+    if (traveled > 40 || velocity > 350) {
+      widget.onSwipe();
+      setState(() => _distance = 0);
+    } else if (_distance != 0) {
+      _resetAnimation =
+          Tween<double>(
+            begin: _distance,
+            end: 0,
+          ).animate(CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic))..addListener(() {
+            setState(() {
+              _distance = _resetAnimation!.value;
+            });
+          });
+      _resetController.forward(from: 0);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final offset = widget.upwards ? _distance.clamp(-60.0, 0.0) : _distance.clamp(0.0, 60.0);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: _onDragStart,
+      onVerticalDragUpdate: _onDragUpdate,
+      onVerticalDragEnd: _onDragEnd,
+      child: Transform.translate(offset: Offset(0, offset), child: widget.child),
+    );
+  }
+}

@@ -8,10 +8,11 @@ import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/player_view_model.dart';
-import '../widgets/common.dart';
+import '../widgets/badges.dart';
+import '../widgets/buttons.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/equalizer_bars.dart';
-import '../widgets/quality_tag.dart';
+import '../widgets/page_parts.dart';
 
 /// The queue: jump to an entry, drag entries (or use the arrows) to reorder them, remove them. Another device's queue
 /// (remote control) shows as far as this library knows its tracks, and its changes go to that device.
@@ -284,9 +285,10 @@ class _LyricsViewState extends State<LyricsView> {
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
+    final lyrics = context.vm.lyrics;
     final colors = context.colors;
     return ListenableBuilder(
-      listenable: player,
+      listenable: Listenable.merge([player, lyrics]),
       builder: (context, _) {
         final track = player.currentTrack;
         final header = widget.showHeader
@@ -310,11 +312,11 @@ class _LyricsViewState extends State<LyricsView> {
                         style: TextStyle(fontSize: 12, color: colors.textMuted),
                       ),
                     ],
-                    if (player.hasLyrics && player.lyricsSourceText.isNotEmpty)
+                    if (lyrics.hasLyrics && lyrics.sourceText.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          player.lyricsSourceText,
+                          lyrics.sourceText,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 11, color: colors.textMuted),
@@ -326,7 +328,7 @@ class _LyricsViewState extends State<LyricsView> {
             : const SizedBox.shrink();
 
         Widget body;
-        if (player.isLoadingLyrics) {
+        if (lyrics.isLoading) {
           body = Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -348,7 +350,7 @@ class _LyricsViewState extends State<LyricsView> {
               ],
             ),
           );
-        } else if (player.showLyricsEmptyState) {
+        } else if (lyrics.showEmptyState) {
           body = Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -356,14 +358,14 @@ class _LyricsViewState extends State<LyricsView> {
                 Icon(Icons.text_snippet_outlined, size: 40, color: colors.palette.textDisabled),
                 const SizedBox(height: 10),
                 Text(
-                  player.lyricsEmptyText,
+                  lyrics.emptyText,
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: colors.textMuted),
                 ),
               ],
             ),
           );
-        } else if (player.hasSyncedLyrics) {
+        } else if (lyrics.isSynced) {
           body = ShaderMask(
             // The lines fade out towards the top and the bottom edge.
             shaderCallback: (rect) => const LinearGradient(
@@ -374,10 +376,10 @@ class _LyricsViewState extends State<LyricsView> {
             ).createShader(rect),
             blendMode: BlendMode.dstIn,
             child: ValueListenableBuilder<int>(
-              valueListenable: player.currentLyricIndex,
+              valueListenable: lyrics.currentLine,
               builder: (context, current, _) {
                 _follow(current);
-                final lines = player.lyricLines;
+                final lines = lyrics.lines;
                 return ListView.builder(
                   controller: _scroll,
                   padding: const EdgeInsets.only(top: 24, bottom: 120),
@@ -389,10 +391,10 @@ class _LyricsViewState extends State<LyricsView> {
                     return _LyricLine(
                       key: key,
                       text: line.text,
-                      active: line.isActive,
-                      past: line.isPast,
+                      active: i == current,
+                      past: i < current,
                       centered: widget.centered,
-                      onTap: () => player.seekToLyric(line),
+                      onTap: () => lyrics.seekTo(line),
                     );
                   },
                 );
@@ -403,7 +405,7 @@ class _LyricsViewState extends State<LyricsView> {
           body = SingleChildScrollView(
             padding: const EdgeInsets.only(bottom: 80),
             child: SelectableText(
-              player.plainLyricsText ?? '',
+              lyrics.plainText ?? '',
               textAlign: widget.centered ? TextAlign.center : TextAlign.start,
               style: TextStyle(fontSize: 15, height: 26 / 15, color: colors.textMain),
             ),

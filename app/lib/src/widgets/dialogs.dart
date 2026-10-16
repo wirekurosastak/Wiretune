@@ -8,6 +8,55 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 
+/// Asks before an action that can't easily be taken back. True when the user confirmed it. Cancel has the focus, so a
+/// stray press of a remote's OK button doesn't confirm a [destructive] action.
+Future<bool> confirmAction(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String confirmLabel,
+  bool destructive = false,
+}) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(title),
+      content: Text(message),
+      actions: [
+        TextButton(
+          autofocus: destructive,
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(ctx.tr('Cancel')),
+        ),
+        FilledButton(
+          autofocus: !destructive,
+          style: destructive ? FilledButton.styleFrom(backgroundColor: ctx.colors.danger) : null,
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(confirmLabel),
+        ),
+      ],
+    ),
+  );
+  return confirmed == true;
+}
+
+/// Signs out of the server; first asks when that deletes the downloads on this device.
+Future<void> confirmAndSignOut(BuildContext context) async {
+  final vm = context.vm;
+  final downloads = vm.downloads;
+  if (downloads.copyCount > 0) {
+    final confirmed = await confirmAction(
+      context,
+      title: context.tr('SignOutConfirm'),
+      message: context.trf('SignOutConfirmDownloads', [downloads.copyCount, downloads.sizeLabel]),
+      confirmLabel: context.tr('SignOut'),
+      destructive: true,
+    );
+    if (!confirmed) return;
+  }
+  await vm.logout();
+}
+
 /// Asks for a name and makes a playlist, starting with [tracks] (called [adding] in the dialog) when there are any, and
 /// opens it.
 Future<void> showNewPlaylistDialog(

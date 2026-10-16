@@ -17,7 +17,7 @@ import '../app_scope.dart';
 import '../view_models/app_section.dart';
 import '../view_models/library_view_models.dart';
 import '../view_models/main_view_model.dart';
-import '../widgets/playlist_dialogs.dart';
+import '../widgets/dialogs.dart';
 
 /// Local HTTP endpoint for scripted UI testing. It exists in debug builds only ([isEnabled] is false in a release or
 /// profile build, whatever the environment says), stays off unless `WIRETUNE_UI_AUTOMATION=1` is set, listens on

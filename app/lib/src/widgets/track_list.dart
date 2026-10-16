@@ -8,13 +8,15 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
+import 'badges.dart';
+import 'buttons.dart';
 import 'cover_image.dart';
-import 'common.dart';
+import 'dialogs.dart';
 import 'downloads.dart';
 import 'equalizer_bars.dart';
+import 'links.dart';
+import 'page_parts.dart';
 import 'player_controls.dart';
-import 'playlist_dialogs.dart';
-import 'quality_tag.dart';
 
 /// Which list a track table shows; each has its own columns, as far as the width allows. Every row ends in the
 /// favourite and a menu with the rest.

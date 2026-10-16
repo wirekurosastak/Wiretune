@@ -8,11 +8,12 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
+import '../widgets/badges.dart';
+import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
-import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/downloads.dart';
-import '../widgets/playlist_dialogs.dart';
-import '../widgets/quality_tag.dart';
+import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
 import 'library_pages.dart';
 

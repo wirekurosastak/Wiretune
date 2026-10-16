@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../localization.dart';
+import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 
 /// The quality tag: a small pill in the colour of the tier the recording is in, reading for example `FLAC 24bit/96kHz`
@@ -46,6 +47,62 @@ class QualityTag extends StatelessWidget {
             letterSpacing: 0.2,
             height: 1.35,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A small pill tinted with its colour: "ARTIST", "ALBUM", "TRACK", a counter.
+class TagBadge extends StatelessWidget {
+  const TagBadge(this.text, {super.key, required this.color});
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: 0.14),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: 0.3)),
+    ),
+    child: Text(
+      text,
+      maxLines: 1,
+      style: TextStyle(fontSize: 10, letterSpacing: 0.8, height: 1.4, fontWeight: FontWeight.w800, color: color),
+    ),
+  );
+}
+
+/// A compact badge for track metadata (BPM, bitrate) displayed in the players.
+class PlayerMetaBadge extends StatelessWidget {
+  const PlayerMetaBadge({super.key, required this.text, this.fontSize = 10});
+
+  final String text;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+      decoration: BoxDecoration(
+        color: colors.surface2,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: colors.glassBorder),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+          color: colors.textMuted,
+          height: 1.3,
         ),
       ),
     );

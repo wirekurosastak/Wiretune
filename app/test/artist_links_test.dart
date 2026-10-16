@@ -4,7 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wiretune/src/widgets/common.dart';
+
+import 'package:wiretune/src/widgets/links.dart';
 
 /// A track of several artists ("Future, Lil Durk") links each of them, the way TIDAL does.
 void main() {

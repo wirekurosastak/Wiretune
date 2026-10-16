@@ -7,9 +7,10 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/search_view_model.dart';
+import '../widgets/badges.dart';
 import '../widgets/cards.dart';
-import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
 
 /// The results of the search: the best match beside the matching tracks, then the artists and the albums.
@@ -219,7 +220,7 @@ class _BestMatchCard extends StatelessWidget {
     };
     return SizedBox(
       width: 320,
-      child: MetricCard(
+      child: _MetricCard(
         accent: typeColor,
         padding: 20,
         onTap: match.open,
@@ -264,6 +265,60 @@ class _BestMatchCard extends StatelessWidget {
             const SizedBox(height: 18),
             TilePlayButton(color: typeColor, onPressed: match.play, size: 48),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A framed glass card that rises a little, takes the [accent] edge and glows in it under the mouse.
+class _MetricCard extends StatefulWidget {
+  const _MetricCard({required this.child, required this.accent, required this.onTap, this.padding = 16});
+
+  final Widget child;
+  final Color accent;
+  final VoidCallback onTap;
+  final double padding;
+
+  @override
+  State<_MetricCard> createState() => _MetricCardState();
+}
+
+class _MetricCardState extends State<_MetricCard> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
+        decoration: BoxDecoration(
+          color: _hover ? colors.surface2 : colors.surface1,
+          borderRadius: BorderRadius.circular(Radii.card + 2),
+          border: Border.all(color: _hover ? widget.accent.withValues(alpha: 0.7) : colors.glassBorder),
+          boxShadow: _hover
+              ? [
+                  BoxShadow(
+                    color: widget.accent.withValues(alpha: 0.28),
+                    blurRadius: 36,
+                    spreadRadius: -10,
+                    offset: const Offset(0, 16),
+                  ),
+                ]
+              : const [],
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(Radii.card + 2),
+            onTap: widget.onTap,
+            child: Padding(padding: EdgeInsets.all(widget.padding), child: widget.child),
+          ),
         ),
       ),
     );

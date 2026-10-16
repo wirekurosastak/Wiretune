@@ -10,24 +10,25 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
+import '../pages/login_page.dart';
+import '../pages/queue_panel.dart';
+import '../pages/search_page.dart';
+import '../pages/section_page.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
-import '../pages/login_page.dart';
-import '../pages/queue_panel.dart';
-import '../pages/search_page.dart';
-import '../pages/section_page.dart';
 import '../widgets/ambient.dart';
-import '../widgets/common.dart';
+import '../widgets/badges.dart';
+import '../widgets/buttons.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/downloads.dart';
+import '../widgets/links.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
-import '../widgets/playlist_dialogs.dart';
-import '../widgets/quality_tag.dart';
 import '../widgets/spectrum_visualizer.dart';
 
 /// The desktop, tablet and TV layout: the header (logo, search, the mode pills, account, language, theme and, without a

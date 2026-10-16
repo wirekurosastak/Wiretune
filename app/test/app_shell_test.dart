@@ -18,11 +18,12 @@ import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/widgets/ambient.dart';
+import 'package:wiretune/src/widgets/badges.dart';
+import 'package:wiretune/src/widgets/buttons.dart';
 import 'package:wiretune/src/widgets/cards.dart';
-import 'package:wiretune/src/widgets/common.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/devices.dart';
-import 'package:wiretune/src/widgets/quality_tag.dart';
+import 'package:wiretune/src/widgets/page_parts.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -357,19 +358,19 @@ void main() {
       return createMainViewModel(library, TestSupport.createEngine(driver));
     }))!;
     const line = "(La, la, la) I'm caught up in the rapture of love, nothing else can compare";
-    vm.player.lyricsProvider = (_) async => '[00:00.50]$line\n[00:30.00]When I feel the magic of you';
+    vm.lyrics.own = (_) async => '[00:00.50]$line\n[00:30.00]When I feel the magic of you';
     await tester.pumpWidget(WiretuneApp(vm: vm));
 
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
     vm.nowPlayingTab = NowPlayingTab.lyrics;
     await tester.runAsync(() async {
-      await waitUntil(() => vm.player.hasSyncedLyrics);
+      await waitUntil(() => vm.lyrics.isSynced);
       await driver.seek(const Duration(seconds: 1));
     });
     await settle(tester);
 
-    expect(vm.player.currentLyricIndex.value, 0);
+    expect(vm.lyrics.currentLine.value, 0);
     final list = tester.getRect(find.descendant(of: find.byType(NowPlayingPage), matching: find.byType(ListView)));
     final sung = tester.getRect(find.text(line));
     expect(sung.left, greaterThanOrEqualTo(list.left));

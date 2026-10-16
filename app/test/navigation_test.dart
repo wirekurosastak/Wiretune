@@ -211,7 +211,7 @@ void main() {
     expect(Localizer.instance.language, 'de');
     expect(vm.isLight, isTrue);
     expect(vm.useOnlineLyrics, isFalse);
-    expect(vm.player.isOnlineLyricsEnabled, isFalse);
+    expect(vm.lyrics.isOnlineEnabled, isFalse);
     expect(vm.showPerformanceStats, isFalse);
 
     vm.changeLanguage('hu');

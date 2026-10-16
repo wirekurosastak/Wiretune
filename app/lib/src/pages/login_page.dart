@@ -8,8 +8,9 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../widgets/ambient.dart';
-import '../widgets/common.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/nav_visualizer.dart';
+import '../widgets/page_parts.dart';
 
 const Color _amber = Color(0xFFFFB703);
 

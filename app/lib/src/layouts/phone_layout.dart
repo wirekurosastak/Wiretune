@@ -5,16 +5,16 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
-import '../theme/app_theme.dart';
-import '../view_models/app_section.dart';
 import '../pages/login_page.dart';
 import '../pages/now_playing_page.dart';
 import '../pages/search_page.dart';
 import '../pages/section_page.dart';
+import '../theme/app_theme.dart';
+import '../view_models/app_section.dart';
 import '../widgets/ambient.dart';
 import '../widgets/cover_image.dart';
-import '../widgets/common.dart';
 import '../widgets/devices.dart';
+import '../widgets/page_parts.dart';
 import '../widgets/player_controls.dart';
 
 /// The phone layout: the page (each draws its own header with the search and account buttons) over the ambient

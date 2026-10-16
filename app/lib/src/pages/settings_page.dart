@@ -11,8 +11,9 @@ import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 import '../view_models/settings_view_models.dart';
-import '../widgets/common.dart';
 import '../widgets/devices.dart';
+import '../widgets/dialogs.dart';
+import '../widgets/page_parts.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});

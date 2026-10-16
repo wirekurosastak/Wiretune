@@ -9,6 +9,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import 'app_section.dart';
 import 'downloads_view_model.dart';
 import 'library_view_models.dart';
+import 'lyrics_view_model.dart';
 import 'player_view_model.dart';
 import 'search_view_model.dart';
 import 'settings_view_models.dart';
@@ -73,11 +74,8 @@ class MainViewModel extends ChangeNotifier {
       ..setStreamTokenProvider(session.getStreamToken)
       ..setOfflineCopyProvider(this.downloadService.localCopy);
 
-    player = PlayerViewModel(audioEngine, library)
-      ..lyricsProvider = _ownLyrics
-      ..isOnlineLyricsEnabled = _useOnlineLyrics
-      ..attachRemote(this.remote);
-    if (onlineLyrics != null) player.onlineLyricsProvider = onlineLyrics.find;
+    player = PlayerViewModel(audioEngine, library)..attachRemote(this.remote);
+    lyrics = LyricsViewModel(player, own: _ownLyrics, online: onlineLyrics?.find);
 
     tracks = TracksViewModel(library, player);
     albums = AlbumsViewModel(library, player)..onNavWave = triggerNavWave;
@@ -138,6 +136,7 @@ class MainViewModel extends ChangeNotifier {
   bool _disposed = false;
 
   late final PlayerViewModel player;
+  late final LyricsViewModel lyrics;
   late final TracksViewModel tracks;
   late final AlbumsViewModel albums;
   late final ArtistsViewModel artists;
@@ -574,7 +573,7 @@ class MainViewModel extends ChangeNotifier {
   bool get useOnlineLyrics => _useOnlineLyrics;
   set useOnlineLyrics(bool value) {
     _useOnlineLyrics = value;
-    player.isOnlineLyricsEnabled = value;
+    lyrics.isOnlineEnabled = value;
     _remember(_onlineLyricsPreference, value ? '1' : '0');
     notifyListeners();
   }
@@ -682,7 +681,7 @@ class MainViewModel extends ChangeNotifier {
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
     _useOnlineLyrics = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
-    player.isOnlineLyricsEnabled = _useOnlineLyrics;
+    lyrics.isOnlineEnabled = _useOnlineLyrics;
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
     if (normalization != null) audioEngine.setNormalization(normalization);
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
@@ -706,6 +705,7 @@ class MainViewModel extends ChangeNotifier {
     albums.refreshLocalizedTexts();
     artists.refreshLocalizedTexts();
     player.refreshLocalizedTexts();
+    lyrics.refreshLocalizedTexts();
     playlists.refreshLocalizedTexts();
     favorites.refreshLocalizedTexts();
     search.refreshLocalizedTexts();
@@ -800,6 +800,7 @@ class MainViewModel extends ChangeNotifier {
     for (final unsubscribe in _unsubscribers) {
       unsubscribe();
     }
+    lyrics.dispose();
     player.dispose();
     tracks.dispose();
     albums.dispose();

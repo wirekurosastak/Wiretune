@@ -7,7 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
-import 'common.dart';
+import 'buttons.dart';
 
 /// The download button of a list (an album, a playlist, the favourites): keeps the whole list on this device, or lets
 /// it go again. While the copies arrive a ring around it fills up (only as they do: nothing moves on its own). Not

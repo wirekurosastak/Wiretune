@@ -8,35 +8,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// Where the lyrics shown for the current track come from.
-enum LyricsOrigin {
-  /// There are no lyrics.
-  none,
-
-  /// The track's own tags (the file, or the server's copy of the file's tags).
-  tags,
-
-  /// The internet lookup (LRCLIB).
-  online,
-}
-
-/// One line of time-synced lyrics as the lyrics panel shows it.
-class LyricLine {
-  LyricLine(this.time, this.text);
-
-  final Duration time;
-  final String text;
-
-  /// An instrumental gap: shown as a small space, never highlighted.
-  bool get isBlank => text.isEmpty;
-
-  /// The line being sung right now.
-  bool isActive = false;
-
-  /// A line that has already been sung (shown dimmer than the ones still to come).
-  bool isPast = false;
-}
-
 /// One entry of the queue.
 class QueueItem {
   QueueItem(this.track, this.index, this.isCurrent);
@@ -51,9 +22,7 @@ class QueueItem {
   int get displayIndex => index + 1;
 }
 
-typedef LyricsProvider = Future<String?> Function(Track track);
-
-/// The player: the queue, shuffle and repeat, the transport, volume and modes, and the lyrics of the current track.
+/// The player: the queue, shuffle and repeat, the transport, volume and modes.
 ///
 /// With [attachRemote] it also takes part in remote control: the account's other players see what plays here and can
 /// control it, and [selectDevice] turns this one into the remote control of another. While it is, the state the
@@ -108,8 +77,6 @@ class PlayerViewModel extends ChangeNotifier {
   int _queueIndex = -1;
   bool _isUserSeeking = false;
   Timer? _seekDebounce;
-  CancellationToken? _lyricsToken;
-  String? _lyricsTrackId;
 
   // ── State ──────────────────────────────────────────────────────────────────────────────────────
   // This device's own playback; the public getters show the other device's instead while this one controls it.
@@ -136,7 +103,7 @@ class PlayerViewModel extends ChangeNotifier {
   set currentTrack(Track? value) {
     if (identical(_currentTrack, value)) return;
     _currentTrack = value;
-    _showCurrentTrack();
+    notifyListeners();
   }
 
   PlaybackState get playbackState {
@@ -196,10 +163,7 @@ class PlayerViewModel extends ChangeNotifier {
   set isQueueOpen(bool value) {
     if (_isQueueOpen == value) return;
     _isQueueOpen = value;
-    if (value) {
-      _updateQueueState();
-      _refreshLyrics();
-    }
+    if (value) _updateQueueState();
     notifyListeners();
   }
 
@@ -936,21 +900,10 @@ class PlayerViewModel extends ChangeNotifier {
   void _setPosition(Duration value) {
     position.value = value;
     elapsedSeconds.value = value.inSeconds;
-    _updateLyricPosition(value);
   }
 
   /// Whether [track] is the one playing (on the device being controlled): the lists highlight it.
   bool isCurrent(Track track) => currentTrack?.id == track.id;
-
-  /// The track shown changed: the lists highlight the new one, and its lyrics are looked for.
-  void _showCurrentTrack() {
-    final shown = currentTrack;
-    if (_lyricsTrackId != shown?.id) {
-      _lyricsTrackId = null;
-      _refreshLyrics();
-    }
-    notifyListeners();
-  }
 
   // ── Other devices (remote control) ─────────────────────────────────────────────────────────────
 
@@ -1083,7 +1036,7 @@ class PlayerViewModel extends ChangeNotifier {
       _applyRemote(playback, device!.playbackReceivedAt ?? DateTime.now());
     } else {
       _setPosition(Duration.zero);
-      _showCurrentTrack();
+      notifyListeners();
     }
   }
 
@@ -1103,7 +1056,7 @@ class PlayerViewModel extends ChangeNotifier {
     _seekDebounce?.cancel();
     _isUserSeeking = false;
     _setPosition(_currentTrack == null ? Duration.zero : _localPosition);
-    _showCurrentTrack();
+    notifyListeners();
   }
 
   void _onDevicesChanged() {
@@ -1153,7 +1106,6 @@ class PlayerViewModel extends ChangeNotifier {
               (previous != null && previous.id == told.id
                   ? previous
                   : (told..coverArtPath = _library.getAlbum(told.albumId)?.coverArtPath)));
-    final trackChanged = shown?.id != _remoteTrack?.id;
     _remoteTrack = shown;
 
     final known = <QueueItem>[];
@@ -1170,11 +1122,7 @@ class PlayerViewModel extends ChangeNotifier {
             if (!_isUserSeeking) _setPosition(_remotePosition());
           })
         : null;
-    if (trackChanged) {
-      _showCurrentTrack();
-    } else {
-      notifyListeners();
-    }
+    notifyListeners();
   }
 
   /// The position of the device being controlled: the one it told, counted on since while it plays.
@@ -1315,175 +1263,6 @@ class PlayerViewModel extends ChangeNotifier {
     super.notifyListeners();
   }
 
-  // ── Lyrics ─────────────────────────────────────────────────────────────────────────────────────
-
-  // Lyrics in LRC form ("[01:23.45] text") are shown line by line: the line being sung is highlighted and the panel
-  // scrolls along. The position arrives a few times a second, so the current line is looked up slightly ahead.
-  static const Duration _lyricLead = Duration(milliseconds: 200);
-  List<LrcLine> _lrcLines = const [];
-
-  /// Finds the lyrics a track carries itself (tag of a local file, server request for a server track).
-  LyricsProvider? lyricsProvider;
-
-  /// Looks lyrics up on the internet; asked only for a track without lyrics of its own, and only while
-  /// [isOnlineLyricsEnabled]. Throws when the lookup could not be made.
-  LyricsProvider? onlineLyricsProvider;
-
-  String? _currentLyrics;
-  bool get hasLyrics => _currentLyrics != null && _currentLyrics!.trim().isNotEmpty;
-
-  /// The lines of time-synced lyrics; empty for plain lyrics or none.
-  List<LyricLine> lyricLines = const [];
-
-  /// Index into [lyricLines] of the line being sung; -1 before the first line.
-  final ValueNotifier<int> currentLyricIndex = ValueNotifier(-1);
-
-  bool get hasSyncedLyrics => lyricLines.isNotEmpty;
-  String? get plainLyricsText => hasSyncedLyrics ? null : _currentLyrics;
-
-  bool isLoadingLyrics = false;
-  LyricsOrigin lyricsOrigin = LyricsOrigin.none;
-
-  /// True when the internet lookup could not be made (no connection, service down), as opposed to "nothing found".
-  bool lyricsLookupFailed = false;
-
-  bool _isOnlineLyricsEnabled = true;
-
-  /// Whether tracks without lyrics of their own are looked up online (the Settings switch).
-  bool get isOnlineLyricsEnabled => _isOnlineLyricsEnabled;
-  set isOnlineLyricsEnabled(bool value) {
-    if (_isOnlineLyricsEnabled == value) return;
-    _isOnlineLyricsEnabled = value;
-    // Switched on while a track without lyrics is open: look now. Switched off while internet lyrics are shown: remove.
-    if ((value && !hasLyrics) || (!value && lyricsOrigin == LyricsOrigin.online)) {
-      _lyricsTrackId = null;
-      _refreshLyrics();
-    }
-    notifyListeners();
-  }
-
-  /// True when the panel has neither lyrics nor a search in progress.
-  bool get showLyricsEmptyState => !hasLyrics && !isLoadingLyrics;
-
-  /// Why there are no lyrics, in the active language.
-  String get lyricsEmptyText => lyricsLookupFailed
-      ? Localizer.get('LyricsLookupFailed')
-      : (isOnlineLyricsEnabled && onlineLyricsProvider != null
-            ? Localizer.get('NoLyrics')
-            : Localizer.get('NoLyricsInTags'));
-
-  /// "Source: LRCLIB" or "Source: the track's own tags"; empty while there are no lyrics.
-  String get lyricsSourceText => switch (lyricsOrigin) {
-    LyricsOrigin.online => Localizer.format('LyricsSource', [OnlineLyrics.sourceName]),
-    LyricsOrigin.tags => Localizer.get('LyricsSourceTags'),
-    LyricsOrigin.none => '',
-  };
-
-  void _setLyrics(String? text) {
-    _currentLyrics = text;
-    _lrcLines = LrcParser.parse(text);
-    currentLyricIndex.value = -1;
-    lyricLines = [for (final l in _lrcLines) LyricLine(l.time, l.text)];
-    // The panel may open (or the lyrics arrive) in the middle of the song: start at the right line.
-    _updateLyricPosition(position.value);
-  }
-
-  /// Moves the highlight to the line that is current at [at]; cheap when nothing changed.
-  void _updateLyricPosition(Duration at) {
-    if (_lrcLines.isEmpty) return;
-    final index = LrcParser.indexAt(_lrcLines, at + _lyricLead);
-    final old = currentLyricIndex.value;
-    if (index == old) return;
-    for (var i = math.max(0, math.min(old, index)); i <= math.min(lyricLines.length - 1, math.max(old, index)); i++) {
-      lyricLines[i].isPast = i < index;
-      lyricLines[i].isActive = i == index && !lyricLines[i].isBlank;
-    }
-    currentLyricIndex.value = index;
-  }
-
-  /// Jumps the song to the start of a lyric line (the user tapped it).
-  void seekToLyric(LyricLine? line) {
-    if (line == null || currentTrack == null) return;
-    seekTo(line.time);
-  }
-
-  /// Loads the lyrics of the current track, but only while the panel that shows them is open.
-  void _refreshLyrics() {
-    final track = currentTrack;
-    if (track == null) {
-      _lyricsToken?.cancel();
-      _lyricsTrackId = null;
-      _clearLyrics();
-      return;
-    }
-    if (_lyricsTrackId == track.id) return; // already loaded, or loading, for this track
-
-    _lyricsToken?.cancel();
-    _clearLyrics();
-    if (!_isQueueOpen || (lyricsProvider == null && onlineLyricsProvider == null)) return;
-
-    _lyricsTrackId = track.id;
-    isLoadingLyrics = true;
-    final token = _lyricsToken = CancellationToken();
-    unawaited(_loadLyrics(track, token));
-  }
-
-  void _clearLyrics() {
-    _setLyrics(null);
-    lyricsOrigin = LyricsOrigin.none;
-    lyricsLookupFailed = false;
-    isLoadingLyrics = false;
-  }
-
-  /// The lyrics the track carries itself come first (they are instant and belong to this very file); only when it has
-  /// none, and the user allows it, the internet is asked.
-  Future<void> _loadLyrics(Track track, CancellationToken ct) async {
-    String? text;
-    var origin = LyricsOrigin.none;
-    var failed = false;
-
-    final own = lyricsProvider;
-    if (own != null) {
-      try {
-        text = await own(track);
-      } catch (e) {
-        if (!ct.isCancelled) WiretuneLog.debug('PlayerViewModel', "Lyrics unavailable for '${track.title}': $e");
-      }
-    }
-    if (ct.isCancelled) return;
-
-    if (text != null && text.trim().isNotEmpty) {
-      origin = LyricsOrigin.tags;
-    } else {
-      text = null;
-      final online = onlineLyricsProvider;
-      if (_isOnlineLyricsEnabled && online != null) {
-        try {
-          text = await online(track);
-          if (text != null && text.trim().isNotEmpty) {
-            origin = LyricsOrigin.online;
-          } else {
-            text = null;
-          }
-        } catch (e) {
-          // Not reaching the service is not the same as "no lyrics exist": say so, and ask again next time.
-          if (!ct.isCancelled) {
-            failed = true;
-            WiretuneLog.debug('PlayerViewModel', "Online lyrics unavailable for '${track.title}': $e");
-          }
-        }
-      }
-    }
-
-    if (ct.isCancelled || !identical(currentTrack, track)) return;
-    _setLyrics(text);
-    lyricsOrigin = origin;
-    lyricsLookupFailed = failed;
-    isLoadingLyrics = false;
-    if (failed) _lyricsTrackId = null; // opening the panel again tries once more
-    notifyListeners();
-  }
-
   /// Re-renders the texts that are read in the active language.
   void refreshLocalizedTexts() => notifyListeners();
 
@@ -1503,7 +1282,6 @@ class PlayerViewModel extends ChangeNotifier {
       unsubscribe();
     }
     _seekDebounce?.cancel();
-    _lyricsToken?.cancel();
     _remoteTicker?.cancel();
     _remoteLost?.cancel();
     _remoteVolumeTimer?.cancel();
@@ -1511,7 +1289,6 @@ class PlayerViewModel extends ChangeNotifier {
     position.dispose();
     elapsedSeconds.dispose();
     spectrum.dispose();
-    currentLyricIndex.dispose();
     super.dispose();
   }
 }

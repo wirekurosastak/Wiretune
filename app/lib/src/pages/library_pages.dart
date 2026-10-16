@@ -9,11 +9,13 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../view_models/library_view_models.dart';
+import '../widgets/badges.dart';
+import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
-import '../widgets/common.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/downloads.dart';
-import '../widgets/quality_tag.dart';
+import '../widgets/links.dart';
+import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
 
 /// What an empty library says, with the two ways to fill it: a server, or a folder of this computer.
