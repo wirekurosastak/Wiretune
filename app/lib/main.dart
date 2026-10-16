@@ -32,9 +32,12 @@ Future<void> main() async {
   if (!platform.isDesktop) AppPaths.platformDataRoot = (await getApplicationSupportDirectory()).path;
   AppPaths.platformMusicFolder = await platform.androidMusicDirectory();
   WiretuneLog.initialize();
-  // The server's covers are kept where the system keeps caches (and may clear them when space runs out).
+  // The server's covers are kept where the system keeps caches (and may clear them when space runs out); a player
+  // given a data folder of its own keeps them there too.
   try {
-    CoverArt.cacheDirectory = p.join((await getApplicationCacheDirectory()).path, 'Covers');
+    final ownData = (Platform.environment[AppPaths.dataDirectoryEnvironmentVariable] ?? '').isNotEmpty;
+    final root = ownData ? AppPaths.getDataDirectory() : (await getApplicationCacheDirectory()).path;
+    CoverArt.cacheDirectory = p.join(root, 'ServerCovers');
     unawaited(CoverArt.trimCache());
   } catch (e) {
     WiretuneLog.warn('Main', 'No cache folder for covers, so they are kept in memory only: $e');
