@@ -12,7 +12,6 @@ import 'package:wiretune/src/layouts/phone_layout.dart';
 import 'package:wiretune/src/layouts/wide_layout.dart';
 import 'package:wiretune/src/pages/library_pages.dart';
 import 'package:wiretune/src/pages/now_playing_page.dart';
-import 'package:wiretune/src/pages/playlists_page.dart';
 import 'package:wiretune/src/pages/queue_panel.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
@@ -207,6 +206,25 @@ void main() {
         expect(find.text('DISC 1'), findsNothing, reason: 'sorted by title the discs mix');
       }
     }
+  });
+
+  testWidgets('Escape closes a dialog first, and only then steps back', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.albums);
+    vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('PlaylistNew')).first);
+    await settle(tester);
+    expect(find.text(Localizer.get('PlaylistNamePlaceholder')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    expect(find.text(Localizer.get('PlaylistNamePlaceholder')), findsNothing);
+    expect(vm.selectedSection, AppSection.playlists, reason: 'the page under the dialog stays');
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await settle(tester);
+    expect(vm.selectedSection, AppSection.albums);
   });
 
   testWidgets('typing in the search field shows the results, Escape steps back out', (tester) async {
@@ -686,11 +704,12 @@ void main() {
     expect(find.text('Go to artist'), findsOneWidget);
     await tester.tap(find.text('Add to playlist'));
     await settle(tester);
-    expect(vm.playlists.isAddToPlaylistDialogOpen, isTrue);
+    expect(find.text(Localizer.get('PlaylistNew')), findsOneWidget); // the dialog's way to a new playlist
     // The dialog lies over the player: its button takes the tap, and the player stays open.
-    await tester.tap(find.descendant(of: find.byType(PlaylistDialogsLayer), matching: find.text('Cancel')));
+    await tester.tap(find.text('Cancel'));
     await settle(tester);
-    expect((vm.playlists.isAddToPlaylistDialogOpen, vm.isNowPlayingOpen), (false, true));
+    expect(find.text(Localizer.get('PlaylistNew')), findsNothing);
+    expect(vm.isNowPlayingOpen, isTrue);
 
     // A swipe down over the cover closes the player.
     await tester.drag(find.descendant(of: player, matching: find.byType(CoverImage)), const Offset(0, 200));

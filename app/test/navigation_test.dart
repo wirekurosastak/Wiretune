@@ -31,11 +31,6 @@ void main() {
     vm.navigateTo(AppSection.playlists);
     showTrack(vm);
     vm.openNowPlaying();
-    vm.playlists.openCreateDialog();
-
-    expect(vm.tryNavigateBack(), isTrue);
-    expect(vm.playlists.isCreateDialogOpen, isFalse);
-    expect(vm.isNowPlayingOpen, isTrue); // the dialog went first
 
     expect(vm.tryNavigateBack(), isTrue);
     expect(vm.isNowPlayingOpen, isFalse);

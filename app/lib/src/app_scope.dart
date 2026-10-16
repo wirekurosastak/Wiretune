@@ -11,6 +11,9 @@ class AppScope extends InheritedWidget {
 
   final MainViewModel vm;
 
+  /// The app's navigator: the dialogs and menus open over the layout in it.
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey(debugLabel: 'wiretune-navigator');
+
   static MainViewModel of(BuildContext context) => context.getInheritedWidgetOfExactType<AppScope>()!.vm;
 
   @override

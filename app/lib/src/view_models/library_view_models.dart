@@ -630,27 +630,11 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   String selectedPlaylistTotalDuration = '';
   bool isPlaylistDetailOpen = false;
 
-  // "New playlist" dialog, optionally adding the pending tracks once created.
-  bool isCreateDialogOpen = false;
-  String newPlaylistName = '';
-
-  // "Add to playlist" dialog: what goes in (a track, an album, an artist's tracks, a playlist), what the dialogs call it,
-  // and the name a new playlist for it starts with.
-  bool isAddToPlaylistDialogOpen = false;
-  List<Track> tracksToAdd = const [];
-  String addingName = '';
-  String _suggestedName = '';
-
-  // Delete confirmation.
-  Playlist? playlistPendingDelete;
-
   // Inline renaming.
   bool isEditingName = false;
   String editingPlaylistName = '';
 
   bool get hasPlaylists => playlists.isNotEmpty || automaticPlaylists.isNotEmpty;
-  bool get isDeleteConfirmOpen => playlistPendingDelete != null;
-  bool get isAnyDialogOpen => isCreateDialogOpen || isAddToPlaylistDialogOpen || isDeleteConfirmOpen;
 
   /// The tracks of [playlist] as the library resolves them (cached per refresh).
   List<Track> tracksOf(Playlist playlist) => _tracksOf[playlist.id] ?? _library.getPlaylistTracks(playlist);
@@ -772,53 +756,22 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     notifyListeners();
   }
 
-  void openCreateDialog() {
-    newPlaylistName = '';
-    isAddToPlaylistDialogOpen = false;
-    isCreateDialogOpen = true;
-    notifyListeners();
-  }
-
-  void closeCreateDialog() {
-    isCreateDialogOpen = false;
-    tracksToAdd = const [];
-    notifyListeners();
-  }
-
-  Future<void> createPlaylist([String? name]) async {
-    if (name != null) newPlaylistName = name;
-    if (newPlaylistName.trim().isEmpty) return;
-
-    final playlist = _library.createPlaylist(newPlaylistName);
-    final pending = tracksToAdd;
-    if (pending.isNotEmpty) _library.addTracksToPlaylist(playlist.id, [for (final t in pending) t.id]);
-
-    isCreateDialogOpen = false;
-    tracksToAdd = const [];
+  /// Makes a playlist called [name] (nothing for a blank one) with [tracks] in it, and opens it.
+  void createPlaylist(String name, [List<Track> tracks = const []]) {
+    if (name.trim().isEmpty) return;
+    final playlist = _library.createPlaylist(name);
+    if (tracks.isNotEmpty) _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
     refreshPlaylists();
     _select(_library.getPlaylist(playlist.id));
     isPlaylistDetailOpen = true;
     notifyListeners();
   }
 
-  void requestDeletePlaylist(Playlist? playlist) {
-    playlistPendingDelete = playlist;
-    notifyListeners();
-  }
+  /// Puts [tracks] at the end of [playlist], those not in it yet.
+  void addTracks(Playlist playlist, List<Track> tracks) =>
+      _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
 
-  void cancelDeletePlaylist() {
-    playlistPendingDelete = null;
-    notifyListeners();
-  }
-
-  Future<void> confirmDeletePlaylist() async {
-    final playlist = playlistPendingDelete;
-    playlistPendingDelete = null;
-    if (playlist != null) await deletePlaylist(playlist);
-    notifyListeners();
-  }
-
-  Future<void> deletePlaylist(Playlist? playlist) async {
+  void deletePlaylist(Playlist? playlist) {
     if (playlist == null) return;
     _library.deletePlaylist(playlist.id);
     if (selectedPlaylist?.id == playlist.id) {
@@ -874,34 +827,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     refreshPlaylists();
   }
 
-  void beginAddTrack(Track track) =>
-      beginAddTracks([track], name: '${track.title} • ${track.artist}', suggestedName: track.album);
-
-  /// Opens the "add to playlist" dialog for [tracks], called [name] there; a new playlist for them starts as
-  /// [suggestedName].
-  void beginAddTracks(List<Track> tracks, {required String name, required String suggestedName}) {
-    if (tracks.isEmpty) return;
-    tracksToAdd = tracks;
-    addingName = name;
-    _suggestedName = suggestedName;
-    isAddToPlaylistDialogOpen = true;
-    notifyListeners();
-  }
-
-  void cancelAddTrack() {
-    isAddToPlaylistDialogOpen = false;
-    tracksToAdd = const [];
-    notifyListeners();
-  }
-
-  Future<void> addPendingTrackTo(Playlist? playlist) async {
-    final tracks = tracksToAdd;
-    if (playlist != null && tracks.isNotEmpty) {
-      _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
-    }
-    cancelAddTrack();
-  }
-
   /// Whether the open playlist shows its own order (Added ↑), the only one its tracks can be moved in.
   bool get canReorder =>
       selectedPlaylist?.isAutomatic == false && sortField == TrackSortField.added && !isSortDescending;
@@ -912,13 +837,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     if (selected == null || !canReorder) return;
     _library.movePlaylistTrack(selected.id, from, to);
     refreshPlaylists();
-  }
-
-  void createPlaylistForPendingTrack() {
-    newPlaylistName = _suggestedName;
-    isAddToPlaylistDialogOpen = false;
-    isCreateDialogOpen = true;
-    notifyListeners();
   }
 
   @override

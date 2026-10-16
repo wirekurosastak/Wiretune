@@ -86,7 +86,7 @@ void main() {
       expect(await session.login('owner', 'wrong-password', false), Localizer.get('SessionBadCredentials'));
       expect(await session.login('OWNER', adminPassword, true), isNull);
       expect(session.state, ServerConnectionState.connected);
-      expect(session.source, LibrarySource.server);
+      expect(session.usesServer, isTrue);
       expect(d.library.tracks, hasLength(3));
       for (final t in d.library.tracks) {
         expect(t.streamUrl, startsWith('${server.baseUrl}/api/stream/'));
@@ -455,7 +455,6 @@ void main() {
       });
       final repo = testRepository()
         ..setSetting('server_url', 'http://wiretune.test')
-        ..setSetting('library_source', 'server')
         ..setSetting('auth_token', 'stored');
       final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
       library.initialize();

@@ -16,7 +16,6 @@ import '../theme/palette.dart';
 import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
 import '../pages/login_page.dart';
-import '../pages/playlists_page.dart';
 import '../pages/queue_panel.dart';
 import '../pages/search_page.dart';
 import '../pages/section_page.dart';
@@ -27,6 +26,7 @@ import '../widgets/devices.dart';
 import '../widgets/downloads.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
+import '../widgets/playlist_dialogs.dart';
 import '../widgets/quality_tag.dart';
 import '../widgets/spectrum_visualizer.dart';
 
@@ -89,7 +89,6 @@ class WideLayout extends StatelessWidget {
                 const _Footer(),
               ],
             ),
-            const PlaylistDialogsLayer(),
             if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
           ],
         ),
@@ -1067,7 +1066,7 @@ class _PlayerBar extends StatelessWidget {
                         child: IconButton(
                           visualDensity: VisualDensity.compact,
                           iconSize: 19,
-                          onPressed: () => vm.addToPlaylist(track),
+                          onPressed: () => showAddTrackToPlaylistDialog(context, track),
                           icon: Icon(Icons.playlist_add_rounded, size: 19, color: colors.textMuted),
                         ),
                       ),

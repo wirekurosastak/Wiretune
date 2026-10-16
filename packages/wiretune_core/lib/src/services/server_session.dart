@@ -16,8 +16,6 @@ import 'wiretune_log.dart';
 
 enum ServerConnectionState { notConfigured, connecting, offline, setupRequired, loginRequired, connected }
 
-enum LibrarySource { none, server, local, hybrid }
-
 /// The player's connection to a Wiretune server: server address, sign-in, copying the server's track list into the
 /// local [LibraryService], and keeping the signed-in account's favourites, play counts and playlists on the server.
 /// Every failure becomes a [state] with a message the interface can show; the commands never throw.
@@ -65,8 +63,13 @@ class ServerSession {
 
   String serverUrl = defaultServerUrl;
   ServerConnectionState state = ServerConnectionState.notConfigured;
-  LibrarySource source = LibrarySource.none;
   UserInfo? currentUser;
+
+  /// Whether this device plays from a server: it keeps a sign-in for one, or still has its tracks from the last time.
+  bool get usesServer => (_client.authToken ?? '').isNotEmpty || _library.rawTracks.any((t) => !t.isLocal);
+
+  /// Whether this device has music of its own: a folder it scanned.
+  bool get usesLocalFolder => _library.musicFolder.isNotEmpty || _library.rawTracks.any((t) => t.isLocal);
 
   /// Raised whenever state, user or status message changes.
   final Event<void> stateChanged = Event<void>();
@@ -107,25 +110,12 @@ class ServerSession {
   void initialize() {
     final url = _settings.getSetting('server_url', defaultServerUrl);
     serverUrl = url != null && url.isNotEmpty ? url : defaultServerUrl;
-    source = LibrarySource.values.asNameMap()[_settings.getSetting('library_source')] ?? LibrarySource.none;
 
     final token = _settings.getSetting('auth_token');
     _client.authToken = token == null || token.isEmpty ? null : token;
     // Until the server confirms the account, what the device kept of it (its hidden items) applies, also offline.
     if (_client.authToken != null) _library.setCurrentUser(_settings.getSetting(_userIdSetting));
-
-    final hasLocal = _library.tracks.any((t) => t.isLocal);
-    final hasServerTracks = _library.tracks.any((t) => !t.isLocal);
-    if (hasLocal && (hasServerTracks || source == LibrarySource.server || _client.authToken != null)) {
-      _setSource(LibrarySource.hybrid);
-    }
-
-    _setState(
-      source == LibrarySource.server || source == LibrarySource.hybrid
-          ? ServerConnectionState.offline
-          : ServerConnectionState.notConfigured,
-      null,
-    );
+    _setState(usesServer ? ServerConnectionState.offline : ServerConnectionState.notConfigured, null);
   }
 
   /// The address the user typed, made into a server URL: `http://` is added when no scheme is given, the path and a
@@ -277,7 +267,6 @@ class ServerSession {
       _library.removeServerTracks();
       _serverTracks = const [];
       _forgetToken();
-      _setSource(_library.tracks.any((t) => t.isLocal) ? LibrarySource.local : LibrarySource.none);
       _setState(ServerConnectionState.loginRequired, 'SessionSignedOut');
     });
   }
@@ -350,15 +339,12 @@ class ServerSession {
 
   Future<void> triggerServerScan() => _client.triggerScan(serverUrl);
 
-  /// Marks the local folder as active, switching to hybrid when the server is also connected or has tracks.
+  /// The local folder was scanned: without a server, the session says that the local library is in use.
   void useLocalLibrary() {
-    final hasServer = isLoggedIn || _library.tracks.any((t) => !t.isLocal);
-    _setSource(hasServer ? LibrarySource.hybrid : LibrarySource.local);
-
-    if (hasServer && state == ServerConnectionState.connected) {
-      _setState(ServerConnectionState.connected, null);
-    } else if (!hasServer) {
+    if (!usesServer) {
       _setState(ServerConnectionState.notConfigured, 'SessionLocalInUse');
+    } else if (state == ServerConnectionState.connected) {
+      _setState(ServerConnectionState.connected, null);
     }
   }
 
@@ -371,9 +357,6 @@ class ServerSession {
     final userData = await _client.getUserData(serverUrl);
     _serverTracks = tracks;
     _library.mergeServerTracks(tracks, userData);
-
-    final hasLocal = _library.tracks.any((t) => t.isLocal);
-    _setSource(hasLocal ? LibrarySource.hybrid : LibrarySource.server);
 
     WiretuneLog.info(
       'ServerSession',
@@ -414,11 +397,6 @@ class ServerSession {
     _library.setCurrentUser(null);
     _settings.setSetting('auth_token', '');
     _settings.setSetting(_userIdSetting, '');
-  }
-
-  void _setSource(LibrarySource value) {
-    source = value;
-    _settings.setSetting('library_source', value.name);
   }
 
   /// [messageKey] is the key of the status text; the text is rendered on demand so that it follows language changes.

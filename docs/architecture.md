@@ -159,8 +159,9 @@ and one view model per area, and `AppScope` hands it down as `context.vm`.
 
 - **Two layouts**, `WideLayout` (desktop, tablet, every TV) and `PhoneLayout` (below 720 logical pixels, or a phone),
   share the view models and the pages.
-- **Navigation** is the `AppSection` enum plus a few flags. `MainViewModel.tryNavigateBack()` closes layers and walks
-  the tab history for the back button and Escape alike; it needs no platform API, so it's unit-tested.
+- **Navigation** is the `AppSection` enum plus a few flags. Back and Escape close a dialog or a menu first (they are
+  routes of the app's navigator, `AppScope.navigatorKey`), then `MainViewModel.tryNavigateBack()` closes layers and
+  walks the tab history; it needs no platform API, so it's unit-tested.
 - **Big libraries** stay smooth: track lists are slivers, and covers are decoded at the size they're shown, into a 120
   MB image cache (160 MB on a TV). The token for server covers travels in a header, never in the URL.
 - **Theme**: an accent per section (`theme/palette.dart`), built once per section. Over the window's neutral base

@@ -55,6 +55,7 @@ class _WiretuneAppState extends State<WiretuneApp> {
             child: RepaintBoundary(
               key: UiAutomationServer.screenshotKey,
               child: MaterialApp(
+                navigatorKey: AppScope.navigatorKey,
                 title: 'Wiretune',
                 debugShowCheckedModeBanner: false,
                 showPerformanceOverlay: vm.showPerformanceStats,
@@ -171,6 +172,12 @@ class _WiretuneAppState extends State<WiretuneApp> {
   /// The view model closes a dialog, the full-screen player, a detail page or returns to the previous tab; when nothing
   /// is left, a phone or TV leaves the app (playback goes on in the background), a desktop window stays.
   void _goBack() {
+    // A dialog or a menu goes first (the system's back pops it itself, Escape gets here).
+    final navigator = AppScope.navigatorKey.currentState;
+    if (navigator != null && navigator.canPop()) {
+      navigator.maybePop();
+      return;
+    }
     if (widget.vm.tryNavigateBack()) return;
     if (!AppPlatform.current.isDesktop) SystemNavigator.pop();
   }

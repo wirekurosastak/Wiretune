@@ -13,9 +13,11 @@ import 'package:path/path.dart' as p;
 import 'package:window_manager/window_manager.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
+import '../app_scope.dart';
 import '../view_models/app_section.dart';
 import '../view_models/library_view_models.dart';
 import '../view_models/main_view_model.dart';
+import '../widgets/playlist_dialogs.dart';
 
 /// Local HTTP endpoint for scripted UI testing. It exists in debug builds only ([isEnabled] is false in a release or
 /// profile build, whatever the environment says), stays off unless `WIRETUNE_UI_AUTOMATION=1` is set, listens on
@@ -27,6 +29,9 @@ class UiAutomationServer {
 
   /// Wraps the whole app, so a screenshot shows what the window shows.
   static final GlobalKey screenshotKey = GlobalKey(debugLabel: 'wiretune-screenshot');
+
+  /// Closes the dialogs and menus over the layout, as the user would before acting on the page.
+  static void _closeDialogs() => AppScope.navigatorKey.currentState?.popUntil((route) => route.isFirst);
 
   static bool get isEnabled => kDebugMode && !kIsWeb && Platform.environment[enableEnvironmentVariable] == '1';
 
@@ -152,20 +157,26 @@ class UiAutomationServer {
         case '/api/ui/continue-offline':
           _vm.continueOffline();
           return await _json(request, 200, {'success': true});
-        case '/api/ui/playlist/new':
-          _vm.playlists.openCreateDialog();
-          _vm.playlists.newPlaylistName = query['name'] ?? '';
-          return await _json(request, 200, {'success': true});
+        case '/api/ui/playlist/new': // the dialog, for a screenshot
+          final context = AppScope.navigatorKey.currentContext;
+          if (context != null) unawaited(showNewPlaylistDialog(context, name: query['name'] ?? ''));
+          return await _json(request, 200, {'success': context != null});
         case '/api/ui/playlist/create':
-          await _vm.playlists.createPlaylist();
+          _closeDialogs();
+          _vm.playlists.createPlaylist(query['name'] ?? '');
           return await _json(request, 200, {'success': true, 'count': _vm.library.playlists.length});
-        case '/api/ui/playlist/add-current':
-          _vm.addToPlaylist(_vm.player.currentTrack);
-          return await _json(request, 200, {'success': true});
+        case '/api/ui/playlist/add-current': // the dialog, for a screenshot
+          final context = AppScope.navigatorKey.currentContext;
+          final track = _vm.player.currentTrack;
+          if (context != null && track != null) unawaited(showAddTrackToPlaylistDialog(context, track));
+          return await _json(request, 200, {'success': context != null && track != null});
         case '/api/ui/playlist/add-to':
           final name = query['name'];
-          if (name == null || name.isEmpty) break;
-          await _vm.playlists.addPendingTrackTo(_vm.library.playlists.where((pl) => pl.name == name).firstOrNull);
+          final track = _vm.player.currentTrack;
+          final playlist = _vm.library.playlists.where((pl) => pl.name == name).firstOrNull;
+          if (playlist == null || track == null) break;
+          _closeDialogs();
+          _vm.playlists.addTracks(playlist, [track]);
           return await _json(request, 200, {'success': true});
         case '/api/ui/play-pause':
           await _vm.player.togglePlayPause();

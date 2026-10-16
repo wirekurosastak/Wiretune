@@ -9,7 +9,6 @@ import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../pages/login_page.dart';
 import '../pages/now_playing_page.dart';
-import '../pages/playlists_page.dart';
 import '../pages/search_page.dart';
 import '../pages/section_page.dart';
 import '../widgets/ambient.dart';
@@ -69,8 +68,6 @@ class PhoneLayout extends StatelessWidget {
               bottomNavigationBar: const _BottomBars(),
             ),
             Positioned.fill(child: _NowPlayingOverlay(isOpen: vm.isNowPlayingOpen)),
-            // Over the full-screen player too: its menu adds the track to a playlist.
-            const PlaylistDialogsLayer(),
             if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
           ],
         ),

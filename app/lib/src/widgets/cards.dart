@@ -12,6 +12,7 @@ import '../view_models/library_view_models.dart';
 import '../view_models/main_view_model.dart';
 import 'common.dart';
 import 'cover_image.dart';
+import 'playlist_dialogs.dart';
 import 'quality_tag.dart';
 
 /// An album: cover (with its format on it), title, artist, track count and release year, and a play button.
@@ -123,7 +124,8 @@ class ListMenu {
     onDownload: (vm) => vm.downloads.toggleAlbum(album),
     removeKey: 'HideAlbum',
     removeIcon: Icons.visibility_off_outlined,
-    onRemove: (vm) {
+    onRemove: (context) {
+      final vm = context.vm;
       vm.library.setHidden(HiddenKind.album, album.id, true);
       if (vm.albums.selectedAlbum?.id == album.id) vm.albums.closeAlbumDetail();
     },
@@ -140,7 +142,8 @@ class ListMenu {
     onDownload: (vm) => vm.downloads.toggleArtist(artist),
     removeKey: 'HideArtist',
     removeIcon: Icons.visibility_off_outlined,
-    onRemove: (vm) {
+    onRemove: (context) {
+      final vm = context.vm;
       vm.library.setHidden(HiddenKind.artist, artist.id, true);
       if (vm.artists.selectedArtist?.id == artist.id) vm.artists.closeArtistDetail();
     },
@@ -157,8 +160,8 @@ class ListMenu {
     onDownload: (vm) => vm.downloads.togglePlaylist(playlist),
     removeKey: playlist.isAutomatic ? null : 'PlaylistDeleteAction',
     removeIsDanger: true,
-    // Asked first, in the playlists' own dialog.
-    onRemove: (vm) => vm.playlists.requestDeletePlaylist(playlist),
+    // Asked first.
+    onRemove: (context) => confirmDeletePlaylist(context, playlist),
   );
 
   /// What playing, shuffling, queueing and a playlist take.
@@ -174,7 +177,7 @@ class ListMenu {
   final String? removeKey;
   final IconData removeIcon;
   final bool removeIsDanger;
-  final void Function(MainViewModel vm)? onRemove;
+  final void Function(BuildContext context)? onRemove;
 
   /// [header]: the page's header has play, shuffle and the download as buttons of their own.
   List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false}) {
@@ -226,11 +229,11 @@ class ListMenu {
       case _ListAction.addToQueue:
         vm.queue(tracks, next: false, name: name);
       case _ListAction.addToPlaylist:
-        vm.playlists.beginAddTracks(tracks, name: label, suggestedName: name);
+        showAddToPlaylistDialog(context, tracks, label: label, suggestedName: name);
       case _ListAction.download:
         onDownload(vm);
       case _ListAction.remove:
-        onRemove?.call(vm);
+        onRemove?.call(context);
     }
   }
 

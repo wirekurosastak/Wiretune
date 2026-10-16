@@ -774,26 +774,25 @@ void main() {
       ]);
     });
 
-    test('the session moves between local, hybrid and back on sign-out', () async {
-      final repo = testRepository()..replaceAllTracks([local('loc-1', 'Local Song', 'Local Artist')]);
+    test("the session uses a server while it has the server's tracks, and the folder while it has files", () async {
+      final repo = testRepository();
       final library = _service(repo)..initialize();
       final session = ServerSession(library, repo);
       addTearDown(session.dispose);
       session.initialize();
-      expect(session.source, LibrarySource.none);
+      expect((session.usesServer, session.usesLocalFolder), (false, false));
 
-      session.useLocalLibrary();
-      expect(session.source, LibrarySource.local);
+      repo.replaceAllTracks([local('loc-1', 'Local Song', 'Local Artist')]);
+      library.initialize();
+      expect((session.usesServer, session.usesLocalFolder), (false, true));
 
       library.mergeServerTracks([server('srv-1', 'Server Song', 'Server Artist')], account());
-      session.useLocalLibrary();
-      expect(session.source, LibrarySource.hybrid);
+      expect((session.usesServer, session.usesLocalFolder), (true, true));
       expect(library.tracks, hasLength(2));
 
       await session.logout();
-      expect(session.source, LibrarySource.local);
+      expect((session.usesServer, session.usesLocalFolder), (false, true));
       expect(library.tracks.single.id, 'loc-1');
-      expect(repo.getSetting('library_source'), 'local');
     });
   });
 }

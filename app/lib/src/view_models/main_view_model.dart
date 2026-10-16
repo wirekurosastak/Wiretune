@@ -289,23 +289,10 @@ class MainViewModel extends ChangeNotifier {
 
   // ── Back ───────────────────────────────────────────────────────────────────────────────────────
 
-  /// The back button / gesture / remote key: closes the innermost open layer (dialog, full-screen player, sign-in
-  /// screen, search, queue, detail page) and then walks back through the tabs the user visited. False when there is
+  /// The back button / gesture / remote key: closes the innermost open layer (full-screen player, sign-in screen,
+  /// search, queue, detail page) and then walks back through the tabs the user visited. False when there is
   /// nothing left to go back to and the app may close.
   bool tryNavigateBack() {
-    if (playlists.isCreateDialogOpen) {
-      playlists.closeCreateDialog();
-      return true;
-    }
-    if (playlists.isAddToPlaylistDialogOpen) {
-      playlists.cancelAddTrack();
-      return true;
-    }
-    if (playlists.isDeleteConfirmOpen) {
-      playlists.cancelDeletePlaylist();
-      return true;
-    }
-
     if (_isNowPlayingOpen) {
       // The queue and the lyrics are pages of the full-screen player: back returns to the player, then closes it.
       if (_nowPlayingTab != NowPlayingTab.player) {
@@ -444,10 +431,6 @@ class MainViewModel extends ChangeNotifier {
     if (artistName != null && artistName.trim().isNotEmpty) openArtist(library.getArtistByName(artistName));
   }
 
-  void addToPlaylist(Track? track) {
-    if (track != null) playlists.beginAddTrack(track);
-  }
-
   /// Puts [tracks] right after the current track ([next]) or at the end of the queue, and says so, naming them by
   /// [name] (a track's title, an album's, an artist's name). With nothing queued they simply play, which says enough.
   void queue(List<Track> tracks, {required bool next, required String name}) {
@@ -499,13 +482,12 @@ class MainViewModel extends ChangeNotifier {
 
   void _onSessionStateChanged() {
     onServerCredentialsChanged?.call(session.serverUrl, session.authToken);
-    final usesServer = session.source == LibrarySource.server || session.source == LibrarySource.hybrid;
     final offline = session.state == ServerConnectionState.offline;
     serverBannerNeedsSignIn = session.state == ServerConnectionState.loginRequired && session.authToken == null;
-    isServerOfflineBannerVisible = usesServer && (offline || serverBannerNeedsSignIn);
+    isServerOfflineBannerVisible = session.usesServer && (offline || serverBannerNeedsSignIn);
     serverBannerMessage = serverBannerNeedsSignIn
         ? session.statusMessage ?? Localizer.get('SessionLoginRequired')
-        : session.source == LibrarySource.hybrid && offline
+        : session.usesLocalFolder && offline
         ? Localizer.format('ServerBannerOffline', [session.serverUrl])
         : session.statusMessage ?? Localizer.format('ServerBannerUnreachable', [session.serverUrl]);
 
@@ -792,13 +774,14 @@ class MainViewModel extends ChangeNotifier {
     // The cached library is usable now; the server connection below may take a while.
     _updateStatusText();
 
-    if (session.source == LibrarySource.server || session.source == LibrarySource.hybrid) await session.connect();
+    if (session.usesServer) await session.connect();
 
-    isLoginViewActive =
-        (session.source == LibrarySource.none && library.tracks.isEmpty) ||
-        (session.source == LibrarySource.server &&
-            (session.state == ServerConnectionState.loginRequired ||
-                session.state == ServerConnectionState.setupRequired));
+    // With nothing to play, or only a server that wants a sign-in, the sign-in screen comes first.
+    isLoginViewActive = session.usesLocalFolder
+        ? false
+        : session.usesServer
+        ? session.state == ServerConnectionState.loginRequired || session.state == ServerConnectionState.setupRequired
+        : library.tracks.isEmpty;
     notifyListeners();
   }
 

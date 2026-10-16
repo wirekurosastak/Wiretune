@@ -36,28 +36,18 @@ class ServerSettingsViewModel extends ChangeNotifier {
   /// Asks for the permission to read the folder before a scan (Android); null when nothing needs asking.
   final Future<bool> Function()? _requestFolderAccess;
 
+  /// The address field: the session's address, unless the user is typing another.
   String serverUrl = ServerSession.defaultServerUrl;
   String localFolder = '';
-  bool isServerReachable = false;
-  bool isConnecting = false;
   bool isScanning = false;
   double scanProgress = 0;
-  String _statusMessage = Localizer.get('StatusReady');
-  bool _statusIsIdle = true;
-  String serverStatusBadge = Localizer.get('BadgeNoConnection');
 
   String username = '';
   String password = '';
   bool stayLoggedIn = true;
-  bool isLoggedIn = false;
-  bool isAdmin = false;
-  bool isSetupRequired = false;
   String setupCode = '';
-  String currentUserName = '';
-  String currentUserRole = '';
   String authErrorMessage = '';
   bool isAuthenticating = false;
-  bool isServerOffline = false;
 
   String serverFolder = '';
   bool isUpdatingServerConfig = false;
@@ -83,11 +73,27 @@ class ServerSettingsViewModel extends ChangeNotifier {
   String? _lastSyncedServerUrl;
   String? _adminDataKey;
 
-  String get statusMessage => _statusMessage;
-  set statusMessage(String value) {
-    _statusMessage = value;
-    _statusIsIdle = value == Localizer.get('StatusReady');
-  }
+  bool get isServerReachable => _session.isServerReachable;
+  bool get isServerOffline => _session.state == ServerConnectionState.offline;
+  bool get isConnecting => _session.state == ServerConnectionState.connecting;
+  bool get isSetupRequired => _session.state == ServerConnectionState.setupRequired;
+  bool get isLoggedIn => _session.isLoggedIn;
+  bool get isAdmin => _session.currentUser?.isAdmin ?? false;
+  String get currentUserName => _session.currentUser?.username ?? '';
+  String get currentUserRole => Localizer.get(isAdmin ? 'RoleAdmin' : 'RoleUser');
+
+  /// What the session is doing, in a sentence; empty once connected, and "Ready" before anything happened.
+  String get statusMessage =>
+      _session.statusMessage ?? (_session.state == ServerConnectionState.connected ? '' : Localizer.get('StatusReady'));
+
+  String get serverStatusBadge => Localizer.get(switch (_session.state) {
+    ServerConnectionState.connected => isLoggedIn ? 'BadgeConnected' : 'BadgeOnline',
+    ServerConnectionState.connecting => 'BadgeConnecting',
+    ServerConnectionState.loginRequired => 'BadgeLoginRequired',
+    ServerConnectionState.setupRequired => 'BadgeSetupRequired',
+    ServerConnectionState.offline => 'BadgeOffline',
+    ServerConnectionState.notConfigured => 'BadgeNoConnection',
+  });
 
   bool get hasAuthError => authErrorMessage.isNotEmpty;
   bool get hasUserManagementError => userManagementErrorMessage.isNotEmpty;
@@ -105,12 +111,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
   /// The server this device is connected to.
   String get connectedServerUrl => _session.serverUrl;
 
-  /// Re-renders the texts that were computed in the previous language.
-  void refreshLocalizedTexts() {
-    // The idle status is the one message that would otherwise stay in the previous language until something happens.
-    if (_statusIsIdle) statusMessage = Localizer.get('StatusReady');
-    syncWithSession();
-  }
+  /// The texts follow the language by themselves; the view only has to draw again.
+  void refreshLocalizedTexts() => notifyListeners();
 
   void syncWithSession() {
     // Only overwrite the address field when the session's address actually changed, not while the user is typing.
@@ -118,30 +120,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
       _lastSyncedServerUrl = _session.serverUrl;
       serverUrl = _session.serverUrl;
     }
-
-    isServerReachable = _session.isServerReachable;
-    isServerOffline = _session.state == ServerConnectionState.offline;
-    isConnecting = _session.state == ServerConnectionState.connecting;
-    isLoggedIn = _session.isLoggedIn;
-    isSetupRequired = _session.state == ServerConnectionState.setupRequired;
-    isAdmin = _session.currentUser?.isAdmin ?? false;
-    currentUserName = _session.currentUser?.username ?? '';
-    currentUserRole = Localizer.get(isAdmin ? 'RoleAdmin' : 'RoleUser');
-    final message = _session.statusMessage;
-    if (message != null && message.trim().isNotEmpty) {
-      statusMessage = message;
-    } else if (_session.state == ServerConnectionState.connected) {
-      statusMessage = '';
-    }
-
-    serverStatusBadge = Localizer.get(switch (_session.state) {
-      ServerConnectionState.connected => isLoggedIn ? 'BadgeConnected' : 'BadgeOnline',
-      ServerConnectionState.connecting => 'BadgeConnecting',
-      ServerConnectionState.loginRequired => 'BadgeLoginRequired',
-      ServerConnectionState.setupRequired => 'BadgeSetupRequired',
-      ServerConnectionState.offline => 'BadgeOffline',
-      ServerConnectionState.notConfigured => 'BadgeNoConnection',
-    });
 
     // The administrator's data is fetched once per administrator sign-in, not on every state change.
     final adminKey = isLoggedIn && isAdmin ? '${_session.serverUrl}|$currentUserName' : null;

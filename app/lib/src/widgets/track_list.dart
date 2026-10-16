@@ -13,6 +13,7 @@ import 'common.dart';
 import 'downloads.dart';
 import 'equalizer_bars.dart';
 import 'player_controls.dart';
+import 'playlist_dialogs.dart';
 import 'quality_tag.dart';
 
 /// Which list a track table shows; each has its own columns, as far as the width allows. Every row ends in the
@@ -618,7 +619,7 @@ class TrackMenu extends StatelessWidget {
       case TrackAction.addToQueue:
         vm.queue([track], next: false, name: track.title);
       case TrackAction.addToPlaylist:
-        vm.addToPlaylist(track);
+        showAddTrackToPlaylistDialog(context, track);
       case TrackAction.removeFromPlaylist:
         vm.playlists.removeTrackFromSelected(track);
       case TrackAction.moveUp || TrackAction.moveDown:

@@ -64,6 +64,7 @@ class DatabaseManager {
     ALTER TABLE users RENAME COLUMN last_login TO last_login_at;
     UPDATE settings SET key = 'music_folder' WHERE key = 'library_path';
     UPDATE settings SET key = 'chosen_music_folder' WHERE key = 'chosen_library_path';
+    DELETE FROM settings WHERE key = 'library_source';
     ''',
   ];
 
