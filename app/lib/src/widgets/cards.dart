@@ -14,7 +14,7 @@ import 'common.dart';
 import 'cover_image.dart';
 import 'quality_tag.dart';
 
-/// An album: cover (with its format on it), title, artist, track count and year, and a play button.
+/// An album: cover (with its format on it), title, artist, track count and release year, and a play button.
 class AlbumCard extends StatelessWidget {
   const AlbumCard({super.key, required this.album, required this.onOpen, required this.onPlay});
 
@@ -34,7 +34,7 @@ class AlbumCard extends StatelessWidget {
     );
     final details = [
       context.trf('TrackCount', [album.trackCount]),
-      if (album.year != null) '${album.year}',
+      if (album.releaseYear != null) '${album.releaseYear}',
     ].join('  •  ');
     final menu = CollectionMenu.album(album, onPlay: onPlay);
     return _DesktopTile(
@@ -290,7 +290,7 @@ class CollectionMenu {
   );
 }
 
-/// Albums as a sliver: on a phone a list of rows (the cover, the title, the artist and the year), on a wide screen a grid
+/// Albums as a sliver: on a phone a list of rows (the cover, the title, the artist and the release year), on a wide screen a grid
 /// of tiles.
 class AlbumsSliver extends StatelessWidget {
   const AlbumsSliver({super.key, required this.albums, required this.onOpen, required this.onPlay});
@@ -321,7 +321,7 @@ class AlbumsSliver extends StatelessWidget {
           placeholderColor: purple,
         ),
         title: album.title,
-        subtitle: [album.artist, if (album.year != null) '${album.year}'].join('  •  '),
+        subtitle: [album.artist, if (album.releaseYear != null) '${album.releaseYear}'].join('  •  '),
         badge: QualityTag(
           tier: album.tier,
           spec: album.compactTagSpec,

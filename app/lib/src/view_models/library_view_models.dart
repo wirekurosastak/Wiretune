@@ -11,13 +11,13 @@ String formatTotal(Iterable<Track> tracks) =>
     Localizer.formatTotalDuration(tracks.fold(Duration.zero, (sum, t) => sum + t.duration));
 
 /// What a list of tracks sorts by, in the order the sort buttons and the table's columns show them: the title, the
-/// track's own fields, then the year, the date added and the quality, as on the albums and the artists pages.
-enum TrackSortField { title, artist, album, length, year, added, quality }
+/// track's own fields, then the release year, the date added and the quality, as on the albums and the artists pages.
+enum TrackSortField { title, artist, album, length, released, added, quality }
 
-/// Whether [field] starts with its highest values (the newest year or date, the best quality) rather than A to Z or
+/// Whether [field] starts with its highest values (the newest release or date, the best quality) rather than A to Z or
 /// the shortest first.
 bool startsDescending(TrackSortField field) =>
-    field == TrackSortField.year || field == TrackSortField.added || field == TrackSortField.quality;
+    field == TrackSortField.released || field == TrackSortField.added || field == TrackSortField.quality;
 
 /// The order of a list: the field it sorts by and the direction. Choosing the active field again flips the direction;
 /// another field starts in its natural one, which [startsDescending] tells.
@@ -45,7 +45,7 @@ class SortOrder<F extends Enum> {
   String label(F field, String name) => field == _field ? '$name ${_descending ? '↓' : '↑'}' : name;
 }
 
-/// [tracks] ordered by [field]; tracks that tie keep their order in [tracks], and one without a year or a date
+/// [tracks] ordered by [field]; tracks that tie keep their order in [tracks], and one without a release year or a date
 /// ([addedAt], the date added to the library unless given) goes last in either direction.
 List<Track> sortTracks(
   List<Track> tracks,
@@ -53,9 +53,9 @@ List<Track> sortTracks(
   bool descending = false,
   DateTime? Function(Track track)? addedAt,
 }) {
-  final added = addedAt ?? (Track t) => t.dateAdded;
+  final added = addedAt ?? (Track t) => t.addedAt;
   final Object? Function(Track t) value = switch (field) {
-    TrackSortField.year => (t) => t.year,
+    TrackSortField.released => (t) => t.releaseYear,
     TrackSortField.added => added,
     _ => (t) => t,
   };
@@ -64,7 +64,7 @@ List<Track> sortTracks(
     TrackSortField.artist => compareText(a.artist, b.artist),
     TrackSortField.album => compareText(a.album, b.album),
     TrackSortField.length => a.duration.compareTo(b.duration),
-    TrackSortField.year => a.year!.compareTo(b.year!),
+    TrackSortField.released => a.releaseYear!.compareTo(b.releaseYear!),
     TrackSortField.added => added(a)!.compareTo(added(b)!),
     TrackSortField.quality => compareFormatQuality(a.format, b.format),
   };
@@ -88,7 +88,7 @@ mixin TrackSorting on ChangeNotifier {
   bool get isSortDescending => _order.descending;
 
   /// When a track was added: to the library, or (on the favourites page) to the favourites.
-  DateTime? addedAt(Track track) => track.dateAdded;
+  DateTime? addedAt(Track track) => track.addedAt;
 
   /// Puts the page's tracks in the order again.
   void _applySort();
@@ -105,7 +105,7 @@ mixin TrackSorting on ChangeNotifier {
     TrackSortField.artist => Localizer.get('SortArtist'),
     TrackSortField.album => Localizer.get('SortAlbum'),
     TrackSortField.length => Localizer.get('SortLength'),
-    TrackSortField.year => Localizer.get('SortYear'),
+    TrackSortField.released => Localizer.get('SortReleased'),
     TrackSortField.added => Localizer.get('SortAdded'),
     TrackSortField.quality => Localizer.get('SortQuality'),
   });
@@ -158,7 +158,7 @@ class TracksViewModel extends ChangeNotifier with TrackSorting {
 }
 
 /// What the albums page sorts by, in the order of its buttons: the title, the album's own field, then the shared ones.
-enum AlbumSortField { title, artist, year, added, quality }
+enum AlbumSortField { title, artist, released, added, quality }
 
 /// What the artists page sorts by, in the order of its buttons: the name, the artist's own field, then the date added.
 enum ArtistSortField { name, albums, added }
@@ -227,7 +227,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   final SortOrder<AlbumSortField> _order = SortOrder(
     AlbumSortField.title,
     startsDescending: (field) =>
-        field == AlbumSortField.year || field == AlbumSortField.added || field == AlbumSortField.quality,
+        field == AlbumSortField.released || field == AlbumSortField.added || field == AlbumSortField.quality,
   );
 
   AlbumSortField get sortField => _order.field;
@@ -245,7 +245,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   String sortLabel(AlbumSortField field) => _order.label(field, switch (field) {
     AlbumSortField.title => 'ABC',
     AlbumSortField.artist => Localizer.get('SortArtist'),
-    AlbumSortField.year => Localizer.get('SortYear'),
+    AlbumSortField.released => Localizer.get('SortReleased'),
     AlbumSortField.added => Localizer.get('SortAdded'),
     AlbumSortField.quality => Localizer.get('SortQuality'),
   });
@@ -294,11 +294,13 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   List<Album> inSortOrder(Iterable<Album> source) {
     final albums = List.of(source);
     switch (sortField) {
-      case AlbumSortField.year:
-        // Albums without a year always go last, in either direction.
+      case AlbumSortField.released:
+        // Albums without a release year always go last, in either direction.
         sortStable(albums, (a, b) {
-          if ((a.year == null) != (b.year == null)) return a.year == null ? 1 : -1;
-          final byYear = isSortDescending ? (b.year ?? 0).compareTo(a.year ?? 0) : (a.year ?? 0).compareTo(b.year ?? 0);
+          if ((a.releaseYear == null) != (b.releaseYear == null)) return a.releaseYear == null ? 1 : -1;
+          final byYear = isSortDescending
+              ? (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0)
+              : (a.releaseYear ?? 0).compareTo(b.releaseYear ?? 0);
           return byYear != 0 ? byYear : compareText(a.title, b.title);
         });
       case AlbumSortField.quality:
@@ -331,7 +333,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
           for (final album in albums)
             album: album.tracks.isEmpty
                 ? DateTime.fromMillisecondsSinceEpoch(0)
-                : album.tracks.map((t) => t.dateAdded).reduce((a, b) => a.isAfter(b) ? a : b),
+                : album.tracks.map((t) => t.addedAt).reduce((a, b) => a.isAfter(b) ? a : b),
         };
         sortStable(albums, (a, b) {
           final da = latestAdded[a]!;
@@ -461,7 +463,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
           for (final artist in artists)
             artist: artist.tracks.isEmpty
                 ? DateTime.fromMillisecondsSinceEpoch(0)
-                : artist.tracks.map((t) => t.dateAdded).reduce((a, b) => a.isAfter(b) ? a : b),
+                : artist.tracks.map((t) => t.addedAt).reduce((a, b) => a.isAfter(b) ? a : b),
         };
         sortStable(artists, (a, b) {
           final da = latestAdded[a]!;

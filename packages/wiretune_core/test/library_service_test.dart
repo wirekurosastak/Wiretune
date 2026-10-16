@@ -179,20 +179,21 @@ void main() {
   });
 
   group("a folder of one artist's songs from several albums", () {
-    Track song(String id, String folder, String album, {String artist = 'AC/DC', int? number, int? year}) => Track(
-      id: id,
-      title: 'Song $id',
-      artist: artist,
-      album: album,
-      albumArtist: artist,
-      trackNumber: number,
-      discNumber: 1,
-      year: year,
-      filePath: '/Music/$folder/$id.flac',
-    );
+    Track song(String id, String folder, String album, {String artist = 'AC/DC', int? number, int? releaseYear}) =>
+        Track(
+          id: id,
+          title: 'Song $id',
+          artist: artist,
+          album: album,
+          albumArtist: artist,
+          trackNumber: number,
+          discNumber: 1,
+          releaseYear: releaseYear,
+          filePath: '/Music/$folder/$id.flac',
+        );
 
     Future<LibraryService> library(List<Track> tracks) async {
-      final repo = testRepository()..setSetting('library_path', '/Music');
+      final repo = testRepository()..setSetting('music_folder', '/Music');
       final service = _service(repo);
       repo.replaceAllTracks(tracks);
       service.initialize();
@@ -201,13 +202,13 @@ void main() {
 
     test('is one album named after the folder, numbered by title and as new as its newest song', () async {
       final service = await library([
-        song('c', 'ACDC Essentials', 'Back In Black', number: 6, year: 1980),
-        song('a', 'ACDC Essentials', 'Highway to Hell', number: 1, year: 1979),
-        song('b', 'ACDC Essentials', 'POWER UP', number: 1, year: 2020),
+        song('c', 'ACDC Essentials', 'Back In Black', number: 6, releaseYear: 1980),
+        song('a', 'ACDC Essentials', 'Highway to Hell', number: 1, releaseYear: 1979),
+        song('b', 'ACDC Essentials', 'POWER UP', number: 1, releaseYear: 2020),
       ]);
 
       final album = service.albums.single;
-      expect((album.title, album.artist, album.year), ('ACDC Essentials', 'AC/DC', 2020));
+      expect((album.title, album.artist, album.releaseYear), ('ACDC Essentials', 'AC/DC', 2020));
       expect(
         [for (final t in album.tracks) (t.title, t.trackNumber, t.discNumber)],
         [('Song a', 1, null), ('Song b', 2, null), ('Song c', 3, null)],
@@ -250,11 +251,11 @@ void main() {
           'In Wonderland',
           artist: 'Hooverphonic',
           number: 7,
-          year: 2011,
+          releaseYear: 2011,
         ),
       ]);
       final album = service.albums.single;
-      expect((album.title, album.year), ('The Best of Hooverphonic', null)); // not the stray's year
+      expect((album.title, album.releaseYear), ('The Best of Hooverphonic', null)); // not the stray's year
       expect([for (final t in album.tracks) t.trackNumber], [1, 2, 7]);
     });
 
@@ -326,7 +327,7 @@ void main() {
     );
 
     test('follows the tags again when the folder no longer qualifies, and stores only the tags', () async {
-      final repo = testRepository()..setSetting('library_path', '/Music');
+      final repo = testRepository()..setSetting('music_folder', '/Music');
       final service = _service(repo);
       repo.replaceAllTracks([song('1', 'GOLD', 'Gold: Greatest Hits', number: 3), song('2', 'GOLD', 'The Singles')]);
       service.initialize();
@@ -485,7 +486,7 @@ void main() {
     service.initialize();
     expect(await service.scanFolder(folder.path), isTrue);
     final id = service.tracks.single.id;
-    final added = service.tracks.single.dateAdded;
+    final added = service.tracks.single.addedAt;
     service.toggleFavorite(id);
     service.recordPlay(id);
 
@@ -494,7 +495,7 @@ void main() {
 
     final track = service.getTrack(id)!;
     expect(track.duration, const Duration(seconds: 2));
-    expect((service.isFavorite(id), service.playCount(id), track.dateAdded), (true, 1, added));
+    expect((service.isFavorite(id), service.playCount(id), track.addedAt), (true, 1, added));
   });
 
   test('content hiding: tracks, albums, artists, precedence, non-destructive hierarchy, and playback', () async {

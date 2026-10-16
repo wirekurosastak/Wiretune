@@ -179,7 +179,7 @@ void main() {
       () => signedInSession(
         lib,
         respond: (request) => switch ((request.method, request.url.path)) {
-          ('GET', '/api/config') => json(200, {'libraryPath': '/mnt/nas/music'}),
+          ('GET', '/api/config') => json(200, {'musicFolder': '/mnt/nas/music'}),
           ('GET', '/api/library/status') => json(200, {
             'trackCount': 0,
             'albumCount': 0,
@@ -188,7 +188,7 @@ void main() {
             'lastScanError': 'Library folder does not exist: /mnt/nas/music',
             'lastScanProblem': ErrorCodes.folderMissing,
           }),
-          ('POST', '/api/config/library-path') => json(400, {
+          ('POST', '/api/config/music-folder') => json(400, {
             'error': 'A whole disk cannot be the music folder.',
             'code': ErrorCodes.folderWholeDisk,
           }),
@@ -198,7 +198,7 @@ void main() {
     ))!;
     final vm = createMainViewModel(lib, null, session)..navigateTo(AppSection.settings);
     await show(tester, vm, wide);
-    await tester.runAsync(vm.serverSettings.loadServerConfig);
+    await tester.runAsync(vm.serverSettings.loadServerFolder);
     await settle(tester);
     expect(find.text(Localizer.format('ServerFolderUnavailable', ['/mnt/nas/music'])), findsOneWidget);
 

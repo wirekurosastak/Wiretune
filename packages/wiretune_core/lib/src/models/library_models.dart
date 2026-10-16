@@ -43,22 +43,22 @@ class Track {
     int? trackNumber,
     this.trackCount,
     int? discNumber,
-    this.year,
+    this.releaseYear,
     this.bpm,
     this.genre,
     this.duration = Duration.zero,
     this.fileSizeBytes = 0,
-    this.fileModifiedUtc,
+    this.fileModifiedAt,
     this.filePath = '',
     this.streamUrl,
     this.hasCoverArt = false,
     this.coverArtPath,
     this.format = const AudioFormat(),
-    DateTime? dateAdded,
+    DateTime? addedAt,
   }) : id = id ?? newId(),
        artists = artists != null && artists.length > 1 ? List.unmodifiable(artists) : const [],
        tagged = (album: album, albumArtist: albumArtist, trackNumber: trackNumber, discNumber: discNumber),
-       dateAdded = dateAdded ?? DateTime.now().toUtc();
+       addedAt = addedAt ?? DateTime.now().toUtc();
 
   final String id;
   String title;
@@ -84,18 +84,18 @@ class Track {
   int? get discNumber => (filed ?? tagged).discNumber;
 
   int? trackCount;
-  int? year;
+  int? releaseYear;
   int? bpm;
   String? genre;
   Duration duration;
   int fileSizeBytes;
-  DateTime? fileModifiedUtc;
+  DateTime? fileModifiedAt;
   String filePath;
   String? streamUrl;
   bool hasCoverArt;
   String? coverArtPath;
   AudioFormat format;
-  DateTime dateAdded;
+  DateTime addedAt;
 
   /// Each artist of the track on its own, main artist first: [artists], or [artist] alone.
   List<String> get artistNames => artists.isEmpty ? [artist] : artists;
@@ -129,15 +129,15 @@ class Track {
     'trackNumber': trackNumber,
     'trackCount': trackCount,
     'discNumber': discNumber,
-    'year': year,
+    'releaseYear': releaseYear,
     'bpm': bpm,
     'genre': genre,
     'durationMs': duration.inMilliseconds,
     'fileSizeBytes': fileSizeBytes,
-    'fileModifiedUtc': fileModifiedUtc == null ? null : formatIsoUtc(fileModifiedUtc!),
+    'fileModifiedAt': fileModifiedAt == null ? null : formatIsoUtc(fileModifiedAt!),
     'hasCoverArt': hasCoverArt,
     'format': format.toJson(),
-    'dateAdded': formatIsoUtc(dateAdded),
+    'addedAt': formatIsoUtc(addedAt),
   };
 
   /// Reads a track of the server's listing. Throws [FormatException] when [json] is not a track.
@@ -159,15 +159,15 @@ class Track {
       trackNumber: integer('trackNumber'),
       trackCount: integer('trackCount'),
       discNumber: integer('discNumber'),
-      year: integer('year'),
+      releaseYear: integer('releaseYear'),
       bpm: integer('bpm'),
       genre: json['genre'] as String?,
       duration: Duration(milliseconds: integer('durationMs') ?? 0),
       fileSizeBytes: integer('fileSizeBytes') ?? 0,
-      fileModifiedUtc: parseIsoUtc(json['fileModifiedUtc']),
+      fileModifiedAt: parseIsoUtc(json['fileModifiedAt']),
       hasCoverArt: json['hasCoverArt'] as bool? ?? false,
       format: AudioFormat.fromJson(json['format']),
-      dateAdded: parseIsoUtc(json['dateAdded']),
+      addedAt: parseIsoUtc(json['addedAt']),
     );
   }
 
@@ -180,7 +180,7 @@ class Album {
     String? id,
     this.title = 'Unknown Album',
     this.artist = 'Unknown Artist',
-    this.year,
+    this.releaseYear,
     this.coverArtPath,
     this.trackCount = 0,
     this.totalDuration = Duration.zero,
@@ -193,7 +193,7 @@ class Album {
   final String id;
   final String title;
   final String artist;
-  final int? year;
+  final int? releaseYear;
   final String? coverArtPath;
   final int trackCount;
   final Duration totalDuration;

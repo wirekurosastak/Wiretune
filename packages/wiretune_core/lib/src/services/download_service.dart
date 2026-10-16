@@ -109,7 +109,7 @@ class DownloadService {
   /// the other devices.
   static String defaultDownloadDirectory() => AppPaths.platformMusicFolder == null && AppPaths.platformDataRoot != null
       ? p.join(AppPaths.getDataDirectory(), 'Downloads')
-      : p.join(AppPaths.musicFolder(), 'Wiretune');
+      : p.join(AppPaths.defaultMusicFolder(), 'Wiretune');
 
   /// The folder of the copies, where people find them.
   String get directory => _directory ??= defaultDownloadDirectory();
@@ -834,7 +834,7 @@ class DownloadService {
 
   /// Changes when the server's file does (its size or its modification time, to the second).
   static String _versionOf(Track track) {
-    final modified = track.fileModifiedUtc?.toUtc().millisecondsSinceEpoch;
+    final modified = track.fileModifiedAt?.toUtc().millisecondsSinceEpoch;
     return stableId('${track.fileSizeBytes}\u001f${modified == null ? '' : modified ~/ 1000}').substring(0, 8);
   }
 

@@ -7,22 +7,23 @@ import '../util/text.dart';
 import '../util/time.dart';
 
 class UserInfo {
-  const UserInfo(this.id, this.username, this.isAdmin, this.createdAt, this.lastLogin);
+  const UserInfo(this.id, this.username, this.isAdmin, this.createdAt, this.lastLoginAt);
 
   final String id;
   final String username;
   final bool isAdmin;
   final DateTime createdAt;
-  final DateTime? lastLogin;
+  final DateTime? lastLoginAt;
 
-  UserInfo copyWith({DateTime? lastLogin}) => UserInfo(id, username, isAdmin, createdAt, lastLogin ?? this.lastLogin);
+  UserInfo copyWith({DateTime? lastLoginAt}) =>
+      UserInfo(id, username, isAdmin, createdAt, lastLoginAt ?? this.lastLoginAt);
 
   Map<String, Object?> toJson() => {
     'id': id,
     'username': username,
     'isAdmin': isAdmin,
     'createdAt': formatIsoUtc(createdAt),
-    'lastLogin': lastLogin == null ? null : formatIsoUtc(lastLogin!),
+    'lastLoginAt': lastLoginAt == null ? null : formatIsoUtc(lastLoginAt!),
   };
 
   static UserInfo fromJson(Object? json) {
@@ -32,7 +33,7 @@ class UserInfo {
       _string(map, 'username'),
       map['isAdmin'] as bool? ?? false,
       parseIsoUtc(map['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      parseIsoUtc(map['lastLogin']),
+      parseIsoUtc(map['lastLoginAt']),
     );
   }
 }
@@ -78,7 +79,7 @@ class ServerLibraryStatus {
     this.albumCount,
     this.artistCount,
     this.isScanning,
-    this.lastScanCompletedUtc,
+    this.lastScanAt,
     this.lastScanError, [
     this.lastScanProblem,
   ]);
@@ -87,7 +88,7 @@ class ServerLibraryStatus {
   final int albumCount;
   final int artistCount;
   final bool isScanning;
-  final DateTime? lastScanCompletedUtc;
+  final DateTime? lastScanAt;
 
   /// Why the last scan didn't run or failed, in English; null when it went well (or for anyone but an administrator).
   final String? lastScanError;
@@ -100,7 +101,7 @@ class ServerLibraryStatus {
     'albumCount': albumCount,
     'artistCount': artistCount,
     'isScanning': isScanning,
-    'lastScanCompletedUtc': lastScanCompletedUtc == null ? null : formatIsoUtc(lastScanCompletedUtc!),
+    'lastScanAt': lastScanAt == null ? null : formatIsoUtc(lastScanAt!),
     'lastScanError': lastScanError,
     'lastScanProblem': lastScanProblem,
   };
@@ -112,7 +113,7 @@ class ServerLibraryStatus {
       (map['albumCount'] as num?)?.toInt() ?? 0,
       (map['artistCount'] as num?)?.toInt() ?? 0,
       map['isScanning'] as bool? ?? false,
-      parseIsoUtc(map['lastScanCompletedUtc']),
+      parseIsoUtc(map['lastScanAt']),
       map['lastScanError'] as String?,
       map['lastScanProblem'] as String?,
     );
@@ -120,27 +121,27 @@ class ServerLibraryStatus {
 }
 
 class ServerConfigInfo {
-  const ServerConfigInfo(this.libraryPath);
+  const ServerConfigInfo(this.musicFolder);
 
-  final String libraryPath;
+  final String musicFolder;
 
-  Map<String, Object?> toJson() => {'libraryPath': libraryPath};
+  Map<String, Object?> toJson() => {'musicFolder': musicFolder};
 
-  static ServerConfigInfo fromJson(Object? json) => ServerConfigInfo(_string(_object(json), 'libraryPath'));
+  static ServerConfigInfo fromJson(Object? json) => ServerConfigInfo(_string(_object(json), 'musicFolder'));
 }
 
 /// Play statistics of one track for one account.
 class TrackPlayStats {
-  const TrackPlayStats(this.trackId, this.playCount, this.lastPlayed);
+  const TrackPlayStats(this.trackId, this.playCount, this.lastPlayedAt);
 
   final String trackId;
   final int playCount;
-  final DateTime? lastPlayed;
+  final DateTime? lastPlayedAt;
 
   Map<String, Object?> toJson() => {
     'trackId': trackId,
     'playCount': playCount,
-    'lastPlayed': lastPlayed == null ? null : formatIsoUtc(lastPlayed!),
+    'lastPlayedAt': lastPlayedAt == null ? null : formatIsoUtc(lastPlayedAt!),
   };
 
   static TrackPlayStats fromJson(Object? json) {
@@ -148,7 +149,7 @@ class TrackPlayStats {
     return TrackPlayStats(
       map['trackId'] as String? ?? '',
       (map['playCount'] as num?)?.toInt() ?? 0,
-      parseIsoUtc(map['lastPlayed']),
+      parseIsoUtc(map['lastPlayedAt']),
     );
   }
 }

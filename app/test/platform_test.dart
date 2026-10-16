@@ -79,18 +79,18 @@ void main() {
         asked++;
         return granted;
       },
-    )..localLibraryPath = root.path;
+    )..localFolder = root.path;
 
-    await settings.startScanFolder();
+    await settings.scanLocalFolder();
     expect(asked, 1);
     expect(settings.localFolderIsError, isTrue);
     expect(settings.localFolderMessage, Localizer.get('FolderAccessDenied'));
-    expect(library.libraryPath, isNot(root.path), reason: 'nothing was scanned');
+    expect(library.musicFolder, isNot(root.path), reason: 'nothing was scanned');
 
     granted = true;
-    await settings.startScanFolder();
+    await settings.scanLocalFolder();
     expect(asked, 2);
     expect(settings.localFolderIsError, isFalse);
-    expect(library.libraryPath, AppPaths.fullPath(root.path));
+    expect(library.musicFolder, AppPaths.fullPath(root.path));
   });
 }

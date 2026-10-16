@@ -32,7 +32,7 @@ class FakeServer {
   void add(Track track, List<int> bytes) {
     track
       ..fileSizeBytes = bytes.length
-      ..fileModifiedUtc ??= DateTime.utc(2026, 1, 1);
+      ..fileModifiedAt ??= DateTime.utc(2026, 1, 1);
     tracks[track.id] = (track, bytes);
   }
 
@@ -323,7 +323,7 @@ void main() {
 
     // Retagged on the server: same track, other bytes and modification time.
     server.tracks.clear();
-    server.add(serverTrack('t1', 'Song', 'Album')..fileModifiedUtc = DateTime.utc(2026, 2, 1), audio(9, 50100));
+    server.add(serverTrack('t1', 'Song', 'Album')..fileModifiedAt = DateTime.utc(2026, 2, 1), audio(9, 50100));
     final requestsBefore = server.streamRequests.length;
     await player.session.refreshLibrary();
     final track = player.library.getTrack('t1')!;
@@ -590,7 +590,7 @@ void main() {
     server.add(track, audio(1));
     final repo = testRepository();
     final player = await signedIn(repo: repo);
-    final version = stableId('${track.fileSizeBytes}\u001f${track.fileModifiedUtc!.millisecondsSinceEpoch ~/ 1000}');
+    final version = stableId('${track.fileSizeBytes}\u001f${track.fileModifiedAt!.millisecondsSinceEpoch ~/ 1000}');
     final legacy = File(
       p.join(player.downloads.directory, '${stableId('track\u001ft1')}-${version.substring(0, 8)}-Song.flac'),
     )..createSync(recursive: true);

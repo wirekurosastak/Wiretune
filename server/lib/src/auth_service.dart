@@ -131,7 +131,7 @@ class AuthService {
 
   Future<AuthResponse?> login(String username, String password, {bool rememberMe = false}) async {
     final rows = _db.connection.select(
-      'SELECT id, username, password_hash, is_admin, created_at, last_login, token_version FROM users '
+      'SELECT id, username, password_hash, is_admin, created_at, last_login_at, token_version FROM users '
       'WHERE username = ? COLLATE NOCASE',
       [username.trim()],
     );
@@ -146,9 +146,9 @@ class AuthService {
     if (!await _verify(password, row['password_hash'] as String)) return null;
 
     final now = DateTime.now().toUtc();
-    _db.connection.execute('UPDATE users SET last_login = ? WHERE id = ?', [toDbTime(now), row['id']]);
+    _db.connection.execute('UPDATE users SET last_login_at = ? WHERE id = ?', [toDbTime(now), row['id']]);
 
-    final user = _toUserInfo(row).copyWith(lastLogin: now);
+    final user = _toUserInfo(row).copyWith(lastLoginAt: now);
     final expires = now.add(rememberMe ? _rememberedLifetime : _sessionLifetime);
     return AuthResponse(_signInToken(user, row['token_version'] as int, expires), user, expires);
   }
@@ -158,7 +158,7 @@ class AuthService {
     final user = _newUser(username, isAdmin: true);
     final hash = await _hash(password);
     _db.connection.execute(
-      'INSERT INTO users (id, username, password_hash, is_admin, created_at, last_login) '
+      'INSERT INTO users (id, username, password_hash, is_admin, created_at, last_login_at) '
       'SELECT ?1, ?2, ?3, 1, ?4, NULL WHERE NOT EXISTS (SELECT 1 FROM users)',
       [user.id, user.username, hash, toDbTime(user.createdAt)],
     );
@@ -173,7 +173,7 @@ class AuthService {
     final user = _newUser(username, isAdmin: false);
     final hash = await _hash(password);
     _db.connection.execute(
-      'INSERT OR IGNORE INTO users (id, username, password_hash, is_admin, created_at, last_login) '
+      'INSERT OR IGNORE INTO users (id, username, password_hash, is_admin, created_at, last_login_at) '
       'VALUES (?, ?, ?, 0, ?, NULL)',
       [user.id, user.username, hash, toDbTime(user.createdAt)],
     );
@@ -184,14 +184,16 @@ class AuthService {
 
   UserInfo? getUser(String userId) {
     final rows = _db.connection.select(
-      'SELECT id, username, password_hash, is_admin, created_at, last_login FROM users WHERE id = ?',
+      'SELECT id, username, password_hash, is_admin, created_at, last_login_at FROM users WHERE id = ?',
       [userId],
     );
     return rows.isEmpty ? null : _toUserInfo(rows.first);
   }
 
   List<UserInfo> getAllUsers() => _db.connection
-      .select('SELECT id, username, password_hash, is_admin, created_at, last_login FROM users ORDER BY username ASC')
+      .select(
+        'SELECT id, username, password_hash, is_admin, created_at, last_login_at FROM users ORDER BY username ASC',
+      )
       .map(_toUserInfo)
       .toList();
 
@@ -265,7 +267,7 @@ class AuthService {
     row['username'] as String,
     (row['is_admin'] as int) != 0,
     fromDbTime(row['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-    fromDbTime(row['last_login']),
+    fromDbTime(row['last_login_at']),
   );
 }
 

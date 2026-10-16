@@ -8,9 +8,9 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 /// The folders the server works with. The library root can change at run time (an administrator chooses another one).
 class ServerPaths {
-  ServerPaths(this.libraryRoot, this.dataDirectory, this.coverCacheDirectory);
+  ServerPaths(this.musicFolder, this.dataDirectory, this.coverCacheDirectory);
 
-  String libraryRoot;
+  String musicFolder;
   final String dataDirectory;
   final String coverCacheDirectory;
 }
@@ -29,7 +29,7 @@ class LibraryScanService {
   bool _stopped = false;
   Future<void>? _loop;
 
-  DateTime? lastScanCompletedUtc;
+  DateTime? lastScanAt;
 
   /// Why the last scan didn't run or failed, in English and as a code ([ErrorCodes]); null after one that went well.
   String? lastScanError;
@@ -70,7 +70,7 @@ class LibraryScanService {
   }
 
   Future<void> scanOnce() async {
-    final root = _paths.libraryRoot;
+    final root = _paths.musicFolder;
     try {
       if (!Directory(root).existsSync()) {
         _problem(ErrorCodes.folderMissing, 'Library folder does not exist: $root');
@@ -81,7 +81,7 @@ class LibraryScanService {
       // An unmounted network share usually shows up as an empty mount point; never wipe the library for that. This only
       // applies to the folder the index was built from: pointing the server at a new, empty folder is deliberate.
       if (_library.tracks.isNotEmpty &&
-          _library.libraryPath == AppPaths.fullPath(root) &&
+          _library.musicFolder == AppPaths.fullPath(root) &&
           Directory(root).listSync().isEmpty) {
         _problem(
           ErrorCodes.folderLooksUnmounted,
@@ -93,7 +93,7 @@ class LibraryScanService {
 
       final started = DateTime.now();
       if (await _library.scanFolder(root, cancellationToken: _cancellation)) {
-        lastScanCompletedUtc = DateTime.now().toUtc();
+        lastScanAt = DateTime.now().toUtc();
         lastScanError = null;
         lastScanProblem = null;
         final seconds = DateTime.now().difference(started).inMilliseconds / 1000;

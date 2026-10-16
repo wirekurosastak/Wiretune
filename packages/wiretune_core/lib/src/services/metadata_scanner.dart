@@ -107,9 +107,9 @@ class MetadataScanner {
             if (knownTracks?[file] case final track?)
               file: _Known(
                 track.fileSizeBytes,
-                track.fileModifiedUtc?.microsecondsSinceEpoch,
+                track.fileModifiedAt?.microsecondsSinceEpoch,
                 track.coverArtPath,
-                track.dateAdded,
+                track.addedAt,
               ),
         };
 
@@ -340,17 +340,17 @@ Track? _readTrack(
         trackNumber: positive(tags.track),
         trackCount: positive(tags.trackCount),
         discNumber: positive(tags.disc),
-        year: positive(tags.year),
+        releaseYear: positive(tags.year),
         bpm: positive(tags.bpm),
         genre: cleanText(tags.genre),
         duration: tags.duration,
         fileSizeBytes: stat.size,
-        fileModifiedUtc: stat.modified.toUtc(),
+        fileModifiedAt: stat.modified.toUtc(),
         filePath: fullPath,
         hasCoverArt: tags.hasPicture || coverArtPath != null,
         coverArtPath: coverArtPath,
         format: format,
-        dateAdded: added ?? DateTime.now().toUtc(),
+        addedAt: added ?? DateTime.now().toUtc(),
       );
     } finally {
       source.close();

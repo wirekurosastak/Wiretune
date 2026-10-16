@@ -105,7 +105,7 @@ void main() {
     expect((await client.get('/api/stream/outside')).statusCode, 404);
 
     // A symlink inside the library pointing outside must also be refused.
-    final symlinkPath = p.join(server.libraryPath, 'symlink_outside.wav');
+    final symlinkPath = p.join(server.musicFolder, 'symlink_outside.wav');
     Link(symlinkPath).createSync(outsidePath);
     index(Track(id: 'symlinked', title: 'Symlinked', filePath: symlinkPath));
     library.initialize();
@@ -207,12 +207,12 @@ void main() {
     await server.waitForTracks(admin, 3);
 
     final empty = Directory(p.join(server.root, 'empty'))..createSync();
-    expect((await admin.post('/api/config/library-path', {'newPath': empty.path})).statusCode, 200);
+    expect((await admin.post('/api/config/music-folder', {'musicFolder': empty.path})).statusCode, 200);
     await server.waitForTracks(admin, 0);
 
-    expect((await admin.post('/api/config/library-path', {'newPath': server.libraryPath})).statusCode, 200);
+    expect((await admin.post('/api/config/music-folder', {'musicFolder': server.musicFolder})).statusCode, 200);
     await server.waitForTracks(admin, 3);
-    for (final entry in Directory(server.libraryPath).listSync()) {
+    for (final entry in Directory(server.musicFolder).listSync()) {
       entry.deleteSync(recursive: true);
     }
     expect((await admin.post('/api/library/scan')).statusCode, 202);
@@ -228,20 +228,23 @@ void main() {
 
   test('the library folder must exist and cannot be a sensitive system or data folder', () async {
     final (admin, _) = await setupAdmin(server);
-    expect((await admin.post('/api/config/library-path', {'newPath': p.join(server.root, 'nope')})).statusCode, 400);
-    expect((await admin.post('/api/config/library-path', {'newPath': '  '})).statusCode, 400);
-    expect((await admin.post('/api/config/library-path', {'newPath': server.dataPath})).statusCode, 400);
+    expect(
+      (await admin.post('/api/config/music-folder', {'musicFolder': p.join(server.root, 'nope')})).statusCode,
+      400,
+    );
+    expect((await admin.post('/api/config/music-folder', {'musicFolder': '  '})).statusCode, 400);
+    expect((await admin.post('/api/config/music-folder', {'musicFolder': server.dataPath})).statusCode, 400);
     if (Platform.isLinux && Directory('/proc').existsSync()) {
-      expect((await admin.post('/api/config/library-path', {'newPath': '/proc'})).statusCode, 400);
+      expect((await admin.post('/api/config/music-folder', {'musicFolder': '/proc'})).statusCode, 400);
     }
     // A whole disk, a folder that holds the server's data, and a link that leads into it.
-    expect((await admin.post('/api/config/library-path', {'newPath': p.rootPrefix(server.root)})).statusCode, 400);
-    expect((await admin.post('/api/config/library-path', {'newPath': server.root})).statusCode, 400);
+    expect((await admin.post('/api/config/music-folder', {'musicFolder': p.rootPrefix(server.root)})).statusCode, 400);
+    expect((await admin.post('/api/config/music-folder', {'musicFolder': server.root})).statusCode, 400);
     if (!Platform.isWindows) {
       final link = Link(p.join(server.root, 'innocent'))..createSync(server.dataPath);
-      expect((await admin.post('/api/config/library-path', {'newPath': link.path})).statusCode, 400);
+      expect((await admin.post('/api/config/music-folder', {'musicFolder': link.path})).statusCode, 400);
     }
-    expect(json(await admin.get('/api/config'))['libraryPath'], server.libraryPath);
+    expect(json(await admin.get('/api/config'))['musicFolder'], server.musicFolder);
   });
 
   test('JSON is compressed, ranged audio never', () async {

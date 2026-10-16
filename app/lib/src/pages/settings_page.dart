@@ -681,13 +681,13 @@ class _LibraryCardState extends State<_LibraryCard> {
   void initState() {
     super.initState();
     final server = context.vm.serverSettings;
-    _serverFolder = TextEditingController(text: server.serverLibraryPath);
-    _localPath = TextEditingController(text: server.localLibraryPath);
-    _lastLoadedServerFolder = server.serverLibraryPath;
+    _serverFolder = TextEditingController(text: server.serverFolder);
+    _localPath = TextEditingController(text: server.localFolder);
+    _lastLoadedServerFolder = server.serverFolder;
     // The folder, and what is wrong with it, as they are now (a drive may have gone since the sign-in); after the
     // frame, as loading tells the listeners at once. It does nothing for anyone but an administrator.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.vm.serverSettings.loadServerConfig();
+      if (mounted) context.vm.serverSettings.loadServerFolder();
     });
   }
 
@@ -700,24 +700,24 @@ class _LibraryCardState extends State<_LibraryCard> {
 
   /// Saves the server's music folder; first asks, since every account's library changes with it.
   Future<void> _saveServerFolder(ServerSettingsViewModel server) async {
-    server.serverLibraryPath = _serverFolder.text;
-    if (server.serverFolderChanged && server.serverLibraryPath.trim().isNotEmpty) {
+    server.serverFolder = _serverFolder.text;
+    if (server.serverFolderChanged && server.serverFolder.trim().isNotEmpty) {
       final confirmed = await confirmAction(
         context,
         title: context.tr('ServerFolderConfirm'),
-        message: context.trf('ServerFolderConfirmHint', [server.serverLibraryPath.trim()]),
+        message: context.trf('ServerFolderConfirmHint', [server.serverFolder.trim()]),
         confirmLabel: context.tr('SaveFolder'),
       );
       if (!confirmed) return;
     }
-    await server.updateServerLibraryPath();
+    await server.saveServerFolder();
   }
 
   Future<void> _browseLocal(ServerSettingsViewModel server) async {
-    final chosen = await FilePicker.getDirectoryPath(initialDirectory: server.localLibraryPath);
+    final chosen = await FilePicker.getDirectoryPath(initialDirectory: server.localFolder);
     if (chosen == null) return;
     _localPath.text = chosen;
-    server.localLibraryPath = chosen;
+    server.localFolder = chosen;
   }
 
   @override
@@ -728,12 +728,12 @@ class _LibraryCardState extends State<_LibraryCard> {
     return ListenableBuilder(
       listenable: server,
       builder: (context, _) {
-        if (server.serverLibraryPath != _lastLoadedServerFolder) {
-          _lastLoadedServerFolder = server.serverLibraryPath;
-          _serverFolder.text = server.serverLibraryPath;
+        if (server.serverFolder != _lastLoadedServerFolder) {
+          _lastLoadedServerFolder = server.serverFolder;
+          _serverFolder.text = server.serverFolder;
         }
-        if (server.localLibraryPath != _localPath.text) {
-          _localPath.text = server.localLibraryPath;
+        if (server.localFolder != _localPath.text) {
+          _localPath.text = server.localFolder;
         }
 
         final admin = server.isLoggedIn && server.isAdmin;
@@ -752,7 +752,7 @@ class _LibraryCardState extends State<_LibraryCard> {
                       hintText: context.tr('ServerFolderPlaceholder'),
                       prefixIcon: const Icon(Icons.folder_outlined, size: 18),
                     ),
-                    onChanged: (v) => server.serverLibraryPath = v,
+                    onChanged: (v) => server.serverFolder = v,
                     onSubmitted: (_) => _saveServerFolder(server),
                   ),
 
@@ -760,7 +760,7 @@ class _LibraryCardState extends State<_LibraryCard> {
                     Tooltip(
                       message: context.tr('TipReindex'),
                       child: OutlinedButton.icon(
-                        onPressed: server.canRescanServer ? server.rescanServer : null,
+                        onPressed: server.canReindexServer ? server.reindexServer : null,
                         icon: const Icon(Icons.refresh_rounded, size: 18),
                         label: Text(context.tr('Reindex')),
                       ),
@@ -792,8 +792,8 @@ class _LibraryCardState extends State<_LibraryCard> {
                       hintText: context.tr('LocalFolderPlaceholder'),
                       prefixIcon: const Icon(Icons.folder_outlined, size: 18),
                     ),
-                    onChanged: (v) => server.localLibraryPath = v,
-                    onSubmitted: (_) => server.startScanFolder(),
+                    onChanged: (v) => server.localFolder = v,
+                    onSubmitted: (_) => server.scanLocalFolder(),
                   ),
                   actions: [
                     OutlinedButton.icon(
@@ -802,7 +802,7 @@ class _LibraryCardState extends State<_LibraryCard> {
                       label: Text(context.tr('Browse')),
                     ),
                     FilledButton.icon(
-                      onPressed: server.isScanning ? null : server.startScanFolder,
+                      onPressed: server.isScanning ? null : server.scanLocalFolder,
                       icon: const Icon(Icons.manage_search_rounded, size: 18),
                       label: Text(context.tr('Scan')),
                     ),

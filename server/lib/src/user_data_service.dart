@@ -17,13 +17,13 @@ class UserDataService {
   final DatabaseManager _db;
 
   static const String _favoriteInsertSql = '''
-    INSERT OR IGNORE INTO user_favorites (user_id, track_id, added_at)
+    INSERT OR IGNORE INTO user_favorites (user_id, track_id, favorited_at)
     SELECT ?1, ?2, ?3
     WHERE (SELECT COUNT(*) FROM user_favorites WHERE user_id = ?1) < ?4''';
 
   static const String _playUpdateSql = '''
     UPDATE user_plays
-    SET play_count = CASE WHEN play_count < 2147483647 THEN play_count + 1 ELSE play_count END, last_played = ?3
+    SET play_count = CASE WHEN play_count < 2147483647 THEN play_count + 1 ELSE play_count END, last_played_at = ?3
     WHERE user_id = ?1 AND track_id = ?2''';
 
   static const String _playlistUpdateSql = '''
@@ -39,13 +39,13 @@ class UserDataService {
   UserDataSnapshot get(String userId) {
     final db = _db.connection;
     final favoriteRows = db.select(
-      'SELECT track_id, added_at FROM user_favorites WHERE user_id = ? ORDER BY added_at, track_id',
+      'SELECT track_id, favorited_at FROM user_favorites WHERE user_id = ? ORDER BY favorited_at, track_id',
       [userId],
     );
     final favorites = [for (final r in favoriteRows) r['track_id'] as String];
-    final favoritedAt = {for (final r in favoriteRows) r['track_id'] as String: ?fromDbTime(r['added_at'])};
+    final favoritedAt = {for (final r in favoriteRows) r['track_id'] as String: ?fromDbTime(r['favorited_at'])};
     final plays = db
-        .select('SELECT track_id, play_count, last_played FROM user_plays WHERE user_id = ?', [userId])
+        .select('SELECT track_id, play_count, last_played_at FROM user_plays WHERE user_id = ?', [userId])
         .map(_toStats)
         .toList();
     final playlists = db
@@ -116,7 +116,7 @@ class UserDataService {
     db.execute(_playUpdateSql, [userId, trackId, now]);
     if (db.updatedRows == 0) {
       db.execute(
-        'INSERT OR IGNORE INTO user_plays (user_id, track_id, play_count, last_played) '
+        'INSERT OR IGNORE INTO user_plays (user_id, track_id, play_count, last_played_at) '
         'SELECT ?1, ?2, 1, ?3 WHERE (SELECT COUNT(*) FROM user_plays WHERE user_id = ?1) < ?4',
         [userId, trackId, now, UserDataRules.maxTrackStats],
       );
@@ -124,7 +124,7 @@ class UserDataService {
     }
 
     final rows = db.select(
-      'SELECT track_id, play_count, last_played FROM user_plays WHERE user_id = ? AND track_id = ?',
+      'SELECT track_id, play_count, last_played_at FROM user_plays WHERE user_id = ? AND track_id = ?',
       [userId, trackId],
     );
     return rows.isEmpty ? null : _toStats(rows.first);
@@ -204,7 +204,7 @@ class UserDataService {
     return TrackPlayStats(
       row['track_id'] as String,
       count < 0 ? 0 : (count > 0x7FFFFFFF ? 0x7FFFFFFF : count),
-      fromDbTime(row['last_played']),
+      fromDbTime(row['last_played_at']),
     );
   }
 

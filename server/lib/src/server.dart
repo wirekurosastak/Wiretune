@@ -124,7 +124,7 @@ class WiretuneServer {
   static const int _playlistBodyLimit = 4 * 1024 * 1024;
 
   /// The setting that holds the music folder an administrator chose in the player; it wins over the configured one.
-  static const String _chosenLibraryPathKey = 'chosen_library_path';
+  static const String _chosenMusicFolderKey = 'chosen_music_folder';
 
   final ServerOptions options;
   final ServerPaths paths;
@@ -157,15 +157,15 @@ class WiretuneServer {
     // A library folder chosen through the admin API wins over the configured one, so it survives restarts. One that is
     // missing right now (a share not mounted yet) is kept like a configured one: the scans wait for it, where falling
     // back to another folder would replace the index with that folder's tracks.
-    final saved = repository.getSetting(_chosenLibraryPathKey);
+    final saved = repository.getSetting(_chosenMusicFolderKey);
     final paths = ServerPaths(
-      saved != null && saved.trim().isNotEmpty ? saved : options.resolveLibraryRoot(),
+      saved != null && saved.trim().isNotEmpty ? saved : options.resolveMusicFolder(),
       dataDirectory,
       p.join(dataDirectory, 'Covers'),
     );
     WiretuneLog.info(
       'Server',
-      "Library: '${paths.libraryRoot}' (exists: ${Directory(paths.libraryRoot).existsSync()}), data: '${paths.dataDirectory}'",
+      "Library: '${paths.musicFolder}' (exists: ${Directory(paths.musicFolder).existsSync()}), data: '${paths.dataDirectory}'",
     );
 
     final library = LibraryService(repository, MetadataScanner(), coverCacheDirectory: paths.coverCacheDirectory);
@@ -344,8 +344,8 @@ class WiretuneServer {
       remote.disconnectAccount(userId, 'The account was removed.');
       return Response.ok(null);
     }),
-    _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson())),
-    _Route('POST', '/api/config/library-path', Access.admin, _updateLibraryPath),
+    _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(ServerConfigInfo(paths.musicFolder).toJson())),
+    _Route('POST', '/api/config/music-folder', Access.admin, _setMusicFolder),
 
     // Library
     _Route(
@@ -358,7 +358,7 @@ class WiretuneServer {
           library.albums.length,
           library.artists.length,
           library.isScanning,
-          scanner.lastScanCompletedUtc,
+          scanner.lastScanAt,
           // The reason names the server's folders, which only an administrator sees.
           call.principal!.isAdmin ? scanner.lastScanError : null,
           call.principal!.isAdmin ? scanner.lastScanProblem : null,
@@ -494,35 +494,35 @@ class WiretuneServer {
         : jsonResponse(user.toJson());
   }
 
-  Future<Response> _updateLibraryPath(_Call call) async {
+  Future<Response> _setMusicFolder(_Call call) async {
     final body = await call.jsonObject();
-    final newPath = body?['newPath'];
-    if (newPath is! String || newPath.trim().isEmpty) {
+    final folder = body?['musicFolder'];
+    if (folder is! String || folder.trim().isEmpty) {
       return errorResponse(400, ErrorCodes.folderRequired, 'The folder path must not be empty.');
     }
 
     final String fullPath;
     try {
-      fullPath = AppPaths.fullPath(newPath.trim());
+      fullPath = AppPaths.fullPath(folder.trim());
     } catch (_) {
       return errorResponse(400, ErrorCodes.folderInvalid, 'The folder path is not valid.');
     }
     if (!Directory(fullPath).existsSync()) {
       return errorResponse(400, ErrorCodes.folderMissing, 'The folder does not exist: $fullPath', {'path': fullPath});
     }
-    final problem = _libraryRootProblem(fullPath);
+    final problem = _musicFolderProblem(fullPath);
     if (problem != null) return violationResponse(problem);
 
-    repository.setSetting(_chosenLibraryPathKey, fullPath);
-    paths.libraryRoot = fullPath;
+    repository.setSetting(_chosenMusicFolderKey, fullPath);
+    paths.musicFolder = fullPath;
     scanner.requestScan();
-    return jsonResponse(ServerConfigInfo(paths.libraryRoot).toJson());
+    return jsonResponse(ServerConfigInfo(paths.musicFolder).toJson());
   }
 
   /// Why the existing folder [fullPath] cannot be the music folder, or null. It must not be a whole disk or a system's
   /// virtual file system (a scan of either never ends), nor hold or lie inside the server's own data. Judged by where
   /// symbolic links lead, so a link cannot dress one up as an ordinary folder.
-  RuleViolation? _libraryRootProblem(String fullPath) {
+  RuleViolation? _musicFolderProblem(String fullPath) {
     final String real;
     try {
       real = AppPaths.fullPath(Directory(fullPath).resolveSymbolicLinksSync());
@@ -548,7 +548,7 @@ class WiretuneServer {
   Future<Response> _stream(_Call call) async {
     final track = library.getTrack(call.params['trackId']!);
     if (track == null ||
-        !AppPaths.isPathUnderRoot(track.filePath, paths.libraryRoot) ||
+        !AppPaths.isPathUnderRoot(track.filePath, paths.musicFolder) ||
         !File(track.filePath).existsSync()) {
       return errorResponse(404, ErrorCodes.notFound, 'Track not found.');
     }
@@ -556,7 +556,7 @@ class WiretuneServer {
   }
 
   Future<Response> _cover(Request request, Track? track) async {
-    if (track == null || !AppPaths.isPathUnderRoot(track.filePath, paths.libraryRoot)) return notFound();
+    if (track == null || !AppPaths.isPathUnderRoot(track.filePath, paths.musicFolder)) return notFound();
     const cache = {'cache-control': 'private, max-age=86400'};
 
     final coverPath = track.coverArtPath;
@@ -564,7 +564,7 @@ class WiretuneServer {
         coverPath.isNotEmpty &&
         File(coverPath).existsSync() &&
         (AppPaths.isPathUnderRoot(coverPath, paths.coverCacheDirectory) ||
-            AppPaths.isPathUnderRoot(coverPath, paths.libraryRoot))) {
+            AppPaths.isPathUnderRoot(coverPath, paths.musicFolder))) {
       return fileResponse(request, File(coverPath), ImageFormat.mimeTypeFromPath(coverPath), headers: cache);
     }
 
@@ -617,7 +617,7 @@ class WiretuneServer {
 
   Future<Response> _lyrics(_Call call) async {
     final track = library.getTrack(call.params['trackId']!);
-    if (track == null || !AppPaths.isPathUnderRoot(track.filePath, paths.libraryRoot)) return notFound();
+    if (track == null || !AppPaths.isPathUnderRoot(track.filePath, paths.musicFolder)) return notFound();
     final lyrics = await MetadataScanner.readLyrics(track.filePath);
     return lyrics == null ? notFound() : jsonResponse({'lyrics': lyrics});
   }

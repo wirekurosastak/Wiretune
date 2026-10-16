@@ -27,7 +27,7 @@ class ServerFixture {
   /// Leaves the files behind on [close], e.g. to start a second server on the same data ("restart").
   bool keepFiles = false;
 
-  String get libraryPath => p.join(root, 'library');
+  String get musicFolder => p.join(root, 'library');
   String get dataPath => p.join(root, 'data');
   String get baseUrl => 'http://127.0.0.1:${server.port}';
 
@@ -44,7 +44,7 @@ class ServerFixture {
     }
     final server = await WiretuneServer.start(
       ServerOptions(
-        libraryPath: p.join(root, 'library'),
+        musicFolder: p.join(root, 'library'),
         dataDirectory: p.join(root, 'data'),
         scanIntervalMinutes: 0,
         setupCode: setupCode,

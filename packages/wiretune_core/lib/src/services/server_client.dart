@@ -145,9 +145,9 @@ class ServerStreamingClient {
   Future<ServerConfigInfo> getServerConfig(String baseUrl) async =>
       _parse(ServerConfigInfo.fromJson, await _send('GET', baseUrl, '/api/config'));
 
-  Future<ServerConfigInfo> updateServerLibraryPath(String baseUrl, String newPath) async => _parse(
+  Future<ServerConfigInfo> saveServerFolder(String baseUrl, String folder) async => _parse(
     ServerConfigInfo.fromJson,
-    await _send('POST', baseUrl, '/api/config/library-path', body: {'newPath': newPath}),
+    await _send('POST', baseUrl, '/api/config/music-folder', body: {'musicFolder': folder}),
   );
 
   Future<void> triggerScan(String baseUrl) => _send('POST', baseUrl, '/api/library/scan');

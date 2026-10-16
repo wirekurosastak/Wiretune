@@ -128,11 +128,11 @@ class LibraryService {
 
   void _rebuildSnapshot() {
     final visible = _rawTracks.where((t) => !isTrackHidden(t)).toList();
-    _snapshot = LibrarySnapshot.build(visible, libraryRoot: libraryPath);
+    _snapshot = LibrarySnapshot.build(visible, musicFolder: musicFolder);
   }
 
   bool get isScanning => _isScanning;
-  String libraryPath = '';
+  String musicFolder = '';
 
   final Event<void> libraryChanged = Event<void>();
   final Event<void> playlistsChanged = Event<void>();
@@ -164,7 +164,7 @@ class LibraryService {
 
   void initialize() {
     _repository.initialize();
-    libraryPath = _repository.getSetting('library_path', '') ?? '';
+    musicFolder = _repository.getSetting('music_folder', '') ?? '';
 
     final storedTracks = _repository.getAllTracks();
     final storedPlaylists = _repository.getAllPlaylists();
@@ -234,8 +234,8 @@ class LibraryService {
         }
         if (cancellationToken?.isCancelled ?? false) return false;
 
-        libraryPath = root;
-        _repository.setSetting('library_path', root);
+        musicFolder = root;
+        _repository.setSetting('music_folder', root);
 
         // From here on nothing waits, so a server refresh can't interleave with this one.
         final existingServerTracks = _rawTracks.where((t) => !t.isLocal).toList();
@@ -328,7 +328,7 @@ class LibraryService {
       }
       final stats = plays[id];
       if (stats != null) {
-        _plays[id] = (count: stats.playCount, lastPlayedAt: stats.lastPlayed);
+        _plays[id] = (count: stats.playCount, lastPlayedAt: stats.lastPlayedAt);
       } else {
         _plays.remove(id);
       }
@@ -665,8 +665,8 @@ class LibrarySnapshot {
   /// What a folder of one artist's songs from several albums is called when the folder is named after the artist.
   static const String essentialsSuffix = 'Essentials';
 
-  /// Builds the library from [source]. [libraryRoot] is the local music folder: its loose files are never one album.
-  static LibrarySnapshot build(Iterable<Track> source, {String libraryRoot = ''}) {
+  /// Builds the library from [source]. [musicFolder] is the local music folder: its loose files are never one album.
+  static LibrarySnapshot build(Iterable<Track> source, {String musicFolder = ''}) {
     final seen = <String>{};
     final tracks = [
       for (final t in source)
@@ -676,7 +676,7 @@ class LibrarySnapshot {
     for (final t in tracks) {
       t.filed = null;
     }
-    final folderAlbums = _folderAlbums(tracks, libraryRoot);
+    final folderAlbums = _folderAlbums(tracks, musicFolder);
     sortStable(
       tracks,
       thenBy<Track>([
@@ -766,16 +766,16 @@ class LibrarySnapshot {
       final first = ordered.first;
       final quality = QualitySummary.of(ordered.map((t) => t.format))!; // an album always has at least one track
       // A folder's collection gathers songs of many years: it is as new as its newest. An album that strays joined
-      // keeps its own year.
+      // keeps its own release year.
       final own = ordered.where((t) => equalsIgnoreCase(t.tagged.album, t.album));
       final collection = own.isEmpty;
-      final years = (collection ? ordered : own).map((t) => t.year).whereType<int>();
+      final years = (collection ? ordered : own).map((t) => t.releaseYear).whereType<int>();
       albums.add(
         Album(
           id: entry.key,
           title: first.album,
           artist: first.effectiveAlbumArtist,
-          year: collection && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
+          releaseYear: collection && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
           coverArtPath: ordered.where((t) => !isBlank(t.coverArtPath)).firstOrNull?.coverArtPath,
           trackCount: ordered.length,
           totalDuration: ordered.fold(Duration.zero, (sum, t) => sum + t.duration),
@@ -811,7 +811,7 @@ class LibrarySnapshot {
       sortStable(
         artistAlbums,
         thenBy<Album>([
-          (a, b) => (b.year ?? -0x80000000).compareTo(a.year ?? -0x80000000),
+          (a, b) => (b.releaseYear ?? -0x80000000).compareTo(a.releaseYear ?? -0x80000000),
           (a, b) => compareText(a.title, b.title),
         ]),
       );
@@ -863,12 +863,12 @@ class LibrarySnapshot {
   /// artist (an "essentials" or "best of" collected track by track, each keeping its original album tag). The album
   /// is the one of those tags that is named like the folder, so that strays join it; else the folder's name, or
   /// "Eminem Essentials" when the folder is named after the artist (Eminem). A collection is numbered by title. Only
-  /// folders inside [libraryRoot] count. Loose files in it, folders of several artists, and a folder holding a whole
+  /// folders inside [musicFolder] count. Loose files in it, folders of several artists, and a folder holding a whole
   /// album (an artist's albums side by side in one folder) keep their own albums. Returns the tracks it refiled.
-  static Set<Track> _folderAlbums(List<Track> tracks, String libraryRoot) {
+  static Set<Track> _folderAlbums(List<Track> tracks, String musicFolder) {
     final refiled = <Track>{};
-    if (isBlank(libraryRoot)) return refiled;
-    final root = AppPaths.comparable(p.normalize(libraryRoot));
+    if (isBlank(musicFolder)) return refiled;
+    final root = AppPaths.comparable(p.normalize(musicFolder));
     final byFolder = <String, List<Track>>{};
     for (final t in tracks) {
       if (t.filePath.isEmpty) continue;

@@ -63,7 +63,7 @@ abstract final class AppPaths {
   /// The user's music folder: [platformMusicFolder] when the app set one, `%USERPROFILE%\Music` on Windows, `~/Music`
   /// on macOS, `/storage/emulated/0/Music` on Android, and on Linux the XDG music directory (`XDG_MUSIC_DIR`, which `xdg-user-dirs` keeps in
   /// `~/.config/user-dirs.dirs` and names in the system's language, e.g. `~/Zenék`), else `~/Music`.
-  static String musicFolder() {
+  static String defaultMusicFolder() {
     final fromPlatform = platformMusicFolder;
     if (fromPlatform != null) return fromPlatform;
     if (Platform.isAndroid) return '/storage/emulated/0/Music';

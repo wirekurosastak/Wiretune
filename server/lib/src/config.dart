@@ -11,7 +11,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 /// line wins.
 class ServerOptions {
   ServerOptions({
-    this.libraryPath,
+    this.musicFolder,
     this.dataDirectory,
     this.host = '0.0.0.0',
     this.port = 5200,
@@ -22,7 +22,7 @@ class ServerOptions {
   });
 
   /// The music folder, absolute or relative to the working directory. Null: the user's music folder.
-  final String? libraryPath;
+  final String? musicFolder;
 
   /// Where the database, cover cache and log live. Null: `Wiretune/Server` in the user's application data.
   final String? dataDirectory;
@@ -86,7 +86,7 @@ class ServerOptions {
 
     final level = text('log-level')!;
     return ServerOptions(
-      libraryPath: text('library'),
+      musicFolder: text('library'),
       dataDirectory: text('data-dir'),
       host: text('host')!,
       port: number('port', 65535),
@@ -99,12 +99,12 @@ class ServerOptions {
     );
   }
 
-  /// The music folder to scan: [libraryPath] made absolute, or the user's music folder when none was given. A folder
+  /// The music folder to scan: [musicFolder] made absolute, or the user's music folder when none was given. A folder
   /// that does not exist (yet) is kept: the scans say so in the log until it appears, e.g. once a share is mounted.
-  String resolveLibraryRoot() {
-    final configured = libraryPath;
+  String resolveMusicFolder() {
+    final configured = musicFolder;
     if (configured != null && configured.trim().isNotEmpty) return AppPaths.fullPath(configured);
-    final music = AppPaths.fullPath(AppPaths.musicFolder());
+    final music = AppPaths.fullPath(AppPaths.defaultMusicFolder());
     WiretuneLog.warn('Server', "No music folder given; using '$music'. Choose one with --library.");
     return music;
   }

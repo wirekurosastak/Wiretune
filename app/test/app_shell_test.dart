@@ -1212,7 +1212,7 @@ void main() {
   testWidgets("the table's dates stay on one line, written the language's way", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     for (final t in vm.library.tracks) {
-      t.dateAdded = DateTime(2026, 10, 11);
+      t.addedAt = DateTime(2026, 10, 11);
     }
     for (final (language, date) in [('en', '2026-10-11'), ('hu', '2026.10.11'), ('de', '11.10.2026')]) {
       vm.changeLanguage(language);

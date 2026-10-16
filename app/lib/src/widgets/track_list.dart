@@ -18,16 +18,16 @@ import 'quality_tag.dart';
 /// Which list a track table shows; each has its own columns, as far as the width allows. Every row ends in the
 /// favourite and a menu with the rest.
 enum TrackTableKind {
-  /// The library, and the favourites: cover, title, artist, album, length, year, added, quality, bitrate.
+  /// The library, and the favourites: cover, title, artist, album, length, released, added, quality, bitrate.
   tracks,
 
   /// An album: track number, title, length, quality, bitrate; a heading over each disc of several.
   album,
 
-  /// An artist: cover, title, album, length, year, quality, bitrate.
+  /// An artist: cover, title, album, length, released, quality, bitrate.
   artist,
 
-  /// A playlist: cover, title, artist, album, length, year, the place in the playlist, quality, bitrate; its menu also
+  /// A playlist: cover, title, artist, album, length, released, the place in the playlist, quality, bitrate; its menu also
   /// removes the track and, in the playlist's own order, moves it.
   playlist,
 
@@ -98,7 +98,7 @@ class _TrackSliverState extends State<TrackSliver> {
   /// When [track] was added: to the favourites on that page, otherwise to the library.
   DateTime? _addedAt(Track track) {
     final sorting = widget.sorting;
-    return sorting != null ? sorting.addedAt(track) : track.dateAdded;
+    return sorting != null ? sorting.addedAt(track) : track.addedAt;
   }
 
   void _play(Track track) => context.vm.player.playQueue(_tracks, track);
@@ -107,7 +107,7 @@ class _TrackSliverState extends State<TrackSliver> {
   bool get _leadIsNumber => kind == TrackTableKind.album;
   bool get _showArtist => kind != TrackTableKind.album && kind != TrackTableKind.artist;
   bool get _showAlbum => kind != TrackTableKind.album && _tableWidth >= 560;
-  bool get _showYear =>
+  bool get _showReleased =>
       (kind == TrackTableKind.tracks || kind == TrackTableKind.artist || kind == TrackTableKind.playlist) &&
       _tableWidth >= 720;
   bool get _showAdded => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && _tableWidth >= 880;
@@ -124,7 +124,7 @@ class _TrackSliverState extends State<TrackSliver> {
 
   // The columns of figures are as wide as their longest header (German) and value; the text columns share the rest.
   static const double _lengthWidth = 76;
-  static const double _yearWidth = 112;
+  static const double _releasedWidth = 112;
   static const double _addedWidth = 124;
   static const double _qualityWidth = 168;
   static const double _bitrateWidth = 104;
@@ -279,7 +279,7 @@ class _TrackSliverState extends State<TrackSliver> {
           if (_showArtist) cell(context.tr('ColArtist'), TrackSortField.artist, flex: _artistFlex),
           if (_showAlbum) cell(context.tr('ColAlbum'), TrackSortField.album, flex: _albumFlex),
           cell(context.tr('ColLength'), TrackSortField.length, width: _lengthWidth),
-          if (_showYear) cell(context.tr('ColYear'), TrackSortField.year, width: _yearWidth),
+          if (_showReleased) cell(context.tr('ColReleased'), TrackSortField.released, width: _releasedWidth),
           if (_showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _addedWidth),
           if (_showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _qualityWidth),
           if (_showQuality) cell(context.tr('ColBitrate'), null, width: _bitrateWidth),
@@ -424,7 +424,8 @@ class _TableRowState extends State<_TableRow> {
                       ),
                     ),
                   _FigureCell(track.formattedDuration, width: _TrackSliverState._lengthWidth),
-                  if (state._showYear) _FigureCell(track.year?.toString() ?? '—', width: _TrackSliverState._yearWidth),
+                  if (state._showReleased)
+                    _FigureCell(track.releaseYear?.toString() ?? '—', width: _TrackSliverState._releasedWidth),
                   if (state._showAdded)
                     _FigureCell(
                       // A playlist knows no date of its tracks, only the order they were added in.
@@ -831,7 +832,7 @@ class _PhoneRow extends StatelessWidget {
   }
 }
 
-/// A table cell of figures (a length, a year, a date): muted, one line, the digits lined up.
+/// A table cell of figures (a length, a release year, a date): muted, one line, the digits lined up.
 class _FigureCell extends StatelessWidget {
   const _FigureCell(this.text, {required this.width});
 

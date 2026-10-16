@@ -17,7 +17,7 @@ void main() {
     expect(options.scanIntervalMinutes, 30);
     expect(options.trustProxy, isFalse);
     expect(options.logLevel, LogLevel.info);
-    expect([options.libraryPath, options.dataDirectory, options.setupCode], everyElement(isNull));
+    expect([options.musicFolder, options.dataDirectory, options.setupCode], everyElement(isNull));
   });
 
   test('every option can come from the environment, and the command line wins', () {
@@ -32,7 +32,7 @@ void main() {
       'WIRETUNE_LOG_LEVEL': 'debug',
     };
     final fromEnvironment = parse([], environment);
-    expect(fromEnvironment.libraryPath, '/srv/music');
+    expect(fromEnvironment.musicFolder, '/srv/music');
     expect(fromEnvironment.dataDirectory, '/var/lib/wiretune');
     expect(fromEnvironment.host, '127.0.0.1');
     expect(fromEnvironment.port, 8080);
@@ -43,7 +43,7 @@ void main() {
 
     final overridden = parse(['--port', '9000', '--library=/mnt/music'], environment);
     expect(overridden.port, 9000);
-    expect(overridden.libraryPath, '/mnt/music');
+    expect(overridden.musicFolder, '/mnt/music');
     expect(overridden.scanIntervalMinutes, 0); // still from the environment
   });
 

@@ -15,7 +15,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     required this.supportsLocalFolder,
     Future<bool> Function()? requestFolderAccess,
   }) : _requestFolderAccess = requestFolderAccess {
-    localLibraryPath = _library.libraryPath.trim().isNotEmpty ? _library.libraryPath : AppPaths.musicFolder();
+    localFolder = _library.musicFolder.trim().isNotEmpty ? _library.musicFolder : AppPaths.defaultMusicFolder();
     _unsubscribers.addAll([
       _library.scanningStateChanged.listen((scanning) {
         isScanning = scanning;
@@ -37,7 +37,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
   final Future<bool> Function()? _requestFolderAccess;
 
   String serverUrl = ServerSession.defaultServerUrl;
-  String localLibraryPath = '';
+  String localFolder = '';
   bool isServerReachable = false;
   bool isConnecting = false;
   bool isScanning = false;
@@ -59,7 +59,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
   bool isAuthenticating = false;
   bool isServerOffline = false;
 
-  String serverLibraryPath = '';
+  String serverFolder = '';
   bool isUpdatingServerConfig = false;
 
   /// The outcome of saving the server's music folder or reindexing it, shown beside that field.
@@ -93,7 +93,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
   bool get hasUserManagementError => userManagementErrorMessage.isNotEmpty;
   String get passwordHint => Localizer.format('PasswordHint', [AuthRules.minPasswordLength]);
   bool get isBusy => isConnecting || isAuthenticating || (isScanning && isLoggedIn);
-  bool get canRescanServer => isLoggedIn && isAdmin && !isScanning;
+  bool get canReindexServer => isLoggedIn && isAdmin && !isScanning;
 
   /// Whether connecting to [address] means leaving the server this device is signed in to.
   bool wouldSwitchServer(String address) {
@@ -148,7 +148,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     if (adminKey != _adminDataKey) {
       _adminDataKey = adminKey;
       if (adminKey != null) {
-        unawaited(loadServerConfig());
+        unawaited(loadServerFolder());
         unawaited(loadUsers());
       }
     }
@@ -243,7 +243,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
   /// What the last scan's problem means for the administrator: the folder can't be reached (the library is kept), it
   /// looks unmounted, or the scan failed. Empty when there is none.
   String _scanProblemText(ServerLibraryStatus status) => switch (status.lastScanProblem) {
-    ErrorCodes.folderMissing => Localizer.format('ServerFolderUnavailable', [serverLibraryPath]),
+    ErrorCodes.folderMissing => Localizer.format('ServerFolderUnavailable', [serverFolder]),
     null => status.lastScanError ?? '', // a server from before problem codes
     final code => describeServerError(code) ?? status.lastScanError ?? '',
   };
@@ -259,7 +259,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> rescanServer() async {
+  Future<void> reindexServer() async {
     if (!_session.isLoggedIn) {
       _showServerFolder(Localizer.get('ScanSignInFirst'), isError: true);
       return;
@@ -307,14 +307,14 @@ class ServerSettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> startScanFolder() async {
+  Future<void> scanLocalFolder() async {
     // Asked here, when the user wants their music read, rather than at start.
     final request = _requestFolderAccess;
     if (request != null && !await request()) {
       _showLocalFolder(Localizer.get('FolderAccessDenied'), isError: true);
       return;
     }
-    if (localLibraryPath.trim().isEmpty || !Directory(localLibraryPath).existsSync()) {
+    if (localFolder.trim().isEmpty || !Directory(localFolder).existsSync()) {
       _showLocalFolder(Localizer.get('FolderMissing'), isError: true);
       return;
     }
@@ -327,7 +327,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     _showLocalFolder(Localizer.get('ScanStarted'));
     try {
       final done = await _library.scanFolder(
-        localLibraryPath,
+        localFolder,
         onProgress: (report) {
           scanProgress = report.progressPercentage;
           _showLocalFolder(
@@ -356,11 +356,11 @@ class ServerSettingsViewModel extends ChangeNotifier {
   }
 
   /// The server's music folder, and what is wrong with it if anything (administrators only).
-  Future<void> loadServerConfig() async {
+  Future<void> loadServerFolder() async {
     if (!isLoggedIn || !isAdmin) return;
     try {
-      serverLibraryPath = (await _session.getServerConfig()).libraryPath;
-      savedServerLibraryPath = serverLibraryPath;
+      serverFolder = (await _session.getServerConfig()).musicFolder;
+      savedServerFolder = serverFolder;
     } on ServerRequestException catch (e) {
       _showServerFolder(Localizer.format('ServerSettingsLoadError', [e.message]), isError: true);
     } on ServerUnauthorizedException catch (e) {
@@ -369,15 +369,15 @@ class ServerSettingsViewModel extends ChangeNotifier {
     await _loadServerFolderProblem();
   }
 
-  /// The server's music folder as the server has it (what [serverLibraryPath] was before the administrator typed).
-  String savedServerLibraryPath = '';
+  /// The server's music folder as the server has it (what [serverFolder] was before the administrator typed).
+  String savedServerFolder = '';
 
   /// Whether saving the folder field would change the server's music folder.
-  bool get serverFolderChanged => serverLibraryPath.trim() != savedServerLibraryPath;
+  bool get serverFolderChanged => serverFolder.trim() != savedServerFolder;
 
-  Future<void> updateServerLibraryPath() async {
+  Future<void> saveServerFolder() async {
     if (!isLoggedIn || !isAdmin) return;
-    if (serverLibraryPath.trim().isEmpty) {
+    if (serverFolder.trim().isEmpty) {
       _showServerFolder(Localizer.get('EnterServerFolder'), isError: true);
       return;
     }
@@ -385,9 +385,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     isUpdatingServerConfig = true;
     notifyListeners();
     try {
-      serverLibraryPath = savedServerLibraryPath = (await _session.updateServerLibraryPath(
-        serverLibraryPath,
-      )).libraryPath;
+      serverFolder = savedServerFolder = (await _session.saveServerFolder(serverFolder)).musicFolder;
       serverFolderProblem = '';
       _showServerFolder(Localizer.get('ServerFolderUpdated'));
     } on ServerRequestException catch (e) {

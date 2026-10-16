@@ -125,13 +125,13 @@ void main() {
       final lib = await library([
         track('1', 'B Album', artist: 'Zed')
           ..title = 'Beta'
-          ..dateAdded = DateTime.utc(2026, 1, 3),
+          ..addedAt = DateTime.utc(2026, 1, 3),
         track('2', 'A Album', artist: 'Abba', format: hiRes)
           ..title = 'Gamma'
-          ..dateAdded = DateTime.utc(2026, 1, 1),
+          ..addedAt = DateTime.utc(2026, 1, 1),
         track('3', 'C Album', artist: 'Moby', format: mp3)
           ..title = 'Alpha'
-          ..dateAdded = DateTime.utc(2026, 1, 2),
+          ..addedAt = DateTime.utc(2026, 1, 2),
       ]);
       final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
       List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
@@ -177,14 +177,14 @@ void main() {
       TrackSortField.artist,
       TrackSortField.album,
       TrackSortField.length,
-      TrackSortField.year,
+      TrackSortField.released,
       TrackSortField.added,
       TrackSortField.quality,
     ]);
     expect(AlbumSortField.values, [
       AlbumSortField.title,
       AlbumSortField.artist,
-      AlbumSortField.year,
+      AlbumSortField.released,
       AlbumSortField.added,
       AlbumSortField.quality,
     ]);
@@ -195,22 +195,22 @@ void main() {
     final lib = await library([
       track('1', 'Album')
         ..title = 'Dated'
-        ..year = 2001
+        ..releaseYear = 2001
         ..duration = const Duration(minutes: 5),
       track('2', 'Album')
         ..title = 'Undated'
         ..duration = const Duration(minutes: 2),
       track('3', 'Album')
         ..title = 'Recent'
-        ..year = 2020
+        ..releaseYear = 2020
         ..duration = const Duration(minutes: 3),
     ]);
     final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
     List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
 
-    tracks.setSortField(TrackSortField.year);
+    tracks.setSortField(TrackSortField.released);
     expect(titles(), ['Recent', 'Dated', 'Undated']);
-    tracks.setSortField(TrackSortField.year);
+    tracks.setSortField(TrackSortField.released);
     expect(titles(), ['Dated', 'Recent', 'Undated']);
     tracks.setSortField(TrackSortField.length);
     expect(tracks.sortLabel(TrackSortField.length), 'Length ↑');
@@ -219,8 +219,8 @@ void main() {
 
   test('sorting albums by added puts the newest album first', () async {
     final lib = await library([
-      track('1', 'Old Album', artist: 'Artist')..dateAdded = DateTime.utc(2025, 1, 1),
-      track('2', 'New Album', artist: 'Artist')..dateAdded = DateTime.utc(2026, 1, 1),
+      track('1', 'Old Album', artist: 'Artist')..addedAt = DateTime.utc(2025, 1, 1),
+      track('2', 'New Album', artist: 'Artist')..addedAt = DateTime.utc(2026, 1, 1),
     ]);
     final albums = AlbumsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
 
@@ -237,9 +237,9 @@ void main() {
 
   test('sorting artists by albums and added behaves consistently', () async {
     final lib = await library([
-      track('1', 'Album 1', artist: 'Few')..dateAdded = DateTime.utc(2026, 5, 1),
-      track('2', 'Album 2', artist: 'Many')..dateAdded = DateTime.utc(2025, 1, 1),
-      track('3', 'Album 3', artist: 'Many')..dateAdded = DateTime.utc(2025, 2, 1),
+      track('1', 'Album 1', artist: 'Few')..addedAt = DateTime.utc(2026, 5, 1),
+      track('2', 'Album 2', artist: 'Many')..addedAt = DateTime.utc(2025, 1, 1),
+      track('3', 'Album 3', artist: 'Many')..addedAt = DateTime.utc(2025, 2, 1),
     ]);
     final artists = ArtistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
 

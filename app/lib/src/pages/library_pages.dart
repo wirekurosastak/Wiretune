@@ -378,7 +378,7 @@ class DetailHeader extends StatelessWidget {
   }
 }
 
-/// One of the details under a detail page's title: a count, a year, a length.
+/// One of the details under a detail page's title: a count, a release year, a length.
 class DetailText extends StatelessWidget {
   const DetailText(this.text, {super.key});
 
@@ -391,7 +391,7 @@ class DetailText extends StatelessWidget {
   );
 }
 
-/// The sort buttons of a list page ("Sort by: ABC ↑ | Year") as one segmented pill; the active segment is filled with
+/// The sort buttons of a list page ("Sort by: ABC ↑ | Released") as one segmented pill; the active segment is filled with
 /// the accent.
 class SortButtons extends StatelessWidget {
   const SortButtons({super.key, required this.buttons});
@@ -709,7 +709,7 @@ class AlbumDetail extends StatelessWidget {
                 onTap: () => vm.openArtistByName(album.artist),
                 style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.coral),
               ),
-              if (album.year != null) DetailText('${album.year}'),
+              if (album.releaseYear != null) DetailText('${album.releaseYear}'),
               DetailText(context.trf('TrackCount', [album.trackCount])),
               DetailText(album.formattedTotalDuration),
             ],

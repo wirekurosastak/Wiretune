@@ -53,7 +53,7 @@ The services talk through synchronous `Event<T>`s: a handler has run by the time
 ## Persistence
 
 SQLite in WAL mode, one synchronous connection per database, instants stored as microseconds since the epoch. The
-schema version is `PRAGMA user_version` (5). A database of an earlier version runs the upgrade steps after its own
+schema version is `PRAGMA user_version` (7). A database of an earlier version runs the upgrade steps after its own
 (`DatabaseManager._upgrades`, one per version) in one transaction; a newer one, or tables without a version, is refused
 (`IncompatibleDatabaseException`) rather than misread. A change to the tables raises the version and appends its step.
 Both sides create every table and use what they need:

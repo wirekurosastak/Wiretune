@@ -39,7 +39,7 @@ void main() {
     expect(first.duration, const Duration(seconds: 1));
     expect(first.coverArtPath, endsWith('Folder.JPG')); // the names are matched ignoring case
     expect(first.hasCoverArt, isTrue);
-    expect(first.fileModifiedUtc, isNotNull);
+    expect(first.fileModifiedAt, isNotNull);
     expect(tracks.firstWhere((t) => t.title == '01 Third').format.isHiRes, isTrue);
     expect(reports.last.scannedFiles, 4); // the broken FLAC counts as scanned, but yields nothing
     expect(reports.last.progressPercentage, 100);
@@ -74,8 +74,8 @@ void main() {
 
     expect(await library.scanFolder(root.path), isTrue);
     expect(library.tracks, hasLength(3));
-    expect(library.libraryPath, AppPaths.fullPath(root.path));
-    expect(repo.getSetting('library_path'), AppPaths.fullPath(root.path));
+    expect(library.musicFolder, AppPaths.fullPath(root.path));
+    expect(repo.getSetting('music_folder'), AppPaths.fullPath(root.path));
 
     final id = library.tracks.first.id;
     library.toggleFavorite(id);

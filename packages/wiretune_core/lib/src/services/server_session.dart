@@ -345,8 +345,7 @@ class ServerSession {
 
   Future<ServerConfigInfo> getServerConfig() => _client.getServerConfig(serverUrl);
 
-  Future<ServerConfigInfo> updateServerLibraryPath(String newPath) =>
-      _client.updateServerLibraryPath(serverUrl, newPath);
+  Future<ServerConfigInfo> saveServerFolder(String folder) => _client.saveServerFolder(serverUrl, folder);
 
   Future<ServerLibraryStatus> getLibraryStatus() => _client.getLibraryStatus(serverUrl);
 

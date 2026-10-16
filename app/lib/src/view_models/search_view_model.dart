@@ -142,8 +142,8 @@ class SearchViewModel extends ChangeNotifier {
     kind: BestMatchKind.album,
     title: album.title,
     subtitle: album.artist,
-    meta: album.year != null
-        ? '${album.year} • ${Localizer.format('TrackCount', [album.trackCount])}'
+    meta: album.releaseYear != null
+        ? '${album.releaseYear} • ${Localizer.format('TrackCount', [album.trackCount])}'
         : Localizer.format('TrackCount', [album.trackCount]),
     coverPath: album.coverArtPath,
     play: () {

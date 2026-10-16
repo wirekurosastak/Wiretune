@@ -31,6 +31,19 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 7) {
+      c.execute('''
+        ALTER TABLE tracks RENAME COLUMN release_year TO year;
+        ALTER TABLE tracks RENAME COLUMN added_at TO date_added;
+        ALTER TABLE tracks RENAME COLUMN file_modified_at TO file_modified;
+        ALTER TABLE tracks RENAME COLUMN last_played_at TO last_played;
+        ALTER TABLE user_favorites RENAME COLUMN favorited_at TO added_at;
+        ALTER TABLE user_plays RENAME COLUMN last_played_at TO last_played;
+        ALTER TABLE users RENAME COLUMN last_login_at TO last_login;
+        UPDATE settings SET key = 'library_path' WHERE key = 'music_folder';
+        UPDATE settings SET key = 'chosen_library_path' WHERE key = 'chosen_music_folder';
+      ''');
+    }
     if (version < 6) c.execute('ALTER TABLE tracks DROP COLUMN artists');
     if (version < 5) c.execute('ALTER TABLE users DROP COLUMN token_version; DROP TABLE downloads;');
     if (version < 4) c.execute('DROP TABLE user_hidden');
@@ -65,7 +78,7 @@ void main() {
     duration: const Duration(milliseconds: 200500),
     filePath: path ?? '/music/$id.flac',
     format: const AudioFormat(codec: 'FLAC', sampleRate: 44100, bitsPerSample: 16, channels: 2, isLossless: true),
-    dateAdded: DateTime.utc(2026, 1, 2, 3, 4, 5),
+    addedAt: DateTime.utc(2026, 1, 2, 3, 4, 5),
   );
 
   int count(DatabaseManager db, String sql) => db.connection.select(sql).first.values.first as int;
@@ -74,7 +87,7 @@ void main() {
     final (repo, _) = await open();
     final track = make('a', number: 4)
       ..genre = 'Jazz'
-      ..fileModifiedUtc = DateTime.utc(2025, 1, 2, 3, 4, 5, 678, 901);
+      ..fileModifiedAt = DateTime.utc(2025, 1, 2, 3, 4, 5, 678, 901);
     final played = DateTime.utc(2026, 5, 6, 7, 8, 9);
 
     repo.replaceAllTracks([track, make('b')]);
@@ -84,8 +97,8 @@ void main() {
     expect(stored.duration, const Duration(milliseconds: 200500));
     expect(stored.genre, 'Jazz');
     expect(stored.trackNumber, 4);
-    expect(stored.fileModifiedUtc, track.fileModifiedUtc); // microseconds survive, so an unchanged file is reused
-    expect(stored.dateAdded, DateTime.utc(2026, 1, 2, 3, 4, 5));
+    expect(stored.fileModifiedAt, track.fileModifiedAt); // microseconds survive, so an unchanged file is reused
+    expect(stored.addedAt, DateTime.utc(2026, 1, 2, 3, 4, 5));
     expect(stored.format.codec, 'FLAC');
     final data = repo.getUserData();
     expect(data.favorites, {'a': null});
@@ -245,15 +258,39 @@ void main() {
 
   test('a database of schema 5 is upgraded, and its files are read again for their artists', () async {
     final (repo, db) = await open();
-    repo.replaceAllTracks([make('a')..fileModifiedUtc = DateTime.utc(2025, 1, 2)]);
+    repo.replaceAllTracks([make('a')..fileModifiedAt = DateTime.utc(2025, 1, 2)]);
     downgrade(db, 5);
 
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
     final kept = (upgraded.getAllTracks()).single;
-    expect((kept.id, kept.fileModifiedUtc), ('a', null));
+    expect((kept.id, kept.fileModifiedAt), ('a', null));
     expect(kept.artists, isEmpty);
   });
+
+  test(
+    "a database of schema 6 is upgraded: its columns take the interface's names, its folders' settings too",
+    () async {
+      final (repo, db) = await open();
+      final played = DateTime.utc(2026, 5, 6);
+      repo
+        ..replaceAllTracks([make('a')..releaseYear = 1999])
+        ..saveUserData(['a'], const {}, {'a': (count: 2, lastPlayedAt: played)})
+        ..setSetting('music_folder', '/srv/music')
+        ..setSetting('chosen_music_folder', '/mnt/music');
+      downgrade(db, 6);
+
+      final (upgraded, again) = await open();
+      expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+      final kept = upgraded.getAllTracks().single;
+      expect((kept.releaseYear, kept.addedAt), (1999, DateTime.utc(2026, 1, 2, 3, 4, 5)));
+      expect(upgraded.getUserData().plays['a'], (count: 2, lastPlayedAt: played));
+      expect(
+        (upgraded.getSetting('music_folder'), upgraded.getSetting('chosen_music_folder')),
+        ('/srv/music', '/mnt/music'),
+      );
+    },
+  );
 
   test("a database of schema 4 is upgraded, and its accounts' tokens keep the version they were signed with", () async {
     final (_, db) = await open();

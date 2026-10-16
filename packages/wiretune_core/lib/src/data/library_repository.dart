@@ -31,12 +31,12 @@ class LibraryRepository {
           trackNumber: _int(r['track_number']),
           trackCount: _int(r['track_count']),
           discNumber: _int(r['disc_number']),
-          year: _int(r['year']),
+          releaseYear: _int(r['release_year']),
           bpm: _int(r['bpm']),
           genre: r['genre'] as String?,
           duration: Duration(milliseconds: _int(r['duration_ms']) ?? 0),
           fileSizeBytes: _int(r['file_size_bytes']) ?? 0,
-          fileModifiedUtc: fromDbTime(r['file_modified']),
+          fileModifiedAt: fromDbTime(r['file_modified_at']),
           filePath: r['file_path'] as String,
           streamUrl: r['stream_url'] as String?,
           hasCoverArt: _int(r['has_cover_art']) == 1,
@@ -49,7 +49,7 @@ class LibraryRepository {
             bitrateKbps: _int(r['bitrate_kbps']) ?? 0,
             isLossless: _int(r['is_lossless']) == 1,
           ),
-          dateAdded: fromDbTime(r['date_added']),
+          addedAt: fromDbTime(r['added_at']),
         ),
     ];
   }
@@ -59,14 +59,14 @@ class LibraryRepository {
     final favorites = <String, DateTime?>{};
     final plays = <String, PlayStats>{};
     final rows = _db.connection.select(
-      'SELECT id, is_favorite, favorited_at, play_count, last_played FROM tracks '
-      'WHERE is_favorite = 1 OR play_count > 0 OR last_played IS NOT NULL',
+      'SELECT id, is_favorite, favorited_at, play_count, last_played_at FROM tracks '
+      'WHERE is_favorite = 1 OR play_count > 0 OR last_played_at IS NOT NULL',
     );
     for (final r in rows) {
       final id = r['id'] as String;
       if (_int(r['is_favorite']) == 1) favorites[id] = fromDbTime(r['favorited_at']);
       final count = _int(r['play_count']) ?? 0;
-      final last = fromDbTime(r['last_played']);
+      final last = fromDbTime(r['last_played_at']);
       if (count > 0 || last != null) plays[id] = (count: count, lastPlayedAt: last);
     }
     return (favorites: favorites, plays: plays);
@@ -77,8 +77,8 @@ class LibraryRepository {
   void saveUserData(Iterable<String> trackIds, Map<String, DateTime?> favorites, Map<String, PlayStats> plays) {
     _db.transaction((db) {
       final update = db.prepare(
-        'UPDATE tracks SET is_favorite = ?1, favorited_at = ?2, play_count = ?3, last_played = ?4 WHERE id = ?5 '
-        'AND (is_favorite IS NOT ?1 OR favorited_at IS NOT ?2 OR play_count IS NOT ?3 OR last_played IS NOT ?4)',
+        'UPDATE tracks SET is_favorite = ?1, favorited_at = ?2, play_count = ?3, last_played_at = ?4 WHERE id = ?5 '
+        'AND (is_favorite IS NOT ?1 OR favorited_at IS NOT ?2 OR play_count IS NOT ?3 OR last_played_at IS NOT ?4)',
       );
       try {
         for (final id in trackIds) {
@@ -101,34 +101,34 @@ class LibraryRepository {
   static const String _upsertSql = '''
     INSERT INTO tracks (
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
-        year, bpm, genre, duration_ms, file_size_bytes, file_modified, file_path, stream_url,
+        release_year, bpm, genre, duration_ms, file_size_bytes, file_modified_at, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
-        bitrate_kbps, is_lossless, date_added, artists
+        bitrate_kbps, is_lossless, added_at, artists
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
               ?24, ?25, ?26)
     ON CONFLICT(id) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, artists = excluded.artists, album = excluded.album,
         album_artist = excluded.album_artist, track_number = excluded.track_number,
-        track_count = excluded.track_count, disc_number = excluded.disc_number, year = excluded.year,
+        track_count = excluded.track_count, disc_number = excluded.disc_number, release_year = excluded.release_year,
         bpm = excluded.bpm, genre = excluded.genre, duration_ms = excluded.duration_ms,
-        file_size_bytes = excluded.file_size_bytes, file_modified = excluded.file_modified,
+        file_size_bytes = excluded.file_size_bytes, file_modified_at = excluded.file_modified_at,
         file_path = excluded.file_path, stream_url = excluded.stream_url, has_cover_art = excluded.has_cover_art,
         cover_art_path = excluded.cover_art_path, codec = excluded.codec, sample_rate = excluded.sample_rate,
         bits_per_sample = excluded.bits_per_sample, channels = excluded.channels,
-        bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless, date_added = excluded.date_added
+        bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless, added_at = excluded.added_at
     WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR artists IS NOT excluded.artists
        OR album IS NOT excluded.album
        OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
        OR track_count IS NOT excluded.track_count OR disc_number IS NOT excluded.disc_number
-       OR year IS NOT excluded.year OR bpm IS NOT excluded.bpm OR genre IS NOT excluded.genre
+       OR release_year IS NOT excluded.release_year OR bpm IS NOT excluded.bpm OR genre IS NOT excluded.genre
        OR duration_ms IS NOT excluded.duration_ms OR file_size_bytes IS NOT excluded.file_size_bytes
-       OR file_modified IS NOT excluded.file_modified OR file_path IS NOT excluded.file_path
+       OR file_modified_at IS NOT excluded.file_modified_at OR file_path IS NOT excluded.file_path
        OR stream_url IS NOT excluded.stream_url
        OR has_cover_art IS NOT excluded.has_cover_art OR cover_art_path IS NOT excluded.cover_art_path
        OR codec IS NOT excluded.codec OR sample_rate IS NOT excluded.sample_rate
        OR bits_per_sample IS NOT excluded.bits_per_sample OR channels IS NOT excluded.channels
        OR bitrate_kbps IS NOT excluded.bitrate_kbps OR is_lossless IS NOT excluded.is_lossless
-       OR date_added IS NOT excluded.date_added
+       OR added_at IS NOT excluded.added_at
     ''';
 
   /// Makes the table hold exactly [tracks]. Rows that are gone are deleted and the others are inserted or updated in
@@ -166,12 +166,12 @@ class LibraryRepository {
             t.tagged.trackNumber,
             t.trackCount,
             t.tagged.discNumber,
-            t.year,
+            t.releaseYear,
             t.bpm,
             t.genre,
             t.duration.inMilliseconds,
             t.fileSizeBytes,
-            toDbTime(t.fileModifiedUtc),
+            toDbTime(t.fileModifiedAt),
             t.filePath,
             t.streamUrl,
             t.hasCoverArt ? 1 : 0,
@@ -182,7 +182,7 @@ class LibraryRepository {
             t.format.channels,
             t.format.bitrateKbps,
             t.format.isLossless ? 1 : 0,
-            toDbTime(t.dateAdded),
+            toDbTime(t.addedAt),
             t.artists.isEmpty ? null : jsonEncode(t.artists),
           ]);
         }

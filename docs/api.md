@@ -29,22 +29,22 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `DELETE /api/users/{userId}` | admin | Deletes an account and its data. `400` for your own account, `404` for an unknown one |
 
 `AuthResponse`: `{ "token", "user": UserInfo, "expiresAt" }`.
-`UserInfo`: `{ "id", "username", "isAdmin", "createdAt", "lastLogin" }`.
+`UserInfo`: `{ "id", "username", "isAdmin", "createdAt", "lastLoginAt" }`.
 `StreamTokenResponse`: `{ "token", "expiresAt" }`.
 
 ## Library
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanCompletedUtc", "lastScanError", "lastScanProblem" }`. Why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`); both `null` when it went well, and for anyone but an administrator, since they name the server's folders |
+| `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanAt", "lastScanError", "lastScanProblem" }`. Why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`); both `null` when it went well, and for anyone but an administrator, since they name the server's folders |
 | `POST /api/library/scan` | admin | Asks for a scan: `202 { "message": "Scan requested." }`. Poll the status route |
 | `GET /api/tracks` | user | Every track |
-| `GET /api/config` | admin | `{ "libraryPath" }` |
-| `POST /api/config/library-path` | admin | Body `{ "newPath" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
+| `GET /api/config` | admin | `{ "musicFolder" }` |
+| `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
 A **track** has `id`, `title`, `artist` (several artists joined by ", "), `artists` (each of them, only when there
-are several), `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `year`,
-`genre`, `durationMs`, `fileSizeBytes`, `fileModifiedUtc`, `hasCoverArt`, `dateAdded` and `format` (`codec`,
+are several), `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `releaseYear`,
+`genre`, `durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt` and `format` (`codec`,
 `sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). Files stay on the server, and so
 do their paths. Favourites and play counts are per account and come from `/api/me/data`. The players group albums and
 artists themselves; `album`, `albumArtist`, `trackNumber` and `discNumber` already say how the server filed a folder's
@@ -59,10 +59,10 @@ descriptions up to 1,000. Over a limit you get `409`.
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayed" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favourites come in the order they were marked; marking one again keeps its time |
+| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favourites come in the order they were marked; marking one again keeps its time |
 | `PUT /api/me/favorites/{trackId}` | user | Marks a favourite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` for an invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
-| `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayed" }`, `409` at the limit |
+| `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
 | `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` for a rule violation, `409` at the limit |
 | `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` for an unknown ID |
 | `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album, or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` for an invalid type or ID, `409` at the limit |

@@ -50,7 +50,7 @@ void main() {
       '01 Third': p.join('Artist B', 'Album 2', '01 Third.wav'),
     };
     for (final track in album.tracks) {
-      final original = File(p.join(server.libraryPath, files[track.title])).readAsBytesSync();
+      final original = File(p.join(server.musicFolder, files[track.title])).readAsBytesSync();
       expect(File(downloads.localCopy(track)!).readAsBytesSync(), original, reason: track.title);
     }
 

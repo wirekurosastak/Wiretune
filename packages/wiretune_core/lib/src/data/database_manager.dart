@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 6;
+  static const int schemaVersion = 7;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -52,6 +52,19 @@ class DatabaseManager {
     // 5 -> 6: every artist of a track (featured ones too). Forgetting the files' modification times makes the next scan
     // read each file again, as only then are the artists known.
     'ALTER TABLE tracks ADD COLUMN artists TEXT; UPDATE tracks SET file_modified = NULL;',
+    // 6 -> 7: the names the interface uses: a track's release year, when it was added, and the times as "..._at"; the
+    // music folder's settings.
+    '''
+    ALTER TABLE tracks RENAME COLUMN year TO release_year;
+    ALTER TABLE tracks RENAME COLUMN date_added TO added_at;
+    ALTER TABLE tracks RENAME COLUMN file_modified TO file_modified_at;
+    ALTER TABLE tracks RENAME COLUMN last_played TO last_played_at;
+    ALTER TABLE user_favorites RENAME COLUMN added_at TO favorited_at;
+    ALTER TABLE user_plays RENAME COLUMN last_played TO last_played_at;
+    ALTER TABLE users RENAME COLUMN last_login TO last_login_at;
+    UPDATE settings SET key = 'music_folder' WHERE key = 'library_path';
+    UPDATE settings SET key = 'chosen_music_folder' WHERE key = 'chosen_library_path';
+    ''',
   ];
 
   final String databasePath;
@@ -151,12 +164,12 @@ const String _schema =
       track_number INTEGER,
       track_count INTEGER,
       disc_number INTEGER,
-      year INTEGER,
+      release_year INTEGER,
       bpm INTEGER,
       genre TEXT,
       duration_ms INTEGER NOT NULL,
       file_size_bytes INTEGER NOT NULL,
-      file_modified INTEGER,
+      file_modified_at INTEGER,
       file_path TEXT NOT NULL,
       stream_url TEXT,
       has_cover_art INTEGER NOT NULL,
@@ -169,8 +182,8 @@ const String _schema =
       is_lossless INTEGER NOT NULL,
       is_favorite INTEGER NOT NULL DEFAULT 0,
       play_count INTEGER NOT NULL DEFAULT 0,
-      last_played INTEGER,
-      date_added INTEGER NOT NULL,
+      last_played_at INTEGER,
+      added_at INTEGER NOT NULL,
       favorited_at INTEGER
   );
 
@@ -197,7 +210,7 @@ const String _schema =
       password_hash TEXT NOT NULL,
       is_admin INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
-      last_login INTEGER,
+      last_login_at INTEGER,
       -- Raised by a password change; a token signed for an older value is refused.
       token_version INTEGER NOT NULL DEFAULT 0
   );
@@ -205,7 +218,7 @@ const String _schema =
   CREATE TABLE user_favorites (
       user_id TEXT NOT NULL,
       track_id TEXT NOT NULL,
-      added_at INTEGER NOT NULL,
+      favorited_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, track_id)
   );
 
@@ -213,7 +226,7 @@ const String _schema =
       user_id TEXT NOT NULL,
       track_id TEXT NOT NULL,
       play_count INTEGER NOT NULL DEFAULT 0,
-      last_played INTEGER,
+      last_played_at INTEGER,
       PRIMARY KEY (user_id, track_id)
   );
 

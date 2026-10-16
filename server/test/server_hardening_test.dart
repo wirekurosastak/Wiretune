@@ -61,7 +61,7 @@ void main() {
         expect(t.title, isNotEmpty);
         expect(t.duration, greaterThan(Duration.zero));
         expect(t.fileSizeBytes, greaterThan(0));
-        expect(t.fileModifiedUtc, isNotNull);
+        expect(t.fileModifiedAt, isNotNull);
         expect(t.format.sampleRate, greaterThan(0));
       }
       expect(tracks.any((t) => t.format.sampleRate == 96000), isTrue);
@@ -248,9 +248,9 @@ void main() {
       final adminOnly = await guest.get('/api/users');
       expect((adminOnly.statusCode, json(adminOnly)['code']), (403, ErrorCodes.adminOnly));
 
-      final disk = await admin.post('/api/config/library-path', {'newPath': '/'});
+      final disk = await admin.post('/api/config/music-folder', {'musicFolder': '/'});
       expect((disk.statusCode, json(disk)['code']), (400, ErrorCodes.folderWholeDisk));
-      final missing = await admin.post('/api/config/library-path', {'newPath': '${server.root}/nope'});
+      final missing = await admin.post('/api/config/music-folder', {'musicFolder': '${server.root}/nope'});
       expect(json(missing)['code'], ErrorCodes.folderMissing);
       expect(json(missing)['path'], '${server.root}/nope');
 
@@ -336,7 +336,7 @@ void main() {
       final (admin, _) = await setupAdmin(first);
       final share = Directory('${first.root}/share')..createSync();
       writeWav('${share.path}/Artist/Album/01 Track.wav', 44100);
-      expect((await admin.post('/api/config/library-path', {'newPath': share.path})).statusCode, 200);
+      expect((await admin.post('/api/config/music-folder', {'musicFolder': share.path})).statusCode, 200);
       await first.waitForTracks(admin, 1);
       await first.close();
 
@@ -348,7 +348,7 @@ void main() {
         await first.close().catchError((_) {});
       });
       final (admin2, _) = await login(second, 'owner', adminPassword);
-      expect(json(await admin2.get('/api/config'))['libraryPath'], AppPaths.fullPath(share.path));
+      expect(json(await admin2.get('/api/config'))['musicFolder'], AppPaths.fullPath(share.path));
       // The scan waits for the share instead of putting the configured folder (three tracks) in its place.
       for (var i = 0; i < 100 && second.server.scanner.lastScanError == null; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 50));
@@ -363,7 +363,7 @@ void main() {
     first.keepFiles = true;
     final (admin, _) = await setupAdmin(first);
     final other = '${first.root}/library2';
-    expect((await admin.post('/api/config/library-path', {'newPath': other})).statusCode, 200);
+    expect((await admin.post('/api/config/music-folder', {'musicFolder': other})).statusCode, 200);
     await first.close();
 
     final second = await ServerFixture.start(existingRoot: first.root);
@@ -373,7 +373,7 @@ void main() {
       await first.close().catchError((_) {});
     });
     final (admin2, _) = await login(second, 'owner', adminPassword);
-    expect(json(await admin2.get('/api/config'))['libraryPath'], AppPaths.fullPath(other));
+    expect(json(await admin2.get('/api/config'))['musicFolder'], AppPaths.fullPath(other));
   });
 
   test('the JWT verifier refuses tampering, other audiences and expired tokens', () {

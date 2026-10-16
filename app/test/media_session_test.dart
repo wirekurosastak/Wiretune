@@ -101,8 +101,8 @@ void main() {
 
   test("the car's lists are in the order chosen in the app", () async {
     final library = createLibrary([
-      TestSupport.makeTrack('1', 'Beta', artist: 'Zed', album: 'Old')..dateAdded = DateTime.utc(2025),
-      TestSupport.makeTrack('2', 'Alpha', artist: 'Abba', album: 'New')..dateAdded = DateTime.utc(2026),
+      TestSupport.makeTrack('1', 'Beta', artist: 'Zed', album: 'Old')..addedAt = DateTime.utc(2025),
+      TestSupport.makeTrack('2', 'Alpha', artist: 'Abba', album: 'New')..addedAt = DateTime.utc(2026),
     ]);
     library.initialize();
     final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));

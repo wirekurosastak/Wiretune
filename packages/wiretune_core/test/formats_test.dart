@@ -32,20 +32,20 @@ void main() {
 
   test('a track survives the JSON round trip of the API, without anything that stays on the server', () {
     final track = TestSupport.makeTrack('abc', 'Title', album: 'Album')
-      ..year = 1999
-      ..fileModifiedUtc = DateTime.utc(2025, 1, 2, 3, 4, 5, 6, 7)
+      ..releaseYear = 1999
+      ..fileModifiedAt = DateTime.utc(2025, 1, 2, 3, 4, 5, 6, 7)
       ..hasCoverArt = true;
     final json = track.toJson();
     expect(json['durationMs'], track.duration.inMilliseconds);
-    for (final key in ['filePath', 'streamUrl', 'isFavorite', 'playCount', 'lastPlayed']) {
+    for (final key in ['filePath', 'streamUrl', 'isFavorite', 'playCount', 'lastPlayedAt']) {
       expect(json.containsKey(key), isFalse, reason: key);
     }
 
     final copy = Track.fromJson(json);
     expect(copy.id, 'abc');
     expect(copy.duration, Duration(milliseconds: track.duration.inMilliseconds));
-    expect(copy.year, 1999);
-    expect(copy.fileModifiedUtc, DateTime.utc(2025, 1, 2, 3, 4, 5, 6, 7));
+    expect(copy.releaseYear, 1999);
+    expect(copy.fileModifiedAt, DateTime.utc(2025, 1, 2, 3, 4, 5, 6, 7));
     expect(copy.format, track.format);
     expect(copy.filePath, isEmpty);
     expect(() => Track.fromJson({'title': 'no id'}), throwsFormatException);

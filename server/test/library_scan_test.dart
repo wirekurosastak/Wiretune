@@ -47,6 +47,6 @@ void main() {
     // systemd gives a service 90 seconds after SIGTERM before it kills it.
     await scans.stop().timeout(const Duration(seconds: 5));
     expect(library.isScanning, isFalse);
-    expect(scans.lastScanCompletedUtc, isNull);
+    expect(scans.lastScanAt, isNull);
   });
 }
