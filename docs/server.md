@@ -62,8 +62,9 @@ that an older server won't open it, so keep a backup from before an upgrade.
 
 ## Scanning
 
-At start-up, every `--scan-interval` minutes, on **Reindex** and whenever the music folder changes. Scans are
-incremental: files with the same path, size and modification time aren't read again, vanished files drop out, and
+At start-up, about ten seconds after files in the music folder stop changing, every `--scan-interval` minutes (network
+shares don't report changes), on **Reindex** and when an administrator picks another folder. When a scan changes the
+library, the players that are online download it again at once. Scans are incremental: files with the same path, size and modification time aren't read again, vanished files drop out, and
 hidden and unreadable ones are skipped. A music folder that doesn't exist (yet) is reported by every scan until it
 appears, so a share that mounts late is picked up by the next one.
 

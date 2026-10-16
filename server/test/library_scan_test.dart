@@ -49,4 +49,33 @@ void main() {
     expect(library.isScanning, isFalse);
     expect(scans.lastScanAt, isNull);
   });
+
+  test('music copied into the folder is scanned once the copying stops, without being asked', () async {
+    final root = Directory.systemTemp.createTempSync('wiretune_watch_scan_').path;
+    addTearDown(() => Directory(root).deleteSync(recursive: true));
+    final music = p.join(root, 'Music');
+    writeWav(p.join(music, 'Album', '01 One.wav'), 44100);
+    final library = LibraryService(testRepository(), MetadataScanner(), coverCacheDirectory: p.join(root, 'Covers'));
+    final scans = LibraryScanService(
+      library,
+      ServerPaths(music, root, p.join(root, 'Covers')),
+      watchDelay: const Duration(milliseconds: 200),
+    );
+    var scanned = 0;
+    scans.onScanned = () => scanned++;
+    addTearDown(scans.stop);
+
+    scans.start();
+    for (var i = 0; i < 300 && scanned == 0; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(library.tracks, hasLength(1));
+
+    writeWav(p.join(music, 'Album', '02 Two.wav'), 44100);
+    writeWav(p.join(music, 'Album', '03 Three.wav'), 44100);
+    for (var i = 0; i < 300 && library.tracks.length < 3; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(library.tracks, hasLength(3));
+  }, testOn: 'linux || mac-os || windows');
 }

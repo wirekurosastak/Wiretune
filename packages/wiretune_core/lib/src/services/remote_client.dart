@@ -107,6 +107,10 @@ class RemoteClient {
   /// The account's favourites, playlists or hidden items may have changed elsewhere: another player changed them, or
   /// the connection was lost for a while (and with it what was said meanwhile).
   final Event<void> accountDataChanged = Event<void>();
+
+  /// The server's library may have changed: a scan found music added, changed or removed, or the connection was lost
+  /// for a while.
+  final Event<void> libraryChanged = Event<void>();
   bool _connectedBefore = false;
 
   String get deviceId => _deviceId;
@@ -215,7 +219,10 @@ class RemoteClient {
     _sendHello();
     final playback = _playback;
     if (playback != null) _sendState(playback);
-    if (_connectedBefore) accountDataChanged.emit(null);
+    if (_connectedBefore) {
+      accountDataChanged.emit(null);
+      libraryChanged.emit(null);
+    }
     _connectedBefore = true;
   }
 
@@ -338,6 +345,8 @@ class RemoteClient {
         _onCommand(message['from'], message['command']);
       case 'dataChanged':
         accountDataChanged.emit(null);
+      case 'libraryChanged':
+        libraryChanged.emit(null);
     }
   }
 

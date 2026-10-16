@@ -230,6 +230,33 @@ void main() {
       expect(told, {'phone': 1, 'laptop': 1}, reason: "each is told of the other's change, not of its own");
     });
 
+    test('new music in the folder shows on the players at once; a scan that finds nothing says nothing', () async {
+      final phone = await device('phone-new-music');
+      await phone.signIn(server);
+      var told = 0;
+      final remote = RemoteClient(phone.session)
+        ..configure(id: 'phone', name: 'phone', kind: DeviceKind.phone, enabled: true);
+      addTearDown(remote.dispose);
+      remote.libraryChanged.listen((_) {
+        told++;
+        phone.session.refreshLibrary();
+      });
+      await waitFor(() => server.server.remote.devicesOf(phone.session.currentUser!.id) == 1);
+
+      // The scan an administrator asks for here is the one the folder watch asks for a few seconds after a copy.
+      writeWav(p.join(server.musicFolder, 'Artist C', 'Album 3', '01 Fourth.wav'), 44100);
+      await admin.post('/api/library/scan');
+      await waitFor(() => phone.library.tracks.length == 4);
+      expect(told, 1);
+      expect(phone.session.state, ServerConnectionState.connected);
+
+      final scanned = server.server.scanner.lastScanAt;
+      await admin.post('/api/library/scan');
+      await waitFor(() => server.server.scanner.lastScanAt != scanned);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(told, 1);
+    });
+
     test('hidden content syncs to the server and follows the account to another device', () async {
       final phone = await device('phone-hidden');
       await phone.signIn(server);

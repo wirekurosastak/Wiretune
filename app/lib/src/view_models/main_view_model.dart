@@ -119,6 +119,8 @@ class MainViewModel extends ChangeNotifier {
       session.changeRefused.listen((reason) => showNotice(Localizer.format('ChangeRefused', [reason]), isError: true)),
       // Another player of the account changed its favourites, playlists or hidden items: this one shows them too.
       this.remote.accountDataChanged.listen((_) => unawaited(session.refreshUserData())),
+      // The server found new music: it shows here without a restart.
+      this.remote.libraryChanged.listen((_) => unawaited(session.refreshLibrary())),
     ]);
 
     _updateStatusText();
@@ -463,6 +465,12 @@ class MainViewModel extends ChangeNotifier {
   }
 
   Future<void> retryConnectServer() => session.connect();
+
+  /// The player came back to the front: what changed while it was away shows (the server's library), and a server that
+  /// was out of reach is asked again at once.
+  Future<void> resume() async {
+    if (startupError == null) await session.resume();
+  }
 
   void dismissServerBanner() {
     isServerOfflineBannerVisible = false;

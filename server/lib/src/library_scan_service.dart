@@ -8,14 +8,26 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'config.dart';
 
-/// Keeps the server library in sync with the music folder: scans at start-up, on a fixed interval and whenever a scan
-/// is requested through the API. Scans are incremental (unchanged files are not read again).
+/// Keeps the server library in sync with the music folder: scans at start-up, [watchDelay] after files in the folder
+/// stop changing, on a fixed interval (for network shares, which report no changes) and whenever a scan is requested
+/// through the API. Scans are incremental (unchanged files are not read again).
 class LibraryScanService {
-  LibraryScanService(this._library, this._paths, {Duration? interval}) : _interval = interval;
+  LibraryScanService(
+    this._library,
+    this._paths, {
+    Duration? interval,
+    Duration watchDelay = const Duration(seconds: 10),
+  }) : _interval = interval {
+    _watch = FolderWatch(requestScan, quiet: watchDelay);
+  }
 
   final LibraryService _library;
   final ServerPaths _paths;
   final Duration? _interval;
+  late final FolderWatch _watch;
+
+  /// Called after every scan that ran to its end, whatever it found.
+  void Function()? onScanned;
 
   Completer<void> _trigger = Completer<void>();
   final CancellationToken _cancellation = CancellationToken();
@@ -43,6 +55,7 @@ class LibraryScanService {
   /// Ends the loop. A scan that is running stops after the files it is reading now, and the index keeps its last state.
   Future<void> stop() async {
     _stopped = true;
+    _watch.stop();
     _cancellation.cancel();
     requestScan();
     await _loop;
@@ -51,6 +64,8 @@ class LibraryScanService {
   Future<void> _run() async {
     await Future<void>.delayed(Duration.zero);
     while (!_stopped) {
+      // Also follows the folder an administrator picked, and one that was missing until now.
+      _watch.watch(_paths.musicFolder);
       await scanOnce();
       if (_stopped) break;
 
@@ -94,6 +109,7 @@ class LibraryScanService {
           'LibraryScan',
           'Scan complete in ${seconds.toStringAsFixed(1)}s: ${_library.tracks.length} tracks, ${_library.albums.length} albums, ${_library.artists.length} artists.',
         );
+        onScanned?.call();
       }
     } catch (e, s) {
       _problem(ErrorCodes.scanFailed, '$e');

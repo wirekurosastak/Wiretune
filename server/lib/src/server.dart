@@ -140,6 +140,13 @@ class WiretuneServer {
   HttpServer? _http;
   late final List<_Route> _routes = _buildRoutes();
 
+  /// The track list as `/api/tracks` serves it (encoded); listed again after every scan, since a cover can change while
+  /// the tracks stay the same.
+  List<int>? _trackList;
+
+  /// The digest of the list the players were last told about.
+  Digest? _announcedTracks;
+
   /// The port the server listens on (useful when started on port 0).
   int get port => _http!.port;
 
@@ -195,6 +202,9 @@ class WiretuneServer {
         'No administrator account exists yet. Create it in the player with the setup code ${server.setupCode.value}',
       );
     }
+    // What the players may already have, so that the start-up scan tells them when it found something new.
+    server._announcedTracks = sha1.convert(server._tracks);
+    scanner.onScanned = server._scanned;
 
     final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
     http.autoCompress = false; // JSON is compressed by the handler, audio never
@@ -369,21 +379,28 @@ class WiretuneServer {
       scanner.requestScan();
       return jsonResponse({'message': 'Scan requested.'}, status: 202, headers: {'location': '/api/library/status'});
     }),
-    _Route('GET', '/api/tracks', Access.user, (_) => jsonResponse([for (final t in library.tracks) t.toJson()])),
+    _Route('GET', '/api/tracks', Access.user, (call) => versionedJson(call.request, _tracks)),
 
     // Media
     _Route('GET', '/api/stream/{trackId}', Access.media, _stream),
-    _Route('GET', '/api/cover/album/{albumId}', Access.media, (call) {
-      final album = library.getAlbum(call.params['albumId']!);
-      return _cover(call.request, album?.tracks.where((t) => t.hasCoverArt).firstOrNull);
-    }),
+    _Route(
+      'GET',
+      '/api/cover/album/{albumId}',
+      Access.media,
+      (call) => _cover(call.request, _coverTrack(call.params['albumId']!)),
+    ),
     _Route('GET', '/api/lyrics/{trackId}', Access.user, _lyrics),
 
     // Remote control: a WebSocket per player
     _Route('GET', '/api/remote', Access.user, _remote),
 
     // The signed-in account's favourites, play counts, playlists and hidden items
-    _Route('GET', '/api/me/data', Access.user, (call) => jsonResponse(userData.get(call.userId).toJson())),
+    _Route(
+      'GET',
+      '/api/me/data',
+      Access.user,
+      (call) => versionedJson(call.request, utf8.encode(jsonEncode(userData.get(call.userId).toJson()))),
+    ),
     _Route('PUT', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, true)),
     _Route('DELETE', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, false)),
     _Route('PUT', '/api/me/hidden/{type}/{itemId}', Access.user, (call) => _setHidden(call, true)),
@@ -553,6 +570,46 @@ class WiretuneServer {
       return errorResponse(404, ErrorCodes.notFound, 'Track not found.');
     }
     return fileResponse(call.request, File(track.filePath), AudioFileTypes.mimeType(track.filePath));
+  }
+
+  List<int> get _tracks => _trackList ??= _listTracks();
+
+  /// Each track as [Track.toJson] gives it, and with a cover the version of the album's cover, which the players put
+  /// in its address: a changed cover gets a new one, and a player shows it at once.
+  List<int> _listTracks() {
+    final coverVersions = <String, String?>{};
+    final json = jsonEncode([
+      for (final track in library.tracks)
+        {
+          ...track.toJson(),
+          if (track.hasCoverArt)
+            'coverVersion': coverVersions.putIfAbsent(track.albumId, () => _coverVersion(track.albumId)),
+        },
+    ]);
+    return utf8.encode(json);
+  }
+
+  /// Changes with what [_cover] serves for the album: the size and time of the cover's file, or of the audio file
+  /// when the picture is read from that.
+  String? _coverVersion(String albumId) {
+    final track = _coverTrack(albumId);
+    if (track == null) return null;
+    final cover = track.coverArtPath;
+    final stat = File(cover != null && cover.isNotEmpty ? cover : track.filePath).statSync();
+    if (stat.type == FileSystemEntityType.notFound) return null;
+    return '${stat.size.toRadixString(36)}-${stat.modified.millisecondsSinceEpoch.toRadixString(36)}';
+  }
+
+  /// The track whose picture is the album's cover.
+  Track? _coverTrack(String albumId) => library.getAlbum(albumId)?.tracks.where((t) => t.hasCoverArt).firstOrNull;
+
+  /// A scan ended: when the list the players get changed, they are told.
+  void _scanned() {
+    _trackList = null;
+    final digest = sha1.convert(_tracks);
+    if (digest == _announcedTracks) return;
+    _announcedTracks = digest;
+    remote.libraryChanged();
   }
 
   Future<Response> _cover(Request request, Track? track) async {

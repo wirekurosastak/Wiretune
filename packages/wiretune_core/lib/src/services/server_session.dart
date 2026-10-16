@@ -39,6 +39,11 @@ class ServerSession {
   /// A stream token is replaced once it has less than this left, so one handed out just now outlasts the longest track.
   static const Duration _streamTokenRefreshMargin = Duration(hours: 4);
 
+  /// How long an unreachable server is left before it is asked again: twice as long each time, up to [_lastRetry].
+  /// Tests shorten it.
+  static Duration firstRetry = const Duration(seconds: 5);
+  static const Duration _lastRetry = Duration(minutes: 2);
+
   final LibraryService _library;
   final LibraryRepository _settings;
   final ServerClient _client;
@@ -53,13 +58,21 @@ class ServerSession {
   // How many changes were made here, so that a refresh can tell one made while it downloaded.
   int _localChanges = 0;
 
-  /// The server's track list as last downloaded, for [refreshUserData].
+  // The server's track list and the account's data as last downloaded, each with its version (the server's ETag), so
+  // that a refresh downloads only what changed.
   List<Track> _serverTracks = const [];
+  String? _serverTracksVersion;
+  UserDataSnapshot? _userData;
+  String? _userDataVersion;
+  Timer? _retry;
+  Duration _retryDelay = firstRetry;
   bool _userDataRefreshing = false;
   bool _userDataRefreshAgain = false;
   (String token, DateTime expiresUtc)? _streamToken;
   String? _statusKey;
   List<Object?> _statusArgs = const [];
+
+  bool _disposed = false;
 
   String serverUrl = defaultServerUrl;
   ServerConnectionState state = ServerConnectionState.notConfigured;
@@ -271,8 +284,26 @@ class ServerSession {
     });
   }
 
-  /// Downloads the server's track list again.
-  Future<void> refreshLibrary() => _gate.synchronized(() => _guarded(_refreshLibraryCore));
+  /// Downloads what changed on the server since the last download: the track list (a scan found new music), the
+  /// account's data, or both. Quietly: the session stays connected meanwhile.
+  Future<void> refreshLibrary() => _gate.synchronized(
+    () => _guarded(() async {
+      if (isLoggedIn) await _downloadLibrary(always: false);
+    }),
+  );
+
+  /// The player came back to the front: a server that was out of reach is asked again at once, and a connected one
+  /// whether its library changed meanwhile.
+  Future<void> resume() async {
+    if (state == ServerConnectionState.offline) {
+      _retry?.cancel();
+      _retry = null;
+      _retryDelay = firstRetry;
+      await _retryConnect();
+    } else {
+      await refreshLibrary();
+    }
+  }
 
   /// Downloads the account's favourites, play counts, playlists and hidden items again, when another of its players
   /// changed them, and applies them to the track list as it was last downloaded (which isn't downloaded again). A
@@ -295,12 +326,26 @@ class ServerSession {
   }
 
   Future<void> _refreshUserDataCore() async {
-    if (!isLoggedIn) return;
-    await flushUserData(const Duration(seconds: 10));
-    final changes = _localChanges;
-    final userData = await _client.getUserData(serverUrl);
-    if (changes != _localChanges || !isLoggedIn) return;
-    _library.mergeServerTracks(_serverTracks, userData);
+    if (isLoggedIn && await _fetchUserData() && isLoggedIn) _library.mergeServerTracks(_serverTracks, _userData!);
+  }
+
+  /// Downloads the account's data if it changed, once the changes made here have reached the server; true when it
+  /// did. A change made while it downloads would be undone by it, so then it is asked again (a few times at most).
+  Future<bool> _fetchUserData() async {
+    var changed = false;
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      // What the user changed so far must reach the server before its data is downloaded, or the download undoes it.
+      await flushUserData(const Duration(seconds: 10));
+      final changes = _localChanges;
+      final answer = await _client.getUserData(serverUrl, _userDataVersion);
+      if (answer != null) {
+        _userData = answer.data;
+        _userDataVersion = answer.version;
+        changed = true;
+      }
+      if (changes == _localChanges) break;
+    }
+    return changed;
   }
 
   Future<List<UserInfo>> getUsers() => _client.getUsers(serverUrl);
@@ -349,20 +394,25 @@ class ServerSession {
   }
 
   Future<void> _refreshLibraryCore() async {
-    // What the user changed so far must reach the server before its data is downloaded, or the download undoes it.
-    await flushUserData(const Duration(seconds: 10));
-
     _setState(ServerConnectionState.connecting, 'SessionDownloading');
-    final tracks = await _client.fetchTracks(serverUrl);
-    final userData = await _client.getUserData(serverUrl);
-    _serverTracks = tracks;
-    _library.mergeServerTracks(tracks, userData);
+    await _downloadLibrary(always: true);
+    _setState(ServerConnectionState.connected, null);
+  }
 
+  /// Downloads the track list and the account's data, each unless it is still the one downloaded last, and puts them in
+  /// the library. Unless [always], nothing changes when neither did.
+  Future<void> _downloadLibrary({required bool always}) async {
+    final list = await _client.fetchTracks(serverUrl, _serverTracksVersion);
+    if (list != null) {
+      _serverTracks = list.tracks;
+      _serverTracksVersion = list.version;
+    }
+    if (!await _fetchUserData() && list == null && !always) return;
+    _library.mergeServerTracks(_serverTracks, _userData!);
     WiretuneLog.info(
       'ServerSession',
-      "Loaded ${tracks.length} tracks from '$serverUrl'. Total library: ${_library.tracks.length} tracks.",
+      "Loaded ${_serverTracks.length} tracks from '$serverUrl'. Total library: ${_library.tracks.length} tracks.",
     );
-    _setState(ServerConnectionState.connected, null);
   }
 
   /// The token for stream URLs: a short-lived one that opens only the audio and cover routes, so that the URL (which
@@ -392,6 +442,9 @@ class ServerSession {
 
   void _forgetToken() {
     _streamToken = null;
+    _serverTracksVersion = null;
+    _userData = null;
+    _userDataVersion = null;
     _client.authToken = null;
     currentUser = null;
     _library.setCurrentUser(null);
@@ -405,7 +458,39 @@ class ServerSession {
     _statusKey = messageKey;
     _statusArgs = args;
     _library.serverConnected = isLoggedIn;
+    if (newState == ServerConnectionState.offline) {
+      _retryLater();
+    } else if (newState != ServerConnectionState.connecting) {
+      _retry?.cancel();
+      _retry = null;
+      _retryDelay = firstRetry;
+    }
     stateChanged.emit(null);
+  }
+
+  // ── Coming back by itself ──
+
+  /// While the server is out of reach, it is asked now and then whether it is back, quietly: the session shows
+  /// "offline" until it answers, and then connects.
+  void _retryLater() {
+    if (_retry != null || _disposed) return;
+    _retry = Timer(_retryDelay, () {
+      _retry = null;
+      final doubled = _retryDelay * 2;
+      _retryDelay = doubled > _lastRetry ? _lastRetry : doubled;
+      unawaited(_retryConnect());
+    });
+  }
+
+  Future<void> _retryConnect() async {
+    if (state != ServerConnectionState.offline || !usesServer) return;
+    try {
+      await _client.checkSetupRequired(serverUrl);
+    } on Exception {
+      if (state == ServerConnectionState.offline) _retryLater();
+      return;
+    }
+    if (state == ServerConnectionState.offline) await connect();
   }
 
   // ── The account's favourites, play counts and playlists ──
@@ -414,9 +499,11 @@ class ServerSession {
   /// is still sent when the session briefly shows "connecting" because of a refresh.
   bool get _canPush => currentUser != null && (_client.authToken ?? '').isNotEmpty;
 
-  /// A change of the account's data made here, for the server.
+  /// A change of the account's data made here, for the server. What the library shows is no longer the data downloaded
+  /// last, so the next download can't be skipped as "not modified": that data may be what the server holds again.
   void _change(Future<void> Function() job) {
     _localChanges++;
+    _userDataVersion = null;
     _enqueue(job);
   }
 
@@ -505,6 +592,8 @@ class ServerSession {
   }
 
   void dispose() {
+    _disposed = true;
+    _retry?.cancel();
     for (final unsubscribe in _unsubscribers) {
       unsubscribe();
     }

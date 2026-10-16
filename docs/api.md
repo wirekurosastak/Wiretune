@@ -38,15 +38,16 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 |---|---|---|
 | `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanAt", "lastScanError", "lastScanProblem" }`. Why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`); both `null` when it went well, and for anyone but an administrator, since they name the server's folders |
 | `POST /api/library/scan` | admin | Asks for a scan: `202 { "message": "Scan requested." }`. Poll the status route |
-| `GET /api/tracks` | user | Every track |
+| `GET /api/tracks` | user | Every track, with an `ETag`. Send it back as `If-None-Match` and an unchanged list is `304` with no body |
 | `GET /api/config` | admin | `{ "musicFolder" }` |
 | `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
 A **track** has `id`, `title`, `artist` (several artists joined by ", "), `artists` (each of them, only when there
 are several), `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `releaseYear`,
 `genre`, `durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt` and `format` (`codec`,
-`sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). Files stay on the server, and so
-do their paths. Favourites and play counts are per account and come from `/api/me/data`. The players group albums and
+`sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). A track with a cover also has
+`coverVersion`, which changes when the album's cover does: the players put it in the cover's address (`?v=`), so a new
+cover is never mistaken for a cached one. Files stay on the server, and so do their paths. Favourites and play counts are per account and come from `/api/me/data`. The players group albums and
 artists themselves; `album`, `albumArtist`, `trackNumber` and `discNumber` already say how the server filed a folder's
 collection ([user guide](user-guide.md#the-library)).
 
@@ -59,7 +60,7 @@ descriptions up to 1,000. Over a limit you get `409`.
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favourites come in the order they were marked; marking one again keeps its time |
+| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favourites come in the order they were marked; marking one again keeps its time. With an `ETag`, as on `/api/tracks` |
 | `PUT /api/me/favorites/{trackId}` | user | Marks a favourite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` for an invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
 | `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
@@ -75,7 +76,7 @@ The server doesn't check that a track ID exists: libraries get rescanned and mov
 | Route | Role | |
 |---|---|---|
 | `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` when the track is unknown, outside the music folder, or gone |
-| `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` when there is none |
+| `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` when there is none. A `?v=` is ignored |
 | `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` when there are none. The server never looks online; the players ask LRCLIB themselves |
 
 ## Remote control
@@ -96,6 +97,7 @@ Every message is a JSON object with a `type`, sent as text, at most 64 K charact
 | `{ "type": "state", "device", "state" }` | server | Another player's state |
 | `{ "type": "command", "from", "command" }` | server | A command for this player |
 | `{ "type": "dataChanged" }` | server | The account's favourites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change when it named itself in an `X-Wiretune-Device` header (its device ID) on that request |
+| `{ "type": "libraryChanged" }` | server | A scan changed what `/api/tracks` lists (music added, changed or removed, a new cover): download it again. Sent to every player of every account |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
 "queueIndex" }`: the track as `/api/tracks` lists it (or `null`), the position when the state was sent (the others

@@ -21,6 +21,7 @@ export 'src/models/remote.dart';
 export 'src/services/app_paths.dart';
 export 'src/services/artist_picture_service.dart';
 export 'src/services/download_service.dart';
+export 'src/services/folder_watch.dart';
 export 'src/services/library_service.dart';
 export 'src/services/lrc_parser.dart';
 export 'src/services/metadata_scanner.dart';

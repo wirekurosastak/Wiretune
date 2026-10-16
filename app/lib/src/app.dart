@@ -32,6 +32,19 @@ class WiretuneApp extends StatefulWidget {
 
 class _WiretuneAppState extends State<WiretuneApp> {
   final Map<(bool, AppSection, bool), ThemeData> _themes = {};
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onResume: () => unawaited(widget.vm.resume()));
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
 
   // The accent follows the section, so a theme is built once per (light, section) and reused.
   ThemeData _theme(bool light, AppSection section, bool isTv) => _themes.putIfAbsent((

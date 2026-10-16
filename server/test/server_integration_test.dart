@@ -273,6 +273,27 @@ void main() {
     expect((await audio.fold<List<int>>([], (a, b) => a..addAll(b))).length, 1024);
   });
 
+  test('the track list and the account data are sent again only when they changed', () async {
+    final (client, _) = await setupAdmin(server);
+    final tracks = await server.waitForTracks(client, 3);
+
+    final versions = <String, String>{};
+    for (final path in ['/api/tracks', '/api/me/data']) {
+      final version = versions[path] = (await client.get(path)).headers['etag']!;
+      final again = await client.get(path, headers: {'If-None-Match': version});
+      expect(again.statusCode, 304, reason: path);
+      expect(again.body, isEmpty);
+    }
+
+    await client.put('/api/me/favorites/${tracks.first['id']}');
+    expect((await client.get('/api/me/data', headers: {'If-None-Match': versions['/api/me/data']!})).statusCode, 200);
+
+    writeWav(p.join(server.musicFolder, 'Artist C', 'Album 3', '01 Fourth.wav'), 44100);
+    await client.post('/api/library/scan');
+    await server.waitForTracks(client, 4);
+    expect((await client.get('/api/tracks', headers: {'If-None-Match': versions['/api/tracks']!})).statusCode, 200);
+  });
+
   test('unknown routes are 404, known routes with another method 405', () async {
     final (client, _) = await setupAdmin(server);
     expect((await client.get('/api/nothing-here')).statusCode, 404);

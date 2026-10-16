@@ -59,6 +59,16 @@ class RemoteHub {
     }
   }
 
+  /// Tells every player that the library changed (a scan found music added, changed or removed, or a new cover), so
+  /// that each downloads the track list again.
+  void libraryChanged() {
+    for (final devices in _accounts.values) {
+      for (final peer in devices.values) {
+        _send(peer, const {'type': 'libraryChanged'});
+      }
+    }
+  }
+
   /// Ends the connections of an account whose tokens no longer stand: it was deleted, or its password changed.
   void disconnectAccount(String userId, String reason) {
     for (final peer in _peers.where((p) => p.userId == userId).toList()) {

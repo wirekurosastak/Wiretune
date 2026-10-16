@@ -70,9 +70,11 @@ class ServerClient {
   static String buildStreamUrl(String baseUrl, String trackId) =>
       '${_base(baseUrl)}/api/stream/${Uri.encodeComponent(trackId)}';
 
-  /// The cover of a whole album, so that the tracks of one album share one image (and one download).
-  static String buildAlbumCoverUrl(String baseUrl, String albumId) =>
-      '${_base(baseUrl)}/api/cover/album/${Uri.encodeComponent(albumId)}';
+  /// The cover of a whole album, so that the tracks of one album share one image (and one download). The [version] the
+  /// server gives it is part of the address, so a changed cover is a new image, never a stale one from a cache.
+  static String buildAlbumCoverUrl(String baseUrl, String albumId, [String? version]) =>
+      '${_base(baseUrl)}/api/cover/album/${Uri.encodeComponent(albumId)}'
+      '${version == null || version.isEmpty ? '' : '?v=${Uri.encodeQueryComponent(version)}'}';
 
   Future<bool> checkSetupRequired(String baseUrl) async {
     final element = await _send('GET', baseUrl, '/api/auth/setup-required', authorize: false, timeout: probeTimeout);
@@ -154,9 +156,13 @@ class ServerClient {
 
   // ── The signed-in account's favourites, play statistics and playlists ──
 
-  /// Everything the server keeps for the account: favourites, play statistics and playlists.
-  Future<UserDataSnapshot> getUserData(String baseUrl) async =>
-      _parse(UserDataSnapshot.fromJson, await _send('GET', baseUrl, '/api/me/data'));
+  /// Everything the server keeps for the account (favourites, play statistics, playlists, hidden items) with its version
+  /// (the ETag); null when it is still the data of [version].
+  Future<({UserDataSnapshot data, String? version})?> getUserData(String baseUrl, [String? version]) async {
+    final answer = await _exchange('GET', baseUrl, '/api/me/data', ifNoneMatch: version);
+    if (answer.status == 304) return null;
+    return (data: _parse(UserDataSnapshot.fromJson, answer.json), version: answer.etag);
+  }
 
   Future<void> setFavorite(String baseUrl, String trackId, bool favorite) =>
       _send(favorite ? 'PUT' : 'DELETE', baseUrl, '/api/me/favorites/${Uri.encodeComponent(trackId)}');
@@ -195,19 +201,26 @@ class ServerClient {
     }
   }
 
-  /// Fetches the server library. Stream and cover URLs are token-free; authorisation is added at playback time. The
-  /// tracks of an album point to the album's cover, so each cover is downloaded and cached once, not once per track.
-  Future<List<Track>> fetchTracks(String baseUrl) async {
-    final list = await _send('GET', baseUrl, '/api/tracks', timeout: libraryTimeout);
+  /// Fetches the server library with the list's version (its ETag); null when it is still the list of [version]. Stream
+  /// and cover URLs are token-free; authorisation is added at playback time. The tracks of an album point to the
+  /// album's cover, so each cover is downloaded and cached once, not once per track.
+  Future<({List<Track> tracks, String? version})?> fetchTracks(String baseUrl, [String? version]) async {
+    final answer = await _exchange('GET', baseUrl, '/api/tracks', timeout: libraryTimeout, ifNoneMatch: version);
+    if (answer.status == 304) return null;
+    final list = answer.json;
     if (list is! List) throw ServerRequestException(_notWiretune(), 200);
-    return [for (final item in list) serverTrack(baseUrl, item)];
+    return (tracks: [for (final item in list) serverTrack(baseUrl, item)], version: answer.etag);
   }
 
-  /// A track of the server's listing ([Track.toJson]'s form), with its stream and cover URLs.
+  /// A track of the server's listing ([Track.toJson]'s form, and its album cover's `coverVersion`), with its stream and
+  /// cover URLs.
   Track serverTrack(String baseUrl, Object? json) {
     final track = _parse(Track.fromJson, json);
+    final coverVersion = json is Map ? json['coverVersion'] : null;
     track.streamUrl = buildStreamUrl(baseUrl, track.id);
-    track.coverArtPath = track.hasCoverArt ? buildAlbumCoverUrl(baseUrl, track.albumId) : null;
+    track.coverArtPath = track.hasCoverArt
+        ? buildAlbumCoverUrl(baseUrl, track.albumId, coverVersion is String ? coverVersion : null)
+        : null;
     return track;
   }
 
@@ -231,6 +244,17 @@ class ServerClient {
     Object? body,
     bool authorize = true,
     Duration timeout = defaultTimeout,
+  }) async => (await _exchange(method, baseUrl, path, body: body, authorize: authorize, timeout: timeout)).json;
+
+  /// [_send], with the answer's status and ETag; with [ifNoneMatch], "not modified" (304) is an answer too.
+  Future<({int status, String? etag, Object? json})> _exchange(
+    String method,
+    String baseUrl,
+    String path, {
+    Object? body,
+    bool authorize = true,
+    Duration timeout = defaultTimeout,
+    String? ifNoneMatch,
   }) async {
     final Uri uri;
     try {
@@ -248,6 +272,7 @@ class ServerClient {
     if (authorize && token != null && token.isNotEmpty) request.headers['Authorization'] = 'Bearer $token';
     final device = deviceId;
     if (authorize && device != null && device.isNotEmpty) request.headers[RemoteRules.deviceHeader] = device;
+    if (ifNoneMatch != null && ifNoneMatch.isNotEmpty) request.headers['If-None-Match'] = ifNoneMatch;
 
     final deadline = DateTime.now().add(timeout);
     http.StreamedResponse response;
@@ -278,19 +303,22 @@ class ServerClient {
       throw ServerRequestException(Localizer.format('ClientConnectionCutOff', ['$e']));
     }
 
-    if (response.statusCode == 401) {
+    final status = response.statusCode;
+    final etag = response.headers['etag'];
+    if (status == 401) {
       throw ServerUnauthorizedException(authorize ? token : null, _errorBody(bytes)?['code'] as String?);
     }
-    if (response.statusCode < 200 || response.statusCode > 299) {
+    if (status == 304 && ifNoneMatch != null) return (status: status, etag: etag, json: null);
+    if (status < 200 || status > 299) {
       final (message, code) = _error(response, bytes);
-      throw ServerRequestException(message, response.statusCode, code);
+      throw ServerRequestException(message, status, code);
     }
 
-    if (bytes.isEmpty) return null;
+    if (bytes.isEmpty) return (status: status, etag: etag, json: null);
     try {
-      return jsonDecode(utf8.decode(bytes));
+      return (status: status, etag: etag, json: jsonDecode(utf8.decode(bytes)));
     } on FormatException {
-      throw ServerRequestException(_notWiretune(), response.statusCode);
+      throw ServerRequestException(_notWiretune(), status);
     }
   }
 

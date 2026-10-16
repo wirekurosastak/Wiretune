@@ -170,6 +170,25 @@ void main() {
     },
   );
 
+  test('the word that the library changed is passed on, and so is coming back after a dropped connection', () async {
+    final hub = FakeRemoteHub();
+    final client = RemoteClient(session, connector: hub.connect);
+    addTearDown(client.dispose);
+    var changed = 0;
+    client.libraryChanged.listen((_) => changed++);
+    client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
+    expect(await until(() => client.isConnected), isTrue);
+    expect(changed, 0);
+
+    hub.deliver({'type': 'libraryChanged'});
+    expect(await until(() => changed == 1), isTrue);
+
+    // What the server said while the connection was down is lost: coming back counts as a change.
+    await hub.drop();
+    expect(await until(() => hub.connections == 2, within: const Duration(seconds: 4)), isTrue);
+    expect(await until(() => changed == 2), isTrue);
+  });
+
   test('what does not keep to the protocol is ignored', () async {
     final hub = FakeRemoteHub();
     final client = RemoteClient(session, connector: hub.connect);

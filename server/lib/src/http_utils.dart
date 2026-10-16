@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -14,6 +15,14 @@ const Map<String, String> _jsonHeaders = {'content-type': 'application/json; cha
 /// A JSON response.
 Response jsonResponse(Object? body, {int status = 200, Map<String, String>? headers}) =>
     Response(status, body: utf8.encode(jsonEncode(body)), headers: {..._jsonHeaders, ...?headers});
+
+/// A JSON [body] (already encoded) with its version as the ETag, or "not modified" without a body when the request
+/// names that version: a player that has the data already downloads nothing.
+Response versionedJson(Request request, List<int> body) {
+  final headers = {'etag': '"${sha1.convert(body)}"', 'cache-control': 'no-cache'};
+  if (request.headers['if-none-match'] == headers['etag']) return Response.notModified(headers: headers);
+  return Response.ok(body, headers: {..._jsonHeaders, ...headers});
+}
 
 /// `{ "error": message, "code": code, ...details }` with [status]: [code] (one of `ErrorCodes`) for a player to tell
 /// the user in their language, [message] in English for whoever reads the exchange, [details] the numbers or path the
