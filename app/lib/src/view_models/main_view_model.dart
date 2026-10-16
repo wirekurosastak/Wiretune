@@ -753,7 +753,7 @@ class MainViewModel extends ChangeNotifier {
     final albumNames = <String, String>{};
     if (artists.isNotEmpty || albums.isNotEmpty) {
       for (final track in library.rawTracks) {
-        for (final name in artists.isEmpty ? const <String>[] : [track.artist, track.effectiveAlbumArtist]) {
+        for (final name in artists.isEmpty ? const <String>[] : [track.primaryArtist, track.effectiveAlbumArtist]) {
           final id = stableId(name.toLowerCase());
           if (artists.contains(id)) artistNames.putIfAbsent(id, () => track.effectiveAlbumArtist);
         }

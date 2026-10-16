@@ -400,11 +400,17 @@ class _TableRowState extends State<_TableRow> {
                   if (state._showArtist)
                     Expanded(
                       flex: state._artistFlex,
-                      child: _CellLink(
-                        track.artist,
-                        hoverColor: colors.palette.coral,
-                        color: colors.textMuted,
-                        onTap: () => vm.openArtistByName(track.artist),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ArtistLinks(
+                            track.artistNames,
+                            hoverColor: colors.palette.coral,
+                            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
+                            onOpen: vm.openArtistByName,
+                          ),
+                        ),
                       ),
                     ),
                   if (state._showAlbum)
@@ -621,7 +627,7 @@ class TrackMenu extends StatelessWidget {
       case TrackAction.openAlbum:
         vm.openAlbumOfTrack(track);
       case TrackAction.openArtist:
-        vm.openArtistByName(track.artist);
+        vm.openArtistByName(track.primaryArtist);
       case TrackAction.hideTrack:
         if (vm.library.isTrackExplicitlyHidden(track.id)) {
           vm.library.unhideTrack(track.id);

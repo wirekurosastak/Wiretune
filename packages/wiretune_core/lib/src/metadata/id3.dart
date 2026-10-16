@@ -451,6 +451,7 @@ void _readFrame(String id, Uint8List body, int major, AudioTags tags) {
   final field = major == 2 ? _v22Frames[id] : _v23Frames[id];
   if (field == null) return;
   final values = _decodeTextFrame(body);
+  if (field == TagField.artist) return tags.setArtists(values);
   for (final value in values) {
     final text = field == TagField.genre ? resolveId3Genre(value) : value;
     if (text != null && text.trim().isNotEmpty) {

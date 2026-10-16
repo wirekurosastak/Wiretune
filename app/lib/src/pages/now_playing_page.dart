@@ -261,19 +261,29 @@ class _PlayerTab extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      InkWell(
-                        borderRadius: BorderRadius.circular(6),
-                        onTap: track == null ? null : () => vm.openArtistByName(track.artist),
-                        child: Padding(
+                      if (track != null && track.artists.isNotEmpty)
+                        Padding(
                           padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                          child: Text(
-                            player.nowPlayingArtist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: ArtistLinks(
+                            track.artistNames,
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.hover),
+                            onOpen: vm.openArtistByName,
+                          ),
+                        )
+                      else
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: track == null ? null : () => vm.openArtistByName(track.artist),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
+                            child: Text(
+                              player.nowPlayingArtist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.hover),
+                            ),
                           ),
                         ),
-                      ),
                       if (player.hasError)
                         Text(player.errorMessage!, style: TextStyle(fontSize: 12, color: colors.danger)),
                     ],

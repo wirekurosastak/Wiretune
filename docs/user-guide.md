@@ -30,8 +30,18 @@ so and offers to reconnect or sign in.
 - **Albums** are tracks with the same album title and album artist. Tracks in one folder that share an album title
   (and have no clashing track numbers) become one album even when their artist tags disagree, credited to the album
   artist tag, the artist of most of the tracks, or *Various Artists*.
-- **Artists** lists album artists only. A guest on other people's albums gets no page, but their tracks are still in
-  *Tracks* and in search.
+- A folder of **one artist's songs from several albums** (a best-of or an "essentials" you put together track by track,
+  each file keeping the album it came from) is one album. It's named after the folder (`ACDC Essentials`,
+  `ABBA/GOLD`), or *Eminem Essentials* when the folder is named after the artist; its songs go in title order and it
+  carries the year of its newest one. When the folder is named like one of the albums in it (`The Best of
+  Hooverphonic`), the odd tracks from elsewhere join that album instead. The artist may be the album artist, the main
+  artist or a featured one. Loose files in the music folder itself, folders of several artists, and a folder holding a
+  whole album (all the tracks its total says) are left as their tags say. The files aren't changed.
+- **Featured artists**: a song of several artists shows them all (*Future, Lil Durk*), each name its own link, when the
+  file names each one (one `ARTIST` field per artist, as TIDAL downloads do, or `ARTISTS`). `Simon & Garfunkel` or
+  `AC/DC` stay one artist: names are never split at `&`, `,` or `/`.
+- **Artists** lists album artists only. An artist's page also has the songs they're featured on, and a guest on other
+  people's albums still gets a page through the song's link or by searching their full name.
 - **Quality tags**: **gold** is hi-res (lossless above 16 bit or 48 kHz), **silver** is lossless at CD resolution,
   **bronze** is lossy. An album or playlist wears its lowest tier, and `MIXED` when its formats differ. The tag says the
   format and the resolution (`FLAC 24bit/96kHz`, `MP3 320kbps`) wherever it shows: in the bottom-left corner of the

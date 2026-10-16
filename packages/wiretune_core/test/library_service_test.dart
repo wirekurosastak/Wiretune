@@ -176,6 +176,201 @@ void main() {
     expect(service.tracks.every((t) => t.albumArtistInferred), isTrue);
   });
 
+  group("a folder of one artist's songs from several albums", () {
+    Track song(String id, String folder, String album, {String artist = 'AC/DC', int? number, int? year}) => Track(
+      id: id,
+      title: 'Song $id',
+      artist: artist,
+      album: album,
+      albumArtist: artist,
+      trackNumber: number,
+      discNumber: 1,
+      year: year,
+      filePath: '/Music/$folder/$id.flac',
+    );
+
+    Future<LibraryService> library(List<Track> tracks) async {
+      final repo = MockRepository()..settings['library_path'] = '/Music';
+      final service = _service(repo);
+      repo.saveTracks(tracks);
+      await service.initialize();
+      return service;
+    }
+
+    test('is one album named after the folder, numbered by title and as new as its newest song', () async {
+      final service = await library([
+        song('c', 'ACDC Essentials', 'Back In Black', number: 6, year: 1980),
+        song('a', 'ACDC Essentials', 'Highway to Hell', number: 1, year: 1979),
+        song('b', 'ACDC Essentials', 'POWER UP', number: 1, year: 2020),
+      ]);
+
+      final album = service.albums.single;
+      expect((album.title, album.artist, album.year), ('ACDC Essentials', 'AC/DC', 2020));
+      expect(
+        [for (final t in album.tracks) (t.title, t.trackNumber, t.discNumber)],
+        [('Song a', 1, null), ('Song b', 2, null), ('Song c', 3, null)],
+      );
+      // What the tags say is kept (and stored) as it is.
+      final tagged = service.getTrack('c')!.taggedAlbum!;
+      expect(
+        (tagged.album, tagged.albumArtist, tagged.trackNumber, tagged.discNumber),
+        ('Back In Black', 'AC/DC', 6, 1),
+      );
+    });
+
+    test("is the artist's Essentials in the artist's own folder", () async {
+      final service = await library([
+        song('1', 'Eminem', 'The Eminem Show', artist: 'Eminem'),
+        song('2', 'Eminem', 'Encore', artist: 'Eminem'),
+      ]);
+      expect(service.albums.single.title, 'Eminem Essentials');
+    });
+
+    test('lets strays join the album the folder is named after, keeping the numbers', () async {
+      final service = await library([
+        song(
+          '1',
+          'Hooverphonic/The Best of Hooverphonic',
+          'The Best of Hooverphonic',
+          artist: 'Hooverphonic',
+          number: 1,
+        ),
+        song(
+          '2',
+          'Hooverphonic/The Best of Hooverphonic',
+          'The Best of Hooverphonic',
+          artist: 'Hooverphonic',
+          number: 2,
+        ),
+        song(
+          '3',
+          'Hooverphonic/The Best of Hooverphonic',
+          'In Wonderland',
+          artist: 'Hooverphonic',
+          number: 7,
+          year: 2011,
+        ),
+      ]);
+      final album = service.albums.single;
+      expect((album.title, album.year), ('The Best of Hooverphonic', null)); // not the stray's year
+      expect([for (final t in album.tracks) t.trackNumber], [1, 2, 7]);
+    });
+
+    test('counts featured artists and the album artist as the shared one', () async {
+      final service = await library([
+        Track(id: '1', title: 'A', artist: 'Ufo361', album: 'Private', filePath: '/Music/Ufo361/1.flac'),
+        Track(
+          id: '2',
+          title: 'B',
+          artist: '10am, Ufo361',
+          artists: ['10am', 'Ufo361'],
+          album: 'pj nach zürich',
+          filePath: '/Music/Ufo361/2.flac',
+        ),
+        Track(
+          id: '3',
+          title: 'C',
+          artist: 'Ludovico Einaudi',
+          album: 'Nomadland',
+          albumArtist: 'Various Artists',
+          filePath: '/Music/Ufo361/3.flac',
+        ),
+      ]);
+      expect(service.albums, hasLength(3)); // Einaudi is no Ufo361 song: nothing is shared
+      final shared = await library([
+        Track(id: '1', title: 'A', artist: 'Ufo361', album: 'Private', filePath: '/Music/Ufo361/1.flac'),
+        Track(
+          id: '2',
+          title: 'B',
+          artist: '10am, Ufo361',
+          artists: ['10am', 'Ufo361'],
+          album: 'pj nach zürich',
+          filePath: '/Music/Ufo361/2.flac',
+        ),
+      ]);
+      expect((shared.albums.single.title, shared.albums.single.artist), ('Ufo361 Essentials', 'Ufo361'));
+    });
+
+    test('leaves loose files in the music folder, and folders of several artists, alone', () async {
+      final loose = await library([song('1', '', 'Back In Black'), song('2', '', 'Highway to Hell')]);
+      expect(loose.albums, hasLength(2));
+      final mixed = await library([
+        song('1', 'Mix', 'Back In Black'),
+        song('2', 'Mix', 'Discovery', artist: 'Daft Punk'),
+      ]);
+      expect(mixed.albums, hasLength(2));
+    });
+
+    test(
+      "leaves an artist's whole albums side by side in one folder apart, and works only inside the music folder",
+      () async {
+        Track full(String id, String album, int number) =>
+            song(id, 'Daft Punk', album, artist: 'Daft Punk', number: number)..trackCount = 3;
+        final flat = await library([
+          for (var i = 1; i <= 3; i++) full('d$i', 'Discovery', i),
+          for (var i = 1; i <= 3; i++) full('h$i', 'Homework', i),
+        ]);
+        expect(flat.albums.map((a) => a.title), unorderedEquals(['Discovery', 'Homework']));
+
+        final repo = MockRepository(); // no music folder known
+        final service = _service(repo);
+        repo.saveTracks([song('1', 'ACDC Essentials', 'Back In Black'), song('2', 'ACDC Essentials', 'POWER UP')]);
+        await service.initialize();
+        expect(service.albums, hasLength(2));
+      },
+    );
+
+    test('follows the tags again when the folder no longer qualifies, and stores only the tags', () async {
+      final repo = MockRepository()..settings['library_path'] = '/Music';
+      final service = _service(repo);
+      repo.saveTracks([song('1', 'GOLD', 'Gold: Greatest Hits', number: 3), song('2', 'GOLD', 'The Singles')]);
+      await service.initialize();
+      expect(service.albums.single.title, 'GOLD');
+
+      await service.replaceTracks([service.getTrack('1')!, service.getTrack('2')!]);
+      expect(service.albums.single.title, 'GOLD');
+      expect({for (final t in await repo.getAllTracks()) t.album}, {'Gold: Greatest Hits', 'The Singles'});
+
+      await service.replaceTracks([service.getTrack('1')!]);
+      final alone = service.albums.single;
+      expect((alone.title, alone.tracks.single.trackNumber), ('Gold: Greatest Hits', 3));
+    });
+  });
+
+  test(
+    "featured artists are credited: their songs are on their pages, while the artist list keeps album artists",
+    () async {
+      final repo = MockRepository();
+      final service = _service(repo);
+      repo.saveTracks([
+        Track(
+          id: '1',
+          title: 'AFFILIATED (feat. Lil Durk)',
+          artist: 'Future, Lil Durk',
+          artists: ['Future', 'Lil Durk'],
+          album: 'I NEVER LIKED YOU',
+          albumArtist: 'Future',
+        ),
+        Track(id: '2', title: 'WAIT FOR U', artist: 'Future', album: 'I NEVER LIKED YOU', albumArtist: 'Future'),
+        Track(
+          id: '3',
+          title: 'Life Is Good',
+          artist: 'Drake, Future',
+          artists: ['Drake', 'Future'],
+          album: 'Dark Lane Demo Tapes',
+        ),
+      ]);
+      await service.initialize();
+
+      expect(service.artists.map((a) => a.name), ['Drake', 'Future']);
+      expect(service.albums.firstWhere((a) => a.title == 'Dark Lane Demo Tapes').artist, 'Drake');
+      final future = service.artists.firstWhere((a) => a.name == 'Future');
+      expect(future.tracks.map((t) => t.id), unorderedEquals(['1', '2', '3']));
+      expect(service.getArtistByName('lil durk')!.tracks.map((t) => t.id), ['1']);
+      expect(service.search('Lil Durk').map((t) => t.id), ['1']);
+    },
+  );
+
   test('colliding track numbers keep the folder apart', () async {
     final repo = MockRepository();
     final service = _service(repo);

@@ -29,6 +29,7 @@ class Track {
     String? id,
     this.title = 'Unknown Title',
     this.artist = 'Unknown Artist',
+    List<String>? artists,
     this.album = 'Unknown Album',
     this.albumArtist,
     this.albumArtistInferred = false,
@@ -52,11 +53,18 @@ class Track {
     this.playCount = 0,
     this.lastPlayed,
   }) : id = id ?? newId(),
+       artists = artists != null && artists.length > 1 ? List.unmodifiable(artists) : const [],
        dateAdded = dateAdded ?? DateTime.now().toUtc();
 
   String id;
   String title;
+
+  /// The artist as shown: when the track has several ([artists]), their names joined by ", ".
   String artist;
+
+  /// Every artist of the track, main artist first, when the tags name more than one (featured artists); empty when
+  /// there is one.
+  final List<String> artists;
   String album;
   String? albumArtist;
 
@@ -88,8 +96,20 @@ class Track {
   /// Whether this is the track the player is on; the lists highlight it.
   bool isPlaying = false;
 
-  /// The artist an album is filed under: the album artist when tagged, otherwise the track artist.
-  String get effectiveAlbumArtist => (albumArtist == null || albumArtist!.trim().isEmpty) ? artist : albumArtist!;
+  /// Each artist of the track on its own, main artist first: [artists], or [artist] alone.
+  List<String> get artistNames => artists.isEmpty ? [artist] : artists;
+
+  /// The main artist: the first of [artists], or [artist].
+  String get primaryArtist => artists.isEmpty ? artist : artists.first;
+
+  /// The artist an album is filed under: the album artist when tagged, otherwise the track's main artist.
+  String get effectiveAlbumArtist =>
+      (albumArtist == null || albumArtist!.trim().isEmpty) ? primaryArtist : albumArtist!;
+
+  /// Set when the library filed the track under its folder's album rather than its own album tag (see
+  /// `LibrarySnapshot.build`): what the tags say. Recomputed on every library build and never stored; [album],
+  /// [albumArtist], [trackNumber] and [discNumber] hold what the library shows.
+  ({String album, String? albumArtist, int? trackNumber, int? discNumber})? taggedAlbum;
 
   /// Identifies the album the track is filed under (title and album artist, ignoring case). It is the same on every
   /// device and on the server, so it is also the key of `/api/cover/album/{id}`.
@@ -107,6 +127,7 @@ class Track {
     'id': id,
     'title': title,
     'artist': artist,
+    if (artists.isNotEmpty) 'artists': artists,
     'album': album,
     'albumArtist': albumArtist,
     'trackNumber': trackNumber,
@@ -133,6 +154,10 @@ class Track {
       id: id,
       title: json['title'] as String? ?? 'Unknown Title',
       artist: json['artist'] as String? ?? 'Unknown Artist',
+      artists: [
+        for (final name in json['artists'] as List? ?? const [])
+          if (name is String && name.trim().isNotEmpty) name,
+      ],
       album: json['album'] as String? ?? 'Unknown Album',
       albumArtist: json['albumArtist'] as String?,
       trackNumber: integer('trackNumber'),

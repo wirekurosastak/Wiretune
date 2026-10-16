@@ -321,7 +321,13 @@ Track? _readTrack(String filePath, String? coverCacheDirectory, Map<String, Stri
 
       final directory = p.dirname(fullPath);
       final coverArtPath =
-          _cacheEmbeddedCover(tags, source, coverCacheDirectory, albumArtist ?? artist, album) ??
+          _cacheEmbeddedCover(
+            tags,
+            source,
+            coverCacheDirectory,
+            albumArtist ?? tags.artists.firstOrNull ?? artist,
+            album,
+          ) ??
           (folderCoverCache != null
               ? folderCoverCache.putIfAbsent(directory, () => MetadataScanner.findFolderCover(directory))
               : MetadataScanner.findFolderCover(directory));
@@ -331,6 +337,7 @@ Track? _readTrack(String filePath, String? coverCacheDirectory, Map<String, Stri
         id: MetadataScanner.computeTrackId(fullPath),
         title: title,
         artist: artist,
+        artists: [for (final name in tags.artists) ?cleanText(name)],
         album: album,
         albumArtist: albumArtist,
         trackNumber: positive(tags.track),

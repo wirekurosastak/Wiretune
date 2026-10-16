@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:path/path.dart' as p;
 
@@ -106,7 +107,7 @@ class LibraryService {
   bool isTrackHidden(Track track) {
     if (_hiddenTracks.contains(track.id)) return true;
     if (_hiddenAlbums.contains(track.albumId)) return true;
-    if (_hiddenArtists.contains(stableId(track.artist.toLowerCase()))) return true;
+    if (_hiddenArtists.contains(stableId(track.primaryArtist.toLowerCase()))) return true;
     if (_hiddenArtists.contains(stableId(track.effectiveAlbumArtist.toLowerCase()))) return true;
     return false;
   }
@@ -123,7 +124,7 @@ class LibraryService {
 
   void _rebuildSnapshot() {
     final visible = _rawTracks.where((t) => !isTrackHidden(t)).toList();
-    _snapshot = LibrarySnapshot.build(visible);
+    _snapshot = LibrarySnapshot.build(visible, libraryRoot: libraryPath);
   }
 
   bool get isScanning => _isScanning;
@@ -582,7 +583,9 @@ class LibraryService {
     final existing = _snapshot.artists.where((a) => equalsIgnoreCase(a.name, trimmed)).firstOrNull;
     if (existing != null) return existing;
 
-    final matchingTracks = _snapshot.tracks.where((t) => equalsIgnoreCase(t.artist, trimmed)).toList();
+    final matchingTracks = _snapshot.tracks
+        .where((t) => t.artistNames.any((n) => equalsIgnoreCase(n, trimmed)))
+        .toList();
     if (matchingTracks.isEmpty) return null;
     return Artist(
       id: stableId(trimmed.toLowerCase()),
@@ -637,12 +640,29 @@ class LibrarySnapshot {
   static int _disc(Track t) => t.discNumber ?? 1;
   static int _number(Track t) => t.trackNumber ?? 0x7FFFFFFF;
 
-  static LibrarySnapshot build(Iterable<Track> source) {
+  /// What a folder of one artist's songs from several albums is called when the folder is named after the artist.
+  static const String essentialsSuffix = 'Essentials';
+
+  /// Builds the library from [source]. [libraryRoot] is the local music folder: its loose files are never one album.
+  static LibrarySnapshot build(Iterable<Track> source, {String libraryRoot = ''}) {
     final seen = <String>{};
     final tracks = [
       for (final t in source)
         if (seen.add(t.id)) t,
     ];
+    // Back to what the tags say before the folders are looked at again: the files may have changed since.
+    for (final t in tracks) {
+      final tagged = t.taggedAlbum;
+      if (tagged == null) continue;
+      t
+        ..album = tagged.album
+        ..albumArtist = tagged.albumArtist
+        ..albumArtistInferred = false
+        ..trackNumber = tagged.trackNumber
+        ..discNumber = tagged.discNumber
+        ..taggedAlbum = null;
+    }
+    final folderAlbums = _folderAlbums(tracks, libraryRoot);
     sortStable(
       tracks,
       thenBy<Track>([
@@ -665,6 +685,7 @@ class LibrarySnapshot {
     final groups = <String, List<Track>>{};
     for (final t in tracks) {
       if (t.filePath.isEmpty || isBlank(t.album) || equalsIgnoreCase(t.album, MetadataScanner.unknownAlbum)) continue;
+      if (folderAlbums.contains(t)) continue;
       final folder = p.dirname(t.filePath).toLowerCase();
       groups.putIfAbsent('${t.album.trim()}\u0000$folder', () => []).add(t);
     }
@@ -693,9 +714,9 @@ class LibrarySnapshot {
 
       final counts = <String, (String, int)>{};
       for (final t in groupTracks) {
-        final key = t.artist.toLowerCase();
+        final key = t.primaryArtist.toLowerCase();
         final current = counts[key];
-        counts[key] = (current?.$1 ?? t.artist, (current?.$2 ?? 0) + 1);
+        counts[key] = (current?.$1 ?? t.primaryArtist, (current?.$2 ?? 0) + 1);
       }
       if (counts.length > 1) {
         var top = counts.values.first;
@@ -739,12 +760,17 @@ class LibrarySnapshot {
       );
       final first = ordered.first;
       final quality = QualitySummary.of(ordered.map((t) => t.format))!; // an album always has at least one track
+      // A folder's collection gathers songs of many years: it is as new as its newest. An album that strays joined
+      // keeps its own year.
+      final own = ordered.where((t) => t.taggedAlbum == null || equalsIgnoreCase(t.taggedAlbum!.album, t.album));
+      final collection = own.isEmpty;
+      final years = (collection ? ordered : own).map((t) => t.year).whereType<int>();
       albums.add(
         Album(
           id: entry.key,
           title: first.album,
           artist: first.effectiveAlbumArtist,
-          year: ordered.map((t) => t.year).whereType<int>().firstOrNull,
+          year: collection && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
           coverArtPath: ordered.where((t) => !isBlank(t.coverArtPath)).firstOrNull?.coverArtPath,
           trackCount: ordered.length,
           totalDuration: ordered.fold(Duration.zero, (sum, t) => sum + t.duration),
@@ -760,9 +786,12 @@ class LibrarySnapshot {
     for (final a in albums) {
       albumsByArtist.putIfAbsent(a.artist.toLowerCase(), () => []).add(a);
     }
+    // Each artist of a track, featured ones too, so an artist's page also has the songs they guest on.
     final tracksByArtist = <String, List<Track>>{};
     for (final t in tracks) {
-      tracksByArtist.putIfAbsent(t.artist.toLowerCase(), () => []).add(t);
+      for (final name in t.artistNames) {
+        tracksByArtist.putIfAbsent(name.toLowerCase(), () => []).add(t);
+      }
     }
 
     // The Artists view lists album artists only: guest performers and one-off compilation artists stay out of it.
@@ -823,5 +852,86 @@ class LibrarySnapshot {
       artists,
       genres,
     );
+  }
+
+  /// Files folders put together by hand under one album: a folder whose songs come from several albums but share one
+  /// artist (an "essentials" or "best of" collected track by track, each keeping its original album tag). The album
+  /// is the one of those tags that is named like the folder, so that strays join it; else the folder's name, or
+  /// "Eminem Essentials" when the folder is named after the artist (Eminem). A collection is numbered by title. Only
+  /// folders inside [libraryRoot] count. Loose files in it, folders of several artists, and a folder holding a whole
+  /// album (an artist's albums side by side in one folder) keep their own albums. Returns the tracks it refiled.
+  static Set<Track> _folderAlbums(List<Track> tracks, String libraryRoot) {
+    final refiled = <Track>{};
+    if (isBlank(libraryRoot)) return refiled;
+    final root = AppPaths.comparable(p.normalize(libraryRoot));
+    final byFolder = <String, List<Track>>{};
+    for (final t in tracks) {
+      if (t.filePath.isEmpty) continue;
+      final key = AppPaths.comparable(p.normalize(p.dirname(t.filePath)));
+      if (p.isWithin(root, key)) byFolder.putIfAbsent(key, () => []).add(t);
+    }
+
+    String simple(String text) => lettersAndDigits(text.toLowerCase());
+
+    for (final folderTracks in byFolder.values) {
+      if (folderTracks.length < 2) continue;
+      final albums = <String, String>{};
+      final albumTracks = <String, List<Track>>{};
+      for (final t in folderTracks) {
+        albums.putIfAbsent(t.album.toLowerCase(), () => t.album);
+        albumTracks.putIfAbsent(t.album.toLowerCase(), () => []).add(t);
+      }
+      if (albums.length < 2) continue;
+
+      // The artist every song shares: as album artist, main artist or featured artist.
+      String? taggedAlbumArtist(Track t) => t.albumArtistInferred ? null : t.albumArtist;
+      bool credits(Track t, String name) =>
+          equalsIgnoreCase(taggedAlbumArtist(t), name) || t.artistNames.any((n) => equalsIgnoreCase(n, name));
+      final first = folderTracks.first;
+      final artist = [
+        ?cleanText(taggedAlbumArtist(first)),
+        ...first.artistNames,
+      ].where((name) => folderTracks.every((t) => credits(t, name))).firstOrNull;
+      if (artist == null) continue;
+
+      final folderName = p.basename(p.dirname(first.filePath)).trim();
+      final named = simple(folderName);
+      if (named.isEmpty) continue;
+      final matching = albums.values.where((a) => simple(a) == named).firstOrNull;
+      if (matching == null && albumTracks.values.any(_isWholeAlbum)) continue;
+      final title = matching ?? (named == simple(artist) ? '$artist $essentialsSuffix' : folderName);
+
+      final ordered = List<Track>.of(folderTracks);
+      if (matching == null) sortStable(ordered, (a, b) => compareText(a.title, b.title));
+      for (final (index, t) in ordered.indexed) {
+        t.taggedAlbum = (
+          album: t.album,
+          albumArtist: t.albumArtistInferred ? null : t.albumArtist,
+          trackNumber: t.trackNumber,
+          discNumber: t.discNumber,
+        );
+        t
+          ..album = title
+          ..albumArtist = artist
+          ..albumArtistInferred = false;
+        if (matching == null) {
+          t
+            ..trackNumber = index + 1
+            ..discNumber = null;
+        }
+        refiled.add(t);
+      }
+    }
+    return refiled;
+  }
+
+  /// True when [tracks] (of one album, in one folder) are all of the album: as many as its track total says, or, the
+  /// total untagged, five or more numbered 1, 2, 3... without a gap. A single or a pair of songs never is.
+  static bool _isWholeAlbum(List<Track> tracks) {
+    if (tracks.length < 3) return false;
+    final total = tracks.map((t) => t.trackCount).whereType<int>().firstOrNull;
+    if (total != null) return tracks.length >= total;
+    final numbers = tracks.map((t) => t.trackNumber).whereType<int>().toSet();
+    return tracks.length >= 5 && numbers.length == tracks.length && numbers.every((n) => n <= tracks.length);
   }
 }

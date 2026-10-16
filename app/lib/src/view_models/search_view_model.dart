@@ -92,6 +92,11 @@ class SearchViewModel extends ChangeNotifier {
         .take(maxCards)
         .toList();
     matchingArtists = _library.artists.where((a) => a.name.toLowerCase().contains(lower)).take(maxCards).toList();
+    // An artist only featured on other people's songs has no place in the artist list, but is found by name.
+    if (!matchingArtists.any((a) => a.name.toLowerCase() == lower)) {
+      final guest = _library.getArtistByName(q);
+      if (guest != null) matchingArtists = [guest, ...matchingArtists.take(maxCards - 1)];
+    }
     bestMatch = _computeBestMatch(lower);
     notifyListeners();
   }

@@ -11,7 +11,6 @@ import 'id3.dart';
 /// The Vorbis comment fields Wiretune reads. The order matters: of two fields for one tag, the one listed first wins.
 const Map<String, TagField> _vorbisFields = {
   'TITLE': TagField.title,
-  'ARTIST': TagField.artist,
   'ALBUMARTIST': TagField.albumArtist,
   'ALBUM ARTIST': TagField.albumArtist,
   'ALBUM_ARTIST': TagField.albumArtist,
@@ -43,6 +42,8 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
     position += 4;
     // ALBUMARTIST outranks ENSEMBLE whatever their order, and TRACKNUMBER's own total outranks TRACKTOTAL.
     final values = <String, String>{};
+    final artist = <String>[];
+    final artists = <String>[];
     for (var i = 0; i < count && position + 4 <= data.length; i++) {
       final length = data.u32le(position);
       position += 4;
@@ -71,9 +72,16 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
         }
         continue;
       }
+      if (key == 'ARTIST' || key == 'ARTISTS') {
+        (key == 'ARTIST' ? artist : artists).add(value);
+        continue;
+      }
       values.putIfAbsent(key, () => value);
     }
 
+    // One ARTIST field per artist, or a credit in ARTIST ("A feat. B") and the names in ARTISTS: the names win, so
+    // that each is an artist of its own.
+    tags.setArtists(artists.length > 1 ? artists : artist);
     for (final MapEntry(:key, value: field) in _vorbisFields.entries) {
       final value = values[key];
       if (value == null || (field == TagField.lyrics && !wantLyrics)) continue;

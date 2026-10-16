@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/src/metadata/id3.dart' show inflateFrame;
+import 'package:wiretune_core/src/metadata/xiph.dart' show readVorbisComment;
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -285,6 +286,47 @@ void main() {
     expect((tags.sampleRate, tags.bitsPerSample, tags.channels), (44100, 16, 2));
     expect(tags.duration.inMicroseconds / 1e6, closeTo((294912 + 100000) / 44100, 0.001));
     expect(TagReader.readPicture(file), [1, 2, 3, 4]);
+  });
+
+  group('several artists', () {
+    Uint8List comment(List<String> entries) {
+      final bytes = BytesBuilder();
+      void u32(int value) => bytes.add((ByteData(4)..setUint32(0, value, Endian.little)).buffer.asUint8List());
+      void text(String value) {
+        final encoded = utf8.encode(value);
+        u32(encoded.length);
+        bytes.add(encoded);
+      }
+
+      text('vendor');
+      u32(entries.length);
+      entries.forEach(text);
+      return bytes.toBytes();
+    }
+
+    AudioTags read(List<String> entries) {
+      final tags = AudioTags();
+      readVorbisComment(comment(entries), 0, tags);
+      return tags;
+    }
+
+    test('one ARTIST field per artist: every one of them, joined for display', () {
+      final tags = read(['ARTIST=Future', 'TITLE=AFFILIATED (feat. Lil Durk)', 'ARTIST=Lil Durk', 'artist=future']);
+      expect(tags.artist, 'Future, Lil Durk');
+      expect(tags.artists, ['Future', 'Lil Durk']);
+    });
+
+    test('ARTISTS names them when ARTIST is a credit, and one artist is no list', () {
+      final picard = read(['ARTIST=Future feat. Lil Durk', 'ARTISTS=Future', 'ARTISTS=Lil Durk']);
+      expect((picard.artist, picard.artists.length), ('Future, Lil Durk', 2));
+      final single = read(['ARTIST=AC/DC', 'ARTISTS=AC/DC']);
+      expect((single.artist, single.artists.length), ('AC/DC', 0));
+    });
+
+    test('names are not split at "&", "," or "/", and a later tag does not replace them', () {
+      final tags = read(['ARTIST=Simon & Garfunkel'])..setArtists(['Other', 'Names']);
+      expect((tags.artist, tags.artists.length), ('Simon & Garfunkel', 0));
+    });
   });
 
   test('a compressed ID3 frame is inflated, but never beyond what a tag can need', () {

@@ -1016,15 +1016,15 @@ class _PlayerBar extends StatelessWidget {
                                   Flexible(
                                     child: Tooltip(
                                       message: track.artist,
-                                      child: LinkText(
-                                        track.artist,
+                                      child: ArtistLinks(
+                                        track.artistNames,
                                         hoverColor: colors.palette.coral,
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
                                           color: colors.textMuted,
                                         ),
-                                        onTap: () => vm.openArtistByName(track.artist),
+                                        onOpen: vm.openArtistByName,
                                       ),
                                     ),
                                   ),

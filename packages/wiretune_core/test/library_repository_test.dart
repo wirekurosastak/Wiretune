@@ -31,6 +31,7 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 6) c.execute('ALTER TABLE tracks DROP COLUMN artists');
     if (version < 5) c.execute('ALTER TABLE users DROP COLUMN token_version; DROP TABLE downloads;');
     if (version < 4) c.execute('DROP TABLE user_hidden');
     if (version < 3) c.execute('ALTER TABLE tracks DROP COLUMN bpm');
@@ -83,6 +84,25 @@ void main() {
     expect(stored.fileModifiedUtc, track.fileModifiedUtc); // microseconds survive, so an unchanged file is reused
     expect(stored.dateAdded, DateTime.utc(2026, 1, 2, 3, 4, 5));
     expect(stored.format.codec, 'FLAC');
+  });
+
+  test("a track's artists round-trip, and what the library filed under a folder's album is stored as tagged", () async {
+    final (repo, _) = await open();
+    final featuring = Track(id: 'f', title: 'Song', artist: 'Future, Lil Durk', artists: ['Future', 'Lil Durk']);
+    final refiled = make('r')
+      ..album = 'ACDC Essentials'
+      ..albumArtist = 'AC/DC'
+      ..trackNumber = 3
+      ..taggedAlbum = (album: 'Back In Black', albumArtist: null, trackNumber: 6, discNumber: 1);
+
+    await repo.replaceAllTracks([featuring, refiled, make('a')]);
+    final stored = {for (final t in await repo.getAllTracks()) t.id: t};
+
+    expect(stored['f']!.artist, 'Future, Lil Durk');
+    expect(stored['f']!.artists, ['Future', 'Lil Durk']);
+    expect(stored['a']!.artists, isEmpty);
+    final r = stored['r']!;
+    expect((r.album, r.albumArtist, r.trackNumber, r.discNumber, r.taggedAlbum), ('Back In Black', null, 6, 1, null));
   });
 
   test('replacing the tracks deletes what is gone and updates what changed', () async {
@@ -222,6 +242,18 @@ void main() {
     expect(hidden['track'], isEmpty);
     expect(hidden['album'], isEmpty);
     expect(hidden['artist'], isEmpty);
+  });
+
+  test('a database of schema 5 is upgraded, and its files are read again for their artists', () async {
+    final (repo, db) = await open();
+    await repo.replaceAllTracks([make('a')..fileModifiedUtc = DateTime.utc(2025, 1, 2)]);
+    downgrade(db, 5);
+
+    final (upgraded, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    final kept = (await upgraded.getAllTracks()).single;
+    expect((kept.id, kept.fileModifiedUtc), ('a', null));
+    expect(kept.artists, isEmpty);
   });
 
   test("a database of schema 4 is upgraded, and its accounts' tokens keep the version they were signed with", () async {

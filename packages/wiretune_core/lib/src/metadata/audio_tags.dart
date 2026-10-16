@@ -16,7 +16,14 @@ class PictureLocation {
 /// What the tag reader found in one file: the tags, the stream properties and the first embedded picture.
 class AudioTags {
   String? title;
+
+  /// The credited artist; when the tag names several (see [artists]), all of them joined by ", ".
   String? artist;
+
+  /// Every artist the tag names, in its order, when it names more than one (a main artist and the featured ones): Vorbis
+  /// comments repeat ARTIST (or list them in ARTISTS), ID3v2.4 and APE separate the values with NUL. Empty when the tag
+  /// names a single artist. Names are never split at "&", "," or "/": "AC/DC" and "Simon & Garfunkel" are one act.
+  List<String> artists = const [];
   String? albumArtist;
   String? album;
   String? genre;
@@ -70,7 +77,10 @@ class AudioTags {
   /// Fills every field that is still empty from [other] (a tag of lower priority in the same file).
   void mergeFrom(AudioTags other) {
     title ??= other.title;
-    artist ??= other.artist;
+    if (artist == null) {
+      artist = other.artist;
+      artists = other.artists;
+    }
     albumArtist ??= other.albumArtist;
     album ??= other.album;
     genre ??= other.genre;
@@ -85,6 +95,20 @@ class AudioTags {
       pictureLocation = other.pictureLocation;
       _pictureType = other._pictureType;
     }
+  }
+
+  /// Sets the artist from the values of one tag field, unless an earlier field set it: the one value, or several
+  /// ([artists]) and their names joined.
+  void setArtists(Iterable<String> values) {
+    if (artist != null) return;
+    final seen = <String>{};
+    final names = [
+      for (final value in values)
+        if (trimNul(value).trim() case final name when name.isNotEmpty && seen.add(name.toLowerCase())) name,
+    ];
+    if (names.isEmpty) return;
+    artist = names.join(', ');
+    artists = names.length > 1 ? names : const [];
   }
 
   /// Sets a text field by its common name, keeping the first non-empty value.

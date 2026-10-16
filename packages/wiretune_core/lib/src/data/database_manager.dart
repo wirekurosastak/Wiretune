@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 5;
+  static const int schemaVersion = 6;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -49,6 +49,9 @@ class DatabaseManager {
     // 4 -> 5: a password change ends the sessions that signed in with the old one; the player's record of its
     // downloaded copies.
     'ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0; $_downloadsTable',
+    // 5 -> 6: every artist of a track (featured ones too). Forgetting the files' modification times makes the next scan
+    // read each file again, as only then are the artists known.
+    'ALTER TABLE tracks ADD COLUMN artists TEXT; UPDATE tracks SET file_modified = NULL;',
   ];
 
   final String databasePath;
@@ -142,6 +145,7 @@ const String _schema =
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       artist TEXT NOT NULL,
+      artists TEXT,
       album TEXT NOT NULL,
       album_artist TEXT,
       track_number INTEGER,

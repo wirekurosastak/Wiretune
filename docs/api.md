@@ -42,11 +42,13 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `GET /api/config` | admin | `{ "libraryPath" }` |
 | `POST /api/config/library-path` | admin | Body `{ "newPath" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
-A **track** has `id`, `title`, `artist`, `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `year`,
+A **track** has `id`, `title`, `artist` (several artists joined by ", "), `artists` (each of them, only when there
+are several), `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `year`,
 `genre`, `durationMs`, `fileSizeBytes`, `fileModifiedUtc`, `hasCoverArt`, `dateAdded` and `format` (`codec`,
 `sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). Files stay on the server, and so
 do their paths. Favourites and play counts are per account and come from `/api/me/data`. The players group albums and
-artists themselves.
+artists themselves; `album`, `albumArtist`, `trackNumber` and `discNumber` already say how the server filed a folder's
+collection ([user guide](user-guide.md#the-library)).
 
 ## Your data
 

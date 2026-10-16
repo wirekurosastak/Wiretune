@@ -30,7 +30,13 @@ merges take turns through a commit gate.
   time haven't changed.
 - **Albums** are keyed by title plus album artist (`Track.albumId`, shared with the server's cover route). A folder of
   tracks with one album title gets one inferred album artist, which is shown but never stored
-  (`Track.albumArtistInferred`), so it can't outlive the files it came from.
+  (`Track.albumArtistInferred`), so it can't outlive the files it came from. A folder inside the music folder whose
+  songs share one artist but carry several album tags (an "essentials" put together by hand) becomes one album the same
+  way: `LibrarySnapshot.build` refiles the tracks and keeps their own tags in `Track.taggedAlbum`, which is what's
+  stored.
+- **Artists of a track**: `Track.artists` holds each one when the tags name several (repeated Vorbis `ARTIST`, `ARTISTS`,
+  NUL-separated ID3v2.4 and APE values), and `Track.artist` joins them for display. Names are never split at `&`, `,`
+  or `/`. Albums file under the main (first) artist; an artist's page also holds the songs they're featured on.
 - **Hybrid**: local tracks have no `streamUrl`, server tracks do. `TrackDeduplication.mergeTracks` folds a server
   duplicate into the local copy, favourite, play count and playlist entries included.
 - **Writes are diffs**: one transaction per change, and rows that didn't change aren't touched.

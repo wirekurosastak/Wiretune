@@ -27,6 +27,7 @@ class LibraryRepository {
           id: r['id'] as String,
           title: r['title'] as String,
           artist: r['artist'] as String,
+          artists: _names(r['artists']),
           album: r['album'] as String,
           albumArtist: r['album_artist'] as String?,
           trackNumber: _int(r['track_number']),
@@ -64,11 +65,11 @@ class LibraryRepository {
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
         year, bpm, genre, duration_ms, file_size_bytes, file_modified, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
-        bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added, favorited_at
+        bitrate_kbps, is_lossless, is_favorite, play_count, last_played, date_added, favorited_at, artists
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-              ?24, ?25, ?26, ?27, ?28, ?29)
+              ?24, ?25, ?26, ?27, ?28, ?29, ?30)
     ON CONFLICT(id) DO UPDATE SET
-        title = excluded.title, artist = excluded.artist, album = excluded.album,
+        title = excluded.title, artist = excluded.artist, artists = excluded.artists, album = excluded.album,
         album_artist = excluded.album_artist, track_number = excluded.track_number,
         track_count = excluded.track_count, disc_number = excluded.disc_number, year = excluded.year,
         bpm = excluded.bpm, genre = excluded.genre, duration_ms = excluded.duration_ms,
@@ -79,7 +80,8 @@ class LibraryRepository {
         bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless,
         is_favorite = excluded.is_favorite, play_count = excluded.play_count,
         last_played = excluded.last_played, date_added = excluded.date_added, favorited_at = excluded.favorited_at
-    WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR album IS NOT excluded.album
+    WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR artists IS NOT excluded.artists
+       OR album IS NOT excluded.album
        OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
        OR track_count IS NOT excluded.track_count OR disc_number IS NOT excluded.disc_number
        OR year IS NOT excluded.year OR bpm IS NOT excluded.bpm OR genre IS NOT excluded.genre
@@ -120,15 +122,17 @@ class LibraryRepository {
       final upsert = db.prepare(_upsertSql);
       try {
         for (final t in wanted.values) {
+          // Only what the file's tags say, not what the library inferred from the folder.
+          final tagged = t.taggedAlbum;
           upsert.execute([
             t.id,
             t.title,
             t.artist,
-            t.album,
-            t.albumArtistInferred ? null : t.albumArtist, // only what the file's tag says
-            t.trackNumber,
+            tagged?.album ?? t.album,
+            tagged != null ? tagged.albumArtist : (t.albumArtistInferred ? null : t.albumArtist),
+            tagged == null ? t.trackNumber : tagged.trackNumber,
             t.trackCount,
-            t.discNumber,
+            tagged == null ? t.discNumber : tagged.discNumber,
             t.year,
             t.bpm,
             t.genre,
@@ -150,6 +154,7 @@ class LibraryRepository {
             toDbTime(t.lastPlayed),
             toDbTime(t.dateAdded),
             toDbTime(t.favoritedAt),
+            t.artists.isEmpty ? null : jsonEncode(t.artists),
           ]);
         }
       } finally {
@@ -310,4 +315,14 @@ class LibraryRepository {
       _db.connection.execute('DELETE FROM downloads WHERE track_id = ?', [trackId]);
 
   static int? _int(Object? value) => value == null ? null : (value as num).toInt();
+
+  static List<String>? _names(Object? value) {
+    if (value is! String) return null;
+    try {
+      final names = jsonDecode(value);
+      return names is List ? names.whereType<String>().toList() : null;
+    } on FormatException {
+      return null; // not written by Wiretune: the artist column alone
+    }
+  }
 }

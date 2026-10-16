@@ -23,14 +23,16 @@ abstract final class TrackDeduplication {
 
     final result = List<Track>.of(locals);
 
-    // Local tracks grouped by normalised title and artist for a fast candidate lookup.
+    // Local tracks grouped by normalised title and main artist for a fast candidate lookup (a player or server that
+    // predates featured artists knows only the first).
     final localByTitleArtist = <String, List<Track>>{};
     for (final t in locals) {
-      localByTitleArtist.putIfAbsent('${cleanTitle(t.title)}|${cleanArtist(t.artist)}', () => []).add(t);
+      localByTitleArtist.putIfAbsent('${cleanTitle(t.title)}|${cleanArtist(t.primaryArtist)}', () => []).add(t);
     }
 
     for (final serverTrack in servers) {
-      final candidates = localByTitleArtist['${cleanTitle(serverTrack.title)}|${cleanArtist(serverTrack.artist)}'];
+      final candidates =
+          localByTitleArtist['${cleanTitle(serverTrack.title)}|${cleanArtist(serverTrack.primaryArtist)}'];
       final duplicateLocal = candidates?.where((l) => isDuplicate(l, serverTrack)).firstOrNull;
       if (duplicateLocal != null) {
         mergeMetadataIntoLocal(duplicateLocal, serverTrack);
@@ -50,8 +52,8 @@ abstract final class TrackDeduplication {
     final serverTitle = cleanTitle(server.title);
     if (localTitle.isEmpty || serverTitle.isEmpty || localTitle != serverTitle) return false;
 
-    final localArtist = cleanArtist(local.artist);
-    final serverArtist = cleanArtist(server.artist);
+    final localArtist = cleanArtist(local.primaryArtist);
+    final serverArtist = cleanArtist(server.primaryArtist);
     if (localArtist.isEmpty || serverArtist.isEmpty || localArtist != serverArtist) return false;
 
     final hasLocalDuration = local.duration > Duration.zero;

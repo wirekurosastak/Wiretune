@@ -142,15 +142,17 @@ class MockRepository extends LibraryRepository {
   Future<void> deleteDownload(String trackId) async => downloads.remove(trackId);
 }
 
+/// A copy of [t] as the database keeps it: what the library filed under a folder's album goes back to its tags.
 Track copyTrack(Track t) => Track(
   id: t.id,
   title: t.title,
   artist: t.artist,
-  album: t.album,
-  albumArtist: t.albumArtist,
-  trackNumber: t.trackNumber,
+  artists: t.artists,
+  album: t.taggedAlbum?.album ?? t.album,
+  albumArtist: t.taggedAlbum == null ? t.albumArtist : t.taggedAlbum!.albumArtist,
+  trackNumber: t.taggedAlbum == null ? t.trackNumber : t.taggedAlbum!.trackNumber,
   trackCount: t.trackCount,
-  discNumber: t.discNumber,
+  discNumber: t.taggedAlbum == null ? t.discNumber : t.taggedAlbum!.discNumber,
   year: t.year,
   genre: t.genre,
   duration: t.duration,
