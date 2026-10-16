@@ -59,10 +59,12 @@ class MainViewModel extends ChangeNotifier {
     this.library,
     this.session, {
     OnlineLyrics? onlineLyrics,
+    ArtistPictureService? artistPictures,
     this.capabilities = const DeviceCapabilities(),
     DownloadService? downloadService,
     RemoteClient? remote,
   }) : _onlineLyrics = onlineLyrics,
+       _artistPictures = artistPictures,
        downloadService = downloadService ?? DownloadService(library, session),
        remote = remote ?? RemoteClient(session) {
     // Stream URLs carry a short-lived, media-only token that the session renews, not the sign-in token; a server track
@@ -79,7 +81,7 @@ class MainViewModel extends ChangeNotifier {
 
     tracks = TracksViewModel(library, player);
     albums = AlbumsViewModel(library, player)..onNavWave = triggerNavWave;
-    artists = ArtistsViewModel(library, player)..onNavWave = triggerNavWave;
+    artists = ArtistsViewModel(library, player, artistPictures)..onNavWave = triggerNavWave;
     playlists = PlaylistsViewModel(library, player)..onNavWave = triggerNavWave;
     favorites = FavoritesViewModel(library, player);
     downloads = DownloadsViewModel(this.downloadService);
@@ -131,6 +133,7 @@ class MainViewModel extends ChangeNotifier {
   final RemoteClient remote;
   final DeviceCapabilities capabilities;
   final OnlineLyrics? _onlineLyrics;
+  final ArtistPictureService? _artistPictures;
   final List<void Function()> _unsubscribers = [];
   bool _disposed = false;
 
@@ -812,6 +815,7 @@ class MainViewModel extends ChangeNotifier {
     downloadService.dispose();
     session.dispose();
     _onlineLyrics?.close();
+    _artistPictures?.close();
     searchFocusRequests.dispose();
     super.dispose();
   }

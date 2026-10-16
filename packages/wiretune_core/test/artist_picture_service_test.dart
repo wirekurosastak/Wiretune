@@ -14,21 +14,25 @@ import 'support.dart';
 void main() {
   late Directory dir;
   late int requests;
-  final service = ArtistPictureService.instance;
+  late ArtistPictureService service;
 
   setUpAll(useTempDataDirectory);
   setUp(() => dir = Directory.systemTemp.createTempSync('wiretune_artist_'));
-  tearDown(() => dir.deleteSync(recursive: true));
+  tearDown(() {
+    service.close();
+    dir.deleteSync(recursive: true);
+  });
 
-  // The service is a singleton; these tests swap its HTTP client and cache file, so they never hit the real API.
+  // A service of its own per test, over a stand-in for Deezer: nothing reaches the real API.
   void useStub(http.Response Function(http.Request request) respond) {
     requests = 0;
-    service.client = MockClient((request) async {
-      requests++;
-      return respond(request);
-    });
-    service.cacheFileOverride = p.join(dir.path, 'artist_pictures.json');
-    service.resetForTests();
+    service = ArtistPictureService(
+      client: MockClient((request) async {
+        requests++;
+        return respond(request);
+      }),
+      cacheFile: p.join(dir.path, 'artist_pictures.json'),
+    );
   }
 
   http.Response json(String body) => http.Response(body, 200, headers: {'content-type': 'application/json'});
@@ -48,20 +52,28 @@ void main() {
     expect(requests, 1);
   });
 
-  test('an unknown artist is remembered and not asked again', () async {
+  test('an unknown artist is remembered, also after a restart, and not asked again', () async {
     useStub((_) => json('{"data":[]}'));
     expect(await service.getArtistPictureUrl('Nobody'), isNull);
     expect(await service.getArtistPictureUrl('Nobody'), isNull);
     expect(requests, 1);
-    expect(service.isCached('Nobody'), isTrue);
+
+    service.close(); // saves the answers
+    useStub((_) => json('{"data":[]}'));
+    expect(await service.getArtistPictureUrl('Nobody'), isNull);
+    expect(requests, 0);
   });
 
   test('server errors are neither cached nor retried at once', () async {
     useStub((_) => http.Response('', 503));
     expect(await service.getArtistPictureUrl('Queen'), isNull);
-    expect(service.isCached('Queen'), isFalse); // an outage is not "this artist has no picture"
     expect(await service.getArtistPictureUrl('Abba'), isNull); // backing off
     expect(requests, 1);
+
+    service.close();
+    useStub((_) => json('{"data":[{"picture_medium":"https://cdn.example/queen.jpg"}]}'));
+    // An outage was not "this artist has no picture": asked again once the service starts afresh.
+    expect(await service.getArtistPictureUrl('Queen'), 'https://cdn.example/queen.jpg');
   });
 
   test('picture URLs that are not https are refused', () async {
@@ -86,5 +98,31 @@ void main() {
 
     service.resolveArtistPicture(null); // nothing to do, and no error
     service.resolveArtistPictures(const []);
+  });
+
+  test('a batch asks once per artist, and an artist that already has a picture is not asked', () async {
+    useStub(
+      (request) => json('{"data":[{"picture_medium":"https://cdn.example/${request.url.queryParameters['q']}.jpg"}]}'),
+    );
+    final artists = [
+      for (final name in ['A', 'B', 'A']) Artist(name: name),
+    ];
+    final done = Artist(name: 'C', picturePath: 'https://cdn.example/C.jpg');
+    final resolved = <Artist>[];
+    final unsubscribe = service.pictureResolved.listen(resolved.add);
+    addTearDown(unsubscribe);
+
+    service.resolveArtistPictures([...artists, done]);
+    service.resolveArtistPictures([artists.first]); // while the first batch runs: joins it
+    for (var i = 0; i < 200 && resolved.length < 4; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+    expect(
+      [for (final a in artists) a.picturePath],
+      [
+        for (final n in ['A', 'B', 'A']) 'https://cdn.example/$n.jpg',
+      ],
+    );
+    expect(requests, 2);
   });
 }

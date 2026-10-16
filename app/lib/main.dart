@@ -57,6 +57,7 @@ Future<void> main() async {
     library,
     session,
     onlineLyrics: OnlineLyrics.createDefault(),
+    artistPictures: ArtistPictureService.createDefault(),
     capabilities: DeviceCapabilities(
       supportsLocalFolder: platform.supportsLocalFolder,
       requestFolderAccess: platform.requestAudioAccess,

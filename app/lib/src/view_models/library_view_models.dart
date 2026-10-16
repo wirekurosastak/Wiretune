@@ -364,17 +364,18 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
 
 /// The Artists section: the artist grid and one artist's page.
 class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
-  ArtistsViewModel(this._library, this._player) {
+  /// [pictures] looks the artists' pictures up online; without it they show an album cover.
+  ArtistsViewModel(this._library, this._player, [this._pictures]) {
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) => refreshArtists()),
-      _pictures.pictureResolved.listen((_) => notifyListeners()),
+      ?_pictures?.pictureResolved.listen((_) => notifyListeners()),
     ]);
     refreshArtists();
   }
 
   final LibraryService _library;
   final PlayerViewModel _player;
-  final ArtistPictureService _pictures = ArtistPictureService.instance;
+  final ArtistPictureService? _pictures;
   final List<void Function()> _unsubscribers = [];
 
   List<Artist> displayedArtists = const [];
@@ -452,7 +453,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     // A genre that is no longer in the library would leave an empty list behind.
     if (genre != null && !genres.any((g) => equalsIgnoreCase(g, genre))) genre = null;
     _applySort();
-    _pictures.resolveArtistPictures(_library.artists);
+    _pictures?.resolveArtistPictures(_library.artists);
     final previous = selectedArtist;
     if (previous != null) {
       final updated = _library.getArtist(previous.id);
@@ -481,7 +482,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
 
   void _showArtist(Artist artist, NavWaveDirection? waveDirection) {
     selectedArtist = artist;
-    _pictures.resolveArtistPicture(artist);
+    _pictures?.resolveArtistPicture(artist);
     isArtistDetailOpen = true;
     if (waveDirection != null) onNavWave?.call(waveDirection);
   }

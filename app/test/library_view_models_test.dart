@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
-import 'package:path/path.dart' as p;
 import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune/src/view_models/player_view_model.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -13,14 +10,7 @@ import 'support.dart';
 
 /// The album list's quality sort, and the genre filter of the album and artist lists.
 void main() {
-  setUpAll(() {
-    final dir = useTempDataDirectory();
-    // The artist list asks for pictures; these tests never reach the real service.
-    ArtistPictureService.instance
-      ..client = MockClient((_) async => http.Response('{}', 404))
-      ..cacheFileOverride = p.join(dir.path, 'artist_pictures.json')
-      ..resetForTests();
-  });
+  setUpAll(useTempDataDirectory);
   setUp(() => Localizer.instance.setLanguage('en'));
 
   Track track(String id, String album, {String artist = 'Artist', String? genre, AudioFormat? format}) =>
