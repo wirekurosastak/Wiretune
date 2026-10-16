@@ -251,7 +251,7 @@ class UiAutomationServer {
       'currentPositionSeconds': engine.currentPosition.inMilliseconds / 1000,
       'volume': engine.volume,
       'isMuted': engine.isMuted,
-      'isBitperfect': engine.isBitperfect,
+      'isBitPerfect': engine.isBitPerfect,
       'isExclusive': engine.isExclusiveMode,
       'repeatMode': _vm.player.repeatMode.name,
       'isShuffle': _vm.player.isShuffle,
@@ -259,11 +259,11 @@ class UiAutomationServer {
       'remoteDevice': _vm.player.isRemote ? _vm.player.remoteDeviceName : null,
       'audioDevices': [
         for (final d in _vm.audioSettings.availableDevices)
-          {'id': d.id, 'name': d.name, 'exclusive': d.isExclusiveSupported, 'bitPerfect': d.isBitperfectSupported},
+          {'id': d.id, 'name': d.name, 'exclusive': d.isExclusiveSupported, 'bitPerfect': d.isBitPerfectSupported},
       ],
       'selectedDevice': _vm.audioSettings.selectedDevice?.id,
       'isExclusiveAvailable': _vm.audioSettings.isExclusiveAvailable,
-      'isBitperfectAvailable': _vm.audioSettings.isBitperfectAvailable,
+      'isBitPerfectAvailable': _vm.audioSettings.isBitPerfectAvailable,
       'spectrumPeak': _vm.player.spectrum.value.fold<double>(0, (a, b) => a > b ? a : b),
       'tracksCount': _vm.library.tracks.length,
       'albumsCount': _vm.library.albums.length,

@@ -34,7 +34,7 @@ abstract class AudioDriver {
   /// The outputs this driver can play to.
   Future<List<AudioOutputDevice>> detectDevices();
 
-  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect});
+  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitPerfect});
   Future<void> play(String audioSource, AudioFormat format, Duration startPosition);
   Future<void> pause();
   Future<void> resume();

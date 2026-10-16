@@ -39,7 +39,7 @@ abstract final class MobileAudio {
       if (event.begin) {
         switch (event.type) {
           case AudioInterruptionType.duck:
-            if (!engine.isBitperfect) {
+            if (!engine.isBitPerfect) {
               ducked = true;
               engine.driver.setVolume(engine.volume * _duckLevel);
             }

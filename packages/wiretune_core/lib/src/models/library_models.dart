@@ -319,7 +319,7 @@ class AudioOutputDevice {
     this.driverType = 'Default',
     this.hardwareCard = '',
     this.isExclusiveSupported = false,
-    this.isBitperfectSupported = false,
+    this.isBitPerfectSupported = false,
     this.isDefault = false,
     this.supportedSampleRates = const [44100, 48000, 88200, 96000, 176400, 192000],
   }) : _name = name;
@@ -334,7 +334,7 @@ class AudioOutputDevice {
   final String driverType;
   final String hardwareCard;
   final bool isExclusiveSupported;
-  final bool isBitperfectSupported;
+  final bool isBitPerfectSupported;
   final bool isDefault;
   final List<int> supportedSampleRates;
 

@@ -44,9 +44,9 @@ class WiretuneAudioEngine {
   String? _nextSource;
   AudioOutputDevice? _currentDevice;
   bool _isExclusiveMode = false;
-  bool _isBitperfect = false;
+  bool _isBitPerfect = false;
   double _volume = 1.0;
-  double _volumeBeforeBitperfect = 1.0;
+  double _volumeBeforeBitPerfect = 1.0;
   bool _isMuted = false;
   VolumeNormalization _normalization = VolumeNormalization.off;
   String? _streamToken;
@@ -61,7 +61,7 @@ class WiretuneAudioEngine {
   final Event<PlaybackState> stateChanged = Event<PlaybackState>();
   final Event<Duration> positionChanged = Event<Duration>();
   final Event<Track?> trackChanged = Event<Track?>();
-  final Event<bool> bitperfectChanged = Event<bool>();
+  final Event<bool> bitPerfectChanged = Event<bool>();
   final Event<bool> exclusiveModeChanged = Event<bool>();
   final Event<Float32List> spectrumDataAvailable = Event<Float32List>();
   final Event<void> trackEnded = Event<void>();
@@ -75,10 +75,10 @@ class WiretuneAudioEngine {
   Track? get currentTrack => _currentTrack;
   PlaybackState get state => _driver.state;
   Duration get currentPosition => _driver.currentPosition;
-  double get volume => _isBitperfect ? 1.0 : (_isMuted ? 0.0 : _volume);
+  double get volume => _isBitPerfect ? 1.0 : (_isMuted ? 0.0 : _volume);
   bool get isMuted => _isMuted;
   bool get isExclusiveMode => _isExclusiveMode;
-  bool get isBitperfect => _isBitperfect;
+  bool get isBitPerfect => _isBitPerfect;
 
   /// The chosen volume normalization; bit-perfect output skips it.
   VolumeNormalization get normalization => _normalization;
@@ -96,11 +96,11 @@ class WiretuneAudioEngine {
     final isLossless = track.format.isLossless;
     final device = _currentDevice?.displayTitle ?? Localizer.get('DefaultOutput');
     var processing = Localizer.get(
-      _isBitperfect
+      _isBitPerfect
           ? (isLossless ? 'SignalProcessingBitPerfect' : 'SignalProcessingBitPerfectLossy')
           : 'SignalProcessingMixer',
     );
-    if (!_isBitperfect && _normalization != VolumeNormalization.off) {
+    if (!_isBitPerfect && _normalization != VolumeNormalization.off) {
       processing = Localizer.format('SignalProcessingNormalized', [
         processing,
         Localizer.get(_normalization == VolumeNormalization.album ? 'NormalizationAlbum' : 'NormalizationTrack'),
@@ -152,7 +152,7 @@ class WiretuneAudioEngine {
     if (device != null) _dropModesTheDeviceLacks(device);
     if (device != null) {
       try {
-        await _driver.initialize(device, exclusive: _isExclusiveMode, bitperfect: _isBitperfect);
+        await _driver.initialize(device, exclusive: _isExclusiveMode, bitPerfect: _isBitPerfect);
       } catch (e, s) {
         WiretuneLog.error('AudioEngine', "Initialising output '${device.name}' failed: $e", e, s);
         playbackFailed.emit(Localizer.format('EngineDeviceInitFailed', [device.name, '$e']));
@@ -231,7 +231,7 @@ class WiretuneAudioEngine {
   Future<void> seek(Duration position) => _driver.seek(position);
 
   void setVolume(double volume) {
-    if (_isBitperfect) {
+    if (_isBitPerfect) {
       _driver.setVolume(1.0);
       return;
     }
@@ -246,7 +246,7 @@ class WiretuneAudioEngine {
 
   void setMuted(bool muted) {
     _isMuted = muted;
-    if (!_isBitperfect) _driver.setVolume(_isMuted ? 0.0 : _volume);
+    if (!_isBitPerfect) _driver.setVolume(_isMuted ? 0.0 : _volume);
   }
 
   Future<void> setExclusiveMode(bool enabled) async {
@@ -262,7 +262,7 @@ class WiretuneAudioEngine {
       }
       _currentDevice = exclusiveDevice;
     } else {
-      if (_isBitperfect) _disableBitperfect();
+      if (_isBitPerfect) _disableBitPerfect();
       _currentDevice =
           _availableDevices.where((d) => d.isDefault).firstOrNull ?? _availableDevices.firstOrNull ?? _currentDevice;
     }
@@ -272,23 +272,23 @@ class WiretuneAudioEngine {
     await _reinitializeOutput();
   }
 
-  Future<void> setBitperfectMode(bool enabled) async {
+  Future<void> setBitPerfectMode(bool enabled) async {
     await _initialDeviceScan;
-    if (_isBitperfect == enabled) return;
+    if (_isBitPerfect == enabled) return;
 
     if (!enabled) {
-      _disableBitperfect();
+      _disableBitPerfect();
       await _reinitializeOutput();
       return;
     }
 
     final current = _currentDevice;
-    final device = current != null && current.isBitperfectSupported && current.isExclusiveSupported
+    final device = current != null && current.isBitPerfectSupported && current.isExclusiveSupported
         ? current
-        : _preferredExclusiveDevice(requireBitperfect: true);
+        : _preferredExclusiveDevice(requireBitPerfect: true);
     if (device == null) {
       playbackFailed.emit(Localizer.get('EngineNoBitPerfect'));
-      bitperfectChanged.emit(false);
+      bitPerfectChanged.emit(false);
       return;
     }
 
@@ -298,11 +298,11 @@ class WiretuneAudioEngine {
       exclusiveModeChanged.emit(true);
     }
 
-    _volumeBeforeBitperfect = _volume;
-    _isBitperfect = true;
+    _volumeBeforeBitPerfect = _volume;
+    _isBitPerfect = true;
     _volume = 1.0;
     _driver.setVolume(1.0);
-    bitperfectChanged.emit(true);
+    bitPerfectChanged.emit(true);
     await _reinitializeOutput();
   }
 
@@ -313,23 +313,23 @@ class WiretuneAudioEngine {
   }
 
   void _dropModesTheDeviceLacks(AudioOutputDevice device) {
-    if (_isBitperfect && !(device.isBitperfectSupported && device.isExclusiveSupported)) _disableBitperfect();
+    if (_isBitPerfect && !(device.isBitPerfectSupported && device.isExclusiveSupported)) _disableBitPerfect();
     if (_isExclusiveMode && !device.isExclusiveSupported) {
       _isExclusiveMode = false;
       exclusiveModeChanged.emit(false);
     }
   }
 
-  void _disableBitperfect() {
-    _isBitperfect = false;
-    _volume = _volumeBeforeBitperfect;
+  void _disableBitPerfect() {
+    _isBitPerfect = false;
+    _volume = _volumeBeforeBitPerfect;
     _driver.setVolume(_isMuted ? 0.0 : _volume);
-    bitperfectChanged.emit(false);
+    bitPerfectChanged.emit(false);
   }
 
-  AudioOutputDevice? _preferredExclusiveDevice({bool requireBitperfect = false}) {
+  AudioOutputDevice? _preferredExclusiveDevice({bool requireBitPerfect = false}) {
     final candidates = _availableDevices
-        .where((d) => d.isExclusiveSupported && (!requireBitperfect || d.isBitperfectSupported))
+        .where((d) => d.isExclusiveSupported && (!requireBitPerfect || d.isBitPerfectSupported))
         .toList();
     if (candidates.isEmpty) return null;
 
@@ -366,7 +366,7 @@ class WiretuneAudioEngine {
     final device = _currentDevice;
     if (device == null) return;
 
-    await _driver.initialize(device, exclusive: _isExclusiveMode, bitperfect: _isBitperfect);
+    await _driver.initialize(device, exclusive: _isExclusiveMode, bitPerfect: _isBitPerfect);
 
     final track = _currentTrack;
     if (track != null && state == PlaybackState.playing) {

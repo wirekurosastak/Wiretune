@@ -451,9 +451,9 @@ class _HeaderModes extends StatelessWidget {
           children: [
             modeBadge(
               label: 'BIT-PERFECT',
-              on: player.isBitperfect,
+              on: player.isBitPerfect,
               tier: QualityTier.gold,
-              onTap: player.toggleBitperfect,
+              onTap: player.toggleBitPerfect,
               tip: 'TipBitPerfect',
             ),
             const SizedBox(width: 8),

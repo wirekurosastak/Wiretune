@@ -88,7 +88,7 @@ class PlayerViewModel extends ChangeNotifier {
         }
       }),
       _engine.trackChanged.listen(_onEngineTrackChanged),
-      _engine.bitperfectChanged.listen((value) {
+      _engine.bitPerfectChanged.listen((value) {
         _volume = value ? 100 : (_engine.volume * 100).roundToDouble();
         notifyListeners();
       }),
@@ -166,7 +166,7 @@ class PlayerViewModel extends ChangeNotifier {
   RepeatMode get repeatMode => isRemote ? (_remoteState?.repeat ?? RepeatMode.off) : _repeat;
 
   bool get isExclusiveMode => _engine.isExclusiveMode;
-  bool get isBitperfect => _engine.isBitperfect;
+  bool get isBitPerfect => _engine.isBitPerfect;
   String? errorMessage;
 
   QualityTier get currentTier => currentTrack?.format.tier ?? QualityTier.silver;
@@ -176,7 +176,7 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isPlaying => playbackState == PlaybackState.playing;
 
   /// Bit-perfect pins the volume at 100 % (also on the device being controlled).
-  bool get isVolumeLocked => isRemote ? (_remoteState?.volumeLocked ?? false) : isBitperfect;
+  bool get isVolumeLocked => isRemote ? (_remoteState?.volumeLocked ?? false) : isBitPerfect;
   bool get isVolumeDisabledOrMuted => isMuted || isVolumeLocked;
   String get volumeToolTip =>
       Localizer.get(isMuted ? 'VolumeUnmute' : (isVolumeLocked ? 'VolumeLocked' : 'VolumeMute'));
@@ -628,7 +628,7 @@ class PlayerViewModel extends ChangeNotifier {
     _library.toggleFavorite(current.id);
   }
 
-  Future<void> toggleBitperfect() => _engine.setBitperfectMode(!isBitperfect);
+  Future<void> toggleBitPerfect() => _engine.setBitPerfectMode(!isBitPerfect);
 
   Future<void> toggleExclusiveMode() => _engine.setExclusiveMode(!isExclusiveMode);
 
@@ -695,7 +695,7 @@ class PlayerViewModel extends ChangeNotifier {
 
   void _setVolumeLocal(double value) {
     _volume = value.clamp(0, 100);
-    if (!isBitperfect) _engine.setVolume(_volume / 100.0);
+    if (!isBitPerfect) _engine.setVolume(_volume / 100.0);
     notifyListeners();
   }
 
@@ -708,7 +708,7 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void _setMutedLocal(bool muted) {
-    if (isBitperfect || _muted == muted) return;
+    if (isBitPerfect || _muted == muted) return;
     _muted = muted;
     _engine.setMuted(_muted);
     notifyListeners();
@@ -1264,7 +1264,7 @@ class PlayerViewModel extends ChangeNotifier {
       _state == PlaybackState.stopped,
       _volume,
       _muted,
-      isBitperfect,
+      isBitPerfect,
       _shuffle,
       _repeat,
       _queueVersion,
@@ -1299,7 +1299,7 @@ class PlayerViewModel extends ChangeNotifier {
         position: at,
         volume: _volume,
         muted: _muted,
-        volumeLocked: isBitperfect,
+        volumeLocked: isBitPerfect,
         shuffle: _shuffle,
         repeat: _repeat,
         queue: queue,

@@ -53,7 +53,7 @@ class TizenAudioDriver with AudioDriverEvents implements AudioDriver {
   ];
 
   @override
-  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect}) async {}
+  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitPerfect}) async {}
 
   @override
   Future<void> play(String audioSource, AudioFormat format, Duration startPosition) async {

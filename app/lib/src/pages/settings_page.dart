@@ -1101,7 +1101,7 @@ class _AudioCard extends StatelessWidget {
                         context.tr(key),
                         selected: mode == vm.normalization,
                         // Bit-perfect output is never normalized.
-                        onPressed: audio.isBitperfect ? null : () => vm.normalization = mode,
+                        onPressed: audio.isBitPerfect ? null : () => vm.normalization = mode,
                       ),
                   ],
                 ),
@@ -1169,22 +1169,22 @@ class _AudioCard extends StatelessWidget {
                       audio.isExclusiveAvailable,
                       audio.setExclusiveMode,
                     );
-                    final bitperfect = mode(
+                    final bitPerfect = mode(
                       'BIT-PERFECT',
                       QualityTier.gold,
                       context.tr('BitPerfectDescription'),
-                      audio.isBitperfect,
-                      audio.isBitperfectAvailable,
-                      audio.setBitperfect,
+                      audio.isBitPerfect,
+                      audio.isBitPerfectAvailable,
+                      audio.setBitPerfect,
                     );
                     if (constraints.maxWidth < 420) {
-                      return Column(children: [exclusive, const SizedBox(height: 10), bitperfect]);
+                      return Column(children: [exclusive, const SizedBox(height: 10), bitPerfect]);
                     }
                     return Row(
                       children: [
                         Expanded(child: exclusive),
                         const SizedBox(width: 10),
-                        Expanded(child: bitperfect),
+                        Expanded(child: bitPerfect),
                       ],
                     );
                   },

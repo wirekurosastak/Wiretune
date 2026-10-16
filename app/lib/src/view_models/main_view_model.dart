@@ -102,7 +102,7 @@ class MainViewModel extends ChangeNotifier {
 
     _unsubscribers.addAll([
       audioEngine.trackChanged.listen((_) => _updateStatusText()),
-      audioEngine.bitperfectChanged.listen((_) => _updateStatusText()),
+      audioEngine.bitPerfectChanged.listen((_) => _updateStatusText()),
       audioEngine.exclusiveModeChanged.listen((_) => _updateStatusText()),
       audioEngine.stateChanged.listen((_) => _updateStatusText()),
       audioEngine.devicesChanged.listen((_) => _updateStatusText()),
@@ -527,7 +527,7 @@ class MainViewModel extends ChangeNotifier {
     if (_disposed) return;
     final device = audioEngine.currentDevice;
     final mode = Localizer.get(
-      audioEngine.isBitperfect ? 'ModeBitPerfect' : (audioEngine.isExclusiveMode ? 'ModeExclusive' : 'ModeShared'),
+      audioEngine.isBitPerfect ? 'ModeBitPerfect' : (audioEngine.isExclusiveMode ? 'ModeExclusive' : 'ModeShared'),
     );
     final deviceName = device?.name ?? Localizer.get('DefaultOutput');
     final driver = device != null && device.driverType.trim().isNotEmpty ? '[${device.driverType}]' : '';

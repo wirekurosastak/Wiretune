@@ -504,7 +504,7 @@ class AudioSettingsViewModel extends ChangeNotifier {
   AudioSettingsViewModel(this._engine) {
     _unsubscribers.addAll([
       _engine.exclusiveModeChanged.listen((_) => _syncWithEngine()),
-      _engine.bitperfectChanged.listen((_) => _syncWithEngine()),
+      _engine.bitPerfectChanged.listen((_) => _syncWithEngine()),
       _engine.devicesChanged.listen((_) => refreshDeviceList()),
       _engine.trackChanged.listen((_) => _updateSignalPath()),
     ]);
@@ -515,9 +515,9 @@ class AudioSettingsViewModel extends ChangeNotifier {
   final List<void Function()> _unsubscribers = [];
 
   bool isExclusiveMode = false;
-  bool isBitperfect = false;
+  bool isBitPerfect = false;
   bool isExclusiveAvailable = false;
-  bool isBitperfectAvailable = false;
+  bool isBitPerfectAvailable = false;
   AudioOutputDevice? selectedDevice;
   String signalPath = '';
   String hardwareStatusText = '';
@@ -530,13 +530,13 @@ class AudioSettingsViewModel extends ChangeNotifier {
     availableDevices = List.of(_engine.availableDevices);
     selectedDevice = availableDevices.where((d) => d.id == _engine.currentDevice?.id).firstOrNull;
     isExclusiveAvailable = availableDevices.any((d) => d.isExclusiveSupported);
-    isBitperfectAvailable = availableDevices.any((d) => d.isBitperfectSupported && d.isExclusiveSupported);
+    isBitPerfectAvailable = availableDevices.any((d) => d.isBitPerfectSupported && d.isExclusiveSupported);
     _syncWithEngine();
   }
 
   void _syncWithEngine() {
     isExclusiveMode = _engine.isExclusiveMode;
-    isBitperfect = _engine.isBitperfect;
+    isBitPerfect = _engine.isBitPerfect;
     selectedDevice = availableDevices.where((d) => d.id == _engine.currentDevice?.id).firstOrNull ?? selectedDevice;
     _updateSignalPath();
   }
@@ -554,7 +554,7 @@ class AudioSettingsViewModel extends ChangeNotifier {
           ? '${AudioFormat.khz(device.supportedSampleRates.reduce((a, b) => a < b ? a : b))}–'
                 '${AudioFormat.khz(device.supportedSampleRates.reduce((a, b) => a > b ? a : b))} kHz'
           : Localizer.get('Unknown');
-      final modes = Localizer.get(device.isBitperfectSupported ? 'AudioModesFull' : 'AudioModesShared');
+      final modes = Localizer.get(device.isBitPerfectSupported ? 'AudioModesFull' : 'AudioModesShared');
       hardwareStatusText = '${device.name} [${device.driverType}] • $rates • $modes';
     }
     notifyListeners();
@@ -567,11 +567,11 @@ class AudioSettingsViewModel extends ChangeNotifier {
     _syncWithEngine();
   }
 
-  Future<void> setBitperfect(bool value) async {
-    isBitperfect = value;
+  Future<void> setBitPerfect(bool value) async {
+    isBitPerfect = value;
     if (value) isExclusiveMode = true;
     notifyListeners();
-    await _engine.setBitperfectMode(value);
+    await _engine.setBitPerfectMode(value);
     _syncWithEngine();
   }
 

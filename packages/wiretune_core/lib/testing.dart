@@ -54,16 +54,16 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   int playCalls = 0;
   AudioOutputDevice? device;
   bool isExclusive = false;
-  bool isBitperfect = false;
+  bool isBitPerfect = false;
 
   @override
   Future<List<AudioOutputDevice>> detectDevices() async => devices ?? [TestSupport.capableDevice];
 
   @override
-  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect}) async {
+  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitPerfect}) async {
     this.device = device;
     isExclusive = exclusive;
-    isBitperfect = bitperfect;
+    isBitPerfect = bitPerfect;
   }
 
   @override
@@ -145,7 +145,7 @@ abstract final class TestSupport {
     driverType: 'ALSA Direct',
     isDefault: true,
     isExclusiveSupported: true,
-    isBitperfectSupported: true,
+    isBitPerfectSupported: true,
   );
 
   static const AudioOutputDevice sharedOnlyDevice = AudioOutputDevice(

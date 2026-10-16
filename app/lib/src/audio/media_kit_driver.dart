@@ -66,7 +66,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   bool _exclusive = false;
 
   PlaybackState _state = PlaybackState.stopped;
-  bool _bitperfect = false;
+  bool _bitPerfect = false;
   double _volume = 1.0;
   VolumeNormalization _normalization = VolumeNormalization.off;
   int _generation = 0;
@@ -162,7 +162,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           driverType: 'ALSA Direct',
           hardwareCard: card,
           isExclusiveSupported: true,
-          isBitperfectSupported: true,
+          isBitPerfectSupported: true,
           supportedSampleRates: _rates,
         ),
     ];
@@ -190,7 +190,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           driverType: 'ALSA Direct',
           hardwareCard: card,
           isExclusiveSupported: true,
-          isBitperfectSupported: true,
+          isBitPerfectSupported: true,
           supportedSampleRates: _rates,
         );
       case 'wasapi':
@@ -200,7 +200,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           driverType: 'WASAPI',
           hardwareCard: description,
           isExclusiveSupported: true,
-          isBitperfectSupported: true,
+          isBitPerfectSupported: true,
           supportedSampleRates: _rates,
         );
       case 'coreaudio':
@@ -210,7 +210,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           driverType: 'Core Audio',
           hardwareCard: description,
           isExclusiveSupported: true,
-          isBitperfectSupported: true,
+          isBitPerfectSupported: true,
           supportedSampleRates: _rates,
         );
       case 'pipewire' || 'pulse':
@@ -227,9 +227,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   @override
-  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitperfect}) =>
+  Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitPerfect}) =>
       _output.synchronized(() async {
-        _bitperfect = bitperfect;
+        _bitPerfect = bitPerfect;
         _configuredDevice = device;
         _exclusive = exclusive;
         final native = _player.platform;
@@ -255,7 +255,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
         await native.setProperty('prefetch-playlist', 'yes');
         await native.setProperty('gapless-audio', 'weak');
         await native.setProperty('audio-samplerate', '0');
-        await native.setProperty('audio-channels', bitperfect ? 'auto' : 'auto-safe');
+        await native.setProperty('audio-channels', bitPerfect ? 'auto' : 'auto-safe');
         await _applyVolume();
       });
 
@@ -414,11 +414,11 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   Future<void> _applyNormalization() async {
     final native = _player.platform;
     if (native is! NativePlayer) return;
-    final mode = _bitperfect ? VolumeNormalization.off : _normalization;
+    final mode = _bitPerfect ? VolumeNormalization.off : _normalization;
     await native.setProperty('replaygain', mode == VolumeNormalization.off ? 'no' : mode.name);
   }
 
-  Future<void> _applyVolume() => _player.setVolume(_bitperfect ? 100 : _volume * 100);
+  Future<void> _applyVolume() => _player.setVolume(_bitPerfect ? 100 : _volume * 100);
 
   // ── mpv's reports ──────────────────────────────────────────────────────────────────────────────
 

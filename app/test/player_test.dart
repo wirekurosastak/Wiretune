@@ -331,7 +331,7 @@ void main() {
       expect(driver.volume, 0);
       player.toggleMute();
 
-      await player.toggleBitperfect();
+      await player.toggleBitPerfect();
       expect(player.isVolumeLocked, isTrue);
       expect(player.volume, 100);
       expect(driver.volume, 1.0); // unity gain where the samples are scaled
@@ -339,7 +339,7 @@ void main() {
       expect(driver.volume, 1.0);
       player.toggleMute(); // refused in bit-perfect mode
       expect(player.isMuted, isFalse);
-      await player.toggleBitperfect();
+      await player.toggleBitPerfect();
       expect(player.volume, 40);
     });
 

@@ -16,8 +16,8 @@ void main() {
     final driver = FakeAudioDriver();
     final engine = TestSupport.createEngine(driver);
     engine.setVolume(0.5);
-    await engine.setBitperfectMode(true);
-    expect(engine.isBitperfect, isTrue);
+    await engine.setBitPerfectMode(true);
+    expect(engine.isBitPerfect, isTrue);
     expect(driver.volume, 1.0);
 
     engine.setVolume(0.5); // must stay at 0 dB: no digital attenuation of the bits
@@ -31,9 +31,9 @@ void main() {
     engine.setVolume(0.75);
     expect(engine.volume, closeTo(0.75, 0.001));
 
-    await engine.setBitperfectMode(true);
+    await engine.setBitPerfectMode(true);
     expect(driver.volume, 1.0);
-    await engine.setBitperfectMode(false);
+    await engine.setBitPerfectMode(false);
     expect(engine.volume, closeTo(0.75, 0.001));
     expect(driver.volume, closeTo(0.75, 0.001));
   });
@@ -48,24 +48,24 @@ void main() {
     engine.setMuted(false);
     expect(driver.volume, closeTo(0.6, 0.001));
 
-    await engine.setBitperfectMode(true);
+    await engine.setBitPerfectMode(true);
     engine.setMuted(true);
     expect(driver.volume, 1.0);
   });
 
   test('bit-perfect switches exclusive on; switching exclusive off switches bit-perfect off', () async {
     final engine = TestSupport.createEngine();
-    await engine.setBitperfectMode(true);
-    expect(engine.isBitperfect, isTrue);
+    await engine.setBitPerfectMode(true);
+    expect(engine.isBitPerfect, isTrue);
     expect(engine.isExclusiveMode, isTrue);
 
     await engine.setExclusiveMode(false);
     expect(engine.isExclusiveMode, isFalse);
-    expect(engine.isBitperfect, isFalse);
+    expect(engine.isBitPerfect, isFalse);
 
     await engine.setExclusiveMode(true);
     expect(engine.isExclusiveMode, isTrue);
-    expect(engine.isBitperfect, isFalse);
+    expect(engine.isBitPerfect, isFalse);
   });
 
   test(
@@ -77,14 +77,14 @@ void main() {
       final engine = WiretuneAudioEngine(driver, deviceDetector: () async => devices);
       await engine.ready;
       engine.setVolume(0.4);
-      await engine.setBitperfectMode(true);
-      expect((engine.isExclusiveMode, engine.isBitperfect, driver.device?.id), (true, true, 'hw:1,0'));
+      await engine.setBitPerfectMode(true);
+      expect((engine.isExclusiveMode, engine.isBitPerfect, driver.device?.id), (true, true, 'hw:1,0'));
 
       devices = [systemDefault]; // the DAC was unplugged
       await engine.refreshDevices();
       expect(engine.currentDevice?.id, 'auto');
-      expect((engine.isExclusiveMode, engine.isBitperfect), (false, false));
-      expect((driver.isExclusive, driver.isBitperfect), (false, false));
+      expect((engine.isExclusiveMode, engine.isBitPerfect), (false, false));
+      expect((driver.isExclusive, driver.isBitPerfect), (false, false));
       expect(driver.volume, closeTo(0.4, 0.001)); // the volume from before bit-perfect is back
     },
   );
@@ -124,10 +124,10 @@ void main() {
     engine.playbackFailed.listen(failures.add);
 
     await engine.setExclusiveMode(true);
-    await engine.setBitperfectMode(true);
+    await engine.setBitPerfectMode(true);
 
     expect(engine.isExclusiveMode, isFalse);
-    expect(engine.isBitperfect, isFalse);
+    expect(engine.isBitPerfect, isFalse);
     expect(failures, hasLength(2));
   });
 
@@ -145,7 +145,7 @@ void main() {
       driverType: 'ALSA Direct',
       hardwareCard: 'SMSL USB AUDIO',
       isExclusiveSupported: true,
-      isBitperfectSupported: true,
+      isBitPerfectSupported: true,
     );
     final engine = TestSupport.createEngine(null, [sink, direct]);
     await engine.ready;
@@ -170,7 +170,7 @@ void main() {
     expect(engine.signalPathDescription, contains('Shared mode'));
     await engine.setExclusiveMode(true);
     expect(engine.signalPathDescription, contains('Exclusive mode'));
-    await engine.setBitperfectMode(true);
+    await engine.setBitPerfectMode(true);
     expect(engine.signalPathDescription, contains('Bit-perfect requested'));
     expect(engine.signalPathDescription, contains('no gain'));
     expect(engine.signalPathDescription, contains('Local file'));
@@ -207,7 +207,7 @@ void main() {
     engine.setNormalization(VolumeNormalization.album);
     expect(driver.normalization, VolumeNormalization.album);
     expect(engine.signalPathDescription, contains('volume normalization: Per album'));
-    await engine.setBitperfectMode(true);
+    await engine.setBitPerfectMode(true);
     expect(engine.signalPathDescription, isNot(contains('normalization')));
   });
 
@@ -267,13 +267,13 @@ void main() {
     expect(failures.single, contains('Nowhere'));
   });
 
-  test('switching to a device without bitperfect support automatically disables bitperfect mode', () async {
+  test('switching to a device without bit-perfect support turns bit-perfect mode off', () async {
     const exclusiveOnlyDevice = AudioOutputDevice(
       id: 'excl_only',
       name: 'Exclusive Only DAC',
       driverType: 'ALSA Direct',
       isExclusiveSupported: true,
-      isBitperfectSupported: false,
+      isBitPerfectSupported: false,
     );
     final engine = TestSupport.createEngine(null, [
       TestSupport.capableDevice,
@@ -282,23 +282,23 @@ void main() {
     ]);
     await engine.ready;
     engine.setVolume(0.7);
-    await engine.setBitperfectMode(true);
-    expect(engine.isBitperfect, isTrue);
+    await engine.setBitPerfectMode(true);
+    expect(engine.isBitPerfect, isTrue);
     expect(engine.volume, 1.0);
 
     // Switch to device supporting exclusive mode but NOT bit-perfect
     await engine.setOutputDevice(exclusiveOnlyDevice);
-    expect(engine.isBitperfect, isFalse);
+    expect(engine.isBitPerfect, isFalse);
     expect(engine.isExclusiveMode, isTrue);
     expect(engine.volume, closeTo(0.7, 0.001));
 
-    // Re-enable bitperfect on capableDevice, then switch to shared-only
+    // Bit-perfect on the capable device again, then the switch to a shared-only one
     await engine.setOutputDevice(TestSupport.capableDevice);
-    await engine.setBitperfectMode(true);
-    expect(engine.isBitperfect, isTrue);
+    await engine.setBitPerfectMode(true);
+    expect(engine.isBitPerfect, isTrue);
 
     await engine.setOutputDevice(TestSupport.sharedOnlyDevice);
-    expect(engine.isBitperfect, isFalse);
+    expect(engine.isBitPerfect, isFalse);
     expect(engine.isExclusiveMode, isFalse);
     expect(engine.volume, closeTo(0.7, 0.001));
   });
