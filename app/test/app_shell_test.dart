@@ -1268,4 +1268,17 @@ void main() {
     await settle(tester);
     expect(find.text(Localizer.get('Connect')), findsWidgets);
   });
+
+  testWidgets('the page opened while signed in, without the address field, closes cleanly', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary();
+      return createMainViewModel(library, null, await signedInSession(library));
+    });
+    vm.showLoginScreen();
+    await settle(tester);
+    expect(find.text(Localizer.get('Connect')), findsNothing);
+    vm.isLoginViewActive = false;
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+  });
 }

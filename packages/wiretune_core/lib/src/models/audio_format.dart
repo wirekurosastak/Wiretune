@@ -60,7 +60,7 @@ class AudioFormat {
   /// lossy ones.
   String get tagSpec => !isLossless
       ? '${codec.toUpperCase()} ${bitrateKbps}kbps'
-      : '${codec.toUpperCase()} ${bitsPerSample}bit/${khz(sampleRate)}kHz';
+      : '${codec.toUpperCase()} ${bitsPerSample}bit/${_khz(sampleRate)}kHz';
 
   /// The tag of a small cover: the format alone (`FLAC`, `MP3`, `MIXED`), in every tier; the tag's colour says the
   /// tier, so a hi-res FLAC reads `FLAC` in gold.
@@ -75,7 +75,7 @@ class AudioFormat {
   String get compactTagSpec => compactSpec(tier, tagSpec);
 
   /// A sample rate in kHz with at most one decimal: `44.1`, `96`, `2822.4`.
-  static String khz(int sampleRate) {
+  static String _khz(int sampleRate) {
     final text = (sampleRate / 1000.0).toStringAsFixed(1);
     return text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
   }

@@ -54,7 +54,8 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
             setMethodCallHandler { call, result ->
                 when (call.method) {
                     "setPlaying" -> {
-                        setPlaying(context, call.arguments as? Boolean ?: false)
+                        val arguments = call.arguments as? Map<*, *>
+                        setPlaying(context, arguments?.get("playing") == true, arguments?.get("streaming") == true)
                         result.success(null)
                     }
                     else -> result.notImplemented()
@@ -138,25 +139,32 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
             context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.absolutePath
         }
 
-    // The locks are released when playback stops, so they need no timeout.
+    /**
+     * The CPU stays awake while music plays, the Wi-Fi radio only while it is [streaming] over the network: a local file
+     * or a download leaves the radio free to sleep. The locks are released when playback stops, so they need no timeout.
+     */
     @SuppressLint("WakelockTimeout")
-    private fun setPlaying(context: Context, playing: Boolean) {
-        if (!playing) {
-            release()
-            return
+    private fun setPlaying(context: Context, playing: Boolean, streaming: Boolean) {
+        if (playing) {
+            val wake = wakeLock ?: (context.getSystemService(Context.POWER_SERVICE) as PowerManager)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Wiretune:playback")
+                .apply { setReferenceCounted(false) }
+            wakeLock = wake
+            if (!wake.isHeld) wake.acquire()
+        } else {
+            wakeLock?.takeIf { it.isHeld }?.release()
         }
-        val wake = wakeLock ?: (context.getSystemService(Context.POWER_SERVICE) as PowerManager)
-            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Wiretune:playback")
-            .apply { setReferenceCounted(false) }
-        wakeLock = wake
-        if (!wake.isHeld) wake.acquire()
 
-        @Suppress("DEPRECATION") // still the lock that keeps the radio awake for a stream (it is what ExoPlayer uses)
-        val wifi = wifiLock ?: (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
-            ?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Wiretune:stream")
-            ?.apply { setReferenceCounted(false) }
-        wifiLock = wifi
-        if (wifi != null && !wifi.isHeld) wifi.acquire()
+        if (streaming) {
+            @Suppress("DEPRECATION") // still the lock that keeps the radio awake for a stream (it is what ExoPlayer uses)
+            val wifi = wifiLock ?: (context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager)
+                ?.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Wiretune:stream")
+                ?.apply { setReferenceCounted(false) }
+            wifiLock = wifi
+            if (wifi != null && !wifi.isHeld) wifi.acquire()
+        } else {
+            wifiLock?.takeIf { it.isHeld }?.release()
+        }
     }
 
     private fun release() {

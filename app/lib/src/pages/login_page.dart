@@ -25,10 +25,16 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  late final _url = TextEditingController(text: context.vm.serverSettings.serverUrl);
+  final _url = TextEditingController();
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _setupCode = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _url.text = context.vm.serverSettings.serverUrl;
+  }
 
   @override
   void dispose() {

@@ -72,8 +72,8 @@ may resample.
 - A phone call pauses playback and its end resumes it; on Android another app's playback pauses it too, and a
   navigation prompt ducks it to 20 %. Unplugging headphones or losing Bluetooth pauses.
 - It keeps playing in the background, with the screen off, and the notification, lock screen, Control Center,
-  Bluetooth and headset buttons control it. On Android the app holds CPU and Wi-Fi locks while it plays, so a stream
-  keeps flowing.
+  Bluetooth and headset buttons control it. On Android the app keeps the CPU awake while it plays, and the Wi-Fi
+  radio while it streams, so a stream keeps flowing; local files and downloads leave the radio to sleep.
 - Android TV is the same app, steered by the remote. Android Auto lists albums, artists, playlists and favourites on
   the car's screen and takes voice search ("play … on Wiretune"); the playing happens on the phone.
 - iOS asks once for *local network* access, which a server on your LAN needs.

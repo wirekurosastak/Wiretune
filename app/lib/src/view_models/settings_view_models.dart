@@ -528,12 +528,8 @@ class AudioSettingsViewModel extends ChangeNotifier {
     if (device == null) {
       hardwareStatusText = Localizer.get('AudioNoOutput');
     } else {
-      final rates = device.supportedSampleRates.isNotEmpty
-          ? '${AudioFormat.khz(device.supportedSampleRates.reduce((a, b) => a < b ? a : b))}–'
-                '${AudioFormat.khz(device.supportedSampleRates.reduce((a, b) => a > b ? a : b))} kHz'
-          : Localizer.get('Unknown');
       final modes = Localizer.get(device.isBitPerfectSupported ? 'AudioModesFull' : 'AudioModesShared');
-      hardwareStatusText = '${device.name} [${device.driverType}] • $rates • $modes';
+      hardwareStatusText = '${device.name} [${device.driverType}] • $modes';
     }
     notifyListeners();
   }

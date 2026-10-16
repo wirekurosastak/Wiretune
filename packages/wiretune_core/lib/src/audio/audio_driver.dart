@@ -80,7 +80,6 @@ class AudioOutputDevice {
     this.isExclusiveSupported = false,
     this.isBitPerfectSupported = false,
     this.isDefault = false,
-    this.supportedSampleRates = const [44100, 48000, 88200, 96000, 176400, 192000],
   }) : _name = name;
 
   final String id;
@@ -95,7 +94,6 @@ class AudioOutputDevice {
   final bool isExclusiveSupported;
   final bool isBitPerfectSupported;
   final bool isDefault;
-  final List<int> supportedSampleRates;
 
   /// Name shown to the user. Devices without an explicit name get a translated "default output" text that is looked
   /// up when read, so it follows the interface language.

@@ -110,7 +110,7 @@ class WiretuneAudioEngine {
     final transport = Localizer.get(
       track.isLocal
           ? 'SignalTransportLocal'
-          : (_offlineCopy?.call(track) != null
+          : (!streams(track)
                 ? 'SignalTransportDownloaded'
                 : (isLossless ? 'SignalTransportServer' : 'SignalTransportServerLossy')),
     );
@@ -130,6 +130,9 @@ class WiretuneAudioEngine {
 
   /// Supplies the path of a downloaded copy of a server track: a track that has one plays from it, without the server.
   void setOfflineCopyProvider(String? Function(Track track)? provider) => _offlineCopy = provider;
+
+  /// Whether [track] plays over the network: a server track without a downloaded copy.
+  bool streams(Track track) => !track.isLocal && _offlineCopy?.call(track) == null;
 
   Future<void> refreshDevices() async {
     List<AudioOutputDevice> devices;
@@ -168,7 +171,7 @@ class WiretuneAudioEngine {
     trackChanged.emit(track);
 
     // A downloaded copy needs no token, and must not wait for a server that may be out of reach.
-    if (!track.isLocal && _streamTokenProvider != null && _offlineCopy?.call(track) == null) {
+    if (_streamTokenProvider != null && streams(track)) {
       await _refreshStreamToken();
       if (request != _request || _disposed) return;
     }
@@ -195,7 +198,7 @@ class WiretuneAudioEngine {
 
   Future<void> _offerNext() async {
     final track = _nextTrack;
-    if (track != null && !track.isLocal && _streamTokenProvider != null && _offlineCopy?.call(track) == null) {
+    if (track != null && _streamTokenProvider != null && streams(track)) {
       await _refreshStreamToken();
       if (_disposed || !identical(track, _nextTrack)) return;
     }

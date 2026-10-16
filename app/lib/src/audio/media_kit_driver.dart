@@ -163,12 +163,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           hardwareCard: card,
           isExclusiveSupported: true,
           isBitPerfectSupported: true,
-          supportedSampleRates: _rates,
         ),
     ];
   }
-
-  static const _rates = [44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000];
 
   /// What a device of mpv's list is, or null for entries that only repeat what "auto" already offers.
   static AudioOutputDevice? _describe(AudioDevice device) {
@@ -191,7 +188,6 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           hardwareCard: card,
           isExclusiveSupported: true,
           isBitPerfectSupported: true,
-          supportedSampleRates: _rates,
         );
       case 'wasapi':
         return AudioOutputDevice(
@@ -201,7 +197,6 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           hardwareCard: description,
           isExclusiveSupported: true,
           isBitPerfectSupported: true,
-          supportedSampleRates: _rates,
         );
       case 'coreaudio':
         return AudioOutputDevice(
@@ -211,7 +206,6 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           hardwareCard: description,
           isExclusiveSupported: true,
           isBitPerfectSupported: true,
-          supportedSampleRates: _rates,
         );
       case 'pipewire' || 'pulse':
         return AudioOutputDevice(
@@ -219,7 +213,6 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           name: description,
           driverType: output == 'pipewire' ? 'PipeWire' : 'PulseAudio',
           hardwareCard: description,
-          supportedSampleRates: _rates,
         );
       default:
         return null;

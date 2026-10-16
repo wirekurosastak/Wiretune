@@ -10,8 +10,9 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../platform.dart';
 
 /// The phone's side of playing music: the audio focus (a call pauses, a navigation prompt ducks, unplugged headphones
-/// pause), and on Android a CPU and Wi-Fi lock while playing, so a stream keeps flowing with the screen off. All of it
-/// is about the sound this phone makes: music it plays on another device (remote control) goes on through a call.
+/// pause), and on Android a CPU lock while playing and a Wi-Fi lock while the music comes over the network, so a stream
+/// keeps flowing with the screen off (a local file or a download leaves the radio free to sleep). All of it is about
+/// the sound this phone makes: music it plays on another device (remote control) goes on through a call.
 abstract final class MobileAudio {
   static const MethodChannel _power = MethodChannel('wiretune/power');
   static const double _duckLevel = 0.2;
@@ -23,17 +24,26 @@ abstract final class MobileAudio {
     var resumeAfterInterruption = false;
     var ducked = false;
 
-    engine.stateChanged.listen((state) async {
-      final playing = state == PlaybackState.playing;
-      if (playing) await session.setActive(true);
-      if (AppPlatform.current.isAndroid) {
-        try {
-          await _power.invokeMethod<void>('setPlaying', playing);
-        } on MissingPluginException {
-          // Not registered (tests): nothing to hold.
-        }
+    Future<void> holdLocks() async {
+      if (!AppPlatform.current.isAndroid) return;
+      final playing = engine.state == PlaybackState.playing;
+      final track = engine.currentTrack;
+      try {
+        await _power.invokeMethod<void>('setPlaying', {
+          'playing': playing,
+          'streaming': playing && track != null && engine.streams(track),
+        });
+      } on MissingPluginException {
+        // Not registered (tests): nothing to hold.
       }
+    }
+
+    engine.stateChanged.listen((state) async {
+      if (state == PlaybackState.playing) await session.setActive(true);
+      await holdLocks();
     });
+    // The next track may come from elsewhere (a stream after a download) without playback ever pausing.
+    engine.trackChanged.listen((_) => holdLocks());
 
     session.interruptionEventStream.listen((event) async {
       if (event.begin) {
