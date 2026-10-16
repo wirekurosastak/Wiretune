@@ -631,11 +631,7 @@ class TrackMenu extends StatelessWidget {
       case TrackAction.openArtist:
         vm.openArtistByName(track.primaryArtist);
       case TrackAction.hideTrack:
-        if (vm.library.isTrackExplicitlyHidden(track.id)) {
-          vm.library.unhideTrack(track.id);
-        } else {
-          vm.library.hideTrack(track.id);
-        }
+        vm.library.setHidden(HiddenKind.track, track.id, !vm.library.isTrackExplicitlyHidden(track.id));
     }
   }
 

@@ -336,7 +336,7 @@ void main() {
       expect({for (final t in repo.getAllTracks()) t.album}, {'Gold: Greatest Hits', 'The Singles'});
 
       // With the other song hidden, the folder holds one album's song: it goes back to its tags.
-      service.hideTrack('2');
+      service.setHidden(HiddenKind.track, '2', true);
       final alone = service.albums.single;
       expect((alone.title, alone.tracks.single.trackNumber), ('Gold: Greatest Hits', 3));
     });
@@ -536,7 +536,7 @@ void main() {
     expect(service.favorites, hasLength(1));
 
     // 1. Hide track 1
-    service.hideTrack('t1');
+    service.setHidden(HiddenKind.track, 't1', true);
     expect(service.isTrackHidden(t1), isTrue);
     expect(service.isTrackExplicitlyHidden('t1'), isTrue);
     expect(service.tracks.map((t) => t.id), ['t2', 't3']);
@@ -550,31 +550,31 @@ void main() {
 
     // 2. Hide Album 1 (precedence & hierarchy)
     final album1Id = t1.albumId;
-    service.hideAlbum(album1Id);
-    expect(service.hiddenAlbums, contains(album1Id));
+    service.setHidden(HiddenKind.album, album1Id, true);
+    expect(service.hidden(HiddenKind.album), contains(album1Id));
     expect(service.isTrackHidden(t2), isTrue); // t2 is hidden via album
     expect(service.albums.map((a) => a.id), [t3.albumId]);
     expect(service.tracks.map((t) => t.id), ['t3']);
 
     // 3. Unhide Album 1: Non-destructive hierarchy test!
     // t1 was explicitly hidden, so when Album 1 is unhidden, t1 MUST STILL be hidden, while t2 reappears.
-    service.unhideAlbum(album1Id);
-    expect(service.hiddenAlbums, isNot(contains(album1Id)));
+    service.setHidden(HiddenKind.album, album1Id, false);
+    expect(service.hidden(HiddenKind.album), isNot(contains(album1Id)));
     expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
     expect(service.isTrackHidden(t2), isFalse); // visible again
     expect(service.tracks.map((t) => t.id), ['t2', 't3']);
 
     // 4. Hide Artist A: hides Album 1 and all its tracks
     final artistAId = service.artists.firstWhere((a) => a.name == 'Artist A').id;
-    service.hideArtist(artistAId);
-    expect(service.hiddenArtists, contains(artistAId));
+    service.setHidden(HiddenKind.artist, artistAId, true);
+    expect(service.hidden(HiddenKind.artist), contains(artistAId));
     expect(service.isTrackHidden(t2), isTrue);
     expect(service.artists.map((a) => a.name), ['Artist B']);
     expect(service.tracks.map((t) => t.id), ['t3']);
 
     // 5. Unhide Artist A: non-destructive hierarchy
-    service.unhideArtist(artistAId);
-    expect(service.hiddenArtists, isNot(contains(artistAId)));
+    service.setHidden(HiddenKind.artist, artistAId, false);
+    expect(service.hidden(HiddenKind.artist), isNot(contains(artistAId)));
     expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
     expect(service.isTrackHidden(t2), isFalse); // visible again
 
@@ -601,7 +601,7 @@ void main() {
 
     service.serverConnected = true; // an account's hidden items change only while signed in to its server
     service.setCurrentUser('user_alpha');
-    service.hideTrack('t1');
+    service.setHidden(HiddenKind.track, 't1', true);
     expect(service.isTrackHidden(t1), isTrue);
     expect(service.tracks, isEmpty);
 
@@ -640,19 +640,19 @@ void main() {
       final restarted = _service(repo);
       restarted.initialize();
       restarted.setCurrentUser('account');
-      expect(restarted.hiddenTracks, contains('s1'));
+      expect(restarted.hidden(HiddenKind.track), contains('s1'));
       expect(restarted.tracks, isEmpty);
 
       // Offline, a change would be lost at the next refresh, so it is not made, nor sent; the user is told why.
-      final sent = <HiddenChangeEvent>[];
+      final sent = <({HiddenKind kind, String id, bool hidden})>[];
       final notices = <ChangeNotice>[];
       restarted.hiddenToggled.listen(sent.add);
       restarted.changeNotice.listen(notices.add);
       expect(restarted.canChangeHidden, isFalse);
-      restarted.unhideTrack('s1');
-      restarted.hideArtist('artist-b');
-      expect(restarted.hiddenTracks, contains('s1'));
-      expect(restarted.hiddenArtists, isEmpty);
+      restarted.setHidden(HiddenKind.track, 's1', false);
+      restarted.setHidden(HiddenKind.artist, 'artist-b', true);
+      expect(restarted.hidden(HiddenKind.track), contains('s1'));
+      expect(restarted.hidden(HiddenKind.artist), isEmpty);
       expect(sent, isEmpty);
       expect(notices, [ChangeNotice.readOnlyOffline, ChangeNotice.readOnlyOffline]);
 
@@ -665,20 +665,20 @@ void main() {
 
       // Signed in again, a change is made and sent on.
       restarted.serverConnected = true;
-      restarted.unhideTrack('s1');
+      restarted.setHidden(HiddenKind.track, 's1', false);
       expect(restarted.tracks, hasLength(1));
-      expect(sent.map((e) => (e.itemType, e.itemId, e.hidden)), [('track', 's1', false)]);
+      expect(sent.map((e) => (e.kind, e.id, e.hidden)), [(HiddenKind.track, 's1', false)]);
 
       // Without an account, hiding is the device's own business.
       restarted.removeServerTracks();
       restarted.serverConnected = false;
       expect(restarted.canChangeHidden, isTrue);
-      restarted.hideArtist('artist-b');
-      expect(restarted.hiddenArtists, contains('artist-b'));
+      restarted.setHidden(HiddenKind.artist, 'artist-b', true);
+      expect(restarted.hidden(HiddenKind.artist), contains('artist-b'));
       expect(sent, hasLength(1));
       restarted.createPlaylist('Local');
       expect(notices, isEmpty);
-      expect(repo.getHiddenItems('account')['track'], isEmpty); // the account's copy left with its tracks
+      expect(repo.getHiddenItems('account')[HiddenKind.track], isEmpty); // the account's copy left with its tracks
     },
   );
 

@@ -59,22 +59,19 @@ class UserDataService {
     final hiddenRows = db.select('SELECT item_type, item_id FROM user_hidden WHERE user_id = ? ORDER BY hidden_at', [
       userId,
     ]);
-    final hiddenArtists = <String>[];
-    final hiddenAlbums = <String>[];
-    final hiddenTracks = <String>[];
+    final hidden = {for (final kind in HiddenKind.values) kind: <String>[]};
     for (final r in hiddenRows) {
-      final type = r['item_type'] as String;
-      final id = r['item_id'] as String;
-      switch (type) {
-        case 'artist':
-          hiddenArtists.add(id);
-        case 'album':
-          hiddenAlbums.add(id);
-        case 'track':
-          hiddenTracks.add(id);
-      }
+      hidden[HiddenKind.parse(r['item_type'])]?.add(r['item_id'] as String);
     }
-    return UserDataSnapshot(favorites, plays, playlists, favoritedAt, hiddenArtists, hiddenAlbums, hiddenTracks);
+    return UserDataSnapshot(
+      favorites,
+      plays,
+      playlists,
+      favoritedAt,
+      hidden[HiddenKind.artist]!,
+      hidden[HiddenKind.album]!,
+      hidden[HiddenKind.track]!,
+    );
   }
 
   /// False when the account is at its favourites limit and nothing was added.
@@ -89,20 +86,20 @@ class UserDataService {
   }
 
   /// Sets whether an artist, album or track is hidden for [userId]. False when the account is at its hidden limit.
-  bool setHidden(String userId, String itemType, String itemId, bool hidden) {
+  bool setHidden(String userId, HiddenKind kind, String itemId, bool hidden) {
     final db = _db.connection;
     if (!hidden) {
       db.execute('DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?', [
         userId,
-        itemType,
+        kind.name,
         itemId,
       ]);
       return true;
     }
-    db.execute(_hiddenInsertSql, [userId, itemType, itemId, toDbTime(DateTime.now()), UserDataRules.maxHidden]);
+    db.execute(_hiddenInsertSql, [userId, kind.name, itemId, toDbTime(DateTime.now()), UserDataRules.maxHidden]);
     return db.select('SELECT 1 FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?', [
       userId,
-      itemType,
+      kind.name,
       itemId,
     ]).isNotEmpty;
   }

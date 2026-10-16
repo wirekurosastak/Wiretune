@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import '../models/audio_format.dart';
 import '../models/library_models.dart';
+import '../models/protocol.dart';
 import '../util/time.dart';
 import 'database_manager.dart';
 
@@ -258,39 +259,33 @@ class LibraryRepository {
     return db.select('SELECT value FROM settings WHERE key = ?', [key]).first['value'] as String;
   }
 
-  Map<String, Set<String>> getHiddenItems([String userId = 'local']) {
+  /// What [userId] hid ('local': this device's own), by kind.
+  Map<HiddenKind, Set<String>> getHiddenItems([String userId = 'local']) {
     final rows = _db.connection.select('SELECT item_type, item_id FROM user_hidden WHERE user_id = ?', [userId]);
-    final result = <String, Set<String>>{'artist': <String>{}, 'album': <String>{}, 'track': <String>{}};
+    final result = {for (final kind in HiddenKind.values) kind: <String>{}};
     for (final r in rows) {
-      final type = r['item_type'] as String;
-      final id = r['item_id'] as String;
-      result.putIfAbsent(type, () => <String>{}).add(id);
+      result[HiddenKind.parse(r['item_type'])]?.add(r['item_id'] as String);
     }
     return result;
   }
 
-  void setHiddenItem(String itemType, String itemId, bool hidden, [String userId = 'local']) {
+  void setHiddenItem(HiddenKind kind, String id, bool hidden, [String userId = 'local']) {
     if (hidden) {
       _db.connection.execute(
         'INSERT OR REPLACE INTO user_hidden (user_id, item_type, item_id, hidden_at) VALUES (?, ?, ?, ?)',
-        [userId, itemType, itemId, toDbTime(DateTime.now().toUtc())],
+        [userId, kind.name, id, toDbTime(DateTime.now().toUtc())],
       );
     } else {
       _db.connection.execute('DELETE FROM user_hidden WHERE user_id = ? AND item_type = ? AND item_id = ?', [
         userId,
-        itemType,
-        itemId,
+        kind.name,
+        id,
       ]);
     }
   }
 
-  /// Makes the hidden items of [userId] exactly these, in one transaction.
-  void replaceHiddenItems(
-    String userId, {
-    required Iterable<String> artists,
-    required Iterable<String> albums,
-    required Iterable<String> tracks,
-  }) {
+  /// Makes the hidden items of [userId] exactly [items], in one transaction.
+  void replaceHiddenItems(String userId, Map<HiddenKind, Iterable<String>> items) {
     final now = toDbTime(DateTime.now().toUtc());
     _db.transaction((db) {
       db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
@@ -298,9 +293,9 @@ class LibraryRepository {
         'INSERT OR IGNORE INTO user_hidden (user_id, item_type, item_id, hidden_at) VALUES (?, ?, ?, ?)',
       );
       try {
-        for (final (type, ids) in [('artist', artists), ('album', albums), ('track', tracks)]) {
+        for (final MapEntry(key: kind, value: ids) in items.entries) {
           for (final id in ids) {
-            insert.execute([userId, type, id, now]);
+            insert.execute([userId, kind.name, id, now]);
           }
         }
       } finally {

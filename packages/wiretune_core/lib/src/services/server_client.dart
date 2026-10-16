@@ -161,11 +161,8 @@ class ServerStreamingClient {
   Future<void> setFavorite(String baseUrl, String trackId, bool favorite) =>
       _send(favorite ? 'PUT' : 'DELETE', baseUrl, '/api/me/favorites/${Uri.encodeComponent(trackId)}');
 
-  Future<void> setHidden(String baseUrl, String itemType, String itemId, bool hidden) => _send(
-    hidden ? 'PUT' : 'DELETE',
-    baseUrl,
-    '/api/me/hidden/${Uri.encodeComponent(itemType)}/${Uri.encodeComponent(itemId)}',
-  );
+  Future<void> setHidden(String baseUrl, HiddenKind kind, String id, bool hidden) =>
+      _send(hidden ? 'PUT' : 'DELETE', baseUrl, '/api/me/hidden/${kind.name}/${Uri.encodeComponent(id)}');
 
   Future<TrackPlayStats> recordPlay(String baseUrl, String trackId) async =>
       _parse(TrackPlayStats.fromJson, await _send('POST', baseUrl, '/api/me/plays/${Uri.encodeComponent(trackId)}'));

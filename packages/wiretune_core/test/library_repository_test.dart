@@ -251,9 +251,9 @@ void main() {
     final (upgraded, again) = await open();
     expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
     final hidden = upgraded.getHiddenItems('user1');
-    expect(hidden['track'], isEmpty);
-    expect(hidden['album'], isEmpty);
-    expect(hidden['artist'], isEmpty);
+    expect(hidden[HiddenKind.track], isEmpty);
+    expect(hidden[HiddenKind.album], isEmpty);
+    expect(hidden[HiddenKind.artist], isEmpty);
   });
 
   test('a database of schema 5 is upgraded, and its files are read again for their artists', () async {
@@ -308,31 +308,31 @@ void main() {
 
   test('user_hidden items persist, isolate users, and clear correctly', () async {
     final (repo, _) = await open();
-    repo.setHiddenItem('track', 't1', true, 'u1');
-    repo.setHiddenItem('album', 'al1', true, 'u1');
-    repo.setHiddenItem('artist', 'ar1', true, 'u1');
-    repo.setHiddenItem('track', 't2', true, 'u2');
+    repo.setHiddenItem(HiddenKind.track, 't1', true, 'u1');
+    repo.setHiddenItem(HiddenKind.album, 'al1', true, 'u1');
+    repo.setHiddenItem(HiddenKind.artist, 'ar1', true, 'u1');
+    repo.setHiddenItem(HiddenKind.track, 't2', true, 'u2');
 
     final u1Hidden = repo.getHiddenItems('u1');
-    expect(u1Hidden['track'], {'t1'});
-    expect(u1Hidden['album'], {'al1'});
-    expect(u1Hidden['artist'], {'ar1'});
+    expect(u1Hidden[HiddenKind.track], {'t1'});
+    expect(u1Hidden[HiddenKind.album], {'al1'});
+    expect(u1Hidden[HiddenKind.artist], {'ar1'});
 
     final u2Hidden = repo.getHiddenItems('u2');
-    expect(u2Hidden['track'], {'t2'});
-    expect(u2Hidden['album'], isEmpty);
-    expect(u2Hidden['artist'], isEmpty);
+    expect(u2Hidden[HiddenKind.track], {'t2'});
+    expect(u2Hidden[HiddenKind.album], isEmpty);
+    expect(u2Hidden[HiddenKind.artist], isEmpty);
 
     // Unhide t1
-    repo.setHiddenItem('track', 't1', false, 'u1');
+    repo.setHiddenItem(HiddenKind.track, 't1', false, 'u1');
     final u1After = repo.getHiddenItems('u1');
-    expect(u1After['track'], isEmpty);
-    expect(u1After['album'], {'al1'});
+    expect(u1After[HiddenKind.track], isEmpty);
+    expect(u1After[HiddenKind.album], {'al1'});
 
     // Clear u1
     repo.clearHiddenItems('u1');
-    expect((repo.getHiddenItems('u1'))['album'], isEmpty);
-    expect((repo.getHiddenItems('u2'))['track'], {'t2'});
+    expect((repo.getHiddenItems('u1'))[HiddenKind.album], isEmpty);
+    expect((repo.getHiddenItems('u2'))[HiddenKind.track], {'t2'});
   });
 
   test('initializing the schema twice changes nothing', () async {

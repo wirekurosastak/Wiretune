@@ -30,7 +30,7 @@ class ServerSession {
       _library.playRecorded.listen((track) => _change(() => _pushPlay(track))),
       _library.playlistEdited.listen((playlist) => _change(() => _pushPlaylist(playlist.id))),
       _library.playlistRemoved.listen((id) => _change(() => _pushPlaylistRemoved(id))),
-      _library.hiddenToggled.listen((event) => _change(() => _pushHidden(event.itemType, event.itemId, event.hidden))),
+      _library.hiddenToggled.listen((change) => _change(() => _pushHidden(change.kind, change.id, change.hidden))),
     ]);
   }
 
@@ -521,10 +521,10 @@ class ServerSession {
     await _sendChange(() => _client.deletePlaylist(serverUrl, playlistId));
   }
 
-  Future<void> _pushHidden(String itemType, String itemId, bool hidden) async {
+  Future<void> _pushHidden(HiddenKind kind, String id, bool hidden) async {
     if (!_canPush) return;
-    final sent = await _sendChange(() => _client.setHidden(serverUrl, itemType, itemId, hidden));
-    if (!sent) _library.setHiddenLocal(itemType, itemId, !hidden);
+    final sent = await _sendChange(() => _client.setHidden(serverUrl, kind, id, hidden));
+    if (!sent) _library.setHiddenLocal(kind, id, !hidden);
   }
 
   void dispose() {

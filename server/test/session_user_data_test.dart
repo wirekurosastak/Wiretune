@@ -236,7 +236,7 @@ void main() {
       expect(phone.library.tracks, hasLength(3));
 
       final trackToHide = phone.library.tracks.first;
-      phone.library.hideTrack(trackToHide.id);
+      phone.library.setHidden(HiddenKind.track, trackToHide.id, true);
       await phone.session.flushUserData();
 
       final data = await serverData(admin);
@@ -247,10 +247,10 @@ void main() {
       final laptop = await device('laptop-hidden');
       await laptop.signIn(server);
       expect(laptop.library.tracks, hasLength(2));
-      expect(laptop.library.hiddenTracks, contains(trackToHide.id));
+      expect(laptop.library.hidden(HiddenKind.track), contains(trackToHide.id));
 
       // Unhide from laptop
-      laptop.library.unhideTrack(trackToHide.id);
+      laptop.library.setHidden(HiddenKind.track, trackToHide.id, false);
       await laptop.session.flushUserData();
 
       await phone.session.refreshLibrary();
@@ -258,7 +258,7 @@ void main() {
       expect(phone.library.isTrackHidden(trackToHide), isFalse);
 
       // The laptop restarts while the server is away: what the account hid stays hidden there.
-      laptop.library.hideTrack(trackToHide.id);
+      laptop.library.setHidden(HiddenKind.track, trackToHide.id, true);
       await laptop.session.flushUserData();
       laptop.session.dispose();
       devices.remove(laptop);
@@ -268,7 +268,7 @@ void main() {
       library.initialize();
       offline.initialize();
       expect(offline.state, ServerConnectionState.offline);
-      expect(library.hiddenTracks, contains(trackToHide.id));
+      expect(library.hidden(HiddenKind.track), contains(trackToHide.id));
       expect(library.tracks, hasLength(2));
     });
 
@@ -281,15 +281,15 @@ void main() {
       final playlist = d.library.createPlaylist('List');
       d.library.addTracksToPlaylist(playlist.id, [track.id]);
       final hidden = d.library.tracks.last;
-      d.library.hideTrack(hidden.id);
+      d.library.setHidden(HiddenKind.track, hidden.id, true);
       final account = d.session.currentUser!.id;
-      expect(d.repo.getHiddenItems(account)['track'], {hidden.id});
+      expect(d.repo.getHiddenItems(account)[HiddenKind.track], {hidden.id});
 
       await d.session.logout();
       expect(d.library.tracks, isEmpty);
       expect(d.library.playlists.any((pl) => pl.isServer), isFalse);
       expect(d.library.serverConnected, isFalse);
-      expect(d.repo.getHiddenItems(account)['track'], isEmpty);
+      expect(d.repo.getHiddenItems(account)[HiddenKind.track], isEmpty);
       expect(d.repo.getSetting('auth_user_id'), '');
 
       expect(await d.session.login('owner', adminPassword, true), isNull);
@@ -298,7 +298,7 @@ void main() {
       final restored = d.library.playlists.single;
       expect(restored.isServer, isTrue);
       expect(restored.trackIds, [track.id]);
-      expect(d.library.hiddenTracks, contains(hidden.id));
+      expect(d.library.hidden(HiddenKind.track), contains(hidden.id));
     });
 
     test('a change made just before a refresh is not undone by it', () async {

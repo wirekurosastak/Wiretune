@@ -646,7 +646,8 @@ class WiretuneServer {
   Response _setHidden(_Call call, bool hidden) {
     final type = call.params['type']!;
     final itemId = call.params['itemId']!;
-    if (type != 'artist' && type != 'album' && type != 'track') {
+    final kind = HiddenKind.parse(type);
+    if (kind == null) {
       return errorResponse(
         400,
         ErrorCodes.invalidItemType,
@@ -655,7 +656,7 @@ class WiretuneServer {
     }
     final error = UserDataRules.validateId(itemId);
     if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
-    if (!userData.setHidden(call.userId, type, itemId, hidden)) {
+    if (!userData.setHidden(call.userId, kind, itemId, hidden)) {
       return errorResponse(
         409,
         ErrorCodes.hiddenLimit,
@@ -664,7 +665,7 @@ class WiretuneServer {
       );
     }
     _dataChanged(call);
-    return jsonResponse({'itemType': type, 'itemId': itemId, 'hidden': hidden});
+    return jsonResponse({'itemType': kind.name, 'itemId': itemId, 'hidden': hidden});
   }
 
   Future<Response> _savePlaylist(_Call call) async {

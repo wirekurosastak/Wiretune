@@ -124,7 +124,7 @@ class CollectionMenu {
     removeKey: 'HideAlbum',
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (vm) {
-      vm.library.hideAlbum(album.id);
+      vm.library.setHidden(HiddenKind.album, album.id, true);
       if (vm.albums.selectedAlbum?.id == album.id) vm.albums.closeAlbumDetail();
     },
   );
@@ -141,7 +141,7 @@ class CollectionMenu {
     removeKey: 'HideArtist',
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (vm) {
-      vm.library.hideArtist(artist.id);
+      vm.library.setHidden(HiddenKind.artist, artist.id, true);
       if (vm.artists.selectedArtist?.id == artist.id) vm.artists.closeArtistDetail();
     },
   );

@@ -10,7 +10,6 @@ import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
-import '../view_models/main_view_model.dart';
 import '../view_models/settings_view_models.dart';
 import '../widgets/common.dart';
 import '../widgets/devices.dart';

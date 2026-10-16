@@ -42,9 +42,6 @@ class AppNotice {
   final bool isError;
 }
 
-/// What kind of thing the user hid.
-enum HiddenKind { artist, album, track }
-
 /// An artist, album or track the user hid, and the name the settings list it by.
 class HiddenItem {
   const HiddenItem(this.kind, this.id, this.label);
@@ -740,15 +737,11 @@ class MainViewModel extends ChangeNotifier {
   /// again only when the library changes: the names come from the tracks, as artists and albums are hidden by hashes.
   List<HiddenItem> get hiddenItems => _hidden ??= _describeHidden();
 
-  void unhide(HiddenItem item) => switch (item.kind) {
-    HiddenKind.artist => library.unhideArtist(item.id),
-    HiddenKind.album => library.unhideAlbum(item.id),
-    HiddenKind.track => library.unhideTrack(item.id),
-  };
+  void unhide(HiddenItem item) => library.setHidden(item.kind, item.id, false);
 
   List<HiddenItem> _describeHidden() {
-    final artists = library.hiddenArtists;
-    final albums = library.hiddenAlbums;
+    final artists = library.hidden(HiddenKind.artist);
+    final albums = library.hidden(HiddenKind.album);
     // An artist goes by the album artist of its first track (hidden as either the track's artist or its album
     // artist), an album by its title and album artist.
     final artistNames = <String, String>{};
@@ -768,7 +761,7 @@ class MainViewModel extends ChangeNotifier {
     return [
       for (final id in artists) HiddenItem(HiddenKind.artist, id, artistNames[id] ?? id),
       for (final id in albums) HiddenItem(HiddenKind.album, id, albumNames[id] ?? id),
-      for (final id in library.hiddenTracks)
+      for (final id in library.hidden(HiddenKind.track))
         HiddenItem(HiddenKind.track, id, switch (library.getTrack(id)) {
           final track? => '${track.title} • ${track.artist}',
           null => id,

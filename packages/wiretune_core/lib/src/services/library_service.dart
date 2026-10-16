@@ -25,14 +25,6 @@ import 'wiretune_log.dart';
 /// changed while the server is out of reach, and a playlist made then stays on this device.
 enum ChangeNotice { readOnlyOffline, playlistKeptOnDevice }
 
-/// The user hid or showed again an artist, an album or a track (`itemType` is `artist`, `album` or `track`).
-class HiddenChangeEvent {
-  const HiddenChangeEvent(this.itemType, this.itemId, this.hidden);
-  final String itemType;
-  final String itemId;
-  final bool hidden;
-}
-
 /// The library: every track (local and from a server), the albums and artists built from them, and the playlists. It
 /// is held in memory as an immutable snapshot that is replaced wholesale after every change, so readers need no lock.
 class LibraryService {
@@ -54,9 +46,7 @@ class LibraryService {
   // its files, the signed-in account's for the server's tracks as the server last told them.
   final Map<String, DateTime?> _favorites = {};
   final Map<String, PlayStats> _plays = {};
-  final Set<String> _hiddenTracks = <String>{};
-  final Set<String> _hiddenAlbums = <String>{};
-  final Set<String> _hiddenArtists = <String>{};
+  final Map<HiddenKind, Set<String>> _hidden = {for (final kind in HiddenKind.values) kind: <String>{}};
 
   /// Whose hidden items apply: [_noAccount] without a server account, else the account's ID. The device keeps a copy
   /// of the account's, which the server's replace at every refresh, so they also apply while it cannot be reached.
@@ -86,9 +76,8 @@ class LibraryService {
   int playCount(String trackId) => _plays[trackId]?.count ?? 0;
   DateTime? lastPlayedAt(String trackId) => _plays[trackId]?.lastPlayedAt;
 
-  Set<String> get hiddenTracks => Set.unmodifiable(_hiddenTracks);
-  Set<String> get hiddenAlbums => Set.unmodifiable(_hiddenAlbums);
-  Set<String> get hiddenArtists => Set.unmodifiable(_hiddenArtists);
+  /// What the user hid of [kind], by ID (an artist and an album by their hashed IDs).
+  Set<String> hidden(HiddenKind kind) => Set.unmodifiable(_hidden[kind]!);
 
   /// Switches to the hidden items of the server account [userId] (null or empty: no account), as this device last saw
   /// them.
@@ -99,32 +88,25 @@ class LibraryService {
     libraryChanged.emit(null);
   }
 
-  void _loadHidden() {
-    final stored = _repository.getHiddenItems(_currentUserId);
-    _setHiddenSets(stored['artist'] ?? const {}, stored['album'] ?? const {}, stored['track'] ?? const {});
-  }
+  void _loadHidden() => _replaceHidden(_repository.getHiddenItems(_currentUserId));
 
-  void _setHiddenSets(Iterable<String> artists, Iterable<String> albums, Iterable<String> tracks) {
-    _hiddenArtists
-      ..clear()
-      ..addAll(artists);
-    _hiddenAlbums
-      ..clear()
-      ..addAll(albums);
-    _hiddenTracks
-      ..clear()
-      ..addAll(tracks);
+  void _replaceHidden(Map<HiddenKind, Iterable<String>> items) {
+    for (final MapEntry(key: kind, value: ids) in _hidden.entries) {
+      ids
+        ..clear()
+        ..addAll(items[kind] ?? const []);
+    }
   }
 
   bool isTrackHidden(Track track) {
-    if (_hiddenTracks.contains(track.id)) return true;
-    if (_hiddenAlbums.contains(track.albumId)) return true;
-    if (_hiddenArtists.contains(stableId(track.primaryArtist.toLowerCase()))) return true;
-    if (_hiddenArtists.contains(stableId(track.effectiveAlbumArtist.toLowerCase()))) return true;
-    return false;
+    final artists = _hidden[HiddenKind.artist]!;
+    return _hidden[HiddenKind.track]!.contains(track.id) ||
+        _hidden[HiddenKind.album]!.contains(track.albumId) ||
+        artists.contains(stableId(track.primaryArtist.toLowerCase())) ||
+        artists.contains(stableId(track.effectiveAlbumArtist.toLowerCase()));
   }
 
-  bool isTrackExplicitlyHidden(String trackId) => _hiddenTracks.contains(trackId);
+  bool isTrackExplicitlyHidden(String trackId) => _hidden[HiddenKind.track]!.contains(trackId);
 
   void _rebuildSnapshot() {
     final visible = _rawTracks.where((t) => !isTrackHidden(t)).toList();
@@ -145,7 +127,7 @@ class LibraryService {
   final Event<Track> playRecorded = Event<Track>();
   final Event<Playlist> playlistEdited = Event<Playlist>();
   final Event<String> playlistRemoved = Event<String>();
-  final Event<HiddenChangeEvent> hiddenToggled = Event<HiddenChangeEvent>();
+  final Event<({HiddenKind kind, String id, bool hidden})> hiddenToggled = Event();
 
   /// A change the user asked for that was not made as asked ([ChangeNotice]).
   final Event<ChangeNotice> changeNotice = Event<ChangeNotice>();
@@ -273,16 +255,9 @@ class LibraryService {
     final incomingServer = serverTracks.toList();
     _applyUserData(incomingServer, userData);
 
-    _setHiddenSets(userData.hiddenArtists, userData.hiddenAlbums, userData.hiddenTracks);
+    _replaceHidden(userData.hidden);
     // Never kept as the device's own: the session names the account before it downloads the account's data.
-    if (_currentUserId != _noAccount) {
-      _repository.replaceHiddenItems(
-        _currentUserId,
-        artists: userData.hiddenArtists,
-        albums: userData.hiddenAlbums,
-        tracks: userData.hiddenTracks,
-      );
-    }
+    if (_currentUserId != _noAccount) _repository.replaceHiddenItems(_currentUserId, userData.hidden);
     final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
 
     List<Track> merged;
@@ -553,41 +528,31 @@ class LibraryService {
 
   Track? getTrack(String trackId) => _rawTrackById[trackId];
 
-  void hideTrack(String trackId) => _setHidden('track', trackId, true);
-  void unhideTrack(String trackId) => _setHidden('track', trackId, false);
-  void hideAlbum(String albumId) => _setHidden('album', albumId, true);
-  void unhideAlbum(String albumId) => _setHidden('album', albumId, false);
-  void hideArtist(String artistId) => _setHidden('artist', artistId, true);
-  void unhideArtist(String artistId) => _setHidden('artist', artistId, false);
+  /// Hides (or shows again) an artist, an album or a track, by [id].
+  void setHidden(HiddenKind kind, String id, bool hidden) => _setHidden(kind, id, hidden);
 
   void unhideAll() {
-    for (final (type, ids) in [('artist', _hiddenArtists), ('album', _hiddenAlbums), ('track', _hiddenTracks)]) {
+    for (final MapEntry(key: kind, value: ids) in _hidden.entries) {
       for (final id in ids.toList()) {
-        _setHidden(type, id, false);
+        _setHidden(kind, id, false);
       }
     }
   }
 
   /// Sets hidden state locally without emitting hiddenToggled event, e.g. to undo a change rejected by the server.
-  void setHiddenLocal(String itemType, String itemId, bool hidden) =>
-      _setHidden(itemType, itemId, hidden, fromServer: true);
+  void setHiddenLocal(HiddenKind kind, String id, bool hidden) => _setHidden(kind, id, hidden, fromServer: true);
 
   /// Whether hidden items can be changed now: always without an account; with one, like its favourites, only while
   /// signed in to the server, which holds them (a change made meanwhile would be undone by the next refresh).
   bool get canChangeHidden => _currentUserId == _noAccount || serverConnected;
 
-  void _setHidden(String itemType, String itemId, bool hidden, {bool fromServer = false}) {
-    final set = switch (itemType) {
-      'artist' => _hiddenArtists,
-      'album' => _hiddenAlbums,
-      'track' => _hiddenTracks,
-      _ => throw ArgumentError.value(itemType, 'itemType'),
-    };
+  void _setHidden(HiddenKind kind, String id, bool hidden, {bool fromServer = false}) {
     if (!fromServer && !canChangeHidden) return changeNotice.emit(ChangeNotice.readOnlyOffline);
-    if (!(hidden ? set.add(itemId) : set.remove(itemId))) return;
+    final ids = _hidden[kind]!;
+    if (!(hidden ? ids.add(id) : ids.remove(id))) return;
 
-    _repository.setHiddenItem(itemType, itemId, hidden, _currentUserId);
-    if (!fromServer && _currentUserId != _noAccount) hiddenToggled.emit(HiddenChangeEvent(itemType, itemId, hidden));
+    _repository.setHiddenItem(kind, id, hidden, _currentUserId);
+    if (!fromServer && _currentUserId != _noAccount) hiddenToggled.emit((kind: kind, id: id, hidden: hidden));
     _rebuildSnapshot();
     libraryChanged.emit(null);
   }

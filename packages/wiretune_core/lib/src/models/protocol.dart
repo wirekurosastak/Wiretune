@@ -206,6 +206,17 @@ class PlaylistUpdate {
 
 /// Everything the server keeps for one account besides the account itself: favourites, play statistics, playlists,
 /// and hidden items.
+/// What kind of thing someone hid: its name is the `{type}` of `/api/me/hidden/{type}/{itemId}`, and what the databases
+/// store.
+enum HiddenKind {
+  artist,
+  album,
+  track;
+
+  /// The kind called [name]; null for anything else.
+  static HiddenKind? parse(Object? name) => values.asNameMap()[name];
+}
+
 class UserDataSnapshot {
   const UserDataSnapshot(
     this.favorites,
@@ -229,6 +240,12 @@ class UserDataSnapshot {
   final List<String> hiddenArtists;
   final List<String> hiddenAlbums;
   final List<String> hiddenTracks;
+
+  Map<HiddenKind, List<String>> get hidden => {
+    HiddenKind.artist: hiddenArtists,
+    HiddenKind.album: hiddenAlbums,
+    HiddenKind.track: hiddenTracks,
+  };
 
   Map<String, Object?> toJson() => {
     'favorites': favorites,
