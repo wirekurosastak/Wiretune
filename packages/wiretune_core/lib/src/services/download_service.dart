@@ -712,8 +712,8 @@ class DownloadService {
   /// The readable place of [track]: `Album artist/Album`, and `01 - Title` (`2-01 - Title` on an album of more than
   /// one disc), with the extension of its format.
   (String folder, String name, String extension) _readableName(Track track) {
-    final artist = safeFileName(track.effectiveAlbumArtist, fallback: 'Unknown Artist', maxLength: 60);
-    final album = safeFileName(track.album, fallback: 'Unknown Album', maxLength: 60);
+    final artist = safeFileName(track.effectiveAlbumArtist, fallback: Track.unknownArtist, maxLength: 60);
+    final album = safeFileName(track.album, fallback: Track.unknownAlbum, maxLength: 60);
     final title = safeFileName(track.title, fallback: 'Track', maxLength: 80);
     final number = track.trackNumber;
     final disc = track.discNumber ?? 1;

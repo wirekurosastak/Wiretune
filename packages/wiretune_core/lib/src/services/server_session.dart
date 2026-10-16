@@ -22,8 +22,7 @@ enum LibrarySource { none, server, local, hybrid }
 /// local [LibraryService], and keeping the signed-in account's favourites, play counts and playlists on the server.
 /// Every failure becomes a [state] with a message the interface can show; the commands never throw.
 class ServerSession {
-  ServerSession(this._library, this._settings, [ServerStreamingClient? client])
-    : _client = client ?? ServerStreamingClient() {
+  ServerSession(this._library, this._settings, [ServerClient? client]) : _client = client ?? ServerClient() {
     _unsubscribers.addAll([
       Localizer.instance.languageChanged.listen((_) => stateChanged.emit(null)),
       _library.favoriteToggled.listen((track) => _change(() => _pushFavorite(track))),
@@ -44,7 +43,7 @@ class ServerSession {
 
   final LibraryService _library;
   final LibraryRepository _settings;
-  final ServerStreamingClient _client;
+  final ServerClient _client;
   final AsyncLock _gate = AsyncLock();
   final AsyncLock _streamTokenGate = AsyncLock();
   final List<void Function()> _unsubscribers = [];

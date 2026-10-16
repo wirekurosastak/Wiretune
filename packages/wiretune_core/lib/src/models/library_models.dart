@@ -7,6 +7,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 
 import '../localization/localizer.dart';
+import '../util/text.dart';
 import '../util/time.dart';
 import 'audio_format.dart';
 
@@ -35,10 +36,10 @@ typedef PlayStats = ({int count, DateTime? lastPlayedAt});
 class Track {
   Track({
     String? id,
-    this.title = 'Unknown Title',
-    this.artist = 'Unknown Artist',
+    this.title = unknownTitle,
+    this.artist = unknownArtist,
     List<String>? artists,
-    String album = 'Unknown Album',
+    String album = unknownAlbum,
     String? albumArtist,
     int? trackNumber,
     this.trackCount,
@@ -59,6 +60,15 @@ class Track {
        artists = artists != null && artists.length > 1 ? List.unmodifiable(artists) : const [],
        tagged = (album: album, albumArtist: albumArtist, trackNumber: trackNumber, discNumber: discNumber),
        addedAt = addedAt ?? DateTime.now().toUtc();
+
+  /// What a track without a title, artist or album tag goes by (the scanner names an untitled file after itself). They
+  /// are data, stored in the library and grouping the untagged files together, so they don't follow the interface
+  /// language.
+  static const String unknownTitle = 'Unknown title';
+  static const String unknownArtist = 'Unknown artist';
+  static const String unknownAlbum = 'Unknown album';
+
+  static bool isUnknownArtist(String? name) => equalsIgnoreCase(name, unknownArtist);
 
   final String id;
   String title;
@@ -148,13 +158,13 @@ class Track {
     int? integer(String key) => (json[key] as num?)?.toInt();
     return Track(
       id: id,
-      title: json['title'] as String? ?? 'Unknown Title',
-      artist: json['artist'] as String? ?? 'Unknown Artist',
+      title: json['title'] as String? ?? unknownTitle,
+      artist: json['artist'] as String? ?? unknownArtist,
       artists: [
         for (final name in json['artists'] as List? ?? const [])
           if (name is String && name.trim().isNotEmpty) name,
       ],
-      album: json['album'] as String? ?? 'Unknown Album',
+      album: json['album'] as String? ?? unknownAlbum,
       albumArtist: json['albumArtist'] as String?,
       trackNumber: integer('trackNumber'),
       trackCount: integer('trackCount'),
@@ -181,8 +191,8 @@ QualitySummary? qualityOf(Iterable<Track> tracks) => QualitySummary.of(tracks.ma
 class Album {
   Album({
     String? id,
-    this.title = 'Unknown Album',
-    this.artist = 'Unknown Artist',
+    this.title = Track.unknownAlbum,
+    this.artist = Track.unknownArtist,
     this.releaseYear,
     this.coverArtPath,
     this.totalDuration = Duration.zero,
@@ -208,7 +218,7 @@ class Album {
 }
 
 class Artist {
-  Artist({String? id, this.name = 'Unknown Artist', this.picturePath, List<Album>? albums, List<Track>? tracks})
+  Artist({String? id, this.name = Track.unknownArtist, this.picturePath, List<Album>? albums, List<Track>? tracks})
     : id = id ?? newId(),
       albums = albums ?? [],
       tracks = tracks ?? [];
@@ -261,58 +271,4 @@ class Playlist {
   int get trackCount => trackIds.length;
 }
 
-enum PlaybackState { stopped, playing, paused, error }
-
 enum RepeatMode { off, all, one }
-
-class ScanProgressReport {
-  const ScanProgressReport({
-    this.scannedFiles = 0,
-    this.totalEstimatedFiles = 0,
-    this.currentFile = '',
-    this.currentArtist = '',
-  });
-
-  final int scannedFiles;
-  final int totalEstimatedFiles;
-  final String currentFile;
-  final String currentArtist;
-
-  double get progressPercentage =>
-      totalEstimatedFiles > 0 ? (scannedFiles / totalEstimatedFiles * 100.0).clamp(0.0, 100.0) : 0;
-}
-
-/// An output the player can send audio to.
-class AudioOutputDevice {
-  const AudioOutputDevice({
-    this.id = 'default',
-    String? name,
-    this.nameKey,
-    this.driverType = 'Default',
-    this.hardwareCard = '',
-    this.isExclusiveSupported = false,
-    this.isBitPerfectSupported = false,
-    this.isDefault = false,
-    this.supportedSampleRates = const [44100, 48000, 88200, 96000, 176400, 192000],
-  }) : _name = name;
-
-  final String id;
-  final String? _name;
-
-  /// Key of the translated name to use when no explicit name was given.
-  final String? nameKey;
-
-  /// ALSA, PipeWire, WASAPI, CoreAudio, Android, Tizen ...
-  final String driverType;
-  final String hardwareCard;
-  final bool isExclusiveSupported;
-  final bool isBitPerfectSupported;
-  final bool isDefault;
-  final List<int> supportedSampleRates;
-
-  /// Name shown to the user. Devices without an explicit name get a translated "default output" text that is looked
-  /// up when read, so it follows the interface language.
-  String get name => _name ?? Localizer.get(nameKey ?? 'AudioSystemDefaultOutput');
-
-  String get displayTitle => hardwareCard.trim().isEmpty ? name : '$name ($hardwareCard)';
-}

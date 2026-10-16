@@ -6,14 +6,7 @@ import 'dart:io';
 
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// The folders the server works with. The library root can change at run time (an administrator chooses another one).
-class ServerPaths {
-  ServerPaths(this.musicFolder, this.dataDirectory, this.coverCacheDirectory);
-
-  String musicFolder;
-  final String dataDirectory;
-  final String coverCacheDirectory;
-}
+import 'config.dart';
 
 /// Keeps the server library in sync with the music folder: scans at start-up, on a fixed interval and whenever a scan
 /// is requested through the API. Scans are incremental (unchanged files are not read again).

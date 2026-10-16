@@ -105,7 +105,7 @@ class Player {
   static Future<Player> start(FakeServer server, String directory, {LibraryRepository? repo}) async {
     repo ??= testRepository();
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: p.join(directory, 'covers-cache'));
-    final session = ServerSession(library, repo, ServerStreamingClient(server.client));
+    final session = ServerSession(library, repo, ServerClient(server.client));
     final downloads = DownloadService(
       library,
       session,

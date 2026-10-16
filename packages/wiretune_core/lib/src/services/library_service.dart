@@ -655,7 +655,7 @@ class LibrarySnapshot {
     // Only files on this machine have a folder; the server already did this for its own tracks.
     final groups = <String, List<Track>>{};
     for (final t in tracks) {
-      if (t.filePath.isEmpty || isBlank(t.album) || equalsIgnoreCase(t.album, MetadataScanner.unknownAlbum)) continue;
+      if (t.filePath.isEmpty || isBlank(t.album) || equalsIgnoreCase(t.album, Track.unknownAlbum)) continue;
       if (folderAlbums.contains(t)) continue;
       final folder = p.dirname(t.filePath).toLowerCase();
       groups.putIfAbsent('${t.album.trim()}\u0000$folder', () => []).add(t);
@@ -725,14 +725,14 @@ class LibrarySnapshot {
       // A folder's collection gathers songs of many years: it is as new as its newest. An album that strays joined
       // keeps its own release year.
       final own = ordered.where((t) => equalsIgnoreCase(t.tagged.album, t.album));
-      final collection = own.isEmpty;
-      final years = (collection ? ordered : own).map((t) => t.releaseYear).whereType<int>();
+      final folderAlbum = own.isEmpty;
+      final years = (folderAlbum ? ordered : own).map((t) => t.releaseYear).whereType<int>();
       albums.add(
         Album(
           id: entry.key,
           title: first.album,
           artist: first.effectiveAlbumArtist,
-          releaseYear: collection && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
+          releaseYear: folderAlbum && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
           coverArtPath: ordered.where((t) => !isBlank(t.coverArtPath)).firstOrNull?.coverArtPath,
           totalDuration: ordered.fold(Duration.zero, (sum, t) => sum + t.duration),
           quality: qualityOf(ordered)!, // an album always has a track

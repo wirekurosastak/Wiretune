@@ -42,13 +42,6 @@ class _Known {
 
 /// Turns audio files into [Track]s: tags, stream properties, cover art. Folder scans run in background isolates.
 class MetadataScanner {
-  /// Placeholders stored for files without an artist / album tag. They are data (they are saved in the library and
-  /// group the untagged files together), not interface text, so they do not follow the interface language.
-  static const String unknownArtist = 'Unknown artist';
-  static const String unknownAlbum = 'Unknown album';
-
-  static bool isUnknownArtist(String? name) => equalsIgnoreCase(name, unknownArtist);
-
   static const List<String> folderCoverNames = [
     'cover.jpg',
     'cover.jpeg',
@@ -299,8 +292,8 @@ Track? _readTrack(
 
       final title = cleanText(tags.title) ?? p.basenameWithoutExtension(fullPath);
       final albumArtist = cleanText(tags.albumArtist);
-      final artist = cleanText(tags.artist) ?? albumArtist ?? MetadataScanner.unknownArtist;
-      final album = cleanText(tags.album) ?? MetadataScanner.unknownAlbum;
+      final artist = cleanText(tags.artist) ?? albumArtist ?? Track.unknownArtist;
+      final album = cleanText(tags.album) ?? Track.unknownAlbum;
 
       final (codec, isLossless) = AudioFileTypes.describe(fullPath, tags.codecDescription);
       var bitsPerSample = tags.bitsPerSample;
@@ -395,4 +388,21 @@ String? _cacheEmbeddedCover(
     WiretuneLog.debug('MetadataScanner', "Could not cache embedded cover for '$album': $e");
     return null;
   }
+}
+
+class ScanProgressReport {
+  const ScanProgressReport({
+    this.scannedFiles = 0,
+    this.totalEstimatedFiles = 0,
+    this.currentFile = '',
+    this.currentArtist = '',
+  });
+
+  final int scannedFiles;
+  final int totalEstimatedFiles;
+  final String currentFile;
+  final String currentArtist;
+
+  double get progressPercentage =>
+      totalEstimatedFiles > 0 ? (scannedFiles / totalEstimatedFiles * 100.0).clamp(0.0, 100.0) : 0;
 }

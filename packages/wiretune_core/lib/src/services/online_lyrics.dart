@@ -13,7 +13,6 @@ import '../about.dart';
 import '../models/library_models.dart';
 import '../util/text.dart';
 import 'app_paths.dart';
-import 'metadata_scanner.dart';
 import 'wiretune_log.dart';
 
 /// The lookup could not be made (no connection, the service answered with an error): not the same as "no lyrics".
@@ -334,11 +333,11 @@ class LyricsQuery {
     final title = cleanText(track.title);
     final artist = cleanText(track.artist);
     if (title == null || artist == null) return null;
-    if (MetadataScanner.isUnknownArtist(artist)) return null;
-    if (equalsIgnoreCase(title, 'Unknown Title')) return null;
+    if (Track.isUnknownArtist(artist)) return null;
+    if (equalsIgnoreCase(title, Track.unknownTitle)) return null;
 
     final album = cleanText(track.album);
-    final knownAlbum = equalsIgnoreCase(album, MetadataScanner.unknownAlbum) ? null : album;
+    final knownAlbum = equalsIgnoreCase(album, Track.unknownAlbum) ? null : album;
     return LyricsQuery(title, artist, knownAlbum, (track.duration.inMilliseconds / 1000).round());
   }
 

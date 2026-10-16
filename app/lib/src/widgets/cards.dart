@@ -36,7 +36,7 @@ class AlbumCard extends StatelessWidget {
       context.trf('TrackCount', [album.trackCount]),
       if (album.releaseYear != null) '${album.releaseYear}',
     ].join('  •  ');
-    final menu = CollectionMenu.album(album, onPlay: onPlay);
+    final menu = ListMenu.album(album, onPlay: onPlay);
     return _DesktopTile(
       accent: purple,
       onTap: onOpen,
@@ -72,7 +72,7 @@ class ArtistCard extends StatelessWidget {
       placeholderIcon: Icons.person,
       placeholderColor: coral,
     );
-    final menu = CollectionMenu.artist(artist, onPlay: onPlay);
+    final menu = ListMenu.artist(artist, onPlay: onPlay);
     return _DesktopTile(
       accent: coral,
       onTap: onOpen,
@@ -93,13 +93,13 @@ class ArtistCard extends StatelessWidget {
 String artistCounts(BuildContext context, Artist artist) =>
     '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}';
 
-enum _CollectionAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, remove }
+enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, remove }
 
 /// The menu of an album, an artist or a playlist: on its tile (the ⋮ on the cover, or a right click), its phone row (the
 /// ⋮) and its page's header (the ⋮ beside play, shuffle and the download, which it then leaves out). Play, shuffle, the
 /// queue's two, a playlist, the download (when a track of it can be), and hiding it (deleting a playlist).
-class CollectionMenu {
-  CollectionMenu._(
+class ListMenu {
+  ListMenu._(
     this.tracks, {
     required this.name,
     required this.label,
@@ -113,7 +113,7 @@ class CollectionMenu {
     this.removeIsDanger = false,
   });
 
-  factory CollectionMenu.album(Album album, {required VoidCallback onPlay}) => CollectionMenu._(
+  factory ListMenu.album(Album album, {required VoidCallback onPlay}) => ListMenu._(
     album.tracks,
     name: album.title,
     label: '${album.title} • ${album.artist}',
@@ -129,7 +129,7 @@ class CollectionMenu {
     },
   );
 
-  factory CollectionMenu.artist(Artist artist, {required VoidCallback onPlay}) => CollectionMenu._(
+  factory ListMenu.artist(Artist artist, {required VoidCallback onPlay}) => ListMenu._(
     artist.tracks,
     name: artist.name,
     label: artist.name,
@@ -147,20 +147,19 @@ class CollectionMenu {
   );
 
   /// An automatic playlist (most played, recently played) can't be downloaded or deleted.
-  factory CollectionMenu.playlist(Playlist playlist, List<Track> tracks, {required VoidCallback onPlay}) =>
-      CollectionMenu._(
-        tracks,
-        name: playlist.name,
-        label: playlist.name,
-        downloadable: playlist.isAutomatic ? const [] : tracks,
-        onPlay: onPlay,
-        isDownloaded: (vm) => vm.downloads.isPlaylistDownloaded(playlist),
-        onDownload: (vm) => vm.downloads.togglePlaylist(playlist),
-        removeKey: playlist.isAutomatic ? null : 'PlaylistDeleteAction',
-        removeIsDanger: true,
-        // Asked first, in the playlists' own dialog.
-        onRemove: (vm) => vm.playlists.requestDeletePlaylist(playlist),
-      );
+  factory ListMenu.playlist(Playlist playlist, List<Track> tracks, {required VoidCallback onPlay}) => ListMenu._(
+    tracks,
+    name: playlist.name,
+    label: playlist.name,
+    downloadable: playlist.isAutomatic ? const [] : tracks,
+    onPlay: onPlay,
+    isDownloaded: (vm) => vm.downloads.isPlaylistDownloaded(playlist),
+    onDownload: (vm) => vm.downloads.togglePlaylist(playlist),
+    removeKey: playlist.isAutomatic ? null : 'PlaylistDeleteAction',
+    removeIsDanger: true,
+    // Asked first, in the playlists' own dialog.
+    onRemove: (vm) => vm.playlists.requestDeletePlaylist(playlist),
+  );
 
   /// What playing, shuffling, queueing and a playlist take.
   final List<Track> tracks;
@@ -178,66 +177,65 @@ class CollectionMenu {
   final void Function(MainViewModel vm)? onRemove;
 
   /// [header]: the page's header has play, shuffle and the download as buttons of their own.
-  List<PopupMenuEntry<_CollectionAction>> _items(BuildContext context, {bool header = false}) {
+  List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false}) {
     final vm = context.vm;
     final colors = context.colors;
-    PopupMenuItem<_CollectionAction> item(_CollectionAction action, IconData icon, String text, {Color? color}) =>
-        PopupMenuItem(
-          value: action,
-          enabled: tracks.isNotEmpty || action == _CollectionAction.remove,
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: color ?? colors.textMuted),
-              const SizedBox(width: 14),
-              Flexible(
-                child: Text(text, style: TextStyle(color: color)),
-              ),
-            ],
+    PopupMenuItem<_ListAction> item(_ListAction action, IconData icon, String text, {Color? color}) => PopupMenuItem(
+      value: action,
+      enabled: tracks.isNotEmpty || action == _ListAction.remove,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color ?? colors.textMuted),
+          const SizedBox(width: 14),
+          Flexible(
+            child: Text(text, style: TextStyle(color: color)),
           ),
-        );
+        ],
+      ),
+    );
     final downloaded = isDownloaded(vm);
     return [
       if (!header) ...[
-        item(_CollectionAction.play, Icons.play_arrow_rounded, context.tr('Play')),
-        item(_CollectionAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
+        item(_ListAction.play, Icons.play_arrow_rounded, context.tr('Play')),
+        item(_ListAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
       ],
-      item(_CollectionAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
-      item(_CollectionAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
-      item(_CollectionAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
+      item(_ListAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
+      item(_ListAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
+      item(_ListAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
       if (!header && downloadable.any(vm.downloads.canDownload))
         item(
-          _CollectionAction.download,
+          _ListAction.download,
           downloaded ? Icons.download_done_rounded : Icons.download_rounded,
           context.tr(downloaded ? 'TipRemoveDownload' : 'TipDownload'),
         ),
       if (removeKey case final key?)
-        item(_CollectionAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
+        item(_ListAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
     ];
   }
 
-  void _run(BuildContext context, _CollectionAction? action) {
+  void _run(BuildContext context, _ListAction? action) {
     if (action == null || !context.mounted) return;
     final vm = context.vm;
     switch (action) {
-      case _CollectionAction.play:
+      case _ListAction.play:
         onPlay();
-      case _CollectionAction.shuffle:
+      case _ListAction.shuffle:
         vm.player.shuffleQueue(tracks);
-      case _CollectionAction.playNext:
+      case _ListAction.playNext:
         vm.queue(tracks, next: true, name: name);
-      case _CollectionAction.addToQueue:
+      case _ListAction.addToQueue:
         vm.queue(tracks, next: false, name: name);
-      case _CollectionAction.addToPlaylist:
+      case _ListAction.addToPlaylist:
         vm.playlists.beginAddTracks(tracks, name: label, suggestedName: name);
-      case _CollectionAction.download:
+      case _ListAction.download:
         onDownload(vm);
-      case _CollectionAction.remove:
+      case _ListAction.remove:
         onRemove?.call(vm);
     }
   }
 
   Future<void> _show(BuildContext context, Offset position, {bool header = false}) async {
-    final action = await showMenu<_CollectionAction>(
+    final action = await showMenu<_ListAction>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
       items: _items(context, header: header),
@@ -249,7 +247,7 @@ class CollectionMenu {
   Future<void> showAt(BuildContext context, Offset position) => _show(context, position);
 
   /// The ⋮ button of a phone row.
-  Widget button(BuildContext context) => PopupMenuButton<_CollectionAction>(
+  Widget button(BuildContext context) => PopupMenuButton<_ListAction>(
     icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
     tooltip: context.tr('TipMore'),
     onSelected: (action) => _run(context, action),
@@ -265,7 +263,7 @@ class CollectionMenu {
       clipBehavior: Clip.antiAlias,
       child: SizedBox.square(
         dimension: 32,
-        child: PopupMenuButton<_CollectionAction>(
+        child: PopupMenuButton<_ListAction>(
           tooltip: '',
           padding: EdgeInsets.zero,
           iconSize: 18,
@@ -328,7 +326,7 @@ class AlbumsSliver extends StatelessWidget {
           fontSize: 9.5,
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
         ),
-        trailing: CollectionMenu.album(album, onPlay: () => onPlay(album)).button(context),
+        trailing: ListMenu.album(album, onPlay: () => onPlay(album)).button(context),
       );
     });
   }
@@ -370,7 +368,7 @@ class ArtistsSliver extends StatelessWidget {
         ),
         title: artist.name,
         subtitle: artistCounts(context, artist),
-        trailing: CollectionMenu.artist(artist, onPlay: () => onPlay(artist)).button(context),
+        trailing: ListMenu.artist(artist, onPlay: () => onPlay(artist)).button(context),
       );
     });
   }
@@ -404,7 +402,7 @@ class PlaylistsSliver extends StatelessWidget {
             playlist: playlist,
             covers: playlistCovers(tracks),
             quality: qualityOf(tracks),
-            menu: CollectionMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)),
+            menu: ListMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)),
             onOpen: () => onOpen(playlist),
             onPlay: () => onPlay(playlist),
           );
@@ -430,7 +428,7 @@ class PlaylistsSliver extends StatelessWidget {
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
         badge: badge,
-        trailing: CollectionMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)).button(context),
+        trailing: ListMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)).button(context),
       );
     });
   }
@@ -583,7 +581,7 @@ class PlaylistCard extends StatelessWidget {
 
   /// The quality tag of its tracks; null for an empty playlist, which has none.
   final QualitySummary? quality;
-  final CollectionMenu menu;
+  final ListMenu menu;
   final VoidCallback onOpen;
   final VoidCallback onPlay;
 

@@ -94,7 +94,7 @@ void main() {
       cache: false,
     );
     // The scanner's placeholder, and a track's default.
-    for (final album in [MetadataScanner.unknownAlbum, 'Unknown Album']) {
+    for (final album in [Track.unknownAlbum, 'Unknown Album']) {
       requests.clear();
       expect(await lyrics.find(song(album: album)), 'found');
       expect(requests.single, startsWith('/api/search?'), reason: album);

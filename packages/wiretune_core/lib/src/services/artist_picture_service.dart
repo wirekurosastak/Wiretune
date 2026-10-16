@@ -12,7 +12,6 @@ import '../about.dart';
 import '../models/library_models.dart';
 import '../util/event.dart';
 import 'app_paths.dart';
-import 'metadata_scanner.dart';
 import 'wiretune_log.dart';
 
 /// Fetches artist pictures from the internet (Deezer's public artist search) and caches the answers on disk and in
@@ -60,7 +59,7 @@ class ArtistPictureService {
 
   /// The cached or fetched picture URL of the artist; null if there is none or on error.
   Future<String?> getArtistPictureUrl(String? artistName) async {
-    if (artistName == null || artistName.trim().isEmpty || MetadataScanner.isUnknownArtist(artistName)) return null;
+    if (artistName == null || artistName.trim().isEmpty || Track.isUnknownArtist(artistName)) return null;
     _loadCache();
 
     final key = _key(artistName);

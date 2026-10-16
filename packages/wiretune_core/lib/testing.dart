@@ -276,7 +276,7 @@ Future<ServerSession> signedInSession(
     };
     return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
   });
-  final session = ServerSession(library, testRepository(), ServerStreamingClient(client));
+  final session = ServerSession(library, testRepository(), ServerClient(client));
   session.initialize();
   await session.connect(serverUrl);
   final error = await session.login('owner', 'password', false);

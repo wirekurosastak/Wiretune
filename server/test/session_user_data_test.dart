@@ -402,7 +402,7 @@ void main() {
       final repo = testRepository();
       final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
       library.initialize();
-      final session = ServerSession(library, repo, ServerStreamingClient(client));
+      final session = ServerSession(library, repo, ServerClient(client));
       session.initialize();
       await session.connect('http://wiretune.test');
       expect(await session.login('owner', 'correct horse', true), isNull);
@@ -459,7 +459,7 @@ void main() {
         ..setSetting('auth_token', 'stored');
       final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
       library.initialize();
-      final session = ServerSession(library, repo, ServerStreamingClient(client));
+      final session = ServerSession(library, repo, ServerClient(client));
       addTearDown(session.dispose);
       session.initialize();
       expect(session.state, ServerConnectionState.offline); // a stored server source starts offline
@@ -478,7 +478,7 @@ void main() {
     final session = ServerSession(
       library,
       repo,
-      ServerStreamingClient(MockClient((_) => throw StateError('no request expected'))),
+      ServerClient(MockClient((_) => throw StateError('no request expected'))),
     );
     addTearDown(session.dispose);
     session.initialize();

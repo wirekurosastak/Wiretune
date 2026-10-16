@@ -32,8 +32,8 @@ void main() {
 
     expect(tracks.map((t) => t.title).toList()..sort(), ['01 First', '02 Second', '01 Third']..sort());
     final first = tracks.firstWhere((t) => t.title == '01 First');
-    expect(first.artist, MetadataScanner.unknownArtist);
-    expect(first.album, MetadataScanner.unknownAlbum);
+    expect(first.artist, Track.unknownArtist);
+    expect(first.album, Track.unknownAlbum);
     expect(first.format.codec, 'WAV');
     expect(first.format.isLossless, isTrue);
     expect(first.duration, const Duration(seconds: 1));

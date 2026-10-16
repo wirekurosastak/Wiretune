@@ -109,3 +109,12 @@ class ServerOptions {
     return music;
   }
 }
+
+/// The folders the server works with. The music folder can change at run time (an administrator chooses another one).
+class ServerPaths {
+  ServerPaths(this.musicFolder, this.dataDirectory, this.coverCacheDirectory);
+
+  String musicFolder;
+  final String dataDirectory;
+  final String coverCacheDirectory;
+}

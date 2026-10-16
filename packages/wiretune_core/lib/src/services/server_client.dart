@@ -47,8 +47,8 @@ String? describeServerError(String? code, [Object? detail]) {
 }
 
 /// Thin typed HTTP client for the Wiretune server REST API.
-class ServerStreamingClient {
-  ServerStreamingClient([http.Client? client]) : _ownsClient = client == null, _http = client ?? http.Client();
+class ServerClient {
+  ServerClient([http.Client? client]) : _ownsClient = client == null, _http = client ?? http.Client();
 
   static const Duration probeTimeout = Duration(seconds: 15); // initial reachability check
   static const Duration defaultTimeout = Duration(seconds: 30); // normal API calls

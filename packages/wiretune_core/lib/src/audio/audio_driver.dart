@@ -3,8 +3,8 @@
 
 import 'dart:typed_data';
 
+import '../localization/localizer.dart';
 import '../models/audio_format.dart';
-import '../models/library_models.dart';
 import '../util/event.dart';
 
 /// Volume normalization from the files' ReplayGain tags: each track at the same loudness, or each album (keeping the
@@ -65,4 +65,41 @@ mixin AudioDriverEvents implements AudioDriver {
   final Event<void> advanced = Event<void>();
   @override
   final Event<String> playbackFailed = Event<String>();
+}
+
+enum PlaybackState { stopped, playing, paused, error }
+
+/// An output the player can send audio to.
+class AudioOutputDevice {
+  const AudioOutputDevice({
+    this.id = 'default',
+    String? name,
+    this.nameKey,
+    this.driverType = 'Default',
+    this.hardwareCard = '',
+    this.isExclusiveSupported = false,
+    this.isBitPerfectSupported = false,
+    this.isDefault = false,
+    this.supportedSampleRates = const [44100, 48000, 88200, 96000, 176400, 192000],
+  }) : _name = name;
+
+  final String id;
+  final String? _name;
+
+  /// Key of the translated name to use when no explicit name was given.
+  final String? nameKey;
+
+  /// ALSA, PipeWire, WASAPI, CoreAudio, Android, Tizen ...
+  final String driverType;
+  final String hardwareCard;
+  final bool isExclusiveSupported;
+  final bool isBitPerfectSupported;
+  final bool isDefault;
+  final List<int> supportedSampleRates;
+
+  /// Name shown to the user. Devices without an explicit name get a translated "default output" text that is looked
+  /// up when read, so it follows the interface language.
+  String get name => _name ?? Localizer.get(nameKey ?? 'AudioSystemDefaultOutput');
+
+  String get displayTitle => hardwareCard.trim().isEmpty ? name : '$name ($hardwareCard)';
 }
