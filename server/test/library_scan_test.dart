@@ -22,6 +22,7 @@ class _EndlessScanner extends MetadataScanner {
     void Function(ScanProgressReport report)? onProgress,
     CancellationToken? cancellationToken,
     Map<String, Track>? knownTracks,
+    String? skip,
   }) async {
     started.complete();
     final token = cancellationToken ?? CancellationToken.none;

@@ -113,7 +113,13 @@ class LibraryService {
   }
 
   bool get isScanning => _isScanning;
+
+  /// The folder the local tracks were scanned from; empty when there are none.
   String musicFolder = '';
+
+  /// The player's own downloads, which may lie inside [musicFolder]: they are copies of server tracks, not local music,
+  /// so scans leave them out.
+  String? downloadFolder;
 
   final Event<void> libraryChanged = Event<void>();
   final Event<void> playlistsChanged = Event<void>();
@@ -208,12 +214,23 @@ class LibraryService {
             onProgress: onProgress,
             cancellationToken: cancellationToken,
             knownTracks: known,
+            skip: downloadFolder,
           );
         } on OperationCanceledException {
           WiretuneLog.info('LibraryService', 'Scan cancelled; library left unchanged.');
           return false;
         }
         if (cancellationToken?.isCancelled ?? false) return false;
+
+        // Nothing added, changed or removed: the library stays as it is, without being written or rebuilt.
+        final unchanged =
+            root == musicFolder &&
+            scanned.length == _rawTracks.where((t) => t.isLocal).length &&
+            scanned.every((t) => identical(t, known[t.filePath]));
+        if (unchanged) {
+          WiretuneLog.info('LibraryService', 'Scan finished: nothing changed.');
+          return true;
+        }
 
         musicFolder = root;
         _repository.setSetting('music_folder', root);

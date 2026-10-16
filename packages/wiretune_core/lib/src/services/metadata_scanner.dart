@@ -65,19 +65,21 @@ class MetadataScanner {
 
   /// Scans [rootPath] recursively. Files whose path, size and modification time match [knownTracks] are not read
   /// again, unless a folder image was added, replaced or removed next to them: the known track is returned instead; one
-  /// that changed keeps its date added. Hidden files and folders (names starting with a dot) are skipped.
+  /// that changed keeps its date added. Hidden files and folders (names starting with a dot) are skipped, and so is the
+  /// folder [skip] (the player's own downloads).
   Future<List<Track>> scanDirectory(
     String rootPath, {
     String? coverCacheDirectory,
     void Function(ScanProgressReport report)? onProgress,
     CancellationToken? cancellationToken,
     Map<String, Track>? knownTracks,
+    String? skip,
   }) async {
     final ct = cancellationToken ?? CancellationToken.none;
     if (!Directory(rootPath).existsSync()) return [];
 
     final log = WiretuneLog.isolateSettings;
-    final files = await _enumerateInIsolate(rootPath);
+    final files = await _enumerateInIsolate(rootPath, skip);
     ct.throwIfCancelled();
 
     final total = files.length;
@@ -174,7 +176,8 @@ class MetadataScanner {
 
 typedef _LogSettings = (String?, LogLevel, bool);
 
-Future<List<String>> _enumerateInIsolate(String root) => Isolate.run(() => _enumerateAudioFiles(root));
+Future<List<String>> _enumerateInIsolate(String root, String? skip) =>
+    Isolate.run(() => _enumerateAudioFiles(root, skip));
 
 Future<List<Object?>> _scanBatchInIsolate(
   List<String> batch,
@@ -217,8 +220,9 @@ Future<Uint8List?> _extractCoverInIsolate(String filePath) => Isolate.run(() {
   }
 });
 
-List<String> _enumerateAudioFiles(String root) {
+List<String> _enumerateAudioFiles(String root, String? skip) {
   final files = <String>[];
+  final skipped = skip == null ? null : AppPaths.comparable(AppPaths.fullPath(skip));
   final pending = <Directory>[Directory(AppPaths.fullPath(root))];
   while (pending.isNotEmpty) {
     final directory = pending.removeLast();
@@ -232,7 +236,7 @@ List<String> _enumerateAudioFiles(String root) {
       final name = p.basename(entry.path);
       if (name.startsWith('.')) continue; // hidden
       if (entry is Directory) {
-        pending.add(entry);
+        if (AppPaths.comparable(entry.path) != skipped) pending.add(entry);
       } else if (entry is File && AudioFileTypes.isSupported(name)) {
         files.add(entry.path);
       } else if (entry is Link) {

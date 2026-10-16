@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -73,6 +74,8 @@ class MainViewModel extends ChangeNotifier {
     audioEngine
       ..setStreamTokenProvider(session.getStreamToken)
       ..setOfflineCopyProvider(this.downloadService.localCopy);
+    // Downloads may land in the local folder (Music/Wiretune); they are server tracks, not local music.
+    library.downloadFolder = this.downloadService.directory;
 
     player = PlayerViewModel(audioEngine, library)..attachRemote(this.remote);
     lyrics = LyricsViewModel(player, own: _ownLyrics, online: onlineLyrics?.find);
@@ -105,6 +108,7 @@ class MainViewModel extends ChangeNotifier {
       audioEngine.devicesChanged.listen((_) => _updateStatusText()),
       library.libraryChanged.listen((_) {
         _hidden = null; // the hidden items, and the tracks that name them, may have changed
+        _followLocalFolder(); // a scan may have been of another folder
         _updateStatusText();
       }),
       library.scanningStateChanged.listen((_) => _updateStatusText()),
@@ -466,10 +470,43 @@ class MainViewModel extends ChangeNotifier {
 
   Future<void> retryConnectServer() => session.connect();
 
-  /// The player came back to the front: what changed while it was away shows (the server's library), and a server that
-  /// was out of reach is asked again at once.
+  /// The player came back to the front: what changed while it was away shows, and a server that was out of reach is
+  /// asked again at once. A local folder that can't be watched (a phone's) is read again, at most once a minute.
   Future<void> resume() async {
-    if (startupError == null) await session.resume();
+    if (startupError != null) return;
+    if (!FolderWatch.isSupported && DateTime.now().difference(_localFolderRead) > const Duration(minutes: 1)) {
+      unawaited(_readLocalFolder());
+    }
+    await session.resume();
+  }
+
+  // ── The local folder ───────────────────────────────────────────────────────────────────────────
+
+  /// Music copied into the local folder, or deleted from it, shows by itself: the folder is read at start, watched
+  /// while the player runs (a computer), and read again when the player comes back to the front (a phone).
+  late final FolderWatch _folderWatch = FolderWatch(() => unawaited(_readLocalFolder()));
+  DateTime _localFolderRead = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _followLocalFolder() {
+    final folder = library.musicFolder;
+    if (!capabilities.supportsLocalFolder || folder.isEmpty) return _folderWatch.stop();
+    _folderWatch.watch(folder, skip: downloadService.directory);
+  }
+
+  /// Reads what changed in the local folder since its last scan (only changed files are read, and an unchanged folder
+  /// changes nothing). A folder that is gone or looks empty, such as an unplugged drive or a card taken out, is left
+  /// for later: it never empties the library.
+  Future<void> _readLocalFolder() async {
+    final folder = library.musicFolder;
+    if (!capabilities.supportsLocalFolder || folder.isEmpty || library.isScanning) return;
+    _localFolderRead = DateTime.now();
+    try {
+      final directory = Directory(folder);
+      if (!directory.existsSync() || directory.listSync().isEmpty) return;
+      await library.scanFolder(folder);
+    } catch (e) {
+      WiretuneLog.warn('MainViewModel', "Could not read the local folder '$folder' again: $e");
+    }
   }
 
   void dismissServerBanner() {
@@ -782,8 +819,10 @@ class MainViewModel extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    // The cached library is usable now; the server connection below may take a while.
+    // The cached library is usable now; the server connection below may take a while, and so may the local folder.
     _updateStatusText();
+    unawaited(_readLocalFolder());
+    _followLocalFolder();
 
     if (session.usesServer) await session.connect();
 
@@ -823,6 +862,7 @@ class MainViewModel extends ChangeNotifier {
     remote.dispose();
     downloadService.dispose();
     session.dispose();
+    _folderWatch.stop();
     _onlineLyrics?.close();
     _artistPictures?.close();
     searchFocusRequests.dispose();

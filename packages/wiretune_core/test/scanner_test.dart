@@ -114,6 +114,34 @@ void main() {
     expect(File(before).existsSync(), isFalse);
   });
 
+  test("the player's own downloads inside the folder are not read as local music", () async {
+    writeWav(p.join(root.path, 'Wiretune', 'Artist B', 'Album 2', '01 Third.wav'), 44100);
+    final tracks = await MetadataScanner().scanDirectory(root.path, skip: p.join(root.path, 'Wiretune'));
+    expect(tracks.map((t) => t.title).toList()..sort(), ['01 First', '01 Third', '02 Second']);
+    expect(tracks.where((t) => t.filePath.contains('Wiretune')), isEmpty);
+  });
+
+  test('a scan that finds nothing new changes nothing; one that finds something changes the library', () async {
+    final library = LibraryService(testRepository(), MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    library.initialize();
+    expect(await library.scanFolder(root.path), isTrue);
+    var changed = 0;
+    library.libraryChanged.listen((_) => changed++);
+
+    expect(await library.scanFolder(root.path), isTrue);
+    expect(changed, 0);
+
+    writeWav(p.join(root.path, 'Artist B', 'Album 2', '02 Fourth.wav'), 44100);
+    expect(await library.scanFolder(root.path), isTrue);
+    expect(changed, 1);
+    expect(library.tracks, hasLength(4));
+
+    File(p.join(root.path, 'Artist B', 'Album 2', '02 Fourth.wav')).deleteSync();
+    expect(await library.scanFolder(root.path), isTrue);
+    expect(changed, 2);
+    expect(library.tracks, hasLength(3));
+  });
+
   test('the library scan stores the folder and keeps user data across rescans', () async {
     final repo = testRepository();
     final library = LibraryService(
