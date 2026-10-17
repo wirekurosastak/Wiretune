@@ -29,11 +29,11 @@ internet. This page is the honest list of what it does and doesn't do about that
 - **Tokens in URLs.** libmpv, TVs and `ffmpeg` can't send headers, so audio and cover URLs carry `?token=`, and the
   server takes only a **stream token** there: 8 hours, audio and covers only, useless for anything else. It reads
   `?token=` on `/api/stream` and `/api/cover` and nowhere else, and never logs a query string. Those URLs still end up
-  in your proxy's access log and, on a desktop running the spectrum analyser, in the process list.
+  in your proxy's access log and, on a desktop running the spectrum analyzer, in the process list.
 - **The database is the crown jewels.** `wiretune-server.db` holds the token-signing key and the password hashes:
   whoever can read it can mint tokens. A data directory the server creates itself is private to its user on Linux; one
   you created keeps the permissions you gave it.
-- **Roles**: administrator and user. Every user can read the whole library. Favourites, play counts and playlists are
+- **Roles**: administrator and user. Every user can read the whole library. Favorites, play counts and playlists are
   per account, and no route, not even an administrator's, reads somebody else's.
 - **Files.** The server reads only the music folder and serves only files inside it (or its cover cache). Clients
   never see a server path, except that an administrator sees the music folder and why a scan failed. An administrator
@@ -59,6 +59,8 @@ internet. This page is the honest list of what it does and doesn't do about that
   after the tags with everything a path could trip on taken out, never after a server's IDs or paths, and only files
   Wiretune recorded as its own copies are ever overwritten or deleted. Signing out deletes them. On iOS they're kept
   out of iCloud and computer backups. The player asks for no storage permission anywhere.
+- **Covers from the server** are kept in the system's cache folder (`ServerCovers`, up to 300 MB), readable by whoever
+  can read it. They're fetched with the sign-in token in a header, never in the address.
 - **Cleartext HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP,
   which those platforms' allow-lists can't express. Use an `https://` address whenever the network isn't yours.
 - **Artist pictures** come from Deezer's public API, which therefore sees the artist names in your library. They're

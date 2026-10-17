@@ -427,7 +427,7 @@ const Map<String, (String, String, String)> allStrings = {
   'DeleteUserConfirm': ('Törlöd: {0}?', 'Delete {0}?', '{0} löschen?'),
   'DeleteUserConfirmHint': (
     'A fiók kedvencei, lejátszásszámai, lejátszási listái és rejtett elemei is törlődnek. Ez nem vonható vissza.',
-    "The account's favourites, play counts, playlists and hidden items go with it. This can't be undone.",
+    "The account's favorites, play counts, playlists and hidden items go with it. This can't be undone.",
     'Die Favoriten, Wiedergabezahlen, Playlists und ausgeblendeten Inhalte des Kontos werden mitgelöscht. Das lässt sich nicht rückgängig machen.',
   ),
   'StatusReady': ('Készenlétben', 'Ready', 'Bereit'),
@@ -1208,7 +1208,7 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'ServerFolderConfirmHint': (
     'Minden fiók ennek a mappának a zenéit fogja látni: {0}. Az ott nem található számok kedvencei és listabejegyzései nem jelennek meg, amíg vissza nem kerülnek.',
-    "Every account will see the music in {0}. Favourites and playlist entries of tracks that aren't there don't show until they're back.",
+    "Every account will see the music in {0}. Favorites and playlist entries of tracks that aren't there don't show until they're back.",
     'Alle Konten sehen dann die Musik in {0}. Favoriten und Playlist-Einträge von Titeln, die dort fehlen, erscheinen erst wieder, wenn sie zurück sind.',
   ),
   'ServerFolderUnavailable': (

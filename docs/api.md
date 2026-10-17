@@ -42,26 +42,26 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `GET /api/config` | admin | `{ "musicFolder" }` |
 | `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
-A **track** has `id`, `title`, `artist` (several artists joined by ", "), `artists` (each of them, only when there
-are several), `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `releaseYear`,
-`genre`, `durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt` and `format` (`codec`,
-`sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). A track with a cover also has
-`coverVersion`, which changes when the album's cover does: the players put it in the cover's address (`?v=`), so a new
-cover is never mistaken for a cached one. Files stay on the server, and so do their paths. Favourites and play counts are per account and come from `/api/me/data`. The players group albums and
-artists themselves; `album`, `albumArtist`, `trackNumber` and `discNumber` already say how the server filed a folder's
-collection ([user guide](user-guide.md#the-library)).
+A **track** has `id`, `title`, `artist` (several artists joined by ", "), `artists` (each of them, only when there are
+several), `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `releaseYear`, `bpm`, `genre`,
+`durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt` and `format` (`codec`, `sampleRate`,
+`bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). A track with a cover also has `coverVersion`,
+which changes when the album's cover does: the players put it in the cover's address (`?v=`), so a new cover is never
+mistaken for a cached one. Files stay on the server, and so do their paths. Favorites and play counts are per account
+and come from `/api/me/data`. The players group albums and artists themselves; `album`, `albumArtist`, `trackNumber` and
+`discNumber` already say how the server filed a folder of one artist's songs ([user guide](user-guide.md#the-library)).
 
 ## Your data
 
-The signed-in account's favourites, play counts, playlists and hidden content preferences. Every route here touches
-only the account in the token, and none takes a stream token. Limits: 100,000 favourites, 100,000 tracks with play
-counts, 500 playlists of up to 20,000 tracks, 50,000 hidden items, IDs up to 128 characters, playlist names up to 200 and
+The signed-in account's favorites, play counts, playlists and hidden content preferences. Every route here touches only
+the account in the token, and none takes a stream token. Limits: 100,000 favorites, 100,000 tracks with play counts, 500
+playlists of up to 20,000 tracks, 50,000 hidden items, IDs up to 128 characters, playlist names up to 200 and
 descriptions up to 1,000. Over a limit you get `409`.
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favourites come in the order they were marked; marking one again keeps its time. With an `ETag`, as on `/api/tracks` |
-| `PUT /api/me/favorites/{trackId}` | user | Marks a favourite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` for an invalid ID, `409` at the limit |
+| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favorites come in the order they were marked; marking one again keeps its time. With an `ETag`, as on `/api/tracks` |
+| `PUT /api/me/favorites/{trackId}` | user | Marks a favorite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` for an invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
 | `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
 | `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` for a rule violation, `409` at the limit |
@@ -96,7 +96,7 @@ Every message is a JSON object with a `type`, sent as text, at most 64 K charact
 | `{ "type": "devices", "devices": [{ "id", "name", "kind" }] }` | server | The account's other players that are online, every time that changes |
 | `{ "type": "state", "device", "state" }` | server | Another player's state |
 | `{ "type": "command", "from", "command" }` | server | A command for this player |
-| `{ "type": "dataChanged" }` | server | The account's favourites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change when it named itself in an `X-Wiretune-Device` header (its device ID) on that request |
+| `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change when it named itself in an `X-Wiretune-Device` header (its device ID) on that request |
 | `{ "type": "libraryChanged" }` | server | A scan changed what `/api/tracks` lists (music added, changed or removed, a new cover): download it again. Sent to every player of every account |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
@@ -106,11 +106,11 @@ track IDs of the queue with the current one's index (or -1). Tracks from the ser
 players find them in their own library.
 
 A **command** has an `action`: `play`, `pause`, `toggle`, `stop`, `next`, `previous`, `seek` (with `positionMs`),
-`volume` (`volume`), `mute` and `shuffle` (`on`), `repeat` (`repeat`), `playTracks` (`trackIds`, the `index` to start
-at or -1 for the player's own choice, and `positionMs` there), `playIndex` (`index` in its queue), `moveTrack` (from
+`volume` (`volume`), `mute` and `shuffle` (`on`), `repeat` (`repeat`), `playTracks` (`trackIds`, the `index` to start at
+or -1 for the player's own choice, and `positionMs` there), `playIndex` (`index` in its queue), `moveTrack` (from
 `index` to `toIndex` in its queue), `removeTrack` (`index`), `clearQueue`, `playNext` (`trackIds` right after the
-current track) or `addToQueue` (`trackIds` at the end; with nothing queued both start playing). A player checks what it gets and ignores a
-command it doesn't understand.
+current track) or `addToQueue` (`trackIds` at the end; with nothing queued both start playing). A player checks what it
+gets and ignores a command it doesn't understand.
 
 The server closes a connection with `4000` when the same device connects again, `4001` beyond 20 devices on one
 account, `4401` when the token expires or the account is deleted, `1008` for a message it doesn't accept (or more than

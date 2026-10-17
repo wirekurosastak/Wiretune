@@ -40,11 +40,12 @@ exclusive and bit-perfect; mpv tends to leave the hardware out of its list, so W
 `/proc/asound`. On Windows the WASAPI endpoints, and on macOS the Core Audio devices, are offered for exclusive and
 bit-perfect without probing their formats first. The list is built at start-up and on **Refresh**.
 
-**What Wiretune tells mpv**, in every mode: no filters, `audio-samplerate=0` (keep the file's rate), `audio-format`
-left alone (keep the decoder's sample format), `audio-channels=auto-safe` (`auto`, so no downmix, in bit-perfect mode),
+**What Wiretune tells mpv**, in every mode: no filters, `audio-samplerate=0` (keep the file's rate), `audio-format` left
+alone (keep the decoder's sample format), `audio-channels=auto-safe` (`auto`, so no downmix, in bit-perfect mode),
 `replaygain` as [volume normalization](#volume-normalization) is set (always `no` in bit-perfect mode), and
-`prefetch-playlist=yes` with `gapless-audio=weak` for [gapless playback](#gapless-playback). Exclusive adds `audio-exclusive=yes`: WASAPI exclusive mode on Windows, Core Audio hog mode on macOS.
-An ALSA `hw:` device is exclusive by nature: it bypasses the sound server, and nothing else can use the card meanwhile.
+`prefetch-playlist=yes` with `gapless-audio=weak` for [gapless playback](#gapless-playback). Exclusive adds
+`audio-exclusive=yes`: WASAPI exclusive mode on Windows, Core Audio hog mode on macOS. An ALSA `hw:` device is exclusive
+by nature: it bypasses the sound server, and nothing else can use the card meanwhile.
 
 **Linux and PipeWire.** PipeWire normally holds the card, so before opening a `hw:` device Wiretune claims it in the
 device reservation protocol: it takes the D-Bus name `org.freedesktop.ReserveDevice1.Audio<card>` (priority 10), and
@@ -74,7 +75,7 @@ may resample.
 - It keeps playing in the background, with the screen off, and the notification, lock screen, Control Center,
   Bluetooth and headset buttons control it. On Android the app keeps the CPU awake while it plays, and the Wi-Fi
   radio while it streams, so a stream keeps flowing; local files and downloads leave the radio to sleep.
-- Android TV is the same app, steered by the remote. Android Auto lists albums, artists, playlists and favourites on
+- Android TV is the same app, steered by the remote. Android Auto lists albums, artists, playlists and favorites on
   the car's screen and takes voice search ("play … on Wiretune"); the playing happens on the phone.
 - iOS asks once for *local network* access, which a server on your LAN needs.
 
@@ -86,21 +87,21 @@ there's no device choice or exclusive mode. Not tried on a real TV yet.
 
 ## Gapless playback
 
-On by default; *Settings → Audio → Gapless playback* turns it off, and each track then opens when the previous one
-ends. While a track plays, the player gives mpv the entry that comes after it in the queue (the same track again with repeat
+On by default; *Settings → Audio → Gapless playback* turns it off, and each track then opens when the previous one ends.
+While a track plays, the player gives mpv the entry that comes after it in the queue (the same track again with repeat
 one, the first with repeat all, nothing while the sleep timer waits for the end of the track) and gives it again
 whenever the queue, shuffle, repeat or the sleep timer change. mpv opens it ahead (`prefetch-playlist`, which for a
-server track means the stream is requested early) and goes on to it without reopening the output when the sample
-format, rate and channels are the same (`gapless-audio=weak`). When they differ, mpv sets the output up again, which
-leaves a short gap, as does exclusive output changing its format. The player counts the next track as playing once mpv
-reports its first position. Tried on Linux with mpv's PipeWire output; Windows, macOS and the phones run the same code
-untried. On Tizen each track still opens when the previous one ends.
+server track means the stream is requested early) and goes on to it without reopening the output when the sample format,
+rate and channels are the same (`gapless-audio=weak`). When they differ, mpv sets the output up again, which leaves a
+short gap, as does exclusive output changing its format. The player counts the next track as playing once mpv reports
+its first position. Tried on Linux with mpv's PipeWire output; Windows, macOS and the phones run the same code untried.
+On Tizen each track still opens when the previous one ends.
 
 ## Volume normalization
 
-*Settings → Audio → Volume normalization* (*Off*, the default, *Per track* or *Per album*) is mpv's ReplayGain: it reads the
-files' `REPLAYGAIN_TRACK_GAIN` or `REPLAYGAIN_ALBUM_GAIN` tags and turns the gain into mpv's software volume, lowered
-where it would clip (mpv's default `replaygain-clip`). A file without the tags plays as it is. It is a gain, so
+*Settings → Audio → Volume normalization* (*Off*, the default, *Per track* or *Per album*) is mpv's ReplayGain: it reads
+the files' `REPLAYGAIN_TRACK_GAIN` or `REPLAYGAIN_ALBUM_GAIN` tags and turns the gain into mpv's software volume,
+lowered where it would clip (mpv's default `replaygain-clip`). A file without the tags plays as it is. It is a gain, so
 bit-perfect mode leaves it out whatever the setting; exclusive mode without bit-perfect, and the phones, apply it. The
 signal path says when it's on. Tizen's player reads no ReplayGain tags, so the TV doesn't offer it.
 
@@ -109,8 +110,8 @@ signal path says when it's on. Tizen's player reads no ReplayGain tags, so the T
 The desktop volume slider is mpv's software volume, applied to the decoded samples; the system mixer and the card's
 mixer are left alone. Bit-perfect pins it at 100 %, which means no gain at all.
 
-The spectrum analyser (desktop, 32 bands from 35 Hz to 16 kHz, about 30 updates a second) never touches what you hear:
-a separate `ffmpeg` decodes the current track in memory (up to 20 minutes of it) and the analyser reads the window at
+The spectrum analyzer (desktop, 64 bands from 20 Hz to 20 kHz, about 30 updates a second) never touches what you hear:
+a separate `ffmpeg` decodes the current track in memory (up to 20 minutes of it) and the analyzer reads the window at
 the playback position. That means a server track is fetched a second time. Without `ffmpeg` on the `PATH` the bars
 stay dark, and the log says why.
 
@@ -120,8 +121,9 @@ stay dark, and the log says why.
   reviewed but never measured; on Windows and macOS the code has never met a DAC. Reports from real setups are very
   welcome.
 - **The signal-path readout shows what Wiretune asked for, not what it measured.** In bit-perfect mode it says
-  *Bit-perfect requested (PCM, no gain, exclusive device access)* (or *Bit-perfect requested (lossy source decoded to PCM, no gain, exclusive device access)* when playing a lossy file), and means exactly that.
+  *Bit-perfect requested (PCM, no gain, exclusive device access)* (or *Bit-perfect requested (lossy source decoded to
+  PCM, no gain, exclusive device access)* when playing a lossy file), and means exactly that.
 - **No crossfade**, and gapless only between tracks of the same format ([above](#gapless-playback)).
-- **No equaliser.**
+- **No equalizer.**
 - **Windows and Tizen have no system media controls.** Windows media keys work while the window has the focus; on a
   Tizen TV the remote's media keys work inside the app.

@@ -5,9 +5,10 @@ Going anywhere near a network you don't fully trust? Read [SECURITY.md](../SECUR
 
 ## Start it
 
+Build it ([building.md](building.md#server)), copy `dist/server` where it will run, and start it:
+
 ```bash
-cd server
-dart run bin/wiretune_server.dart --library /srv/music
+dist/server/bin/wiretune_server --library /srv/music
 ```
 
 It listens on port 5200 on every IPv4 interface, scans the folder, and waits for the first account. Until someone
@@ -17,8 +18,7 @@ creates it, every start logs a line like this, and the player will ask for that 
 No administrator account exists yet. Create it in the player with the setup code K7QP-2WXM
 ```
 
-For a server that stays up, build the standalone executable with `dart tool/build.dart server`
-([building.md](building.md#server)) and run `dist/server/bin/wiretune_server` with the same options.
+[Docker](#docker) and [systemd](#running-it-as-a-service) are below.
 
 ## Options
 
@@ -40,13 +40,12 @@ The server speaks plain HTTP; TLS is a proxy's job.
 
 ## Data directory
 
-`~/.config/Wiretune/Server` on Linux, `%APPDATA%\Wiretune\Server` on Windows,
-`~/Library/Application Support/Wiretune/Server` on macOS, unless `--data-dir` says otherwise. The first lines of the
-log name it.
+Where it is: [the table of folders](user-guide.md#where-things-are), or what `--data-dir` says. The first lines of the
+log name it. It holds:
 
-- `wiretune-server.db`, with its `-wal` and `-shm`: the index, the accounts, everyone's favourites, play counts and
+- `wiretune-server.db`, with its `-wal` and `-shm`: the index, the accounts, everyone's favorites, play counts and
   playlists, and the token-signing key.
-- `Covers/`: art pulled out of tags. Any scan rebuilds it.
+- `Covers/`: the pictures taken out of the files. Deleting it is safe: the next scan writes them again.
 - `wiretune-server.log`: moved to `.1` at 10 MiB.
 
 Every change is on disk the moment it's made, so a restart loses nothing. A *different* data directory loses
@@ -62,24 +61,26 @@ that an older server won't open it, so keep a backup from before an upgrade.
 
 ## Scanning
 
-At start-up, about ten seconds after files in the music folder stop changing, every `--scan-interval` minutes (network
-shares don't report changes), on **Reindex** and when an administrator picks another folder. When a scan changes the
-library, the players that are online download it again at once. Scans are incremental: files with the same path, size and modification time aren't read again, vanished files drop out, and
-hidden and unreadable ones are skipped. A music folder that doesn't exist (yet) is reported by every scan until it
-appears, so a share that mounts late is picked up by the next one.
+At start-up, about ten seconds after files in the music folder stop changing, every `--scan-interval` minutes (a
+network share doesn't report changes made on other machines), on **Reindex**, and when an administrator picks another
+folder. When a scan changes the library, the players that are online download it again at once.
+
+Scans are incremental: files with the same path, size and modification time aren't read again (unless a cover image
+next to them changed), vanished files drop out, and hidden and unreadable ones are skipped. A music folder that doesn't
+exist (yet) is reported by every scan until it appears, so a share that mounts late is picked up by the next one.
 
 An administrator can pick another music folder in the player (*Settings → Server folder*); the player says why the
 server turns one down, and warns the administrator while the folder is missing or looks unmounted.
 
 The extension decides what's indexed: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis and
-Opus. A file whose extension lies is recognised by its content. Missing tags fall back to the file name,
+Opus. A file whose extension lies is recognized by its content. Missing tags fall back to the file name,
 `Unknown artist` and `Unknown album`. Whether a file also *plays* depends on the player ([audio.md](audio.md)).
 
 If the folder the index came from suddenly looks empty, the scan is skipped with *Library folder is empty (unmounted
 share?)*: an unmounted NAS shouldn't wipe your library. Pointing the server at a new, empty folder on purpose does
 clear it.
 
-**Track IDs** come from each file's full path. Moving or renaming a file gives it a new ID, and the favourites and
+**Track IDs** come from each file's full path. Moving or renaming a file gives it a new ID, and the favorites and
 playlist entries of the old one point at nothing.
 
 ## Accounts
@@ -88,19 +89,16 @@ playlist entries of the old one point at nothing.
   After that, the code is never used again.
 - **Everyone else** is added and removed by the administrator (*Settings → Users*). They're regular users: nobody gets
   promoted, and the administrator can't delete their own account.
-- **Rules**: names up to 64 characters, unique ignoring case; passwords from 8 characters up to 72 bytes. bcrypt would
-  quietly ignore anything longer, so longer ones are refused.
-- **Tokens** last 24 hours, or 90 days with *Keep me signed in*. Audio URLs carry a separate 8-hour stream token that
-  the players renew themselves. Deleting a user locks them out at once.
-- **Per-account data**: favourites, play counts, playlists and hidden artists, albums and tracks live on the server,
-  are the same on every device, and go when the account goes. Limits: 100,000 favourites, 100,000 tracks with play
+- **Rules**: names up to 64 characters, unique ignoring case; passwords from 8 characters up to 72 bytes (bcrypt would
+  quietly ignore anything longer, so longer ones are refused).
+- **Per-account data**: favorites, play counts, playlists and hidden artists, albums and tracks live on the server,
+  are the same on every device, and go when the account goes. Limits: 100,000 favorites, 100,000 tracks with play
   counts, 500 playlists, 50,000 hidden items.
-- **Rate limit**: setup, sign-in and password changes share 10 requests a minute per address, then `429`.
 - **Changing a password** (in the player, with the current one) signs out the account's other devices; an
   administrator's reset of another account (*Settings → Users*) signs it out everywhere: the way to cut off a lost
-  phone.
+  phone. Sign-ins, tokens and their limits: [SECURITY.md](../SECURITY.md#server).
 - **Lost the admin password?** There's no reset. Stop the server, delete the rows of the `users` table in
-  `wiretune-server.db`, start it again and set it up afresh. Everyone starts over, and the old accounts' favourites and
+  `wiretune-server.db`, start it again and set it up afresh. Everyone starts over, and the old accounts' favorites and
   playlists become unreachable.
 
 ## Docker
@@ -183,5 +181,5 @@ told to put the client's there (nginx's `real_ip` module, for example).
 | The player says it isn't a Wiretune server | Something answered, but not Wiretune: a wrong port, or a proxy's error page. |
 | Everyone shares one sign-in limit behind a proxy | Run the server with `--trust-proxy` ([above](#reverse-proxy-and-tls)). |
 | Every player had to sign in again after a restart | The database, and with it the token-signing key, was replaced. |
-| The setup screen is back, or favourites vanished after a restart | The server is using a different data directory. Compare the one named at the top of the log with the one you expect. |
+| The setup screen is back, or favorites vanished after a restart | The server is using a different data directory. Compare the one named at the top of the log with the one you expect. |
 | `Failed to load dynamic library … sqlite3` | The executable was copied without the `lib/` folder of its bundle. Copy the whole bundle. |

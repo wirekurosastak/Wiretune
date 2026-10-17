@@ -162,7 +162,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      # Without the secrets the app keeps the build's ad-hoc signature (docs/building.md#macos-player).
+      # Without the secrets the app keeps the build's ad-hoc signature (docs/building.md#macos).
       - name: Signing certificate
         if: env.MACOS_CERTIFICATE != ''
         run: |

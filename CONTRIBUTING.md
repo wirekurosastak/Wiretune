@@ -1,14 +1,13 @@
 # Contributing
 
-Thanks for helping out. Building is in [docs/building.md](docs/building.md), testing in
-[docs/development.md](docs/development.md), the design in [docs/architecture.md](docs/architecture.md). This page is
-what a change has to look like.
+Thanks for helping out. Building is in [docs/building.md](docs/building.md); where the code is, and how to test it, in
+[docs/development.md](docs/development.md). This page is what a change has to look like.
 
 ## The rules
 
 - **Keep it simple.** Concrete classes over one-implementation interfaces; no new layer, helper or package until two
   callers need it. Deleting code is a perfectly good contribution.
-- **Fix the root cause, with a test that fails without the fix**: server behaviour against the real server
+- **Fix the root cause, with a test that fails without the fix**: server behavior against the real server
   (`ServerFixture` in `server/test/support.dart`), logic in unit tests, what people see in a widget test
   (`app/test/app_shell_test.dart`). A test that needs `ffmpeg` or another tool skips itself without it (`hasTool`).
 - **Errors someone can act on.** Log with `WiretuneLog`, show a message the user can do something with, and never
@@ -55,6 +54,6 @@ git ls-files '*.dart' '*.kt' '*.cs' | xargs grep -L 'SPDX-License-Identifier: AG
 ```
 
 One logical change per pull request. Say what was wrong, why the fix is right, and what you couldn't test (a platform,
-a DAC, a TV, a car). Update the docs when behaviour, configuration or the API changes.
+a DAC, a TV, a car). Update the docs when behavior, configuration or the API changes.
 
 Security problems go through [SECURITY.md](SECURITY.md), never a public issue.

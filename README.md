@@ -2,30 +2,39 @@
 
 **Your lossless collection, on your own hardware, played properly.**
 
-You have a folder of FLACs. A few hundred albums ripped over the years, maybe a pile of 24/96 downloads. You don't
-want a subscription, you don't want to upload anything, and you'd like the player to stay out of the way between the
-file and the DAC.
+You have a folder of FLACs: a few hundred albums ripped over the years, maybe a pile of 24/96 downloads. You don't want
+a subscription, you don't want to upload anything, and you'd like the player to stay out of the way between the file
+and the DAC.
 
 Wiretune is two programs. A **server** you run at home indexes the folder and streams it over your network. A
-**player** browses, queues and plays it: one Flutter app for Linux, Windows, macOS, Android (phone, tablet, TV and
-Auto), iOS and Samsung's Tizen TVs. On a desktop it can skip the system mixer, open your DAC directly and play
-bit-perfect. It also plays a plain folder with no server at all, or both at once.
+**player** browses, queues and plays it, on Linux, Windows, macOS, Android (phone, tablet, TV and Auto), iOS and
+Samsung's Tizen TVs. On a computer it can skip the system mixer and play bit-perfect to your DAC. It also plays a plain
+folder with no server at all, or both at once.
 
-No cloud, no account on somebody else's computer, no telemetry. The only things that touch the internet are artist
+No cloud, no account on somebody else's computer, no telemetry. The only things that reach the internet are artist
 pictures and lyrics for tracks that have none, and you can turn both off ([SECURITY.md](SECURITY.md#players)).
+
+![The albums on a computer](docs/images/albums.png)
+
+![The albums, an album and the full-screen player on a phone](docs/images/phone.png)
+
+<sub>The albums, artists and covers in these pictures are made up.</sub>
 
 ## What you get
 
-- Artists, albums, songs, search, a queue with shuffle and repeat, favourites, playlists, and lyrics beside the queue
-  (from the file, or from [LRCLIB](https://lrclib.net) when the file has none).
-- A quality tag on every track, **gold** for hi-res, **silver** for CD-quality lossless, **bronze** for lossy, and a
-  32-band spectrum analyser on the desktop.
-- Favourites, play counts and playlists kept on your server, per account, so they follow you from device to device.
-- Downloads for offline listening (a track, an album, a playlist or your favourites), kept in step with the server.
+- Artists, albums, tracks, search, a queue with shuffle and repeat, favorites, playlists, a sleep timer, and lyrics
+  that follow the song (from the file, or from [LRCLIB](https://lrclib.net) when the file has none).
+- New music shows up by itself: copy it into the folder, and about ten seconds after the copying stops every player
+  shows it. No rescan, no restart.
+- A quality tag on every album and track: **gold** for hi-res, **silver** for CD-quality lossless, **bronze** for
+  lossy. A 64-band spectrum analyzer on the desktop.
+- Favorites, play counts and playlists kept on your server, per account, so they follow you from device to device.
+- Downloads for offline listening (a track, an album, an artist, a playlist or your favorites), kept in step with the
+  server.
 - Remote control between your devices: see and steer what the desktop plays from your phone, or move the music from
   one to the other.
-- One decoder everywhere but Tizen (FFmpeg, inside libmpv): FLAC, ALAC, WAV, AIFF, APE, WavPack, DSD, MP3, AAC, Vorbis,
-  Opus.
+- Gapless playback, and one decoder everywhere but Tizen (FFmpeg, inside libmpv): FLAC, ALAC, WAV, AIFF, APE,
+  WavPack, DSD, MP3, AAC, Vorbis, Opus.
 - Lock-screen controls on phones, Android Auto in the car, a remote-friendly TV layout, MPRIS on Linux, and the
   interface in English, Hungarian or German.
 
@@ -36,7 +45,7 @@ pictures and lyrics for tracks that have none, and you can turn both off ([SECUR
 | Play a server library | Yes | Yes | Yes | Yes | Yes | Browse and play | Yes | Yes |
 | Play a local folder | Yes | Yes | Yes | Yes, **not tried on a phone** | No | No | No | No |
 | Exclusive / bit-perfect | Yes (ALSA `hw:` devices) | Written, **not tried on a DAC** | Written, **not tried on a DAC** | No | No | No | No | No |
-| Spectrum analyser | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | No | No | No | No | No |
+| Spectrum analyzer | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | No | No | No | No | No |
 | System media controls | MPRIS | No | Media keys, Now Playing | Notification, lock screen | Remote | The car | Lock screen, Control Center | Remote, in the app |
 | Run the server | Yes | Yes | Yes | — | — | — | — | — |
 
@@ -44,60 +53,28 @@ pictures and lyrics for tracks that have none, and you can turn both off ([SECUR
 [development.md](docs/development.md#what-has-actually-been-tried) says which platforms have actually run. And
 bit-perfect is only as good as the path behind it, so read [audio.md](docs/audio.md) before you lean on the word.
 
-## Quick start
+## Build and start
 
-You need [Flutter](https://docs.flutter.dev/get-started/install) 3.47 or newer (it brings Dart); `flutter doctor` tells
-you what your platform still needs. On Linux the player also wants libmpv (`sudo dnf install mpv-devel`,
-`sudo apt install libmpv-dev`), and `ffmpeg` if you'd like the spectrum.
-
-Start the server in one terminal:
+Install what your system needs ([building.md](docs/building.md) has one command per system), then build the server
+and a player, for example on Linux:
 
 ```bash
-cd server
-dart run bin/wiretune_server.dart --library /srv/music
-```
-
-and the player in another:
-
-```bash
-cd app
-flutter run -d linux        # or -d windows, -d macos, or a phone from `flutter devices`
+dart tool/build.dart server linux
+dist/server/bin/wiretune_server --library ~/Music      # the server
+dist/linux/wiretune                                     # the player
 ```
 
 In the player, enter `http://<server-ip>:5200` and press **Connect**. A fresh server asks you to create the first
-account, which becomes the administrator, and for the **setup code** the server printed in its log. There are no
-default passwords.
-
-Only want to play a folder on this computer or Android phone? Choose **Continue without a server** and point *Settings* at your music.
-
-## Building
-
-`tool/build.dart` makes the release build of every target you name and puts what ships into `dist/`:
-
-```bash
-dart tool/build.dart server linux android
-```
-
-| Target | Builds on | You get |
-|---|---|---|
-| `server` | Linux, Windows or macOS, for that system | `dist/server/`: `bin/wiretune_server` and the SQLite library in `lib/` |
-| `linux` | Linux | `dist/linux/`: `wiretune` with its `lib/` and `data/` |
-| `windows` | Windows | `dist/windows/`: `wiretune.exe` with its DLLs and `data/` (`windows-installer` adds a setup `.exe`) |
-| `macos` | macOS | `dist/macos/Wiretune.app` and `Wiretune.dmg` |
-| `android` (phone, tablet, TV, Auto) | anywhere | `dist/android/`: one APK per processor type |
-| `ios` | macOS, with a signing team set in Xcode | `dist/ios/`: the `.ipa` |
-| `tizen` (Samsung TV) | anywhere, with [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen) | `dist/tizen/`: the `.tpk` |
-
-Copy a folder as a whole: the executables load their libraries from next to them. What to install first, signing, and
-getting the result onto a phone or a TV: [docs/building.md](docs/building.md).
+account, which becomes the administrator, with the **setup code** the server printed in its log. There are no default
+passwords. Only want to play a folder on this computer or Android phone? Choose **Continue without a server** and point
+*Settings* at your music.
 
 ## Documentation
 
-- [User guide](docs/user-guide.md): the things the player doesn't say out loud.
-- [Server](docs/server.md): configuration, accounts, backups, systemd, and putting it behind a proxy.
+- [User guide](docs/user-guide.md): what the player doesn't say out loud, and where it keeps its files.
+- [Server](docs/server.md): options, accounts, backups, Docker, systemd, and putting it behind a proxy.
 - [Audio](docs/audio.md): what each output mode really does, and what isn't verified.
-- [Building](docs/building.md), [Development](docs/development.md) and [Architecture](docs/architecture.md): for
-  building it, changing it and understanding it.
+- [Building](docs/building.md) and [Development](docs/development.md): building it, and changing it.
 - [HTTP API](docs/api.md), [Security](SECURITY.md) and [Contributing](CONTRIBUTING.md).
 
 The server speaks plain HTTP. Keep it on your LAN, or put a TLS proxy or a VPN in front of it.
