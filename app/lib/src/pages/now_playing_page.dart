@@ -305,12 +305,13 @@ class _PlayerTab extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
+                      // The artist in the artists' red, as on an album's page, whatever the section's colour.
                       if (track != null && track.artists.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
                           child: ArtistLinks(
                             track.artistNames,
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.hover),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.palette.coral),
                             onOpen: vm.openArtistByName,
                           ),
                         )
@@ -324,7 +325,7 @@ class _PlayerTab extends StatelessWidget {
                               player.nowPlayingArtist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.hover),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.palette.coral),
                             ),
                           ),
                         ),

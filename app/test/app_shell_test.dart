@@ -1399,6 +1399,20 @@ void main() {
     }
   });
 
+  testWidgets("the full-screen player's artist is in the artists' red, whatever the section's colour", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis')]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.navigateTo(AppSection.albums); // the albums' purple is the accent
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    await settle(tester);
+    final artist = find.descendant(of: find.byType(NowPlayingPage), matching: find.text('Miles Davis'));
+    expect(tester.widget<Text>(artist).style?.color, tester.element(artist).colors.palette.coral);
+  });
+
   testWidgets("dragging the player's seek bar seeks, and is no swipe", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([

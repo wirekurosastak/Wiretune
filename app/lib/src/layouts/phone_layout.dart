@@ -509,14 +509,8 @@ class _MiniPlayer extends StatelessWidget {
                           icon: Icon(Icons.skip_previous_rounded, size: 24, color: colors.textMain),
                         ),
                       ),
-                      SizedBox.square(
-                        dimension: 42,
-                        child: IconButton(
-                          tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
-                          onPressed: player.togglePlayPause,
-                          icon: PlayPauseIcon(playing: player.isPlaying, size: 28, color: colors.accent),
-                        ),
-                      ),
+                      // The players' round Play, as in the full-screen player and on a computer, in the 42 it had.
+                      const Padding(padding: EdgeInsets.symmetric(horizontal: 2), child: PlayButton(size: 38)),
                       Padding(
                         padding: EdgeInsets.only(right: math.max(0, (column - _nextSize) / 2)),
                         child: SizedBox.square(
