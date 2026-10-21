@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
+import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../widgets/ambient.dart';
@@ -29,11 +30,15 @@ class _LoginPageState extends State<LoginPage> {
   final _username = TextEditingController();
   final _password = TextEditingController();
   final _setupCode = TextEditingController();
+  final _urlFocus = FocusNode();
+  final _usernameFocus = FocusNode();
+  final _setupCodeFocus = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _url.text = context.vm.serverSettings.serverUrl;
+    if (AppPlatform.current.isTv) WidgetsBinding.instance.addPostFrameCallback((_) => _focusFirstField());
   }
 
   @override
@@ -42,7 +47,22 @@ class _LoginPageState extends State<LoginPage> {
     _username.dispose();
     _password.dispose();
     _setupCode.dispose();
+    _urlFocus.dispose();
+    _usernameFocus.dispose();
+    _setupCodeFocus.dispose();
     super.dispose();
+  }
+
+  /// A remote starts on the field to fill in: the server's address until it answers, then the setup code or the name.
+  void _focusFirstField() {
+    if (!mounted) return;
+    final server = context.vm.serverSettings;
+    final field = !server.isServerReachable
+        ? _urlFocus
+        : server.isSetupRequired
+        ? _setupCodeFocus
+        : _usernameFocus;
+    field.requestFocus();
   }
 
   void _copyFields() {
@@ -264,6 +284,7 @@ class _LoginPageState extends State<LoginPage> {
               height: 46,
               child: TextField(
                 controller: _url,
+                focusNode: _urlFocus,
                 keyboardType: TextInputType.url,
                 autofocus: !server.isServerReachable,
                 decoration: const InputDecoration(hintText: 'http://192.168.1.10:5200'),
@@ -316,13 +337,14 @@ class _LoginPageState extends State<LoginPage> {
           ),
         ),
         const SizedBox(height: 12),
-        _field(_setupCode, context.tr('SetupCodePlaceholder'), capitalize: true),
+        _field(_setupCode, context.tr('SetupCodePlaceholder'), capitalize: true, focusNode: _setupCodeFocus),
         const SizedBox(height: 12),
       ],
       _field(
         _username,
         context.tr(setup ? 'AdminUsernamePlaceholder' : 'UsernamePlaceholder'),
         autofill: AutofillHints.username,
+        focusNode: _usernameFocus,
       ),
       const SizedBox(height: 12),
       _field(
@@ -410,10 +432,12 @@ class _LoginPageState extends State<LoginPage> {
     bool capitalize = false,
     String? autofill,
     VoidCallback? onSubmitted,
+    FocusNode? focusNode,
   }) => SizedBox(
     height: 46,
     child: TextField(
       controller: controller,
+      focusNode: focusNode,
       obscureText: obscure,
       obscuringCharacter: '•',
       textCapitalization: capitalize ? TextCapitalization.characters : TextCapitalization.none,

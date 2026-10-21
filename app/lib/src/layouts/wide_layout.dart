@@ -30,6 +30,7 @@ import '../widgets/links.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/spectrum_visualizer.dart';
+import '../widgets/tv_focus.dart';
 
 /// The desktop, tablet and TV layout: the header (logo, search, the mode pills, account, language, theme and, without a
 /// system title bar, the window buttons), then floating panels over the ambient backdrop: the sidebar, the page and the
@@ -49,49 +50,58 @@ class WideLayout extends StatelessWidget {
     final colors = context.colors;
     return Material(
       color: colors.palette.background,
-      child: ListenableBuilder(
-        listenable: vm,
-        builder: (context, _) => Stack(
-          children: [
-            const Positioned.fill(child: AmbientBackdrop()),
-            Column(
-              children: [
-                const _Header(),
-                if (vm.isServerOfflineBannerVisible) const _OfflineBanner(),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: gap),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const _Sidebar(),
-                        const SizedBox(width: gap),
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(Radii.panel),
-                            child: ShaderMask(
-                              shaderCallback: (rect) => const LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
-                                stops: [0.0, 0.035, 0.965, 1.0],
-                              ).createShader(rect),
-                              blendMode: BlendMode.dstIn,
-                              child: FocusTraversalGroup(child: _Content(vm: vm)),
+      child: TvFocusAreas(
+        child: ListenableBuilder(
+          listenable: vm,
+          builder: (context, _) => Stack(
+            children: [
+              const Positioned.fill(child: AmbientBackdrop()),
+              // Under the sign-in page nothing takes the focus: a remote's arrows or Tab would go behind it.
+              ExcludeFocus(
+                excluding: vm.isLoginViewActive,
+                child: Column(
+                  children: [
+                    const TvFocusArea(area: TvArea.header, child: _Header()),
+                    if (vm.isServerOfflineBannerVisible) const _OfflineBanner(),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: gap),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const TvFocusArea(area: TvArea.sidebar, child: _Sidebar()),
+                            const SizedBox(width: gap),
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(Radii.panel),
+                                child: ShaderMask(
+                                  shaderCallback: (rect) => const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
+                                    stops: [0.0, 0.035, 0.965, 1.0],
+                                  ).createShader(rect),
+                                  blendMode: BlendMode.dstIn,
+                                  child: TvFocusArea(
+                                    area: TvArea.content,
+                                    child: FocusTraversalGroup(child: _Content(vm: vm)),
+                                  ),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: gap),
+                    const TvFocusArea(area: TvArea.player, child: _PlayerBar()),
+                    const _Footer(),
+                  ],
                 ),
-                const SizedBox(height: gap),
-                const _PlayerBar(),
-                const _Footer(),
-              ],
-            ),
-            if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
-          ],
+              ),
+              if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
+            ],
+          ),
         ),
       ),
     );

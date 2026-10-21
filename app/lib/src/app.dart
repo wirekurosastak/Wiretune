@@ -16,6 +16,7 @@ import 'platform.dart';
 import 'theme/app_theme.dart';
 import 'view_models/app_section.dart';
 import 'view_models/main_view_model.dart';
+import 'widgets/tv_focus.dart';
 
 /// The root widget: theme, language, the keyboard and remote shortcuts, the back button, and the layout for the screen.
 class WiretuneApp extends StatefulWidget {
@@ -74,6 +75,14 @@ class _WiretuneAppState extends State<WiretuneApp> {
                 showPerformanceOverlay: vm.showPerformanceStats,
                 theme: _theme(light, vm.selectedSection, platform.isTv),
                 themeAnimationDuration: const Duration(milliseconds: 350),
+                // A remote's arrows move between controls: a slider keeps Left and Right, not Up and Down too; a text
+                // field lets them go (TvTextFieldKeys).
+                builder: platform.isTv
+                    ? (context, child) => MediaQuery(
+                        data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
+                        child: TvTextFieldKeys(child: child!),
+                      )
+                    : null,
                 shortcuts: {
                   ..._defaultShortcuts(platform),
                   // TV remotes: the centre button and the media keys.

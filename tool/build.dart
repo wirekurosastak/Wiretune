@@ -73,8 +73,44 @@ final Map<String, Future<void> Function()> _targets = {
     'android',
   ),
   'ios': () => _buildPackages('flutter', ['build', 'ipa', '--release'], 'app/build/ios/ipa', '.ipa', 'ios'),
-  'tizen': () => _buildPackages('flutter-tizen', ['build', 'tpk', '--release'], 'app/build/tizen/tpk', '.tpk', 'tizen'),
+  'tizen': () => _withPubspecAddition(
+    _tizenSqlite,
+    () => _buildPackages('flutter-tizen', ['build', 'tpk', '--release'], 'app/build/tizen/tpk', '.tpk', 'tizen'),
+  ),
 };
+
+/// A Samsung TV can't load the SQLite the sqlite3 package downloads for Linux on ARM (built for hard-float and a newer
+/// glibc), so the Tizen build uses the TV's own: 3.31 or later, and Wiretune needs nothing newer. The package can't tell
+/// a TV from desktop Linux, which keeps the one it bundles, so the setting is in app/pubspec.yaml only during the build.
+const String _tizenSqlite = '''
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: system
+      name: /usr/lib/libsqlite3.so.0
+''';
+
+/// Runs [build] with [addition] at the end of app/pubspec.yaml, and puts the file back afterwards, also on Ctrl+C.
+Future<void> _withPubspecAddition(String addition, Future<void> Function() build) async {
+  final pubspec = File(_path('app/pubspec.yaml'));
+  final original = pubspec.readAsStringSync();
+  if (original.contains('\nhooks:')) {
+    throw const _BuildFailure('app/pubspec.yaml already has a hooks: section; take it out first.');
+  }
+  void restore() => pubspec.writeAsStringSync(original);
+  final interrupted = ProcessSignal.sigint.watch().listen((_) {
+    restore();
+    exit(130);
+  });
+  pubspec.writeAsStringSync('$original$addition');
+  try {
+    await build();
+  } finally {
+    restore();
+    await interrupted.cancel();
+  }
+}
 
 Future<void> main(List<String> args) async {
   if (args.contains('-h') || args.contains('--help')) {

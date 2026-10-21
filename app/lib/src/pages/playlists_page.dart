@@ -112,15 +112,22 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
         ? Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 240, maxWidth: 400),
-                child: TextField(
-                  controller: _name..text = _name.text.isEmpty ? playlists.editingPlaylistName : _name.text,
-                  autofocus: true,
-                  maxLength: UserDataRules.maxPlaylistNameLength,
-                  decoration: const InputDecoration(counterText: ''),
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                  onSubmitted: (value) => playlists.confirmRenamePlaylist(value).then((_) => _name.clear()),
+              // As wide as the header leaves beside its two buttons, up to 400; one line of the title's size.
+              Flexible(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 400),
+                  child: TextField(
+                    controller: _name..text = _name.text.isEmpty ? playlists.editingPlaylistName : _name.text,
+                    autofocus: true,
+                    maxLength: UserDataRules.maxPlaylistNameLength,
+                    decoration: const InputDecoration(
+                      counterText: '',
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                    onSubmitted: (value) => playlists.confirmRenamePlaylist(value).then((_) => _name.clear()),
+                  ),
                 ),
               ),
               const SizedBox(width: 8),

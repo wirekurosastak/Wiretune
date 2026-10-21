@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
@@ -140,24 +142,30 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> with SingleTicke
 class _BottomBars extends StatelessWidget {
   const _BottomBars();
 
+  /// The pill's shape and place, TIDAL's: 9 from the sides, 18 above the screen's edge (over a gesture bar, clear of
+  /// the system's buttons), corners of 40.
+  static const double _side = 9, _bottom = 18, _radius = 40;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return SafeArea(
-      top: false,
+    final inset = MediaQuery.viewPaddingOf(context).bottom;
+    return MediaQuery.removePadding(
+      context: context,
+      removeBottom: true,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        padding: EdgeInsets.fromLTRB(_side, 0, _side, math.max(_bottom, inset - 6)),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: colors.palette.modal,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(_radius),
             border: Border.all(color: colors.palette.panelBorder),
             boxShadow: [
               BoxShadow(color: colors.palette.shadow, blurRadius: 24, spreadRadius: -4, offset: const Offset(0, 8)),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(_radius),
             child: Material(
               type: MaterialType.transparency,
               child: AnimatedSize(
@@ -190,21 +198,25 @@ class _BottomNavigation extends StatelessWidget {
       (AppSection.favorites, Icons.favorite_rounded, palette.coral, 'NavFavorites'),
       (AppSection.playlists, Icons.queue_music_rounded, palette.lime, 'NavPlaylistsShort'),
     ];
-    return SizedBox(
-      height: 64,
-      child: Row(
-        children: [
-          for (final (section, icon, color, label) in items)
-            Expanded(
-              child: _NavItem(
-                icon: icon,
-                label: context.tr(label),
-                color: color,
-                active: !vm.isSearchOpen && vm.selectedSection == section,
-                onTap: () => vm.navigateTo(section),
+    // Room under it, as in TIDAL's pill, so the labels clear the pill's rounded bottom.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: SizedBox(
+        height: 64,
+        child: Row(
+          children: [
+            for (final (section, icon, color, label) in items)
+              Expanded(
+                child: _NavItem(
+                  icon: icon,
+                  label: context.tr(label),
+                  color: color,
+                  active: !vm.isSearchOpen && vm.selectedSection == section,
+                  onTap: () => vm.navigateTo(section),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -397,6 +409,8 @@ class _OfflineBanner extends StatelessWidget {
 class _MiniPlayer extends StatelessWidget {
   const _MiniPlayer();
 
+  static const double _coverSize = 44, _nextSize = 38;
+
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
@@ -409,96 +423,115 @@ class _MiniPlayer extends StatelessWidget {
         final track = player.currentTrack;
         if (track == null) return const SizedBox.shrink();
 
-        return VerticalSwipe(
-          upwards: true,
-          onSwipe: vm.openNowPlaying,
-          child: SizedBox(
-            height: 66,
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: vm.openNowPlaying,
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 0, 4, 0),
-                      child: Row(
-                        children: [
-                          DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(Radii.small + 2),
-                              boxShadow: [
-                                BoxShadow(color: colors.palette.shadow, blurRadius: 8, offset: const Offset(0, 3)),
-                              ],
-                            ),
-                            child: CoverImage(path: track.coverArtPath, size: 44, radius: Radii.small + 2),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
+        // Room above it, as in TIDAL's pill, under the pill's rounded top.
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: VerticalSwipe(
+            upwards: true,
+            onSwipe: vm.openNowPlaying,
+            // The cover and Next stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
+            // of the pill's width, as they are.
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final column = constraints.maxWidth / 5;
+                return SizedBox(
+                  height: 66,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: vm.openNowPlaying,
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
+                            child: Row(
                               children: [
-                                Text(
-                                  player.nowPlayingTitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: -0.2,
-                                    color: colors.textMain,
+                                DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(Radii.small + 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: colors.palette.shadow,
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 3),
+                                      ),
+                                    ],
+                                  ),
+                                  child: CoverImage(
+                                    path: track.coverArtPath,
+                                    size: _coverSize,
+                                    radius: Radii.small + 2,
                                   ),
                                 ),
-                                const SizedBox(height: 1),
-                                if (player.isRemote && !player.hasError)
-                                  const PlayingOnLabel(fontSize: 11.5)
-                                else
-                                  Text(
-                                    player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: player.hasError ? colors.danger : colors.textMuted,
-                                    ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        player.nowPlayingTitle,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -0.2,
+                                          color: colors.textMain,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 1),
+                                      if (player.isRemote && !player.hasError)
+                                        const PlayingOnLabel(fontSize: 11.5)
+                                      else
+                                        Text(
+                                          player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: player.hasError ? colors.danger : colors.textMuted,
+                                          ),
+                                        ),
+                                    ],
                                   ),
+                                ),
                               ],
                             ),
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                      SizedBox.square(
+                        dimension: 38,
+                        child: IconButton(
+                          tooltip: context.tr('TipPrevious'),
+                          onPressed: player.previousTrack,
+                          icon: Icon(Icons.skip_previous_rounded, size: 24, color: colors.textMain),
+                        ),
+                      ),
+                      SizedBox.square(
+                        dimension: 42,
+                        child: IconButton(
+                          tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
+                          onPressed: player.togglePlayPause,
+                          icon: PlayPauseIcon(playing: player.isPlaying, size: 28, color: colors.accent),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(right: math.max(0, (column - _nextSize) / 2)),
+                        child: SizedBox.square(
+                          dimension: _nextSize,
+                          child: IconButton(
+                            tooltip: context.tr('TipNext'),
+                            onPressed: player.nextTrack,
+                            icon: Icon(Icons.skip_next_rounded, size: 24, color: colors.textMain),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                SizedBox.square(
-                  dimension: 38,
-                  child: IconButton(
-                    tooltip: context.tr('TipPrevious'),
-                    onPressed: player.previousTrack,
-                    icon: Icon(Icons.skip_previous_rounded, size: 24, color: colors.textMain),
-                  ),
-                ),
-                SizedBox.square(
-                  dimension: 42,
-                  child: IconButton(
-                    tooltip: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
-                    onPressed: player.togglePlayPause,
-                    icon: PlayPauseIcon(playing: player.isPlaying, size: 28, color: colors.accent),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: SizedBox.square(
-                    dimension: 38,
-                    child: IconButton(
-                      tooltip: context.tr('TipNext'),
-                      onPressed: player.nextTrack,
-                      icon: Icon(Icons.skip_next_rounded, size: 24, color: colors.textMain),
-                    ),
-                  ),
-                ),
-              ],
+                );
+              },
             ),
           ),
         );

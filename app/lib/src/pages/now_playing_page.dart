@@ -203,6 +203,14 @@ class _PlayerTab extends StatelessWidget {
       final value? when value > 0 => value,
       _ => null,
     };
+    // The bitrate, in the quality's colours as in the desktop's table, where the cover's tag doesn't say it already (a
+    // lossy file's does: "MP3 320kbps").
+    final format = track?.format;
+    final meta = [
+      if (bpm != null) PlayerMetaBadge(text: '$bpm BPM', fontSize: 11),
+      if (format != null && format.isLossless && format.bitrateKbps > 0)
+        QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: 11),
+    ];
     // The queue and the lyrics scroll vertically themselves; here a swipe down closes the player.
     return VerticalSwipe(
       upwards: false,
@@ -215,8 +223,9 @@ class _PlayerTab extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // The cover at its size while playing (paused, it sits back within the same room), centred above the
-                  // title with at least [below] under it; a track's BPM sits midway between that edge and the title.
-                  final below = bpm != null ? 48.0 : 16.0;
+                  // title with at least [below] under it; a track's BPM and bitrate sit midway between that edge and the
+                  // title.
+                  final below = meta.isNotEmpty ? 48.0 : 16.0;
                   final side = math.max(
                     0.0,
                     math.min(420.0, math.min(constraints.maxWidth, constraints.maxHeight - below)),
@@ -266,9 +275,9 @@ class _PlayerTab extends StatelessWidget {
                         ),
                       ),
                       Expanded(
-                        child: bpm == null
-                            ? const SizedBox.shrink()
-                            : Center(child: PlayerMetaBadge(text: '$bpm BPM', fontSize: 11)),
+                        child: Center(
+                          child: Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: meta),
+                        ),
                       ),
                     ],
                   );

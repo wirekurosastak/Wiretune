@@ -661,6 +661,10 @@ class _DesktopTileState extends State<_DesktopTile> {
   bool _hover = false;
   bool _focus = false;
 
+  /// The play and menu buttons: a TV remote passes them by, so a tile is one step, and OK opens it.
+  static Widget? _offTv(Widget? button) =>
+      button != null && AppPlatform.current.isTv ? ExcludeFocus(child: button) : button;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -705,7 +709,7 @@ class _DesktopTileState extends State<_DesktopTile> {
           Positioned(
             top: widget.circle ? 0 : 8,
             right: widget.circle ? 0 : 8,
-            child: AnimatedOpacity(opacity: showPlay ? 1 : 0, duration: duration, child: widget.menu),
+            child: AnimatedOpacity(opacity: showPlay ? 1 : 0, duration: duration, child: _offTv(widget.menu)),
           ),
           Positioned(
             right: widget.circle ? 4 : 8,
@@ -714,7 +718,7 @@ class _DesktopTileState extends State<_DesktopTile> {
               offset: showPlay ? Offset.zero : const Offset(0, 0.35),
               duration: duration,
               curve: Curves.easeOutCubic,
-              child: AnimatedOpacity(opacity: showPlay ? 1 : 0, duration: duration, child: widget.play),
+              child: AnimatedOpacity(opacity: showPlay ? 1 : 0, duration: duration, child: _offTv(widget.play)),
             ),
           ),
         ],

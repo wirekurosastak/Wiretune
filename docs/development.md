@@ -99,7 +99,7 @@ shells.
 | Linux desktop | Built and run against a real server and library (1,320 tracks), every screen checked at 1280×820, 900×700 and phone width, and playback, the queue, the spectrum, MPRIS and the device list driven through UI automation. Exclusive and bit-perfect not tried on a DAC |
 | Android | Debug and release APKs build. **Not yet run on a phone, a TV or in a car**; in particular, downloading into the shared *Music* folder without a permission (Android 11 and later) hasn't been tried on a device |
 | Windows, macOS, iOS | Not yet built (they need their own hosts) |
-| Tizen | Dependencies resolve with flutter-tizen. **Not yet built** or run on a TV |
+| Tizen | Built on Fedora and quickly tried on a 2024 Samsung TV (Tizen 8.0): it signs in and plays, and the remote reaches everything, but moving around is sluggish and **needs more work** |
 | Bit-perfect, exclusive | Not measured on any platform ([audio.md](audio.md#known-limitations)) |
 
 "Not yet" means exactly that. If you have one of those devices, you can move a row.

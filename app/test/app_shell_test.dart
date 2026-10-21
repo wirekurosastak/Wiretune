@@ -411,6 +411,52 @@ void main() {
     expect(vm.library.isFavorite(favorite.id), isFalse);
   });
 
+  testWidgets("a phone's track row ends with its menu alone, the favourite in it, so the title has the room", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final row = find.ancestor(of: find.text('So What'), matching: find.byType(InkWell)).first;
+    expect(find.descendant(of: row, matching: find.byType(HeartIcon)), findsNothing);
+    await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('TipFavorite')));
+    await settle(tester);
+    expect(vm.library.isFavorite('1'), isTrue);
+  });
+
+  testWidgets("the mini player's cover and Next stand over the nav's Artists and Playlists icons", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.player.playQueue(vm.library.tracks);
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    double centre(Finder finder) => tester.getCenter(finder).dx;
+    final cover = find.byWidgetPredicate((w) => w is CoverImage && w.size == 44);
+    expect(centre(cover), moreOrLessEquals(centre(find.byIcon(Icons.person_rounded).last), epsilon: 0.5));
+    expect(
+      centre(find.byTooltip(Localizer.get('TipNext'))),
+      moreOrLessEquals(centre(find.byIcon(Icons.queue_music_rounded).last), epsilon: 0.5),
+    );
+  });
+
+  testWidgets("renaming a playlist on a phone fits the field and its buttons on the screen", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    final playlist = vm.library.createPlaylist('My summer playlist');
+    vm.navigateTo(AppSection.playlists);
+    vm.playlists.openPlaylist(vm.library.getPlaylist(playlist.id));
+    await settle(tester);
+    vm.playlists.startRename();
+    await settle(tester);
+    expect(tester.takeException(), isNull);
+    expect(tester.getRect(find.byTooltip(Localizer.get('Cancel'))).right, lessThanOrEqualTo(400));
+    expect(tester.getSize(find.byType(TextField)).height, lessThan(56));
+  });
+
   testWidgets('a phone lists albums and artists as rows, and a row opens its page', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     // Rows: one under the other, not tiles side by side.
@@ -441,7 +487,11 @@ void main() {
   testWidgets('the quality tag sits on the cover: the full-screen player, an album, a playlist', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     void expectOnCover(Finder page, Finder cover) {
-      final tag = find.descendant(of: page, matching: find.byType(QualityTag));
+      // The format's tag; the player's bitrate below the cover is a tag too.
+      final tag = find.descendant(
+        of: page,
+        matching: find.byWidgetPredicate((w) => w is QualityTag && !(w.spec ?? '').endsWith('kbps')),
+      );
       expect(tag, findsOneWidget); // and nowhere else on the page
       final (on, under) = (tester.getRect(tag), tester.getRect(cover));
       expect(under.intersect(on), on, reason: '$on lies inside $under');
@@ -1302,11 +1352,25 @@ void main() {
     expect((vm.artists.isArtistDetailOpen, offset()), (false, again));
   });
 
-  testWidgets("the player's BPM sits midway between the cover, at its size while playing, and the title", (
+  testWidgets("the player's BPM and bitrate sit midway between the cover, at its size while playing, and the title", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
-      final library = createLibrary([TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')..bpm = 136]);
+      final library = createLibrary([
+        Track(
+          id: '1',
+          title: 'So What',
+          album: 'Kind of Blue',
+          filePath: '/music/1.flac',
+          format: const AudioFormat(
+            codec: 'FLAC',
+            sampleRate: 44100,
+            bitsPerSample: 16,
+            bitrateKbps: 912,
+            isLossless: true,
+          ),
+        )..bpm = 136,
+      ]);
       library.initialize();
       return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
     });
@@ -1327,8 +1391,11 @@ void main() {
             .first,
       ); // unscaled
       final bpm = tester.getCenter(find.text('136 BPM'));
+      final bitrate = tester.getCenter(find.text(Localizer.format('BitrateKbps', [912])));
       final title = tester.getRect(find.descendant(of: page, matching: find.text('So What')));
       expect(bpm.dy, moreOrLessEquals((cover.bottom + title.top) / 2, epsilon: 0.5), reason: 'playing: $playing');
+      expect(bitrate.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
+      expect(bitrate.dx, greaterThan(bpm.dx));
     }
   });
 
@@ -1456,6 +1523,106 @@ void main() {
       expect(tester.getRect(sort).right, lessThan(tester.getRect(other).left), reason: '${section.name}: sort first');
       expect(find.byIcon(Icons.swap_vert_rounded), findsNothing);
     }
+  });
+
+  testWidgets("a TV remote moves between the sidebar, the page, the player bar and the search box, and never sticks", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'linux', tizen: true, tv: true);
+    final vm = await pumpApp(tester, const Size(1920, 1080), () async {
+      final library = createLibrary([
+        for (var a = 1; a <= 24; a++)
+          for (var t = 1; t <= 3; t++)
+            TestSupport.makeTrack('$a-$t', 'Song $a.$t', artist: 'Artist ${a % 12 + 1}', album: 'Album $a'),
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    Future<void> press(LogicalKeyboardKey key, [int times = 1]) async {
+      for (var i = 0; i < times; i++) {
+        await tester.sendKeyEvent(key);
+        await settle(tester);
+      }
+    }
+
+    FocusNode focus() => FocusManager.instance.primaryFocus!;
+    bool within(Finder area) => tester.getRect(area).contains(tester.getCenter(find.byWidget(focus().context!.widget)));
+    final sidebar = find.ancestor(of: find.text(Localizer.get('NavArtists')), matching: find.byType(ListView)).first;
+    final searchBox = find.byType(TextField);
+    final grid = find.byType(CustomScrollView);
+    expect(within(sidebar), isTrue, reason: 'the sidebar has the focus at start');
+
+    // Up into the search box, and Down out of it again: its cursor doesn't keep the arrows.
+    await press(LogicalKeyboardKey.arrowUp);
+    expect(focus().context!.findAncestorWidgetOfExactType<TextField>(), isNotNull);
+    await press(LogicalKeyboardKey.arrowDown);
+    expect(within(grid), isTrue, reason: 'into the page');
+    expect(within(searchBox), isFalse);
+
+    // Left from the page's edge to the sidebar, Right back into the page.
+    await press(LogicalKeyboardKey.arrowDown);
+    await press(LogicalKeyboardKey.arrowLeft, 10);
+    expect(within(sidebar), isTrue);
+    await press(LogicalKeyboardKey.arrowRight);
+    expect(within(grid), isTrue);
+
+    // OK opens the artist with something lit on its page; Back closes it with something lit again.
+    await press(LogicalKeyboardKey.select);
+    expect(vm.artists.isArtistDetailOpen, isTrue);
+    expect(focus(), isNot(isA<FocusScopeNode>()));
+    await press(LogicalKeyboardKey.escape);
+    expect(vm.artists.isArtistDetailOpen, isFalse);
+    expect(focus(), isNot(isA<FocusScopeNode>()));
+
+    // Down past the page's end to the player bar, and Up back to the same tile; a tile is one step (its buttons are
+    // passed by).
+    FocusNode? last;
+    for (var i = 0; i < 8 && within(grid); i++) {
+      expect(focus().context!.findAncestorWidgetOfExactType<TilePlayButton>(), isNull);
+      last = focus();
+      await press(LogicalKeyboardKey.arrowDown);
+    }
+    expect(within(grid), isFalse, reason: 'in the player bar');
+    expect(within(sidebar), isFalse);
+    await press(LogicalKeyboardKey.arrowUp);
+    expect(focus(), last, reason: 'the page keeps its place');
+  });
+
+  testWidgets("on a TV the sign-in page has the remote's focus, and the arrows move through its fields and buttons", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'linux', tizen: true, tv: true);
+    final vm = await pumpApp(tester, const Size(1920, 1080), () async {
+      final library = createLibrary(const []);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    vm.isLoginViewActive = true;
+    await settle(tester);
+    Future<void> press(LogicalKeyboardKey key) async {
+      await tester.sendKeyEvent(key);
+      await settle(tester);
+    }
+
+    FocusNode focus() => FocusManager.instance.primaryFocus!;
+    String? hint() => focus().context!.findAncestorWidgetOfExactType<TextField>()?.decoration?.hintText;
+    bool on(String label) =>
+        find.ancestor(of: find.text(label), matching: find.byWidget(focus().context!.widget)).evaluate().isNotEmpty;
+    expect(hint(), 'http://192.168.1.10:5200', reason: 'the address first, not the layout behind the page');
+    await press(LogicalKeyboardKey.arrowRight); // the cursor is at the end: on to the button beside
+    expect(on(Localizer.get('Connect')), isTrue);
+    await press(LogicalKeyboardKey.arrowLeft);
+    expect(hint(), 'http://192.168.1.10:5200');
+    await press(LogicalKeyboardKey.arrowDown);
+    expect(hint(), Localizer.get('UsernamePlaceholder'));
+    await press(LogicalKeyboardKey.arrowDown);
+    expect(hint(), Localizer.get('PasswordPlaceholder'));
+    await press(LogicalKeyboardKey.arrowDown);
+    await press(LogicalKeyboardKey.arrowDown);
+    expect(on(Localizer.get('SignIn')), isTrue);
+    await press(LogicalKeyboardKey.arrowUp);
+    await press(LogicalKeyboardKey.arrowUp);
+    expect(hint(), Localizer.get('PasswordPlaceholder'));
   });
 
   testWidgets("the phone's navigation has no ripple or bounce, and the desktop's cover holds still", (tester) async {

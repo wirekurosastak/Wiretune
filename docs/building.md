@@ -129,15 +129,11 @@ Certificate Manager create a **Samsung** certificate profile for TVs (it needs a
 turn on developer mode on the TV (open *Apps*, type 12345 on the remote, enter your computer's address), then
 `sdb connect <tv-ip>` and `flutter-tizen install` in `app/`.
 
-Nobody has built this one yet, so expect rough edges, and please report them. If a TV refuses the SQLite library the
-build bundles, add this to `app/pubspec.yaml` for the Tizen build only, so the TV's own is used:
+It has only been tried quickly, on a 2024 Samsung (Tizen 8.0): it works, but moving around with the remote is sluggish
+and needs more work.
 
-```yaml
-hooks:
-  user_defines:
-    sqlite3:
-      source: system
-```
+The TV uses its own SQLite: the one the sqlite3 package downloads for Linux on ARM doesn't load there. The build
+script adds that setting to `app/pubspec.yaml` for the Tizen build only, and takes it out again.
 
 ## Signing
 

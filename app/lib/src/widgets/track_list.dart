@@ -478,22 +478,20 @@ class _TableRowState extends State<_TableRow> {
 }
 
 /// The buttons at the end of a row: the favourite, and the menu with the rest (in a table and on a phone alike).
+/// The heart and the ⋮ menu at a row's end; a phone's row has the menu alone, with the favourite in it, so that the title
+/// has the room.
 List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {bool phone = false}) {
+  if (phone) return [TrackMenu(track: track, kind: kind, width: 48, withFavorite: true)];
   final colors = context.colors;
-  final size = phone ? 48.0 : 44.0;
   final favorite = context.vm.library.isFavorite(track.id);
   return [
     _IconCell(
-      width: size,
+      width: 44,
       tooltip: context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
-      icon: HeartIcon(
-        filled: favorite,
-        color: favorite ? colors.palette.coral : colors.textMuted,
-        size: phone ? 22 : 18,
-      ),
+      icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted, size: 18),
       onPressed: () => context.vm.library.toggleFavorite(track.id),
     ),
-    TrackMenu(track: track, kind: kind, width: size),
+    TrackMenu(track: track, kind: kind, width: 44),
   ];
 }
 
@@ -527,7 +525,14 @@ Future<void> _showTrackContextMenu(BuildContext context, Offset position, Track 
 /// add to the queue, a playlist (and, in one, moving and removing the track), the download, the way to the album and the
 /// artist, and hiding it.
 class TrackMenu extends StatelessWidget {
-  const TrackMenu({super.key, required this.track, required this.kind, required this.width, this.color});
+  const TrackMenu({
+    super.key,
+    required this.track,
+    required this.kind,
+    required this.width,
+    this.color,
+    this.withFavorite = false,
+  });
 
   final Track track;
 
@@ -539,7 +544,10 @@ class TrackMenu extends StatelessWidget {
   /// The dots' colour; muted when not given.
   final Color? color;
 
-  /// [withFavorite]: the right click's menu, which also has the favourite (the row's heart beside the dots has it).
+  /// Whether the menu has the favourite too: where no heart is beside it (a phone's row).
+  final bool withFavorite;
+
+  /// [withFavorite]: a menu without a heart beside it (the right click's, a phone row's) has the favourite too.
   static List<PopupMenuEntry<TrackAction>> buildMenuItems(
     BuildContext context,
     Track track,
@@ -648,7 +656,7 @@ class TrackMenu extends StatelessWidget {
           tooltip: context.tr('TipMore'),
           icon: Icon(Icons.more_vert_rounded, color: color ?? colors.textMuted, size: 22),
           onSelected: (action) => handleAction(context, action, track),
-          itemBuilder: (context) => buildMenuItems(context, track, kind),
+          itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
         ),
       ),
     );
