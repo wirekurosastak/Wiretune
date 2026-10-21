@@ -263,7 +263,7 @@ class _BestMatchCard extends StatelessWidget {
               style: TextStyle(fontSize: 11, color: colors.textMuted),
             ),
             const SizedBox(height: 18),
-            TilePlayButton(color: typeColor, onPressed: match.play, size: 48),
+            TilePlayButton(color: typeColor, onPressed: match.play, tracks: match.tracks, size: 48),
           ],
         ),
       ),

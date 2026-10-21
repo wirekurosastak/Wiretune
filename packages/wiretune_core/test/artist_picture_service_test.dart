@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -32,10 +33,34 @@ void main() {
         return respond(request);
       }),
       cacheFile: p.join(dir.path, 'artist_pictures.json'),
+      spacing: Duration.zero,
     );
   }
 
   http.Response json(String body) => http.Response(body, 200, headers: {'content-type': 'application/json'});
+
+  // Deezer's artist search answering with [artists] (name, fans, picture); its album search with [albums] (the
+  // artist's name and picture of each).
+  void useDeezer({List<(String, int, String)> artists = const [], List<(String, String)> albums = const []}) =>
+      useStub((request) {
+        final kind = request.url.pathSegments.last;
+        return json(
+          jsonEncode({
+            'data': kind == 'album'
+                ? [
+                    for (final (name, picture) in albums)
+                      {
+                        'title': 'An album',
+                        'artist': {'name': name, 'picture_medium': picture},
+                      },
+                  ]
+                : [
+                    for (final (name, fans, picture) in artists)
+                      {'name': name, 'nb_fan': fans, 'picture_medium': picture},
+                  ],
+          }),
+        );
+      });
 
   test('null, blank and unknown artists have no picture', () async {
     useStub((_) => json('{}'));
@@ -46,77 +71,167 @@ void main() {
   });
 
   test('a known artist gets a URL, cached for every spelling', () async {
-    useStub((_) => json('{"data":[{"picture_medium":"https://cdn.example/queen.jpg"}]}'));
+    useDeezer(artists: [('Queen', 100, 'https://cdn.example/queen.jpg')]);
     expect(await service.getArtistPictureUrl('Queen'), 'https://cdn.example/queen.jpg');
     expect(await service.getArtistPictureUrl('  queen '), 'https://cdn.example/queen.jpg');
     expect(requests, 1);
   });
 
+  test('by name alone, only that exact name counts, and the best known of those who have it', () async {
+    useDeezer(
+      artists: [
+        ('SZA', 1339100, 'https://cdn.example/sza.jpg'),
+        ('Aza', 5, 'https://cdn.example/aza-5.jpg'),
+        ('AZA', 25, 'https://cdn.example/aza-25.jpg'),
+      ],
+    );
+    expect(await service.getArtistPictureUrl('aza'), 'https://cdn.example/aza-25.jpg');
+    useDeezer(artists: [('Coldplay', 18427271, 'https://cdn.example/coldplay.jpg')]);
+    expect(await service.getArtistPictureUrl('Co Lee'), isNull, reason: 'not another name');
+  });
+
+  test('an album of theirs tells which of the artists with the name they are', () async {
+    useDeezer(
+      artists: [('AZA', 25, 'https://cdn.example/aza-25.jpg')],
+      albums: [('Someone Else', 'https://cdn.example/other.jpg'), ('Aza', 'https://cdn.example/aza-2.jpg')],
+    );
+    expect(
+      await service.getArtistPictureUrl('aza', albums: ['#SzuperCsillagParaszt']),
+      'https://cdn.example/aza-2.jpg',
+    );
+    expect(requests, 1);
+
+    // No album of theirs found: their name, then.
+    useDeezer(artists: [('AZA', 25, 'https://cdn.example/aza-25.jpg')]);
+    expect(await service.getArtistPictureUrl('aza', albums: ['One', 'Two', 'Three']), 'https://cdn.example/aza-25.jpg');
+    expect(requests, 3, reason: 'two albums, then the name');
+  });
+
+  test("an album's second act is found among its contributors, not by their name", () async {
+    useStub((request) {
+      if (request.url.path == '/album/637590871') {
+        return json(
+          jsonEncode({
+            'contributors': [
+              {'name': 'Co Lee', 'picture_medium': 'https://cdn.example/co-lee.jpg'},
+              {'name': 'Blaize', 'picture_medium': 'https://cdn.example/blaize-65.jpg'},
+            ],
+          }),
+        );
+      }
+      return json(
+        jsonEncode({
+          'data': request.url.path == '/search/album'
+              ? [
+                  {
+                    'id': 637590871,
+                    'title': 'LA PROMENADE',
+                    'artist': {'name': 'Co Lee', 'picture_medium': 'https://cdn.example/co-lee.jpg'},
+                  },
+                ]
+              : [
+                  {'name': 'Blaize', 'nb_fan': 216, 'picture_medium': 'https://cdn.example/blaize-216.jpg'},
+                ],
+        }),
+      );
+    });
+    expect(await service.getArtistPictureUrl('Blaize', albums: ['LA PROMENADE']), 'https://cdn.example/blaize-65.jpg');
+    expect(requests, 2);
+  });
+
+  test("Deezer's grey stand-in is no picture, and neither is an address that is not https", () async {
+    useDeezer(artists: [('Ketioz', 9, 'https://cdn-images.dzcdn.net/images/artist//250x250-000000-80-0-0.jpg')]);
+    expect(await service.getArtistPictureUrl('Ketioz'), isNull);
+    useStub(
+      (_) => json(
+        '{"data":[{"name":"Queen","picture_medium":"file:///etc/passwd","picture_big":"http://insecure.example/x.jpg"}]}',
+      ),
+    );
+    expect(await service.getArtistPictureUrl('Queen'), isNull);
+  });
+
   test('an unknown artist is remembered, also after a restart, and not asked again', () async {
-    useStub((_) => json('{"data":[]}'));
+    useDeezer();
     expect(await service.getArtistPictureUrl('Nobody'), isNull);
     expect(await service.getArtistPictureUrl('Nobody'), isNull);
     expect(requests, 1);
 
     service.close(); // saves the answers
-    useStub((_) => json('{"data":[]}'));
+    useDeezer();
     expect(await service.getArtistPictureUrl('Nobody'), isNull);
     expect(requests, 0);
   });
 
-  test('server errors are neither cached nor retried at once', () async {
-    useStub((_) => http.Response('', 503));
-    expect(await service.getArtistPictureUrl('Queen'), isNull);
-    expect(await service.getArtistPictureUrl('Abba'), isNull); // backing off
-    expect(requests, 1);
-
-    service.close();
-    useStub((_) => json('{"data":[{"picture_medium":"https://cdn.example/queen.jpg"}]}'));
-    // An outage was not "this artist has no picture": asked again once the service starts afresh.
-    expect(await service.getArtistPictureUrl('Queen'), 'https://cdn.example/queen.jpg');
+  test("an earlier lookup's answers are asked again: it took the wrong one of the artists with a name", () async {
+    File(
+      p.join(dir.path, 'artist_pictures.json'),
+    ).writeAsStringSync('{"version": 2, "artists": {"aza": "https://cdn.example/wrong.jpg"}}');
+    useDeezer(artists: [('Aza', 5, 'https://cdn.example/aza.jpg')]);
+    expect(await service.getArtistPictureUrl('aza'), 'https://cdn.example/aza.jpg');
   });
 
-  test('picture URLs that are not https are refused', () async {
-    useStub(
-      (_) => json('{"data":[{"picture_medium":"file:///etc/passwd","picture_big":"http://insecure.example/x.jpg"}]}'),
-    );
-    expect(await service.getArtistPictureUrl('Queen'), isNull);
-  });
+  for (final (what, answer) in [
+    ('server errors', http.Response('', 503)),
+    ('too many requests (an error sent with 200 OK)', http.Response('{"error":{"code":4,"message":"Quota"}}', 200)),
+  ]) {
+    test('$what are neither cached nor retried at once', () async {
+      useStub((_) => answer);
+      expect(await service.getArtistPictureUrl('Queen'), isNull);
+      expect(await service.getArtistPictureUrl('Abba'), isNull); // backing off
+      expect(requests, 1);
 
-  test('resolving sets the picture of the artist', () async {
-    useStub((_) => json('{"data":[{"picture_medium":"https://cdn.example/a.jpg"}]}'));
-    final artist = Artist(name: 'Somebody', picturePath: '/covers/album.jpg');
+      service.close();
+      useDeezer(artists: [('Queen', 100, 'https://cdn.example/queen.jpg')]);
+      // An outage was not "this artist has no picture": asked again once the service starts afresh.
+      expect(await service.getArtistPictureUrl('Queen'), 'https://cdn.example/queen.jpg');
+    });
+  }
+
+  Future<void> resolving(List<Artist> resolved, int count) async {
+    for (var i = 0; i < 200 && resolved.length < count; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+  }
+
+  test("resolving sets the artist's picture, also over a server's album cover", () async {
+    useDeezer(artists: [('Somebody', 1, 'https://cdn.example/a.jpg'), ('Co Lee', 1, 'https://cdn.example/b.jpg')]);
+    final local = Artist(name: 'Somebody', picturePath: '/covers/album.jpg');
+    final served = Artist(name: 'Co Lee', picturePath: 'https://music.example/api/cover/album/5f35fa6701f60a0e?v=8');
     final resolved = <Artist>[];
     final unsubscribe = service.pictureResolved.listen(resolved.add);
     addTearDown(unsubscribe);
 
-    service.resolveArtistPictures([artist]);
-    for (var i = 0; i < 100 && resolved.isEmpty; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
-    expect(artist.picturePath, 'https://cdn.example/a.jpg');
+    service.resolveArtistPictures([local, served]);
+    await resolving(resolved, 2);
+    expect([local.picturePath, served.picturePath], ['https://cdn.example/a.jpg', 'https://cdn.example/b.jpg']);
 
     service.resolveArtistPicture(null); // nothing to do, and no error
     service.resolveArtistPictures(const []);
   });
 
-  test('a batch asks once per artist, and an artist that already has a picture is not asked', () async {
+  test('a batch asks once per artist, and an artist that already shows its picture is not asked', () async {
     useStub(
-      (request) => json('{"data":[{"picture_medium":"https://cdn.example/${request.url.queryParameters['q']}.jpg"}]}'),
+      (request) => json(
+        jsonEncode({
+          'data': [
+            {
+              'name': request.url.queryParameters['q'],
+              'picture_medium': 'https://cdn.example/${request.url.queryParameters['q']}.jpg',
+            },
+          ],
+        }),
+      ),
     );
     final artists = [
       for (final name in ['A', 'B', 'A']) Artist(name: name),
     ];
-    final done = Artist(name: 'C', picturePath: 'https://cdn.example/C.jpg');
     final resolved = <Artist>[];
     final unsubscribe = service.pictureResolved.listen(resolved.add);
     addTearDown(unsubscribe);
 
-    service.resolveArtistPictures([...artists, done]);
+    service.resolveArtistPictures(artists);
     service.resolveArtistPictures([artists.first]); // while the first batch runs: joins it
-    for (var i = 0; i < 200 && resolved.length < 4; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
+    await resolving(resolved, 3);
     expect(
       [for (final a in artists) a.picturePath],
       [
@@ -124,5 +239,11 @@ void main() {
       ],
     );
     expect(requests, 2);
+
+    // The library built again: the same artist shows an album cover until its known picture is set, without a request.
+    final again = Artist(name: 'B', picturePath: '/covers/b.jpg');
+    service.resolveArtistPictures([again, artists[1]]);
+    await resolving(resolved, 4);
+    expect((again.picturePath, requests, resolved.length), ('https://cdn.example/B.jpg', 2, 4));
   });
 }

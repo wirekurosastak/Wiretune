@@ -16,6 +16,7 @@ class BestMatch {
     required this.subtitle,
     required this.meta,
     required this.coverPath,
+    required this.tracks,
     required this.play,
     required this.open,
   });
@@ -25,6 +26,9 @@ class BestMatch {
   final String subtitle;
   final String meta;
   final String? coverPath;
+
+  /// What [play] plays: its button pauses and resumes them while they are the queue.
+  final List<Track> tracks;
   final void Function() play;
 
   /// What a tap on the card does: an artist or an album opens, a track plays.
@@ -132,6 +136,7 @@ class SearchViewModel extends ChangeNotifier {
     meta:
         '${Localizer.format('AlbumCount', [artist.albumCount])} • ${Localizer.format('TrackCount', [artist.trackCount])}',
     coverPath: artist.picturePath,
+    tracks: artist.tracks,
     play: () {
       if (artist.tracks.isNotEmpty) _player.playQueue(artist.tracks);
     },
@@ -146,6 +151,7 @@ class SearchViewModel extends ChangeNotifier {
         ? '${album.releaseYear} • ${Localizer.format('TrackCount', [album.trackCount])}'
         : Localizer.format('TrackCount', [album.trackCount]),
     coverPath: album.coverArtPath,
+    tracks: album.tracks,
     play: () {
       if (album.tracks.isNotEmpty) _player.playQueue(album.tracks);
     },
@@ -160,6 +166,7 @@ class SearchViewModel extends ChangeNotifier {
       subtitle: '${track.artist} • ${track.album}',
       meta: '${track.formattedDuration} • ${track.format.tagSpec}',
       coverPath: track.coverArtPath,
+      tracks: [track],
       play: play,
       open: play,
     );

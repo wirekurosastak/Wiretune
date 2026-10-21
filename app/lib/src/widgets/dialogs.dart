@@ -7,6 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
+import '../view_models/app_section.dart';
 
 /// Asks before an action that can't easily be taken back. True when the user confirmed it. Cancel has the focus, so a
 /// stray press of a remote's OK button doesn't confirm a [destructive] action.
@@ -39,6 +40,20 @@ Future<bool> confirmAction(
   );
   return confirmed == true;
 }
+
+/// Asks what a swipe left or right does in the full-screen player (at the first one); null when the question is
+/// dismissed.
+Future<PlayerSwipe?> askPlayerSwipe(BuildContext context) => showDialog<PlayerSwipe>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    title: Text(ctx.tr('PlayerSwipeQuestion')),
+    content: Text(ctx.tr('PlayerSwipeLater')),
+    actions: [
+      for (final (choice, key) in [(PlayerSwipe.tracks, 'PlayerSwipeTracks'), (PlayerSwipe.tabs, 'PlayerSwipeTabs')])
+        OutlinedButton(onPressed: () => Navigator.of(ctx).pop(choice), child: Text(ctx.tr(key))),
+    ],
+  ),
+);
 
 /// Signs out of the server; first asks when that deletes the downloads on this device.
 Future<void> confirmAndSignOut(BuildContext context) async {

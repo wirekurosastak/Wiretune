@@ -140,6 +140,24 @@ void main() {
     },
   );
 
+  test('the tracks sort by bitrate, the highest first, a file of unknown bitrate last either way', () async {
+    AudioFormat kbps(int bitrate) => AudioFormat(codec: 'FLAC', isLossless: true, bitrateKbps: bitrate);
+    final lib = await library([
+      track('1', 'Album', format: kbps(900))..title = 'CD',
+      track('2', 'Album', format: kbps(0))..title = 'Unknown',
+      track('3', 'Album', format: kbps(3100))..title = 'Hi-res',
+      track('4', 'Album', format: kbps(320))..title = 'MP3',
+    ]);
+    final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
+
+    tracks.setSortField(TrackSortField.bitrate);
+    expect(tracks.sortLabel(TrackSortField.bitrate), 'Bitrate ↓');
+    expect(titles(), ['Hi-res', 'CD', 'MP3', 'Unknown']);
+    tracks.setSortField(TrackSortField.bitrate);
+    expect(titles(), ['MP3', 'CD', 'Hi-res', 'Unknown']);
+  });
+
   test('the favourites can sort by date added with newest first', () async {
     final lib = await library(
       [
@@ -170,6 +188,7 @@ void main() {
       TrackSortField.released,
       TrackSortField.added,
       TrackSortField.quality,
+      TrackSortField.bitrate, // a track's, beside its quality
     ]);
     expect(AlbumSortField.values, [
       AlbumSortField.title,

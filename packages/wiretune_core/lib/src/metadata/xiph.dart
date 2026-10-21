@@ -44,6 +44,8 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
     final values = <String, String>{};
     final artist = <String>[];
     final artists = <String>[];
+    // Each album artist field's values: a field may be repeated, one album artist each.
+    final albumArtists = <String, List<String>>{};
     for (var i = 0; i < count && position + 4 <= data.length; i++) {
       final length = data.u32le(position);
       position += 4;
@@ -76,6 +78,10 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
         (key == 'ARTIST' ? artist : artists).add(value);
         continue;
       }
+      if (_vorbisFields[key] == TagField.albumArtist) {
+        albumArtists.putIfAbsent(key, () => []).add(value);
+        continue;
+      }
       values.putIfAbsent(key, () => value);
     }
 
@@ -83,6 +89,10 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
     // that each is an artist of its own.
     tags.setArtists(artists.length > 1 ? artists : artist);
     for (final MapEntry(:key, value: field) in _vorbisFields.entries) {
+      if (field == TagField.albumArtist) {
+        tags.setAlbumArtists(albumArtists[key] ?? const []);
+        continue;
+      }
       final value = values[key];
       if (value == null || (field == TagField.lyrics && !wantLyrics)) continue;
       tags.setText(field, field == TagField.genre ? resolveId3Genre(value) : value);

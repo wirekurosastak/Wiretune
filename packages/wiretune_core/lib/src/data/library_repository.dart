@@ -29,6 +29,7 @@ class LibraryRepository {
           artists: _names(r['artists']),
           album: r['album'] as String,
           albumArtist: r['album_artist'] as String?,
+          albumArtists: _names(r['album_artists']),
           trackNumber: _int(r['track_number']),
           trackCount: _int(r['track_count']),
           discNumber: _int(r['disc_number']),
@@ -104,12 +105,13 @@ class LibraryRepository {
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
         release_year, bpm, genre, duration_ms, file_size_bytes, file_modified_at, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
-        bitrate_kbps, is_lossless, added_at, artists
+        bitrate_kbps, is_lossless, added_at, artists, album_artists
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-              ?24, ?25, ?26)
+              ?24, ?25, ?26, ?27)
     ON CONFLICT(id) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, artists = excluded.artists, album = excluded.album,
-        album_artist = excluded.album_artist, track_number = excluded.track_number,
+        album_artist = excluded.album_artist, album_artists = excluded.album_artists,
+        track_number = excluded.track_number,
         track_count = excluded.track_count, disc_number = excluded.disc_number, release_year = excluded.release_year,
         bpm = excluded.bpm, genre = excluded.genre, duration_ms = excluded.duration_ms,
         file_size_bytes = excluded.file_size_bytes, file_modified_at = excluded.file_modified_at,
@@ -119,7 +121,8 @@ class LibraryRepository {
         bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless, added_at = excluded.added_at
     WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR artists IS NOT excluded.artists
        OR album IS NOT excluded.album
-       OR album_artist IS NOT excluded.album_artist OR track_number IS NOT excluded.track_number
+       OR album_artist IS NOT excluded.album_artist OR album_artists IS NOT excluded.album_artists
+       OR track_number IS NOT excluded.track_number
        OR track_count IS NOT excluded.track_count OR disc_number IS NOT excluded.disc_number
        OR release_year IS NOT excluded.release_year OR bpm IS NOT excluded.bpm OR genre IS NOT excluded.genre
        OR duration_ms IS NOT excluded.duration_ms OR file_size_bytes IS NOT excluded.file_size_bytes
@@ -185,6 +188,7 @@ class LibraryRepository {
             t.format.isLossless ? 1 : 0,
             toDbTime(t.addedAt),
             t.artists.isEmpty ? null : jsonEncode(t.artists),
+            t.albumArtists.isEmpty ? null : jsonEncode(t.albumArtists),
           ]);
         }
       } finally {

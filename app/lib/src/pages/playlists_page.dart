@@ -38,40 +38,43 @@ class PlaylistsPage extends StatelessWidget {
             ],
           );
         }
-        return CustomScrollView(
-          key: const PageStorageKey('playlists'),
-          slivers: [
-            SliverToBoxAdapter(
-              child: PageHeader(
-                title: context.tr('NavPlaylists'),
-                subtitle: context.trf('PlaylistCount', [playlists.playlists.length]),
-                actions: [
-                  SortButtons(
-                    buttons: [
-                      for (final field in PlaylistSortField.values)
-                        (
-                          playlists.listSortLabel(field),
-                          playlists.listSortField == field,
-                          () => playlists.setListSortField(field),
-                        ),
-                    ],
-                  ),
-                  FilledButton.icon(
-                    onPressed: () => showNewPlaylistDialog(context),
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: Text(context.tr('PlaylistNew')),
-                  ),
-                ],
+        return PinnedTitleBar(
+          title: context.tr('NavPlaylists'),
+          child: CustomScrollView(
+            key: const PageStorageKey('playlists'),
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeader(
+                  title: context.tr('NavPlaylists'),
+                  subtitle: context.trf('PlaylistCount', [playlists.playlists.length]),
+                  actions: [
+                    SortButtons(
+                      buttons: [
+                        for (final field in PlaylistSortField.values)
+                          (
+                            playlists.listSortLabel(field),
+                            playlists.listSortField == field,
+                            () => playlists.setListSortField(field),
+                          ),
+                      ],
+                    ),
+                    FilledButton.icon(
+                      onPressed: () => showNewPlaylistDialog(context),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: Text(context.tr('PlaylistNew')),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            PlaylistsSliver(
-              playlists: [...playlists.automaticPlaylists, ...playlists.playlists],
-              tracksOf: playlists.tracksOf,
-              onOpen: playlists.openPlaylist,
-              onPlay: playlists.playPlaylist,
-            ),
-            const PageEndSpace(),
-          ],
+              PlaylistsSliver(
+                playlists: [...playlists.automaticPlaylists, ...playlists.playlists],
+                tracksOf: playlists.tracksOf,
+                onOpen: playlists.openPlaylist,
+                onPlay: playlists.playPlaylist,
+              ),
+              const PageEndSpace(),
+            ],
+          ),
         );
       },
     );
@@ -166,63 +169,68 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             ),
           );
 
-    return CustomScrollView(
-      key: PageStorageKey('playlist-${playlist.id}'),
-      slivers: [
-        SliverToBoxAdapter(
-          child: DetailHeader(
-            back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),
-            artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
-            artworkBadge: switch (qualityOf(tracks)) {
-              final quality? => QualityTag(tier: quality.tier, spec: quality.spec, fontSize: 11),
-              null => null,
-            },
-            tags: [
-              TagBadge(
-                context.tr(playlist.isAutomatic ? 'LabelAutoPlaylist' : 'LabelPlaylist'),
-                color: colors.palette.lime,
-              ),
-            ],
-            title: playlist.name,
-            titleWidget: title,
-            details: [
-              DetailText(context.trf('TrackCount', [playlist.trackCount])),
-              if (playlists.selectedPlaylistTotalDuration.isNotEmpty)
-                DetailText(playlists.selectedPlaylistTotalDuration),
-            ],
-            actions: [
-              PlayShuffleButtons(
-                onPlay: tracks.isEmpty ? null : () => playlists.playPlaylist(),
-                onShuffle: tracks.isEmpty ? null : () => playlists.shufflePlaylist(),
-                trailing: playlist.isAutomatic
-                    ? null
-                    : DownloadListButton.forTracks(
-                        tracks,
-                        isDownloaded: () => context.vm.downloads.isPlaylistDownloaded(playlist),
-                        onPressed: () => context.vm.downloads.togglePlaylist(playlist),
-                      ),
-              ),
-              ListMenu.playlist(playlist, tracks, onPlay: playlists.playPlaylist).headerButton(),
-            ],
-          ),
-        ),
-        if (tracks.isEmpty)
+    return PinnedTitleBar(
+      title: playlist.name,
+      onBack: playlists.closePlaylistDetail,
+      play: tracks.isEmpty ? null : ListPlayButton(tracks: tracks, onPlay: playlists.playPlaylist),
+      child: CustomScrollView(
+        key: PageStorageKey('playlist-${playlist.id}'),
+        slivers: [
           SliverToBoxAdapter(
-            child: EmptyState(
-              icon: Icons.playlist_add,
-              title: context.tr('PlaylistEmptyTitle'),
-              hint: context.tr('PlaylistEmptyHint'),
+            child: DetailHeader(
+              back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),
+              artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
+              artworkBadge: switch (qualityOf(tracks)) {
+                final quality? => QualityTag(tier: quality.tier, spec: quality.spec, fontSize: 11),
+                null => null,
+              },
+              tags: [
+                TagBadge(
+                  context.tr(playlist.isAutomatic ? 'LabelAutoPlaylist' : 'LabelPlaylist'),
+                  color: colors.palette.lime,
+                ),
+              ],
+              title: playlist.name,
+              titleWidget: title,
+              details: [
+                DetailText(context.trf('TrackCount', [playlist.trackCount])),
+                if (playlists.selectedPlaylistTotalDuration.isNotEmpty)
+                  DetailText(playlists.selectedPlaylistTotalDuration),
+              ],
+              actions: [
+                PlayShuffleButtons(
+                  tracks: tracks,
+                  onPlay: tracks.isEmpty ? null : () => playlists.playPlaylist(),
+                  download: playlist.isAutomatic
+                      ? null
+                      : DownloadListButton.forTracks(
+                          tracks,
+                          isDownloaded: () => context.vm.downloads.isPlaylistDownloaded(playlist),
+                          onPressed: () => context.vm.downloads.togglePlaylist(playlist),
+                        ),
+                  menu: ListMenu.playlist(playlist, tracks, onPlay: playlists.playPlaylist).headerButton(),
+                ),
+              ],
             ),
-          )
-        else
-          TrackSliver(
-            tracks: tracks,
-            sorting: playlists,
-            kind: TrackTableKind.playlist,
-            onReorder: playlists.canReorder ? playlists.moveTrack : null,
           ),
-        const PageEndSpace(),
-      ],
+          if (tracks.isEmpty)
+            SliverToBoxAdapter(
+              child: EmptyState(
+                icon: Icons.playlist_add,
+                title: context.tr('PlaylistEmptyTitle'),
+                hint: context.tr('PlaylistEmptyHint'),
+              ),
+            )
+          else
+            TrackSliver(
+              tracks: tracks,
+              sorting: playlists,
+              kind: TrackTableKind.playlist,
+              onReorder: playlists.canReorder ? playlists.moveTrack : null,
+            ),
+          const PageEndSpace(),
+        ],
+      ),
     );
   }
 }

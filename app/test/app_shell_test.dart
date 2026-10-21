@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
@@ -14,6 +15,7 @@ import 'package:wiretune/src/pages/library_pages.dart';
 import 'package:wiretune/src/pages/now_playing_page.dart';
 import 'package:wiretune/src/pages/queue_panel.dart';
 import 'package:wiretune/src/platform.dart';
+import 'package:wiretune/src/theme/app_theme.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
@@ -24,6 +26,7 @@ import 'package:wiretune/src/widgets/cards.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/devices.dart';
 import 'package:wiretune/src/widgets/page_parts.dart';
+import 'package:wiretune/src/widgets/player_controls.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -624,7 +627,7 @@ void main() {
     vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
     await settle(tester);
     expect(inHeader('Download to this device'), findsNothing);
-    expect(tester.widget<PlayShuffleButtons>(find.byType(PlayShuffleButtons)).trailing, isNull, reason: 'no button');
+    expect(tester.widget<PlayShuffleButtons>(find.byType(PlayShuffleButtons)).download, isNull, reason: 'no button');
     expect(inRows('Download to this device'), findsNothing);
 
     final album = vm.library.albums.firstWhere((a) => a.title == 'Giant Steps');
@@ -1030,22 +1033,336 @@ void main() {
     expect(handles, findsNothing);
   });
 
-  testWidgets("a phone's play and shuffle are round buttons without words, on one line with the sort", (tester) async {
+  testWidgets("a phone's play and shuffle are round buttons without words, on one line with the sort, Play last", (
+    tester,
+  ) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
-    final play = find.ancestor(of: find.byIcon(Icons.play_arrow_rounded), matching: find.byType(FilledButton));
-    final shuffle = find.ancestor(of: find.byIcon(Icons.shuffle_rounded), matching: find.byType(OutlinedButton));
+    final header = find.byType(PageHeader);
+    final play = find.descendant(of: header, matching: find.byType(FilledButton));
+    final shuffle = find.descendant(of: header, matching: find.byType(ShuffleSwitch));
     expect(play, findsOneWidget);
     expect(shuffle, findsOneWidget);
-    for (final button in [play, shuffle]) {
-      expect(tester.getSize(button), const Size.square(PhoneChrome.controlHeight));
-      expect(tester.widget<ButtonStyleButton>(button).style?.shape?.resolve({}), isA<CircleBorder>());
-    }
+    expect(tester.getRect(shuffle).right, lessThan(tester.getRect(play).left));
+    expect(tester.getRect(play).right, moreOrLessEquals(400 - 16, epsilon: 1), reason: 'the edges are 16 px');
+    expect(tester.getSize(play), const Size.square(PhoneChrome.playSize));
+    expect(tester.widget<ButtonStyleButton>(play).style?.shape?.resolve({}), isA<CircleBorder>());
+    expect(tester.getSize(shuffle), const Size.square(PhoneChrome.controlHeight));
     expect(find.descendant(of: play, matching: find.byType(Text)), findsNothing);
     expect(find.byTooltip(Localizer.get('Play')), findsWidgets);
     final sort = tester.getCenter(find.text('ABC ↑'));
     expect(sort.dy, moreOrLessEquals(tester.getCenter(play).dy, epsilon: 1));
+  });
+
+  testWidgets(
+    "a list's Play pauses and resumes it while the queue is that list, and plays it once the queue is another",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(400, 860), () async {
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 1),
+          TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2),
+          TestSupport.makeTrack('3', 'Opening', artist: 'Daft Punk', album: 'Random Access Memories'),
+        ]);
+        library.initialize();
+        return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      });
+      final player = vm.player;
+      vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+      await settle(tester);
+      final header = find.byType(DetailHeader);
+      final play = find.descendant(of: header, matching: find.byType(FilledButton));
+      Finder says(String key) => find.descendant(of: header, matching: find.byTooltip(Localizer.get(key)));
+      expect(says('Play'), findsOneWidget);
+      // The menu at the left edge, Shuffle and Play at the right, Play over the ⋮ of the rows.
+      final menu = find.descendant(of: header, matching: find.byTooltip(Localizer.get('TipMore')));
+      final rowMenu = find.descendant(of: find.byType(TrackSliver), matching: find.byTooltip(Localizer.get('TipMore')));
+      expect(tester.getRect(menu).left, moreOrLessEquals(16, epsilon: 1));
+      expect(tester.getCenter(play).dx, moreOrLessEquals(tester.getCenter(rowMenu.first).dx, epsilon: 0.5));
+      expect(tester.getSize(play), const Size.square(PhoneChrome.playSize));
+
+      await tester.tap(play);
+      await settle(tester);
+      expect((player.isPlaying, player.currentTrack?.title), (true, 'So What'));
+      expect(says('Pause'), findsOneWidget);
+      await tester.tap(play);
+      await settle(tester);
+      expect((player.isPlaying, player.currentTrack?.title), (false, 'So What'));
+      expect(says('Play'), findsOneWidget);
+      await tester.tap(play);
+      await settle(tester);
+      expect((player.isPlaying, player.currentTrack?.title), (true, 'So What'));
+      player.nextTrack(); // the album's next track: the queue is still the album
+      await settle(tester);
+      expect(says('Pause'), findsOneWidget);
+      await tester.tap(play);
+      await settle(tester);
+      expect((player.isPlaying, player.currentTrack?.title), (false, 'Blue in Green'), reason: 'paused, not restarted');
+
+      player.playQueue(vm.library.tracks.where((t) => t.album == 'Random Access Memories'));
+      await settle(tester);
+      expect(says('Play'), findsOneWidget);
+      await tester.tap(play);
+      await settle(tester);
+      expect((player.isPlaying, player.currentTrack?.title), (true, 'So What'));
+    },
+  );
+
+  testWidgets("a phone's track lists sort by bitrate too, from their sort menu", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    await tester.tap(find.text('ABC ↑'));
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('SortBitrate')));
+    await settle(tester);
+    expect(vm.tracks.sortField, TrackSortField.bitrate);
+    expect(find.text('${Localizer.get('SortBitrate')} ↓'), findsOneWidget);
+  });
+
+  testWidgets("a list's shuffle is the player's switch: Play starts at the first track while it is off", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 12; i++) TestSupport.makeTrack('$i', 'Take $i', album: 'Kind of Blue', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    final player = vm.player;
+    vm.openAlbum(vm.library.albums.single);
+    await settle(tester);
+    final header = find.byType(DetailHeader);
+    final shuffle = find.descendant(of: header, matching: find.byType(ShuffleSwitch));
+    final play = find.descendant(of: header, matching: find.byType(FilledButton));
+    // An icon alone, without a button's frame; a dot under it while on.
+    expect(find.descendant(of: shuffle, matching: find.byType(OutlinedButton)), findsNothing);
+    Finder dot() => find.descendant(
+      of: shuffle,
+      matching: find.byWidgetPredicate(
+        (w) =>
+            w is Container &&
+            w.decoration is BoxDecoration &&
+            (w.decoration! as BoxDecoration).shape == BoxShape.circle,
+      ),
+    );
+    expect(dot(), findsNothing);
+
+    await tester.tap(play);
+    await settle(tester);
+    expect((player.isShuffle, player.currentTrack?.title), (false, 'Take 1'));
+    expect(player.queueTracks.map((t) => t.title), [for (var i = 1; i <= 12; i++) 'Take $i']);
+
+    await tester.tap(shuffle);
+    await settle(tester);
+    expect(player.isShuffle, isTrue);
+    expect(dot(), findsOneWidget);
+    expect(
+      tester.widget<Icon>(find.descendant(of: shuffle, matching: find.byType(Icon))).color,
+      tester.element(shuffle).colors.accent,
+    );
+    expect(find.descendant(of: header, matching: find.byTooltip(Localizer.get('TipShuffleOff'))), findsOneWidget);
+
+    await tester.tap(shuffle);
+    await settle(tester);
+    expect((player.isShuffle, dot().evaluate().isEmpty), (false, true));
+
+    // The desktop's is the same switch, beside its Play.
+    tester.view.physicalSize = const Size(1400, 900);
+    await settle(tester);
+    expect(find.descendant(of: shuffle, matching: find.byType(OutlinedButton)), findsNothing);
+    expect(find.descendant(of: header, matching: find.text(Localizer.get('Shuffle'))), findsNothing);
+    await tester.tap(shuffle);
+    await settle(tester);
+    expect((player.isShuffle, dot().evaluate().length), (true, 1));
+    expect(tester.getRect(shuffle).left, greaterThan(tester.getRect(play).right), reason: 'Play first');
+  });
+
+  testWidgets("the best match's Play pauses and resumes what it played, as a tile's does", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 1),
+        TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.searchQuery = 'Kind of Blue';
+    await settle(tester);
+    final best = find.byWidgetPredicate((w) => w is TilePlayButton && w.size == 48);
+    Finder says(String key) => find.descendant(of: best, matching: find.byTooltip(Localizer.get(key)));
+    expect(says('Play'), findsOneWidget);
+    await tester.tap(best);
+    await settle(tester);
+    expect(vm.player.isPlaying, isTrue);
+    expect(says('Pause'), findsOneWidget);
+    await tester.tap(best);
+    await settle(tester);
+    expect((vm.player.isPlaying, vm.player.currentTrack?.title), (false, 'So What'));
+    expect(says('Play'), findsOneWidget);
+  });
+
+  testWidgets("a phone page's title and Play stay in a bar at the top once its header has scrolled under it", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 60; i++)
+          TestSupport.makeTrack('$i', 'Take $i', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.openAlbum(vm.library.albums.single);
+    await settle(tester);
+    final bar = find.ancestor(of: find.byTooltip(Localizer.get('Back')), matching: find.byType(AnimatedOpacity));
+    double shown() => tester.widget<AnimatedOpacity>(bar).opacity;
+    expect(shown(), 0);
+    expect(find.descendant(of: bar, matching: find.text('Kind of Blue')), findsOneWidget);
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300)); // the buttons are still in view
+    await settle(tester);
+    expect(shown(), 0);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await settle(tester);
+    expect(shown(), 1);
+    // Half below the bar's edge, over the ⋮ of the rows, as the header's was.
+    final play = find.descendant(of: find.byType(ListPlayButton).last, matching: find.byType(FilledButton));
+    final rowMenu = find.byTooltip(Localizer.get('TipMore')).last;
+    expect(tester.getSize(play), const Size.square(PhoneChrome.playSize));
+    expect(tester.getCenter(play).dx, moreOrLessEquals(tester.getCenter(rowMenu).dx, epsilon: 0.5));
+    expect(tester.getCenter(play).dy, moreOrLessEquals(tester.getRect(bar).bottom, epsilon: 0.5));
+    await tester.tap(play);
+    await settle(tester);
+    expect(vm.player.currentTrack?.title, 'Take 1');
+    await tester.tap(find.descendant(of: bar, matching: find.byTooltip(Localizer.get('Back'))));
+    await settle(tester);
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+
+    // A list page keeps its name, without a way back.
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final tracksBar = find.ancestor(of: find.text(Localizer.get('NavTracks')), matching: find.byType(AnimatedOpacity));
+    expect(tester.widget<AnimatedOpacity>(tracksBar).opacity, 0);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+    await settle(tester);
+    expect(tester.widget<AnimatedOpacity>(tracksBar).opacity, 1);
+    expect(find.descendant(of: tracksBar, matching: find.byTooltip(Localizer.get('Back'))), findsNothing);
+
+    // Far down, where the header is no longer built, and back to the page, which keeps its place: the bar too.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await settle(tester);
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    expect(find.text('Take 2'), findsNothing, reason: 'still scrolled');
+    expect(tester.widget<AnimatedOpacity>(tracksBar).opacity, 1);
+  });
+
+  testWidgets("the player's BPM sits midway between the cover, at its size while playing, and the title", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')..bpm = 136]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    await settle(tester);
+    final page = find.byType(NowPlayingPage);
+    for (final playing in [true, false]) {
+      if (!playing) await vm.player.pause();
+      await tester.pump(const Duration(seconds: 1));
+      expect(vm.player.isPlaying, playing);
+      final cover = tester.getRect(
+        find
+            .ancestor(
+              of: find.descendant(of: page, matching: find.byType(CoverImage)),
+              matching: find.byType(AnimatedScale),
+            )
+            .first,
+      ); // unscaled
+      final bpm = tester.getCenter(find.text('136 BPM'));
+      final title = tester.getRect(find.descendant(of: page, matching: find.text('So What')));
+      expect(bpm.dy, moreOrLessEquals((cover.bottom + title.top) / 2, epsilon: 0.5), reason: 'playing: $playing');
+    }
+  });
+
+  testWidgets("dragging the player's seek bar seeks, and is no swipe", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue', trackNumber: 1),
+        TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.playerSwipe = PlayerSwipe.tracks;
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    await settle(tester);
+    final seek = find.descendant(of: find.byType(SeekBar), matching: find.byType(Slider)).first;
+    await tester.drag(seek, const Offset(-150, 0));
+    await settle(tester);
+    expect(vm.player.currentTrack?.title, 'So What');
+    await tester.drag(seek, const Offset(150, 0));
+    await settle(tester);
+    expect(vm.player.currentTrack?.title, 'So What');
+    expect(vm.player.position.value, greaterThan(Duration.zero), reason: 'it seeked');
+  });
+
+  testWidgets("a swipe in the player asks once what it does, then does it; the settings change it", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue', trackNumber: 1),
+        TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    final player = vm.player;
+    player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    await settle(tester);
+    Future<void> swipeLeft() async {
+      await tester.fling(find.byType(NowPlayingPage), const Offset(-200, 0), 1000, warnIfMissed: false);
+      await settle(tester);
+    }
+
+    await swipeLeft();
+    expect(find.text(Localizer.get('PlayerSwipeQuestion')), findsOneWidget);
+    expect(player.currentTrack?.title, 'So What', reason: 'nothing happens before the answer');
+    await tester.tap(find.text(Localizer.get('PlayerSwipeTracks')));
+    await settle(tester);
+    expect(vm.playerSwipe, PlayerSwipe.tracks);
+    expect(player.currentTrack?.title, 'Blue in Green');
+
+    await tester.fling(find.byType(NowPlayingPage), const Offset(200, 0), 1000, warnIfMissed: false);
+    await settle(tester);
+    expect(find.text(Localizer.get('PlayerSwipeQuestion')), findsNothing, reason: 'asked once');
+    expect(player.currentTrack?.title, 'So What');
+
+    vm.closeNowPlaying();
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    // Mid-screen: clear of the title bar above and the floating bars below.
+    unawaited(Scrollable.ensureVisible(tester.element(find.text(Localizer.get('PlayerSwipeTabs'))), alignment: 0.5));
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('PlayerSwipeTabs')));
+    await settle(tester);
+    expect(vm.playerSwipe, PlayerSwipe.tabs);
+    expect(vm.library.getPreference('player_swipe'), 'tabs');
+
+    vm.openNowPlaying();
+    await settle(tester);
+    await swipeLeft();
+    expect((vm.nowPlayingTab, player.currentTrack?.title), (NowPlayingTab.queue, 'So What'));
+    await swipeLeft();
+    await swipeLeft();
+    expect(vm.nowPlayingTab, NowPlayingTab.lyrics, reason: 'the last tab stays');
   });
 
   testWidgets("a phone held sideways shows a detail page's header beside its artwork, clear of the status bar", (
@@ -1091,7 +1408,7 @@ void main() {
           of: find.text(Localizer.get('PlaylistNew')),
           matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
         ),
-        _ => find.ancestor(of: find.byIcon(Icons.play_arrow_rounded), matching: find.byType(FilledButton)),
+        _ => find.byType(ShuffleSwitch),
       }.first;
       expect(tester.getSize(sort).height, PhoneChrome.controlHeight, reason: section.name);
       expect(tester.getSize(other).height, PhoneChrome.controlHeight, reason: section.name);

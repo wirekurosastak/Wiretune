@@ -285,7 +285,7 @@ class _TrackSliverState extends State<TrackSliver> {
           if (_showReleased) cell(context.tr('ColReleased'), TrackSortField.released, width: _releasedWidth),
           if (_showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _addedWidth),
           if (_showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _qualityWidth),
-          if (_showQuality) cell(context.tr('ColBitrate'), null, width: _bitrateWidth),
+          if (_showQuality) cell(context.tr('ColBitrate'), TrackSortField.bitrate, width: _bitrateWidth),
           const SizedBox(width: 2 * 44),
         ],
       ),
@@ -823,6 +823,7 @@ class _PhoneRow extends StatelessWidget {
                 ),
               ),
               ..._trailing(context, state.kind, track, phone: true),
+              const SizedBox(width: 8), // as much room as before the cover
             ],
           ),
         ),

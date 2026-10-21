@@ -85,6 +85,10 @@ AudioTags? readApeTag(ByteSource source, {bool wantLyrics = true}) {
         tags.setArtists(value.split('\u0000'));
         continue;
       }
+      if (field == TagField.albumArtist) {
+        tags.setAlbumArtists(value.split('\u0000'));
+        continue;
+      }
       final first = value.split('\u0000').firstWhere((v) => v.trim().isNotEmpty, orElse: () => '');
       tags.setText(field, field == TagField.genre ? resolveId3Genre(first) : first);
     }

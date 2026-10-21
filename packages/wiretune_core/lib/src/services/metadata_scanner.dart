@@ -344,6 +344,7 @@ Track? _readTrack(
         artists: [for (final name in tags.artists) ?cleanText(name)],
         album: album,
         albumArtist: albumArtist,
+        albumArtists: [for (final name in tags.albumArtists) ?cleanText(name)],
         trackNumber: positive(tags.track),
         trackCount: positive(tags.trackCount),
         discNumber: positive(tags.disc),

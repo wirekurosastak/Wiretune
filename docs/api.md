@@ -43,7 +43,8 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
 A **track** has `id`, `title`, `artist` (several artists joined by ", "), `artists` (each of them, only when there are
-several), `album`, `albumArtist`, `trackNumber`, `trackCount`, `discNumber`, `releaseYear`, `bpm`, `genre`,
+several), `album`, `albumArtist` (the first when there are several), `albumArtists` (each of them, only when there are
+several), `trackNumber`, `trackCount`, `discNumber`, `releaseYear`, `bpm`, `genre`,
 `durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt` and `format` (`codec`, `sampleRate`,
 `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). A track with a cover also has `coverVersion`,
 which changes when the album's cover does: the players put it in the cover's address (`?v=`), so a new cover is never

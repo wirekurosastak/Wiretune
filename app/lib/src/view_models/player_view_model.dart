@@ -171,6 +171,21 @@ class PlayerViewModel extends ChangeNotifier {
   List<QueueItem> get queueItems => isRemote ? _remoteQueue : _queueItems;
   int get currentQueueIndex => isRemote ? _remoteQueue.indexWhere((item) => item.isCurrent) : _queueIndex;
 
+  /// Whether the queue is [tracks] (an album, an artist, a playlist, a list page) in any order, as their Play, their
+  /// menu's Shuffle or one of their rows started it, with a track loaded: their Play button then pauses and resumes it.
+  /// A single track is whenever it is the one loaded, whatever the queue. A device being controlled holds at most
+  /// [RemoteRules.maxQueueLength] of a longer list.
+  bool isQueueOf(List<Track> tracks) {
+    final current = currentTrack;
+    if (tracks.isEmpty || current == null) return false;
+    if (tracks.length == 1) return tracks.single.id == current.id;
+    final queue = isRemote ? queueTracks : _originalQueue;
+    final length = isRemote ? math.min(tracks.length, RemoteRules.maxQueueLength) : tracks.length;
+    if (queue.length != length) return false;
+    final ids = {for (final track in tracks) track.id};
+    return queue.every((track) => ids.contains(track.id));
+  }
+
   void toggleQueue() => isQueueOpen = !isQueueOpen;
 
   void closeQueue() => isQueueOpen = false;

@@ -41,6 +41,7 @@ class Track {
     List<String>? artists,
     String album = unknownAlbum,
     String? albumArtist,
+    List<String>? albumArtists,
     int? trackNumber,
     this.trackCount,
     int? discNumber,
@@ -58,6 +59,7 @@ class Track {
     DateTime? addedAt,
   }) : id = id ?? newId(),
        artists = artists != null && artists.length > 1 ? List.unmodifiable(artists) : const [],
+       albumArtists = albumArtists != null && albumArtists.length > 1 ? List.unmodifiable(albumArtists) : const [],
        tagged = (album: album, albumArtist: albumArtist, trackNumber: trackNumber, discNumber: discNumber),
        addedAt = addedAt ?? DateTime.now().toUtc();
 
@@ -82,6 +84,10 @@ class Track {
 
   /// Where the file's tags put the track. This is what is stored.
   final AlbumPlace tagged;
+
+  /// Every album artist the tags name, the one in [tagged] first, when they name more than one (an album of two acts);
+  /// empty when they name one.
+  final List<String> albumArtists;
 
   /// Where the library files the track instead, worked out afresh from [tagged] at every build of the library (see
   /// `LibrarySnapshot.build`): the album of a folder put together by hand, or an album artist taken from the folder's
@@ -117,6 +123,10 @@ class Track {
   String get effectiveAlbumArtist =>
       (albumArtist == null || albumArtist!.trim().isEmpty) ? primaryArtist : albumArtist!;
 
+  /// Every artist of the album the track is filed under, [effectiveAlbumArtist] first: the album artists its tags
+  /// name, unless the library filed the track under another album.
+  List<String> get albumArtistNames => filed == null && albumArtists.isNotEmpty ? albumArtists : [effectiveAlbumArtist];
+
   /// Identifies the album the track is filed under (title and album artist, ignoring case). It is the same on every
   /// device and on the server, so it is also the key of `/api/cover/album/{id}`.
   String get albumId => stableId('${album.toLowerCase()}\u001f${effectiveAlbumArtist.toLowerCase()}');
@@ -136,6 +146,8 @@ class Track {
     if (artists.isNotEmpty) 'artists': artists,
     'album': album,
     'albumArtist': albumArtist,
+    // As filed, like the album and the album artist.
+    if (albumArtistNames case final names when names.length > 1) 'albumArtists': names,
     'trackNumber': trackNumber,
     'trackCount': trackCount,
     'discNumber': discNumber,
@@ -156,16 +168,18 @@ class Track {
     final id = json['id'];
     if (id is! String || id.isEmpty) throw const FormatException('A track has no ID.');
     int? integer(String key) => (json[key] as num?)?.toInt();
+    List<String> names(String key) => [
+      for (final name in json[key] as List? ?? const [])
+        if (name is String && name.trim().isNotEmpty) name,
+    ];
     return Track(
       id: id,
       title: json['title'] as String? ?? unknownTitle,
       artist: json['artist'] as String? ?? unknownArtist,
-      artists: [
-        for (final name in json['artists'] as List? ?? const [])
-          if (name is String && name.trim().isNotEmpty) name,
-      ],
+      artists: names('artists'),
       album: json['album'] as String? ?? unknownAlbum,
       albumArtist: json['albumArtist'] as String?,
+      albumArtists: names('albumArtists'),
       trackNumber: integer('trackNumber'),
       trackCount: integer('trackCount'),
       discNumber: integer('discNumber'),
@@ -193,17 +207,28 @@ class Album {
     String? id,
     this.title = Track.unknownAlbum,
     this.artist = Track.unknownArtist,
+    List<String>? artists,
     this.releaseYear,
     this.coverArtPath,
     this.totalDuration = Duration.zero,
     required this.quality,
     List<Track>? tracks,
   }) : id = id ?? newId(),
+       artists = artists != null && artists.length > 1 ? List.unmodifiable(artists) : const [],
        tracks = tracks ?? [];
 
   final String id;
   final String title;
+
+  /// The album artist as shown: when the album has several ([artists]), their names joined by ", ".
   final String artist;
+
+  /// Every artist of the album, the one it is filed under first, when it has more than one (an album of two acts);
+  /// empty when it has one.
+  final List<String> artists;
+
+  /// Each artist of the album on its own: [artists], or [artist] alone.
+  List<String> get artistNames => artists.isEmpty ? [artist] : artists;
   final int? releaseYear;
   final String? coverArtPath;
   final Duration totalDuration;

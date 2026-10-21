@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 7;
+  static const int schemaVersion = 8;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -66,6 +66,8 @@ class DatabaseManager {
     UPDATE settings SET key = 'chosen_music_folder' WHERE key = 'chosen_library_path';
     DELETE FROM settings WHERE key = 'library_source';
     ''',
+    // 7 -> 8: every album artist of a track (an album of two acts). As for 5 -> 6, the next scan reads each file again.
+    'ALTER TABLE tracks ADD COLUMN album_artists TEXT; UPDATE tracks SET file_modified_at = NULL;',
   ];
 
   final String databasePath;
@@ -162,6 +164,7 @@ const String _schema =
       artists TEXT,
       album TEXT NOT NULL,
       album_artist TEXT,
+      album_artists TEXT,
       track_number INTEGER,
       track_count INTEGER,
       disc_number INTEGER,

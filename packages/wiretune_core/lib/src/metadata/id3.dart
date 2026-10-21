@@ -452,6 +452,7 @@ void _readFrame(String id, Uint8List body, int major, AudioTags tags) {
   if (field == null) return;
   final values = _decodeTextFrame(body);
   if (field == TagField.artist) return tags.setArtists(values);
+  if (field == TagField.albumArtist) return tags.setAlbumArtists(values);
   for (final value in values) {
     final text = field == TagField.genre ? resolveId3Genre(value) : value;
     if (text != null && text.trim().isNotEmpty) {

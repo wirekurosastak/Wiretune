@@ -522,3 +522,36 @@ class _VerticalSwipeState extends State<VerticalSwipe> with SingleTickerProvider
     );
   }
 }
+
+/// Calls [onSwipe] when a horizontal swipe over [child] goes far or fast enough: `forward` for one to the left (towards
+/// what comes next), else to the right. Taps, and vertical drags such as a list's, still reach the child.
+class HorizontalSwipe extends StatefulWidget {
+  const HorizontalSwipe({super.key, required this.onSwipe, required this.child});
+
+  final void Function({required bool forward}) onSwipe;
+  final Widget child;
+
+  @override
+  State<HorizontalSwipe> createState() => _HorizontalSwipeState();
+}
+
+class _HorizontalSwipeState extends State<HorizontalSwipe> {
+  double _distance = 0;
+
+  void _onDragEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    if (_distance.abs() > 60 || velocity.abs() > 400) {
+      widget.onSwipe(forward: (velocity.abs() > 400 ? velocity : _distance) < 0);
+    }
+    _distance = 0;
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.translucent,
+    onHorizontalDragStart: (_) => _distance = 0,
+    onHorizontalDragUpdate: (details) => _distance += details.delta.dx,
+    onHorizontalDragEnd: _onDragEnd,
+    child: widget.child,
+  );
+}

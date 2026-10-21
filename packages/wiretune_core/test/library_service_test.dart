@@ -376,6 +376,41 @@ void main() {
     },
   );
 
+  test('an album of two acts is credited to both, is on both pages, and hiding either hides it', () async {
+    final repo = testRepository();
+    final service = _service(repo);
+    Track track(String id, String title) => Track(
+      id: id,
+      title: title,
+      artist: 'Future, Metro Boomin',
+      artists: ['Future', 'Metro Boomin'],
+      album: "WE DON'T TRUST YOU",
+      albumArtist: 'Future',
+      albumArtists: ['Future', 'Metro Boomin'],
+    );
+    repo.replaceAllTracks([
+      track('1', 'Type Shit'),
+      track('2', 'Like That'),
+      Track(id: '3', title: 'WAIT FOR U', artist: 'Future', album: 'I NEVER LIKED YOU', albumArtist: 'Future'),
+    ]);
+    service.initialize();
+
+    final album = service.albums.firstWhere((a) => a.title == "WE DON'T TRUST YOU");
+    expect(album.artist, 'Future, Metro Boomin');
+    expect(album.artistNames, ['Future', 'Metro Boomin']);
+    // Filed under the first, as before, so its ID (covers, downloads, hidden albums) stays the same.
+    expect(album.id, stableId("we don't trust you\u001ffuture"));
+    expect(service.artists.map((a) => a.name), ['Future', 'Metro Boomin']);
+    final metro = service.artists.firstWhere((a) => a.name == 'Metro Boomin');
+    expect(metro.albums.map((a) => a.title), ["WE DON'T TRUST YOU"]);
+    expect(service.artists.firstWhere((a) => a.name == 'Future').albums, hasLength(2));
+    expect(service.search('metro').map((t) => t.id), unorderedEquals(['1', '2']));
+
+    service.setHidden(HiddenKind.artist, metro.id, true);
+    expect(service.albums.map((a) => a.title), ['I NEVER LIKED YOU']);
+    expect(service.artists.map((a) => a.name), ['Future']);
+  });
+
   test('colliding track numbers keep the folder apart', () async {
     final repo = testRepository();
     final service = _service(repo);

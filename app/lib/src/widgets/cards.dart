@@ -10,11 +10,13 @@ import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
 import '../view_models/main_view_model.dart';
+import '../view_models/player_view_model.dart';
 import 'badges.dart';
 import 'buttons.dart';
 import 'cover_image.dart';
 import 'dialogs.dart';
 import 'page_parts.dart';
+import 'player_controls.dart';
 
 /// An album: cover (with its format on it), title, artist, track count and release year, and a play button.
 class AlbumCard extends StatelessWidget {
@@ -51,7 +53,7 @@ class AlbumCard extends StatelessWidget {
         _line(details, 11, FontWeight.w500, colors.textMuted),
       ],
       badge: QualityTag(tier: album.quality.tier, spec: album.quality.spec),
-      play: TilePlayButton(color: purple, onPressed: onPlay),
+      play: TilePlayButton(color: purple, onPressed: onPlay, tracks: album.tracks),
     );
   }
 }
@@ -86,7 +88,7 @@ class ArtistCard extends StatelessWidget {
         _line(artist.name, 14, FontWeight.w700, colors.textMain, center: true),
         _line(artistCounts(context, artist), 12.5, FontWeight.w500, colors.textMuted, center: true),
       ],
-      play: TilePlayButton(color: coral, onPressed: onPlay),
+      play: TilePlayButton(color: coral, onPressed: onPlay, tracks: artist.tracks),
     );
   }
 }
@@ -604,7 +606,7 @@ class PlaylistCard extends StatelessWidget {
         _line(context.trf('TrackCount', [playlist.trackCount]), 12.5, FontWeight.w500, colors.textMuted),
       ],
       badge: quality == null ? null : QualityTag(tier: quality!.tier, spec: quality!.spec),
-      play: TilePlayButton(color: lime, onPressed: playlist.trackCount > 0 ? onPlay : null),
+      play: TilePlayButton(color: lime, onPressed: playlist.trackCount > 0 ? onPlay : null, tracks: menu.tracks),
     );
   }
 }
@@ -828,20 +830,36 @@ class TileGridSliver extends StatelessWidget {
   }
 }
 
-/// The round play button of a tile: filled with a gradient of [color], over a glow of it.
+/// The round play button of a tile: filled with a gradient of [color], over a glow of it. While the queue is [tracks]
+/// (the tile's album, artist, playlist or track), it pauses and resumes it instead, as a list's Play does.
 class TilePlayButton extends StatelessWidget {
-  const TilePlayButton({super.key, required this.color, required this.onPressed, this.size = 44});
+  const TilePlayButton({
+    super.key,
+    required this.color,
+    required this.onPressed,
+    this.tracks = const [],
+    this.size = 44,
+  });
 
   final Color color;
   final VoidCallback? onPressed;
+  final List<Track> tracks;
   final double size;
 
   @override
   Widget build(BuildContext context) {
+    final player = context.vm.player;
+    return ListenableBuilder(listenable: player, builder: (context, _) => _build(context, player));
+  }
+
+  Widget _build(BuildContext context, PlayerViewModel player) {
     final colors = context.colors;
-    final enabled = onPressed != null;
+    final current = onPressed != null && player.isQueueOf(tracks);
+    final playing = current && player.isPlaying;
+    final onTap = current ? player.togglePlayPause : onPressed;
+    final enabled = onTap != null;
     return Tooltip(
-      message: context.tr('Play'),
+      message: context.tr(playing ? 'Pause' : 'Play'),
       child: PopEffect(
         enabled: enabled,
         child: DecoratedBox(
@@ -870,13 +888,15 @@ class TilePlayButton extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               customBorder: const CircleBorder(),
-              onTap: onPressed,
+              onTap: onTap,
               child: SizedBox.square(
                 dimension: size,
-                child: Icon(
-                  Icons.play_arrow_rounded,
-                  size: size * 0.58,
-                  color: enabled ? colors.onAccent : colors.textMuted,
+                child: Center(
+                  child: PlayPauseIcon(
+                    playing: playing,
+                    size: size * 0.58,
+                    color: enabled ? colors.onAccent : colors.textMuted,
+                  ),
                 ),
               ),
             ),

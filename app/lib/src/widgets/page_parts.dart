@@ -85,85 +85,94 @@ class _PhonePageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
+    final titleRow = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 68),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 30,
+                      letterSpacing: -0.8,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textMain,
+                    ),
+                  ),
+                  if (subtitle != null && subtitle!.isNotEmpty)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                ],
+              ),
+            ),
+            // The way to another device also while nothing plays here (no mini player then).
+            const DevicesButton(dimension: 44, iconSize: 23),
+            if (vm.selectedSection != AppSection.settings)
+              SizedBox.square(
+                dimension: 44,
+                child: IconButton(
+                  tooltip: context.tr('Search'),
+                  onPressed: vm.openSearch,
+                  icon: Icon(Icons.search_rounded, size: 24, color: colors.textMain),
+                ),
+              ),
+            SizedBox.square(
+              dimension: 44,
+              child: IconButton(
+                tooltip: context.tr('NavSettings'),
+                onPressed: () => vm.navigateTo(AppSection.settings),
+                icon: Icon(
+                  vm.isUserLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,
+                  size: 26,
+                  color: vm.isUserLoggedIn ? colors.textMain : colors.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
     return SafeArea(
       bottom: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 68),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 30,
-                            letterSpacing: -0.8,
-                            fontWeight: FontWeight.w800,
-                            color: colors.textMain,
-                          ),
-                        ),
-                        if (subtitle != null && subtitle!.isNotEmpty)
-                          Text(
-                            subtitle!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 12, color: colors.textMuted),
-                          ),
-                      ],
-                    ),
-                  ),
-                  // The way to another device also while nothing plays here (no mini player then).
-                  const DevicesButton(dimension: 44, iconSize: 23),
-                  if (vm.selectedSection != AppSection.settings)
-                    SizedBox.square(
-                      dimension: 44,
-                      child: IconButton(
-                        tooltip: context.tr('Search'),
-                        onPressed: vm.openSearch,
-                        icon: Icon(Icons.search_rounded, size: 24, color: colors.textMain),
-                      ),
-                    ),
-                  SizedBox.square(
-                    dimension: 44,
-                    child: IconButton(
-                      tooltip: context.tr('NavSettings'),
-                      onPressed: () => vm.navigateTo(AppSection.settings),
-                      icon: Icon(
-                        vm.isUserLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,
-                        size: 26,
-                        color: vm.isUserLoggedIn ? colors.textMain : colors.textMuted,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          if (actions.isEmpty) PinnedTitleBar.anchor(context, titleRow) else titleRow,
           if (actions.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-              // One line, all one height: the play and shuffle pills (with a list's download) at their size, the other
-              // buttons (the sort first, a genre filter, a new playlist) sharing the rest.
-              child: SizedBox(
-                height: PhoneChrome.controlHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final (i, action) in actions.indexed) ...[
-                      if (i > 0) const SizedBox(width: 10),
-                      if (action is PlayShuffleButtons) Center(child: action) else Expanded(child: action),
+              // One line as tall as Play, whether the page has it or not, so the lists start at the same place: the
+              // round buttons at their size, Play last, the others (the sort first, a genre filter, a new playlist)
+              // one height, sharing the rest.
+              child: PinnedTitleBar.anchor(
+                context,
+                SizedBox(
+                  height: PhoneChrome.playSize,
+                  child: Row(
+                    children: [
+                      for (final (i, action) in actions.indexed) ...[
+                        if (i > 0) const SizedBox(width: 10),
+                        if (action is PlayShuffleButtons)
+                          action
+                        else
+                          Expanded(
+                            child: SizedBox(height: PhoneChrome.controlHeight, child: action),
+                          ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -173,15 +182,165 @@ class _PhonePageHeader extends StatelessWidget {
   }
 }
 
+/// On a phone, the bar over the top of a page that appears once the page's header has scrolled away under it: the way
+/// [onBack] (a detail page's), the page's [title], and its [play] button, which so stays at hand, half below the bar's
+/// edge (as in Spotify). Elsewhere [child] alone. The header marks the part whose leaving shows the bar ([anchor]): the
+/// line of its buttons, as tall as Play, so that Play stops where the header's reaches the edge; else its title.
+class PinnedTitleBar extends StatefulWidget {
+  const PinnedTitleBar({super.key, required this.title, this.onBack, this.play, required this.child});
+
+  final String title;
+  final VoidCallback? onBack;
+  final Widget? play;
+
+  /// The page's scroll view.
+  final Widget child;
+
+  static const double height = 56;
+
+  /// [child] (a part of the page's header), marked as the one whose leaving shows the bar when there is one.
+  static Widget anchor(BuildContext context, Widget child) {
+    final key = context.dependOnInheritedWidgetOfExactType<_PinnedTitleBarScope>()?.anchor;
+    return key == null ? child : KeyedSubtree(key: key, child: child);
+  }
+
+  @override
+  State<PinnedTitleBar> createState() => _PinnedTitleBarState();
+}
+
+class _PinnedTitleBarState extends State<PinnedTitleBar> {
+  final GlobalKey _anchor = GlobalKey();
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // A page that comes back scrolled (its place is kept) shows the bar at once.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+  }
+
+  bool _onNotification(Notification notification) {
+    if (notification case ScrollNotification(depth: 0) || ScrollMetricsNotification(depth: 0)) _update();
+    return false;
+  }
+
+  /// Shows the bar once the anchor's middle passes its lower edge: the header's Play is then where the bar's is.
+  void _update() {
+    if (!mounted) return;
+    final own = context.findRenderObject() as RenderBox?;
+    final anchor = _anchor.currentContext?.findRenderObject() as RenderBox?;
+    if (own == null || anchor == null || !own.attached || !anchor.attached) return;
+    final middle = anchor.localToGlobal(anchor.size.centerLeft(Offset.zero), ancestor: own).dy;
+    final shown = middle < MediaQuery.paddingOf(context).top + PinnedTitleBar.height;
+    if (shown != _shown) setState(() => _shown = shown);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!PhoneChrome.isPhone(context)) return widget.child;
+    final colors = context.colors;
+    final onBack = widget.onBack;
+    final play = widget.play;
+    final bottom = MediaQuery.paddingOf(context).top + PinnedTitleBar.height;
+    final bar = DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.palette.modal,
+        border: Border(bottom: BorderSide(color: colors.palette.panelBorder)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: PinnedTitleBar.height,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              onBack == null ? 20 : 4,
+              0,
+              play == null ? 16 : PhoneChrome.playEndPadding + PhoneChrome.playSize + 8,
+              0,
+            ),
+            child: Row(
+              children: [
+                if (onBack != null)
+                  SizedBox.square(
+                    dimension: 44,
+                    child: IconButton(
+                      tooltip: context.tr('Back'),
+                      onPressed: onBack,
+                      icon: Icon(Icons.arrow_back_rounded, size: 24, color: colors.textMain),
+                    ),
+                  ),
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 17,
+                      letterSpacing: -0.3,
+                      fontWeight: FontWeight.w800,
+                      color: colors.textMain,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    Widget appearing(Widget child) => IgnorePointer(
+      ignoring: !_shown,
+      child: AnimatedOpacity(opacity: _shown ? 1 : 0, duration: const Duration(milliseconds: 120), child: child),
+    );
+    return _PinnedTitleBarScope(
+      anchor: _anchor,
+      child: NotificationListener<Notification>(
+        onNotification: _onNotification,
+        child: Stack(
+          children: [
+            Positioned.fill(child: widget.child),
+            Positioned(top: 0, left: 0, right: 0, child: appearing(bar)),
+            if (play != null)
+              Positioned(
+                top: bottom - PhoneChrome.playSize / 2,
+                right: PhoneChrome.playEndPadding,
+                child: appearing(play),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinnedTitleBarScope extends InheritedWidget {
+  const _PinnedTitleBarScope({required this.anchor, required super.child});
+
+  final GlobalKey anchor;
+
+  @override
+  bool updateShouldNotify(_PinnedTitleBarScope oldWidget) => anchor != oldWidget.anchor;
+}
+
 /// Marks the phone layout, whose pages draw the phone's headers and full-width buttons.
 class PhoneChrome extends InheritedWidget {
   const PhoneChrome({super.key, required super.child});
 
   static bool isPhone(BuildContext context) => context.dependOnInheritedWidgetOfExactType<PhoneChrome>() != null;
 
-  /// The height of every button in a phone's page and detail headers (play, shuffle, the sort, a filter, a download,
-  /// hide or delete), so a line of them is even and the lists below start at the same place.
+  /// The height of every button in a phone's page and detail headers but Play (shuffle, the sort, a filter, a
+  /// download, the menu), so a line of them is even.
   static const double controlHeight = 44;
+
+  /// A list's Play on a phone: a little larger than the buttons beside it, as in Spotify.
+  static const double playSize = 48;
+
+  /// How far from the right edge a phone page's Play is centred: over the ⋮ that ends the rows of its list (the list's
+  /// 8 px padding, the row's 8 px and half of the 48 px button), in its header and in [PinnedTitleBar] alike.
+  static const double playCenterInset = 40;
+
+  /// The room right of a phone page's Play: 16 px, as at every phone page's edges.
+  static const double playEndPadding = playCenterInset - playSize / 2;
 
   @override
   bool updateShouldNotify(PhoneChrome oldWidget) => false;

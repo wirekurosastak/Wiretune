@@ -37,7 +37,8 @@ No restart, no rescan:
 - **Featured artists**: when a file names each artist (one `ARTIST` field each, as TIDAL downloads do, or `ARTISTS`),
   the song shows them all (*Future, Lil Durk*), each name a link, and is on each one's page. Names are never split at
   `&`, `,` or `/`, so *Simon & Garfunkel* stays one artist. **Artists** lists album artists; a guest gets a page through
-  the song's link or a search.
+  the song's link or a search. An album of two acts (one `ALBUMARTIST` field each) shows them both and is on both
+  pages; hiding either artist hides it.
 - **Quality tags**: **gold** is hi-res (lossless above 16 bit or 48 kHz), **silver** lossless at CD resolution,
   **bronze** lossy. An album or playlist wears its weakest track's tier, and *MIXED* when its formats differ. Hover or
   long-press a tag for the details.
@@ -99,6 +100,8 @@ downloads never count as local music.
 
 - **An Android phone** plays a folder of its own too; the first **Scan** asks for the permission to read music. From
   Android 13 on that covers audio files only, so a `cover.jpg` beside them isn't seen (pictures inside the files are).
+- **In the full-screen player** a swipe left or right changes the track or switches between *Player*, *Queue* and
+  *Lyrics*: the first swipe asks which, and *Settings* changes it later.
 - **TVs** (Android TV, Samsung Tizen) are steered with the remote: the arrows move, the center button plays, Back goes
   back. Some formats may not play on Tizen ([audio.md](audio.md#tizen)).
 - **Android Auto** lists Wiretune once the phone is signed in: albums, artists, playlists, favorites, voice search.

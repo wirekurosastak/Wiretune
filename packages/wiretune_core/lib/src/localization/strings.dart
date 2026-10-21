@@ -20,6 +20,7 @@ const Map<String, (String, String, String)> allStrings = {
   'ConnectShort': ('Kapcsolódás', 'Connect', 'Verbinden'),
   'Reconnect': ('Újracsatlakozás', 'Reconnect', 'Erneut verbinden'),
   'Play': ('Lejátszás', 'Play', 'Wiedergabe'),
+  'Pause': ('Szünet', 'Pause', 'Pause'),
   'Shuffle': ('Keverés', 'Shuffle', 'Zufällig'),
   'Or': ('VAGY', 'OR', 'ODER'),
   'Language': ('Nyelv', 'Language', 'Sprache'),
@@ -55,6 +56,12 @@ const Map<String, (String, String, String)> allStrings = {
     'Exklusivmodus (direkter DAC-Zugriff am System-Mixer vorbei)',
   ),
   'AccountAndConnection': ('Fiók és kapcsolat', 'Account & connection', 'Konto & Verbindung'),
+  'SettingsPlayerSwipe': ('Húzás a lejátszóban', 'Swiping in the player', 'Wischen im Player'),
+  'SettingsPlayerSwipeHint': (
+    'Mit tegyen a balra vagy jobbra húzás a teljes képernyős lejátszóban.',
+    'What swiping left or right does in the full-screen player.',
+    'Was Wischen nach links oder rechts im Vollbild-Player tut.',
+  ),
   'SettingsOnlineLyrics': ('Dalszöveg az internetről', 'Lyrics from the internet', 'Liedtexte aus dem Internet'),
   'SettingsOnlineLyricsHint': (
     'Hiányzó dalszövegek keresése az lrclib.net-en.',
@@ -176,6 +183,7 @@ const Map<String, (String, String, String)> allStrings = {
   'SortBy': ('Rendezés:', 'Sort by:', 'Sortieren nach:'),
   'SortReleased': ('Megjelenés', 'Released', 'Erschienen'),
   'SortQuality': ('Minőség', 'Quality', 'Qualität'),
+  'SortBitrate': ('Bitráta', 'Bitrate', 'Bitrate'),
   'SortArtist': ('Előadó', 'Artist', 'Künstler'),
   'SortAlbum': ('Album', 'Album', 'Album'),
   'SortLength': ('Hossz', 'Length', 'Dauer'),
@@ -275,6 +283,22 @@ const Map<String, (String, String, String)> allStrings = {
   'Lyrics': ('DALSZÖVEG', 'LYRICS', 'LIEDTEXT'),
   'TabPlayer': ('Lejátszó', 'Player', 'Player'),
   'TabLyrics': ('Dalszöveg', 'Lyrics', 'Liedtext'),
+  'PlayerSwipeQuestion': (
+    'Mit tegyen a balra vagy jobbra húzás a lejátszóban?',
+    'What should swiping left or right do in the player?',
+    'Was soll Wischen nach links oder rechts im Player tun?',
+  ),
+  'PlayerSwipeLater': (
+    'Később a Beállításokban módosíthatod.',
+    'You can change this later in Settings.',
+    'Du kannst das später in den Einstellungen ändern.',
+  ),
+  'PlayerSwipeTracks': ('Előző / következő szám', 'Previous / next track', 'Vorheriger / nächster Titel'),
+  'PlayerSwipeTabs': (
+    'Lejátszó, lejátszási sor, dalszöveg',
+    'Player, queue, lyrics',
+    'Player, Warteschlange, Liedtext',
+  ),
   'NoLyrics': (
     'Ehhez a számhoz nem találtunk dalszöveget.',
     'No lyrics found for this track.',

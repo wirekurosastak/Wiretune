@@ -51,6 +51,14 @@ void main() {
     expect(() => Track.fromJson({'title': 'no id'}), throwsFormatException);
   });
 
+  test('the album artists travel as the track is filed', () {
+    final duo = Track(id: 'a', album: 'Duo', albumArtist: 'One', albumArtists: ['One', 'Two']);
+    expect(Track.fromJson(duo.toJson()).albumArtistNames, ['One', 'Two']);
+    duo.filed = (album: 'One Essentials', albumArtist: 'One', trackNumber: 1, discNumber: null);
+    expect(duo.toJson().containsKey('albumArtists'), isFalse);
+    expect(Track.fromJson(duo.toJson()).albumArtistNames, ['One']);
+  });
+
   test('instants keep their microseconds through the API and the database', () {
     final instant = DateTime.utc(2024, 1, 2, 3, 4, 5, 123, 456);
     expect(parseIsoUtc(formatIsoUtc(instant)), instant);

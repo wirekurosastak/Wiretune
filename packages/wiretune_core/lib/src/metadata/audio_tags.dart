@@ -24,7 +24,13 @@ class AudioTags {
   /// comments repeat ARTIST (or list them in ARTISTS), ID3v2.4 and APE separate the values with NUL. Empty when the tag
   /// names a single artist. Names are never split at "&", "," or "/": "AC/DC" and "Simon & Garfunkel" are one act.
   List<String> artists = const [];
+
+  /// The album artist; when the tag names several (see [albumArtists]), the first of them.
   String? albumArtist;
+
+  /// Every album artist the tag names, in its order, when it names more than one (an album of two acts), read as
+  /// [artists] are. Empty when the tag names a single album artist.
+  List<String> albumArtists = const [];
   String? album;
   String? genre;
   String? lyrics;
@@ -81,7 +87,10 @@ class AudioTags {
       artist = other.artist;
       artists = other.artists;
     }
-    albumArtist ??= other.albumArtist;
+    if (albumArtist == null) {
+      albumArtist = other.albumArtist;
+      albumArtists = other.albumArtists;
+    }
     album ??= other.album;
     genre ??= other.genre;
     lyrics ??= other.lyrics;
@@ -101,14 +110,28 @@ class AudioTags {
   /// ([artists]) and their names joined.
   void setArtists(Iterable<String> values) {
     if (artist != null) return;
-    final seen = <String>{};
-    final names = [
-      for (final value in values)
-        if (trimNul(value).trim() case final name when name.isNotEmpty && seen.add(name.toLowerCase())) name,
-    ];
+    final names = _distinctNames(values);
     if (names.isEmpty) return;
     artist = names.join(', ');
     artists = names.length > 1 ? names : const [];
+  }
+
+  /// Sets the album artist from the values of one tag field, unless an earlier field set it: the first value, and all
+  /// of them ([albumArtists]) when there are several.
+  void setAlbumArtists(Iterable<String> values) {
+    if (albumArtist != null) return;
+    final names = _distinctNames(values);
+    if (names.isEmpty) return;
+    albumArtist = names.first;
+    albumArtists = names.length > 1 ? names : const [];
+  }
+
+  static List<String> _distinctNames(Iterable<String> values) {
+    final seen = <String>{};
+    return [
+      for (final value in values)
+        if (trimNul(value).trim() case final name when name.isNotEmpty && seen.add(name.toLowerCase())) name,
+    ];
   }
 
   /// Sets a text field by its common name, keeping the first non-empty value.

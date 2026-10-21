@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -13,6 +15,7 @@ import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/links.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/track_list.dart';
@@ -21,7 +24,7 @@ import 'queue_panel.dart';
 /// The phone's full-screen player, over the colours of the cover: the cover (with its quality tag), the queue or the
 /// lyrics on top (three tabs), and the seek bar and the transport below, whatever the tab. The header has the track's
 /// menu (a playlist, the download, the album, the artist); a swipe down over the header, or over the player tab, closes
-/// it.
+/// it, and a swipe left or right over the tabs changes the track or the tab ([PlayerSwipe]).
 class NowPlayingPage extends StatelessWidget {
   const NowPlayingPage({super.key});
 
@@ -146,15 +149,18 @@ class NowPlayingPage extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 220),
-                        child: KeyedSubtree(
-                          key: ValueKey(tab),
-                          child: switch (tab) {
-                            NowPlayingTab.player => const _PlayerTab(),
-                            NowPlayingTab.queue => const _QueueTab(),
-                            NowPlayingTab.lyrics => const _LyricsTab(),
-                          },
+                      child: HorizontalSwipe(
+                        onSwipe: ({required forward}) => _swipe(context, forward: forward),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 220),
+                          child: KeyedSubtree(
+                            key: ValueKey(tab),
+                            child: switch (tab) {
+                              NowPlayingTab.player => const _PlayerTab(),
+                              NowPlayingTab.queue => const _QueueTab(),
+                              NowPlayingTab.lyrics => const _LyricsTab(),
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -170,6 +176,17 @@ class NowPlayingPage extends StatelessWidget {
   }
 }
 
+/// A swipe left or right over the tabs: what the user chose it to do, asked at the first one.
+Future<void> _swipe(BuildContext context, {required bool forward}) async {
+  final vm = context.vm;
+  if (vm.playerSwipe == null) {
+    final choice = await askPlayerSwipe(context);
+    if (choice == null || !context.mounted) return;
+    vm.playerSwipe = choice;
+  }
+  vm.swipeNowPlaying(forward: forward);
+}
+
 class _PlayerTab extends StatelessWidget {
   const _PlayerTab();
 
@@ -182,6 +199,10 @@ class _PlayerTab extends StatelessWidget {
     final player = vm.player;
     final colors = context.colors;
     final track = player.currentTrack;
+    final bpm = switch (track?.bpm) {
+      final value? when value > 0 => value,
+      _ => null,
+    };
     // The queue and the lyrics scroll vertically themselves; here a swipe down closes the player.
     return VerticalSwipe(
       upwards: false,
@@ -190,58 +211,71 @@ class _PlayerTab extends StatelessWidget {
         children: [
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 12, 28, 16),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420, maxHeight: 420),
-                  child: AspectRatio(
-                    aspectRatio: 1,
-                    // The cover sits back a little while the music is paused, and springs forward when it plays.
-                    child: AnimatedScale(
-                      scale: player.isPlaying ? 1 : 0.86,
-                      duration: const Duration(milliseconds: 520),
-                      curve: player.isPlaying ? Curves.easeOutBack : Curves.easeOutCubic,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 520),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(Radii.panel),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0x8C000000),
-                              blurRadius: player.isPlaying ? 50 : 24,
-                              spreadRadius: -10,
-                              offset: Offset(0, player.isPlaying ? 28 : 14),
+              padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // The cover at its size while playing (paused, it sits back within the same room), centred above the
+                  // title with at least [below] under it; a track's BPM sits midway between that edge and the title.
+                  final below = bpm != null ? 48.0 : 16.0;
+                  final side = math.max(
+                    0.0,
+                    math.min(420.0, math.min(constraints.maxWidth, constraints.maxHeight - below)),
+                  );
+                  final spare = math.max(0.0, constraints.maxHeight - side - below);
+                  return Column(
+                    children: [
+                      SizedBox(height: spare / 2),
+                      SizedBox.square(
+                        dimension: side,
+                        // The cover sits back a little while the music is paused, and springs forward when it plays.
+                        child: AnimatedScale(
+                          scale: player.isPlaying ? 1 : 0.86,
+                          duration: const Duration(milliseconds: 520),
+                          curve: player.isPlaying ? Curves.easeOutBack : Curves.easeOutCubic,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 520),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(Radii.panel),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0x8C000000),
+                                  blurRadius: player.isPlaying ? 50 : 24,
+                                  spreadRadius: -10,
+                                  offset: Offset(0, player.isPlaying ? 28 : 14),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
-                            // On the cover, as on the album tiles.
-                            if (player.currentTagSpec.isNotEmpty)
-                              Positioned(
-                                left: 14,
-                                bottom: 14,
-                                child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 12),
-                              ),
-                          ],
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
+                                // On the cover, as on the album tiles.
+                                if (player.currentTagSpec.isNotEmpty)
+                                  Positioned(
+                                    left: 14,
+                                    bottom: 14,
+                                    child: QualityTag(
+                                      tier: player.currentTier,
+                                      spec: player.currentTagSpec,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
+                      Expanded(
+                        child: bpm == null
+                            ? const SizedBox.shrink()
+                            : Center(child: PlayerMetaBadge(text: '$bpm BPM', fontSize: 11)),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
-          if (track != null && track.bpm != null && track.bpm! > 0)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 11)],
-              ),
-            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 0, 16, 4),
             child: Row(

@@ -31,6 +31,7 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 8) c.execute('ALTER TABLE tracks DROP COLUMN album_artists');
     if (version < 7) {
       c.execute('''
         ALTER TABLE tracks RENAME COLUMN release_year TO year;
@@ -266,6 +267,22 @@ void main() {
     final kept = (upgraded.getAllTracks()).single;
     expect((kept.id, kept.fileModifiedAt), ('a', null));
     expect(kept.artists, isEmpty);
+  });
+
+  test('a database of schema 7 is upgraded, and its files are read again for their album artists', () async {
+    final (repo, db) = await open();
+    repo.replaceAllTracks([make('a')..fileModifiedAt = DateTime.utc(2025, 1, 2)]);
+    downgrade(db, 7);
+
+    final (upgraded, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    final kept = upgraded.getAllTracks().single;
+    expect((kept.id, kept.fileModifiedAt), ('a', null));
+    expect(kept.albumArtists, isEmpty);
+    upgraded.replaceAllTracks([
+      Track(id: 'a', album: 'Duo', albumArtist: 'One', albumArtists: ['One', 'Two'], filePath: '/m/a.flac'),
+    ]);
+    expect(upgraded.getAllTracks().single.albumArtists, ['One', 'Two']);
   });
 
   test(

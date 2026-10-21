@@ -329,6 +329,14 @@ void main() {
       final tags = read(['ARTIST=Simon & Garfunkel'])..setArtists(['Other', 'Names']);
       expect((tags.artist, tags.artists.length), ('Simon & Garfunkel', 0));
     });
+
+    test('one ALBUMARTIST field per album artist: the first files the album, all of them are kept', () {
+      final tags = read(['ALBUMARTIST=aza', 'ENSEMBLE=Orchestra', 'ALBUMARTIST=Mikee Mykanic', 'ALBUMARTIST=Ketioz']);
+      expect(tags.albumArtist, 'aza');
+      expect(tags.albumArtists, ['aza', 'Mikee Mykanic', 'Ketioz']);
+      final single = read(['ENSEMBLE=Orchestra', 'ALBUM ARTIST=Ella Fitzgerald']);
+      expect((single.albumArtist, single.albumArtists.length), ('Ella Fitzgerald', 0));
+    });
   });
 
   test('a compressed ID3 frame is inflated, but never beyond what a tag can need', () {

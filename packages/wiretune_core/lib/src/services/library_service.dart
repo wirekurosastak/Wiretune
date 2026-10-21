@@ -102,7 +102,7 @@ class LibraryService {
     return _hidden[HiddenKind.track]!.contains(track.id) ||
         _hidden[HiddenKind.album]!.contains(track.albumId) ||
         artists.contains(stableId(track.primaryArtist.toLowerCase())) ||
-        artists.contains(stableId(track.effectiveAlbumArtist.toLowerCase()));
+        track.albumArtistNames.any((name) => artists.contains(stableId(name.toLowerCase())));
   }
 
   bool isTrackExplicitlyHidden(String trackId) => _hidden[HiddenKind.track]!.contains(trackId);
@@ -558,7 +558,9 @@ class LibraryService {
     if (isBlank(query)) return all;
     final q = query.trim().toLowerCase();
     bool has(String? text) => text != null && text.toLowerCase().contains(q);
-    return all.where((t) => has(t.title) || has(t.artist) || has(t.album) || has(t.albumArtist) || has(t.genre));
+    return all.where(
+      (t) => has(t.title) || has(t.artist) || has(t.album) || t.albumArtistNames.any(has) || has(t.genre),
+    );
   }
 
   Track? getTrack(String trackId) => _rawTrackById[trackId];
@@ -763,11 +765,19 @@ class LibrarySnapshot {
       final own = ordered.where((t) => equalsIgnoreCase(t.tagged.album, t.album));
       final folderAlbum = own.isEmpty;
       final years = (folderAlbum ? ordered : own).map((t) => t.releaseYear).whereType<int>();
+      // Every album artist its tracks name, the one it is filed under first.
+      final named = <String>{};
+      final albumArtists = [
+        for (final t in ordered)
+          for (final name in t.albumArtistNames)
+            if (named.add(name.toLowerCase())) name,
+      ];
       albums.add(
         Album(
           id: entry.key,
           title: first.album,
-          artist: first.effectiveAlbumArtist,
+          artist: albumArtists.join(', '),
+          artists: albumArtists,
           releaseYear: folderAlbum && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
           coverArtPath: ordered.where((t) => !isBlank(t.coverArtPath)).firstOrNull?.coverArtPath,
           totalDuration: ordered.fold(Duration.zero, (sum, t) => sum + t.duration),
@@ -778,9 +788,12 @@ class LibrarySnapshot {
     }
     sortStable(albums, (a, b) => compareText(a.title, b.title));
 
+    // An album of two acts is on the page of each.
     final albumsByArtist = <String, List<Album>>{};
     for (final a in albums) {
-      albumsByArtist.putIfAbsent(a.artist.toLowerCase(), () => []).add(a);
+      for (final name in a.artistNames) {
+        albumsByArtist.putIfAbsent(name.toLowerCase(), () => []).add(a);
+      }
     }
     // Each artist of a track, featured ones too, so an artist's page also has the songs they guest on.
     final tracksByArtist = <String, List<Track>>{};
@@ -793,7 +806,9 @@ class LibrarySnapshot {
     // The Artists view lists album artists only: guest performers and one-off compilation artists stay out of it.
     final artistNames = <String, String>{};
     for (final a in albums) {
-      artistNames.putIfAbsent(a.artist.toLowerCase(), () => a.artist);
+      for (final name in a.artistNames) {
+        artistNames.putIfAbsent(name.toLowerCase(), () => name);
+      }
     }
 
     final artists = <Artist>[];

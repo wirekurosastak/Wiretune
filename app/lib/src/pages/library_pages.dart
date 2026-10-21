@@ -57,22 +57,26 @@ class TracksPage extends StatelessWidget {
       listenable: tracks,
       builder: (context, _) {
         if (!tracks.hasTracks) return const EmptyLibrary();
-        return CustomScrollView(
-          key: const PageStorageKey('tracks'),
-          slivers: [
-            SliverToBoxAdapter(
-              child: PageHeader(
-                title: context.tr('NavTracks'),
-                subtitle: '${context.trf('TrackCount', [tracks.totalTracksCount])}  •  ${tracks.totalTracksDuration}',
-                actions: [
-                  if (PhoneChrome.isPhone(context)) TrackSortButtons(tracks), // a wide table sorts by its headers
-                  PlayShuffleButtons(onPlay: tracks.playAll, onShuffle: tracks.shuffleAll),
-                ],
+        return PinnedTitleBar(
+          title: context.tr('NavTracks'),
+          play: ListPlayButton(tracks: tracks.displayedTracks, onPlay: tracks.playAll),
+          child: CustomScrollView(
+            key: const PageStorageKey('tracks'),
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeader(
+                  title: context.tr('NavTracks'),
+                  subtitle: '${context.trf('TrackCount', [tracks.totalTracksCount])}  •  ${tracks.totalTracksDuration}',
+                  actions: [
+                    if (PhoneChrome.isPhone(context)) TrackSortButtons(tracks), // a wide table sorts by its headers
+                    PlayShuffleButtons(tracks: tracks.displayedTracks, onPlay: tracks.playAll),
+                  ],
+                ),
               ),
-            ),
-            TrackSliver(tracks: tracks.displayedTracks, sorting: tracks),
-            const PageEndSpace(),
-          ],
+              TrackSliver(tracks: tracks.displayedTracks, sorting: tracks),
+              const PageEndSpace(),
+            ],
+          ),
         );
       },
     );
@@ -95,31 +99,35 @@ class FavoritesPage extends StatelessWidget {
             hint: context.tr('EmptyFavoritesHint'),
           );
         }
-        return CustomScrollView(
-          key: const PageStorageKey('favorites'),
-          slivers: [
-            SliverToBoxAdapter(
-              child: PageHeader(
-                title: context.tr('NavFavorites'),
-                subtitle:
-                    '${context.trf('TrackCount', [favorites.favoriteTracks.length])}  •  ${favorites.totalFavoritesDuration}',
-                actions: [
-                  if (PhoneChrome.isPhone(context)) TrackSortButtons(favorites), // a wide table sorts by its headers
-                  PlayShuffleButtons(
-                    onPlay: favorites.playAll,
-                    onShuffle: favorites.shuffleAll,
-                    trailing: DownloadListButton.forTracks(
-                      favorites.favoriteTracks,
-                      isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
-                      onPressed: context.vm.downloads.toggleFavorites,
+        return PinnedTitleBar(
+          title: context.tr('NavFavorites'),
+          play: ListPlayButton(tracks: favorites.favoriteTracks, onPlay: favorites.playAll),
+          child: CustomScrollView(
+            key: const PageStorageKey('favorites'),
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeader(
+                  title: context.tr('NavFavorites'),
+                  subtitle:
+                      '${context.trf('TrackCount', [favorites.favoriteTracks.length])}  •  ${favorites.totalFavoritesDuration}',
+                  actions: [
+                    if (PhoneChrome.isPhone(context)) TrackSortButtons(favorites), // a wide table sorts by its headers
+                    PlayShuffleButtons(
+                      tracks: favorites.favoriteTracks,
+                      onPlay: favorites.playAll,
+                      download: DownloadListButton.forTracks(
+                        favorites.favoriteTracks,
+                        isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
+                        onPressed: context.vm.downloads.toggleFavorites,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites),
-            const PageEndSpace(),
-          ],
+              TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites),
+              const PageEndSpace(),
+            ],
+          ),
         );
       },
     );
@@ -293,14 +301,24 @@ class DetailHeader extends StatelessWidget {
             ],
           );
     if (narrow) {
-      // The phone's header: the 230 px artwork with a glow, the title and the details, all centred.
+      final narrowTitle =
+          titleWidget ??
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 24, letterSpacing: -0.6, fontWeight: FontWeight.w800, color: colors.textMain),
+          );
+      // The phone's header: the 230 px artwork with a glow, the title and the details centred, and a line of buttons
+      // as tall as Play (see PlayShuffleButtons), Play over the ⋮ of the rows below.
       return SafeArea(
         bottom: false,
         child: Column(
           children: [
             ?back,
             Padding(
-              padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 10),
+              padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 0),
               child: Column(
                 children: [
                   Container(
@@ -310,33 +328,23 @@ class DetailHeader extends StatelessWidget {
                     child: framed,
                   ),
                   const SizedBox(height: 20),
-                  titleWidget ??
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 24,
-                          letterSpacing: -0.6,
-                          fontWeight: FontWeight.w800,
-                          color: colors.textMain,
-                        ),
-                      ),
+                  if (actions.isEmpty) PinnedTitleBar.anchor(context, narrowTitle) else narrowTitle,
                   if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
-                  if (actions.isNotEmpty) ...[
-                    const SizedBox(height: 18),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 12,
-                      runSpacing: 10,
-                      children: actions,
-                    ),
-                  ],
                 ],
               ),
             ),
+            if (actions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, PhoneChrome.playEndPadding, 0),
+                child: PinnedTitleBar.anchor(
+                  context,
+                  SizedBox(
+                    height: PhoneChrome.playSize,
+                    child: Row(children: [for (final action in actions) Expanded(child: action)]),
+                  ),
+                ),
+              ),
+            const SizedBox(height: 10),
           ],
         ),
       );
@@ -349,7 +357,10 @@ class DetailHeader extends StatelessWidget {
         const SizedBox(height: 12),
         titleWidget ?? Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle(context)),
         if (detailRow != null) ...[const SizedBox(height: 12), detailRow],
-        if (actions.isNotEmpty) ...[const SizedBox(height: 22), Wrap(spacing: 12, runSpacing: 8, children: actions)],
+        if (actions.isNotEmpty) ...[
+          const SizedBox(height: 22),
+          PinnedTitleBar.anchor(context, Wrap(spacing: 12, runSpacing: 8, children: actions)),
+        ],
       ],
     );
     final header = Column(
@@ -427,8 +438,12 @@ class SortButtons extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   side: BorderSide(color: colors.palette.glassBorder),
                 ),
+                // As tall as its choices (a sheet keeps to 9/16 of the screen otherwise, which cut the last ones off),
+                // and scrolling when even the screen is too short for them.
+                isScrollControlled: true,
+                useSafeArea: true,
                 builder: (ctx) => SafeArea(
-                  child: Padding(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -651,28 +666,31 @@ class AlbumsPage extends StatelessWidget {
         if (albums.displayedAlbums.isEmpty) {
           return const EmptyLibrary(); // nothing to list means nothing in the library
         }
-        return CustomScrollView(
-          key: const PageStorageKey('albums'),
-          slivers: [
-            SliverToBoxAdapter(
-              child: PageHeader(
-                title: context.tr('NavAlbums'),
-                subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
-                actions: [
-                  SortButtons(
-                    buttons: [
-                      for (final field in AlbumSortField.values)
-                        (albums.sortLabel(field), albums.sortField == field, () => albums.setSortField(field)),
-                    ],
-                  ),
-                  if (albums.genres.isNotEmpty)
-                    _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
-                ],
+        return PinnedTitleBar(
+          title: context.tr('NavAlbums'),
+          child: CustomScrollView(
+            key: const PageStorageKey('albums'),
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeader(
+                  title: context.tr('NavAlbums'),
+                  subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
+                  actions: [
+                    SortButtons(
+                      buttons: [
+                        for (final field in AlbumSortField.values)
+                          (albums.sortLabel(field), albums.sortField == field, () => albums.setSortField(field)),
+                      ],
+                    ),
+                    if (albums.genres.isNotEmpty)
+                      _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
+                  ],
+                ),
               ),
-            ),
-            AlbumsSliver(albums: albums.displayedAlbums, onOpen: albums.openAlbum, onPlay: albums.playAlbum),
-            const PageEndSpace(),
-          ],
+              AlbumsSliver(albums: albums.displayedAlbums, onOpen: albums.openAlbum, onPlay: albums.playAlbum),
+              const PageEndSpace(),
+            ],
+          ),
         );
       },
     );
@@ -689,49 +707,54 @@ class AlbumDetail extends StatelessWidget {
     final vm = context.vm;
     final albums = vm.albums;
     final colors = context.colors;
-    return CustomScrollView(
-      key: PageStorageKey('album-${album.id}'),
-      slivers: [
-        SliverToBoxAdapter(
-          child: DetailHeader(
-            back: BackLink(text: albums.backText, onPressed: albums.closeAlbumDetail),
-            artwork: CoverImage(
-              path: album.coverArtPath,
-              radius: Radii.card,
-              decodeWidth: 640,
-              placeholderIcon: Icons.album,
-              placeholderColor: colors.palette.purple,
-            ),
-            artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
-            tags: [TagBadge(context.tr('ColAlbum'), color: colors.palette.purple)],
-            title: album.title,
-            details: [
-              LinkText(
-                album.artist,
-                onTap: () => vm.openArtistByName(album.artist),
-                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.coral),
+    return PinnedTitleBar(
+      title: album.title,
+      onBack: albums.closeAlbumDetail,
+      play: ListPlayButton(tracks: album.tracks, onPlay: albums.playAlbum),
+      child: CustomScrollView(
+        key: PageStorageKey('album-${album.id}'),
+        slivers: [
+          SliverToBoxAdapter(
+            child: DetailHeader(
+              back: BackLink(text: albums.backText, onPressed: albums.closeAlbumDetail),
+              artwork: CoverImage(
+                path: album.coverArtPath,
+                radius: Radii.card,
+                decodeWidth: 640,
+                placeholderIcon: Icons.album,
+                placeholderColor: colors.palette.purple,
               ),
-              if (album.releaseYear != null) DetailText('${album.releaseYear}'),
-              DetailText(context.trf('TrackCount', [album.trackCount])),
-              DetailText(album.formattedTotalDuration),
-            ],
-            actions: [
-              PlayShuffleButtons(
-                onPlay: () => albums.playAlbum(),
-                onShuffle: () => albums.shuffleAlbum(),
-                trailing: DownloadListButton.forTracks(
-                  album.tracks,
-                  isDownloaded: () => vm.downloads.isAlbumDownloaded(album),
-                  onPressed: () => vm.downloads.toggleAlbum(album),
+              artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
+              tags: [TagBadge(context.tr('ColAlbum'), color: colors.palette.purple)],
+              title: album.title,
+              details: [
+                ArtistLinks(
+                  album.artistNames,
+                  onOpen: vm.openArtistByName,
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.coral),
                 ),
-              ),
-              ListMenu.album(album, onPlay: albums.playAlbum).headerButton(),
-            ],
+                if (album.releaseYear != null) DetailText('${album.releaseYear}'),
+                DetailText(context.trf('TrackCount', [album.trackCount])),
+                DetailText(album.formattedTotalDuration),
+              ],
+              actions: [
+                PlayShuffleButtons(
+                  tracks: album.tracks,
+                  onPlay: () => albums.playAlbum(),
+                  download: DownloadListButton.forTracks(
+                    album.tracks,
+                    isDownloaded: () => vm.downloads.isAlbumDownloaded(album),
+                    onPressed: () => vm.downloads.toggleAlbum(album),
+                  ),
+                  menu: ListMenu.album(album, onPlay: albums.playAlbum).headerButton(),
+                ),
+              ],
+            ),
           ),
-        ),
-        TrackSliver(tracks: album.tracks, kind: TrackTableKind.album),
-        const PageEndSpace(),
-      ],
+          TrackSliver(tracks: album.tracks, kind: TrackTableKind.album),
+          const PageEndSpace(),
+        ],
+      ),
     );
   }
 }
@@ -752,28 +775,31 @@ class ArtistsPage extends StatelessWidget {
         if (artists.displayedArtists.isEmpty) {
           return const EmptyLibrary(); // nothing to list means nothing in the library
         }
-        return CustomScrollView(
-          key: const PageStorageKey('artists'),
-          slivers: [
-            SliverToBoxAdapter(
-              child: PageHeader(
-                title: context.tr('NavArtists'),
-                subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
-                actions: [
-                  SortButtons(
-                    buttons: [
-                      for (final field in ArtistSortField.values)
-                        (artists.sortLabel(field), artists.sortField == field, () => artists.setSortField(field)),
-                    ],
-                  ),
-                  if (artists.genres.isNotEmpty)
-                    _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
-                ],
+        return PinnedTitleBar(
+          title: context.tr('NavArtists'),
+          child: CustomScrollView(
+            key: const PageStorageKey('artists'),
+            slivers: [
+              SliverToBoxAdapter(
+                child: PageHeader(
+                  title: context.tr('NavArtists'),
+                  subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
+                  actions: [
+                    SortButtons(
+                      buttons: [
+                        for (final field in ArtistSortField.values)
+                          (artists.sortLabel(field), artists.sortField == field, () => artists.setSortField(field)),
+                      ],
+                    ),
+                    if (artists.genres.isNotEmpty)
+                      _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
+                  ],
+                ),
               ),
-            ),
-            ArtistsSliver(artists: artists.displayedArtists, onOpen: artists.openArtist, onPlay: artists.playArtist),
-            const PageEndSpace(),
-          ],
+              ArtistsSliver(artists: artists.displayedArtists, onOpen: artists.openArtist, onPlay: artists.playArtist),
+              const PageEndSpace(),
+            ],
+          ),
         );
       },
     );
@@ -793,57 +819,62 @@ class ArtistDetail extends StatelessWidget {
     final colors = context.colors;
     final narrow = DetailHeader.isNarrow(context);
     final albumTracks = [for (final album in albums) ...album.tracks];
-    return CustomScrollView(
-      key: PageStorageKey('artist-${artist.id}'),
-      slivers: [
-        SliverToBoxAdapter(
-          child: DetailHeader(
-            back: BackLink(text: artists.backText, onPressed: artists.closeArtistDetail),
-            artwork: CoverImage(
-              path: artist.picturePath,
-              circle: true,
-              placeholderIcon: Icons.person,
-              placeholderColor: colors.palette.coral,
-            ),
-            tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
-            title: artist.name,
-            details: [
-              DetailText(context.trf('AlbumCount', [artist.albumCount])),
-              DetailText(context.trf('TrackCount', [artist.trackCount])),
-            ],
-            actions: [
-              PlayShuffleButtons(
-                onPlay: () => artists.playArtist(),
-                onShuffle: () => artists.shuffleArtist(),
-                // The artist's albums, also the ones that arrive later.
-                trailing: DownloadListButton.forTracks(
-                  albumTracks,
-                  isDownloaded: () => vm.downloads.isArtistDownloaded(artist),
-                  onPressed: () => vm.downloads.toggleArtist(artist),
-                ),
+    return PinnedTitleBar(
+      title: artist.name,
+      onBack: artists.closeArtistDetail,
+      play: ListPlayButton(tracks: artist.tracks, onPlay: artists.playArtist),
+      child: CustomScrollView(
+        key: PageStorageKey('artist-${artist.id}'),
+        slivers: [
+          SliverToBoxAdapter(
+            child: DetailHeader(
+              back: BackLink(text: artists.backText, onPressed: artists.closeArtistDetail),
+              artwork: CoverImage(
+                path: artist.picturePath,
+                circle: true,
+                placeholderIcon: Icons.person,
+                placeholderColor: colors.palette.coral,
               ),
-              ListMenu.artist(artist, onPlay: artists.playArtist).headerButton(),
-            ],
+              tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
+              title: artist.name,
+              details: [
+                DetailText(context.trf('AlbumCount', [artist.albumCount])),
+                DetailText(context.trf('TrackCount', [artist.trackCount])),
+              ],
+              actions: [
+                PlayShuffleButtons(
+                  tracks: artist.tracks,
+                  onPlay: () => artists.playArtist(),
+                  // The artist's albums, also the ones that arrive later.
+                  download: DownloadListButton.forTracks(
+                    albumTracks,
+                    isDownloaded: () => vm.downloads.isArtistDownloaded(artist),
+                    onPressed: () => vm.downloads.toggleArtist(artist),
+                  ),
+                  menu: ListMenu.artist(artist, onPlay: artists.playArtist).headerButton(),
+                ),
+              ],
+            ),
           ),
-        ),
-        if (albums.isNotEmpty) ...[
+          if (albums.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
+                child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 10)),
+              ),
+            ),
+            AlbumsSliver(albums: albums, onOpen: vm.openAlbum, onPlay: vm.albums.playAlbum),
+          ],
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
-              child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 10)),
+              child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
             ),
           ),
-          AlbumsSliver(albums: albums, onOpen: vm.openAlbum, onPlay: vm.albums.playAlbum),
+          TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist),
+          const PageEndSpace(),
         ],
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
-            child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
-          ),
-        ),
-        TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist),
-        const PageEndSpace(),
-      ],
+      ),
     );
   }
 }

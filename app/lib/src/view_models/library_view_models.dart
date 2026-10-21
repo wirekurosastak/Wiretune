@@ -11,13 +11,16 @@ String formatTotal(Iterable<Track> tracks) =>
     Localizer.formatTotalDuration(tracks.fold(Duration.zero, (sum, t) => sum + t.duration));
 
 /// What a list of tracks sorts by, in the order the sort buttons and the table's columns show them: the title, the
-/// track's own fields, then the release year, the date added and the quality, as on the albums and the artists pages.
-enum TrackSortField { title, artist, album, length, released, added, quality }
+/// track's own fields, then the release year, the date added, the quality and the bitrate, as on the albums and the
+/// artists pages.
+enum TrackSortField { title, artist, album, length, released, added, quality, bitrate }
 
-/// Whether [field] starts with its highest values (the newest release or date, the best quality) rather than A to Z or
-/// the shortest first.
-bool startsDescending(TrackSortField field) =>
-    field == TrackSortField.released || field == TrackSortField.added || field == TrackSortField.quality;
+/// Whether [field] starts with its highest values (the newest release or date, the best quality, the highest bitrate)
+/// rather than A to Z or the shortest first.
+bool startsDescending(TrackSortField field) => switch (field) {
+  TrackSortField.released || TrackSortField.added || TrackSortField.quality || TrackSortField.bitrate => true,
+  TrackSortField.title || TrackSortField.artist || TrackSortField.album || TrackSortField.length => false,
+};
 
 /// The order of a list: the field it sorts by and the direction. Choosing the active field again flips the direction;
 /// another field starts in its natural one, which [startsDescending] tells.
@@ -45,8 +48,8 @@ class SortOrder<F extends Enum> {
   String label(F field, String name) => field == _field ? '$name ${_descending ? '↓' : '↑'}' : name;
 }
 
-/// [tracks] ordered by [field]; tracks that tie keep their order in [tracks], and one without a release year or a date
-/// ([addedAt], the date added to the library unless given) goes last in either direction.
+/// [tracks] ordered by [field]; tracks that tie keep their order in [tracks], and one without a release year, a date
+/// ([addedAt], the date added to the library unless given) or a known bitrate goes last in either direction.
 List<Track> sortTracks(
   List<Track> tracks,
   TrackSortField field, {
@@ -64,11 +67,13 @@ List<Track> sortTracks(
       TrackSortField.released => (a, b) => a.releaseYear!.compareTo(b.releaseYear!),
       TrackSortField.added => (a, b) => added(a)!.compareTo(added(b)!),
       TrackSortField.quality => (a, b) => compareFormatQuality(a.format, b.format),
+      TrackSortField.bitrate => (a, b) => a.format.bitrateKbps.compareTo(b.format.bitrateKbps),
     },
     descending: descending,
     missing: switch (field) {
       TrackSortField.released => (t) => t.releaseYear == null,
       TrackSortField.added => (t) => added(t) == null,
+      TrackSortField.bitrate => (t) => t.format.bitrateKbps <= 0,
       _ => null,
     },
   );
@@ -113,6 +118,7 @@ mixin TrackSorting on ChangeNotifier {
     TrackSortField.released => Localizer.get('SortReleased'),
     TrackSortField.added => Localizer.get('SortAdded'),
     TrackSortField.quality => Localizer.get('SortQuality'),
+    TrackSortField.bitrate => Localizer.get('SortBitrate'),
   });
 
   /// [tracks] (in the library's order) in the page's order; the library's order of artist, album and track number
@@ -149,11 +155,10 @@ class TracksViewModel extends ChangeNotifier with TrackSorting {
   @override
   void _applySort() => displayedTracks = _sorted(_library.tracks);
 
+  /// Plays the page from its first track, or from any while shuffle is on (the header's shuffle switch shows which).
   void playAll() {
     if (displayedTracks.isNotEmpty) _player.playQueue(displayedTracks);
   }
-
-  void shuffleAll() => _player.shuffleQueue(displayedTracks);
 
   @override
   void dispose() {
@@ -353,8 +358,6 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
     _player.playQueue(target.tracks);
   }
 
-  void shuffleAlbum() => _player.shuffleQueue(selectedAlbum?.tracks ?? const []);
-
   @override
   void dispose() {
     _unsubscribe();
@@ -502,8 +505,6 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     _player.playQueue(target.tracks);
   }
 
-  void shuffleArtist() => _player.shuffleQueue(selectedArtist?.tracks ?? const []);
-
   @override
   void dispose() {
     for (final unsubscribe in _unsubscribers) {
@@ -552,8 +553,6 @@ class FavoritesViewModel extends ChangeNotifier with TrackSorting {
   void playAll() {
     if (favoriteTracks.isNotEmpty) _player.playQueue(favoriteTracks);
   }
-
-  void shuffleAll() => _player.shuffleQueue(favoriteTracks);
 
   @override
   void dispose() {
@@ -818,8 +817,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     final tracks = playlist == null ? selectedPlaylistTracks : _library.getPlaylistTracks(playlist);
     if (tracks.isNotEmpty) _player.playQueue(tracks);
   }
-
-  void shufflePlaylist() => _player.shuffleQueue(selectedPlaylistTracks);
 
   Future<void> removeTrackFromSelected(Track? track) async {
     final selected = selectedPlaylist;
