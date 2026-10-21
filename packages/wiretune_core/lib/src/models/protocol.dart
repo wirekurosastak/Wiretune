@@ -301,7 +301,6 @@ abstract final class ErrorCodes {
   static const String passwordTooLong = 'passwordTooLong'; // with max (bytes)
   static const String alreadySetUp = 'alreadySetUp';
   static const String setupCodeWrong = 'setupCodeWrong';
-  static const String currentPasswordWrong = 'currentPasswordWrong';
   static const String usernameTaken = 'usernameTaken';
   static const String userNotFound = 'userNotFound';
   static const String cannotDeleteSelf = 'cannotDeleteSelf';

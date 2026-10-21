@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -186,6 +187,8 @@ class _PhonePageHeader extends StatelessWidget {
 /// [onBack] (a detail page's), the page's [title], and its [play] button, which so stays at hand, half below the bar's
 /// edge (as in Spotify). Elsewhere [child] alone. The header marks the part whose leaving shows the bar ([anchor]): the
 /// line of its buttons, as tall as Play, so that Play stops where the header's reaches the edge; else its title.
+/// Choosing the page's section again in the navigation scrolls it back to its top
+/// (`MainViewModel.scrollToTopRequested`).
 class PinnedTitleBar extends StatefulWidget {
   const PinnedTitleBar({super.key, required this.title, this.onBack, this.play, required this.child});
 
@@ -211,12 +214,33 @@ class PinnedTitleBar extends StatefulWidget {
 class _PinnedTitleBarState extends State<PinnedTitleBar> {
   final GlobalKey _anchor = GlobalKey();
   bool _shown = false;
+  late final void Function() _unsubscribe;
 
   @override
   void initState() {
     super.initState();
     // A page that comes back scrolled (its place is kept) shows the bar at once.
     WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+    _unsubscribe = context.vm.scrollToTopRequested.listen((_) => _scrollToTop());
+  }
+
+  @override
+  void dispose() {
+    _unsubscribe();
+    super.dispose();
+  }
+
+  void _scrollToTop() {
+    final anchor = _anchor.currentContext;
+    final position = anchor == null ? null : Scrollable.maybeOf(anchor)?.position;
+    if (position == null || position.pixels <= position.minScrollExtent) return;
+    unawaited(
+      position.animateTo(
+        position.minScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      ),
+    );
   }
 
   bool _onNotification(Notification notification) {

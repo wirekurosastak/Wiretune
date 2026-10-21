@@ -22,10 +22,10 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` for a missing field, `401` for wrong credentials. Rate limited |
 | `POST /api/auth/register` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` when the name is taken |
 | `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't get another one |
-| `POST /api/auth/change-password` | user | Body `{ "currentPassword", "newPassword" }`. `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, which expires when the old one would have. `400` for a password that breaks the rules, `403` when the current one is wrong. Rate limited. Every token issued before (the caller's, other devices', stream tokens) stops working, and the account's remote-control connections close with `4401` |
+| `POST /api/auth/change-password` | user | Body `{ "newPassword" }`; the current password isn't asked for. `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, which expires when the old one would have. `400` for a password that breaks the rules. Rate limited. Every token issued before (the caller's, other devices', stream tokens) stops working, and the account's remote-control connections close with `4401` |
 | `GET /api/auth/me` | user | The caller's `UserInfo` |
 | `GET /api/users` | admin | Every account |
-| `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions, as a change does. `200` `{ "changed": true }`, `400` for a password that breaks the rules or for your own account (change that with the current one), `404` for an unknown one |
+| `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions, as a change does. `200` `{ "changed": true }`, `400` for a password that breaks the rules or for your own account (change that with `change-password`), `404` for an unknown one |
 | `DELETE /api/users/{userId}` | admin | Deletes an account and its data. `400` for your own account, `404` for an unknown one |
 
 `AuthResponse`: `{ "token", "user": UserInfo, "expiresAt" }`.
@@ -39,6 +39,7 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanAt", "lastScanError", "lastScanProblem" }`. Why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`); both `null` when it went well, and for anyone but an administrator, since they name the server's folders |
 | `POST /api/library/scan` | admin | Asks for a scan: `202 { "message": "Scan requested." }`. Poll the status route |
 | `GET /api/tracks` | user | Every track, with an `ETag`. Send it back as `If-None-Match` and an unchanged list is `304` with no body |
+| `GET /api/artists/pictures` | user | The artists that have a picture of their own in the music folder (`artist.jpg`, see the [user guide](user-guide.md#the-library)): `{ artistId: version }`, the version changing with the file. With an `ETag`, as on `/api/tracks` |
 | `GET /api/config` | admin | `{ "musicFolder" }` |
 | `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
 
@@ -78,6 +79,7 @@ The server doesn't check that a track ID exists: libraries get rescanned and mov
 |---|---|---|
 | `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` when the track is unknown, outside the music folder, or gone |
 | `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` when there is none. A `?v=` is ignored |
+| `GET /api/cover/artist/{artistId}` | user | The artist's own picture, as for an album's cover. `404` when there is none |
 | `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` when there are none. The server never looks online; the players ask LRCLIB themselves |
 
 ## Remote control
@@ -98,7 +100,7 @@ Every message is a JSON object with a `type`, sent as text, at most 64 K charact
 | `{ "type": "state", "device", "state" }` | server | Another player's state |
 | `{ "type": "command", "from", "command" }` | server | A command for this player |
 | `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change when it named itself in an `X-Wiretune-Device` header (its device ID) on that request |
-| `{ "type": "libraryChanged" }` | server | A scan changed what `/api/tracks` lists (music added, changed or removed, a new cover): download it again. Sent to every player of every account |
+| `{ "type": "libraryChanged" }` | server | A scan changed what `/api/tracks` or `/api/artists/pictures` lists (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
 "queueIndex" }`: the track as `/api/tracks` lists it (or `null`), the position when the state was sent (the others
@@ -126,7 +128,7 @@ account, `4401` when the token expires or the account is deleted, `1008` for a m
 | `adminOnly` | 403 | An administrator's route |
 | `rateLimited` | 429 | With `retryAfter` (seconds), also as the `Retry-After` header |
 | `credentialsRequired`, `usernameInvalid` (`max`), `passwordTooShort` (`min`), `passwordTooLong` (`max`, in bytes) | 400 | Account rules |
-| `alreadySetUp` (409), `setupCodeWrong` (403), `currentPasswordWrong` (403), `usernameTaken` (409), `userNotFound` (404), `cannotDeleteSelf` (400), `cannotResetOwnPassword` (400) | | Accounts |
+| `alreadySetUp` (409), `setupCodeWrong` (403), `usernameTaken` (409), `userNotFound` (404), `cannotDeleteSelf` (400), `cannotResetOwnPassword` (400) | | Accounts |
 | `folderRequired`, `folderInvalid`, `folderMissing` (`path`), `folderUnreadable` (`path`), `folderWholeDisk`, `folderSystem`, `folderServerData` | 400 | The music folder |
 | `invalidId`, `invalidItemType`, `playlistInvalid`, `playlistNameRequired`, `playlistNameTooLong` (`max`), `playlistDescriptionTooLong` (`max`), `playlistTooManyTracks` (`max`) | 400 | The account's data |
 | `favoritesLimit`, `playCountsLimit`, `playlistsLimit`, `hiddenLimit` (all with `limit`) | 409 | The account's limits |

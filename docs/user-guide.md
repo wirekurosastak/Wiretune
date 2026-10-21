@@ -43,8 +43,12 @@ No restart, no rescan:
   **bronze** lossy. An album or playlist wears its weakest track's tier, and *MIXED* when its formats differ. Hover or
   long-press a tag for the details.
 - **Covers** are the picture in the file, else a `cover`, `folder` or `front` image (`.jpg`, `.jpeg`, `.png`),
-  `albumart.jpg` or `artwork.jpg` beside it. **Artist pictures** come from the internet
-  ([SECURITY.md](../SECURITY.md#players)); until one turns up, an album cover stands in.
+  `albumart.jpg` or `artwork.jpg` beside it.
+- **Artist pictures** come from the internet ([SECURITY.md](../SECURITY.md#players)); until one turns up, an album cover
+  stands in. When it shows someone else (several artists share a name), use your own: an `artist.jpg` (or `.jpeg`,
+  `.png`) in a folder named after the artist, the one that holds their albums (`Miles Davis/artist.jpg` beside
+  `Miles Davis/Kind of Blue/`) or, for an artist without one, a new folder at the top of the music folder holding
+  just the picture. With a server, it goes in the server's music folder and every player shows it.
 - **Sorting**: the lists start A→Z, the favorites with the newest. Pressing the active sort again turns it round, and
   what has no year or date goes last. A choice lasts until the app closes.
 - **Hidden** artists, albums and tracks come back from *Settings → Hidden content*.

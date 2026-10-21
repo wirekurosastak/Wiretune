@@ -202,7 +202,14 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Raised when the section on show is chosen again from the navigation while its page is up (no album's or artist's
+  /// page, no search over it): the page scrolls back to its top. Its place is kept otherwise.
+  final Event<void> scrollToTopRequested = Event<void>();
+
   void navigateTo(AppSection section) {
+    final again =
+        section == selectedSection && !isSearchOpen && !albums.isAlbumDetailOpen && !artists.isArtistDetailOpen;
+    if (again) scrollToTopRequested.emit(null);
     albums.returnAction = null;
     albums.closeAlbumDetail();
     artists.returnAction = null;

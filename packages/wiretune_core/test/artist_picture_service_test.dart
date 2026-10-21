@@ -209,6 +209,15 @@ void main() {
     service.resolveArtistPictures(const []);
   });
 
+  test('an artist with a picture of their own is never looked up', () async {
+    useDeezer(artists: [('Valter', 1, 'https://cdn.example/someone-else.jpg')]);
+    final artist = Artist(name: 'Valter', picturePath: '/music/Valter/artist.jpg', hasOwnPicture: true);
+    service.resolveArtistPictures([artist]);
+    service.resolveArtistPicture(artist);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect((artist.picturePath, requests), ('/music/Valter/artist.jpg', 0));
+  });
+
   test('a batch asks once per artist, and an artist that already shows its picture is not asked', () async {
     useStub(
       (request) => json(

@@ -243,18 +243,29 @@ class Album {
 }
 
 class Artist {
-  Artist({String? id, this.name = Track.unknownArtist, this.picturePath, List<Album>? albums, List<Track>? tracks})
-    : id = id ?? newId(),
-      albums = albums ?? [],
-      tracks = tracks ?? [];
+  Artist({
+    String? id,
+    this.name = Track.unknownArtist,
+    this.picturePath,
+    this.hasOwnPicture = false,
+    List<Album>? albums,
+    List<Track>? tracks,
+  }) : id = id ?? newId(),
+       albums = albums ?? [],
+       tracks = tracks ?? [];
 
   final String id;
   final String name;
   int get albumCount => albums.length;
   int get trackCount => tracks.length;
 
-  /// An album cover at first; replaced by the artist's photo once the online lookup found one.
+  /// The artist's own picture ([hasOwnPicture]), else an album cover at first, replaced by the artist's photo once the
+  /// online lookup found one.
   String? picturePath;
+
+  /// Whether [picturePath] is a picture put beside the music for the artist (`artist.jpg`), which the online lookup
+  /// leaves alone.
+  final bool hasOwnPicture;
   final List<Album> albums;
 
   /// Tracks performed by the artist plus every track on albums filed under the artist.

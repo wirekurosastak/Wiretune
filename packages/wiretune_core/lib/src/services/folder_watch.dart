@@ -61,10 +61,14 @@ class FolderWatch {
     _settle = Timer(quiet, onSettled);
   }
 
-  /// A change to music or to a cover, outside hidden folders (which the scans skip too) and outside [_skip].
+  /// A change to music, to a cover or to an artist's picture, outside hidden folders (which the scans skip too) and
+  /// outside [_skip].
   bool _counts(String path) {
     final name = p.basename(path);
-    if (!AudioFileTypes.isSupported(name) && !MetadataScanner.folderCoverNames.contains(name.toLowerCase())) {
+    final lower = name.toLowerCase();
+    if (!AudioFileTypes.isSupported(name) &&
+        !MetadataScanner.folderCoverNames.contains(lower) &&
+        !MetadataScanner.artistPictureNames.contains(lower)) {
       return false;
     }
     if (p.split(p.relative(path, from: _folder)).any((part) => part.startsWith('.'))) return false;

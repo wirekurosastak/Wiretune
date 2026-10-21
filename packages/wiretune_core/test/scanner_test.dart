@@ -172,4 +172,40 @@ void main() {
     expect(await library.scanFolder(root.path, cancellationToken: token), isFalse);
     expect(library.tracks, isEmpty);
   });
+
+  test("an artist's own picture: artist.jpg in a folder named after them, beside their albums or at the top", () async {
+    void image(List<String> parts) =>
+        (File(p.joinAll([root.path, ...parts]))..parent.createSync(recursive: true)).writeAsBytesSync([1, 2, 3]);
+    writeWav(p.join(root.path, 'aza', '#SzuperCsillagParaszt', '01 One.wav'), 44100, artist: 'Aza');
+    image(['aza', 'Artist.JPG']);
+    // Only in other acts' folders: a folder of their own at the top holds the picture alone.
+    writeWav(p.join(root.path, 'Various', 'Mix', '01 Two.wav'), 44100, artist: 'Valter');
+    image(['Valter', 'artist.png']);
+    image(['Nobody', 'artist.jpg']); // no such artist
+    image(['Various', 'Mix', 'artist.jpg']); // a folder named after no artist
+    final library = LibraryService(testRepository(), MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    library.initialize();
+    expect(await library.scanFolder(root.path), isTrue);
+
+    Artist artist(String name) => library.artists.firstWhere((a) => a.name == name);
+    expect((artist('Aza').picturePath, artist('Aza').hasOwnPicture), (p.join(root.path, 'aza', 'Artist.JPG'), true));
+    expect(artist('Valter').picturePath, p.join(root.path, 'Valter', 'artist.png'));
+    expect(library.artistPictureFiles, hasLength(2));
+    expect(library.artists.where((a) => a.hasOwnPicture), hasLength(2));
+
+    // One put there later is noticed by a scan that finds no music changed, and one taken away too.
+    var changed = 0;
+    library.libraryChanged.listen((_) => changed++);
+    writeWav(p.join(root.path, 'Artist C', 'Album 3', '01 Three.wav'), 44100, artist: 'Artist C');
+    expect(await library.scanFolder(root.path), isTrue);
+    expect(artist('Artist C').hasOwnPicture, isFalse);
+    image(['Artist C', 'artist.jpeg']);
+    File(p.join(root.path, 'Valter', 'artist.png')).deleteSync();
+    expect(await library.scanFolder(root.path), isTrue);
+    expect(changed, 2);
+    expect(artist('Artist C').picturePath, p.join(root.path, 'Artist C', 'artist.jpeg'));
+    expect(artist('Valter').hasOwnPicture, isFalse);
+    // A guest's page has theirs too.
+    expect(library.getArtistByName('artist c')?.hasOwnPicture, isTrue);
+  });
 }

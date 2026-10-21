@@ -20,8 +20,9 @@ internet. This page is the honest list of what it does and doesn't do about that
   Otherwise whoever reached a server with an empty data directory first (a wrong path, an unmounted volume) would own
   it. The code protects that first account and nothing else.
 - **Passwords** are bcrypt hashes (cost 12). Setup, sign-in and password changes share a limit of 10 requests a minute
-  per client address. No lockout beyond that, no two-factor. An account changes its own password with the current one
-  (*Settings → Change password*); an administrator can set a new one for any other account (*Settings → Users*).
+  per client address. No lockout beyond that, no two-factor. A signed-in account changes its own password without
+  giving the current one (*Settings → Change password*), so a device someone else picks up signed in can change it too;
+  an administrator can set a new one for any other account (*Settings → Users*).
 - **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. Every request checks its token
   against the account: deleting the user locks them out at once, and a password change (or an administrator's reset)
   ends every session signed in before it, stream tokens included. The device that changed the password gets a new
@@ -65,7 +66,8 @@ internet. This page is the honest list of what it does and doesn't do about that
   which those platforms' allow-lists can't express. Use an `https://` address whenever the network isn't yours.
 - **Artist pictures** come from Deezer's public API, which therefore sees the artist names in your library and the
   titles of up to two albums of each (they tell apart artists who share a name). They're cached in
-  `artist_pictures.json`. `WIRETUNE_NO_ARTIST_PICTURES=1` turns the lookup off.
+  `artist_pictures.json`. `WIRETUNE_NO_ARTIST_PICTURES=1` turns the lookup off; an artist with a picture of their own
+  (`artist.jpg`) isn't looked up.
 - **Lyrics** for a track without any are looked up on LRCLIB when you open the queue panel: title, artist, album and
   length, sent by the player (not the server) with a `Wiretune/<version>` user agent. Answers are cached in the `lyrics`
   folder under hashed names. Turn it off in Settings, or for the whole process with `WIRETUNE_NO_ONLINE_LYRICS=1`.

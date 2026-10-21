@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -109,8 +110,31 @@ class LibraryService {
 
   void _rebuildSnapshot() {
     final visible = _rawTracks.where((t) => !isTrackHidden(t)).toList();
-    _snapshot = LibrarySnapshot.build(visible, musicFolder: musicFolder);
+    _snapshot = LibrarySnapshot.build(visible, musicFolder: musicFolder, artistPictures: _artistPictures);
   }
+
+  // The artists' own pictures (`artist.jpg`) by artist ID: the files of the local folder's, the addresses of the
+  // server's (kept, so they show offline too). A local one wins.
+  Map<String, String> _localArtistPictures = const {};
+  Map<String, String> _serverArtistPictures = const {};
+  Map<String, String> get _artistPictures => {..._serverArtistPictures, ..._localArtistPictures};
+
+  /// The artists' own pictures in the local folder, by artist ID (see [MetadataScanner.findArtistPictures]).
+  Map<String, String> get artistPictureFiles => _localArtistPictures;
+
+  /// Looks for the artists' own pictures in the local folder again, for the local ones of [tracks]; true when they
+  /// changed.
+  bool _findArtistPictures(Iterable<Track> tracks) {
+    final found = MetadataScanner.findArtistPictures(musicFolder, tracks.where((t) => t.isLocal));
+    if (_sameEntries(found, _localArtistPictures)) return false;
+    _localArtistPictures = found;
+    return true;
+  }
+
+  static bool _sameEntries(Map<String, String> a, Map<String, String> b) =>
+      a.length == b.length && a.entries.every((e) => b[e.key] == e.value);
+
+  static const String _serverArtistPicturesSetting = 'server_artist_pictures';
 
   bool get isScanning => _isScanning;
 
@@ -166,6 +190,8 @@ class LibraryService {
       ..clear()
       ..addAll(userData.plays);
     _loadHidden();
+    _findArtistPictures(storedTracks);
+    _serverArtistPictures = _storedServerArtistPictures();
 
     _rebuildSnapshot();
     _playlists = _sortedPlaylists(storedPlaylists);
@@ -176,6 +202,19 @@ class LibraryService {
     );
     libraryChanged.emit(null);
     playlistsChanged.emit(null);
+  }
+
+  Map<String, String> _storedServerArtistPictures() {
+    try {
+      final stored = jsonDecode(_repository.getSetting(_serverArtistPicturesSetting, '') ?? '');
+      return {
+        if (stored is Map)
+          for (final MapEntry(:key, :value) in stored.entries)
+            if (key is String && value is String) key: value,
+      };
+    } on FormatException {
+      return const {};
+    }
   }
 
   static List<Playlist> _sortedPlaylists(Iterable<Playlist> playlists) {
@@ -228,6 +267,11 @@ class LibraryService {
             scanned.length == _rawTracks.where((t) => t.isLocal).length &&
             scanned.every((t) => identical(t, known[t.filePath]));
         if (unchanged) {
+          // An artist's picture may have come or gone, though.
+          if (_findArtistPictures(_rawTracks)) {
+            _rebuildSnapshot();
+            libraryChanged.emit(null);
+          }
           WiretuneLog.info('LibraryService', 'Scan finished: nothing changed.');
           return true;
         }
@@ -247,6 +291,7 @@ class LibraryService {
         } else {
           toSave = scanned;
         }
+        _findArtistPictures(toSave);
         _replaceTracksCore(toSave);
         _pruneCoverCache();
 
@@ -285,8 +330,14 @@ class LibraryService {
   }
 
   /// Replaces the server part of the library, with the signed-in account's favourites, play counts and playlists as
-  /// the server holds them (they replace whatever this device cached).
-  void mergeServerTracks(Iterable<Track> serverTracks, UserDataSnapshot userData) {
+  /// the server holds them (they replace whatever this device cached), and with [artistPictures] the addresses of the
+  /// artists' own pictures on the server by artist ID (null keeps the ones it had).
+  void mergeServerTracks(
+    Iterable<Track> serverTracks,
+    UserDataSnapshot userData, {
+    Map<String, String>? artistPictures,
+  }) {
+    if (artistPictures != null) _setServerArtistPictures(artistPictures);
     final incomingServer = serverTracks.toList();
     _applyUserData(incomingServer, userData);
 
@@ -312,8 +363,15 @@ class LibraryService {
     _replaceTracksCore(merged);
   }
 
+  void _setServerArtistPictures(Map<String, String> pictures) {
+    if (_sameEntries(pictures, _serverArtistPictures)) return;
+    _serverArtistPictures = Map.unmodifiable(pictures);
+    _repository.setSetting(_serverArtistPicturesSetting, jsonEncode(pictures));
+  }
+
   /// Drops the server's tracks and the cached copies of its playlists (sign-out); local tracks and playlists stay.
   void removeServerTracks() {
+    _setServerArtistPictures(const {});
     final existingLocalTracks = _rawTracks.where((t) => t.isLocal).toList();
     _serverAliases = const {};
     if (_playlists.any((p) => p.isServer)) _replaceServerPlaylists(const []);
@@ -611,7 +669,9 @@ class LibraryService {
         .where((t) => t.artistNames.any((n) => equalsIgnoreCase(n, trimmed)))
         .toList();
     if (matchingTracks.isEmpty) return null;
-    return Artist(id: stableId(trimmed.toLowerCase()), name: trimmed, tracks: matchingTracks);
+    final id = stableId(trimmed.toLowerCase());
+    final picture = _artistPictures[id];
+    return Artist(id: id, name: trimmed, picturePath: picture, hasOwnPicture: picture != null, tracks: matchingTracks);
   }
 
   Playlist? getPlaylist(String playlistId) => _playlists.where((pl) => pl.id == playlistId).firstOrNull;
@@ -662,7 +722,12 @@ class LibrarySnapshot {
   static const String essentialsSuffix = 'Essentials';
 
   /// Builds the library from [source]. [musicFolder] is the local music folder: its loose files are never one album.
-  static LibrarySnapshot build(Iterable<Track> source, {String musicFolder = ''}) {
+  /// [artistPictures] are the artists' own pictures by artist ID, which an artist then shows instead of an album cover.
+  static LibrarySnapshot build(
+    Iterable<Track> source, {
+    String musicFolder = '',
+    Map<String, String> artistPictures = const {},
+  }) {
     final seen = <String>{};
     final tracks = [
       for (final t in source)
@@ -834,11 +899,14 @@ class LibrarySnapshot {
           (a, b) => _number(a).compareTo(_number(b)),
         ]),
       );
+      final id = stableId(name.toLowerCase());
+      final own = artistPictures[id];
       artists.add(
         Artist(
-          id: stableId(name.toLowerCase()),
+          id: id,
           name: name,
-          picturePath: artistAlbums.where((a) => !isBlank(a.coverArtPath)).firstOrNull?.coverArtPath,
+          picturePath: own ?? artistAlbums.where((a) => !isBlank(a.coverArtPath)).firstOrNull?.coverArtPath,
+          hasOwnPicture: own != null,
           albums: artistAlbums,
           tracks: artistTracks,
         ),

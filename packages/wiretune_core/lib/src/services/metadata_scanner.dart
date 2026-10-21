@@ -56,6 +56,9 @@ class MetadataScanner {
     'artwork.jpg',
   ];
 
+  /// The names of an artist's own picture, in the order they are looked for (ignoring case): see [findArtistPictures].
+  static const List<String> artistPictureNames = ['artist.jpg', 'artist.jpeg', 'artist.png'];
+
   static const int _maxLyricsLength = 100000;
   static const int _batchSize = 24;
 
@@ -152,19 +155,57 @@ class MetadataScanner {
   Future<Uint8List?> extractCoverArt(String filePath) => _extractCoverInIsolate(filePath);
 
   /// The first file named like a cover ([folderCoverNames], ignoring case) in [directory].
-  static String? findFolderCover(String? directory) {
+  static String? findFolderCover(String? directory) => _firstNamed(directory, folderCoverNames);
+
+  /// The artists' own pictures in [musicFolder], by artist ID: an [artistPictureNames] file in a folder named after the
+  /// artist (ignoring case), directly in the music folder or holding their songs or their albums' folders. They take
+  /// the place of the pictures found online. The artists looked for are those of [tracks], whose folders are searched.
+  static Map<String, String> findArtistPictures(String musicFolder, Iterable<Track> tracks) {
+    if (musicFolder.isEmpty) return const {};
+    final wanted = <String>{};
+    final folders = <String>{};
+    try {
+      for (final entity in Directory(musicFolder).listSync(followLinks: false)) {
+        if (entity is Directory) folders.add(entity.path);
+      }
+    } catch (_) {
+      // Unreadable or gone: only the tracks' folders, then.
+    }
+    for (final track in tracks) {
+      for (final name in [...track.artistNames, ...track.albumArtistNames]) {
+        wanted.add(name.trim().toLowerCase());
+      }
+      if (track.filePath.isEmpty) continue;
+      final folder = p.dirname(track.filePath);
+      folders
+        ..add(folder)
+        ..add(p.dirname(folder));
+    }
+    final pictures = <String, String>{};
+    for (final folder in folders) {
+      final name = p.basename(folder).trim().toLowerCase();
+      if (!wanted.contains(name) || !p.isWithin(musicFolder, folder)) continue;
+      final id = stableId(name);
+      if (pictures.containsKey(id)) continue;
+      if (_firstNamed(folder, artistPictureNames) case final picture?) pictures[id] = picture;
+    }
+    return pictures;
+  }
+
+  /// The first file in [directory] with one of [names] (lower case), ignoring case.
+  static String? _firstNamed(String? directory, List<String> names) {
     if (directory == null || directory.isEmpty) return null;
     try {
       final byName = <String, String>{};
       for (final entity in Directory(directory).listSync(followLinks: false)) {
         if (entity is File) byName.putIfAbsent(p.basename(entity.path).toLowerCase(), () => entity.path);
       }
-      for (final name in folderCoverNames) {
+      for (final name in names) {
         final match = byName[name];
         if (match != null) return match;
       }
     } catch (_) {
-      // Unreadable directory: no folder cover.
+      // Unreadable directory: no such file.
     }
     return null;
   }

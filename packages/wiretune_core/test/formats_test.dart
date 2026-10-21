@@ -119,7 +119,7 @@ XDG_PUBLICSHARE_DIR="\$HOME/"
       ErrorCodes.rateLimited, ErrorCodes.signInRequired, ErrorCodes.tokenInvalid, ErrorCodes.sessionExpired,
       ErrorCodes.passwordChanged, ErrorCodes.accountRemoved, ErrorCodes.wrongCredentials, ErrorCodes.adminOnly,
       ErrorCodes.credentialsRequired, ErrorCodes.usernameInvalid, ErrorCodes.passwordTooShort,
-      ErrorCodes.passwordTooLong, ErrorCodes.alreadySetUp, ErrorCodes.setupCodeWrong, ErrorCodes.currentPasswordWrong,
+      ErrorCodes.passwordTooLong, ErrorCodes.alreadySetUp, ErrorCodes.setupCodeWrong,
       ErrorCodes.usernameTaken, ErrorCodes.userNotFound, ErrorCodes.cannotDeleteSelf,
       ErrorCodes.cannotResetOwnPassword, ErrorCodes.folderRequired, ErrorCodes.folderInvalid,
       ErrorCodes.folderMissing, ErrorCodes.folderUnreadable, ErrorCodes.folderWholeDisk, ErrorCodes.folderSystem,

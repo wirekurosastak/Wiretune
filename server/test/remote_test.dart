@@ -237,10 +237,7 @@ void main() {
     final peer = await Peer.connect(server, guest.token!, 'phone');
     await until(() => server.server.remote.devicesOf(info.id) == 1);
 
-    final changed = await guest.post('/api/auth/change-password', {
-      'currentPassword': guestPassword,
-      'newPassword': 'another-password',
-    });
+    final changed = await guest.post('/api/auth/change-password', {'newPassword': 'another-password'});
     expect(changed.statusCode, 200);
     expect(await closedWith(peer.socket), RemoteRules.closeSignedOut);
     await expectLater(

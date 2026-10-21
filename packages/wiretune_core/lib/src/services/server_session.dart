@@ -58,10 +58,12 @@ class ServerSession {
   // How many changes were made here, so that a refresh can tell one made while it downloaded.
   int _localChanges = 0;
 
-  // The server's track list and the account's data as last downloaded, each with its version (the server's ETag), so
-  // that a refresh downloads only what changed.
+  // The server's track list, its artists' own pictures and the account's data as last downloaded, each with its version
+  // (the server's ETag), so that a refresh downloads only what changed.
   List<Track> _serverTracks = const [];
   String? _serverTracksVersion;
+  Map<String, String>? _artistPictures;
+  String? _artistPicturesVersion;
   UserDataSnapshot? _userData;
   String? _userDataVersion;
   Timer? _retry;
@@ -326,7 +328,9 @@ class ServerSession {
   }
 
   Future<void> _refreshUserDataCore() async {
-    if (isLoggedIn && await _fetchUserData() && isLoggedIn) _library.mergeServerTracks(_serverTracks, _userData!);
+    if (isLoggedIn && await _fetchUserData() && isLoggedIn) {
+      _library.mergeServerTracks(_serverTracks, _userData!, artistPictures: _artistPictures);
+    }
   }
 
   /// Downloads the account's data if it changed, once the changes made here have reached the server; true when it
@@ -358,11 +362,11 @@ class ServerSession {
   /// Changes the account's password. The server signs out every other session of the account and hands this one a new
   /// token, which replaces the stored one. Throws [ServerRequestException] or [ServerUnauthorizedException] when the
   /// password could not be changed.
-  Future<void> changePassword(String currentPassword, String newPassword) async {
+  Future<void> changePassword(String newPassword) async {
     // What is on its way to the server goes with the old token, before it stops working.
     await flushUserData(const Duration(seconds: 10));
     await _gate.synchronized(() async {
-      final renewed = await _client.changePassword(serverUrl, currentPassword, newPassword);
+      final renewed = await _client.changePassword(serverUrl, newPassword);
       _client.authToken = renewed.token;
       _streamToken = null;
       // Kept only when the old one was ("stay signed in").
@@ -399,16 +403,28 @@ class ServerSession {
     _setState(ServerConnectionState.connected, null);
   }
 
-  /// Downloads the track list and the account's data, each unless it is still the one downloaded last, and puts them in
-  /// the library. Unless [always], nothing changes when neither did.
+  /// Downloads the track list, the artists' own pictures and the account's data, each unless it is still the one
+  /// downloaded last, and puts them in the library. Unless [always], nothing changes when none did.
   Future<void> _downloadLibrary({required bool always}) async {
     final list = await _client.fetchTracks(serverUrl, _serverTracksVersion);
     if (list != null) {
       _serverTracks = list.tracks;
       _serverTracksVersion = list.version;
     }
-    if (!await _fetchUserData() && list == null && !always) return;
-    _library.mergeServerTracks(_serverTracks, _userData!);
+    // A server without the list (from before it) answers every time, with none.
+    final pictures = await _client.fetchArtistPictures(serverUrl, _artistPicturesVersion);
+    final known = _artistPictures;
+    final picturesChanged =
+        pictures != null &&
+        (known == null ||
+            known.length != pictures.pictures.length ||
+            pictures.pictures.entries.any((e) => known[e.key] != e.value));
+    if (pictures != null) {
+      _artistPictures = pictures.pictures;
+      _artistPicturesVersion = pictures.version;
+    }
+    if (!await _fetchUserData() && list == null && !picturesChanged && !always) return;
+    _library.mergeServerTracks(_serverTracks, _userData!, artistPictures: _artistPictures);
     WiretuneLog.info(
       'ServerSession',
       "Loaded ${_serverTracks.length} tracks from '$serverUrl'. Total library: ${_library.tracks.length} tracks.",
@@ -443,6 +459,8 @@ class ServerSession {
   void _forgetToken() {
     _streamToken = null;
     _serverTracksVersion = null;
+    _artistPictures = null;
+    _artistPicturesVersion = null;
     _userData = null;
     _userDataVersion = null;
     _client.authToken = null;

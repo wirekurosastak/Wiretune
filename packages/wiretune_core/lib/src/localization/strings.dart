@@ -423,15 +423,9 @@ const Map<String, (String, String, String)> allStrings = {
   'PasswordMinPlaceholder': ('Jelszó (min. 8)', 'Password (min. 8)', 'Passwort (mind. 8)'),
   'PasswordConfirmPlaceholder': ('Jelszó megerősítése', 'Confirm password', 'Passwort bestätigen'),
   'ChangePassword': ('Jelszó módosítása', 'Change password', 'Passwort ändern'),
-  'CurrentPassword': ('Jelenlegi jelszó', 'Current password', 'Aktuelles Passwort'),
   'NewPassword': ('Új jelszó', 'New password', 'Neues Passwort'),
   'ResetPassword': ('Jelszó visszaállítása', 'Reset password', 'Passwort zurücksetzen'),
   'TipResetPassword': ('Jelszó visszaállítása', 'Reset password', 'Passwort zurücksetzen'),
-  'EnterCurrentPassword': (
-    'Add meg a jelenlegi jelszót!',
-    'Enter your current password!',
-    'Aktuelles Passwort eingeben!',
-  ),
   'EnterNewPassword': ('Add meg az új jelszót!', 'Enter a new password!', 'Neues Passwort eingeben!'),
   'PasswordHint': (
     'Jelszó (legalább {0} karakter)',
@@ -1032,11 +1026,6 @@ const Map<String, (String, String, String)> allStrings = {
     'The setup code is missing or wrong. The server prints it in its log when it starts.',
     'Der Einrichtungscode fehlt oder ist falsch. Der Server schreibt ihn beim Start in sein Protokoll.',
   ),
-  'ErrorCurrentPasswordWrong': (
-    'A jelenlegi jelszó hibás.',
-    'The current password is wrong.',
-    'Das aktuelle Passwort ist falsch.',
-  ),
   'ErrorUsernameTaken': (
     'Ez a felhasználónév már foglalt.',
     'That user name is already taken.',
@@ -1053,9 +1042,9 @@ const Map<String, (String, String, String)> allStrings = {
     'Du kannst dein eigenes Konto nicht löschen.',
   ),
   'ErrorCannotResetOwnPassword': (
-    'A saját jelszavadat a jelenlegivel változtathatod meg.',
-    'Change your own password with your current one.',
-    'Ändere dein eigenes Passwort mit dem aktuellen.',
+    'A saját jelszavadat a Jelszó módosítása gombbal változtathatod meg.',
+    'Change your own password with Change password.',
+    'Ändere dein eigenes Passwort mit „Passwort ändern“.',
   ),
   'ErrorFolderRequired': (
     'Add meg egy mappa útvonalát.',

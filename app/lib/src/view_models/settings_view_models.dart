@@ -430,9 +430,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
     }
   }
 
-  Future<String?> changePassword(String currentPassword, String newPassword, String confirmPassword) async {
+  Future<String?> changePassword(String newPassword, String confirmPassword) async {
     if (!isLoggedIn) return Localizer.get('NotSignedIn');
-    if (currentPassword.isEmpty) return Localizer.get('EnterCurrentPassword');
     if (newPassword.isEmpty) return Localizer.get('EnterNewPassword');
     if (newPassword.length < AuthRules.minPasswordLength) {
       return Localizer.format('PasswordTooShort', [AuthRules.minPasswordLength]);
@@ -440,7 +439,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     if (newPassword != confirmPassword) return Localizer.get('PasswordsDontMatch');
 
     try {
-      await _session.changePassword(currentPassword, newPassword);
+      await _session.changePassword(newPassword);
       return null;
     } catch (e) {
       return '$e';

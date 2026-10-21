@@ -100,12 +100,9 @@ class AuthService {
     return null;
   }
 
-  /// Sets a new password when [current] is the caller's present one, and ends every session signed in before: their
-  /// tokens are refused from now on. The caller gets a new token in exchange for theirs, valid as long as the old one
-  /// was. Null when [current] is wrong (or the account is gone).
-  Future<AuthResponse?> changePassword(Principal caller, String current, String replacement) async {
-    final rows = _db.connection.select('SELECT password_hash FROM users WHERE id = ?', [caller.userId]);
-    if (rows.isEmpty || !await _verify(current, rows.first['password_hash'] as String)) return null;
+  /// Sets the caller's new password, and ends every session signed in before: their tokens are refused from now on. The
+  /// caller gets a new token in exchange for theirs, valid as long as the old one was. Null when the account is gone.
+  Future<AuthResponse?> changePassword(Principal caller, String replacement) async {
     final version = _setPasswordHash(caller.userId, await _hash(replacement));
     final user = version == null ? null : getUser(caller.userId);
     if (user == null) return null;

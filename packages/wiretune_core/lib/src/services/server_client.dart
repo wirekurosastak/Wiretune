@@ -76,6 +76,10 @@ class ServerClient {
       '${_base(baseUrl)}/api/cover/album/${Uri.encodeComponent(albumId)}'
       '${version == null || version.isEmpty ? '' : '?v=${Uri.encodeQueryComponent(version)}'}';
 
+  /// An artist's own picture on the server (`artist.jpg`); [version] changes with the file.
+  static String buildArtistPictureUrl(String baseUrl, String artistId, String version) =>
+      '${_base(baseUrl)}/api/cover/artist/${Uri.encodeComponent(artistId)}?v=${Uri.encodeQueryComponent(version)}';
+
   Future<bool> checkSetupRequired(String baseUrl) async {
     final element = await _send('GET', baseUrl, '/api/auth/setup-required', authorize: false, timeout: probeTimeout);
     if (element is! Map || element['setupRequired'] is! bool) throw ServerRequestException(_notWiretune(), 200);
@@ -131,14 +135,9 @@ class ServerClient {
 
   /// Changes the signed-in account's password. The server ends the sessions signed in with the old one and answers
   /// with a new token for this one.
-  Future<AuthResponse> changePassword(String baseUrl, String currentPassword, String newPassword) async => _parse(
+  Future<AuthResponse> changePassword(String baseUrl, String newPassword) async => _parse(
     AuthResponse.fromJson,
-    await _send(
-      'POST',
-      baseUrl,
-      '/api/auth/change-password',
-      body: {'currentPassword': currentPassword, 'newPassword': newPassword},
-    ),
+    await _send('POST', baseUrl, '/api/auth/change-password', body: {'newPassword': newPassword}),
   );
 
   Future<void> adminResetPassword(String baseUrl, String userId, String newPassword) =>
@@ -210,6 +209,30 @@ class ServerClient {
     final list = answer.json;
     if (list is! List) throw ServerRequestException(_notWiretune(), 200);
     return (tracks: [for (final item in list) serverTrack(baseUrl, item)], version: answer.etag);
+  }
+
+  /// The addresses of the artists' own pictures on the server, by artist ID, with the list's version (its ETag); null
+  /// when it is still the list of [version]. A server from before them has none.
+  Future<({Map<String, String> pictures, String? version})?> fetchArtistPictures(
+    String baseUrl, [
+    String? version,
+  ]) async {
+    try {
+      final answer = await _exchange('GET', baseUrl, '/api/artists/pictures', ifNoneMatch: version);
+      if (answer.status == 304) return null;
+      final versions = answer.json;
+      if (versions is! Map) throw ServerRequestException(_notWiretune(), 200);
+      return (
+        pictures: {
+          for (final MapEntry(:key, :value) in versions.entries)
+            if (key is String && value is String) key: buildArtistPictureUrl(baseUrl, key, value),
+        },
+        version: answer.etag,
+      );
+    } on ServerRequestException catch (e) {
+      if (e.statusCode == 404) return (pictures: const <String, String>{}, version: null);
+      rethrow;
+    }
   }
 
   /// A track of the server's listing ([Track.toJson]'s form, and its album cover's `coverVersion`), with its stream and

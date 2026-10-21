@@ -316,6 +316,26 @@ void main() {
     expect(await coverVersion(), allOf(isNotNull, isNot(first)));
   });
 
+  test("an artist's own picture is listed with its version and served to the players", () async {
+    final (client, auth) = await setupAdmin(server);
+    await server.waitForTracks(client, 3);
+    final folder = p.join(server.musicFolder, 'Artist C');
+    writeWav(p.join(folder, 'Album 3', '01 Fourth.wav'), 44100, artist: 'Artist C');
+    File(p.join(folder, 'artist.png')).writeAsBytesSync([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    await client.post('/api/library/scan');
+    await server.waitForTracks(client, 4);
+
+    final id = stableId('artist c');
+    final listed = json(await client.get('/api/artists/pictures')) as Map<String, dynamic>;
+    expect(listed.keys, [id]);
+    expect(listed[id], isA<String>());
+    final picture = await server.client(auth.token).get('/api/cover/artist/$id');
+    expect((picture.statusCode, picture.headers['content-type']), (200, 'image/png'));
+    expect(picture.bodyBytes, hasLength(8));
+    expect((await server.client(auth.token).get('/api/cover/artist/${stableId('artist a')}')).statusCode, 404);
+    expect((await server.client().get('/api/cover/artist/$id')).statusCode, 401);
+  });
+
   test('unknown routes are 404, known routes with another method 405', () async {
     final (client, _) = await setupAdmin(server);
     expect((await client.get('/api/nothing-here')).statusCode, 404);

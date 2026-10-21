@@ -154,13 +154,7 @@ void main() {
       expect((await server.client(old).get('/api/users')).statusCode, 200);
 
       // Once the password changes, it is a token of the old password like any other.
-      expect(
-        (await admin.post('/api/auth/change-password', {
-          'currentPassword': adminPassword,
-          'newPassword': 'a-brand-new-password',
-        })).statusCode,
-        200,
-      );
+      expect((await admin.post('/api/auth/change-password', {'newPassword': 'a-brand-new-password'})).statusCode, 200);
       expect((await server.client(old).get('/api/auth/me')).statusCode, 401);
     });
 
@@ -172,10 +166,7 @@ void main() {
       final streamUrl = '/api/stream/${track['id']}?token=${Uri.encodeComponent(streamToken)}';
       expect((await server.client().get(streamUrl)).statusCode, 200);
 
-      final changed = await phone.post('/api/auth/change-password', {
-        'currentPassword': adminPassword,
-        'newPassword': 'a-brand-new-password',
-      });
+      final changed = await phone.post('/api/auth/change-password', {'newPassword': 'a-brand-new-password'});
       expect(changed.statusCode, 200);
       expect(json(changed)['changed'], isTrue);
       final renewed = AuthResponse.fromJson(json(changed));
@@ -458,38 +449,30 @@ void main() {
       expect(await attempt('198.51.100.8'), 400); // another client of the same proxy
     });
 
-    test('a password changes only with the current one', () async {
-      final (admin, _) = await setupAdmin(server);
-      const replacement = 'a-brand-new-password';
+    test(
+      'a signed-in account changes its password without the current one; a weak one or no sign-in is refused',
+      () async {
+        final (admin, _) = await setupAdmin(server);
+        const replacement = 'a-brand-new-password';
 
-      final wrong = await admin.post('/api/auth/change-password', {
-        'currentPassword': 'not-it',
-        'newPassword': replacement,
-      });
-      expect(wrong.statusCode, 403);
+        expect((await admin.post('/api/auth/change-password', {'newPassword': 'short'})).statusCode, 400);
+        expect((await admin.post('/api/auth/change-password', <String, Object?>{})).statusCode, 400);
 
-      final weak = await admin.post('/api/auth/change-password', {
-        'currentPassword': adminPassword,
-        'newPassword': 'short',
-      });
-      expect(weak.statusCode, 400);
+        // An older player still sends the current password: it is ignored, right or wrong.
+        final changed = await admin.post('/api/auth/change-password', {
+          'currentPassword': 'not-it',
+          'newPassword': replacement,
+        });
+        expect(changed.statusCode, 200);
+        final old = await server.client().post('/api/auth/login', {'username': 'owner', 'password': adminPassword});
+        expect(old.statusCode, 401);
 
-      final changed = await admin.post('/api/auth/change-password', {
-        'currentPassword': adminPassword,
-        'newPassword': replacement,
-      });
-      expect(changed.statusCode, 200);
-      final old = await server.client().post('/api/auth/login', {'username': 'owner', 'password': adminPassword});
-      expect(old.statusCode, 401);
+        final anonymous = await server.client().post('/api/auth/change-password', {'newPassword': adminPassword});
+        expect(anonymous.statusCode, 401);
 
-      final anonymous = await server.client().post('/api/auth/change-password', {
-        'currentPassword': replacement,
-        'newPassword': adminPassword,
-      });
-      expect(anonymous.statusCode, 401);
-
-      final (_, auth) = await login(server, 'owner', replacement);
-      expect(auth.user.username, 'owner');
-    });
+        final (_, auth) = await login(server, 'owner', replacement);
+        expect(auth.user.username, 'owner');
+      },
+    );
   });
 }

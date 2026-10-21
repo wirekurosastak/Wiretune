@@ -1261,6 +1261,47 @@ void main() {
     expect(tester.widget<AnimatedOpacity>(tracksBar).opacity, 1);
   });
 
+  testWidgets("a phone page keeps its place across the tabs, and its tab chosen again takes it to the top", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 40; i++)
+          TestSupport.makeTrack('$i', 'Song $i', artist: 'Artist ${'$i'.padLeft(2, '0')}', album: 'Album $i'),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.navigateTo(AppSection.artists);
+    await settle(tester);
+    double offset() => tester.state<ScrollableState>(find.byType(Scrollable).first).position.pixels;
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+    await settle(tester);
+    final scrolled = offset();
+    expect(scrolled, greaterThan(500));
+
+    final artistsTab = find.text(Localizer.get('NavArtists')).last;
+    await tester.tap(find.text(Localizer.get('NavAlbums')).last);
+    await settle(tester);
+    await tester.tap(artistsTab);
+    await settle(tester);
+    expect(offset(), scrolled, reason: 'where it was');
+
+    await tester.tap(artistsTab);
+    await settle(tester);
+    expect(offset(), 0);
+
+    // From an artist's page the tab leads back to the list, where it was.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+    await settle(tester);
+    final again = offset();
+    vm.openArtist(vm.library.artists.last);
+    await settle(tester);
+    await tester.tap(artistsTab);
+    await settle(tester);
+    expect((vm.artists.isArtistDetailOpen, offset()), (false, again));
+  });
+
   testWidgets("the player's BPM sits midway between the cover, at its size while playing, and the title", (
     tester,
   ) async {

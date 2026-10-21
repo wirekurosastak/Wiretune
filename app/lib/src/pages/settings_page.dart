@@ -252,7 +252,6 @@ class _AccountCardState extends State<_AccountCard> {
   }
 
   void _openChangePasswordDialog(BuildContext context, ServerSettingsViewModel server) {
-    final current = TextEditingController();
     final next = TextEditingController();
     final confirm = TextEditingController();
     String? error;
@@ -271,15 +270,6 @@ class _AccountCardState extends State<_AccountCard> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextField(
-                    controller: current,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: ctx.tr('CurrentPassword'),
-                      hintText: ctx.tr('CurrentPassword'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   TextField(
                     controller: next,
                     obscureText: true,
@@ -314,7 +304,7 @@ class _AccountCardState extends State<_AccountCard> {
                           busy = true;
                           error = null;
                         });
-                        final err = await server.changePassword(current.text, next.text, confirm.text);
+                        final err = await server.changePassword(next.text, confirm.text);
                         if (err != null) {
                           setDialogState(() {
                             busy = false;

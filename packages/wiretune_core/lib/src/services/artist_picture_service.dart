@@ -99,9 +99,10 @@ class ArtistPictureService {
   }
 
   /// An artist with a name that doesn't show the picture found here yet: an album cover meanwhile, which may be an
-  /// address too (the server's covers are), so only the cache can tell. One known to have none is left as it is.
+  /// address too (the server's covers are), so only the cache can tell. One known to have none is left as it is, and
+  /// so is one with a picture of their own.
   bool _wanted(Artist artist) {
-    if (artist.name.trim().isEmpty) return false;
+    if (artist.hasOwnPicture || artist.name.trim().isEmpty) return false;
     final known = _cache[_key(artist.name)];
     return known == null || (known.isNotEmpty && artist.picturePath != known);
   }

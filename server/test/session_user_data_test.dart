@@ -122,7 +122,7 @@ void main() {
       await desktop.signIn(server);
       final before = phone.session.authToken;
 
-      await phone.session.changePassword(adminPassword, 'a-brand-new-password');
+      await phone.session.changePassword('a-brand-new-password');
       expect(phone.session.authToken, isNot(before));
       expect(phone.repo.getSetting('auth_token'), phone.session.authToken); // "stay signed in" keeps the new one
       await phone.session.refreshLibrary();
@@ -139,10 +139,10 @@ void main() {
       expect(desktop.session.statusMessage, contains('jelszavát'));
       Localizer.instance.setLanguage('en');
 
-      // A wrong current password changes nothing.
+      // A password the server refuses changes nothing.
       await expectLater(
-        phone.session.changePassword('not-it', 'another-new-password'),
-        throwsA(isA<ServerRequestException>().having((e) => e.statusCode, 'status', 403)),
+        phone.session.changePassword('short'),
+        throwsA(isA<ServerRequestException>().having((e) => e.statusCode, 'status', 400)),
       );
       expect(phone.repo.getSetting('auth_token'), phone.session.authToken);
     });

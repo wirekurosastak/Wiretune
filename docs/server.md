@@ -94,7 +94,7 @@ playlist entries of the old one point at nothing.
 - **Per-account data**: favorites, play counts, playlists and hidden artists, albums and tracks live on the server,
   are the same on every device, and go when the account goes. Limits: 100,000 favorites, 100,000 tracks with play
   counts, 500 playlists, 50,000 hidden items.
-- **Changing a password** (in the player, with the current one) signs out the account's other devices; an
+- **Changing a password** (in the player, without the current one) signs out the account's other devices; an
   administrator's reset of another account (*Settings → Users*) signs it out everywhere: the way to cut off a lost
   phone. Sign-ins, tokens and their limits: [SECURITY.md](../SECURITY.md#server).
 - **Lost the admin password?** There's no reset. Stop the server, delete the rows of the `users` table in

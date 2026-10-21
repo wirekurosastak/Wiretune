@@ -144,8 +144,11 @@ class WiretuneServer {
   /// the tracks stay the same.
   List<int>? _trackList;
 
-  /// The digest of the list the players were last told about.
-  Digest? _announcedTracks;
+  /// The artists' own pictures as `/api/artists/pictures` serves them (encoded): each one's version by artist ID.
+  List<int>? _artistPictureList;
+
+  /// The digest of the lists the players were last told about.
+  Digest? _announcedLibrary;
 
   /// The port the server listens on (useful when started on port 0).
   int get port => _http!.port;
@@ -203,7 +206,7 @@ class WiretuneServer {
       );
     }
     // What the players may already have, so that the start-up scan tells them when it found something new.
-    server._announcedTracks = sha1.convert(server._tracks);
+    server._announcedLibrary = server._libraryDigest;
     scanner.onScanned = server._scanned;
 
     final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
@@ -380,6 +383,7 @@ class WiretuneServer {
       return jsonResponse({'message': 'Scan requested.'}, status: 202, headers: {'location': '/api/library/status'});
     }),
     _Route('GET', '/api/tracks', Access.user, (call) => versionedJson(call.request, _tracks)),
+    _Route('GET', '/api/artists/pictures', Access.user, (call) => versionedJson(call.request, _artistPictures)),
 
     // Media
     _Route('GET', '/api/stream/{trackId}', Access.media, _stream),
@@ -389,6 +393,7 @@ class WiretuneServer {
       Access.media,
       (call) => _cover(call.request, _coverTrack(call.params['albumId']!)),
     ),
+    _Route('GET', '/api/cover/artist/{artistId}', Access.media, _artistPicture),
     _Route('GET', '/api/lyrics/{trackId}', Access.user, _lyrics),
 
     // Remote control: a WebSocket per player
@@ -464,15 +469,16 @@ class WiretuneServer {
 
   Future<Response> _changePassword(_Call call) async {
     final body = await call.jsonObject();
-    final current = body?['currentPassword'];
+    // A signed-in player's word is enough: the current password isn't asked for (one sent by an older player is
+    // ignored).
     final replacement = body?['newPassword'];
-    if (current is! String || current.isEmpty || replacement is! String) {
-      return errorResponse(400, ErrorCodes.credentialsRequired, 'The current and the new password are required.');
+    if (replacement is! String) {
+      return errorResponse(400, ErrorCodes.credentialsRequired, 'The new password is required.');
     }
     final error = AuthService.validatePassword(replacement);
     if (error != null) return violationResponse(error);
-    final renewed = await auth.changePassword(call.principal!, current, replacement);
-    if (renewed == null) return errorResponse(403, ErrorCodes.currentPasswordWrong, 'The current password is wrong.');
+    final renewed = await auth.changePassword(call.principal!, replacement);
+    if (renewed == null) return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
     // The account's open remote-control connections were signed in with the old password; this player reconnects with
     // the token it gets here.
     remote.disconnectAccount(call.userId, 'The password changed.');
@@ -483,7 +489,7 @@ class WiretuneServer {
     final userId = call.params['userId']!;
     // Resetting would sign the administrator out everywhere, this request's token included.
     if (userId == call.userId) {
-      return errorResponse(400, ErrorCodes.cannotResetOwnPassword, 'Change your own password with your current one.');
+      return errorResponse(400, ErrorCodes.cannotResetOwnPassword, 'Change your own password with Change password.');
     }
     final body = await call.jsonObject();
     final replacement = body?['newPassword'];
@@ -595,20 +601,35 @@ class WiretuneServer {
     final track = _coverTrack(albumId);
     if (track == null) return null;
     final cover = track.coverArtPath;
-    final stat = File(cover != null && cover.isNotEmpty ? cover : track.filePath).statSync();
+    return _fileVersion(cover != null && cover.isNotEmpty ? cover : track.filePath);
+  }
+
+  /// The size and time of the file at [path]; null when there is none.
+  static String? _fileVersion(String path) {
+    final stat = File(path).statSync();
     if (stat.type == FileSystemEntityType.notFound) return null;
     return '${stat.size.toRadixString(36)}-${stat.modified.millisecondsSinceEpoch.toRadixString(36)}';
   }
 
+  List<int> get _artistPictures => _artistPictureList ??= utf8.encode(
+    jsonEncode({
+      for (final MapEntry(key: id, value: path) in library.artistPictureFiles.entries) id: ?_fileVersion(path),
+    }),
+  );
+
+  /// Both lists the players download, which a scan may change.
+  Digest get _libraryDigest => sha1.convert([..._tracks, ..._artistPictures]);
+
   /// The track whose picture is the album's cover.
   Track? _coverTrack(String albumId) => library.getAlbum(albumId)?.tracks.where((t) => t.hasCoverArt).firstOrNull;
 
-  /// A scan ended: when the list the players get changed, they are told.
+  /// A scan ended: when the lists the players get changed, they are told.
   void _scanned() {
     _trackList = null;
-    final digest = sha1.convert(_tracks);
-    if (digest == _announcedTracks) return;
-    _announcedTracks = digest;
+    _artistPictureList = null;
+    final digest = _libraryDigest;
+    if (digest == _announcedLibrary) return;
+    _announcedLibrary = digest;
     remote.libraryChanged();
   }
 
@@ -628,6 +649,20 @@ class WiretuneServer {
     final bytes = File(track.filePath).existsSync() ? await MetadataScanner().extractCoverArt(track.filePath) : null;
     if (bytes == null || bytes.isEmpty) return notFound();
     return Response.ok(bytes, headers: {...cache, 'content-type': ImageFormat.mimeType(bytes)});
+  }
+
+  /// An artist's own picture (`artist.jpg` in the music folder).
+  Future<Response> _artistPicture(_Call call) async {
+    final path = library.artistPictureFiles[call.params['artistId']!];
+    if (path == null || !AppPaths.isPathUnderRoot(path, paths.musicFolder) || !File(path).existsSync()) {
+      return notFound();
+    }
+    return fileResponse(
+      call.request,
+      File(path),
+      ImageFormat.mimeTypeFromPath(path),
+      headers: {'cache-control': 'private, max-age=86400'},
+    );
   }
 
   /// Upgrades the request to a WebSocket and hands it to the hub. The sign-in token comes in the header like on every
