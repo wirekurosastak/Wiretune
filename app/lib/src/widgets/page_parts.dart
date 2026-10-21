@@ -213,7 +213,15 @@ class PinnedTitleBar extends StatefulWidget {
 
 class _PinnedTitleBarState extends State<PinnedTitleBar> {
   final GlobalKey _anchor = GlobalKey();
-  bool _shown = false;
+
+  /// How far the bar has come in, 0 to 1: it follows the scroll, so it fades in under the finger, never by itself.
+  double _progress = 0;
+
+  /// Whether the bar's Play is out: from the moment the header's reaches the bar, so that one of them shows at a time.
+  bool _playShown = false;
+
+  /// The least scroll the bar takes to come in, where the header is close under it already.
+  static const double _minFade = 40;
   late final void Function() _unsubscribe;
 
   @override
@@ -248,15 +256,32 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
     return false;
   }
 
-  /// Shows the bar once the anchor's middle passes its lower edge: the header's Play is then where the bar's is.
+  /// The bar comes in with the scroll, from none at the page's top to whole where the header's Play reaches its lower
+  /// edge (the anchor's middle; without a Play, its bottom, when the header has gone under it).
   void _update() {
     if (!mounted) return;
     final own = context.findRenderObject() as RenderBox?;
-    final anchor = _anchor.currentContext?.findRenderObject() as RenderBox?;
+    final anchorContext = _anchor.currentContext;
+    final anchor = anchorContext?.findRenderObject() as RenderBox?;
     if (own == null || anchor == null || !own.attached || !anchor.attached) return;
-    final middle = anchor.localToGlobal(anchor.size.centerLeft(Offset.zero), ancestor: own).dy;
-    final shown = middle < MediaQuery.paddingOf(context).top + PinnedTitleBar.height;
-    if (shown != _shown) setState(() => _shown = shown);
+    final position = Scrollable.maybeOf(anchorContext!)?.position;
+    final scrolled = position == null || !position.hasPixels
+        ? 0.0
+        : math.max(0.0, position.pixels - position.minScrollExtent);
+    final edge = MediaQuery.paddingOf(context).top + PinnedTitleBar.height;
+    final top = anchor.localToGlobal(Offset.zero, ancestor: own).dy;
+    final middle = top + anchor.size.height / 2;
+    final reference = widget.play != null ? middle : top + anchor.size.height;
+    // The scroll from the page's top to where the bar is whole.
+    final distance = math.max(reference - edge + scrolled, _minFade);
+    final progress = (scrolled / distance).clamp(0.0, 1.0);
+    final playShown = middle < edge;
+    if (progress != _progress || playShown != _playShown) {
+      setState(() {
+        _progress = progress;
+        _playShown = playShown;
+      });
+    }
   }
 
   @override
@@ -312,10 +337,20 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
         ),
       ),
     );
-    Widget appearing(Widget child) => IgnorePointer(
-      ignoring: !_shown,
-      child: AnimatedOpacity(opacity: _shown ? 1 : 0, duration: const Duration(milliseconds: 120), child: child),
+    final fadingBar = IgnorePointer(
+      ignoring: _progress < 0.5,
+      child: Opacity(opacity: _progress, child: bar),
     );
+    final pinnedPlay = play == null
+        ? null
+        : IgnorePointer(
+            ignoring: !_playShown,
+            child: AnimatedOpacity(
+              opacity: _playShown ? 1 : 0,
+              duration: const Duration(milliseconds: 120),
+              child: play,
+            ),
+          );
     return _PinnedTitleBarScope(
       anchor: _anchor,
       child: NotificationListener<Notification>(
@@ -323,13 +358,9 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
         child: Stack(
           children: [
             Positioned.fill(child: widget.child),
-            Positioned(top: 0, left: 0, right: 0, child: appearing(bar)),
-            if (play != null)
-              Positioned(
-                top: bottom - PhoneChrome.playSize / 2,
-                right: PhoneChrome.playEndPadding,
-                child: appearing(play),
-              ),
+            Positioned(top: 0, left: 0, right: 0, child: fadingBar),
+            if (pinnedPlay != null)
+              Positioned(top: bottom - PhoneChrome.playSize / 2, right: PhoneChrome.playEndPadding, child: pinnedPlay),
           ],
         ),
       ),

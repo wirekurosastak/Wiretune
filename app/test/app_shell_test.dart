@@ -1266,17 +1266,24 @@ void main() {
     });
     vm.openAlbum(vm.library.albums.single);
     await settle(tester);
-    final bar = find.ancestor(of: find.byTooltip(Localizer.get('Back')), matching: find.byType(AnimatedOpacity));
-    double shown() => tester.widget<AnimatedOpacity>(bar).opacity;
-    expect(shown(), 0);
+    final bar = find.ancestor(of: find.byTooltip(Localizer.get('Back')), matching: find.byType(Opacity)).first;
+    double shown() => tester.widget<Opacity>(bar).opacity;
+    double playShown() => tester
+        .widget<AnimatedOpacity>(
+          find.ancestor(of: find.byType(ListPlayButton).last, matching: find.byType(AnimatedOpacity)),
+        )
+        .opacity;
+    expect((shown(), playShown()), (0, 0));
     expect(find.descendant(of: bar, matching: find.text('Kind of Blue')), findsOneWidget);
 
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300)); // the buttons are still in view
-    await settle(tester);
-    expect(shown(), 0);
+    // It comes in with the scroll: partly while the header's buttons are still in view, its Play not yet.
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
     await settle(tester);
-    expect(shown(), 1);
+    expect(shown(), inExclusiveRange(0, 1));
+    expect(playShown(), 0);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await settle(tester);
+    expect((shown(), playShown()), (1, 1));
     // Half below the bar's edge, over the ⋮ of the rows, as the header's was.
     final play = find.descendant(of: find.byType(ListPlayButton).last, matching: find.byType(FilledButton));
     final rowMenu = find.byTooltip(Localizer.get('TipMore')).last;
@@ -1293,11 +1300,11 @@ void main() {
     // A list page keeps its name, without a way back.
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
-    final tracksBar = find.ancestor(of: find.text(Localizer.get('NavTracks')), matching: find.byType(AnimatedOpacity));
-    expect(tester.widget<AnimatedOpacity>(tracksBar).opacity, 0);
+    final tracksBar = find.ancestor(of: find.text(Localizer.get('NavTracks')), matching: find.byType(Opacity)).first;
+    expect(tester.widget<Opacity>(tracksBar).opacity, 0);
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
     await settle(tester);
-    expect(tester.widget<AnimatedOpacity>(tracksBar).opacity, 1);
+    expect(tester.widget<Opacity>(tracksBar).opacity, 1);
     expect(find.descendant(of: tracksBar, matching: find.byTooltip(Localizer.get('Back'))), findsNothing);
 
     // Far down, where the header is no longer built, and back to the page, which keeps its place: the bar too.
@@ -1308,7 +1315,15 @@ void main() {
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
     expect(find.text('Take 2'), findsNothing, reason: 'still scrolled');
-    expect(tester.widget<AnimatedOpacity>(tracksBar).opacity, 1);
+    expect(tester.widget<Opacity>(tracksBar).opacity, 1);
+
+    // A page without buttons under its title (Settings) shows its big title alone at the top.
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    final settingsBar = find
+        .ancestor(of: find.text(Localizer.get('NavSettings')).last, matching: find.byType(Opacity))
+        .first;
+    expect(tester.widget<Opacity>(settingsBar).opacity, 0);
   });
 
   testWidgets("a phone page keeps its place across the tabs, and its tab chosen again takes it to the top", (
