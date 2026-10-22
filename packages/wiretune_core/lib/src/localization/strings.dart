@@ -25,6 +25,8 @@ const Map<String, (String, String, String)> allStrings = {
   'Or': ('VAGY', 'OR', 'ODER'),
   'Language': ('Nyelv', 'Language', 'Sprache'),
   'Theme': ('Téma', 'Theme', 'Farbschema'),
+  'ThemeDark': ('Sötét', 'Dark', 'Dunkel'),
+  'ThemeLight': ('Világos', 'Light', 'Hell'),
   'Unknown': ('ismeretlen', 'unknown', 'unbekannt'),
 
   // ── Navigation and shell ────────────────────────────────────────────────────────────────────────────
@@ -37,11 +39,10 @@ const Map<String, (String, String, String)> allStrings = {
   'NavSettings': ('Beállítások', 'Settings', 'Einstellungen'),
   'SectionLibrary': ('KÖNYVTÁR', 'LIBRARY', 'BIBLIOTHEK'),
   'SectionCollection': ('GYŰJTEMÉNY', 'COLLECTION', 'SAMMLUNG'),
-  'SectionSettings': ('BEÁLLÍTÁSOK', 'SETTINGS', 'EINSTELLUNGEN'),
   'SearchPlaceholder': (
-    'Keresés számok, előadók, albumok között...',
-    'Search tracks, artists, albums…',
-    'Titel, Künstler und Alben durchsuchen …',
+    'Keresés előadók, albumok, számok között...',
+    'Search artists, albums, tracks…',
+    'Künstler, Alben und Titel durchsuchen …',
   ),
   'Search': ('Keresés', 'Search', 'Suche'),
   'TipClearSearch': ('Keresés törlése', 'Clear search', 'Suche löschen'),
@@ -101,8 +102,6 @@ const Map<String, (String, String, String)> allStrings = {
   'TipMinimize': ('Kis méret', 'Minimize', 'Minimieren'),
   'TipMaximize': ('Teljes méret', 'Maximize', 'Maximieren'),
   'TipRestore': ('Előző méret', 'Restore', 'Wiederherstellen'),
-  'TipThemeLight': ('Váltás világos témára', 'Switch to the light theme', 'Zum hellen Farbschema wechseln'),
-  'TipThemeDark': ('Váltás sötét témára', 'Switch to the dark theme', 'Zum dunklen Farbschema wechseln'),
   'TipDismissNotice': ('Értesítés bezárása', 'Dismiss notification', 'Benachrichtigung schließen'),
   'Back': ('Vissza', 'Back', 'Zurück'),
   'BackToMusic': ('Vissza a zenékhez', 'Back to music', 'Zurück zur Musik'),
@@ -118,7 +117,6 @@ const Map<String, (String, String, String)> allStrings = {
   'DurationMinutesSeconds': ('{0} perc {1} mp', '{0} min {1} s', '{0} Min. {1} Sek.'),
   'CreatedAt': ('Létrehozva: {0:yyyy.MM.dd HH:mm}', 'Created: {0:yyyy-MM-dd HH:mm}', 'Erstellt: {0:dd.MM.yyyy HH:mm}'),
   'DateShort': ('{0:yyyy.MM.dd}', '{0:yyyy-MM-dd}', '{0:dd.MM.yyyy}'),
-  'QuotedText': ('„{0}”', '“{0}”', '„{0}“'),
   'FooterLocalAndServer': ('({0} helyi, {1} szerver)', '({0} local, {1} server)', '({0} lokal, {1} Server)'),
   'FooterServerOnly': ('({0} szerver)', '({0} server)', '({0} Server)'),
   'FooterLocalOnly': ('({0} helyi)', '({0} local)', '({0} lokal)'),
@@ -242,12 +240,6 @@ const Map<String, (String, String, String)> allStrings = {
   'TipRemoveFromPlaylist': ('Eltávolítás a listából', 'Remove from playlist', 'Aus Playlist entfernen'),
 
   // ── Search ──────────────────────────────────────────────────────────────────────────────────────────
-  'SearchResultsFor': ('Keresési találatok:', 'Search results:', 'Suchergebnisse:'),
-  'SearchSubtitle': (
-    'Számok, albumok és előadók egy helyen',
-    'Tracks, albums and artists in one place',
-    'Titel, Alben und Künstler an einem Ort',
-  ),
   'NoResultsTitle': ('Nincs találat a keresésre', 'No results found', 'Keine Treffer'),
   'NoResultsHint': (
     'Próbálj meg más előadóra, számcímre vagy albumra keresni.',
@@ -281,7 +273,7 @@ const Map<String, (String, String, String)> allStrings = {
   'QueuedNext': ('Következőként szól: {0}', 'Plays next: {0}', 'Als Nächstes: {0}'),
   'QueuedLast': ('A sorba került: {0}', 'Added to the queue: {0}', 'In der Warteschlange: {0}'),
   'Lyrics': ('DALSZÖVEG', 'LYRICS', 'LIEDTEXT'),
-  'TabPlayer': ('Lejátszó', 'Player', 'Player'),
+  'TabTrack': ('Szám', 'Track', 'Titel'),
   'TabLyrics': ('Dalszöveg', 'Lyrics', 'Liedtext'),
   'PlayerSwipeQuestion': (
     'Mit tegyen a balra vagy jobbra húzás a lejátszóban?',
@@ -294,11 +286,7 @@ const Map<String, (String, String, String)> allStrings = {
     'Du kannst das später in den Einstellungen ändern.',
   ),
   'PlayerSwipeTracks': ('Előző / következő szám', 'Previous / next track', 'Vorheriger / nächster Titel'),
-  'PlayerSwipeTabs': (
-    'Lejátszó, lejátszási sor, dalszöveg',
-    'Player, queue, lyrics',
-    'Player, Warteschlange, Liedtext',
-  ),
+  'PlayerSwipeTabs': ('Szám, lejátszási sor, dalszöveg', 'Track, queue, lyrics', 'Titel, Warteschlange, Liedtext'),
   'NoLyrics': (
     'Ehhez a számhoz nem találtunk dalszöveget.',
     'No lyrics found for this track.',
@@ -840,6 +828,11 @@ const Map<String, (String, String, String)> allStrings = {
   'DownloadsNone': ('Még nincsenek letöltések.', 'No downloads yet.', 'Noch keine Downloads.'),
   'DownloadsRemoveAll': ('Összes letöltés törlése', 'Remove all downloads', 'Alle Downloads entfernen'),
   'DownloadsRemoveConfirm': ('Igen, mind törlődjön', 'Yes, remove them all', 'Ja, alle entfernen'),
+  'DownloadsRemoveAllConfirm': (
+    '{0} letöltött szám ({1}) törlődik erről az eszközről.',
+    '{0} downloaded tracks ({1}) are deleted from this device.',
+    '{0} heruntergeladene Titel ({1}) werden von diesem Gerät gelöscht.',
+  ),
   'DownloadsSyncMode': ('Letöltések szinkronizálása', 'Sync downloads', 'Downloads synchronisieren'),
   'DownloadsSyncModeHint': (
     'Automatikusan letölti az új albumokat és számokat a letöltött előadóknál és listáknál.',

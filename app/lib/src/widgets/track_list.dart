@@ -198,7 +198,7 @@ class _TrackSliverState extends State<TrackSliver> {
                     proxyDecorator: (child, index, animation) => Material(
                       color: context.colors.palette.modal,
                       elevation: 8,
-                      borderRadius: BorderRadius.circular(Radii.card),
+                      borderRadius: BorderRadius.circular(Radii.medium),
                       child: child,
                     ),
                     itemBuilder: (context, index) => ReorderableDelayedDragStartListener(
@@ -318,7 +318,7 @@ class _TableRowState extends State<_TableRow> {
     final playing = vm.player.isCurrent(track);
     final onPlay = state._play;
     final kind = state.kind;
-    final radius = BorderRadius.circular(Radii.small + 2);
+    final radius = BorderRadius.circular(Radii.medium);
     final Widget lead;
     if (state._leadIsNumber) {
       lead = playing
@@ -335,7 +335,7 @@ class _TableRowState extends State<_TableRow> {
               ),
             );
     } else {
-      lead = _Cover(track: track, playing: playing, hover: _hover, size: 38, radius: 7);
+      lead = _Cover(track: track, playing: playing, hover: _hover, size: 38, radius: Radii.small);
     }
 
     return MouseRegion(
@@ -347,10 +347,10 @@ class _TableRowState extends State<_TableRow> {
           duration: const Duration(milliseconds: 180),
           decoration: BoxDecoration(
             borderRadius: radius,
-            color: _hover ? colors.surface1 : colors.surface1.withValues(alpha: 0),
-            gradient: playing
-                ? LinearGradient(colors: [colors.accent.withValues(alpha: 0.2), colors.accent.withValues(alpha: 0.03)])
-                : null,
+            // The playing track's soft wash, as on a phone's row.
+            color: playing
+                ? colors.accent.withValues(alpha: 0.12)
+                : (_hover ? colors.surface1 : colors.surface1.withValues(alpha: 0)),
           ),
           child: Material(
             type: MaterialType.transparency,
@@ -521,7 +521,7 @@ Future<void> _showTrackContextMenu(BuildContext context, Offset position, Track 
   }
 }
 
-/// The "⋮" menu of a track, on its row (a table's and a phone's) and in the phone's full-screen player: play next and
+/// The "⋮" menu of a track, on its row (a table's and a phone's), in the player bar and the phone's full-screen player: play next and
 /// add to the queue, a playlist (and, in one, moving and removing the track), the download, the way to the album and the
 /// artist, and hiding it.
 class TrackMenu extends StatelessWidget {
@@ -531,6 +531,7 @@ class TrackMenu extends StatelessWidget {
     required this.kind,
     required this.width,
     this.color,
+    this.iconSize = 22,
     this.withFavorite = false,
   });
 
@@ -543,6 +544,7 @@ class TrackMenu extends StatelessWidget {
 
   /// The dots' colour; muted when not given.
   final Color? color;
+  final double iconSize;
 
   /// Whether the menu has the favourite too: where no heart is beside it (a phone's row).
   final bool withFavorite;
@@ -654,7 +656,7 @@ class TrackMenu extends StatelessWidget {
       child: Center(
         child: PopupMenuButton<TrackAction>(
           tooltip: context.tr('TipMore'),
-          icon: Icon(Icons.more_vert_rounded, color: color ?? colors.textMuted, size: 22),
+          icon: Icon(Icons.more_vert_rounded, color: color ?? colors.textMuted, size: iconSize),
           onSelected: (action) => handleAction(context, action, track),
           itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
         ),
@@ -693,7 +695,13 @@ class _IconCell extends StatelessWidget {
 
 /// A small cover, with the bouncing bars over it while the track plays, or a play button under the mouse.
 class _Cover extends StatelessWidget {
-  const _Cover({required this.track, required this.playing, this.hover = false, this.size = 32, this.radius = 4});
+  const _Cover({
+    required this.track,
+    required this.playing,
+    this.hover = false,
+    this.size = 32,
+    this.radius = Radii.tag,
+  });
 
   final Track track;
   final bool playing;
@@ -772,9 +780,9 @@ class _PhoneRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
         color: playing ? colors.accent.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(Radii.card),
+        borderRadius: BorderRadius.circular(Radii.medium),
         child: InkWell(
-          borderRadius: BorderRadius.circular(Radii.card),
+          borderRadius: BorderRadius.circular(Radii.medium),
           onTap: () => state._play(track),
           child: Row(
             children: [

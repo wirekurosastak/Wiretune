@@ -34,7 +34,12 @@ class PlaylistsPage extends StatelessWidget {
             title: context.tr('EmptyPlaylistsTitle'),
             hint: context.tr('EmptyPlaylistsHint'),
             actions: [
-              FilledButton(onPressed: () => showNewPlaylistDialog(context), child: Text(context.tr('PlaylistNew'))),
+              PressShrink(
+                child: FilledButton(
+                  onPressed: () => showNewPlaylistDialog(context),
+                  child: Text(context.tr('PlaylistNew')),
+                ),
+              ),
             ],
           );
         }
@@ -46,7 +51,7 @@ class PlaylistsPage extends StatelessWidget {
               SliverToBoxAdapter(
                 child: PageHeader(
                   title: context.tr('NavPlaylists'),
-                  subtitle: context.trf('PlaylistCount', [playlists.playlists.length]),
+                  subtitle: context.trf('PlaylistCount', [playlists.allPlaylists.length]),
                   actions: [
                     SortButtons(
                       buttons: [
@@ -58,16 +63,18 @@ class PlaylistsPage extends StatelessWidget {
                           ),
                       ],
                     ),
-                    FilledButton.icon(
-                      onPressed: () => showNewPlaylistDialog(context),
-                      icon: const Icon(Icons.add_rounded, size: 18),
-                      label: Text(context.tr('PlaylistNew')),
+                    PressShrink(
+                      child: FilledButton.icon(
+                        onPressed: () => showNewPlaylistDialog(context),
+                        icon: const Icon(Icons.add_rounded, size: 18),
+                        label: Text(context.tr('PlaylistNew')),
+                      ),
                     ),
                   ],
                 ),
               ),
               PlaylistsSliver(
-                playlists: [...playlists.automaticPlaylists, ...playlists.playlists],
+                playlists: playlists.allPlaylists,
                 tracksOf: playlists.tracksOf,
                 onOpen: playlists.openPlaylist,
                 onPlay: playlists.playPlaylist,
@@ -149,7 +156,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
         : Tooltip(
             message: context.tr('Rename'),
             child: InkWell(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(Radii.tag),
               onTap: playlists.startRename,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -176,10 +183,11 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             ),
           );
 
+    final menu = ListMenu.playlist(playlist, tracks, onPlay: playlists.playPlaylist);
     return PinnedTitleBar(
       title: playlist.name,
       onBack: playlists.closePlaylistDetail,
-      play: tracks.isEmpty ? null : ListPlayButton(tracks: tracks, onPlay: playlists.playPlaylist),
+      menu: menu.topBarButton(),
       child: CustomScrollView(
         key: PageStorageKey('playlist-${playlist.id}'),
         slivers: [
@@ -215,7 +223,8 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                           isDownloaded: () => context.vm.downloads.isPlaylistDownloaded(playlist),
                           onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                         ),
-                  menu: ListMenu.playlist(playlist, tracks, onPlay: playlists.playPlaylist).headerButton(),
+                  addToPlaylist: menu.addToPlaylistButton(),
+                  menu: menu.headerButton(),
                 ),
               ],
             ),

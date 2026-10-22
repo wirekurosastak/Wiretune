@@ -24,8 +24,11 @@ class WiretuneApp extends StatefulWidget {
 
   final MainViewModel vm;
 
-  /// Below this width (or on a phone held upright) the phone layout is used; a TV always gets the wide one.
+  /// Below this width (or on a phone) the phone layout is used; a TV always gets the wide one.
   static const double phoneLayoutWidth = 720;
+
+  /// A phone or tablet whose shorter side is below this is a phone: it gets the phone layout, and stays upright.
+  static const double phoneShortestSide = 600;
 
   @override
   State<WiretuneApp> createState() => _WiretuneAppState();
@@ -34,6 +37,15 @@ class WiretuneApp extends StatefulWidget {
 class _WiretuneAppState extends State<WiretuneApp> {
   final Map<(bool, AppSection, bool), ThemeData> _themes = {};
   late final AppLifecycleListener _lifecycle;
+
+  /// What back can close: the main view model's layers and tabs, the queue, and the open detail pages.
+  late final Listenable _backState = Listenable.merge([
+    widget.vm,
+    widget.vm.player,
+    widget.vm.albums,
+    widget.vm.artists,
+    widget.vm.playlists,
+  ]);
 
   @override
   void initState() {
@@ -112,16 +124,23 @@ class _WiretuneAppState extends State<WiretuneApp> {
                     systemNavigationBarColor: Colors.transparent,
                     systemNavigationBarContrastEnforced: false,
                   ),
-                  child: PopScope(
-                    canPop: false,
-                    onPopInvokedWithResult: (didPop, _) {
-                      if (!didPop) _goBack();
-                    },
+                  // The system's back comes here only while the app has somewhere to go back to; else the system
+                  // takes it and leaves the app, with its own animation. (Android 16 sends a back gesture to the app
+                  // only if told beforehand that the app wants it, which the canPop here does.)
+                  child: ListenableBuilder(
+                    listenable: _backState,
+                    builder: (context, child) => PopScope(
+                      canPop: !vm.canNavigateBack,
+                      onPopInvokedWithResult: (didPop, _) {
+                        if (!didPop) _goBack();
+                      },
+                      child: child!,
+                    ),
                     child: vm.startupError != null
                         ? _StartupErrorPage(message: vm.startupError!)
                         : Stack(
                             children: [
-                              const Positioned.fill(child: _LayoutSwitch()),
+                              const Positioned.fill(child: _PhoneUpright(child: _LayoutSwitch())),
                               _NoticeHost(vm: vm),
                             ],
                           ),
@@ -213,9 +232,39 @@ class _LayoutSwitch extends StatelessWidget {
     final platform = AppPlatform.current;
     final size = MediaQuery.sizeOf(context);
     final phone =
-        !platform.isTv && (size.width < WiretuneApp.phoneLayoutWidth || (platform.isMobile && size.shortestSide < 600));
+        !platform.isTv &&
+        (size.width < WiretuneApp.phoneLayoutWidth ||
+            (platform.isMobile && size.shortestSide < WiretuneApp.phoneShortestSide));
     return phone ? const PhoneLayout() : const WideLayout();
   }
+}
+
+/// Keeps a phone upright, as TIDAL and Spotify do: held sideways, its floating player and navigation would cover a third
+/// of the screen. A tablet, or a foldable opened up, turns freely; a computer or a TV has nothing to turn.
+class _PhoneUpright extends StatefulWidget {
+  const _PhoneUpright({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PhoneUpright> createState() => _PhoneUprightState();
+}
+
+class _PhoneUprightState extends State<_PhoneUpright> {
+  bool? _upright;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!AppPlatform.current.isMobile) return;
+    final upright = MediaQuery.sizeOf(context).shortestSide < WiretuneApp.phoneShortestSide;
+    if (upright == _upright) return;
+    _upright = upright;
+    unawaited(SystemChrome.setPreferredOrientations(upright ? const [DeviceOrientation.portraitUp] : const []));
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 /// Shows the latest [AppNotice] at the top of the screen for a few seconds (an error a little longer), over either

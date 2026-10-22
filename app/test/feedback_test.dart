@@ -13,6 +13,7 @@ import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
+import 'package:wiretune/src/widgets/dialogs.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -145,7 +146,7 @@ void main() {
     expect(copy.existsSync(), isTrue);
 
     await pressSignOut();
-    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text(Localizer.get('SignOut'))));
+    await tester.tap(find.descendant(of: find.byType(AppDialog), matching: find.text(Localizer.get('SignOut'))));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
     await settle(tester);
     expect(session.isLoggedIn, isFalse);
@@ -219,7 +220,7 @@ void main() {
     await tester.tap(save);
     await settle(tester);
     expect(find.text(Localizer.get('ServerFolderConfirm')), findsOneWidget);
-    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text(Localizer.get('SaveFolder'))));
+    await tester.tap(find.descendant(of: find.byType(AppDialog), matching: find.text(Localizer.get('SaveFolder'))));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester);
     expect(find.text(Localizer.get('ErrorFolderWholeDisk')), findsOneWidget);

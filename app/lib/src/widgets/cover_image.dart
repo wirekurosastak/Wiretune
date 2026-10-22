@@ -146,7 +146,7 @@ class CoverImage extends StatelessWidget {
     super.key,
     required this.path,
     this.size,
-    this.radius = 8,
+    this.radius = Radii.small,
     this.placeholderIcon = Icons.music_note,
     this.circle = false,
     this.decodeWidth,

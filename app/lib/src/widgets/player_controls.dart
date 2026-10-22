@@ -20,6 +20,61 @@ String repeatTip(PlayerViewModel player) => switch (player.repeatMode) {
   RepeatMode.one => 'TipRepeatOff',
 };
 
+/// The repeat button's icon: repeat one, or repeat (the whole queue, or off).
+IconData repeatIcon(PlayerViewModel player) =>
+    player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded;
+
+/// A mode of the player (shuffle, repeat) as its button, alike in every player: the icon in the accent with a dot under
+/// it while the mode is on, muted while it is off. No glow: that is the switch beside a list's Play ([ShuffleSwitch]).
+class PlayerModeButton extends StatelessWidget {
+  const PlayerModeButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.on,
+    required this.onPressed,
+    this.iconSize = 19,
+  });
+
+  final IconData icon;
+
+  /// The key of the tooltip, which says what a press does next.
+  final String tooltip;
+  final bool on;
+  final VoidCallback onPressed;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return IconButton(
+      tooltip: context.tr(tooltip),
+      iconSize: iconSize,
+      onPressed: onPressed,
+      icon: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Icon(icon, color: on ? colors.accent : colors.textMuted),
+          // Under the icon by 3/8 of its size: 7 px under the bar's 19 px icons, 9 under the phone player's 24.
+          Positioned(
+            bottom: -(iconSize * 3 / 8).roundToDouble(),
+            child: AnimatedOpacity(
+              opacity: on ? 1 : 0,
+              duration: const Duration(milliseconds: 200),
+              child: Container(
+                width: 4,
+                height: 4,
+                decoration: BoxDecoration(color: colors.accent, shape: BoxShape.circle),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Shuffle, previous, play/pause, next, repeat. Shuffle and repeat take the accent and a dot under them while on.
 class TransportControls extends StatelessWidget {
   const TransportControls({super.key});
@@ -27,41 +82,20 @@ class TransportControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
-    final colors = context.colors;
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        const small = 19.0;
         const skip = 24.0;
-        Widget toggle(IconData icon, String tip, bool on, VoidCallback onPressed) => IconButton(
-          tooltip: context.tr(tip),
-          iconSize: small,
-          onPressed: onPressed,
-          icon: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: on ? colors.accent : colors.textMuted),
-              Positioned(
-                bottom: -7,
-                child: AnimatedOpacity(
-                  opacity: on ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Container(
-                    width: 4,
-                    height: 4,
-                    decoration: BoxDecoration(color: colors.accent, shape: BoxShape.circle),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
         return Row(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            toggle(Icons.shuffle_rounded, shuffleTip(player), player.isShuffle, player.toggleShuffle),
+            PlayerModeButton(
+              icon: Icons.shuffle_rounded,
+              tooltip: shuffleTip(player),
+              on: player.isShuffle,
+              onPressed: player.toggleShuffle,
+            ),
             const SizedBox(width: 4),
             IconButton(
               tooltip: context.tr('TipPrevious'),
@@ -79,11 +113,11 @@ class TransportControls extends StatelessWidget {
               icon: const Icon(Icons.skip_next_rounded),
             ),
             const SizedBox(width: 4),
-            toggle(
-              player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-              repeatTip(player),
-              player.repeatMode != RepeatMode.off,
-              player.toggleRepeat,
+            PlayerModeButton(
+              icon: repeatIcon(player),
+              tooltip: repeatTip(player),
+              on: player.repeatMode != RepeatMode.off,
+              onPressed: player.toggleRepeat,
             ),
           ],
         );
@@ -447,78 +481,6 @@ class FavoriteCurrentButton extends StatelessWidget {
           icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted),
         );
       },
-    );
-  }
-}
-
-/// Calls [onSwipe] when a vertical swipe over [child] goes far or fast enough [upwards] (or downwards). Taps, and
-/// horizontal drags such as a slider's, still reach the child.
-class VerticalSwipe extends StatefulWidget {
-  const VerticalSwipe({super.key, required this.upwards, required this.onSwipe, required this.child});
-
-  final bool upwards;
-  final VoidCallback onSwipe;
-  final Widget child;
-
-  @override
-  State<VerticalSwipe> createState() => _VerticalSwipeState();
-}
-
-class _VerticalSwipeState extends State<VerticalSwipe> with SingleTickerProviderStateMixin {
-  double _distance = 0;
-  late final AnimationController _resetController = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 200),
-  );
-  Animation<double>? _resetAnimation;
-
-  @override
-  void dispose() {
-    _resetController.dispose();
-    super.dispose();
-  }
-
-  void _onDragStart(DragStartDetails _) {
-    _resetController.stop();
-    _distance = 0;
-  }
-
-  void _onDragUpdate(DragUpdateDetails details) {
-    setState(() {
-      _distance += details.delta.dy;
-    });
-  }
-
-  void _onDragEnd(DragEndDetails details) {
-    final direction = widget.upwards ? -1 : 1;
-    final velocity = (details.primaryVelocity ?? 0) * direction;
-    final traveled = _distance * direction;
-    if (traveled > 40 || velocity > 350) {
-      widget.onSwipe();
-      setState(() => _distance = 0);
-    } else if (_distance != 0) {
-      _resetAnimation =
-          Tween<double>(
-            begin: _distance,
-            end: 0,
-          ).animate(CurvedAnimation(parent: _resetController, curve: Curves.easeOutCubic))..addListener(() {
-            setState(() {
-              _distance = _resetAnimation!.value;
-            });
-          });
-      _resetController.forward(from: 0);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final offset = widget.upwards ? _distance.clamp(-60.0, 0.0) : _distance.clamp(0.0, 60.0);
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onVerticalDragStart: _onDragStart,
-      onVerticalDragUpdate: _onDragUpdate,
-      onVerticalDragEnd: _onDragEnd,
-      child: Transform.translate(offset: Offset(0, offset), child: widget.child),
     );
   }
 }

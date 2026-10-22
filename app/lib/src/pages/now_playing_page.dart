@@ -18,13 +18,15 @@ import '../widgets/devices.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/links.dart';
 import '../widgets/player_controls.dart';
+import '../widgets/player_sheet.dart';
 import '../widgets/track_list.dart';
 import 'queue_panel.dart';
 
-/// The phone's full-screen player, over the colours of the cover: the cover (with its quality tag), the queue or the
-/// lyrics on top (three tabs), and the seek bar and the transport below, whatever the tab. The header has the track's
-/// menu (a playlist, the download, the album, the artist); a swipe down over the header, or over the player tab, closes
-/// it, and a swipe left or right over the tabs changes the track or the tab ([PlayerSwipe]).
+/// The phone's full-screen player, over the colours of the cover: the track (its cover with the quality tag), the queue
+/// or the lyrics on top (three tabs), and the seek bar and the transport below, whatever the tab. The track's tab has
+/// its menu (a playlist, the download, the album, the artist); a drag down over the header, or over the track's tab,
+/// takes the player down with the finger ([PlayerSheetDrag]), and a swipe left or right over the tabs changes the track
+/// or the tab ([PlayerSwipe]).
 class NowPlayingPage extends StatelessWidget {
   const NowPlayingPage({super.key});
 
@@ -45,7 +47,7 @@ class NowPlayingPage extends StatelessWidget {
             curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
               color: selected ? colors.accent : colors.accent.withValues(alpha: 0),
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(Radii.pill),
               boxShadow: selected ? colors.accentGlow(0.6) : const [],
             ),
             child: Material(
@@ -74,12 +76,22 @@ class NowPlayingPage extends StatelessWidget {
           child: Stack(
             children: [
               const Positioned.fill(child: AmbientBackdrop(colour: 1)),
+              // The queue and the lyrics are read on a layer of the background's colour, so their grey text holds on a
+              // bright cover; the track's tab keeps the cover's colours at full strength.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: tab == NowPlayingTab.track ? 0 : 1,
+                    duration: const Duration(milliseconds: 240),
+                    curve: Curves.easeOutCubic,
+                    child: ColoredBox(color: colors.palette.background.withValues(alpha: 0.55)),
+                  ),
+                ),
+              ),
               SafeArea(
                 child: Column(
                   children: [
-                    VerticalSwipe(
-                      upwards: false,
-                      onSwipe: vm.closeNowPlaying,
+                    PlayerSheetDrag(
                       child: Column(
                         children: [
                           SizedBox(
@@ -131,13 +143,13 @@ class NowPlayingPage extends StatelessWidget {
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
                                   color: colors.surface1,
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius: BorderRadius.circular(Radii.pill),
                                   border: Border.all(color: colors.glassBorder),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    segment(NowPlayingTab.player, 'TabPlayer'),
+                                    segment(NowPlayingTab.track, 'TabTrack'),
                                     segment(NowPlayingTab.queue, 'Queue'),
                                     segment(NowPlayingTab.lyrics, 'TabLyrics'),
                                   ],
@@ -151,17 +163,7 @@ class NowPlayingPage extends StatelessWidget {
                     Expanded(
                       child: HorizontalSwipe(
                         onSwipe: ({required forward}) => _swipe(context, forward: forward),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          child: KeyedSubtree(
-                            key: ValueKey(tab),
-                            child: switch (tab) {
-                              NowPlayingTab.player => const _PlayerTab(),
-                              NowPlayingTab.queue => const _QueueTab(),
-                              NowPlayingTab.lyrics => const _LyricsTab(),
-                            },
-                          ),
-                        ),
+                        child: _Tabs(tab: tab),
                       ),
                     ),
                     const _Transport(),
@@ -187,8 +189,64 @@ Future<void> _swipe(BuildContext context, {required bool forward}) async {
   vm.swipeNowPlaying(forward: forward);
 }
 
-class _PlayerTab extends StatelessWidget {
-  const _PlayerTab();
+/// The tab on show, the new one sliding in from the side it lies on (a swipe brings it from where the finger went)
+/// as the old one fades out to the other.
+class _Tabs extends StatefulWidget {
+  const _Tabs({required this.tab});
+
+  final NowPlayingTab tab;
+
+  @override
+  State<_Tabs> createState() => _TabsState();
+}
+
+class _TabsState extends State<_Tabs> {
+  late AnimatedSwitcherTransitionBuilder _transition = _slideTo(widget.tab, forward: true);
+
+  @override
+  void didUpdateWidget(_Tabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tab == oldWidget.tab) return;
+    _transition = _slideTo(widget.tab, forward: widget.tab.index > oldWidget.tab.index);
+  }
+
+  /// The new [tab] comes in from the right going [forward], from the left going back; the switcher builds the old
+  /// tab's transition again with it (a new builder), so that one leaves the other way.
+  static AnimatedSwitcherTransitionBuilder _slideTo(NowPlayingTab tab, {required bool forward}) => (child, animation) {
+    final side = (forward ? 1.0 : -1.0) * (child.key == ValueKey(tab) ? 1 : -1);
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween(begin: Offset(0.2 * side, 0), end: Offset.zero).animate(animation),
+        child: child,
+      ),
+    );
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final tab = widget.tab;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 240),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) =>
+          Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
+      transitionBuilder: _transition,
+      child: KeyedSubtree(
+        key: ValueKey(tab),
+        child: switch (tab) {
+          NowPlayingTab.track => const _TrackTab(),
+          NowPlayingTab.queue => const _QueueTab(),
+          NowPlayingTab.lyrics => const _LyricsTab(),
+        },
+      ),
+    );
+  }
+}
+
+class _TrackTab extends StatelessWidget {
+  const _TrackTab();
 
   @override
   Widget build(BuildContext context) =>
@@ -211,10 +269,8 @@ class _PlayerTab extends StatelessWidget {
       if (format != null && format.isLossless && format.bitrateKbps > 0)
         QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: 11),
     ];
-    // The queue and the lyrics scroll vertically themselves; here a swipe down closes the player.
-    return VerticalSwipe(
-      upwards: false,
-      onSwipe: vm.closeNowPlaying,
+    // The queue and the lyrics scroll vertically themselves; here a drag down takes the player down.
+    return PlayerSheetDrag(
       child: Column(
         children: [
           Expanded(
@@ -317,7 +373,7 @@ class _PlayerTab extends StatelessWidget {
                         )
                       else
                         InkWell(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(Radii.tag),
                           onTap: track == null ? null : () => vm.openArtistByName(track.artist),
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
@@ -368,23 +424,19 @@ class _QueueTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
           child: Row(
             children: [
+              // How many: the tab above already says it is the queue (the wide layout's queue says it so too).
               Expanded(
                 child: Text(
-                  context.tr('Queue'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    letterSpacing: 0.8,
-                    fontWeight: FontWeight.w700,
-                    color: colors.textMuted,
-                  ),
+                  context.trf('TrackCount', [player.queueItems.length]),
+                  style: TextStyle(fontSize: 13, color: colors.textMuted),
                 ),
               ),
               PopEffect(
                 enabled: player.queueItems.isNotEmpty,
-                glowColor: colors.palette.coral,
+                glowColor: colors.danger,
                 child: TextButton.icon(
                   style: TextButton.styleFrom(
-                    foregroundColor: colors.palette.coral,
+                    foregroundColor: colors.danger,
                     minimumSize: const Size(0, 40),
                     overlayColor: Colors.transparent,
                   ),
@@ -447,15 +499,19 @@ class _Transport extends StatelessWidget {
   Widget _build(BuildContext context) {
     final player = context.vm.player;
     final colors = context.colors;
-    Color toggle(bool on) => on ? colors.hover : colors.textMuted;
-    Widget icon(IconData data, double size, String tip, VoidCallback onPressed, {Color? color}) => SizedBox.square(
+    Widget icon(IconData data, String tip, VoidCallback onPressed) => SizedBox.square(
       dimension: 52,
       child: IconButton(
         tooltip: context.tr(tip),
         onPressed: onPressed,
-        iconSize: size,
-        icon: Icon(data, color: color ?? colors.textMain),
+        iconSize: 34,
+        icon: Icon(data, color: colors.textMain),
       ),
+    );
+    // Shuffle and repeat as in every player: the accent and a dot while on.
+    Widget mode(IconData data, String tip, bool on, VoidCallback onPressed) => SizedBox.square(
+      dimension: 52,
+      child: PlayerModeButton(icon: data, tooltip: tip, on: on, onPressed: onPressed, iconSize: 24),
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
@@ -468,23 +524,11 @@ class _Transport extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                icon(
-                  Icons.shuffle_rounded,
-                  24,
-                  shuffleTip(player),
-                  player.toggleShuffle,
-                  color: toggle(player.isShuffle),
-                ),
-                icon(Icons.skip_previous_rounded, 34, 'TipPrevious', player.previousTrack),
+                mode(Icons.shuffle_rounded, shuffleTip(player), player.isShuffle, player.toggleShuffle),
+                icon(Icons.skip_previous_rounded, 'TipPrevious', player.previousTrack),
                 const PlayButton(size: 70),
-                icon(Icons.skip_next_rounded, 34, 'TipNext', player.nextTrack),
-                icon(
-                  player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded,
-                  24,
-                  repeatTip(player),
-                  player.toggleRepeat,
-                  color: toggle(player.repeatMode != RepeatMode.off),
-                ),
+                icon(Icons.skip_next_rounded, 'TipNext', player.nextTrack),
+                mode(repeatIcon(player), repeatTip(player), player.repeatMode != RepeatMode.off, player.toggleRepeat),
               ],
             ),
           ),

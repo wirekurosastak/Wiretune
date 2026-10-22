@@ -209,6 +209,14 @@ mixin DetailOrigin on ChangeNotifier {
     _backTextSource = backTextSource;
   }
 
+  /// The page now belongs to its tab (the user left it through the navigation): back leads to the tab's list.
+  void forgetOrigin() {
+    if (returnAction == null && _backTextSource == null) return;
+    returnAction = null;
+    _backTextSource = null;
+    notifyListeners();
+  }
+
   /// Clears the origin and returns the action to run after the detail page was closed.
   void Function()? _takeOrigin() {
     final action = returnAction;
@@ -636,6 +644,9 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
 
   bool get hasPlaylists => playlists.isNotEmpty || automaticPlaylists.isNotEmpty;
 
+  /// What the Playlists page lists, and counts: the automatic playlists, then the user's own.
+  List<Playlist> get allPlaylists => [...automaticPlaylists, ...playlists];
+
   /// The tracks of [playlist] as the library resolves them (cached per refresh).
   List<Track> tracksOf(Playlist playlist) => _tracksOf[playlist.id] ?? _library.getPlaylistTracks(playlist);
 
@@ -705,9 +716,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     final selectedId = selectedPlaylist?.id;
     playlists = _inSortOrder(_library.playlists);
     automaticPlaylists = _automatic();
-    _tracksOf = {
-      for (final pl in [...automaticPlaylists, ...playlists]) pl.id: _library.getPlaylistTracks(pl),
-    };
+    _tracksOf = {for (final pl in allPlaylists) pl.id: _library.getPlaylistTracks(pl)};
     selectedPlaylist = selectedId == null
         ? null
         : (_library.getPlaylist(selectedId) ?? automaticPlaylists.where((pl) => pl.id == selectedId).firstOrNull);

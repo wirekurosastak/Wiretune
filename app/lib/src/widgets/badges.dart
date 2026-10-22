@@ -33,7 +33,7 @@ class QualityTag extends StatelessWidget {
         decoration: BoxDecoration(
           color: MedalColors.bg(tier),
           border: Border.all(color: MedalColors.border(tier)),
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.circular(Radii.tag),
           boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 3, offset: Offset(0, 1))],
         ),
         child: Text(
@@ -65,7 +65,7 @@ class TagBadge extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
     decoration: BoxDecoration(
       color: color.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(Radii.pill),
       border: Border.all(color: color.withValues(alpha: 0.3)),
     ),
     child: Text(
@@ -90,7 +90,7 @@ class PlayerMetaBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
       decoration: BoxDecoration(
         color: colors.surface2,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(Radii.tag),
         border: Border.all(color: colors.glassBorder),
       ),
       child: Text(

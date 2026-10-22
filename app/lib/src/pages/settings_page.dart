@@ -15,6 +15,7 @@ import '../view_models/settings_view_models.dart';
 import '../widgets/devices.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/page_parts.dart';
+import '../widgets/buttons.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -101,7 +102,7 @@ class _CardTitle extends StatelessWidget {
             height: 36,
             decoration: BoxDecoration(
               color: colors.accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(Radii.medium),
               border: Border.all(color: colors.accent.withValues(alpha: 0.25)),
             ),
             child: Icon(icon, color: colors.accent, size: 20),
@@ -262,8 +263,8 @@ class _AccountCardState extends State<_AccountCard> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           final colors = ctx.colors;
-          return AlertDialog(
-            title: Text(ctx.tr('ChangePassword')),
+          return AppDialog(
+            title: ctx.tr('ChangePassword'),
             content: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 380),
               child: Column(
@@ -296,26 +297,28 @@ class _AccountCardState extends State<_AccountCard> {
             ),
             actions: [
               TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setDialogState(() {
-                          busy = true;
-                          error = null;
-                        });
-                        final err = await server.changePassword(next.text, confirm.text);
-                        if (err != null) {
+              PressShrink(
+                child: FilledButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
                           setDialogState(() {
-                            busy = false;
-                            error = err;
+                            busy = true;
+                            error = null;
                           });
-                        } else {
-                          if (ctx.mounted) Navigator.of(ctx).pop();
-                          if (context.mounted) context.vm.showNotice(context.tr('PasswordChangedOthersSignedOut'));
-                        }
-                      },
-                child: Text(ctx.tr('Save')),
+                          final err = await server.changePassword(next.text, confirm.text);
+                          if (err != null) {
+                            setDialogState(() {
+                              busy = false;
+                              error = err;
+                            });
+                          } else {
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (context.mounted) context.vm.showNotice(context.tr('PasswordChangedOthersSignedOut'));
+                          }
+                        },
+                  child: Text(ctx.tr('Save')),
+                ),
               ),
             ],
           );
@@ -335,8 +338,8 @@ class _AccountCardState extends State<_AccountCard> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           final colors = ctx.colors;
-          return AlertDialog(
-            title: Text('${ctx.tr('ResetPassword')}: ${user.username}'),
+          return AppDialog(
+            title: '${ctx.tr('ResetPassword')}: ${user.username}',
             content: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 380),
               child: Column(
@@ -369,28 +372,30 @@ class _AccountCardState extends State<_AccountCard> {
             ),
             actions: [
               TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
-              FilledButton(
-                onPressed: busy
-                    ? null
-                    : () async {
-                        setDialogState(() {
-                          busy = true;
-                          error = null;
-                        });
-                        final err = await server.adminResetPassword(user.id, next.text, confirm.text);
-                        if (err != null) {
+              PressShrink(
+                child: FilledButton(
+                  onPressed: busy
+                      ? null
+                      : () async {
                           setDialogState(() {
-                            busy = false;
-                            error = err;
+                            busy = true;
+                            error = null;
                           });
-                        } else {
-                          if (ctx.mounted) Navigator.of(ctx).pop();
-                          if (context.mounted) {
-                            context.vm.showNotice(context.trf('PasswordResetDone', [user.username]));
+                          final err = await server.adminResetPassword(user.id, next.text, confirm.text);
+                          if (err != null) {
+                            setDialogState(() {
+                              busy = false;
+                              error = err;
+                            });
+                          } else {
+                            if (ctx.mounted) Navigator.of(ctx).pop();
+                            if (context.mounted) {
+                              context.vm.showNotice(context.trf('PasswordResetDone', [user.username]));
+                            }
                           }
-                        }
-                      },
-                child: Text(ctx.tr('Save')),
+                        },
+                  child: Text(ctx.tr('Save')),
+                ),
               ),
             ],
           );
@@ -457,7 +462,7 @@ class _AccountCardState extends State<_AccountCard> {
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: badgeColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(Radii.pill),
                   ),
                   child: Text(
                     server.serverStatusBadge,
@@ -477,11 +482,13 @@ class _AccountCardState extends State<_AccountCard> {
                   onSubmitted: (_) => _connect(server),
                 ),
                 actions: [
-                  FilledButton(
-                    onPressed: server.isConnecting ? null : () => _connect(server),
-                    child: server.isConnecting
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(context.tr('ConnectShort')),
+                  PressShrink(
+                    child: FilledButton(
+                      onPressed: server.isConnecting ? null : () => _connect(server),
+                      child: server.isConnecting
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                          : Text(context.tr('ConnectShort')),
+                    ),
                   ),
                 ],
               ),
@@ -549,10 +556,12 @@ class _AccountCardState extends State<_AccountCard> {
                         ],
                       ),
                     ),
-                    FilledButton.icon(
-                      onPressed: vm.showLoginScreen,
-                      icon: const Icon(Icons.login_rounded, size: 16),
-                      label: Text(context.tr('SignIn')),
+                    PressShrink(
+                      child: FilledButton.icon(
+                        onPressed: vm.showLoginScreen,
+                        icon: const Icon(Icons.login_rounded, size: 16),
+                        label: Text(context.tr('SignIn')),
+                      ),
                     ),
                   ],
                 ),
@@ -575,10 +584,12 @@ class _AccountCardState extends State<_AccountCard> {
                 const SizedBox(height: 4),
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final add = FilledButton.icon(
-                      onPressed: server.isAddingUser ? null : () => _add(server),
-                      icon: const Icon(Icons.person_add_alt_1_rounded),
-                      label: Text(context.tr('Add')),
+                    final add = PressShrink(
+                      child: FilledButton.icon(
+                        onPressed: server.isAddingUser ? null : () => _add(server),
+                        icon: const Icon(Icons.person_add_alt_1_rounded),
+                        label: Text(context.tr('Add')),
+                      ),
                     );
                     if (constraints.maxWidth < 760) {
                       return Column(
@@ -759,10 +770,12 @@ class _LibraryCardState extends State<_LibraryCard> {
                         label: Text(context.tr('Reindex')),
                       ),
                     ),
-                    FilledButton.icon(
-                      onPressed: server.isUpdatingServerConfig ? null : () => _saveServerFolder(server),
-                      icon: const Icon(Icons.save_rounded, size: 18),
-                      label: Text(context.tr('SaveFolder')),
+                    PressShrink(
+                      child: FilledButton.icon(
+                        onPressed: server.isUpdatingServerConfig ? null : () => _saveServerFolder(server),
+                        icon: const Icon(Icons.save_rounded, size: 18),
+                        label: Text(context.tr('SaveFolder')),
+                      ),
                     ),
                   ],
                 ),
@@ -795,10 +808,12 @@ class _LibraryCardState extends State<_LibraryCard> {
                       icon: const Icon(Icons.folder_open_rounded, size: 18),
                       label: Text(context.tr('Browse')),
                     ),
-                    FilledButton.icon(
-                      onPressed: server.isScanning ? null : server.scanLocalFolder,
-                      icon: const Icon(Icons.manage_search_rounded, size: 18),
-                      label: Text(context.tr('Scan')),
+                    PressShrink(
+                      child: FilledButton.icon(
+                        onPressed: server.isScanning ? null : server.scanLocalFolder,
+                        icon: const Icon(Icons.manage_search_rounded, size: 18),
+                        label: Text(context.tr('Scan')),
+                      ),
                     ),
                   ],
                 ),
@@ -816,17 +831,10 @@ class _LibraryCardState extends State<_LibraryCard> {
   }
 }
 
-/// What is downloaded, how much room it takes, what is being downloaded now, and a way to remove it all (after a
-/// second tap: it can be gigabytes).
-class _DownloadsCard extends StatefulWidget {
+/// What is downloaded, how much room it takes, what is being downloaded now, and a way to remove it all (asked first:
+/// it can be gigabytes).
+class _DownloadsCard extends StatelessWidget {
   const _DownloadsCard();
-
-  @override
-  State<_DownloadsCard> createState() => _DownloadsCardState();
-}
-
-class _DownloadsCardState extends State<_DownloadsCard> {
-  bool _confirming = false;
 
   @override
   Widget build(BuildContext context) {
@@ -878,34 +886,23 @@ class _DownloadsCardState extends State<_DownloadsCard> {
 
             if (downloads.hasAnything) ...[
               const SizedBox(height: 14),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 10,
-                runSpacing: 8,
-                children: _confirming
-                    ? [
-                        OutlinedButton(
-                          onPressed: () => setState(() => _confirming = false),
-                          child: Text(context.tr('Cancel')),
-                        ),
-                        FilledButton.icon(
-                          style: FilledButton.styleFrom(backgroundColor: colors.danger),
-                          onPressed: () async {
-                            setState(() => _confirming = false);
-                            downloads.removeAll();
-                          },
-                          icon: const Icon(Icons.delete_forever_rounded),
-                          label: Text(context.tr('DownloadsRemoveConfirm')),
-                        ),
-                      ]
-                    : [
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
-                          onPressed: () => setState(() => _confirming = true),
-                          icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
-                          label: Text(context.tr('DownloadsRemoveAll')),
-                        ),
-                      ],
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
+                  onPressed: () async {
+                    final confirmed = await confirmAction(
+                      context,
+                      title: context.tr('DownloadsRemoveAll'),
+                      message: context.trf('DownloadsRemoveAllConfirm', [downloads.copyCount, downloads.sizeLabel]),
+                      confirmLabel: context.tr('DownloadsRemoveConfirm'),
+                      destructive: true,
+                    );
+                    if (confirmed) downloads.removeAll();
+                  },
+                  icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
+                  label: Text(context.tr('DownloadsRemoveAll')),
+                ),
               ),
             ],
           ],
@@ -1011,7 +1008,7 @@ class _AudioCard extends StatelessWidget {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: colors.surface1,
-              borderRadius: BorderRadius.circular(Radii.small + 2),
+              borderRadius: BorderRadius.circular(Radii.small),
               border: Border.all(color: border),
             ),
             child: Column(
@@ -1024,7 +1021,7 @@ class _AudioCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: MedalColors.bg(tier),
                         border: Border.all(color: MedalColors.border(tier)),
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(Radii.tag),
                       ),
                       child: Text(
                         badgeText,
@@ -1196,7 +1193,7 @@ class _AudioCard extends StatelessWidget {
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small + 2)),
+                decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small)),
                 child: Text(
                   audio.signalPath,
                   style: TextStyle(
@@ -1223,7 +1220,9 @@ Widget _choice(String label, {required bool selected, VoidCallback? onPressed}) 
     padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14)),
   );
   return selected
-      ? FilledButton(style: style, onPressed: onPressed, child: Text(label))
+      ? PressShrink(
+          child: FilledButton(style: style, onPressed: onPressed, child: Text(label)),
+        )
       : OutlinedButton(style: style, onPressed: onPressed, child: Text(label));
 }
 
@@ -1258,32 +1257,24 @@ class _AppearanceCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            Row(
+            // The two themes as choices, like the languages.
+            Text(
+              context.tr('Theme'),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+            ),
+            const SizedBox(height: 2),
+            Text(context.tr('SettingsThemeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr('Theme'),
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                      ),
-                      Text(context.tr('SettingsThemeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                    ],
+                for (final (light, key) in const [(false, 'ThemeDark'), (true, 'ThemeLight')])
+                  _choice(
+                    context.tr(key),
+                    selected: vm.isLight == light,
+                    onPressed: () => vm.setTheme(light: light),
                   ),
-                ),
-                Tooltip(
-                  message: context.tr(vm.isLight ? 'TipThemeDark' : 'TipThemeLight'),
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                    ),
-                    onPressed: vm.toggleTheme,
-                    icon: Icon(vm.isLight ? Icons.dark_mode_outlined : Icons.light_mode_outlined, size: 16),
-                    label: Text(context.tr('Theme')),
-                  ),
-                ),
               ],
             ),
             const SizedBox(height: 16),

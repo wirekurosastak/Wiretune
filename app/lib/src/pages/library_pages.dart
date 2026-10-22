@@ -31,10 +31,12 @@ class EmptyLibrary extends StatelessWidget {
       title: context.tr('EmptyLibraryTitle'),
       hint: context.tr(vm.capabilities.supportsLocalFolder ? 'EmptyLibraryHint' : 'EmptyLibraryHintServer'),
       actions: [
-        FilledButton.icon(
-          onPressed: vm.showLoginScreen,
-          icon: const Icon(Icons.dns_outlined, size: 18),
-          label: Text(context.tr('ConnectToServer')),
+        PressShrink(
+          child: FilledButton.icon(
+            onPressed: vm.showLoginScreen,
+            icon: const Icon(Icons.dns_outlined, size: 18),
+            label: Text(context.tr('ConnectToServer')),
+          ),
         ),
         if (vm.capabilities.supportsLocalFolder)
           OutlinedButton.icon(
@@ -59,7 +61,6 @@ class TracksPage extends StatelessWidget {
         if (!tracks.hasTracks) return const EmptyLibrary();
         return PinnedTitleBar(
           title: context.tr('NavTracks'),
-          play: ListPlayButton(tracks: tracks.displayedTracks, onPlay: tracks.playAll),
           child: CustomScrollView(
             key: const PageStorageKey('tracks'),
             slivers: [
@@ -101,7 +102,6 @@ class FavoritesPage extends StatelessWidget {
         }
         return PinnedTitleBar(
           title: context.tr('NavFavorites'),
-          play: ListPlayButton(tracks: favorites.favoriteTracks, onPlay: favorites.playAll),
           child: CustomScrollView(
             key: const PageStorageKey('favorites'),
             slivers: [
@@ -134,7 +134,8 @@ class FavoritesPage extends StatelessWidget {
   }
 }
 
-/// The button that leads back from a detail page (a bordered button with the section's arrow).
+/// The button that leads back from a detail page: a bordered button with the section's arrow and [text], where it leads
+/// (on a phone the top bar has the arrow).
 class BackLink extends StatelessWidget {
   const BackLink({super.key, required this.text, required this.onPressed});
 
@@ -145,34 +146,21 @@ class BackLink extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     if (PhoneChrome.isPhone(context)) {
-      // The phone's back button: a plain arrow and the text, 56 px high.
+      // The top bar's arrow stands here, as in TIDAL.
+      if (PinnedTitleBar.hasBar(context)) return const SizedBox(height: PinnedTitleBar.height);
+      // Without one, the arrow alone where the bar's would be; where it leads is its tooltip.
       return Padding(
-        padding: const EdgeInsets.fromLTRB(8, 0, 16, 0),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(6),
-            onTap: onPressed,
-            child: SizedBox(
-              height: 56,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 0, 16, 0),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_back_rounded, size: 24, color: colors.textMain),
-                    const SizedBox(width: 8),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 280),
-                      child: Text(
-                        text,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.textMain),
-                      ),
-                    ),
-                  ],
-                ),
+        padding: const EdgeInsets.only(left: 4),
+        child: SizedBox(
+          height: PinnedTitleBar.height,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox.square(
+              dimension: 44,
+              child: IconButton(
+                tooltip: text,
+                onPressed: onPressed,
+                icon: Icon(Icons.arrow_back_rounded, size: 24, color: colors.textMain),
               ),
             ),
           ),
@@ -233,6 +221,7 @@ class DetailHeader extends StatelessWidget {
     required this.tags,
     required this.title,
     this.artworkBadge,
+    this.roundArtwork = false,
     this.back,
     this.details = const [],
     this.actions = const [],
@@ -243,6 +232,9 @@ class DetailHeader extends StatelessWidget {
 
   /// Shown on the artwork's corner, as on the tiles: an album's or a playlist's quality tag.
   final Widget? artworkBadge;
+
+  /// The artwork is round (an artist's picture): so is its shadow and glow.
+  final bool roundArtwork;
   final Widget? back;
 
   /// The labels above the title on a wide screen ("ALBUM", "PLAYLIST").
@@ -279,6 +271,9 @@ class DetailHeader extends StatelessWidget {
       BoxShadow(color: colors.palette.shadow, blurRadius: 40, spreadRadius: -8, offset: const Offset(0, 20)),
       BoxShadow(color: colors.accent.withValues(alpha: 0.18), blurRadius: 60, spreadRadius: -10),
     ];
+    final frame = roundArtwork
+        ? BoxDecoration(shape: BoxShape.circle, boxShadow: shadow)
+        : BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow);
     final badge = artworkBadge;
     final framed = badge == null
         ? artwork
@@ -301,15 +296,40 @@ class DetailHeader extends StatelessWidget {
             ],
           );
     if (narrow) {
-      final narrowTitle =
-          titleWidget ??
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 24, letterSpacing: -0.6, fontWeight: FontWeight.w800, color: colors.textMain),
-          );
+      // The phone's top bar takes the name over once it has reached it: one of a line shrinks into the bar's title,
+      // a longer one (or a playlist's, which renames it) fades over to it.
+      final titleStyle = TextStyle(
+        fontSize: 24,
+        letterSpacing: -0.6,
+        fontWeight: FontWeight.w800,
+        color: colors.textMain,
+      );
+      final narrowTitle = titleWidget != null
+          ? PinnedTitleBar.pageTitle(context, titleWidget!)
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                // Measured in the font it is drawn in (the app's, which a Text takes from around it).
+                final painter = TextPainter(
+                  text: TextSpan(text: title, style: DefaultTextStyle.of(context).style.merge(titleStyle)),
+                  maxLines: 1,
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                )..layout(maxWidth: constraints.maxWidth);
+                final oneLine = !painter.didExceedMaxLines;
+                painter.dispose();
+                return PinnedTitleBar.pageTitle(
+                  context,
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: titleStyle,
+                  ),
+                  shrinkStyle: oneLine ? titleStyle : null,
+                );
+              },
+            );
       // The phone's header: the 230 px artwork with a glow, the title and the details centred, and a line of buttons
       // as tall as Play (see PlayShuffleButtons), Play over the ⋮ of the rows below.
       return SafeArea(
@@ -321,12 +341,7 @@ class DetailHeader extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 0),
               child: Column(
                 children: [
-                  Container(
-                    width: 230,
-                    height: 230,
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
-                    child: framed,
-                  ),
+                  Container(width: 230, height: 230, decoration: frame, child: framed),
                   const SizedBox(height: 20),
                   if (actions.isEmpty) PinnedTitleBar.anchor(context, narrowTitle) else narrowTitle,
                   if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
@@ -355,7 +370,10 @@ class DetailHeader extends StatelessWidget {
       children: [
         Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: tags),
         const SizedBox(height: 12),
-        titleWidget ?? Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle(context)),
+        PinnedTitleBar.pageTitle(
+          context,
+          titleWidget ?? Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle(context)),
+        ),
         if (detailRow != null) ...[const SizedBox(height: 12), detailRow],
         if (actions.isNotEmpty) ...[
           const SizedBox(height: 22),
@@ -372,12 +390,7 @@ class DetailHeader extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                width: 210,
-                height: 210,
-                decoration: BoxDecoration(borderRadius: BorderRadius.circular(Radii.card), boxShadow: shadow),
-                child: framed,
-              ),
+              Container(width: 210, height: 210, decoration: frame, child: framed),
               const SizedBox(width: 30),
               Expanded(child: text),
             ],
@@ -435,7 +448,7 @@ class SortButtons extends StatelessWidget {
                 context: context,
                 backgroundColor: colors.palette.modal,
                 shape: RoundedRectangleBorder(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.panel)),
                   side: BorderSide(color: colors.palette.glassBorder),
                 ),
                 // As tall as its choices (a sheet keeps to 9/16 of the screen otherwise, which cut the last ones off),
@@ -524,7 +537,7 @@ class SortButtons extends StatelessWidget {
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
                 color: colors.surface1,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(Radii.pill),
                 border: Border.all(color: colors.glassBorder),
               ),
               child: Row(
@@ -536,7 +549,7 @@ class SortButtons extends StatelessWidget {
                       curve: Curves.easeOutCubic,
                       decoration: BoxDecoration(
                         color: selected ? colors.accent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(Radii.pill),
                         boxShadow: selected ? colors.accentGlow(0.5) : const [],
                       ),
                       child: Material(
@@ -617,7 +630,7 @@ class _GenreFilter extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(Radii.pill),
           border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
         ),
         child: Row(
@@ -707,10 +720,11 @@ class AlbumDetail extends StatelessWidget {
     final vm = context.vm;
     final albums = vm.albums;
     final colors = context.colors;
+    final menu = ListMenu.album(album, onPlay: albums.playAlbum);
     return PinnedTitleBar(
       title: album.title,
       onBack: albums.closeAlbumDetail,
-      play: ListPlayButton(tracks: album.tracks, onPlay: albums.playAlbum),
+      menu: menu.topBarButton(),
       child: CustomScrollView(
         key: PageStorageKey('album-${album.id}'),
         slivers: [
@@ -746,7 +760,8 @@ class AlbumDetail extends StatelessWidget {
                     isDownloaded: () => vm.downloads.isAlbumDownloaded(album),
                     onPressed: () => vm.downloads.toggleAlbum(album),
                   ),
-                  menu: ListMenu.album(album, onPlay: albums.playAlbum).headerButton(),
+                  addToPlaylist: menu.addToPlaylistButton(),
+                  menu: menu.headerButton(),
                 ),
               ],
             ),
@@ -819,10 +834,11 @@ class ArtistDetail extends StatelessWidget {
     final colors = context.colors;
     final narrow = DetailHeader.isNarrow(context);
     final albumTracks = [for (final album in albums) ...album.tracks];
+    final menu = ListMenu.artist(artist, onPlay: artists.playArtist);
     return PinnedTitleBar(
       title: artist.name,
       onBack: artists.closeArtistDetail,
-      play: ListPlayButton(tracks: artist.tracks, onPlay: artists.playArtist),
+      menu: menu.topBarButton(),
       child: CustomScrollView(
         key: PageStorageKey('artist-${artist.id}'),
         slivers: [
@@ -835,6 +851,7 @@ class ArtistDetail extends StatelessWidget {
                 placeholderIcon: Icons.person,
                 placeholderColor: colors.palette.coral,
               ),
+              roundArtwork: true,
               tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
               title: artist.name,
               details: [
@@ -851,7 +868,8 @@ class ArtistDetail extends StatelessWidget {
                     isDownloaded: () => vm.downloads.isArtistDownloaded(artist),
                     onPressed: () => vm.downloads.toggleArtist(artist),
                   ),
-                  menu: ListMenu.artist(artist, onPlay: artists.playArtist).headerButton(),
+                  addToPlaylist: menu.addToPlaylistButton(),
+                  menu: menu.headerButton(),
                 ),
               ],
             ),
@@ -863,7 +881,7 @@ class ArtistDetail extends StatelessWidget {
                 child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 10)),
               ),
             ),
-            AlbumsSliver(albums: albums, onOpen: vm.openAlbum, onPlay: vm.albums.playAlbum),
+            AlbumsSliver(albums: albums, onOpen: vm.openAlbum, onPlay: vm.albums.playAlbum, withArtist: false),
           ],
           SliverToBoxAdapter(
             child: Padding(

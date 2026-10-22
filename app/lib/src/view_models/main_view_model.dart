@@ -202,23 +202,40 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Raised when the section on show is chosen again from the navigation while its page is up (no album's or artist's
-  /// page, no search over it): the page scrolls back to its top. Its place is kept otherwise.
+  /// Raised when the section on show is chosen again from the navigation while its list is up (no album's, artist's
+  /// or playlist's page, no search over it): the list scrolls back to its top. Its place is kept otherwise.
   final Event<void> scrollToTopRequested = Event<void>();
 
+  /// A tab (a section of the sidebar) as TIDAL's and Spotify's: another one shows as it was left, an album's, an
+  /// artist's or a playlist's page still open; the one on show chosen again goes from such a page back to its list,
+  /// and from the list to its top.
   void navigateTo(AppSection section) {
-    final again =
-        section == selectedSection && !isSearchOpen && !albums.isAlbumDetailOpen && !artists.isArtistDetailOpen;
-    if (again) scrollToTopRequested.emit(null);
-    albums.returnAction = null;
-    albums.closeAlbumDetail();
-    artists.returnAction = null;
-    artists.closeArtistDetail();
+    if (section == selectedSection && !isSearchOpen && !_closeDetailOf(section)) scrollToTopRequested.emit(null);
+    // A page kept open is its tab's from now on, wherever it was opened from.
+    albums.forgetOrigin();
+    artists.forgetOrigin();
     searchQuery = '';
     isSearchOpen = false;
     // The automatic playlists follow what was played since.
     if (section == AppSection.playlists) playlists.refreshPlaylists();
     selectedSection = section;
+  }
+
+  /// Closes the page open over [section]'s list; false when none is.
+  bool _closeDetailOf(AppSection section) {
+    switch (section) {
+      case AppSection.albums when albums.isAlbumDetailOpen:
+        albums.forgetOrigin();
+        albums.closeAlbumDetail();
+      case AppSection.artists when artists.isArtistDetailOpen:
+        artists.forgetOrigin();
+        artists.closeArtistDetail();
+      case AppSection.playlists when playlists.isPlaylistDetailOpen:
+        playlists.closePlaylistDetail();
+      default:
+        return false;
+    }
+    return true;
   }
 
   // ── Search ─────────────────────────────────────────────────────────────────────────────────────
@@ -278,13 +295,13 @@ class MainViewModel extends ChangeNotifier {
   // ── Full-screen player (phone) ─────────────────────────────────────────────────────────────────
 
   bool _isNowPlayingOpen = false;
-  NowPlayingTab _nowPlayingTab = NowPlayingTab.player;
+  NowPlayingTab _nowPlayingTab = NowPlayingTab.track;
 
   bool get isNowPlayingOpen => _isNowPlayingOpen;
   set isNowPlayingOpen(bool value) {
     if (_isNowPlayingOpen == value) return;
     _isNowPlayingOpen = value;
-    if (!value) nowPlayingTab = NowPlayingTab.player;
+    if (!value) nowPlayingTab = NowPlayingTab.track;
     notifyListeners();
   }
 
@@ -292,7 +309,7 @@ class MainViewModel extends ChangeNotifier {
   NowPlayingTab get nowPlayingTab => _nowPlayingTab;
   set nowPlayingTab(NowPlayingTab value) {
     _nowPlayingTab = value;
-    player.isQueueOpen = value != NowPlayingTab.player;
+    player.isQueueOpen = value != NowPlayingTab.track;
     notifyListeners();
   }
 
@@ -334,58 +351,55 @@ class MainViewModel extends ChangeNotifier {
   /// search, queue, detail page) and then walks back through the tabs the user visited. False when there is
   /// nothing left to go back to and the app may close.
   bool tryNavigateBack() {
+    final step = _backStep();
+    step?.call();
+    return step != null;
+  }
+
+  /// Whether back has somewhere to go in the app ([tryNavigateBack] would be true); the app tells the system so, which
+  /// otherwise closes it on a back gesture.
+  bool get canNavigateBack => _backStep() != null;
+
+  /// What back does now, or null when nothing is left to go back to.
+  VoidCallback? _backStep() {
     if (_isNowPlayingOpen) {
-      // The queue and the lyrics are pages of the full-screen player: back returns to the player, then closes it.
-      if (_nowPlayingTab != NowPlayingTab.player) {
-        nowPlayingTab = NowPlayingTab.player;
-      } else {
-        isNowPlayingOpen = false;
-      }
-      return true;
+      // The queue and the lyrics are tabs of the full-screen player: back returns to the track's, then closes it.
+      return _nowPlayingTab != NowPlayingTab.track
+          ? () => nowPlayingTab = NowPlayingTab.track
+          : () => isNowPlayingOpen = false;
     }
 
     // The sign-in screen is shown over an empty library; leaving it to reach the (empty) app would be a dead end.
-    if (_isLoginViewActive && library.tracks.isNotEmpty) {
-      isLoginViewActive = false;
-      return true;
-    }
+    if (_isLoginViewActive && library.tracks.isNotEmpty) return () => isLoginViewActive = false;
 
-    if (_isSearchOpen || _isSearchActive) {
-      closeSearch();
-      return true;
-    }
+    if (_isSearchOpen || _isSearchActive) return closeSearch;
 
-    if (player.isQueueOpen) {
-      player.closeQueue();
-      return true;
-    }
+    if (player.isQueueOpen) return player.closeQueue;
 
     switch (_selectedSection) {
       case AppSection.albums when albums.isAlbumDetailOpen:
-        albums.closeAlbumDetail();
-        return true;
+        return albums.closeAlbumDetail;
       case AppSection.artists when artists.isArtistDetailOpen:
-        artists.closeArtistDetail();
-        return true;
+        return artists.closeArtistDetail;
       case AppSection.playlists when playlists.isPlaylistDetailOpen:
-        playlists.closePlaylistDetail();
-        return true;
+        return playlists.closePlaylistDetail;
       default:
         break;
     }
 
     // Back from a tab goes to the tab the user came from, shown as it was left (an open album stays open).
     if (_tabHistory.isNotEmpty) {
-      final previous = _tabHistory.removeLast();
-      _isRestoringTab = true;
-      try {
-        selectedSection = previous;
-      } finally {
-        _isRestoringTab = false;
-      }
-      return true;
+      return () {
+        final previous = _tabHistory.removeLast();
+        _isRestoringTab = true;
+        try {
+          selectedSection = previous;
+        } finally {
+          _isRestoringTab = false;
+        }
+      };
     }
-    return false;
+    return null;
   }
 
   // ── Opening albums and artists from anywhere ───────────────────────────────────────────────────
@@ -631,8 +645,6 @@ class MainViewModel extends ChangeNotifier {
   bool _useOnlineLyrics = true;
 
   bool get isLight => _isLight;
-
-  void toggleTheme() => setTheme(light: !_isLight);
 
   void setTheme({required bool light, bool persist = true}) {
     _isLight = light;

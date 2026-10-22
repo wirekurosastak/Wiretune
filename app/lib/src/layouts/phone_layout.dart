@@ -18,118 +18,122 @@ import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/player_controls.dart';
+import '../widgets/player_sheet.dart';
 
 /// The phone layout: the page (each draws its own header with the search and account buttons) over the ambient
 /// backdrop, and floating over its lower edge the unified pill with the mini player and bottom navigation;
-/// search and the full-screen player slide over it.
-class PhoneLayout extends StatelessWidget {
+/// search and the full-screen player slide over it, the player with the finger that drags it ([PlayerSheet]).
+class PhoneLayout extends StatefulWidget {
   const PhoneLayout({super.key});
+
+  @override
+  State<PhoneLayout> createState() => _PhoneLayoutState();
+}
+
+class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStateMixin {
+  late final PlayerSheet _sheet = PlayerSheet(vsync: this, open: context.vm.isNowPlayingOpen);
+
+  @override
+  void dispose() {
+    _sheet.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
-    return PhoneChrome(
-      child: ListenableBuilder(
-        listenable: vm,
-        builder: (context, _) => Stack(
-          children: [
-            Scaffold(
-              backgroundColor: colors.palette.background,
-              // The page reaches under the floating bars; the Scaffold tells it how much they cover.
-              extendBody: true,
-              body: Stack(
-                children: [
-                  const Positioned.fill(child: AmbientBackdrop(colour: 0.70)),
-                  Column(
-                    children: [
-                      if (vm.isSearchOpen) const SafeArea(bottom: false, child: _SearchBar()),
-                      if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
-                      Expanded(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          switchInCurve: Curves.easeOutCubic,
-                          layoutBuilder: (currentChild, previousChildren) =>
-                              Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
-                          transitionBuilder: (child, animation) => FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(
-                              scale: Tween(begin: 0.985, end: 1.0).animate(animation),
-                              child: child,
+    return PlayerSheetScope(
+      sheet: _sheet,
+      child: PhoneChrome(
+        child: ListenableBuilder(
+          listenable: vm,
+          builder: (context, _) => Stack(
+            children: [
+              Scaffold(
+                backgroundColor: colors.palette.background,
+                // The page reaches under the floating bars; the Scaffold tells it how much they cover.
+                extendBody: true,
+                body: Stack(
+                  children: [
+                    const Positioned.fill(child: AmbientBackdrop(colour: 0.70)),
+                    Column(
+                      children: [
+                        if (vm.isSearchOpen) const SafeArea(bottom: false, child: _SearchBar()),
+                        if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
+                        Expanded(
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOutCubic,
+                            layoutBuilder: (currentChild, previousChildren) =>
+                                Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
+                            transitionBuilder: (child, animation) => FadeTransition(
+                              opacity: animation,
+                              child: ScaleTransition(
+                                scale: Tween(begin: 0.985, end: 1.0).animate(animation),
+                                child: child,
+                              ),
                             ),
+                            child: vm.isSearchOpen
+                                // A touch on the results puts the keyboard away (as in Spotify): a menu opened there
+                                // then has no field to give the focus back to when it closes.
+                                ? Listener(
+                                    key: const ValueKey('search'),
+                                    onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                                    child: const SearchResults(),
+                                  )
+                                : KeyedSubtree(
+                                    key: ValueKey(vm.selectedSection),
+                                    child: sectionPage(vm.selectedSection),
+                                  ),
                           ),
-                          child: vm.isSearchOpen
-                              ? const SearchResults(key: ValueKey('search'))
-                              : KeyedSubtree(key: ValueKey(vm.selectedSection), child: sectionPage(vm.selectedSection)),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
+                bottomNavigationBar: const _BottomBars(),
               ),
-              bottomNavigationBar: const _BottomBars(),
-            ),
-            Positioned.fill(child: _NowPlayingOverlay(isOpen: vm.isNowPlayingOpen)),
-            if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
-          ],
+              Positioned.fill(
+                child: _NowPlayingOverlay(sheet: _sheet, isOpen: vm.isNowPlayingOpen),
+              ),
+              if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// The full-screen player sliding up from the bottom when opened, and back down when closed.
+/// The full-screen player, as far open as its [sheet] is: pouring out of the mini player's cover when opened and back
+/// into it when closed, or with the finger ([MagicLamp]).
 class _NowPlayingOverlay extends StatefulWidget {
-  const _NowPlayingOverlay({required this.isOpen});
+  const _NowPlayingOverlay({required this.sheet, required this.isOpen});
 
+  final PlayerSheet sheet;
   final bool isOpen;
 
   @override
   State<_NowPlayingOverlay> createState() => _NowPlayingOverlayState();
 }
 
-class _NowPlayingOverlayState extends State<_NowPlayingOverlay> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 320),
-  );
-  late final Animation<Offset> _slide = Tween<Offset>(
-    begin: const Offset(0, 1),
-    end: Offset.zero,
-  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic));
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.isOpen) _controller.value = 1;
-  }
-
+class _NowPlayingOverlayState extends State<_NowPlayingOverlay> {
   @override
   void didUpdateWidget(_NowPlayingOverlay oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isOpen != oldWidget.isOpen) {
-      if (widget.isOpen) {
-        _controller.forward();
-      } else {
-        _controller.reverse();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+    if (widget.isOpen != oldWidget.isOpen) widget.sheet.follow(open: widget.isOpen);
   }
 
   @override
   Widget build(BuildContext context) {
+    final position = widget.sheet.position;
     return AnimatedBuilder(
-      animation: _controller,
+      animation: position,
       builder: (context, _) {
-        if (_controller.isDismissed && !widget.isOpen) return const SizedBox.shrink();
-        return SlideTransition(
-          position: _slide,
+        if (position.isDismissed && !widget.isOpen) return const SizedBox.shrink();
+        return MagicLamp(
+          sheet: widget.sheet,
           child: IgnorePointer(ignoring: !widget.isOpen, child: const NowPlayingPage()),
         );
       },
@@ -240,7 +244,6 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = context.colors.textMuted;
-    const duration = Duration(milliseconds: 320);
     return Semantics(
       selected: active,
       button: true,
@@ -249,34 +252,42 @@ class _NavItem extends StatelessWidget {
         // No ripple and no bounce: the section's colour and glow say which is active, as elsewhere.
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(Radii.card),
           splashFactory: NoSplash.splashFactory,
           highlightColor: Colors.transparent,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  height: 30,
-                  child: Icon(
-                    icon,
-                    size: 24,
-                    color: active ? color : muted,
-                    shadows: active ? [Shadow(color: color.withValues(alpha: 0.75), blurRadius: 16)] : null,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                AnimatedDefaultTextStyle(
-                  duration: duration,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: active ? FontWeight.w700 : FontWeight.w600,
-                    color: active ? color : muted,
-                  ),
-                  child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-                ),
-              ],
+            // The icon, its glow and the label take the colour together, in step with the page's fade.
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: active ? 1 : 0),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              builder: (context, lit, _) {
+                final tint = Color.lerp(muted, color, lit)!;
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      height: 30,
+                      child: Icon(
+                        icon,
+                        size: 24,
+                        color: tint,
+                        shadows: lit > 0 ? [Shadow(color: color.withValues(alpha: 0.75 * lit), blurRadius: 16)] : null,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    DefaultTextStyle(
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: lit > 0.5 ? FontWeight.w700 : FontWeight.w600,
+                        color: tint,
+                      ),
+                      child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ),
@@ -331,13 +342,16 @@ class _SearchBarState extends State<_SearchBar> {
                 fillColor: colors.surface2,
                 prefixIcon: Icon(Icons.search_rounded, size: 20, color: colors.accent),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(999), borderSide: BorderSide.none),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(Radii.pill),
+                  borderSide: BorderSide.none,
+                ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(Radii.pill),
                   borderSide: BorderSide(color: colors.glassBorder),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(Radii.pill),
                   borderSide: BorderSide(color: colors.accent, width: 1.5),
                 ),
                 suffixIcon: _controller.text.isEmpty
@@ -426,9 +440,7 @@ class _MiniPlayer extends StatelessWidget {
         // Room above it, as in TIDAL's pill, under the pill's rounded top.
         return Padding(
           padding: const EdgeInsets.only(top: 10),
-          child: VerticalSwipe(
-            upwards: true,
-            onSwipe: vm.openNowPlaying,
+          child: PlayerSheetDrag(
             // The cover and Next stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
             // of the pill's width, as they are.
             child: LayoutBuilder(
@@ -445,9 +457,11 @@ class _MiniPlayer extends StatelessWidget {
                             padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
                             child: Row(
                               children: [
+                                // The lamp the full-screen player pours out of.
                                 DecoratedBox(
+                                  key: PlayerSheetScope.maybeOf(context)?.lamp,
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(Radii.small + 2),
+                                    borderRadius: BorderRadius.circular(Radii.small),
                                     boxShadow: [
                                       BoxShadow(
                                         color: colors.palette.shadow,
@@ -456,11 +470,7 @@ class _MiniPlayer extends StatelessWidget {
                                       ),
                                     ],
                                   ),
-                                  child: CoverImage(
-                                    path: track.coverArtPath,
-                                    size: _coverSize,
-                                    radius: Radii.small + 2,
-                                  ),
+                                  child: CoverImage(path: track.coverArtPath, size: _coverSize, radius: Radii.small),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(

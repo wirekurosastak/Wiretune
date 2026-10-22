@@ -8,9 +8,10 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
+import 'buttons.dart';
 
 /// Asks before an action that can't easily be taken back. True when the user confirmed it. Cancel has the focus, so a
-/// stray press of a remote's OK button doesn't confirm a [destructive] action.
+/// stray press of a remote's OK button doesn't confirm a [destructive] action, which is red.
 Future<bool> confirmAction(
   BuildContext context, {
   required String title,
@@ -20,8 +21,8 @@ Future<bool> confirmAction(
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
+    builder: (ctx) => AppDialog(
+      title: title,
       content: Text(message),
       actions: [
         TextButton(
@@ -29,11 +30,13 @@ Future<bool> confirmAction(
           onPressed: () => Navigator.of(ctx).pop(false),
           child: Text(ctx.tr('Cancel')),
         ),
-        FilledButton(
-          autofocus: !destructive,
-          style: destructive ? FilledButton.styleFrom(backgroundColor: ctx.colors.danger) : null,
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: Text(confirmLabel),
+        PressShrink(
+          child: FilledButton(
+            autofocus: !destructive,
+            style: destructive ? FilledButton.styleFrom(backgroundColor: ctx.colors.danger) : null,
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(confirmLabel),
+          ),
         ),
       ],
     ),
@@ -45,8 +48,8 @@ Future<bool> confirmAction(
 /// dismissed.
 Future<PlayerSwipe?> askPlayerSwipe(BuildContext context) => showDialog<PlayerSwipe>(
   context: context,
-  builder: (ctx) => AlertDialog(
-    title: Text(ctx.tr('PlayerSwipeQuestion')),
+  builder: (ctx) => AppDialog(
+    title: ctx.tr('PlayerSwipeQuestion'),
     content: Text(ctx.tr('PlayerSwipeLater')),
     actions: [
       for (final (choice, key) in [(PlayerSwipe.tracks, 'PlayerSwipeTracks'), (PlayerSwipe.tabs, 'PlayerSwipeTabs')])
@@ -81,7 +84,6 @@ Future<void> showNewPlaylistDialog(
   String adding = '',
 }) => showDialog<void>(
   context: context,
-  useSafeArea: false,
   builder: (_) => _NewPlaylistDialog(tracks: tracks, name: name, adding: adding),
 );
 
@@ -97,11 +99,9 @@ Future<void> showAddToPlaylistDialog(
   final playlists = context.vm.playlists;
   final createNew = await showDialog<bool>(
     context: context,
-    useSafeArea: false,
-    builder: (dialog) => _DialogCard(
+    builder: (dialog) => AppDialog(
       title: dialog.tr('TipAddToPlaylist'),
       subtitle: label,
-      onClose: () => Navigator.pop(dialog),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 320),
         child: ListView(
@@ -144,24 +144,14 @@ Future<void> showAddTrackToPlaylistDialog(BuildContext context, Track track) =>
 
 /// Asks before [playlist] is deleted.
 Future<void> confirmDeletePlaylist(BuildContext context, Playlist playlist) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    useSafeArea: false,
-    builder: (dialog) => _DialogCard(
-      title: dialog.tr('PlaylistDeleteAction'),
-      onClose: () => Navigator.pop(dialog),
-      content: Text(dialog.trf('PlaylistDeleteConfirm', [playlist.name])),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(dialog), child: Text(dialog.tr('Cancel'))),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: dialog.colors.danger, foregroundColor: Colors.white),
-          onPressed: () => Navigator.pop(dialog, true),
-          child: Text(dialog.tr('Delete')),
-        ),
-      ],
-    ),
+  final confirmed = await confirmAction(
+    context,
+    title: context.tr('PlaylistDeleteAction'),
+    message: context.trf('PlaylistDeleteConfirm', [playlist.name]),
+    confirmLabel: context.tr('Delete'),
+    destructive: true,
   );
-  if (confirmed == true && context.mounted) context.vm.playlists.deletePlaylist(playlist);
+  if (confirmed && context.mounted) context.vm.playlists.deletePlaylist(playlist);
 }
 
 class _NewPlaylistDialog extends StatefulWidget {
@@ -191,9 +181,8 @@ class _NewPlaylistDialogState extends State<_NewPlaylistDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => _DialogCard(
+  Widget build(BuildContext context) => AppDialog(
     title: context.tr('PlaylistNew'),
-    onClose: () => Navigator.pop(context),
     subtitle: widget.tracks.isEmpty ? null : context.trf('PlaylistAlsoAddsTrack', [widget.adding]),
     content: TextField(
       controller: _name,
@@ -204,83 +193,63 @@ class _NewPlaylistDialogState extends State<_NewPlaylistDialog> {
     ),
     actions: [
       TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('Cancel'))),
-      FilledButton(onPressed: _create, child: Text(context.tr('Create'))),
+      PressShrink(
+        child: FilledButton(onPressed: _create, child: Text(context.tr('Create'))),
+      ),
     ],
   );
 }
 
-/// The card of the playlist dialogs: a title with a close button, a line about what it is for, the content and the
-/// buttons, in the middle of the screen.
-class _DialogCard extends StatelessWidget {
-  const _DialogCard({
-    required this.title,
-    this.subtitle,
-    required this.content,
-    required this.actions,
-    required this.onClose,
-  });
+/// Every dialog of the app, one look: the title (and a line about what it is for), the content, and the buttons at the
+/// bottom right, Cancel first. No close button: Cancel, Back or a tap beside it closes it. A TV remote's focus starts in
+/// it.
+class AppDialog extends StatelessWidget {
+  const AppDialog({super.key, required this.title, this.subtitle, required this.content, required this.actions});
 
   final String title;
   final String? subtitle;
   final Widget content;
   final List<Widget> actions;
-  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
-          child: Material(
-            color: colors.palette.modal,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(color: colors.palette.glassBorder),
-            ),
-            elevation: 12,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
-              child: FocusScope(
-                autofocus: true,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: colors.textMain),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: context.tr('Close'),
-                          onPressed: onClose,
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                      ],
-                    ),
-                    if (subtitle != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Text(subtitle!, style: TextStyle(fontSize: 13, color: colors.textMuted)),
-                      ),
-                    const SizedBox(height: 8),
-                    content,
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        for (final action in actions) Padding(padding: const EdgeInsets.only(left: 8), child: action),
-                      ],
-                    ),
-                  ],
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 16),
+          child: FocusScope(
+            autofocus: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: colors.textMain),
                 ),
-              ),
+                if (subtitle != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(subtitle!, style: TextStyle(fontSize: 13, color: colors.textMuted)),
+                  ),
+                const SizedBox(height: 14),
+                DefaultTextStyle.merge(
+                  style: TextStyle(fontSize: 14, height: 1.4, color: colors.textMain),
+                  child: content,
+                ),
+                const SizedBox(height: 18),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OverflowBar(
+                    spacing: 8,
+                    overflowSpacing: 8,
+                    overflowAlignment: OverflowBarAlignment.end,
+                    children: actions,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

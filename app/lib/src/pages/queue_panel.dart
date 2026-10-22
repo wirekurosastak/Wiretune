@@ -56,7 +56,7 @@ class QueueList extends StatelessWidget {
 
 /// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, or the bouncing bars of the
 /// current track), title and artist, format, length, the arrows and the remove button. The current entry is washed in
-/// the accent.
+/// the accent. On a phone it is as large as the phone's other track rows, its × a finger's target.
 class _QueueRow extends StatefulWidget {
   const _QueueRow({
     super.key,
@@ -88,18 +88,27 @@ class _QueueRowState extends State<_QueueRow> {
     final item = widget.item;
     final track = item.track;
     final current = item.isCurrent;
-    Widget small(IconData icon, String tip, VoidCallback? onPressed, {Color? color}) => SizedBox(
-      width: 28,
-      height: 28,
+    final phone = PhoneChrome.isPhone(context);
+    final cover = phone ? 56.0 : 42.0;
+    Widget small(
+      IconData icon,
+      String tip,
+      VoidCallback? onPressed, {
+      Color? color,
+      double size = 28,
+      double iconSize = 16,
+    }) => SizedBox(
+      width: size,
+      height: size,
       child: IconButton(
         tooltip: context.tr(tip),
         padding: EdgeInsets.zero,
-        iconSize: 16,
+        iconSize: iconSize,
         onPressed: onPressed,
         icon: Icon(icon, color: color ?? colors.textMuted),
       ),
     );
-    final radius = BorderRadius.circular(Radii.card - 2);
+    final radius = BorderRadius.circular(Radii.medium);
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: MouseRegion(
@@ -118,7 +127,7 @@ class _QueueRowState extends State<_QueueRow> {
             onTap: () => player.playQueueItem(item),
             child: LayoutBuilder(
               builder: (context, constraints) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: EdgeInsets.fromLTRB(10, phone ? 6 : 7, phone ? 0 : 10, phone ? 6 : 7),
                 child: Row(
                   children: [
                     ReorderableDragStartListener(
@@ -133,12 +142,12 @@ class _QueueRowState extends State<_QueueRow> {
                     ),
                     const SizedBox(width: 6),
                     SizedBox(
-                      width: 42,
-                      height: 42,
+                      width: cover,
+                      height: cover,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          CoverImage(path: track.coverArtPath, radius: Radii.small, decodeWidth: 84),
+                          CoverImage(path: track.coverArtPath, radius: Radii.small, decodeWidth: (cover * 2).round()),
                           if (current)
                             DecoratedBox(
                               decoration: BoxDecoration(
@@ -158,12 +167,16 @@ class _QueueRowState extends State<_QueueRow> {
                                   color: Color(0x99000000),
                                   borderRadius: BorderRadius.only(
                                     topLeft: Radius.circular(Radii.small),
-                                    bottomRight: Radius.circular(6),
+                                    bottomRight: Radius.circular(Radii.tag),
                                   ),
                                 ),
                                 child: Text(
                                   '${item.displayIndex}',
-                                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white),
+                                  style: TextStyle(
+                                    fontSize: phone ? 10 : 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                  ),
                                 ),
                               ),
                             ),
@@ -180,17 +193,17 @@ class _QueueRowState extends State<_QueueRow> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w700,
+                              fontSize: phone ? 16 : 13.5,
+                              fontWeight: phone ? FontWeight.w600 : FontWeight.w700,
                               color: current ? colors.hover : colors.textMain,
                             ),
                           ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: phone ? 3 : 2),
                           Text(
                             track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 11.5, color: colors.textMuted),
+                            style: TextStyle(fontSize: phone ? 13 : 11.5, color: colors.textMuted),
                           ),
                         ],
                       ),
@@ -204,13 +217,13 @@ class _QueueRowState extends State<_QueueRow> {
                     Text(
                       track.formattedDuration,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: phone ? 13 : 12,
                         fontWeight: FontWeight.w500,
                         color: colors.textMuted,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    SizedBox(width: phone ? 4 : 12),
                     if (widget.showMoveButtons) ...[
                       small(
                         Icons.keyboard_arrow_up_rounded,
@@ -230,6 +243,8 @@ class _QueueRowState extends State<_QueueRow> {
                       'TipRemoveFromQueue',
                       () => player.removeQueueItem(item),
                       color: colors.danger,
+                      size: phone ? 44 : 28,
+                      iconSize: phone ? 22 : 16,
                     ),
                   ],
                 ),
@@ -351,20 +366,7 @@ class _LyricsViewState extends State<LyricsView> {
             ),
           );
         } else if (lyrics.showEmptyState) {
-          body = Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.text_snippet_outlined, size: 40, color: colors.palette.textDisabled),
-                const SizedBox(height: 10),
-                Text(
-                  lyrics.emptyText,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: colors.textMuted),
-                ),
-              ],
-            ),
-          );
+          body = EmptyState(icon: Icons.lyrics_outlined, title: lyrics.emptyText);
         } else if (lyrics.isSynced) {
           body = ShaderMask(
             // The lines fade out towards the top and the bottom edge.
@@ -563,7 +565,7 @@ class QueueLyricsPanel extends StatelessWidget {
                         overlayColor: Colors.transparent,
                       ),
                       onPressed: count == 0 ? null : player.clearQueue,
-                      icon: Icon(Icons.delete_outline_rounded, size: 18, color: count == 0 ? null : colors.danger),
+                      icon: Icon(Icons.playlist_remove_rounded, size: 18, color: count == 0 ? null : colors.danger),
                       label: Text(context.tr('ClearQueue')),
                     ),
                   ),

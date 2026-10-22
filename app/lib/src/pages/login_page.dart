@@ -12,6 +12,7 @@ import '../widgets/ambient.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/page_parts.dart';
+import '../widgets/buttons.dart';
 
 const Color _amber = Color(0xFFFFB703);
 
@@ -105,7 +106,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: colors.palette.panel,
-                        borderRadius: BorderRadius.circular(Radii.card + 4),
+                        borderRadius: BorderRadius.circular(Radii.panel),
                         boxShadow: [
                           BoxShadow(
                             color: colors.palette.shadow,
@@ -242,11 +243,13 @@ class _LoginPageState extends State<LoginPage> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 42)),
-              onPressed: vm.continueOffline,
-              icon: const Icon(Icons.library_music_rounded, size: 18),
-              label: Text(context.tr('BackToMusic')),
+            child: PressShrink(
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 42)),
+                onPressed: vm.continueOffline,
+                icon: const Icon(Icons.library_music_rounded, size: 18),
+                label: Text(context.tr('BackToMusic')),
+              ),
             ),
           ),
         ],
@@ -264,7 +267,7 @@ class _LoginPageState extends State<LoginPage> {
       decoration: BoxDecoration(
         color: _amber.withValues(alpha: 0x28 / 255),
         border: Border.all(color: _amber.withValues(alpha: 0.6)),
-        borderRadius: BorderRadius.circular(Radii.card - 2),
+        borderRadius: BorderRadius.circular(Radii.medium),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,11 +369,13 @@ class _LoginPageState extends State<LoginPage> {
         ),
       ],
       const SizedBox(height: 8),
-      FilledButton.icon(
-        style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-        onPressed: server.isAuthenticating ? null : _submit,
-        icon: Icon(setup ? Icons.admin_panel_settings_outlined : Icons.login_rounded, size: 18),
-        label: Text(context.tr(setup ? 'CreateAdminAndSignIn' : 'SignIn')),
+      PressShrink(
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+          onPressed: server.isAuthenticating ? null : _submit,
+          icon: Icon(setup ? Icons.admin_panel_settings_outlined : Icons.login_rounded, size: 18),
+          label: Text(context.tr(setup ? 'CreateAdminAndSignIn' : 'SignIn')),
+        ),
       ),
       if (server.hasAuthError) ...[
         const SizedBox(height: 12),
@@ -379,7 +384,7 @@ class _LoginPageState extends State<LoginPage> {
           decoration: BoxDecoration(
             color: const Color(0x28FF003C),
             border: Border.all(color: colors.danger.withValues(alpha: 0.6)),
-            borderRadius: BorderRadius.circular(Radii.card - 2),
+            borderRadius: BorderRadius.circular(Radii.medium),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

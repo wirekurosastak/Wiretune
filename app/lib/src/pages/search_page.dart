@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
+import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
@@ -23,12 +24,18 @@ class SearchResults extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final search = context.vm.search;
-    final colors = context.colors;
     return ListenableBuilder(
       listenable: search,
       builder: (context, _) {
         if (!search.isSearchActive) {
-          return EmptyState(icon: Icons.search, title: context.tr('Search'), hint: context.tr('SearchSubtitle'));
+          return EmptyState(icon: Icons.search, title: context.tr('Search'));
+        }
+        if (!search.hasResults) {
+          return EmptyState(
+            icon: Icons.search_off_rounded,
+            title: context.tr('NoResultsTitle'),
+            hint: context.tr('NoResultsHint'),
+          );
         }
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -36,66 +43,11 @@ class SearchResults extends StatelessWidget {
             final sideBySide = constraints.maxWidth >= _sideBySideWidth;
             final pad = EdgeInsets.symmetric(horizontal: narrow ? 16 : 30);
             final best = search.bestMatch;
+            // No title: the search field above shows what was searched for. The results start where a page's title
+            // would.
             return CustomScrollView(
               slivers: [
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(pad.left, narrow ? 12 : 24, pad.right, 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(text: '${context.tr('SearchResultsFor')} '),
-                              TextSpan(
-                                text: context.trf('QuotedText', [search.query]),
-                                style: TextStyle(color: colors.accent),
-                              ),
-                            ],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 30,
-                            letterSpacing: -0.8,
-                            fontWeight: FontWeight.w800,
-                            color: colors.textMain,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(context.tr('SearchSubtitle'), style: TextStyle(fontSize: 13, color: colors.textMuted)),
-                      ],
-                    ),
-                  ),
-                ),
-                if (!search.hasResults)
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 40),
-                        child: GlassCard(
-                          padding: const EdgeInsets.all(40),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.search_off_rounded, size: 56, color: colors.textMuted),
-                              const SizedBox(height: 14),
-                              Text(
-                                context.tr('NoResultsTitle'),
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: colors.textMain),
-                              ),
-                              const SizedBox(height: 14),
-                              Text(
-                                context.tr('NoResultsHint'),
-                                style: TextStyle(fontSize: 13, color: colors.textMuted),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                SliverToBoxAdapter(child: SizedBox(height: narrow ? 8 : 28)),
                 if (best != null && sideBySide)
                   SliverToBoxAdapter(
                     child: Padding(
@@ -203,7 +155,8 @@ class SearchResults extends StatelessWidget {
   }
 }
 
-/// The best match: a 110 px cover, its type, title and details, and a play button; the card opens it.
+/// The best match: a 116 px cover, its type, title and details, a play button and its ⋮, on a card 320 px wide; the
+/// card opens it.
 class _BestMatchCard extends StatelessWidget {
   const _BestMatchCard({required this.match});
 
@@ -263,7 +216,25 @@ class _BestMatchCard extends StatelessWidget {
               style: TextStyle(fontSize: 11, color: colors.textMuted),
             ),
             const SizedBox(height: 18),
-            TilePlayButton(color: typeColor, onPressed: match.play, tracks: match.tracks, size: 48),
+            Row(
+              children: [
+                TilePlayButton(color: typeColor, onPressed: match.play, tracks: match.tracks, size: 48),
+                const Spacer(),
+                // The same menu as its row's or tile's.
+                switch (match.item) {
+                  final Artist artist => ListMenu.artist(artist, onPlay: match.play).button(context),
+                  final Album album => ListMenu.album(album, onPlay: match.play).button(context),
+                  final Track track => TrackMenu(
+                    track: track,
+                    kind: TrackTableKind.search,
+                    width: 48,
+                    iconSize: 20,
+                    withFavorite: true,
+                  ),
+                  _ => const SizedBox.shrink(),
+                },
+              ],
+            ),
           ],
         ),
       ),
@@ -299,7 +270,7 @@ class _MetricCardState extends State<_MetricCard> {
         transform: Matrix4.translationValues(0, _hover ? -3 : 0, 0),
         decoration: BoxDecoration(
           color: _hover ? colors.surface2 : colors.surface1,
-          borderRadius: BorderRadius.circular(Radii.card + 2),
+          borderRadius: BorderRadius.circular(Radii.card),
           border: Border.all(color: _hover ? widget.accent.withValues(alpha: 0.7) : colors.glassBorder),
           boxShadow: _hover
               ? [
@@ -315,7 +286,7 @@ class _MetricCardState extends State<_MetricCard> {
         child: Material(
           type: MaterialType.transparency,
           child: InkWell(
-            borderRadius: BorderRadius.circular(Radii.card + 2),
+            borderRadius: BorderRadius.circular(Radii.card),
             onTap: widget.onTap,
             child: Padding(padding: EdgeInsets.all(widget.padding), child: widget.child),
           ),

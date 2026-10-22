@@ -51,6 +51,8 @@ No restart, no rescan:
   just the picture. With a server, it goes in the server's music folder and every player shows it.
 - **Sorting**: the lists start A→Z, the favorites with the newest. Pressing the active sort again turns it round, and
   what has no year or date goes last. A choice lasts until the app closes.
+- **Tabs keep their place**: an album, artist or playlist you opened is still open when you come back to its tab.
+  Pressing the tab you're on returns to its list, and pressing it again goes to the list's top.
 - **Hidden** artists, albums and tracks come back from *Settings → Hidden content*.
 
 ## Playing music
@@ -104,7 +106,8 @@ downloads never count as local music.
 
 - **An Android phone** plays a folder of its own too; the first **Scan** asks for the permission to read music. From
   Android 13 on that covers audio files only, so a `cover.jpg` beside them isn't seen (pictures inside the files are).
-- **In the full-screen player** a swipe left or right changes the track or switches between *Player*, *Queue* and
+- **A phone stays upright**, as in TIDAL and Spotify; a tablet turns.
+- **In the full-screen player** a swipe left or right changes the track or switches between *Track*, *Queue* and
   *Lyrics*: the first swipe asks which, and *Settings* changes it later.
 - **TVs** (Android TV, Samsung Tizen) are steered with the remote: the arrows move, the center button plays, Back goes
   back. Some formats may not play on Tizen ([audio.md](audio.md#tizen)).

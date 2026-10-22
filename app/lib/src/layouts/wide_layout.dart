@@ -24,12 +24,11 @@ import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
-import '../widgets/dialogs.dart';
-import '../widgets/downloads.dart';
 import '../widgets/links.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/spectrum_visualizer.dart';
+import '../widgets/track_list.dart';
 import '../widgets/tv_focus.dart';
 
 /// The desktop, tablet and TV layout: the header (logo, search, the mode pills, account, language, theme and, without a
@@ -346,7 +345,7 @@ class _SearchFieldState extends State<_SearchField> {
     }
     final width = MediaQuery.sizeOf(context).width;
     final focused = _focus.hasFocus;
-    final radius = BorderRadius.circular(999);
+    final radius = BorderRadius.circular(Radii.pill);
     OutlineInputBorder border(Color color, double thickness) => OutlineInputBorder(
       borderRadius: radius,
       borderSide: BorderSide(color: color, width: thickness),
@@ -425,7 +424,7 @@ class _HeaderModes extends StatelessWidget {
             child: Material(
               type: MaterialType.transparency,
               child: InkWell(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(Radii.tag),
                 onTap: onTap,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
@@ -433,7 +432,7 @@ class _HeaderModes extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: bg,
                     border: Border.all(color: border),
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(Radii.tag),
                     boxShadow: on
                         ? [BoxShadow(color: fg.withValues(alpha: 0.25), blurRadius: 10, spreadRadius: -2)]
                         : const [],
@@ -659,16 +658,18 @@ class _OfflineBanner extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 32),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-            ),
-            onPressed: vm.serverBannerNeedsSignIn ? vm.showLoginScreen : vm.retryConnectServer,
-            icon: Icon(vm.serverBannerNeedsSignIn ? Icons.login_rounded : Icons.refresh_rounded, size: 16),
-            label: Text(
-              context.tr(vm.serverBannerNeedsSignIn ? 'SignIn' : 'Reconnect'),
-              style: const TextStyle(fontSize: 12),
+          PressShrink(
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              onPressed: vm.serverBannerNeedsSignIn ? vm.showLoginScreen : vm.retryConnectServer,
+              icon: Icon(vm.serverBannerNeedsSignIn ? Icons.login_rounded : Icons.refresh_rounded, size: 16),
+              label: Text(
+                context.tr(vm.serverBannerNeedsSignIn ? 'SignIn' : 'Reconnect'),
+                style: const TextStyle(fontSize: 12),
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -765,10 +766,10 @@ class _Sidebar extends StatelessWidget {
                     Icons.queue_music_rounded,
                     palette.lime,
                     context.tr('NavPlaylists'),
-                    vm.playlists.playlists.length,
+                    vm.playlists.allPlaylists.length,
                   ),
+                  // Settings alone needs no heading: the gap sets it apart.
                   const SizedBox(height: 22),
-                  if (!compact) _GroupTitle(context.tr('SectionSettings')),
                   item(AppSection.settings, Icons.tune_rounded, colors.textMain, context.tr('NavSettings'), null),
                 ],
               ),
@@ -836,9 +837,10 @@ class _SidebarItemState extends State<_SidebarItem> {
     final selected = widget.selected;
     final color = widget.color;
     const duration = Duration(milliseconds: 260);
+    // The tile pops under the mouse: quick, with a small overshoot, rather than the slower fade of the rest.
     final tile = AnimatedScale(
       scale: _hover && !selected ? 1.08 : 1,
-      duration: duration,
+      duration: const Duration(milliseconds: 170),
       curve: Curves.easeOutBack,
       child: AnimatedContainer(
         duration: duration,
@@ -847,7 +849,7 @@ class _SidebarItemState extends State<_SidebarItem> {
         height: 30,
         decoration: BoxDecoration(
           color: selected ? color : color.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(Radii.small),
           boxShadow: selected
               ? [BoxShadow(color: color.withValues(alpha: 0.55), blurRadius: 14, spreadRadius: -2)]
               : const [],
@@ -898,7 +900,7 @@ class _SidebarItemState extends State<_SidebarItem> {
             duration: duration,
             curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(Radii.card),
+              borderRadius: BorderRadius.circular(Radii.medium),
               color: selected ? null : (_hover ? colors.surface1 : Colors.transparent),
               gradient: selected
                   ? LinearGradient(colors: [color.withValues(alpha: 0.24), color.withValues(alpha: 0.04)])
@@ -952,7 +954,7 @@ class _PlayerBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: colors.palette.modal,
-        borderRadius: BorderRadius.circular(Radii.panel + 2),
+        borderRadius: BorderRadius.circular(Radii.panel),
         border: Border.all(color: colors.palette.panelBorder),
         boxShadow: [
           BoxShadow(color: colors.palette.shadow, blurRadius: 30, spreadRadius: -8, offset: const Offset(0, 12)),
@@ -1069,19 +1071,11 @@ class _PlayerBar extends StatelessWidget {
                         ),
                       ),
                     ),
+                    // The heart and the track's menu with the rest, as on its row and in the phone's player.
                     if (track != null) ...[
                       const SizedBox(width: 8),
                       const FavoriteCurrentButton(size: 19, visualDensity: VisualDensity.compact),
-                      Tooltip(
-                        message: context.tr('TipAddToPlaylist'),
-                        child: IconButton(
-                          visualDensity: VisualDensity.compact,
-                          iconSize: 19,
-                          onPressed: () => showAddTrackToPlaylistDialog(context, track),
-                          icon: Icon(Icons.playlist_add_rounded, size: 19, color: colors.textMuted),
-                        ),
-                      ),
-                      _CurrentTrackDownloadButton(track: track),
+                      TrackMenu(track: track, kind: TrackTableKind.tracks, width: 40, iconSize: 19),
                     ],
                   ],
                 ),
@@ -1148,7 +1142,8 @@ class _PlayerBar extends StatelessWidget {
 }
 
 /// The cover of the current track, which opens and closes the queue: a dark veil with a chevron under the mouse or the
-/// keyboard's focus (and while the queue is open), and a glow of the accent while a track plays. It holds still.
+/// keyboard's focus (and while the queue is open), a small chevron at its foot on a touch screen, and a glow of the
+/// accent while a track plays. It holds still.
 class _QueueCover extends StatelessWidget {
   const _QueueCover();
 
@@ -1172,7 +1167,7 @@ class _QueueCover extends StatelessWidget {
           height: 58,
           decoration: BoxDecoration(
             color: colors.surface2,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(Radii.medium),
             boxShadow: [
               BoxShadow(
                 color: player.isPlaying ? colors.accent.withValues(alpha: 0.4) : colors.palette.shadow,
@@ -1187,6 +1182,26 @@ class _QueueCover extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               CoverImage(path: player.currentTrack?.coverArtPath, radius: 0, placeholderColor: colors.palette.cyan),
+              // A touch screen has no mouse to bring the veil: there a small chevron stays at the cover's foot.
+              if (AppPlatform.current.isMobile)
+                AnimatedOpacity(
+                  opacity: lit || open ? 0 : 1,
+                  duration: const Duration(milliseconds: 180),
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00000000), Color(0x8C000000)],
+                        stops: [0.45, 1],
+                      ),
+                    ),
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: Colors.white),
+                    ),
+                  ),
+                ),
               AnimatedOpacity(
                 opacity: lit ? 1 : (open ? 0.85 : 0),
                 duration: const Duration(milliseconds: 180),
@@ -1269,40 +1284,6 @@ class _Footer extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _CurrentTrackDownloadButton extends StatelessWidget {
-  const _CurrentTrackDownloadButton({required this.track});
-
-  final Track track;
-
-  @override
-  Widget build(BuildContext context) {
-    final vm = context.vm;
-    final downloads = vm.downloads;
-    final colors = context.colors;
-    return ValueListenableBuilder(
-      valueListenable: downloads.states,
-      builder: (context, _, _) {
-        if (!downloads.canDownload(track)) return const SizedBox.shrink();
-        final state = downloads.stateOf(track);
-        final withList = downloads.isDownloadedWithList(track);
-        return Tooltip(
-          message: downloadTip(context, track),
-          child: IconButton(
-            visualDensity: VisualDensity.compact,
-            iconSize: 19,
-            onPressed: withList ? null : () => downloads.toggleTrack(track),
-            icon: Icon(
-              downloadIcon(state) ?? Icons.download_rounded,
-              size: 19,
-              color: state == DownloadState.none ? colors.textMuted : colors.accent,
-            ),
-          ),
-        );
-      },
     );
   }
 }

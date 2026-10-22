@@ -45,7 +45,8 @@ class DownloadListButton extends StatelessWidget {
           icon: complete
               ? Icons.download_done_rounded
               : (downloaded ? Icons.downloading_rounded : Icons.download_rounded),
-          color: downloaded ? context.colors.accent : context.colors.textMain,
+          // Muted like the buttons beside it (bright under the mouse) until it is kept: then the accent.
+          color: downloaded ? context.colors.accent : null,
           progress: downloaded && !complete ? done / total : null,
           onPressed: onPressed,
         );

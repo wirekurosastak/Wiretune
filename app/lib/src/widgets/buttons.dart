@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -57,13 +58,58 @@ class _PressableState extends State<Pressable> {
   }
 }
 
+/// Gives a little under the finger or the click, as a quick answer to the press: a Play ([PopEffect.press]) and the
+/// filled buttons that start something (New playlist, Connect, a dialog's own). A finger that moves on (a scroll) lets
+/// go of it. It takes no part in deciding what the touch is: the button under it still gets the tap.
+class PressShrink extends StatefulWidget {
+  const PressShrink({super.key, required this.child, this.scale = 0.96});
+
+  final Widget child;
+
+  /// How small it gets: a round Play gives more (0.92) than a wide button.
+  final double scale;
+
+  @override
+  State<PressShrink> createState() => _PressShrinkState();
+}
+
+class _PressShrinkState extends State<PressShrink> {
+  bool _pressed = false;
+  Offset _down = Offset.zero;
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (event) {
+      // A button that can't be pressed (a Save while it saves) doesn't give.
+      final child = widget.child;
+      if (child is ButtonStyleButton && !child.enabled) return;
+      _down = event.position;
+      setState(() => _pressed = true);
+    },
+    onPointerMove: (event) {
+      if (_pressed && (event.position - _down).distance > kTouchSlop) setState(() => _pressed = false);
+    },
+    onPointerUp: (_) => setState(() => _pressed = false),
+    onPointerCancel: (_) => setState(() => _pressed = false),
+    child: AnimatedScale(
+      scale: _pressed ? widget.scale : 1,
+      // Quick to give, as a press is.
+      duration: Duration(milliseconds: _pressed ? 110 : 200),
+      curve: Curves.easeOutCubic,
+      child: widget.child,
+    ),
+  );
+}
+
 /// Lifts [child] and makes it a little larger under the mouse; with a [glowColor], a pill of its glow rises behind it.
+/// A Play ([press]) also gives under the finger or the click ([PressShrink]), as the players' round Play does.
 class PopEffect extends StatefulWidget {
-  const PopEffect({super.key, required this.child, this.enabled = true, this.glowColor});
+  const PopEffect({super.key, required this.child, this.enabled = true, this.glowColor, this.press = false});
 
   final Widget child;
   final bool enabled;
   final Color? glowColor;
+  final bool press;
 
   @override
   State<PopEffect> createState() => _PopEffectState();
@@ -77,7 +123,7 @@ class _PopEffectState extends State<PopEffect> {
     if (!widget.enabled) return widget.child;
     final glow = widget.glowColor;
     final scale = _hover ? 1.05 : 1.0;
-    return MouseRegion(
+    final effect = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: AnimatedContainer(
@@ -89,29 +135,39 @@ class _PopEffectState extends State<PopEffect> {
           ..scaleByDouble(scale, scale, 1.0, 1.0),
         decoration: glow != null && _hover
             ? BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: BorderRadius.circular(Radii.pill),
                 boxShadow: [BoxShadow(color: glow.withValues(alpha: 0.45), blurRadius: 18, spreadRadius: -2)],
               )
             : null,
         child: widget.child,
       ),
     );
+    return widget.press ? PressShrink(scale: 0.92, child: effect) : effect;
   }
 }
 
 /// A list's accent-filled, glowing "Play" and the player's shuffle switch beside it ([ShuffleSwitch]: Play starts
-/// the list from its first track, or from any while shuffle is on), then the list's [download] and [menu]. On a phone
-/// Play is round, the largest, at the right edge and shuffle beside it; an album's, an artist's or a
-/// playlist's (the pages with a [menu]) spread over the line, the menu and the download at the left edge, as in
-/// Spotify. While the queue is [tracks], Play pauses and resumes it ([ListPlayButton]).
+/// the list from its first track, or from any while shuffle is on), then the list's [download], its way into a
+/// playlist ([addToPlaylist]) and [menu]. On a phone Play is round, the largest, at the right edge and shuffle beside
+/// it; an album's, an artist's or a playlist's (the pages with a [menu]) spread over the line, the download and the
+/// playlist at the left edge, as in Spotify; their menu is the top bar's there (`ListMenu.topBarButton`). While the queue is [tracks], Play pauses and resumes it
+/// ([ListPlayButton]).
 class PlayShuffleButtons extends StatelessWidget {
-  const PlayShuffleButtons({super.key, this.tracks = const [], this.onPlay, this.download, this.menu});
+  const PlayShuffleButtons({
+    super.key,
+    this.tracks = const [],
+    this.onPlay,
+    this.download,
+    this.addToPlaylist,
+    this.menu,
+  });
 
   final List<Track> tracks;
 
   /// Null for a list with nothing to play: Play and the switch are then off.
   final VoidCallback? onPlay;
   final Widget? download;
+  final Widget? addToPlaylist;
   final Widget? menu;
 
   @override
@@ -119,22 +175,25 @@ class PlayShuffleButtons extends StatelessWidget {
     final play = ListPlayButton(tracks: tracks, onPlay: onPlay);
     final shuffle = ShuffleSwitch(enabled: onPlay != null);
     if (PhoneChrome.isPhone(context)) {
-      final left = [?menu, ?download];
       return Row(
         mainAxisSize: menu == null ? MainAxisSize.min : MainAxisSize.max,
         children: [
           if (menu != null) ...[
-            for (final (i, button) in left.indexed) ...[if (i > 0) const SizedBox(width: 10), button],
+            ?download,
+            if (download != null && addToPlaylist != null) const SizedBox(width: 10),
+            ?addToPlaylist,
             const Spacer(),
-          ] else
-            for (final button in left) ...[button, const SizedBox(width: 10)],
+          ] else if (download != null) ...[
+            download!,
+            const SizedBox(width: 10),
+          ],
           shuffle,
           const SizedBox(width: 10),
           play,
         ],
       );
     }
-    return Wrap(spacing: 12, runSpacing: 8, children: [play, shuffle, ?download, ?menu]);
+    return Wrap(spacing: 12, runSpacing: 8, children: [play, shuffle, ?download, ?addToPlaylist, ?menu]);
   }
 
   static const TextStyle _labelStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.1);
@@ -252,9 +311,10 @@ class ListPlayButton extends StatelessWidget {
     );
     return PopEffect(
       enabled: onPressed != null,
+      press: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(Radii.pill),
           boxShadow: onPressed == null ? const [] : colors.accentGlow(),
         ),
         child: phone

@@ -51,11 +51,25 @@ extension WiretuneThemeContext on BuildContext {
   WiretuneColors get colors => Theme.of(this).extension<WiretuneColors>()!;
 }
 
-/// Corner radii: small controls, cards and rows, the floating panels.
+/// The corner radii, one scale for every screen: a corner takes the step of what it rounds.
 abstract final class Radii {
+  /// Tags and badges, the marks on a cover, the ink around a link of text.
+  static const double tag = 4;
+
+  /// A row's cover, an icon's square, a checkbox, a box of text inside a card, the scrollbar.
   static const double small = 8;
-  static const double card = 14;
+
+  /// Rows (a list's, the queue's, the sidebar's), fields, a tile's cover, the player bar's cover.
+  static const double medium = 12;
+
+  /// Cards and menus, a page's artwork, a banner.
+  static const double card = 16;
+
+  /// The floating panels and the player bar, dialogs and sheets.
   static const double panel = 20;
+
+  /// Round ends: more than half the height of anything.
+  static const double pill = 999;
 }
 
 ThemeData buildTheme({
@@ -81,7 +95,7 @@ ThemeData buildTheme({
   final focus = accent.withValues(alpha: isTv ? 0.45 : 0.25);
   const stadium = StadiumBorder();
   OutlineInputBorder field(Color color, [double width = 1]) => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: BorderRadius.circular(Radii.medium),
     borderSide: BorderSide(color: color, width: width),
   );
   final textTheme = Typography.material2021(platform: TargetPlatform.android).englishLike
@@ -138,12 +152,12 @@ ThemeData buildTheme({
       trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
     ),
     checkboxTheme: CheckboxThemeData(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Radii.tag)),
       side: BorderSide(color: palette.textMuted, width: 1.5),
     ),
     scrollbarTheme: ScrollbarThemeData(
       thickness: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.hovered) ? 8 : 5),
-      radius: const Radius.circular(8),
+      radius: const Radius.circular(Radii.small),
       thumbColor: WidgetStateProperty.all(palette.glassHighlight),
       crossAxisMargin: 3,
     ),
@@ -211,7 +225,7 @@ ThemeData buildTheme({
     dialogTheme: DialogThemeData(
       backgroundColor: palette.modal,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(Radii.panel),
         side: BorderSide(color: palette.glassBorder),
       ),
     ),

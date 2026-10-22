@@ -12,6 +12,7 @@ enum BestMatchKind { artist, album, track }
 class BestMatch {
   BestMatch({
     required this.kind,
+    required this.item,
     required this.title,
     required this.subtitle,
     required this.meta,
@@ -22,6 +23,9 @@ class BestMatch {
   });
 
   final BestMatchKind kind;
+
+  /// The [Artist], [Album] or [Track] it is: its ⋮ is that one's menu.
+  final Object item;
   final String title;
   final String subtitle;
   final String meta;
@@ -131,6 +135,7 @@ class SearchViewModel extends ChangeNotifier {
 
   BestMatch _artistMatch(Artist artist) => BestMatch(
     kind: BestMatchKind.artist,
+    item: artist,
     title: artist.name,
     subtitle: Localizer.get('SubtitleArtist'),
     meta:
@@ -145,6 +150,7 @@ class SearchViewModel extends ChangeNotifier {
 
   BestMatch _albumMatch(Album album) => BestMatch(
     kind: BestMatchKind.album,
+    item: album,
     title: album.title,
     subtitle: album.artist,
     meta: album.releaseYear != null
@@ -162,6 +168,7 @@ class SearchViewModel extends ChangeNotifier {
     void play() => _player.playQueue([track], track);
     return BestMatch(
       kind: BestMatchKind.track,
+      item: track,
       title: track.title,
       subtitle: '${track.artist} • ${track.album}',
       meta: '${track.formattedDuration} • ${track.format.tagSpec}',

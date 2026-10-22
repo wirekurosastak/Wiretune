@@ -27,6 +27,7 @@ import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/devices.dart';
 import 'package:wiretune/src/widgets/page_parts.dart';
 import 'package:wiretune/src/widgets/player_controls.dart';
+import 'package:wiretune/src/widgets/player_sheet.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -305,7 +306,7 @@ void main() {
     await tester.binding.handlePopRoute();
     await settle(tester);
     expect(vm.isNowPlayingOpen, isTrue);
-    expect(vm.nowPlayingTab, NowPlayingTab.player);
+    expect(vm.nowPlayingTab, NowPlayingTab.track);
 
     await tester.binding.handlePopRoute();
     await settle(tester);
@@ -748,7 +749,7 @@ void main() {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.player.playQueue(vm.library.tracks);
     await settle(tester);
-    await tester.drag(find.text(vm.player.nowPlayingTitle), const Offset(0, -120)); // on the mini player
+    await tester.fling(find.text(vm.player.nowPlayingTitle), const Offset(0, -120), 1000); // on the mini player
     await settle(tester);
     expect(vm.isNowPlayingOpen, isTrue);
 
@@ -766,9 +767,91 @@ void main() {
     expect(vm.isNowPlayingOpen, isTrue);
 
     // A swipe down over the cover closes the player.
-    await tester.drag(find.descendant(of: player, matching: find.byType(CoverImage)), const Offset(0, 200));
+    await tester.fling(find.descendant(of: player, matching: find.byType(CoverImage)), const Offset(0, 200), 1000);
     await settle(tester);
     expect(vm.isNowPlayingOpen, isFalse);
+  });
+
+  testWidgets('on a phone the full-screen player follows the finger, then goes on or back where it is let go', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    final page = find.byType(NowPlayingPage);
+    // Its top as drawn: it pours out of the mini player's cover, so from there (closed) to the screen's top (open).
+    final sheet = tester.widget<PlayerSheetScope>(find.byType(PlayerSheetScope)).sheet;
+    final lamp = tester.getCenter(find.byKey(sheet.lamp)).dy;
+    double top() => lamp * (1 - sheet.position.value);
+    // A test gesture's moves carry no time: let go, it is still, not flung.
+    Future<void> drag(Finder from, double dy, {required double whileHeld}) async {
+      final finger = await tester.startGesture(tester.getCenter(from));
+      await finger.moveBy(Offset(0, dy.sign * 20)); // past the slop: the drag starts here
+      await finger.moveBy(Offset(0, dy));
+      await tester.pump();
+      expect(top(), moreOrLessEquals(whileHeld, epsilon: 1), reason: 'under the finger');
+      await finger.up();
+      await settle(tester);
+    }
+
+    // Up from the mini player, short of half the screen: it comes up with the finger, and sinks back.
+    final mini = find.text(vm.player.nowPlayingTitle);
+    await drag(mini, -300, whileHeld: lamp - 300);
+    expect((vm.isNowPlayingOpen, page.evaluate().isEmpty), (false, true));
+
+    // Past half: it goes on up, and is open.
+    await drag(mini, -500, whileHeld: lamp - 500);
+    expect((vm.isNowPlayingOpen, top()), (true, 0));
+
+    // Down from the open player, a little: it goes back up, still open.
+    await drag(find.descendant(of: page, matching: find.byType(CoverImage)), 200, whileHeld: 200);
+    expect((vm.isNowPlayingOpen, top()), (true, 0));
+  });
+
+  testWidgets('a phone stays upright; a tablet turns', (tester) async {
+    AppPlatform.forTesting(system: 'android');
+    final orientations = <Object?>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemChrome.setPreferredOrientations') orientations.add(call.arguments);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+
+    await pumpApp(tester, const Size(400, 860));
+    expect(orientations.last, ['DeviceOrientation.portraitUp']);
+    tester.view.physicalSize = const Size(1280, 800);
+    await settle(tester);
+    expect(orientations.last, isEmpty, reason: 'every way the system allows');
+  });
+
+  testWidgets('the system is told the app wants back exactly while it has somewhere to go back to', (tester) async {
+    // Android 16 sends a back gesture to the app only if told so beforehand; else it closes the app.
+    final handlesBack = <Object?>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemNavigator.setFrameworkHandlesBack') handlesBack.add(call.arguments);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    vm.albums.openAlbum(vm.albums.displayedAlbums.first);
+    await settle(tester);
+    expect(handlesBack.last, isTrue, reason: 'an album is open');
+
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+    expect(handlesBack.last, isTrue, reason: 'back returns to the tab before');
+
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    expect(vm.selectedSection, isNot(AppSection.albums));
+    expect(handlesBack.last, isFalse, reason: 'nothing is left: the system leaves the app');
   });
 
   testWidgets("a track's menu puts it next in the queue, and says so", (tester) async {
@@ -1040,11 +1123,13 @@ void main() {
     expect(find.text(Localizer.get('SortBy')), findsNothing);
     expect(find.text('ABC ↑'), findsNothing);
 
-    // The phone's play and shuffle are icons alone, on one line with the download and the menu.
+    // The phone's play and shuffle are icons alone; the menu is the top bar's, with delete in it.
     expect(find.text(Localizer.get('Play')), findsNothing);
     expect(find.text(Localizer.get('Shuffle')), findsNothing);
-    final play = tester.getCenter(find.byTooltip(Localizer.get('Play')).first);
-    expect(tester.getCenter(more).dy, moreOrLessEquals(play.dy, epsilon: 1));
+    expect(more, findsNothing);
+    await tester.tap(find.byTooltip(Localizer.get('TipMore')).last);
+    await settle(tester);
+    expect(find.text(Localizer.get('PlaylistDeleteAction')), findsOneWidget);
   });
 
   testWidgets("a playlist's tracks move by their handle or the menu, while it shows its own order", (tester) async {
@@ -1124,10 +1209,9 @@ void main() {
       final play = find.descendant(of: header, matching: find.byType(FilledButton));
       Finder says(String key) => find.descendant(of: header, matching: find.byTooltip(Localizer.get(key)));
       expect(says('Play'), findsOneWidget);
-      // The menu at the left edge, Shuffle and Play at the right, Play over the ⋮ of the rows.
-      final menu = find.descendant(of: header, matching: find.byTooltip(Localizer.get('TipMore')));
+      // Shuffle and Play at the right, Play over the ⋮ of the rows; the menu is the top bar's.
+      expect(find.descendant(of: header, matching: find.byTooltip(Localizer.get('TipMore'))), findsNothing);
       final rowMenu = find.descendant(of: find.byType(TrackSliver), matching: find.byTooltip(Localizer.get('TipMore')));
-      expect(tester.getRect(menu).left, moreOrLessEquals(16, epsilon: 1));
       expect(tester.getCenter(play).dx, moreOrLessEquals(tester.getCenter(rowMenu.first).dx, epsilon: 0.5));
       expect(tester.getSize(play), const Size.square(PhoneChrome.playSize));
 
@@ -1253,7 +1337,7 @@ void main() {
     expect(says('Play'), findsOneWidget);
   });
 
-  testWidgets("a phone page's title and Play stay in a bar at the top once its header has scrolled under it", (
+  testWidgets("a phone page's top bar keeps its buttons at hand, and takes the page's name over with the scroll", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
@@ -1264,48 +1348,84 @@ void main() {
       library.initialize();
       return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
     });
+    ScrollPosition scroll() => tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    double shown(Finder text) =>
+        tester.widget<Opacity>(find.ancestor(of: text, matching: find.byType(Opacity)).first).opacity;
+
     vm.openAlbum(vm.library.albums.single);
     await settle(tester);
-    final bar = find.ancestor(of: find.byTooltip(Localizer.get('Back')), matching: find.byType(Opacity)).first;
-    double shown() => tester.widget<Opacity>(bar).opacity;
-    double playShown() => tester
-        .widget<AnimatedOpacity>(
-          find.ancestor(of: find.byType(ListPlayButton).last, matching: find.byType(AnimatedOpacity)),
-        )
-        .opacity;
-    expect((shown(), playShown()), (0, 0));
-    expect(find.descendant(of: bar, matching: find.text('Kind of Blue')), findsOneWidget);
+    final bar = find.byType(PinnedTitleBar);
+    Finder inBar(Finder finder) => find.descendant(of: bar, matching: finder);
+    final headerName = find.descendant(of: find.byType(DetailHeader), matching: find.text('Kind of Blue'));
+    final barName = find.descendant(of: find.byType(OverflowBox), matching: find.text('Kind of Blue'));
+    // The way back, the search and the album's ⋮ are there from the start, once each; the header leaves them to it.
+    expect(shown(headerName), 1);
+    expect(barName, findsNothing);
+    expect(find.byTooltip(Localizer.get('Back')), findsOneWidget);
+    expect(find.byTooltip(Localizer.get('Search')), findsOneWidget);
+    final more = find.descendant(of: find.byType(DetailHeader), matching: find.byTooltip(Localizer.get('TipMore')));
+    expect(more, findsNothing, reason: "the header's ⋮ is the bar's");
+    expect(find.byType(ListPlayButton), findsOneWidget, reason: "the header's alone");
 
-    // It comes in with the scroll: partly while the header's buttons are still in view, its Play not yet.
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    // The bar takes the name over as it reaches the shade (which would darken it in the page), right where it is; it
+    // goes on up with the page to the bar's middle, and shrinks there into the bar's title beside the way back.
+    final nameRect = tester.getRect(headerName);
+    final shadeBottom = PinnedTitleBar.height + 40;
+    final entered = nameRect.top - shadeBottom;
+    scroll().jumpTo(entered - 4);
     await settle(tester);
-    expect(shown(), inExclusiveRange(0, 1));
-    expect(playShown(), 0);
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    expect((shown(headerName), barName.evaluate().isEmpty), (1, true));
+    scroll().jumpTo(entered + 10);
     await settle(tester);
-    expect((shown(), playShown()), (1, 1));
-    // Half below the bar's edge, over the ⋮ of the rows, as the header's was.
-    final play = find.descendant(of: find.byType(ListPlayButton).last, matching: find.byType(FilledButton));
-    final rowMenu = find.byTooltip(Localizer.get('TipMore')).last;
-    expect(tester.getSize(play), const Size.square(PhoneChrome.playSize));
-    expect(tester.getCenter(play).dx, moreOrLessEquals(tester.getCenter(rowMenu).dx, epsilon: 0.5));
-    expect(tester.getCenter(play).dy, moreOrLessEquals(tester.getRect(bar).bottom, epsilon: 0.5));
-    await tester.tap(play);
+    expect(shown(headerName), 0);
+    expect(tester.getRect(barName), nameRect.shift(Offset(0, -(entered + 10))), reason: 'where it was, unshrunk');
+    final reached = nameRect.center.dy - PinnedTitleBar.height / 2;
+    scroll().jumpTo(reached);
     await settle(tester);
-    expect(vm.player.currentTrack?.title, 'Take 1');
-    await tester.tap(find.descendant(of: bar, matching: find.byTooltip(Localizer.get('Back'))));
+    expect(tester.getRect(barName).center.dy, moreOrLessEquals(PinnedTitleBar.height / 2, epsilon: 0.5));
+    expect(tester.getRect(barName).height, moreOrLessEquals(nameRect.height, epsilon: 0.5));
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+    await settle(tester);
+    expect(tester.getRect(barName).height, moreOrLessEquals(nameRect.height * 17 / 24, epsilon: 0.5));
+    expect(tester.getRect(barName).left, moreOrLessEquals(4 + PinnedTitleBar.buttonSize, epsilon: 0.5));
+    expect(tester.getCenter(barName).dy, moreOrLessEquals(PinnedTitleBar.height / 2, epsilon: 0.5));
+    // Scrolled far down, the album's menu is still at hand (the bar's ⋮ is over the rows', the last).
+    await tester.tap(find.byTooltip(Localizer.get('TipMore')).last);
+    await settle(tester);
+    expect(find.text(Localizer.get('AddToQueue')), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('AddToQueue')));
+    await settle(tester);
+    expect(vm.player.queueTracks, hasLength(60));
+    await tester.tap(inBar(find.byTooltip(Localizer.get('Back'))));
     await settle(tester);
     expect(vm.albums.isAlbumDetailOpen, isFalse);
 
-    // A list page keeps its name, without a way back.
+    // A list page's big title is the bar's from the start, where the header had it, and shrinks into it with the
+    // scroll; no way back, and the header's devices, search and account buttons are the bar's.
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
-    final tracksBar = find.ancestor(of: find.text(Localizer.get('NavTracks')), matching: find.byType(Opacity)).first;
-    expect(tester.widget<Opacity>(tracksBar).opacity, 0);
+    final tracks = Localizer.get('NavTracks');
+    final shrinking = find.descendant(of: find.byType(OverflowBox), matching: find.text(tracks));
+    final headerTitle = find.descendant(of: find.byType(PageHeader), matching: find.text(tracks));
+    double size() => tester.getRect(shrinking).height; // as drawn, scaled
+    expect(tester.getRect(shrinking), tester.getRect(headerTitle), reason: 'in the place of the header’s');
+    expect(shown(headerTitle), 0);
+    final full = size();
+    expect(find.byTooltip(Localizer.get('Search')), findsOneWidget);
+    expect(find.byTooltip(Localizer.get('NavSettings')), findsOneWidget);
+    scroll().jumpTo(28);
+    await settle(tester);
+    expect(size(), inExclusiveRange(full * 17 / 30, full));
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
     await settle(tester);
-    expect(tester.widget<Opacity>(tracksBar).opacity, 1);
-    expect(find.descendant(of: tracksBar, matching: find.byTooltip(Localizer.get('Back'))), findsNothing);
+    expect(size(), moreOrLessEquals(full * 17 / 30, epsilon: 0.5));
+    expect(tester.getCenter(shrinking).dy, moreOrLessEquals(PinnedTitleBar.height / 2, epsilon: 0.5));
+    expect(inBar(find.byTooltip(Localizer.get('Back'))), findsNothing);
+    await tester.tap(find.byTooltip(Localizer.get('Search')));
+    await settle(tester);
+    expect(vm.isSearchOpen, isTrue, reason: 'search, however far the page is scrolled');
+    vm.closeSearch();
+    await settle(tester);
 
     // Far down, where the header is no longer built, and back to the page, which keeps its place: the bar too.
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
@@ -1315,15 +1435,19 @@ void main() {
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
     expect(find.text('Take 2'), findsNothing, reason: 'still scrolled');
-    expect(tester.widget<Opacity>(tracksBar).opacity, 1);
+    expect(size(), moreOrLessEquals(full * 17 / 30, epsilon: 0.5));
+    expect(tester.getCenter(shrinking).dy, moreOrLessEquals(PinnedTitleBar.height / 2, epsilon: 0.5));
 
-    // A page without buttons under its title (Settings) shows its big title alone at the top.
-    vm.navigateTo(AppSection.settings);
+    // A playlist's name, which renames it, doesn't shrink: it fades as it reaches the bar, whose own comes up after.
+    vm.navigateTo(AppSection.playlists);
     await settle(tester);
-    final settingsBar = find
-        .ancestor(of: find.text(Localizer.get('NavSettings')).last, matching: find.byType(Opacity))
-        .first;
-    expect(tester.widget<Opacity>(settingsBar).opacity, 0);
+    vm.playlists.createPlaylist('Mix', vm.library.tracks.take(30).toList());
+    await settle(tester);
+    final risen = find.byWidgetPredicate((w) => w is Text && w.data == 'Mix' && w.style?.fontSize == 17);
+    expect(shown(risen), 0);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+    await settle(tester);
+    expect(shown(risen), 1);
   });
 
   testWidgets("a phone page keeps its place across the tabs, and its tab chosen again takes it to the top", (
@@ -1698,11 +1822,23 @@ void main() {
 
     vm.navigateTo(AppSection.settings);
     await settle(tester);
-    for (final label in [Localizer.get('ConnectShort'), 'Magyar', 'Deutsch']) {
+    for (final label in [
+      Localizer.get('ConnectShort'),
+      'Magyar',
+      'Deutsch',
+      Localizer.get('ThemeDark'),
+      Localizer.get('ThemeLight'),
+    ]) {
       for (final element in find.text(label).evaluate()) {
         expect(find.ancestor(of: find.byWidget(element.widget), matching: find.byType(Tooltip)), findsNothing);
       }
     }
+    final light = find.text(Localizer.get('ThemeLight'));
+    await tester.ensureVisible(light);
+    await settle(tester);
+    await tester.tap(light);
+    await settle(tester);
+    expect(vm.isLight, isTrue);
   });
 
   testWidgets("the player bar's cover follows the track that plays, without the mouse over it", (tester) async {
@@ -1752,6 +1888,7 @@ void main() {
       Localizer.get('AddToQueue'),
       Localizer.get('TipAddToPlaylist'),
       Localizer.get('TipDownload'),
+      Localizer.get('GoToArtist'),
       Localizer.get('HideAlbum'),
     ];
     List<String> entries() => [
@@ -1781,6 +1918,167 @@ void main() {
     await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
     await settle(tester);
     expect(entries(), expected);
+  });
+
+  testWidgets("an album's menu leads to its artist, but not on that artist's page or in the album's header", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    Future<void> openTileMenu() async {
+      final tile = find.ancestor(of: find.text('Kind of Blue').first, matching: find.byType(AlbumCard));
+      await tester.tap(find.descendant(of: tile, matching: find.byIcon(Icons.more_vert_rounded)));
+      await settle(tester);
+      expect(find.text(Localizer.get('PlayNext')), findsOneWidget, reason: 'the menu is open');
+    }
+
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    await openTileMenu();
+    await tester.tap(find.text(Localizer.get('GoToArtist')));
+    await settle(tester);
+    expect((vm.selectedSection, vm.artists.selectedArtist?.name), (AppSection.artists, 'Miles Davis'));
+
+    await openTileMenu(); // the album's tile on its artist's page
+    expect(find.text(Localizer.get('GoToArtist')), findsNothing);
+    await tester.tapAt(const Offset(5, 5));
+    await settle(tester);
+
+    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+    await settle(tester);
+    await tester.tap(
+      find.descendant(of: find.byType(DetailHeader), matching: find.byTooltip(Localizer.get('TipMore'))),
+    );
+    await settle(tester);
+    expect(find.text(Localizer.get('PlayNext')), findsOneWidget);
+    expect(find.text(Localizer.get('GoToArtist')), findsNothing, reason: "the artist's name above is the link");
+  });
+
+  testWidgets('the playlists page and the sidebar count the automatic playlists too', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    await tester.runAsync(() async {
+      vm.library.recordPlay('1');
+      vm.library.createPlaylist('Mix');
+    });
+    vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    final count = vm.playlists.allPlaylists.length;
+    expect(count, greaterThan(vm.playlists.playlists.length), reason: 'the most and the recently played');
+    expect(find.text(Localizer.format('PlaylistCount', [count])), findsOneWidget);
+    final sidebar = find.ancestor(of: find.text(Localizer.get('NavPlaylists')).first, matching: find.byType(InkWell));
+    expect(find.descendant(of: sidebar.first, matching: find.text('$count')), findsOneWidget);
+  });
+
+  testWidgets("a phone's Settings page has neither the search nor the account button, which leads there", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    expect(find.byTooltip(Localizer.get('NavSettings')), findsOneWidget);
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    expect(find.byTooltip(Localizer.get('NavSettings')), findsNothing);
+    expect(find.byTooltip(Localizer.get('Search')), findsNothing);
+  });
+
+  testWidgets("both players show shuffle and repeat alike, and the phone's queue says how many tracks it holds", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.player.playQueue(vm.library.tracks);
+    vm.player.toggleShuffle();
+    await settle(tester);
+    List<bool> modes(Finder within) => [
+      for (final b in tester.widgetList<PlayerModeButton>(
+        find.descendant(of: within, matching: find.byType(PlayerModeButton)),
+      ))
+        b.on,
+    ];
+    expect(modes(find.byType(WideLayout)), [true, false]);
+
+    tester.view.physicalSize = const Size(400, 860);
+    vm.openNowPlaying();
+    await settle(tester);
+    final player = find.byType(NowPlayingPage);
+    expect(modes(player), [true, false]);
+
+    vm.nowPlayingTab = NowPlayingTab.queue;
+    await settle(tester);
+    expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [3]))), findsOneWidget);
+    expect(find.descendant(of: player, matching: find.byIcon(Icons.playlist_remove_rounded)), findsOneWidget);
+    // A phone's queue rows are its track rows' size, their red × a finger's target.
+    final remove = find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipRemoveFromQueue')));
+    expect(remove, findsNWidgets(3));
+    expect(tester.getSize(remove.first), const Size(44, 44));
+  });
+
+  testWidgets("an album's header puts it into a playlist beside the download; its menu then leaves that out", (
+    tester,
+  ) async {
+    for (final size in const [Size(400, 860), Size(1400, 900)]) {
+      final vm = await pumpApp(tester, size);
+      vm.openAlbum(vm.library.albums.first);
+      await settle(tester);
+      final add = find.descendant(
+        of: find.byType(DetailHeader),
+        matching: find.byTooltip(Localizer.get('TipAddToPlaylist')),
+      );
+      expect(add, findsOneWidget, reason: '$size');
+      // The page's ⋮: the phone's top bar's (over the rows', the last), else the header's.
+      final more = find.byTooltip(Localizer.get('TipMore'));
+      await tester.tap(size.width < 720 ? more.last : find.descendant(of: find.byType(DetailHeader), matching: more));
+      await settle(tester);
+      expect(find.text(Localizer.get('AddToQueue')), findsOneWidget, reason: '$size');
+      expect(find.text(Localizer.get('TipAddToPlaylist')), findsNothing, reason: '$size');
+      await tester.tapAt(const Offset(5, 5));
+      await settle(tester);
+      await tester.tap(add);
+      await settle(tester);
+      expect(find.text(Localizer.get('PlaylistNew')), findsOneWidget, reason: '$size: the playlist dialog');
+      await tester.tap(find.text(Localizer.get('Cancel')));
+      await settle(tester);
+    }
+  });
+
+  testWidgets("a menu opened from the search results leaves the keyboard down when it closes", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    await tester.tap(find.byIcon(Icons.search_rounded));
+    await settle(tester);
+    await tester.enterText(find.byType(TextField), 'kind');
+    await settle(tester);
+    bool typing() => tester.widget<EditableText>(find.byType(EditableText)).focusNode.hasFocus;
+    expect(typing(), isTrue);
+    final card = find.ancestor(of: find.text(Localizer.get('BestMatch').toUpperCase()), matching: find.byType(Column));
+    for (final close in ['outside', 'entry']) {
+      await tester.tap(find.descendant(of: card.first, matching: find.byIcon(Icons.more_vert_rounded)));
+      await settle(tester);
+      if (close == 'outside') {
+        await tester.tapAt(const Offset(200, 20));
+      } else {
+        await tester.tap(find.text(Localizer.get('AddToQueue')));
+      }
+      await settle(tester);
+      expect(typing(), isFalse, reason: close);
+      expect(vm.isSearchOpen, isTrue);
+    }
+  });
+
+  testWidgets("the best match has its ⋮, the menu its row or tile has", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.openSearch();
+    for (final (query, entry) in [('kind', 'GoToArtist'), ('miles', 'HideArtist'), ('so what', 'GoToAlbum')]) {
+      vm.searchQuery = query;
+      await settle(tester);
+      final card = find.ancestor(
+        of: find.text(Localizer.get('BestMatch').toUpperCase()),
+        matching: find.byType(Column),
+      );
+      final menu = find.descendant(of: card.first, matching: find.byIcon(Icons.more_vert_rounded));
+      expect(menu, findsOneWidget, reason: query);
+      await tester.tap(menu);
+      await settle(tester);
+      expect(find.text(Localizer.get(entry)), findsOneWidget, reason: query);
+      await tester.tapAt(const Offset(200, 20));
+      await settle(tester);
+    }
   });
 
   testWidgets("the table's dates stay on one line, written the language's way", (tester) async {

@@ -131,6 +131,46 @@ void main() {
     expect(vm.artists.selectedArtist?.name, 'Miles Davis');
   });
 
+  test('a tab keeps its open page while another is shown; chosen again, it goes back to its list', () async {
+    final vm = await create();
+    vm.navigateTo(AppSection.albums);
+    vm.albums.openAlbum(vm.library.albums.first);
+    vm.navigateTo(AppSection.playlists);
+    vm.playlists.createPlaylist('Mix', vm.library.tracks.take(2).toList());
+    expect(vm.playlists.isPlaylistDetailOpen, isTrue);
+
+    // Another tab and back: each page is where it was left.
+    vm.navigateTo(AppSection.albums);
+    expect(vm.albums.isAlbumDetailOpen, isTrue);
+    vm.navigateTo(AppSection.playlists);
+    expect(vm.playlists.isPlaylistDetailOpen, isTrue);
+
+    // The tab on show chosen again: back to its list, then to the list's top.
+    var toTop = 0;
+    final unsubscribe = vm.scrollToTopRequested.listen((_) => toTop++);
+    addTearDown(unsubscribe);
+    vm.navigateTo(AppSection.playlists);
+    expect((vm.playlists.isPlaylistDetailOpen, toTop), (false, 0));
+    vm.navigateTo(AppSection.playlists);
+    expect(toTop, 1);
+    vm.navigateTo(AppSection.albums);
+    vm.navigateTo(AppSection.albums);
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+  });
+
+  test('a page opened from elsewhere belongs to its tab once the user moves on through the tabs', () async {
+    final vm = await create();
+    vm.navigateTo(AppSection.tracks);
+    vm.openAlbum(vm.library.albums.first);
+    expect(vm.selectedSection, AppSection.albums);
+    vm.navigateTo(AppSection.artists);
+    vm.navigateTo(AppSection.albums);
+    expect(vm.albums.isAlbumDetailOpen, isTrue);
+    expect(vm.albums.backText, Localizer.get('NavAlbums'));
+    expect(vm.tryNavigateBack(), isTrue);
+    expect((vm.selectedSection, vm.albums.isAlbumDetailOpen), (AppSection.albums, false));
+  });
+
   test('navigating closes the search page', () async {
     final vm = await create();
     vm.openSearch();
@@ -157,7 +197,7 @@ void main() {
     final vm = await create();
     showTrack(vm);
     vm.openNowPlaying();
-    expect(vm.nowPlayingTab, NowPlayingTab.player);
+    expect(vm.nowPlayingTab, NowPlayingTab.track);
     expect(vm.player.isQueueOpen, isFalse);
 
     vm.nowPlayingTab = NowPlayingTab.queue;
@@ -166,7 +206,7 @@ void main() {
     expect(vm.player.isQueueOpen, isTrue);
 
     vm.closeNowPlaying();
-    expect(vm.nowPlayingTab, NowPlayingTab.player);
+    expect(vm.nowPlayingTab, NowPlayingTab.track);
     expect(vm.player.isQueueOpen, isFalse);
   });
 
@@ -215,7 +255,7 @@ void main() {
     expect(vm.showPerformanceStats, isFalse);
 
     vm.changeLanguage('hu');
-    vm.toggleTheme();
+    vm.setTheme(light: false);
     vm.showPerformanceStats = true;
     await Future<void>.delayed(Duration.zero);
     expect(repo.getSetting('preference.language'), 'hu');

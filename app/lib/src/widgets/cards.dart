@@ -20,11 +20,14 @@ import 'player_controls.dart';
 
 /// An album: cover (with its format on it), title, artist, track count and release year, and a play button.
 class AlbumCard extends StatelessWidget {
-  const AlbumCard({super.key, required this.album, required this.onOpen, required this.onPlay});
+  const AlbumCard({super.key, required this.album, required this.onOpen, required this.onPlay, this.withArtist = true});
 
   final Album album;
   final VoidCallback onOpen;
   final VoidCallback onPlay;
+
+  /// Whether its menu leads to the album's artist ([ListMenu.album]).
+  final bool withArtist;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +35,7 @@ class AlbumCard extends StatelessWidget {
     final purple = colors.palette.purple;
     final cover = CoverImage(
       path: album.coverArtPath,
-      radius: Radii.small + 2,
+      radius: Radii.medium,
       placeholderIcon: Icons.album,
       placeholderColor: purple,
     );
@@ -40,7 +43,7 @@ class AlbumCard extends StatelessWidget {
       context.trf('TrackCount', [album.trackCount]),
       if (album.releaseYear != null) '${album.releaseYear}',
     ].join('  •  ');
-    final menu = ListMenu.album(album, onPlay: onPlay);
+    final menu = ListMenu.album(album, onPlay: onPlay, withArtist: withArtist);
     return _DesktopTile(
       accent: purple,
       onTap: onOpen,
@@ -97,11 +100,12 @@ class ArtistCard extends StatelessWidget {
 String artistCounts(BuildContext context, Artist artist) =>
     '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}';
 
-enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, remove }
+enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, openArtist, remove }
 
 /// The menu of an album, an artist or a playlist: on its tile (the ⋮ on the cover, or a right click), its phone row (the
-/// ⋮) and its page's header (the ⋮ beside play, shuffle and the download, which it then leaves out). Play, shuffle, the
-/// queue's two, a playlist, the download (when a track of it can be), and hiding it (deleting a playlist).
+/// ⋮) and its page's header (the ⋮ beside play, shuffle, the download and the playlist, which it then leaves out). Play, shuffle, the
+/// queue's two, a playlist, the download (when a track of it can be), an album's way to its artist (whose name is no
+/// link on a tile or a row), and hiding it (deleting a playlist).
 class ListMenu {
   ListMenu._(
     this.tracks, {
@@ -111,13 +115,15 @@ class ListMenu {
     required this.onPlay,
     required this.isDownloaded,
     required this.onDownload,
+    this.artist,
     this.removeKey,
     this.removeIcon = Icons.delete_outline_rounded,
     this.onRemove,
     this.removeIsDanger = false,
   });
 
-  factory ListMenu.album(Album album, {required VoidCallback onPlay}) => ListMenu._(
+  /// [withArtist]: the menu leads to the album's (first) artist, except on that artist's page.
+  factory ListMenu.album(Album album, {required VoidCallback onPlay, bool withArtist = true}) => ListMenu._(
     album.tracks,
     name: album.title,
     label: '${album.title} • ${album.artist}',
@@ -125,6 +131,7 @@ class ListMenu {
     onPlay: onPlay,
     isDownloaded: (vm) => vm.downloads.isAlbumDownloaded(album),
     onDownload: (vm) => vm.downloads.toggleAlbum(album),
+    artist: withArtist ? album.artistNames.first : null,
     removeKey: 'HideAlbum',
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
@@ -177,12 +184,15 @@ class ListMenu {
   final VoidCallback onPlay;
   final bool Function(MainViewModel vm) isDownloaded;
   final void Function(MainViewModel vm) onDownload;
+
+  /// The artist "Go to artist" opens; null leaves it out.
+  final String? artist;
   final String? removeKey;
   final IconData removeIcon;
   final bool removeIsDanger;
   final void Function(BuildContext context)? onRemove;
 
-  /// [header]: the page's header has play, shuffle and the download as buttons of their own.
+  /// [header]: the page's header has play, shuffle, the download and the playlist as buttons of their own.
   List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false}) {
     final vm = context.vm;
     final colors = context.colors;
@@ -207,13 +217,16 @@ class ListMenu {
       ],
       item(_ListAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
       item(_ListAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
-      item(_ListAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
+      // The page's header has it as a button of its own.
+      if (!header) item(_ListAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
       if (!header && downloadable.any(vm.downloads.canDownload))
         item(
           _ListAction.download,
           downloaded ? Icons.download_done_rounded : Icons.download_rounded,
           context.tr(downloaded ? 'TipRemoveDownload' : 'TipDownload'),
         ),
+      // The page's header has the artist's name as a link.
+      if (!header && artist != null) item(_ListAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
       if (removeKey case final key?)
         item(_ListAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
     ];
@@ -235,6 +248,8 @@ class ListMenu {
         showAddToPlaylistDialog(context, tracks, label: label, suggestedName: name);
       case _ListAction.download:
         onDownload(vm);
+      case _ListAction.openArtist:
+        vm.openArtistByName(artist);
       case _ListAction.remove:
         onRemove?.call(context);
     }
@@ -281,7 +296,33 @@ class ListMenu {
     ),
   );
 
-  /// The ⋮ of a page's header, beside play, shuffle and the download: the rest of the menu, opening below it.
+  /// The header's button that puts the tracks into a playlist (taken out of its menu), beside the download.
+  Widget addToPlaylistButton() => Builder(
+    builder: (context) => HeaderIconButton(
+      tooltip: context.tr('TipAddToPlaylist'),
+      icon: Icons.playlist_add_rounded,
+      onPressed: () => showAddToPlaylistDialog(context, tracks, label: label, suggestedName: name),
+    ),
+  );
+
+  /// The ⋮ of a phone page's top bar ([PinnedTitleBar.menu]): the rest of the menu (play, shuffle, the download and the
+  /// playlist are the header's), at hand however far the page is scrolled.
+  Widget topBarButton() => Builder(
+    builder: (context) => SizedBox.square(
+      dimension: PinnedTitleBar.buttonSize,
+      child: IconButton(
+        tooltip: context.tr('TipMore'),
+        onPressed: () {
+          final box = context.findRenderObject()! as RenderBox;
+          _show(context, box.localToGlobal(box.size.bottomLeft(Offset.zero)), header: true);
+        },
+        icon: Icon(Icons.more_vert_rounded, size: 24, color: context.colors.textMain),
+      ),
+    ),
+  );
+
+  /// The ⋮ of a page's header, beside play, shuffle and the download: the rest of the menu, opening below it. On a
+  /// phone it is in the top bar instead ([topBarButton]).
   Widget headerButton() => Builder(
     builder: (context) => HeaderIconButton(
       tooltip: context.tr('TipMore'),
@@ -297,19 +338,32 @@ class ListMenu {
 /// Albums as a sliver: on a phone a list of rows (the cover, the title, the artist and the release year), on a wide screen a grid
 /// of tiles.
 class AlbumsSliver extends StatelessWidget {
-  const AlbumsSliver({super.key, required this.albums, required this.onOpen, required this.onPlay});
+  const AlbumsSliver({
+    super.key,
+    required this.albums,
+    required this.onOpen,
+    required this.onPlay,
+    this.withArtist = true,
+  });
 
   final List<Album> albums;
   final void Function(Album album) onOpen;
   final void Function(Album album) onPlay;
+
+  /// Whether the albums' menus lead to their artist: not on that artist's page.
+  final bool withArtist;
 
   @override
   Widget build(BuildContext context) {
     if (!PhoneChrome.isPhone(context)) {
       return TileGridSliver(
         itemCount: albums.length,
-        itemBuilder: (context, index) =>
-            AlbumCard(album: albums[index], onOpen: () => onOpen(albums[index]), onPlay: () => onPlay(albums[index])),
+        itemBuilder: (context, index) => AlbumCard(
+          album: albums[index],
+          onOpen: () => onOpen(albums[index]),
+          onPlay: () => onPlay(albums[index]),
+          withArtist: withArtist,
+        ),
       );
     }
     final purple = context.colors.palette.purple;
@@ -320,7 +374,7 @@ class AlbumsSliver extends StatelessWidget {
         picture: CoverImage(
           path: album.coverArtPath,
           size: _ListRow.pictureSize,
-          radius: Radii.small + 2,
+          radius: Radii.small,
           placeholderIcon: Icons.album,
           placeholderColor: purple,
         ),
@@ -332,7 +386,7 @@ class AlbumsSliver extends StatelessWidget {
           fontSize: 9.5,
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
         ),
-        trailing: ListMenu.album(album, onPlay: () => onPlay(album)).button(context),
+        trailing: ListMenu.album(album, onPlay: () => onPlay(album), withArtist: withArtist).button(context),
       );
     });
   }
@@ -430,7 +484,7 @@ class PlaylistsSliver extends StatelessWidget {
             );
       return _ListRow(
         onTap: () => onOpen(playlist),
-        picture: PlaylistCover(covers: covers, radius: Radii.small + 2),
+        picture: PlaylistCover(covers: covers, radius: Radii.small),
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
         badge: badge,
@@ -481,7 +535,7 @@ class _ListRow extends StatelessWidget {
       type: MaterialType.transparency,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(Radii.card),
+        borderRadius: BorderRadius.circular(Radii.medium),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
@@ -544,7 +598,7 @@ class _ListRow extends StatelessWidget {
 
 /// A playlist's cover: a 2x2 collage of its albums, one cover, or an icon.
 class PlaylistCover extends StatelessWidget {
-  const PlaylistCover({super.key, required this.covers, this.radius = 6});
+  const PlaylistCover({super.key, required this.covers, this.radius = Radii.small});
 
   final List<String> covers;
   final double radius;
@@ -600,7 +654,7 @@ class PlaylistCard extends StatelessWidget {
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
       menu: menu.coverButton(context),
-      cover: PlaylistCover(covers: covers, radius: Radii.small + 2),
+      cover: PlaylistCover(covers: covers, radius: Radii.medium),
       lines: [
         _line(playlist.name, 14, FontWeight.w700, colors.textMain),
         _line(context.trf('TrackCount', [playlist.trackCount]), 12.5, FontWeight.w500, colors.textMuted),
@@ -673,7 +727,7 @@ class _DesktopTileState extends State<_DesktopTile> {
     const duration = Duration(milliseconds: 240);
     final shape = widget.circle
         ? const BoxDecoration(shape: BoxShape.circle)
-        : BoxDecoration(borderRadius: BorderRadius.circular(Radii.small + 2));
+        : BoxDecoration(borderRadius: BorderRadius.circular(Radii.medium));
     final cover = AspectRatio(
       aspectRatio: 1,
       child: Stack(
@@ -738,7 +792,7 @@ class _DesktopTileState extends State<_DesktopTile> {
           child: Material(
             type: MaterialType.transparency,
             child: InkWell(
-              borderRadius: BorderRadius.circular(Radii.card + 2),
+              borderRadius: BorderRadius.circular(Radii.card),
               hoverColor: Colors.transparent,
               splashColor: Colors.transparent,
               highlightColor: Colors.transparent,
@@ -866,6 +920,7 @@ class TilePlayButton extends StatelessWidget {
       message: context.tr(playing ? 'Pause' : 'Play'),
       child: PopEffect(
         enabled: enabled,
+        press: true,
         child: DecoratedBox(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
