@@ -1,9 +1,11 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
@@ -186,6 +188,8 @@ Future<void> _swipe(BuildContext context, {required bool forward}) async {
     if (choice == null || !context.mounted) return;
     vm.playerSwipe = choice;
   }
+  // A tick under the finger: the swipe took.
+  unawaited(HapticFeedback.selectionClick());
   vm.swipeNowPlaying(forward: forward);
 }
 

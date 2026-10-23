@@ -1,7 +1,10 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
@@ -396,7 +399,11 @@ class _LyricsViewState extends State<LyricsView> {
                       active: i == current,
                       past: i < current,
                       centered: widget.centered,
-                      onTap: () => lyrics.seekTo(line),
+                      onTap: () {
+                        // A tick under the finger: the song jumps there.
+                        unawaited(HapticFeedback.selectionClick());
+                        lyrics.seekTo(line);
+                      },
                     );
                   },
                 );

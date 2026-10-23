@@ -3,6 +3,7 @@
 
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -146,21 +147,77 @@ class _Content extends StatelessWidget {
       } else {
         page = KeyedSubtree(key: ValueKey(vm.selectedSection), child: sectionPage(vm.selectedSection));
       }
-      return AnimatedSwitcher(
-        duration: const Duration(milliseconds: 220),
-        switchInCurve: Curves.easeOutCubic,
-        layoutBuilder: (currentChild, previousChildren) =>
-            Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween(begin: const Offset(0, 0.012), end: Offset.zero).animate(animation),
-            child: ScaleTransition(scale: Tween(begin: 0.99, end: 1.0).animate(animation), child: child),
+      return _TilePinch(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          layoutBuilder: (currentChild, previousChildren) =>
+              Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween(begin: const Offset(0, 0.012), end: Offset.zero).animate(animation),
+              child: ScaleTransition(scale: Tween(begin: 0.99, end: 1.0).animate(animation), child: child),
+            ),
           ),
+          child: page,
         ),
-        child: page,
       );
     },
+  );
+}
+
+/// Two fingers on a touch screen, or a touchpad's pinch, spread or pinched over the page: its tiles grow or shrink
+/// (`MainViewModel.tileSize`), as many columns fitting as their size leaves room for.
+class _TilePinch extends StatefulWidget {
+  const _TilePinch({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TilePinch> createState() => _TilePinchState();
+}
+
+class _TilePinchState extends State<_TilePinch> {
+  final Map<int, Offset> _touches = {};
+  double? _startSpan;
+  double _startSize = MainViewModel.tileSizeDefault;
+
+  double get _span => (_touches.values.first - _touches.values.last).distance;
+
+  /// Two fingers down: the pinch starts from them; any other number of them, none.
+  void _begin() {
+    _startSize = context.vm.tileSize.value;
+    _startSpan = _touches.length == 2 ? _span : null;
+  }
+
+  void _resize(double scale) =>
+      context.vm.tileSize.value = (_startSize * scale).clamp(MainViewModel.tileSizeMin, MainViewModel.tileSizeMax);
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (event) {
+      if (event.kind != PointerDeviceKind.touch) return;
+      _touches[event.pointer] = event.position;
+      _begin();
+    },
+    onPointerMove: (event) {
+      if (!_touches.containsKey(event.pointer)) return;
+      _touches[event.pointer] = event.position;
+      final start = _startSpan;
+      if (start != null && start > 0 && _touches.length == 2) _resize(_span / start);
+    },
+    onPointerUp: (event) {
+      _touches.remove(event.pointer);
+      _begin();
+    },
+    onPointerCancel: (event) {
+      _touches.remove(event.pointer);
+      _begin();
+    },
+    onPointerPanZoomStart: (_) => _startSize = context.vm.tileSize.value,
+    onPointerPanZoomUpdate: (event) => _resize(event.scale),
+    child: widget.child,
   );
 }
 

@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
@@ -179,13 +180,36 @@ Widget _fading(BuildContext context, String text) {
 /// A phone tab page's buttons at the top right: the way to another device (also while nothing plays here, with no mini
 /// player then), the search and the account (not on the Settings page: nothing to search there, and the account
 /// button leads to it).
-List<Widget> _topButtons(BuildContext context) {
+List<Widget> _topButtons(BuildContext context, {ValueListenable<double>? pullIn}) {
   final vm = context.vm;
   final colors = context.colors;
+  const devices = DevicesButton(dimension: PinnedTitleBar.buttonSize, iconSize: 23);
   return [
-    const DevicesButton(dimension: PinnedTitleBar.buttonSize, iconSize: 23),
+    if (pullIn == null)
+      devices
+    else
+      // While the page is pulled towards the search, the cast button moves into the search's place.
+      ValueListenableBuilder<double>(
+        valueListenable: pullIn,
+        builder: (context, t, child) => Transform.translate(
+          offset: Offset(PinnedTitleBar.buttonSize * Curves.easeOut.transform(t), 0),
+          child: child,
+        ),
+        child: devices,
+      ),
     if (vm.selectedSection != AppSection.settings) ...[
-      _searchButton(context),
+      if (pullIn == null)
+        _searchButton(context)
+      else
+        // ... which leaves it for the middle, where letting go opens it.
+        ValueListenableBuilder<double>(
+          valueListenable: pullIn,
+          builder: (context, t, child) => Opacity(
+            opacity: (1 - 2 * t).clamp(0.0, 1.0),
+            child: Transform.scale(scale: 1 - 0.4 * t, child: child),
+          ),
+          child: _searchButton(context),
+        ),
       SizedBox.square(
         dimension: PinnedTitleBar.buttonSize,
         child: IconButton(
@@ -306,8 +330,20 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   /// Whether the bar draws the title, its place in the header left empty.
   final ValueNotifier<bool> _taken = ValueNotifier(false);
 
-  /// How far the page is scrolled, which moves a title the bar has taken before it shrinks.
+  /// How far the page is scrolled (below 0 while it is pulled down past its top), which moves a title the bar has taken
+  /// before it shrinks.
   final ValueNotifier<double> _scrolled = ValueNotifier(0);
+
+  /// How far a tab page is pulled down past its top towards opening the search, 0 to 1: the bar's search gives its
+  /// place to the cast button and comes out in the middle.
+  final ValueNotifier<double> _pullIn = ValueNotifier(0);
+
+  /// While a tab page is pulled down past its top: how far the finger pulled it before it let go.
+  double _pulled = 0;
+  bool _dragging = false;
+
+  /// How far a tab page is pulled down past its top for search to open when the finger lets go.
+  static const double _pullToSearch = 88;
 
   /// What the title the bar draws follows.
   late final Listenable _titleMotion = Listenable.merge([_taken, _titleIn, _scrolled]);
@@ -317,6 +353,10 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
 
   /// Whether the page's title shrinks into the bar (else it fades over to it).
   bool _shrinks = true;
+
+  /// The scroll over which the shade comes in, and the top of a title that doesn't shrink in the page, as last
+  /// measured.
+  double? _shadeDistance, _fadingTitleTop;
 
   /// The least scroll the shade takes to come in, where the header is close under the bar already.
   static const double _minFade = 40;
@@ -336,6 +376,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
     _titleIn.dispose();
     _taken.dispose();
     _scrolled.dispose();
+    _pullIn.dispose();
     super.dispose();
   }
 
@@ -353,8 +394,46 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   }
 
   bool _onNotification(Notification notification) {
-    if (notification case ScrollNotification(depth: 0) || ScrollMetricsNotification(depth: 0)) _update();
+    if (notification case ScrollNotification(depth: 0)) {
+      // The page has scrolled but isn't laid out there yet: what follows the scroll follows it now, and the header is
+      // measured once it is.
+      _update(measure: false);
+      _measureAfterLayout();
+    }
+    if (notification case ScrollMetricsNotification(depth: 0)) _update();
+    if (notification case ScrollUpdateNotification(depth: 0) when _pullSearches) _pullOnUpdate(notification);
     return false;
+  }
+
+  bool _measureScheduled = false;
+
+  void _measureAfterLayout() {
+    if (_measureScheduled) return;
+    _measureScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measureScheduled = false;
+      _update();
+    });
+  }
+
+  /// Whether pulling the page down past its top opens the search: a tab page's, not the Settings page (nothing to
+  /// search there).
+  bool get _pullSearches => widget.onBack == null && context.vm.selectedSection != AppSection.settings;
+
+  /// A tab page pulled down past its top opens the search once the finger lets go far enough down, as a second way to
+  /// it; a tick tells the finger where that is.
+  void _pullOnUpdate(ScrollUpdateNotification notification) {
+    final pull = math.max(0.0, notification.metrics.minScrollExtent - notification.metrics.pixels);
+    if (notification.dragDetails != null) {
+      if ((pull >= _pullToSearch) != (_pulled >= _pullToSearch)) unawaited(HapticFeedback.selectionClick());
+      _pulled = pull;
+      _dragging = true;
+      return;
+    }
+    // The first step after the finger let go.
+    if (_dragging && _pulled >= _pullToSearch) context.vm.openSearch();
+    _dragging = false;
+    _pulled = 0;
   }
 
   RenderBox? _box(GlobalKey key, RenderBox own) {
@@ -384,25 +463,31 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   /// The shade comes in with the scroll, from none at the page's top to whole where the anchor's bottom has gone under
   /// the bar (or the page ends). The title shrinks over [PinnedTitleBar._collapse] from where it reaches the bar's
   /// middle; one that doesn't shrink passes over while it goes under the bar's edge.
-  void _update() {
+  ///
+  /// Where the header's parts are in the page is [measure]d only once it is laid out at the scroll: measured in between
+  /// (a scroll's step comes before the page moves), they would be off by that step, and the title would jitter.
+  void _update({bool measure = true}) {
     if (!mounted) return;
     final own = context.findRenderObject() as RenderBox?;
     if (own == null) return;
     final anchor = _box(_anchor, own);
     final position = anchor == null ? null : Scrollable.maybeOf(_anchor.currentContext!)?.position;
     final measured = position != null && position.hasPixels && position.hasContentDimensions;
-    final scrolled = measured ? math.max(0.0, position.pixels - position.minScrollExtent) : 0.0;
+    // Signed: below 0 while the page is pulled down past its top.
+    final offset = measured ? position.pixels - position.minScrollExtent : 0.0;
+    final scrolled = math.max(0.0, offset);
     final edge = MediaQuery.paddingOf(context).top + PinnedTitleBar.height;
 
     var progress = _progress;
-    if (anchor != null) {
+    if (anchor != null && measure) {
       final top = anchor.localToGlobal(Offset.zero, ancestor: own).dy;
       // The scroll from the page's top to where the shade is whole; a short page (an album of a few tracks) that can't
       // scroll so far has it whole at its end.
       final reach = measured ? position.maxScrollExtent - position.minScrollExtent : double.infinity;
-      final distance = math.max(math.min(top + anchor.size.height - edge + scrolled, reach), math.min(_minFade, reach));
-      progress = distance <= 0 ? 0.0 : (scrolled / distance).clamp(0.0, 1.0);
+      _shadeDistance = math.max(math.min(top + anchor.size.height - edge + offset, reach), math.min(_minFade, reach));
     }
+    final distance = _shadeDistance;
+    if (anchor != null && distance != null) progress = distance <= 0 ? 0.0 : (scrolled / distance).clamp(0.0, 1.0);
 
     final title = _box(_title, own);
     var rest = _rest;
@@ -410,18 +495,19 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
     if (title != null) {
       final style = (_title.currentWidget as _TitleMark?)?.shrinkStyle;
       shrinks = style != null;
-      if (style != null) {
+      if (style == null) {
+        rest = null;
+      } else if (measure) {
+        // Where it stands in the page, which the scroll doesn't change: between layouts, as last measured.
         final topLeft = title.localToGlobal(Offset.zero, ancestor: own);
         final size = title.size;
         rest = (
-          middle: topLeft.dy + size.height / 2 + scrolled,
+          middle: topLeft.dy + size.height / 2 + offset,
           left: topLeft.dx,
           width: size.width,
           height: size.height,
           style: style,
         );
-      } else {
-        rest = null;
       }
     } else if (rest == null && shrinks && scrolled > 0) {
       // Back far down the page, its header not built: the title is wholly the bar's, as it ends up.
@@ -442,7 +528,11 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
     } else if (title != null) {
       // From its top at the bar's edge to its bottom there: the header's fades over the first half, the bar's comes in
       // over the second.
-      final top = title.localToGlobal(Offset.zero, ancestor: own).dy;
+      // Where its top is in the page (as for a shrinking one's place), and so on the screen at this scroll.
+      if (measure || _fadingTitleTop == null) {
+        _fadingTitleTop = title.localToGlobal(Offset.zero, ancestor: own).dy + offset;
+      }
+      final top = _fadingTitleTop! - offset;
       titleIn = ((edge - top) / title.size.height).clamp(0.0, 1.0);
       taken = false;
     } else {
@@ -451,7 +541,8 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
     }
     _titleIn.value = titleIn;
     _taken.value = taken;
-    _scrolled.value = scrolled;
+    _scrolled.value = offset;
+    _pullIn.value = _pullSearches ? (-offset / _pullToSearch).clamp(0.0, 1.0) : 0.0;
     if (progress != _progress || rest != _rest || shrinks != _shrinks) {
       setState(() {
         _progress = progress;
@@ -508,7 +599,11 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
                 ),
               // A shrinking title is drawn over the bar (below); one that doesn't shrink rises in here.
               Expanded(child: rest != null || _shrinks ? const SizedBox.shrink() : _risingTitle(colors)),
-              if (onBack != null) ...[_searchButton(context), ?widget.menu] else ..._topButtons(context),
+              if (onBack != null) ...[
+                _searchButton(context),
+                ?widget.menu,
+              ] else
+                ..._topButtons(context, pullIn: _pullIn),
             ],
           ),
         ),
@@ -523,12 +618,64 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
         onNotification: _onNotification,
         child: Stack(
           children: [
-            Positioned.fill(child: widget.child),
+            // The page gives past its ends, as on an iPhone: pulled down at its top, a detail page's artwork
+            // stretches ([PhoneArtworkStretch]) and a tab page offers the search.
+            Positioned.fill(
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics())),
+                child: widget.child,
+              ),
+            ),
+            if (_pullSearches) _pullHint(context),
             Positioned(top: 0, left: 0, right: 0, child: shade),
             Positioned(top: 0, left: 0, right: 0, child: bar),
             if (rest != null) _shrinkingTitle(context, rest),
           ],
         ),
+      ),
+    );
+  }
+
+  /// The search, out of the bar's right into its middle as a tab page is pulled down past its top (the bar's own
+  /// fading as it comes): whole, and in the accent, where letting go opens it.
+  Widget _pullHint(BuildContext context) {
+    final colors = context.colors;
+    const size = 40.0;
+    return Positioned(
+      top: _barMiddle(context) - size / 2,
+      left: 0,
+      right: 0,
+      child: ValueListenableBuilder<double>(
+        valueListenable: _pullIn,
+        builder: (context, t, _) {
+          if (t == 0) return const SizedBox.shrink();
+          final ready = t >= 1;
+          // In as the bar's goes out, a little behind it.
+          final shown = ((t - 0.2) / 0.8).clamp(0.0, 1.0);
+          return IgnorePointer(
+            child: Center(
+              child: Opacity(
+                opacity: shown,
+                child: Transform.scale(
+                  scale: 0.6 + 0.4 * Curves.easeOut.transform(shown),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: ready ? colors.accent : colors.surface2,
+                      boxShadow: ready ? colors.accentGlow(0.6) : null,
+                    ),
+                    child: Icon(Icons.search_rounded, size: 22, color: ready ? colors.onAccent : colors.textMain),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -607,6 +754,52 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
         );
       },
     );
+  }
+}
+
+/// A detail page's artwork on a phone, stretching as the page is pulled down past its top (larger, growing up into the
+/// gap from its bottom edge) and back as it lets go: it follows the finger only.
+class PhoneArtworkStretch extends StatefulWidget {
+  const PhoneArtworkStretch({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<PhoneArtworkStretch> createState() => _PhoneArtworkStretchState();
+}
+
+class _PhoneArtworkStretchState extends State<PhoneArtworkStretch> {
+  ScrollPosition? _position;
+
+  /// The most it grows (a part of its size), however far it is pulled.
+  static const double _maxGrowth = 0.3;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context)?.position;
+    if (position == _position) return;
+    _position?.removeListener(_changed);
+    _position = position?..addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    _position?.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() => setState(() {});
+
+  @override
+  Widget build(BuildContext context) {
+    final position = _position;
+    final pull = position == null || !position.hasPixels || !position.hasContentDimensions
+        ? 0.0
+        : math.max(0.0, position.minScrollExtent - position.pixels);
+    // As fast as the finger at first, slower the further it goes, never past [_maxGrowth].
+    final growth = _maxGrowth * pull / (pull + _maxGrowth * 220);
+    return Transform.scale(scale: 1 + growth, alignment: Alignment.bottomCenter, child: widget.child);
   }
 }
 

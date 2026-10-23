@@ -1,10 +1,12 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 
@@ -13,7 +15,12 @@ import '../app_scope.dart';
 /// the mini player or down from the player's top, as in TIDAL and Spotify ([PlayerSheetDrag]). It moves only then.
 class PlayerSheet {
   PlayerSheet({required TickerProvider vsync, required bool open})
-    : position = AnimationController(vsync: vsync, duration: _duration, value: open ? 1 : 0);
+    : position = AnimationController(vsync: vsync, duration: _duration, value: open ? 1 : 0) {
+    // A soft knock when it lands open.
+    position.addStatusListener((status) {
+      if (status == AnimationStatus.completed) unawaited(HapticFeedback.lightImpact());
+    });
+  }
 
   /// The whole way up or down; a part of the way takes that part of it.
   static const Duration _duration = Duration(milliseconds: 320);
@@ -59,7 +66,12 @@ class PlayerSheet {
   }
 
   /// The finger moved [delta] down (up when negative); [travel] is how far the player's top goes from closed to open.
-  void _move(double delta, double travel) => position.value -= delta / travel;
+  /// Past half the way (where letting go opens or closes it) a tick tells the finger so.
+  void _move(double delta, double travel) {
+    final before = position.value > 0.5;
+    position.value -= delta / travel;
+    if ((position.value > 0.5) != before) unawaited(HapticFeedback.selectionClick());
+  }
 
   /// How far the player's top goes from closed to open: from the mini player's cover, out of which it pours, to the
   /// screen's top (the whole [height] without a cover). So its top stays under the finger.

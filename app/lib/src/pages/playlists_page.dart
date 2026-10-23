@@ -195,6 +195,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             child: DetailHeader(
               back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),
               artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
+              artworkFlight: 'playlist:${playlist.id}',
               artworkBadge: switch (qualityOf(tracks)) {
                 final quality? => QualityTag(tier: quality.tier, spec: quality.spec, fontSize: 11),
                 null => null,

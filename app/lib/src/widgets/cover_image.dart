@@ -163,24 +163,31 @@ class CoverImage extends StatelessWidget {
   /// The placeholder icon's colour; the section's accent when not given.
   final Color? placeholderColor;
 
+  /// [child] with its covers drawing nothing in place of the placeholder: a sharp cover laid over a smaller one (a
+  /// flying cover's), which shows until it has loaded.
+  static Widget withoutPlaceholders(Widget child) => _NoPlaceholders(child: child);
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final quiet = context.getInheritedWidgetOfExactType<_NoPlaceholders>() != null;
     final ratio = MediaQuery.devicePixelRatioOf(context);
     final width = decodeWidth ?? (size == null ? 512 : (size! * ratio).round());
     final provider = CoverArt.provider(path, decodeWidth: width);
 
-    Widget placeholder() => Container(
-      color: colors.surface2,
-      alignment: Alignment.center,
-      child: LayoutBuilder(
-        builder: (context, constraints) => Icon(
-          placeholderIcon,
-          color: placeholderColor ?? colors.accent.withValues(alpha: 0.8),
-          size: (constraints.biggest.shortestSide.isFinite ? constraints.biggest.shortestSide : 48) * 0.42,
-        ),
-      ),
-    );
+    Widget placeholder() => quiet
+        ? const SizedBox.expand()
+        : Container(
+            color: colors.surface2,
+            alignment: Alignment.center,
+            child: LayoutBuilder(
+              builder: (context, constraints) => Icon(
+                placeholderIcon,
+                color: placeholderColor ?? colors.accent.withValues(alpha: 0.8),
+                size: (constraints.biggest.shortestSide.isFinite ? constraints.biggest.shortestSide : 48) * 0.42,
+              ),
+            ),
+          );
 
     final image = provider == null
         ? placeholder()
@@ -198,4 +205,11 @@ class CoverImage extends StatelessWidget {
         : ClipRRect(borderRadius: BorderRadius.circular(radius), child: image);
     return size == null ? clipped : SizedBox.square(dimension: size, child: clipped);
   }
+}
+
+class _NoPlaceholders extends InheritedWidget {
+  const _NoPlaceholders({required super.child});
+
+  @override
+  bool updateShouldNotify(_NoPlaceholders oldWidget) => false;
 }

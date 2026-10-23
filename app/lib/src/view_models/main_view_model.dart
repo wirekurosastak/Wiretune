@@ -206,6 +206,12 @@ class MainViewModel extends ChangeNotifier {
   /// or playlist's page, no search over it): the list scrolls back to its top. Its place is kept otherwise.
   final Event<void> scrollToTopRequested = Event<void>();
 
+  /// How wide a wide screen's tiles are at the least (albums, artists, playlists): a pinch makes them larger or smaller,
+  /// for as long as the app runs.
+  final ValueNotifier<double> tileSize = ValueNotifier(tileSizeDefault);
+
+  static const double tileSizeDefault = 176, tileSizeMin = 128, tileSizeMax = 320;
+
   /// A tab (a section of the sidebar) as TIDAL's and Spotify's: another one shows as it was left, an album's, an
   /// artist's or a playlist's page still open; the one on show chosen again goes from such a page back to its list,
   /// and from the list to its top.

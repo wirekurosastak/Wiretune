@@ -23,6 +23,7 @@ import 'package:wiretune/src/widgets/ambient.dart';
 import 'package:wiretune/src/widgets/badges.dart';
 import 'package:wiretune/src/widgets/buttons.dart';
 import 'package:wiretune/src/widgets/cards.dart';
+import 'package:wiretune/src/widgets/cover_colour.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/devices.dart';
 import 'package:wiretune/src/widgets/page_parts.dart';
@@ -427,7 +428,7 @@ void main() {
     expect(vm.library.isFavorite('1'), isTrue);
   });
 
-  testWidgets("the mini player's cover and Next stand over the nav's Artists and Playlists icons", (tester) async {
+  testWidgets("the mini player's cover and Play stand over the nav's Artists and Playlists icons", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')]);
       library.initialize();
@@ -440,7 +441,7 @@ void main() {
     final cover = find.byWidgetPredicate((w) => w is CoverImage && w.size == 44);
     expect(centre(cover), moreOrLessEquals(centre(find.byIcon(Icons.person_rounded).last), epsilon: 0.5));
     expect(
-      centre(find.byTooltip(Localizer.get('TipNext'))),
+      centre(find.byWidgetPredicate((w) => w is PlayButton && w.size == 38)),
       moreOrLessEquals(centre(find.byIcon(Icons.queue_music_rounded).last), epsilon: 0.5),
     );
   });
@@ -631,6 +632,11 @@ void main() {
       await tester.pumpWidget(WiretuneApp(vm: vm));
       vm.player.playQueue(vm.library.tracks);
       await loadCovers(tester, washOf(find.byType(PhoneLayout)));
+      // The mini player's wash takes the cover's colour once it has been read, over a moment, and then holds still.
+      await tester.runAsync(() => CoverColour.of(cover));
+      await tester.pump(); // the colour comes in from here
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(vm.player.isPlaying, isTrue);
       expect(washOf(find.byType(PhoneLayout)), findsWidgets); // so there is something that could move
       return (vm, driver);
@@ -2036,6 +2042,181 @@ void main() {
       await tester.tap(find.text(Localizer.get('Cancel')));
       await settle(tester);
     }
+  });
+
+  testWidgets("a swipe over the mini player's track skips it, left to the next, right back", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    final first = vm.player.currentTrack;
+    final mini = find.text(vm.player.nowPlayingTitle).last;
+    await tester.fling(mini, const Offset(-200, 0), 1000);
+    await settle(tester);
+    expect(vm.player.currentTrack, isNot(first));
+    // A short drag, let go slowly: it goes back, the track stays.
+    final second = vm.player.currentTrack;
+    await tester.drag(find.text(vm.player.nowPlayingTitle).last, const Offset(-40, 0));
+    await settle(tester);
+    expect(vm.player.currentTrack, second);
+  });
+
+  testWidgets("a detail page's name goes up with the page, step for step, however unevenly it is scrolled", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.albums);
+    final album = vm.library.albums.first;
+    vm.openAlbum(album);
+    await settle(tester);
+    final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    final barTitle = find.descendant(of: find.byType(OverflowBox), matching: find.text(album.title));
+    final finger = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView)));
+    // Up to just short of where the bar takes the name over (as it reaches the shade).
+    while (barTitle.evaluate().isEmpty && position.pixels < 400) {
+      await finger.moveBy(const Offset(0, -10));
+      await tester.pump();
+    }
+    await finger.moveBy(const Offset(0, 20));
+    await tester.pump();
+    double? inPage, left;
+    var checked = 0;
+    for (final step in <double>[1, 3, 0.5, 4, 1, 2, 6, 1, 3, 0.5, 5, 2, 1, 4, 3, 1, 2, 7, 1, 3, 2, 5, 1, 2]) {
+      await finger.moveBy(Offset(0, -step));
+      await tester.pump();
+      if (barTitle.evaluate().isEmpty) continue;
+      final rect = tester.getRect(barTitle);
+      left ??= rect.left;
+      if (rect.left != left) break; // shrinking into the bar from here on
+      inPage ??= rect.center.dy + position.pixels;
+      expect(rect.center.dy + position.pixels, moreOrLessEquals(inPage, epsilon: 0.01), reason: 'step $step');
+      checked++;
+    }
+    await finger.up();
+    await settle(tester);
+    expect(checked, greaterThan(3), reason: 'the bar took the name over before it shrank');
+  });
+
+  testWidgets('a tab page pulled down past its top opens the search; a detail page stretches its artwork', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final list = find.byType(CustomScrollView);
+    final finger = await tester.startGesture(tester.getCenter(list));
+    for (var i = 0; i < 10; i++) {
+      await finger.moveBy(const Offset(0, 40));
+      await tester.pump();
+    }
+    expect(vm.isSearchOpen, isFalse, reason: 'not while held');
+    await finger.up();
+    await settle(tester);
+    expect(vm.isSearchOpen, isTrue);
+    vm.closeSearch();
+    await settle(tester);
+
+    // A short pull only gives.
+    await tester.drag(list, const Offset(0, 60));
+    await settle(tester);
+    expect(vm.isSearchOpen, isFalse);
+
+    vm.openAlbum(vm.library.albums.first);
+    await settle(tester);
+    final stretch = find.byType(PhoneArtworkStretch);
+    final before = tester.getRect(stretch).height;
+    final pull = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView)));
+    for (var i = 0; i < 5; i++) {
+      await pull.moveBy(const Offset(0, 40));
+      await tester.pump();
+    }
+    expect(tester.getRect(find.descendant(of: stretch, matching: find.byType(CoverImage))).height, greaterThan(before));
+    for (var i = 0; i < 20; i++) {
+      await pull.moveBy(const Offset(0, 40));
+      await tester.pump();
+    }
+    expect(
+      tester.getRect(find.descendant(of: stretch, matching: find.byType(CoverImage))).height,
+      lessThanOrEqualTo(before * 1.3),
+      reason: 'it grows so far and no further',
+    );
+    await pull.up();
+    await tester.pump(const Duration(milliseconds: 50));
+    final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    expect(position.pixels, lessThan(position.minScrollExtent), reason: 'still springing back');
+    await settle(tester);
+    await settle(tester);
+    expect(vm.isSearchOpen, isFalse, reason: 'a detail page has no search to pull');
+    expect(position.pixels, position.minScrollExtent, reason: 'back in place');
+    expect(tester.getRect(find.descendant(of: stretch, matching: find.byType(CoverImage))).height, before);
+
+    // Pulled again and let go, the page still answers while it springs back.
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 200));
+    await tester.pump(const Duration(milliseconds: 30));
+    final track = vm.library.albums.first.tracks.first;
+    await tester.tap(find.text(track.title).last);
+    await settle(tester);
+    expect(vm.player.currentTrack, track, reason: 'a row answers');
+    await tester.tap(find.byTooltip(Localizer.get('Back')));
+    await settle(tester);
+    expect(vm.albums.selectedAlbum, isNull, reason: 'the page lets go');
+  });
+
+  testWidgets("a long press on an album's row floats its preview with the whole menu over the page", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    final album = vm.library.albums.first;
+    await tester.longPress(find.text(album.title).first);
+    await settle(tester);
+    for (final key in ['Play', 'Shuffle', 'PlayNext', 'AddToQueue', 'TipAddToPlaylist', 'GoToArtist']) {
+      expect(find.text(Localizer.get(key)), findsOneWidget, reason: key);
+    }
+    await tester.tap(find.text(Localizer.get('PlayNext')));
+    await settle(tester);
+    expect(find.text(Localizer.get('Shuffle')), findsNothing, reason: 'closed by the choice');
+    expect(vm.player.queueTracks.map((t) => t.album), contains(album.title));
+  });
+
+  testWidgets("a tap in a preview's gaps closes it; one on its cover opens the album", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    final album = vm.library.albums.first;
+    Finder cover() => find.byWidgetPredicate((w) => w is CoverImage && w.decodeWidth == 640);
+
+    await tester.longPress(find.text(album.title).first);
+    await settle(tester);
+    await tester.tapAt(tester.getRect(cover()).bottomCenter + const Offset(0, 8));
+    await settle(tester);
+    expect(find.text(Localizer.get('Shuffle')), findsNothing, reason: 'closed');
+    expect(vm.albums.selectedAlbum, isNull);
+
+    await tester.longPress(find.text(album.title).first);
+    await settle(tester);
+    await tester.tap(cover());
+    await settle(tester);
+    expect(find.text(Localizer.get('PlayNext')), findsNothing, reason: 'closed');
+    expect(vm.albums.selectedAlbum, album);
+  });
+
+  testWidgets("two fingers spread over a wide screen's tiles make them larger, fewer to a row", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    final start = vm.tileSize.value;
+    final center = tester.getCenter(find.byType(CustomScrollView));
+    final a = await tester.createGesture(kind: PointerDeviceKind.touch);
+    final b = await tester.createGesture(kind: PointerDeviceKind.touch);
+    await a.down(center - const Offset(40, 0));
+    await b.down(center + const Offset(40, 0));
+    await a.moveTo(center - const Offset(80, 0));
+    await b.moveTo(center + const Offset(80, 0));
+    await tester.pump();
+    await a.up();
+    await b.up();
+    await settle(tester);
+    expect(vm.tileSize.value, greaterThan(start));
+    expect(vm.tileSize.value, lessThanOrEqualTo(MainViewModel.tileSizeMax));
   });
 
   testWidgets("a menu opened from the search results leaves the keyboard down when it closes", (tester) async {

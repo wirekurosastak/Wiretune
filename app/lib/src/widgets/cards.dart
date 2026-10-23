@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -13,6 +15,7 @@ import '../view_models/main_view_model.dart';
 import '../view_models/player_view_model.dart';
 import 'badges.dart';
 import 'buttons.dart';
+import 'cover_flight.dart';
 import 'cover_image.dart';
 import 'dialogs.dart';
 import 'page_parts.dart';
@@ -48,6 +51,15 @@ class AlbumCard extends StatelessWidget {
       accent: purple,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
+      onLongPress: () => menu.preview(
+        context,
+        cover: albumPreviewCover(context, album),
+        title: album.title,
+        subtitle: album.artist,
+        flightTag: 'album:${album.id}',
+        onOpen: onOpen,
+      ),
+      flightTag: 'album:${album.id}',
       menu: menu.coverButton(context),
       cover: cover,
       lines: [
@@ -84,6 +96,16 @@ class ArtistCard extends StatelessWidget {
       accent: coral,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
+      onLongPress: () => menu.preview(
+        context,
+        cover: artistPreviewPicture(context, artist),
+        round: true,
+        title: artist.name,
+        subtitle: artistCounts(context, artist),
+        flightTag: 'artist:${artist.id}',
+        onOpen: onOpen,
+      ),
+      flightTag: 'artist:${artist.id}',
       menu: menu.coverButton(context),
       circle: true,
       cover: picture,
@@ -95,6 +117,24 @@ class ArtistCard extends StatelessWidget {
     );
   }
 }
+
+/// An album's cover as large as a preview shows it.
+Widget albumPreviewCover(BuildContext context, Album album) => CoverImage(
+  path: album.coverArtPath,
+  radius: Radii.card,
+  decodeWidth: 640,
+  placeholderIcon: Icons.album,
+  placeholderColor: context.colors.palette.purple,
+);
+
+/// An artist's picture as large as a preview shows it.
+Widget artistPreviewPicture(BuildContext context, Artist artist) => CoverImage(
+  path: artist.picturePath,
+  circle: true,
+  decodeWidth: 640,
+  placeholderIcon: Icons.person,
+  placeholderColor: context.colors.palette.coral,
+);
 
 /// How many albums and tracks an artist has, as its tile and its row say it.
 String artistCounts(BuildContext context, Artist artist) =>
@@ -267,6 +307,53 @@ class ListMenu {
   /// Opens the menu at [position] (a right click on a tile).
   Future<void> showAt(BuildContext context, Offset position) => _show(context, position);
 
+  /// A long press's preview: [cover] large ([round]: an artist's), its [title] and [subtitle] and the whole menu under
+  /// them, floating over the page, which blurs behind it. A tap on the cover opens its page ([onOpen]), the cover
+  /// flying there ([flightTag]); a tap anywhere else but the menu closes it.
+  Future<void> preview(
+    BuildContext context, {
+    required Widget cover,
+    bool round = false,
+    required String title,
+    String? subtitle,
+    required String flightTag,
+    required VoidCallback onOpen,
+  }) async {
+    var open = false;
+    final action = await showGeneralDialog<_ListAction>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black.withValues(alpha: 0.3),
+      transitionDuration: const Duration(milliseconds: 240),
+      pageBuilder: (dialog, _, _) => _Preview(
+        cover: cover,
+        round: round,
+        title: title,
+        subtitle: subtitle,
+        flightTag: flightTag,
+        onOpen: () {
+          open = true;
+          Navigator.pop(dialog);
+        },
+        items: _items(dialog),
+      ),
+      transitionBuilder: (context, animation, _, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+        final blur = 14 * animation.value;
+        return BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: FadeTransition(
+            opacity: curved,
+            child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(curved), child: child),
+          ),
+        );
+      },
+    );
+    if (open) onOpen();
+    if (context.mounted) _run(context, action);
+  }
+
   /// The ⋮ button of a phone row.
   Widget button(BuildContext context) => PopupMenuButton<_ListAction>(
     icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
@@ -335,6 +422,118 @@ class ListMenu {
   );
 }
 
+/// The card of [ListMenu.preview]: the cover, which opens its page, the names, and the menu's entries, which close it
+/// with their choice. A tap on anything else closes it too.
+class _Preview extends StatelessWidget {
+  const _Preview({
+    required this.cover,
+    required this.round,
+    required this.title,
+    required this.subtitle,
+    required this.flightTag,
+    required this.onOpen,
+    required this.items,
+  });
+
+  final Widget cover;
+  final bool round;
+  final String title;
+  final String? subtitle;
+  final String flightTag;
+  final VoidCallback onOpen;
+  final List<PopupMenuEntry<_ListAction>> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    // A Material under it, for the app's text style: a dialog's page has none of its own.
+    return Material(
+      type: MaterialType.transparency,
+      // The gaps between the cover, the names and the menu, and the names themselves, are the page's: a tap there
+      // closes it, as one beside it does.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.pop(context),
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: round ? BoxShape.circle : BoxShape.rectangle,
+                        borderRadius: round ? null : BorderRadius.circular(Radii.card),
+                        boxShadow: [
+                          BoxShadow(color: colors.palette.shadow, blurRadius: 40, offset: const Offset(0, 18)),
+                        ],
+                      ),
+                      child: Semantics(
+                        button: true,
+                        label: title,
+                        child: GestureDetector(
+                          onTap: onOpen,
+                          child: CoverFlightSource(
+                            tag: flightTag,
+                            radius: round ? null : Radii.card,
+                            cover: SizedBox.square(dimension: 240, child: cover),
+                            builder: (context, cover) => cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colors.textMain),
+                    ),
+                    if (subtitle != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          subtitle!,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13.5, color: colors.textMuted),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    Material(
+                      color: colors.palette.modal,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(Radii.card),
+                        side: BorderSide(color: colors.glassBorder),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        // A menu, as a screen reader tells it, as the ⋮'s is.
+                        child: Semantics(
+                          role: ui.SemanticsRole.menu,
+                          explicitChildNodes: true,
+                          label: title,
+                          child: Column(mainAxisSize: MainAxisSize.min, children: items),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Albums as a sliver: on a phone a list of rows (the cover, the title, the artist and the release year), on a wide screen a grid
 /// of tiles.
 class AlbumsSliver extends StatelessWidget {
@@ -369,8 +568,18 @@ class AlbumsSliver extends StatelessWidget {
     final purple = context.colors.palette.purple;
     return _rows(albums.length, (index) {
       final album = albums[index];
+      final menu = ListMenu.album(album, onPlay: () => onPlay(album), withArtist: withArtist);
       return _ListRow(
         onTap: () => onOpen(album),
+        onLongPress: () => menu.preview(
+          context,
+          cover: albumPreviewCover(context, album),
+          title: album.title,
+          subtitle: album.artist,
+          flightTag: 'album:${album.id}',
+          onOpen: () => onOpen(album),
+        ),
+        flightTag: 'album:${album.id}',
         picture: CoverImage(
           path: album.coverArtPath,
           size: _ListRow.pictureSize,
@@ -386,7 +595,7 @@ class AlbumsSliver extends StatelessWidget {
           fontSize: 9.5,
           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
         ),
-        trailing: ListMenu.album(album, onPlay: () => onPlay(album), withArtist: withArtist).button(context),
+        trailing: menu.button(context),
       );
     });
   }
@@ -417,8 +626,20 @@ class ArtistsSliver extends StatelessWidget {
     final coral = context.colors.palette.coral;
     return _rows(artists.length, (index) {
       final artist = artists[index];
+      final menu = ListMenu.artist(artist, onPlay: () => onPlay(artist));
       return _ListRow(
         onTap: () => onOpen(artist),
+        onLongPress: () => menu.preview(
+          context,
+          cover: artistPreviewPicture(context, artist),
+          round: true,
+          title: artist.name,
+          subtitle: artistCounts(context, artist),
+          flightTag: 'artist:${artist.id}',
+          onOpen: () => onOpen(artist),
+        ),
+        flightTag: 'artist:${artist.id}',
+        circle: true,
         picture: CoverImage(
           path: artist.picturePath,
           size: _ListRow.pictureSize,
@@ -428,7 +649,7 @@ class ArtistsSliver extends StatelessWidget {
         ),
         title: artist.name,
         subtitle: artistCounts(context, artist),
-        trailing: ListMenu.artist(artist, onPlay: () => onPlay(artist)).button(context),
+        trailing: menu.button(context),
       );
     });
   }
@@ -482,13 +703,23 @@ class PlaylistsSliver extends StatelessWidget {
               fontSize: 9.5,
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
             );
+      final menu = ListMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist));
       return _ListRow(
         onTap: () => onOpen(playlist),
+        onLongPress: () => menu.preview(
+          context,
+          cover: PlaylistCover(covers: covers, radius: Radii.card),
+          title: playlist.name,
+          subtitle: context.trf('TrackCount', [playlist.trackCount]),
+          flightTag: 'playlist:${playlist.id}',
+          onOpen: () => onOpen(playlist),
+        ),
+        flightTag: 'playlist:${playlist.id}',
         picture: PlaylistCover(covers: covers, radius: Radii.small),
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
         badge: badge,
-        trailing: ListMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist)).button(context),
+        trailing: menu.button(context),
       );
     });
   }
@@ -512,6 +743,9 @@ Widget _rows(int count, Widget Function(int index) row) => count == 0
 class _ListRow extends StatelessWidget {
   const _ListRow({
     required this.onTap,
+    this.onLongPress,
+    this.flightTag,
+    this.circle = false,
     required this.picture,
     required this.title,
     required this.subtitle,
@@ -522,6 +756,15 @@ class _ListRow extends StatelessWidget {
   static const double pictureSize = 68;
 
   final VoidCallback onTap;
+
+  /// A long press: the preview ([ListMenu.preview]).
+  final VoidCallback? onLongPress;
+
+  /// What the picture shows, for it to fly to the page the row opens ([CoverFlightSource]).
+  final String? flightTag;
+
+  /// The picture is round (an artist's).
+  final bool circle;
   final Widget picture;
   final String title;
   final String subtitle;
@@ -530,11 +773,19 @@ class _ListRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tag = flightTag;
+    return tag == null
+        ? _build(context, picture)
+        : CoverFlightSource(tag: tag, radius: circle ? null : Radii.small, cover: picture, builder: _build);
+  }
+
+  Widget _build(BuildContext context, Widget picture) {
     final colors = context.colors;
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(Radii.medium),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
@@ -653,6 +904,15 @@ class PlaylistCard extends StatelessWidget {
       accent: lime,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
+      onLongPress: () => menu.preview(
+        context,
+        cover: PlaylistCover(covers: covers, radius: Radii.card),
+        title: playlist.name,
+        subtitle: context.trf('TrackCount', [playlist.trackCount]),
+        flightTag: 'playlist:${playlist.id}',
+        onOpen: onOpen,
+      ),
+      flightTag: 'playlist:${playlist.id}',
       menu: menu.coverButton(context),
       cover: PlaylistCover(covers: covers, radius: Radii.medium),
       lines: [
@@ -681,6 +941,8 @@ class _DesktopTile extends StatefulWidget {
     required this.accent,
     required this.onTap,
     this.onSecondaryTap,
+    this.onLongPress,
+    this.flightTag,
     required this.cover,
     required this.lines,
     required this.play,
@@ -698,6 +960,12 @@ class _DesktopTile extends StatefulWidget {
   final Color accent;
   final VoidCallback onTap;
   final void Function(Offset position)? onSecondaryTap;
+
+  /// A long press (a touch screen's): the preview ([ListMenu.preview]).
+  final VoidCallback? onLongPress;
+
+  /// What the cover shows, for it to fly to the page the tile opens ([CoverFlightSource]).
+  final String? flightTag;
   final Widget cover;
   final List<Widget> lines;
   final Widget play;
@@ -715,12 +983,27 @@ class _DesktopTileState extends State<_DesktopTile> {
   bool _hover = false;
   bool _focus = false;
 
+  /// What the last press was made with: a mouse held down doesn't open the preview, a finger or a pen does.
+  ui.PointerDeviceKind? _pressedWith;
+
   /// The play and menu buttons: a TV remote passes them by, so a tile is one step, and OK opens it.
   static Widget? _offTv(Widget? button) =>
       button != null && AppPlatform.current.isTv ? ExcludeFocus(child: button) : button;
 
   @override
   Widget build(BuildContext context) {
+    final tag = widget.flightTag;
+    return tag == null
+        ? _build(context, widget.cover)
+        : CoverFlightSource(
+            tag: tag,
+            radius: widget.circle ? null : Radii.medium,
+            cover: widget.cover,
+            builder: _build,
+          );
+  }
+
+  Widget _build(BuildContext context, Widget coverImage) {
     final colors = context.colors;
     final active = _hover || _focus;
     final showPlay = active || AppPlatform.current.isMobile;
@@ -746,7 +1029,7 @@ class _DesktopTileState extends State<_DesktopTile> {
                 ),
               ],
             ),
-            child: widget.cover,
+            child: coverImage,
           ),
           if (widget.badge != null)
             // Beside the play button, while it is there, the tag shrinks rather than slide under it.
@@ -785,31 +1068,44 @@ class _DesktopTileState extends State<_DesktopTile> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
-        child: AnimatedContainer(
-          duration: duration,
-          curve: Curves.easeOutCubic,
-          transform: Matrix4.translationValues(0, active ? -4 : 0, 0),
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(Radii.card),
-              hoverColor: Colors.transparent,
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              onTap: widget.onTap,
-              onSecondaryTapUp: widget.onSecondaryTap != null ? (d) => widget.onSecondaryTap!(d.globalPosition) : null,
-              child: Padding(
-                padding: const EdgeInsets.all(_DesktopTile.padding),
-                child: Column(
-                  crossAxisAlignment: widget.circle ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-                  children: [
-                    cover,
-                    const SizedBox(height: _DesktopTile.captionGap),
-                    for (var i = 0; i < widget.lines.length; i++) ...[
-                      if (i > 0) const SizedBox(height: 2),
-                      SizedBox(width: double.infinity, child: widget.lines[i]),
+        child: Listener(
+          onPointerDown: (event) => _pressedWith = event.kind,
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(0, active ? -4 : 0, 0),
+            child: Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(Radii.card),
+                hoverColor: Colors.transparent,
+                splashColor: Colors.transparent,
+                highlightColor: Colors.transparent,
+                onTap: widget.onTap,
+                onLongPress: switch (widget.onLongPress) {
+                  final onLongPress? => () {
+                    if (_pressedWith == ui.PointerDeviceKind.touch || _pressedWith == ui.PointerDeviceKind.stylus) {
+                      onLongPress();
+                    }
+                  },
+                  null => null,
+                },
+                onSecondaryTapUp: widget.onSecondaryTap != null
+                    ? (d) => widget.onSecondaryTap!(d.globalPosition)
+                    : null,
+                child: Padding(
+                  padding: const EdgeInsets.all(_DesktopTile.padding),
+                  child: Column(
+                    crossAxisAlignment: widget.circle ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+                    children: [
+                      cover,
+                      const SizedBox(height: _DesktopTile.captionGap),
+                      for (var i = 0; i < widget.lines.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 2),
+                        SizedBox(width: double.infinity, child: widget.lines[i]),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -829,12 +1125,11 @@ enum TileKind {
   twoLines,
 }
 
-/// Tiles as a sliver, for a wide screen (a phone lists rows): as many columns of at least 176 px as fit, stretched to
-/// fill the row.
+/// Tiles as a sliver, for a wide screen (a phone lists rows): as many columns as fit of at least the tile size (176
+/// px, larger or smaller after a pinch: `MainViewModel.tileSize`), stretched to fill the row.
 class TileGridSliver extends StatelessWidget {
   const TileGridSliver({super.key, required this.itemCount, required this.itemBuilder, this.kind = TileKind.album});
 
-  static const double _minTileWidth = 176;
   static const double _gap = 14;
 
   final int itemCount;
@@ -862,28 +1157,31 @@ class TileGridSliver extends StatelessWidget {
     final title = _lineHeight(context, 14, FontWeight.w700);
     final second = _lineHeight(context, 12.5, FontWeight.w500);
     final third = _lineHeight(context, 11, FontWeight.w500);
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
-        const padding = 20.0;
-        final available = constraints.crossAxisExtent - 2 * padding;
-        final columns = ((available + _gap) / (_minTileWidth + _gap)).floor().clamp(1, 1000);
-        final tileWidth = (available - _gap * (columns - 1)) / columns;
-        // The square cover, then the caption at the user's font size.
-        final lines = kind == TileKind.album ? title + second + third + 4 : title + second + 2;
-        const inset = 2 * _DesktopTile.padding;
-        return SliverPadding(
-          padding: const EdgeInsets.fromLTRB(padding, 4, padding, 4),
-          sliver: SliverGrid(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              mainAxisExtent: inset + (tileWidth - inset) + _DesktopTile.captionGap + lines + 2,
-              crossAxisSpacing: _gap,
-              mainAxisSpacing: _gap,
+    return ValueListenableBuilder<double>(
+      valueListenable: context.vm.tileSize,
+      builder: (context, minTileWidth, _) => SliverLayoutBuilder(
+        builder: (context, constraints) {
+          const padding = 20.0;
+          final available = constraints.crossAxisExtent - 2 * padding;
+          final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
+          final tileWidth = (available - _gap * (columns - 1)) / columns;
+          // The square cover, then the caption at the user's font size.
+          final lines = kind == TileKind.album ? title + second + third + 4 : title + second + 2;
+          const inset = 2 * _DesktopTile.padding;
+          return SliverPadding(
+            padding: const EdgeInsets.fromLTRB(padding, 4, padding, 4),
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                mainAxisExtent: inset + (tileWidth - inset) + _DesktopTile.captionGap + lines + 2,
+                crossAxisSpacing: _gap,
+                mainAxisSpacing: _gap,
+              ),
+              delegate: SliverChildBuilderDelegate(itemBuilder, childCount: itemCount),
             ),
-            delegate: SliverChildBuilderDelegate(itemBuilder, childCount: itemCount),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

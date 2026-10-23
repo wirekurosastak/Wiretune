@@ -1,9 +1,12 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
@@ -14,6 +17,7 @@ import '../pages/section_page.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../widgets/ambient.dart';
+import '../widgets/cover_colour.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
 import '../widgets/page_parts.dart';
@@ -423,7 +427,7 @@ class _OfflineBanner extends StatelessWidget {
 class _MiniPlayer extends StatelessWidget {
   const _MiniPlayer();
 
-  static const double _coverSize = 44, _nextSize = 38;
+  static const double _coverSize = 44, _playSize = 38;
 
   @override
   Widget build(BuildContext context) {
@@ -437,109 +441,192 @@ class _MiniPlayer extends StatelessWidget {
         final track = player.currentTrack;
         if (track == null) return const SizedBox.shrink();
 
-        // Room above it, as in TIDAL's pill, under the pill's rounded top.
-        return Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: PlayerSheetDrag(
-            // The cover and Next stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
-            // of the pill's width, as they are.
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final column = constraints.maxWidth / 5;
-                return SizedBox(
-                  height: 66,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: vm.openNowPlaying,
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
-                            child: Row(
-                              children: [
-                                // The lamp the full-screen player pours out of.
-                                DecoratedBox(
-                                  key: PlayerSheetScope.maybeOf(context)?.lamp,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(Radii.small),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: colors.palette.shadow,
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 3),
-                                      ),
-                                    ],
-                                  ),
-                                  child: CoverImage(path: track.coverArtPath, size: _coverSize, radius: Radii.small),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+        // A faint wash of the cover's colour from the pill's top; Play stays in the section's, as everywhere.
+        return CoverTint(
+          path: track.coverArtPath,
+          builder: (context, wash) => DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: wash == null
+                  ? null
+                  : LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        wash.withValues(alpha: 0.2 * wash.a),
+                        wash.withValues(alpha: 0),
+                      ],
+                    ),
+            ),
+            // Room above it, as in TIDAL's pill, under the pill's rounded top.
+            child: Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: PlayerSheetDrag(
+                // The cover and Play stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
+                // of the pill's width, as they are. A swipe over the track skips (no buttons for it, as in TIDAL and
+                // Spotify).
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final column = constraints.maxWidth / 5;
+                    return SizedBox(
+                      height: 66,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _SkipSwipe(
+                              onNext: player.nextTrack,
+                              onPrevious: player.previousTrack,
+                              child: InkWell(
+                                onTap: vm.openNowPlaying,
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
+                                  child: Row(
                                     children: [
-                                      Text(
-                                        player.nowPlayingTitle,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -0.2,
-                                          color: colors.textMain,
+                                      // The lamp the full-screen player pours out of.
+                                      DecoratedBox(
+                                        key: PlayerSheetScope.maybeOf(context)?.lamp,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(Radii.small),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: colors.palette.shadow,
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: CoverImage(
+                                          path: track.coverArtPath,
+                                          size: _coverSize,
+                                          radius: Radii.small,
                                         ),
                                       ),
-                                      const SizedBox(height: 1),
-                                      if (player.isRemote && !player.hasError)
-                                        const PlayingOnLabel(fontSize: 11.5)
-                                      else
-                                        Text(
-                                          player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            color: player.hasError ? colors.danger : colors.textMuted,
-                                          ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              player.nowPlayingTitle,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 14.5,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: -0.2,
+                                                color: colors.textMain,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 1),
+                                            if (player.isRemote && !player.hasError)
+                                              const PlayingOnLabel(fontSize: 11.5)
+                                            else
+                                              Text(
+                                                player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: player.hasError ? colors.danger : colors.textMuted,
+                                                ),
+                                              ),
+                                          ],
                                         ),
+                                      ),
                                     ],
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
-                      SizedBox.square(
-                        dimension: 38,
-                        child: IconButton(
-                          tooltip: context.tr('TipPrevious'),
-                          onPressed: player.previousTrack,
-                          icon: Icon(Icons.skip_previous_rounded, size: 24, color: colors.textMain),
-                        ),
-                      ),
-                      // The players' round Play, as in the full-screen player and on a computer, in the 42 it had.
-                      const Padding(padding: EdgeInsets.symmetric(horizontal: 2), child: PlayButton(size: 38)),
-                      Padding(
-                        padding: EdgeInsets.only(right: math.max(0, (column - _nextSize) / 2)),
-                        child: SizedBox.square(
-                          dimension: _nextSize,
-                          child: IconButton(
-                            tooltip: context.tr('TipNext'),
-                            onPressed: player.nextTrack,
-                            icon: Icon(Icons.skip_next_rounded, size: 24, color: colors.textMain),
+                          // The players' round Play, as in the full-screen player and on a computer.
+                          Padding(
+                            padding: EdgeInsets.only(right: math.max(0, (column - _playSize) / 2)),
+                            child: const PlayButton(size: _playSize),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-              },
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         );
       },
     );
   }
+}
+
+/// A swipe left or right over the mini player's track (the cover and the titles), as in TIDAL and Spotify: the track
+/// follows the finger, and let go past a third of the way, or flung, it goes on out and the next (left) or the previous
+/// (right) comes in from the other side; else it goes back. A screen reader, which takes the swipes for itself, offers
+/// Next and Previous as its actions.
+class _SkipSwipe extends StatefulWidget {
+  const _SkipSwipe({required this.onNext, required this.onPrevious, required this.child});
+
+  final VoidCallback onNext;
+  final VoidCallback onPrevious;
+  final Widget child;
+
+  @override
+  State<_SkipSwipe> createState() => _SkipSwipeState();
+}
+
+class _SkipSwipeState extends State<_SkipSwipe> with SingleTickerProviderStateMixin {
+  /// How far the track is off its place, in pixels (left when negative).
+  late final AnimationController _offset = AnimationController.unbounded(vsync: this);
+  double _width = 1;
+
+  @override
+  void dispose() {
+    _offset.dispose();
+    super.dispose();
+  }
+
+  Future<void> _release(double velocity) async {
+    final offset = _offset.value;
+    final skip = velocity.abs() > 600 ? velocity.sign : (offset.abs() > _width / 3 ? offset.sign : 0.0);
+    if (skip == 0) {
+      await _offset.animateTo(0, duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
+      return;
+    }
+    // Out the way it went, the other track in from the far side.
+    await _offset.animateTo(skip * _width, duration: const Duration(milliseconds: 140), curve: Curves.easeIn);
+    if (!mounted) return;
+    unawaited(HapticFeedback.lightImpact());
+    skip < 0 ? widget.onNext() : widget.onPrevious();
+    _offset.value = -skip * _width * 0.6;
+    await _offset.animateTo(0, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      _width = constraints.maxWidth;
+      final gestures = GestureDetector(
+        onHorizontalDragStart: (_) => _offset.stop(),
+        onHorizontalDragUpdate: (details) => _offset.value += details.primaryDelta ?? 0,
+        onHorizontalDragEnd: (details) => unawaited(_release(details.primaryVelocity ?? 0)),
+        child: ClipRect(
+          child: AnimatedBuilder(
+            animation: _offset,
+            builder: (context, child) => Opacity(
+              opacity: (1 - _offset.value.abs() / _width).clamp(0.0, 1.0),
+              child: Transform.translate(offset: Offset(_offset.value, 0), child: child),
+            ),
+            child: widget.child,
+          ),
+        ),
+      );
+      return Semantics(
+        customSemanticsActions: {
+          CustomSemanticsAction(label: context.tr('TipNext')): widget.onNext,
+          CustomSemanticsAction(label: context.tr('TipPrevious')): widget.onPrevious,
+        },
+        child: gestures,
+      );
+    },
+  );
 }

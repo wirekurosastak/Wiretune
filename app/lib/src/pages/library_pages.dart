@@ -12,6 +12,7 @@ import '../view_models/library_view_models.dart';
 import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
+import '../widgets/cover_flight.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/downloads.dart';
 import '../widgets/links.dart';
@@ -222,6 +223,7 @@ class DetailHeader extends StatelessWidget {
     required this.title,
     this.artworkBadge,
     this.roundArtwork = false,
+    this.artworkFlight,
     this.back,
     this.details = const [],
     this.actions = const [],
@@ -235,6 +237,9 @@ class DetailHeader extends StatelessWidget {
 
   /// The artwork is round (an artist's picture): so is its shadow and glow.
   final bool roundArtwork;
+
+  /// What the artwork shows, for the cover pressed on a tile or a row to fly into it ([CoverFlightTarget]).
+  final String? artworkFlight;
   final Widget? back;
 
   /// The labels above the title on a wide screen ("ALBUM", "PLAYLIST").
@@ -252,6 +257,15 @@ class DetailHeader extends StatelessWidget {
 
   /// Whether the page is narrower than [sideBySideWidth]: the header, and the page around it, are the upright phone's.
   static bool isNarrow(BuildContext context) => MediaQuery.sizeOf(context).width < sideBySideWidth;
+
+  /// The framed artwork, with its shadow and its tag, as what a cover flies into: hidden whole until it lands, and the
+  /// sharp artwork laid over the tile's smaller picture on the way.
+  Widget _flight(Widget framed) {
+    final tag = artworkFlight;
+    return tag == null
+        ? framed
+        : CoverFlightTarget(tag: tag, radius: roundArtwork ? null : Radii.card, arrival: artwork, child: framed);
+  }
 
   /// The wide header's title style; a playlist's editable title uses it too.
   static TextStyle titleStyle(BuildContext context) => TextStyle(
@@ -341,7 +355,9 @@ class DetailHeader extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(16, back == null ? 12 : 0, 16, 0),
               child: Column(
                 children: [
-                  Container(width: 230, height: 230, decoration: frame, child: framed),
+                  PhoneArtworkStretch(
+                    child: _flight(Container(width: 230, height: 230, decoration: frame, child: framed)),
+                  ),
                   const SizedBox(height: 20),
                   if (actions.isEmpty) PinnedTitleBar.anchor(context, narrowTitle) else narrowTitle,
                   if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
@@ -390,7 +406,7 @@ class DetailHeader extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(width: 210, height: 210, decoration: frame, child: framed),
+              _flight(Container(width: 210, height: 210, decoration: frame, child: framed)),
               const SizedBox(width: 30),
               Expanded(child: text),
             ],
@@ -738,6 +754,7 @@ class AlbumDetail extends StatelessWidget {
                 placeholderIcon: Icons.album,
                 placeholderColor: colors.palette.purple,
               ),
+              artworkFlight: 'album:${album.id}',
               artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
               tags: [TagBadge(context.tr('ColAlbum'), color: colors.palette.purple)],
               title: album.title,
@@ -851,6 +868,7 @@ class ArtistDetail extends StatelessWidget {
                 placeholderIcon: Icons.person,
                 placeholderColor: colors.palette.coral,
               ),
+              artworkFlight: 'artist:${artist.id}',
               roundArtwork: true,
               tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
               title: artist.name,
