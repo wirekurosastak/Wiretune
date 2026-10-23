@@ -2333,6 +2333,64 @@ void main() {
     );
   });
 
+  testWidgets("a computer's section chosen again in the sidebar brings its page back to the top", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 60; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Album ${i % 6}', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    for (final (section, name) in [(AppSection.tracks, 'NavTracks'), (AppSection.settings, 'NavSettings')]) {
+      vm.navigateTo(section);
+      await settle(tester);
+      final page = find.byType(section == AppSection.tracks ? CustomScrollView : ListView).last;
+      double scrolled() => tester
+          .state<ScrollableState>(find.descendant(of: page, matching: find.byType(Scrollable)).first)
+          .position
+          .pixels;
+      await tester.drag(page, const Offset(0, -600));
+      await settle(tester);
+      expect(scrolled(), greaterThan(0), reason: '$section scrolled');
+      // The sidebar's, before the page's.
+      await tester.tap(find.text(Localizer.get(name)).first);
+      await settle(tester);
+      expect(scrolled(), 0, reason: '$section back at its top');
+    }
+  });
+
+  testWidgets("a scrolled table or grid builds only the rows and tiles that come into view", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        for (var a = 1; a <= 40; a++)
+          for (var t = 1; t <= 3; t++) TestSupport.makeTrack('$a-$t', 'Song $a.$t', album: 'Album $a', trackNumber: t),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    final built = <String, int>{};
+    debugOnRebuildDirtyWidget = (element, _) =>
+        built.update(element.widget.runtimeType.toString(), (n) => n + 1, ifAbsent: () => 1);
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+    // A table's rows come in one by one; a grid's six tiles at once (before the fix: 96 rows and 195 tiles).
+    for (final (section, item, per, most) in [
+      (AppSection.tracks, '_TableRow', 52.0, 20),
+      (AppSection.albums, 'CoverFlightSource', 250.0, 40),
+    ]) {
+      vm.navigateTo(section);
+      await settle(tester);
+      built.clear();
+      // Ten small steps, a row's or a tile row's worth in all.
+      final finger = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView).first));
+      for (var i = 0; i < 10; i++) {
+        await finger.moveBy(Offset(0, -per / 10));
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await finger.up();
+      expect(built[item] ?? 0, lessThan(most), reason: '$section: not every one at every step');
+    }
+  });
+
   testWidgets("a page opened by a link sends its artwork back to its tile when it closes", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.navigateTo(AppSection.artists);

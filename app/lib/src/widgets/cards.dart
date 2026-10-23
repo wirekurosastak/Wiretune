@@ -1296,10 +1296,10 @@ class TileGridSliver extends StatelessWidget {
     final third = _lineHeight(context, 11, FontWeight.w500);
     return ValueListenableBuilder<double>(
       valueListenable: context.vm.tileSize,
-      builder: (context, minTileWidth, _) => SliverLayoutBuilder(
-        builder: (context, constraints) {
+      builder: (context, minTileWidth, _) => SliverWidthBuilder(
+        builder: (context, width) {
           const padding = 20.0;
-          final available = constraints.crossAxisExtent - 2 * padding;
+          final available = width - 2 * padding;
           final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
           final tileWidth = (available - _gap * (columns - 1)) / columns;
           // The square cover, then the caption at the user's font size.

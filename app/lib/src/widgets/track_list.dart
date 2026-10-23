@@ -179,12 +179,12 @@ class _TrackSliverState extends State<TrackSliver> {
     final vm = context.vm;
     // The rows follow the player (the playing track) and the downloads (their states, not their every byte).
     final listenable = Listenable.merge([vm.player, vm.downloads.states]);
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
+    return SliverWidthBuilder(
+      builder: (context, width) {
         // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
         final padding = widget.horizontalPadding ?? (table ? TrackSliver.tablePadding : 8.0);
-        _tableWidth = constraints.crossAxisExtent - 2 * padding;
+        _tableWidth = width - 2 * padding;
         return ListenableBuilder(
           listenable: listenable,
           builder: (context, _) {

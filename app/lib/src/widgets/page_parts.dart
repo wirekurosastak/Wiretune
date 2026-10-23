@@ -76,6 +76,42 @@ class PageHeader extends StatelessWidget {
   }
 }
 
+/// A sliver built for the width it is laid out in. A [SliverLayoutBuilder]'s constraints carry the scroll, so it builds
+/// again at every step of it (every row of a table, every tile of a grid, at every frame); this one only when the width
+/// changes, or when it is rebuilt itself.
+class SliverWidthBuilder extends StatefulWidget {
+  const SliverWidthBuilder({super.key, required this.builder});
+
+  final Widget Function(BuildContext context, double width) builder;
+
+  @override
+  State<SliverWidthBuilder> createState() => _SliverWidthBuilderState();
+}
+
+class _SliverWidthBuilderState extends State<SliverWidthBuilder> {
+  double? _width;
+  Widget? _sliver;
+
+  @override
+  void didUpdateWidget(SliverWidthBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sliver = null;
+  }
+
+  @override
+  Widget build(BuildContext context) => SliverLayoutBuilder(
+    builder: (context, constraints) {
+      final width = constraints.crossAxisExtent;
+      if (width != _width || _sliver == null) {
+        _width = width;
+        // In a context of its own, which what it looks up (the theme, the phone's chrome) rebuilds when that changes.
+        _sliver = Builder(builder: (context) => widget.builder(context, width));
+      }
+      return _sliver!;
+    },
+  );
+}
+
 /// A tab page (Albums, Artists, Tracks, Favorites, Playlists): its [header] over its list. On a phone the header scrolls
 /// with the list and the top bar takes its title over ([PinnedTitleBar]); elsewhere it stays put above the list, as do
 /// [columnHeaders] (a table's, [TrackColumnHeaders]) under it, and only the list scrolls. A short page (a TV's) leaves
@@ -118,15 +154,19 @@ class TabPageList extends StatelessWidget {
             ...slivers,
           ],
         );
-        if (phone) return PinnedTitleBar(title: title, child: list);
-        if (!apart) return list;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            header,
-            ?columnHeaders,
-            Expanded(child: _TopFade(child: list)),
-          ],
+        // Elsewhere the bar is the page alone, but still brings it back to its top.
+        return PinnedTitleBar(
+          title: title,
+          child: phone || !apart
+              ? list
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    header,
+                    ?columnHeaders,
+                    Expanded(child: _TopFade(child: list)),
+                  ],
+                ),
         );
       },
     );
@@ -922,9 +962,28 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
     super.dispose();
   }
 
+  /// The page's list: the first one under it that scrolls up and down (its header's may scroll sideways).
+  ScrollPosition? _listPosition() {
+    ScrollableState? list;
+    void visit(Element element) {
+      if (list != null) return;
+      if (element is StatefulElement) {
+        if (element.state case final ScrollableState scrollable
+            when axisDirectionToAxis(scrollable.axisDirection) == Axis.vertical) {
+          list = scrollable;
+          return;
+        }
+      }
+      element.visitChildren(visit);
+    }
+
+    (context as Element).visitChildren(visit);
+    return list?.position;
+  }
+
+  // Found from here, not from the header: far down the page the header isn't built, and a computer's has none marked.
   void _scrollToTop() {
-    final anchor = _anchor.currentContext;
-    final position = anchor == null ? null : Scrollable.maybeOf(anchor)?.position;
+    final position = _listPosition();
     if (position == null || position.pixels <= position.minScrollExtent) return;
     unawaited(
       position.animateTo(
