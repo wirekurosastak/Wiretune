@@ -60,25 +60,22 @@ class TracksPage extends StatelessWidget {
       listenable: tracks,
       builder: (context, _) {
         if (!tracks.hasTracks) return const EmptyLibrary();
-        return PinnedTitleBar(
+        return TabPageList(
           title: context.tr('NavTracks'),
-          child: CustomScrollView(
-            key: const PageStorageKey('tracks'),
-            slivers: [
-              SliverToBoxAdapter(
-                child: PageHeader(
-                  title: context.tr('NavTracks'),
-                  subtitle: '${context.trf('TrackCount', [tracks.totalTracksCount])}  •  ${tracks.totalTracksDuration}',
-                  actions: [
-                    if (PhoneChrome.isPhone(context)) TrackSortButtons(tracks), // a wide table sorts by its headers
-                    PlayShuffleButtons(tracks: tracks.displayedTracks, onPlay: tracks.playAll),
-                  ],
-                ),
-              ),
-              TrackSliver(tracks: tracks.displayedTracks, sorting: tracks),
-              const PageEndSpace(),
+          storageKey: 'tracks',
+          header: PageHeader(
+            title: context.tr('NavTracks'),
+            subtitle: '${context.trf('TrackCount', [tracks.totalTracksCount])}  •  ${tracks.totalTracksDuration}',
+            actions: [
+              if (PhoneChrome.isPhone(context)) TrackSortButtons(tracks), // a wide table sorts by its headers
+              PlayShuffleButtons(tracks: tracks.displayedTracks, onPlay: tracks.playAll),
             ],
           ),
+          columnHeaders: TrackColumnHeaders(sorting: tracks),
+          slivers: [
+            TrackSliver(tracks: tracks.displayedTracks, sorting: tracks, columnHeaders: false),
+            const PageEndSpace(),
+          ],
         );
       },
     );
@@ -101,42 +98,39 @@ class FavoritesPage extends StatelessWidget {
             hint: context.tr('EmptyFavoritesHint'),
           );
         }
-        return PinnedTitleBar(
+        return TabPageList(
           title: context.tr('NavFavorites'),
-          child: CustomScrollView(
-            key: const PageStorageKey('favorites'),
-            slivers: [
-              SliverToBoxAdapter(
-                child: PageHeader(
-                  title: context.tr('NavFavorites'),
-                  subtitle:
-                      '${context.trf('TrackCount', [favorites.favoriteTracks.length])}  •  ${favorites.totalFavoritesDuration}',
-                  actions: [
-                    if (PhoneChrome.isPhone(context)) TrackSortButtons(favorites), // a wide table sorts by its headers
-                    PlayShuffleButtons(
-                      tracks: favorites.favoriteTracks,
-                      onPlay: favorites.playAll,
-                      download: DownloadListButton.forTracks(
-                        favorites.favoriteTracks,
-                        isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
-                        onPressed: context.vm.downloads.toggleFavorites,
-                      ),
-                    ),
-                  ],
+          storageKey: 'favorites',
+          header: PageHeader(
+            title: context.tr('NavFavorites'),
+            subtitle:
+                '${context.trf('TrackCount', [favorites.favoriteTracks.length])}  •  ${favorites.totalFavoritesDuration}',
+            actions: [
+              if (PhoneChrome.isPhone(context)) TrackSortButtons(favorites), // a wide table sorts by its headers
+              PlayShuffleButtons(
+                tracks: favorites.favoriteTracks,
+                onPlay: favorites.playAll,
+                download: DownloadListButton.forTracks(
+                  favorites.favoriteTracks,
+                  isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
+                  onPressed: context.vm.downloads.toggleFavorites,
                 ),
               ),
-              TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites),
-              const PageEndSpace(),
             ],
           ),
+          columnHeaders: TrackColumnHeaders(sorting: favorites),
+          slivers: [
+            TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites, columnHeaders: false),
+            const PageEndSpace(),
+          ],
         );
       },
     );
   }
 }
 
-/// The button that leads back from a detail page: a bordered button with the section's arrow and [text], where it leads
-/// (on a phone the top bar has the arrow).
+/// A detail page's way back in its header, on a phone: room for the top bar's arrow, or without a bar the arrow itself,
+/// [text] (where it leads) its tooltip. Elsewhere the row over the page has it ([PinnedTitleBar]).
 class BackLink extends StatelessWidget {
   const BackLink({super.key, required this.text, required this.onPressed});
 
@@ -168,47 +162,7 @@ class BackLink extends StatelessWidget {
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 22, 26, 12),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Pressable(
-          onPressed: onPressed,
-          builder: (context, lit) => AnimatedScale(
-            scale: lit ? 1.05 : 1.0,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.arrow_back_rounded,
-                    size: 20,
-                    color: colors.textMain,
-                    shadows: lit ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)] : null,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    text,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: colors.textMain,
-                      letterSpacing: -0.2,
-                      shadows: lit ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)] : null,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    return const SizedBox.shrink(); // the row over the page has it
   }
 }
 
@@ -267,6 +221,30 @@ class DetailHeader extends StatelessWidget {
         : CoverFlightTarget(tag: tag, radius: roundArtwork ? null : Radii.card, arrival: artwork, child: framed);
   }
 
+  /// The title, marked for the bar over the page: one of a line the bar takes over and shrinks into its own, a longer
+  /// one (or a playlist's, which renames it) fades over to it.
+  Widget _pageTitle(BuildContext context, TextStyle style, {required int maxLines, TextAlign? textAlign}) {
+    if (titleWidget case final widget?) return PinnedTitleBar.pageTitle(context, widget);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Measured in the font it is drawn in (the app's, which a Text takes from around it).
+        final painter = TextPainter(
+          text: TextSpan(text: title, style: DefaultTextStyle.of(context).style.merge(style)),
+          maxLines: 1,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final oneLine = !painter.didExceedMaxLines;
+        painter.dispose();
+        return PinnedTitleBar.pageTitle(
+          context,
+          Text(title, textAlign: textAlign, maxLines: maxLines, overflow: TextOverflow.ellipsis, style: style),
+          shrinkStyle: oneLine ? style : null,
+        );
+      },
+    );
+  }
+
   /// The wide header's title style; a playlist's editable title uses it too.
   static TextStyle titleStyle(BuildContext context) => TextStyle(
     fontSize: 46,
@@ -318,32 +296,7 @@ class DetailHeader extends StatelessWidget {
         fontWeight: FontWeight.w800,
         color: colors.textMain,
       );
-      final narrowTitle = titleWidget != null
-          ? PinnedTitleBar.pageTitle(context, titleWidget!)
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                // Measured in the font it is drawn in (the app's, which a Text takes from around it).
-                final painter = TextPainter(
-                  text: TextSpan(text: title, style: DefaultTextStyle.of(context).style.merge(titleStyle)),
-                  maxLines: 1,
-                  textDirection: Directionality.of(context),
-                  textScaler: MediaQuery.textScalerOf(context),
-                )..layout(maxWidth: constraints.maxWidth);
-                final oneLine = !painter.didExceedMaxLines;
-                painter.dispose();
-                return PinnedTitleBar.pageTitle(
-                  context,
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: titleStyle,
-                  ),
-                  shrinkStyle: oneLine ? titleStyle : null,
-                );
-              },
-            );
+      final narrowTitle = _pageTitle(context, titleStyle, maxLines: 3, textAlign: TextAlign.center);
       // The phone's header: the 230 px artwork with a glow, the title and the details centred, and a line of buttons
       // as tall as Play (see PlayShuffleButtons), Play over the ⋮ of the rows below.
       return SafeArea(
@@ -386,10 +339,7 @@ class DetailHeader extends StatelessWidget {
       children: [
         Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: tags),
         const SizedBox(height: 12),
-        PinnedTitleBar.pageTitle(
-          context,
-          titleWidget ?? Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: titleStyle(context)),
-        ),
+        _pageTitle(context, titleStyle(context), maxLines: 2),
         if (detailRow != null) ...[const SizedBox(height: 12), detailRow],
         if (actions.isNotEmpty) ...[
           const SizedBox(height: 22),
@@ -524,10 +474,8 @@ class SortButtons extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Flexible(
-                  child: Text(
+                  child: SortLabel(
                     active.$1,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.accent),
                   ),
                 ),
@@ -575,9 +523,8 @@ class SortButtons extends StatelessWidget {
                           onTap: onTap,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            child: Text(
+                            child: SortLabel(
                               label,
-                              maxLines: 1,
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
@@ -695,31 +642,27 @@ class AlbumsPage extends StatelessWidget {
         if (albums.displayedAlbums.isEmpty) {
           return const EmptyLibrary(); // nothing to list means nothing in the library
         }
-        return PinnedTitleBar(
+        return TabPageList(
           title: context.tr('NavAlbums'),
-          child: CustomScrollView(
-            key: const PageStorageKey('albums'),
-            slivers: [
-              SliverToBoxAdapter(
-                child: PageHeader(
-                  title: context.tr('NavAlbums'),
-                  subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
-                  actions: [
-                    SortButtons(
-                      buttons: [
-                        for (final field in AlbumSortField.values)
-                          (albums.sortLabel(field), albums.sortField == field, () => albums.setSortField(field)),
-                      ],
-                    ),
-                    if (albums.genres.isNotEmpty)
-                      _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
-                  ],
-                ),
+          storageKey: 'albums',
+          header: PageHeader(
+            title: context.tr('NavAlbums'),
+            subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
+            actions: [
+              SortButtons(
+                buttons: [
+                  for (final field in AlbumSortField.values)
+                    (albums.sortLabel(field), albums.sortField == field, () => albums.setSortField(field)),
+                ],
               ),
-              AlbumsSliver(albums: albums.displayedAlbums, onOpen: albums.openAlbum, onPlay: albums.playAlbum),
-              const PageEndSpace(),
+              if (albums.genres.isNotEmpty)
+                _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
             ],
           ),
+          slivers: [
+            AlbumsSliver(albums: albums.displayedAlbums, onOpen: albums.openAlbum, onPlay: albums.playAlbum),
+            const PageEndSpace(),
+          ],
         );
       },
     );
@@ -740,10 +683,12 @@ class AlbumDetail extends StatelessWidget {
     return PinnedTitleBar(
       title: album.title,
       onBack: albums.closeAlbumDetail,
+      backText: albums.backText,
       menu: menu.topBarButton(),
       child: CustomScrollView(
         key: PageStorageKey('album-${album.id}'),
         slivers: [
+          PinnedTitleBar.room,
           SliverToBoxAdapter(
             child: DetailHeader(
               back: BackLink(text: albums.backText, onPressed: albums.closeAlbumDetail),
@@ -807,31 +752,27 @@ class ArtistsPage extends StatelessWidget {
         if (artists.displayedArtists.isEmpty) {
           return const EmptyLibrary(); // nothing to list means nothing in the library
         }
-        return PinnedTitleBar(
+        return TabPageList(
           title: context.tr('NavArtists'),
-          child: CustomScrollView(
-            key: const PageStorageKey('artists'),
-            slivers: [
-              SliverToBoxAdapter(
-                child: PageHeader(
-                  title: context.tr('NavArtists'),
-                  subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
-                  actions: [
-                    SortButtons(
-                      buttons: [
-                        for (final field in ArtistSortField.values)
-                          (artists.sortLabel(field), artists.sortField == field, () => artists.setSortField(field)),
-                      ],
-                    ),
-                    if (artists.genres.isNotEmpty)
-                      _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
-                  ],
-                ),
+          storageKey: 'artists',
+          header: PageHeader(
+            title: context.tr('NavArtists'),
+            subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
+            actions: [
+              SortButtons(
+                buttons: [
+                  for (final field in ArtistSortField.values)
+                    (artists.sortLabel(field), artists.sortField == field, () => artists.setSortField(field)),
+                ],
               ),
-              ArtistsSliver(artists: artists.displayedArtists, onOpen: artists.openArtist, onPlay: artists.playArtist),
-              const PageEndSpace(),
+              if (artists.genres.isNotEmpty)
+                _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
             ],
           ),
+          slivers: [
+            ArtistsSliver(artists: artists.displayedArtists, onOpen: artists.openArtist, onPlay: artists.playArtist),
+            const PageEndSpace(),
+          ],
         );
       },
     );
@@ -855,10 +796,12 @@ class ArtistDetail extends StatelessWidget {
     return PinnedTitleBar(
       title: artist.name,
       onBack: artists.closeArtistDetail,
+      backText: artists.backText,
       menu: menu.topBarButton(),
       child: CustomScrollView(
         key: PageStorageKey('artist-${artist.id}'),
         slivers: [
+          PinnedTitleBar.room,
           SliverToBoxAdapter(
             child: DetailHeader(
               back: BackLink(text: artists.backText, onPressed: artists.closeArtistDetail),

@@ -23,7 +23,7 @@ import 'package:wiretune/src/widgets/ambient.dart';
 import 'package:wiretune/src/widgets/badges.dart';
 import 'package:wiretune/src/widgets/buttons.dart';
 import 'package:wiretune/src/widgets/cards.dart';
-import 'package:wiretune/src/widgets/cover_colour.dart';
+import 'package:wiretune/src/widgets/cover_flight.dart';
 import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/devices.dart';
 import 'package:wiretune/src/widgets/page_parts.dart';
@@ -632,11 +632,6 @@ void main() {
       await tester.pumpWidget(WiretuneApp(vm: vm));
       vm.player.playQueue(vm.library.tracks);
       await loadCovers(tester, washOf(find.byType(PhoneLayout)));
-      // The mini player's wash takes the cover's colour once it has been read, over a moment, and then holds still.
-      await tester.runAsync(() => CoverColour.of(cover));
-      await tester.pump(); // the colour comes in from here
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump();
       expect(vm.player.isPlaying, isTrue);
       expect(washOf(find.byType(PhoneLayout)), findsWidgets); // so there is something that could move
       return (vm, driver);
@@ -992,21 +987,8 @@ void main() {
     signedIn.dispose();
   });
 
-  testWidgets('a back link and a sortable column take a click anywhere they light up, not just on the letters', (
-    tester,
-  ) async {
+  testWidgets('a sortable column takes a click anywhere it lights up, not just on the letters', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
-
-    // The gap between the back arrow and its text.
-    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
-    await settle(tester);
-    expect(vm.albums.isAlbumDetailOpen, isTrue);
-    final arrow = tester.getRect(
-      find.descendant(of: find.byType(BackLink), matching: find.byIcon(Icons.arrow_back_rounded)),
-    );
-    await tester.tapAt(Offset(arrow.right + 4, arrow.center.dy));
-    await settle(tester);
-    expect(vm.albums.isAlbumDetailOpen, isFalse);
 
     // The padding beside a column's name.
     vm.navigateTo(AppSection.tracks);
@@ -1040,7 +1022,10 @@ void main() {
     tester.view.physicalSize = const Size(400, 860);
     await settle(tester);
     expect(find.byType(PhoneLayout), findsOneWidget);
-    expect(find.text('${Localizer.get('SortArtist')} ↑'), findsOneWidget); // the phone's button, with the direction
+    expect(
+      find.byWidgetPredicate((w) => w is SortLabel && w.label == '${Localizer.get('SortArtist')} ↑'),
+      findsOneWidget,
+    ); // the phone's button, with the direction
     expect([for (final t in vm.tracks.displayedTracks) t.artist], ['Daft Punk', 'Miles Davis', 'Miles Davis']);
   });
 
@@ -1127,7 +1112,7 @@ void main() {
     tester.view.physicalSize = const Size(400, 860);
     await settle(tester);
     expect(find.text(Localizer.get('SortBy')), findsNothing);
-    expect(find.text('ABC ↑'), findsNothing);
+    expect(find.byType(SortLabel), findsNothing);
 
     // The phone's play and shuffle are icons alone; the menu is the top bar's, with delete in it.
     expect(find.text(Localizer.get('Play')), findsNothing);
@@ -1192,7 +1177,7 @@ void main() {
     expect(tester.getSize(shuffle), const Size.square(PhoneChrome.controlHeight));
     expect(find.descendant(of: play, matching: find.byType(Text)), findsNothing);
     expect(find.byTooltip(Localizer.get('Play')), findsWidgets);
-    final sort = tester.getCenter(find.text('ABC ↑'));
+    final sort = tester.getCenter(find.byWidgetPredicate((w) => w is SortLabel && w.label == 'ABC ↑'));
     expect(sort.dy, moreOrLessEquals(tester.getCenter(play).dy, epsilon: 1));
   });
 
@@ -1252,12 +1237,19 @@ void main() {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
-    await tester.tap(find.text('ABC ↑'));
+    Finder sortLabel(String label) => find.byWidgetPredicate((w) => w is SortLabel && w.label == label);
+    await tester.tap(sortLabel('ABC ↑'));
     await settle(tester);
     await tester.tap(find.text(Localizer.get('SortBitrate')));
     await settle(tester);
     expect(vm.tracks.sortField, TrackSortField.bitrate);
-    expect(find.text('${Localizer.get('SortBitrate')} ↓'), findsOneWidget);
+    expect(sortLabel('${Localizer.get('SortBitrate')} ↓'), findsOneWidget);
+    // The arrow turns round with the order, as the same arrow.
+    final arrow = find.descendant(
+      of: sortLabel('${Localizer.get('SortBitrate')} ↓'),
+      matching: find.byType(AnimatedRotation),
+    );
+    expect(tester.widget<AnimatedRotation>(arrow).turns, 0.5);
   });
 
   testWidgets("a list's shuffle is the player's switch: Play starts at the first track while it is off", (
@@ -1669,7 +1661,12 @@ void main() {
     for (final MapEntry(key: section, value: label) in sortLabel.entries) {
       vm.navigateTo(section);
       await settle(tester);
-      final sort = find.ancestor(of: find.text(label), matching: find.byType(OutlinedButton)).first;
+      final sort = find
+          .ancestor(
+            of: find.byWidgetPredicate((w) => w is SortLabel && w.label == label),
+            matching: find.byType(OutlinedButton),
+          )
+          .first;
       final other = switch (section) {
         AppSection.playlists => find.ancestor(
           of: find.text(Localizer.get('PlaylistNew')),
@@ -1708,7 +1705,7 @@ void main() {
     bool within(Finder area) => tester.getRect(area).contains(tester.getCenter(find.byWidget(focus().context!.widget)));
     final sidebar = find.ancestor(of: find.text(Localizer.get('NavArtists')), matching: find.byType(ListView)).first;
     final searchBox = find.byType(TextField);
-    final grid = find.byType(CustomScrollView);
+    final grid = find.byType(TabPageList); // the page: its header and its tiles
     expect(within(sidebar), isTrue, reason: 'the sidebar has the focus at start');
 
     // Up into the search box, and Down out of it again: its cursor doesn't keep the arrows.
@@ -2197,6 +2194,301 @@ void main() {
     await settle(tester);
     expect(find.text(Localizer.get('PlayNext')), findsNothing, reason: 'closed');
     expect(vm.albums.selectedAlbum, album);
+  });
+
+  testWidgets("a long press's finger slid onto a preview's entry and let go there chooses it", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    final album = vm.library.albums.first;
+    final finger = await tester.startGesture(tester.getCenter(find.text(album.title).first));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+    await settle(tester);
+    final entry = find.text(Localizer.get('AddToQueue'));
+    expect(entry, findsOneWidget, reason: 'the preview is open under the finger');
+    await finger.moveTo(tester.getCenter(entry) + const Offset(0, -30));
+    await tester.pump();
+    await finger.moveTo(tester.getCenter(entry));
+    await tester.pump();
+    await finger.up();
+    await settle(tester);
+    expect(entry, findsNothing, reason: 'closed by the choice');
+    expect(vm.player.queueTracks.map((t) => t.album), contains(album.title));
+  });
+
+  testWidgets("a computer's detail page keeps its way back over the list, and shrinks its name in beside it", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 40; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Long Album', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    vm.openAlbum(vm.library.albums.single);
+    await settle(tester);
+    final back = find.byIcon(Icons.arrow_back_rounded);
+    final list = find.byType(CustomScrollView);
+    expect(
+      find.descendant(of: list, matching: back),
+      findsNothing,
+      reason: 'over the list, not in it',
+    );
+    // The artwork's glow reaches up past it: the list is there to draw it, under the row, not cut at the row's edge.
+    final artwork = find.descendant(of: find.byType(DetailHeader), matching: find.byType(CoverImage));
+    expect(tester.getTopLeft(artwork).dy - tester.getTopLeft(list).dy, greaterThanOrEqualTo(PinnedTitleBar.height));
+    expect(
+      tester.widget<Tooltip>(find.ancestor(of: back, matching: find.byType(Tooltip)).first).message,
+      Localizer.get('NavAlbums'),
+      reason: 'where it leads',
+    );
+    // At first only the header's; scrolled, the row's, shrunk beside the way back and level with it.
+    final name = find.text('Long Album');
+    expect(name, findsOneWidget);
+    final big = tester.getRect(name).height;
+    final arrowAt = tester.getRect(back);
+    await tester.drag(list, const Offset(0, -500));
+    await settle(tester);
+    expect(tester.getRect(back), arrowAt, reason: 'the way back stays');
+    final small = tester.getRect(name.last);
+    expect(small.height, lessThan(big * 0.6));
+    expect(small.left, closeTo(arrowAt.right + 18, 4), reason: 'beside its button (the icon sits 10 in from its edge)');
+    expect(small.center.dy, closeTo(arrowAt.center.dy, 2));
+    await tester.tap(back);
+    await settle(tester);
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+  });
+
+  testWidgets("a detail page's column headers stay at the top of its list while the rows scroll on", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 40; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Long Album', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    vm.openAlbum(vm.library.albums.single);
+    await settle(tester);
+    final list = find.byType(CustomScrollView);
+    final column = find.text(Localizer.get('ColTitle'));
+    final at = tester.getTopLeft(column).dy;
+    await tester.drag(list, const Offset(0, -900));
+    await settle(tester);
+    // The list reaches under the row of the way back; they stop under it.
+    final top = tester.getTopLeft(list).dy + PinnedTitleBar.height;
+    expect(tester.getTopLeft(column).dy, lessThan(at), reason: 'up with the page at first');
+    expect(tester.getTopLeft(column).dy, closeTo(top + 12, 12), reason: 'then under the row');
+    await tester.drag(list, const Offset(0, -300));
+    await settle(tester);
+    expect(tester.getTopLeft(column).dy, closeTo(top + 12, 12), reason: 'and there it stays');
+    await tester.tap(column);
+    await settle(tester);
+    expect(tester.getTopLeft(column).dy, closeTo(top + 12, 12));
+    expect(
+      find.descendant(of: find.byType(TrackSliver), matching: find.byType(SortArrow)),
+      findsOneWidget,
+      reason: 'they still sort',
+    );
+  });
+
+  testWidgets("a row brought into view from below the page's top stops under the pinned column headers", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 40; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Long Album', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    vm.openAlbum(vm.library.albums.single);
+    await settle(tester);
+    final list = find.byType(CustomScrollView);
+    await tester.drag(list, const Offset(0, -2000));
+    await settle(tester);
+    // A row the headers cover, brought into view as the keyboard's or a remote's focus moving up does.
+    final headers = find.text(Localizer.get('ColTitle'));
+    final under = tester.getBottomLeft(headers).dy;
+    final row = [
+      for (var i = 1; i <= 40; i++) find.text('Song $i'),
+    ].firstWhere((row) => row.evaluate().isNotEmpty && tester.getCenter(row).dy < under);
+    await tester.runAsync(
+      () => Scrollable.ensureVisible(
+        tester.element(row),
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+      ),
+    );
+    await settle(tester);
+    expect(
+      tester.getTopLeft(row).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(headers).dy - 1),
+      reason: 'not hidden under the headers',
+    );
+  });
+
+  testWidgets("a page opened by a link sends its artwork back to its tile when it closes", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.artists);
+    await settle(tester);
+    // As from an album's artist link: no cover was pressed, so none flew in.
+    vm.openArtist(vm.library.artists.first);
+    await settle(tester);
+    vm.artists.closeArtistDetail();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    final listed = find.byType(CoverImage).evaluate().length;
+    await settle(tester);
+    expect(listed, find.byType(CoverImage).evaluate().length + 1, reason: 'one in flight over the list');
+  });
+
+  testWidgets("queued music's cover arcs into the mini player's, which bumps as it lands", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.player.playQueue(vm.library.tracks.take(1).toList());
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    final landing = find.byType(CoverFlightLanding);
+    double scale() => tester
+        .widget<Transform>(find.descendant(of: landing, matching: find.byType(Transform)).first)
+        .transform
+        .getMaxScaleOnAxis();
+    final row = find.ancestor(of: find.text(vm.library.albums.last.title), matching: find.byType(InkWell)).first;
+    await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
+    await settle(tester);
+    final covers = find.byType(CoverImage).evaluate().length;
+    await tester.tap(find.text(Localizer.get('PlayNext')));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byType(CoverImage).evaluate().length, greaterThan(covers), reason: 'one in flight');
+    expect(scale(), 1, reason: 'not landed yet');
+    // It lands after its 560 ms (from its first frame), and bumps for 360 from the frame after.
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(scale(), greaterThan(1.05), reason: 'the bump');
+    await settle(tester);
+    expect(scale(), 1);
+  });
+
+  testWidgets("the tab bar's glow stands behind the active tab's icon, and goes over to the next", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    final nav = find.ancestor(of: find.byIcon(Icons.album).last, matching: find.byType(Stack)).first;
+    final glow = find.descendant(
+      of: nav,
+      matching: find.byWidgetPredicate(
+        (w) =>
+            w is DecoratedBox &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).gradient is RadialGradient,
+      ),
+    );
+    for (final (section, icon) in [
+      (AppSection.albums, Icons.album),
+      (AppSection.playlists, Icons.queue_music_rounded),
+    ]) {
+      vm.navigateTo(section);
+      await settle(tester);
+      final centre = tester.getCenter(find.byIcon(icon).last);
+      expect(tester.getCenter(glow).dx, moreOrLessEquals(centre.dx, epsilon: 0.5), reason: section.name);
+      expect(tester.getCenter(glow).dy, moreOrLessEquals(centre.dy, epsilon: 1.5), reason: section.name);
+    }
+  });
+
+  testWidgets('a tab further right slides its page in from the right, one further left from the left', (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.artists);
+    await settle(tester);
+    vm.navigateTo(AppSection.tracks);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(tester.getTopLeft(find.byType(TracksPage)).dx, greaterThan(0));
+    await settle(tester);
+    expect(tester.getTopLeft(find.byType(TracksPage)).dx, 0);
+    vm.navigateTo(AppSection.albums);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(tester.getTopLeft(find.byType(AlbumsPage)).dx, lessThan(0));
+    await settle(tester);
+  });
+
+  testWidgets('the search field grows out of the button that opened it, and keeps its focus once open', (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final button = tester.getRect(find.byTooltip(Localizer.get('Search')));
+    await tester.tap(find.byTooltip(Localizer.get('Search')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final clip = tester.widget<ClipPath>(
+      find.ancestor(of: find.byType(TextField), matching: find.byType(ClipPath)).first,
+    );
+    final shown = clip.clipper!.getClip(const Size(400, 120)).getBounds();
+    expect(shown.width, lessThan(300), reason: 'still growing');
+    expect(shown.right, moreOrLessEquals(button.right, epsilon: 60), reason: 'out of the button');
+    await tester.enterText(find.byType(TextField), 'So');
+    await settle(tester);
+    expect(vm.searchQuery, 'So');
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'So', reason: 'kept through the end');
+    expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextField>(), isNotNull);
+    vm.closeSearch();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byType(TextField), findsOneWidget, reason: 'going back into the button');
+    await settle(tester);
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets("the seek bar's time floats over the knob while it is held", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.player.playQueue(vm.library.tracks.take(1).toList());
+    vm.openNowPlaying();
+    await settle(tester);
+    final bar = find.byType(SeekBar);
+    double bubble() =>
+        tester.widget<AnimatedOpacity>(find.descendant(of: bar, matching: find.byType(AnimatedOpacity))).opacity;
+    expect(bubble(), 0);
+    final slider = find.descendant(of: bar, matching: find.byType(Slider));
+    final finger = await tester.startGesture(tester.getCenter(slider));
+    await finger.moveBy(const Offset(30, 0));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(bubble(), 1);
+    await finger.up();
+    await settle(tester);
+    expect(bubble(), 0);
+  });
+
+  testWidgets("a computer's tab page keeps its header and the column headers while the list scrolls", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 60; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Album ${i % 6}', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    // The sidebar's, then the header's.
+    final name = find.text(Localizer.get('NavTracks')).last;
+    final column = find.text(Localizer.get('ColTitle'));
+    final row = find.text('Song 1');
+    final nameAt = tester.getTopLeft(name);
+    final columnAt = tester.getTopLeft(column);
+    final rowAt = tester.getTopLeft(row);
+    final list = find.byType(CustomScrollView);
+    expect(tester.getTopLeft(list).dy, greaterThan(columnAt.dy), reason: 'the list starts under them');
+    await tester.drag(list, const Offset(0, -40));
+    await settle(tester);
+    expect(tester.getTopLeft(name), nameAt);
+    expect(tester.getTopLeft(column), columnAt);
+    expect(tester.getTopLeft(row).dy, lessThan(rowAt.dy), reason: 'the rows move');
+    await tester.tap(column);
+    await settle(tester);
+    expect(vm.tracks.sortField, TrackSortField.title, reason: 'they still sort');
+    expect(vm.tracks.isSortDescending, isTrue);
   });
 
   testWidgets("two fingers spread over a wide screen's tiles make them larger, fewer to a row", (tester) async {

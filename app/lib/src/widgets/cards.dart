@@ -1,9 +1,12 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
@@ -56,7 +59,6 @@ class AlbumCard extends StatelessWidget {
         cover: albumPreviewCover(context, album),
         title: album.title,
         subtitle: album.artist,
-        flightTag: 'album:${album.id}',
         onOpen: onOpen,
       ),
       flightTag: 'album:${album.id}',
@@ -102,7 +104,6 @@ class ArtistCard extends StatelessWidget {
         round: true,
         title: artist.name,
         subtitle: artistCounts(context, artist),
-        flightTag: 'artist:${artist.id}',
         onOpen: onOpen,
       ),
       flightTag: 'artist:${artist.id}',
@@ -149,6 +150,7 @@ enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download,
 class ListMenu {
   ListMenu._(
     this.tracks, {
+    required this.flightTag,
     required this.name,
     required this.label,
     required this.downloadable,
@@ -165,6 +167,7 @@ class ListMenu {
   /// [withArtist]: the menu leads to the album's (first) artist, except on that artist's page.
   factory ListMenu.album(Album album, {required VoidCallback onPlay, bool withArtist = true}) => ListMenu._(
     album.tracks,
+    flightTag: 'album:${album.id}',
     name: album.title,
     label: '${album.title} • ${album.artist}',
     downloadable: album.tracks,
@@ -183,6 +186,7 @@ class ListMenu {
 
   factory ListMenu.artist(Artist artist, {required VoidCallback onPlay}) => ListMenu._(
     artist.tracks,
+    flightTag: 'artist:${artist.id}',
     name: artist.name,
     label: artist.name,
     // The download keeps the artist's albums, as the button on its page does.
@@ -202,6 +206,7 @@ class ListMenu {
   /// An automatic playlist (most played, recently played) can't be downloaded or deleted.
   factory ListMenu.playlist(Playlist playlist, List<Track> tracks, {required VoidCallback onPlay}) => ListMenu._(
     tracks,
+    flightTag: 'playlist:${playlist.id}',
     name: playlist.name,
     label: playlist.name,
     downloadable: playlist.isAutomatic ? const [] : tracks,
@@ -216,6 +221,9 @@ class ListMenu {
 
   /// What playing, shuffling, queueing and a playlist take.
   final List<Track> tracks;
+
+  /// What its cover shows ([CoverFlight]): queued, it flies into the player's.
+  final String flightTag;
 
   /// What a notice calls it (its title or name), and what the playlist dialog does (with the album's artist).
   final String name;
@@ -282,8 +290,10 @@ class ListMenu {
         vm.player.shuffleQueue(tracks);
       case _ListAction.playNext:
         vm.queue(tracks, next: true, name: name);
+        CoverFlight.toPlayer(flightTag);
       case _ListAction.addToQueue:
         vm.queue(tracks, next: false, name: name);
+        CoverFlight.toPlayer(flightTag);
       case _ListAction.addToPlaylist:
         showAddToPlaylistDialog(context, tracks, label: label, suggestedName: name);
       case _ListAction.download:
@@ -308,50 +318,98 @@ class ListMenu {
   Future<void> showAt(BuildContext context, Offset position) => _show(context, position);
 
   /// A long press's preview: [cover] large ([round]: an artist's), its [title] and [subtitle] and the whole menu under
-  /// them, floating over the page, which blurs behind it. A tap on the cover opens its page ([onOpen]), the cover
-  /// flying there ([flightTag]); a tap anywhere else but the menu closes it.
+  /// them, floating over the page, which blurs behind it. While the finger that pressed is still down, it can slide
+  /// onto an entry and choose it by letting go there ([_PressSlide]); let go elsewhere, the preview stays. A tap on the
+  /// cover then opens its page ([onOpen]), the cover flying there; a tap anywhere else but the menu closes it.
   Future<void> preview(
     BuildContext context, {
     required Widget cover,
     bool round = false,
     required String title,
     String? subtitle,
-    required String flightTag,
     required VoidCallback onOpen,
   }) async {
     var open = false;
-    final action = await showGeneralDialog<_ListAction>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black.withValues(alpha: 0.3),
-      transitionDuration: const Duration(milliseconds: 240),
-      pageBuilder: (dialog, _, _) => _Preview(
-        cover: cover,
-        round: round,
-        title: title,
-        subtitle: subtitle,
-        flightTag: flightTag,
-        onOpen: () {
-          open = true;
-          Navigator.pop(dialog);
-        },
-        items: _items(dialog),
+    Widget card(BuildContext dialog, _PressSlide? slide) => _Preview(
+      cover: cover,
+      round: round,
+      title: title,
+      subtitle: subtitle,
+      flightTag: flightTag,
+      onOpen: () {
+        open = true;
+        Navigator.pop(dialog);
+      },
+      items: _items(dialog),
+      slide: slide,
+    );
+
+    // While the finger is down, in the screen's overlay: a dialog (a route) would take the finger away.
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final shown = AnimationController(vsync: overlay, duration: _previewDuration)..forward();
+    final slide = _PressSlide();
+    final held = OverlayEntry(
+      builder: (overlayContext) => IgnorePointer(
+        child: AnimatedBuilder(
+          animation: shown,
+          builder: (context, child) => ColoredBox(
+            color: _previewBarrier.withValues(alpha: 0.3 * shown.value),
+            child: child,
+          ),
+          child: _previewFrame(shown, card(overlayContext, slide)),
+        ),
       ),
-      transitionBuilder: (context, animation, _, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+    );
+    overlay.insert(held);
+    final (chose, choice) = await slide.released;
+
+    _ListAction? action = choice;
+    if (chose) {
+      // Chosen with the finger: away, and done.
+      await shown.reverse();
+      held.remove();
+    } else {
+      // Let go elsewhere: the preview stays, now as a dialog (Back closes it), already in place.
+      final route = PageRouteBuilder<_ListAction>(
+        opaque: false,
+        barrierDismissible: true,
+        barrierLabel: context.mounted ? MaterialLocalizations.of(context).modalBarrierDismissLabel : null,
+        barrierColor: _previewBarrier.withValues(alpha: 0.3),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: _previewDuration,
+        pageBuilder: (dialog, _, _) => card(dialog, null),
+        transitionsBuilder: (context, animation, _, child) => _previewFrame(animation, child),
+      );
+      final result = context.mounted ? Navigator.of(context, rootNavigator: true).push(route) : null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => held.remove());
+      action = await result;
+    }
+    held.dispose();
+    shown.dispose();
+    if (open) onOpen();
+    if (context.mounted) _run(context, action);
+  }
+
+  static const Duration _previewDuration = Duration(milliseconds: 240);
+  static const Color _previewBarrier = Colors.black;
+
+  /// The preview coming in as [animation] runs: the page blurring behind it, the card fading in and growing to its size.
+  static Widget _previewFrame(Animation<double> animation, Widget child) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
         final blur = 14 * animation.value;
         return BackdropFilter(
           filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: FadeTransition(
-            opacity: curved,
-            child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(curved), child: child),
-          ),
+          child: child,
         );
       },
+      child: FadeTransition(
+        opacity: curved,
+        child: ScaleTransition(scale: Tween(begin: 0.9, end: 1.0).animate(curved), child: child),
+      ),
     );
-    if (open) onOpen();
-    if (context.mounted) _run(context, action);
   }
 
   /// The ⋮ button of a phone row.
@@ -433,6 +491,7 @@ class _Preview extends StatelessWidget {
     required this.flightTag,
     required this.onOpen,
     required this.items,
+    required this.slide,
   });
 
   final Widget cover;
@@ -442,6 +501,9 @@ class _Preview extends StatelessWidget {
   final String flightTag;
   final VoidCallback onOpen;
   final List<PopupMenuEntry<_ListAction>> items;
+
+  /// The finger still down from the long press, while it is.
+  final _PressSlide? slide;
 
   @override
   Widget build(BuildContext context) {
@@ -519,7 +581,10 @@ class _Preview extends StatelessWidget {
                           role: ui.SemanticsRole.menu,
                           explicitChildNodes: true,
                           label: title,
-                          child: Column(mainAxisSize: MainAxisSize.min, children: items),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: slide?.entries(context, items) ?? items,
+                          ),
                         ),
                       ),
                     ),
@@ -531,6 +596,82 @@ class _Preview extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// The finger of a long press, still down as its preview opens: slid onto one of the menu's entries, which lights up
+/// under it, and let go there, it chooses it, as in iOS. Let go without having slid onto one, it chooses nothing
+/// ([released]).
+class _PressSlide {
+  _PressSlide() {
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_follow);
+  }
+
+  final Completer<(bool chose, _ListAction? action)> _released = Completer();
+
+  /// Completes when the finger lets go: whether it chose an entry, and which.
+  Future<(bool, _ListAction?)> get released => _released.future;
+
+  /// The entry under the finger, by its place in the menu.
+  final ValueNotifier<int?> _over = ValueNotifier(null);
+  List<GlobalKey> _keys = const [];
+  List<PopupMenuEntry<_ListAction>> _items = const [];
+  Offset? _start;
+  bool _moved = false;
+
+  /// How far the finger goes before it is sliding (not just held).
+  static const double _slop = 12;
+
+  /// [items], each marked for the finger to find, and lit while it is over it.
+  List<Widget> entries(BuildContext context, List<PopupMenuEntry<_ListAction>> items) {
+    if (_items.length != items.length) _keys = [for (final _ in items) GlobalKey()];
+    _items = items;
+    final colors = context.colors;
+    return [
+      for (final (i, item) in items.indexed)
+        ValueListenableBuilder<int?>(
+          key: _keys[i],
+          valueListenable: _over,
+          builder: (context, over, child) =>
+              ColoredBox(color: over == i ? colors.accent.withValues(alpha: 0.16) : Colors.transparent, child: child),
+          child: item,
+        ),
+    ];
+  }
+
+  void _follow(PointerEvent event) {
+    if (_released.isCompleted) return;
+    if (event is PointerMoveEvent) {
+      final start = _start ??= event.position;
+      if (!_moved && (event.position - start).distance < _slop) return;
+      _moved = true;
+      final over = _entryAt(event.position);
+      if (over != _over.value && over != null) unawaited(HapticFeedback.selectionClick());
+      _over.value = over;
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      GestureBinding.instance.pointerRouter.removeGlobalRoute(_follow);
+      final over = event is PointerUpEvent ? _over.value : null;
+      _over.value = null;
+      _released.complete(switch (over == null ? null : _items[over]) {
+        PopupMenuItem<_ListAction>(enabled: true, :final value) => (true, value),
+        _ => (false, null),
+      });
+    }
+  }
+
+  /// The enabled entry at [position] on the screen, if any.
+  int? _entryAt(Offset position) {
+    for (final (i, key) in _keys.indexed) {
+      final box = key.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || !box.attached || !box.hasSize) continue;
+      if ((box.localToGlobal(Offset.zero) & box.size).contains(position)) {
+        return switch (_items[i]) {
+          PopupMenuItem<_ListAction>(enabled: true) => i,
+          _ => null,
+        };
+      }
+    }
+    return null;
   }
 }
 
@@ -576,7 +717,6 @@ class AlbumsSliver extends StatelessWidget {
           cover: albumPreviewCover(context, album),
           title: album.title,
           subtitle: album.artist,
-          flightTag: 'album:${album.id}',
           onOpen: () => onOpen(album),
         ),
         flightTag: 'album:${album.id}',
@@ -635,7 +775,6 @@ class ArtistsSliver extends StatelessWidget {
           round: true,
           title: artist.name,
           subtitle: artistCounts(context, artist),
-          flightTag: 'artist:${artist.id}',
           onOpen: () => onOpen(artist),
         ),
         flightTag: 'artist:${artist.id}',
@@ -711,7 +850,6 @@ class PlaylistsSliver extends StatelessWidget {
           cover: PlaylistCover(covers: covers, radius: Radii.card),
           title: playlist.name,
           subtitle: context.trf('TrackCount', [playlist.trackCount]),
-          flightTag: 'playlist:${playlist.id}',
           onOpen: () => onOpen(playlist),
         ),
         flightTag: 'playlist:${playlist.id}',
@@ -909,7 +1047,6 @@ class PlaylistCard extends StatelessWidget {
         cover: PlaylistCover(covers: covers, radius: Radii.card),
         title: playlist.name,
         subtitle: context.trf('TrackCount', [playlist.trackCount]),
-        flightTag: 'playlist:${playlist.id}',
         onOpen: onOpen,
       ),
       flightTag: 'playlist:${playlist.id}',

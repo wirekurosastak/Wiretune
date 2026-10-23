@@ -43,45 +43,41 @@ class PlaylistsPage extends StatelessWidget {
             ],
           );
         }
-        return PinnedTitleBar(
+        return TabPageList(
           title: context.tr('NavPlaylists'),
-          child: CustomScrollView(
-            key: const PageStorageKey('playlists'),
-            slivers: [
-              SliverToBoxAdapter(
-                child: PageHeader(
-                  title: context.tr('NavPlaylists'),
-                  subtitle: context.trf('PlaylistCount', [playlists.allPlaylists.length]),
-                  actions: [
-                    SortButtons(
-                      buttons: [
-                        for (final field in PlaylistSortField.values)
-                          (
-                            playlists.listSortLabel(field),
-                            playlists.listSortField == field,
-                            () => playlists.setListSortField(field),
-                          ),
-                      ],
+          storageKey: 'playlists',
+          header: PageHeader(
+            title: context.tr('NavPlaylists'),
+            subtitle: context.trf('PlaylistCount', [playlists.allPlaylists.length]),
+            actions: [
+              SortButtons(
+                buttons: [
+                  for (final field in PlaylistSortField.values)
+                    (
+                      playlists.listSortLabel(field),
+                      playlists.listSortField == field,
+                      () => playlists.setListSortField(field),
                     ),
-                    PressShrink(
-                      child: FilledButton.icon(
-                        onPressed: () => showNewPlaylistDialog(context),
-                        icon: const Icon(Icons.add_rounded, size: 18),
-                        label: Text(context.tr('PlaylistNew')),
-                      ),
-                    ),
-                  ],
+                ],
+              ),
+              PressShrink(
+                child: FilledButton.icon(
+                  onPressed: () => showNewPlaylistDialog(context),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: Text(context.tr('PlaylistNew')),
                 ),
               ),
-              PlaylistsSliver(
-                playlists: playlists.allPlaylists,
-                tracksOf: playlists.tracksOf,
-                onOpen: playlists.openPlaylist,
-                onPlay: playlists.playPlaylist,
-              ),
-              const PageEndSpace(),
             ],
           ),
+          slivers: [
+            PlaylistsSliver(
+              playlists: playlists.allPlaylists,
+              tracksOf: playlists.tracksOf,
+              onOpen: playlists.openPlaylist,
+              onPlay: playlists.playPlaylist,
+            ),
+            const PageEndSpace(),
+          ],
         );
       },
     );
@@ -187,10 +183,12 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
     return PinnedTitleBar(
       title: playlist.name,
       onBack: playlists.closePlaylistDetail,
+      backText: context.tr('NavPlaylists'),
       menu: menu.topBarButton(),
       child: CustomScrollView(
         key: PageStorageKey('playlist-${playlist.id}'),
         slivers: [
+          PinnedTitleBar.room,
           SliverToBoxAdapter(
             child: DetailHeader(
               back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),

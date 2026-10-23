@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../app_scope.dart';
@@ -73,6 +74,510 @@ class PageHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A tab page (Albums, Artists, Tracks, Favorites, Playlists): its [header] over its list. On a phone the header scrolls
+/// with the list and the top bar takes its title over ([PinnedTitleBar]); elsewhere it stays put above the list, as do
+/// [columnHeaders] (a table's, [TrackColumnHeaders]) under it, and only the list scrolls. A short page (a TV's) leaves
+/// the list the room: there they scroll with it.
+class TabPageList extends StatelessWidget {
+  const TabPageList({
+    super.key,
+    required this.title,
+    required this.storageKey,
+    required this.header,
+    this.columnHeaders,
+    required this.slivers,
+  });
+
+  final String title;
+
+  /// Keeps the list's place while another tab is on show.
+  final String storageKey;
+  final Widget header;
+  final Widget? columnHeaders;
+  final List<Widget> slivers;
+
+  /// The page's height from which the header stays put.
+  static const double _headerStaysFrom = 520;
+
+  @override
+  Widget build(BuildContext context) {
+    final phone = PhoneChrome.isPhone(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final apart = !phone && constraints.maxHeight >= _headerStaysFrom;
+        final columnHeaders = phone ? null : this.columnHeaders;
+        final list = CustomScrollView(
+          key: PageStorageKey(storageKey),
+          slivers: [
+            if (!apart) ...[
+              SliverToBoxAdapter(child: header),
+              if (columnHeaders != null) SliverToBoxAdapter(child: columnHeaders),
+            ],
+            ...slivers,
+          ],
+        );
+        if (phone) return PinnedTitleBar(title: title, child: list);
+        if (!apart) return list;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            header,
+            ?columnHeaders,
+            Expanded(child: _TopFade(child: list)),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The top edge of a list under a header that stays: once the list has scrolled, what goes under it fades out, as at
+/// the page's bottom edge; at the list's top nothing does, nor while a table's headers are pinned there
+/// ([PinnedColumnHeaders]), under which its rows fade instead.
+class _TopFade extends StatefulWidget {
+  const _TopFade({this.top = 0, required this.child});
+
+  /// What stands over the list's top (a row of its own): what scrolls under it goes, and the fade is below it.
+  final double top;
+  final Widget child;
+
+  static const double height = 24;
+
+  @override
+  State<_TopFade> createState() => _TopFadeState();
+}
+
+class _TopFadeState extends State<_TopFade> {
+  /// How much of the fade is there, 0 to 1: it comes in over the first [_TopFade.height] of the scroll; and how much of
+  /// it is left below [_TopFade.top] by the tables' headers pinned there.
+  final ValueNotifier<(double, double)> _shown = ValueNotifier((0, 1));
+
+  /// The tables' headers in the list, which take the edge over once they reach it.
+  final Set<_PinnedColumnHeadersState> _pinned = {};
+
+  @override
+  void dispose() {
+    _shown.dispose();
+    super.dispose();
+  }
+
+  // The metrics' also tell where a list brought back to its place starts.
+  bool _onScroll(Notification notification) {
+    final (depth, metrics) = switch (notification) {
+      ScrollNotification(:final depth, :final metrics) => (depth, metrics),
+      ScrollMetricsNotification(:final depth, :final metrics) => (depth, metrics),
+      _ => (-1, null),
+    };
+    if (depth == 0 && metrics != null) {
+      final scrolled = metrics.pixels - metrics.minScrollExtent;
+      var below = 1.0;
+      for (final headers in _pinned) {
+        // Gone as they reach the edge, so as not to fade them.
+        if (headers.pinsAt case final pinsAt?) {
+          final distance = pinsAt - metrics.minScrollExtent - widget.top - scrolled;
+          below = math.min(below, (distance / _TopFade.height).clamp(0.0, 1.0));
+        }
+      }
+      _shown.value = ((scrolled / _TopFade.height).clamp(0.0, 1.0), below);
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NotificationListener<Notification>(
+      onNotification: _onScroll,
+      child: _TopFadeScope(
+        state: this,
+        child: ValueListenableBuilder<(double, double)>(
+          valueListenable: _shown,
+          builder: (context, shown, child) => ShaderMask(
+            shaderCallback: (rect) {
+              final (t, below) = shown;
+              final top = (widget.top / rect.height).clamp(0.0, 1.0);
+              return LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 1 - t),
+                  Colors.black.withValues(alpha: 1 - t),
+                  Colors.black.withValues(alpha: 1 - t * below),
+                  Colors.black,
+                ],
+                stops: [0, top, top, ((widget.top + _TopFade.height) / rect.height).clamp(top, 1.0)],
+              ).createShader(rect);
+            },
+            blendMode: BlendMode.dstIn,
+            child: child,
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+class _TopFadeScope extends InheritedWidget {
+  const _TopFadeScope({required this.state, required super.child});
+
+  final _TopFadeState state;
+
+  @override
+  bool updateShouldNotify(_TopFadeScope oldWidget) => state != oldWidget.state;
+}
+
+/// A table's column headers over its [rows], as slivers: once they reach the top of the list they stay there while
+/// the rows go on under them, fading out below them as at the list's edge; at the table's end they go up with it.
+class PinnedColumnHeaders extends StatefulWidget {
+  const PinnedColumnHeaders({super.key, required this.headers, required this.rows});
+
+  final Widget headers;
+  final Widget rows;
+
+  @override
+  State<PinnedColumnHeaders> createState() => _PinnedColumnHeadersState();
+}
+
+class _PinnedColumnHeadersState extends State<PinnedColumnHeaders> {
+  final GlobalKey _headers = GlobalKey();
+  _TopFadeState? _fade;
+
+  /// The scroll at which the headers reach the top of the list; null before they are laid out.
+  double? get pinsAt {
+    final sliver = _headers.currentContext?.findRenderObject() as RenderSliver?;
+    if (sliver == null || !sliver.attached || sliver.geometry == null) return null;
+    return sliver.constraints.precedingScrollExtent;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final fade = context.getInheritedWidgetOfExactType<_TopFadeScope>()?.state;
+    if (fade == _fade) return;
+    _fade?._pinned.remove(this);
+    _fade = fade?.._pinned.add(this);
+  }
+
+  @override
+  void dispose() {
+    _fade?._pinned.remove(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SliverMainAxisGroup(
+    slivers: [
+      PinnedHeaderSliver(key: _headers, child: widget.headers),
+      _FadeUnder(sliver: widget.rows),
+    ],
+  );
+}
+
+/// [sliver], fading out where something pinned over it covers it (its overlap), and below that over [_TopFade.height].
+class _FadeUnder extends SingleChildRenderObjectWidget {
+  const _FadeUnder({required Widget sliver}) : super(child: sliver);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderFadeUnder();
+}
+
+class _RenderFadeUnder extends RenderProxySliver {
+  double _overlap = 0;
+
+  @override
+  bool get alwaysNeedsCompositing => child != null;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    if (constraints.overlap != _overlap) {
+      _overlap = constraints.overlap;
+      markNeedsPaint();
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null || !geometry!.visible) return;
+    final height = geometry!.paintExtent;
+    if (_overlap <= 0 || height <= 0 || constraints.axis != Axis.vertical) {
+      layer = null;
+      context.paintChild(child, offset);
+      return;
+    }
+    final size = Size(constraints.crossAxisExtent, height);
+    // Wholly under what covers it; from there coming in, the fade growing as it slides under.
+    final covered = (_overlap / height).clamp(0.0, 1.0);
+    final clear = ((_overlap + _TopFade.height) / height).clamp(covered, 1.0);
+    final start = 1 - (_overlap / _TopFade.height).clamp(0.0, 1.0);
+    final mask = (layer as ShaderMaskLayer?) ?? ShaderMaskLayer();
+    mask
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          Colors.transparent,
+          Colors.black.withValues(alpha: start),
+          Colors.black,
+        ],
+        stops: [0, covered, covered, clear],
+      ).createShader(Offset.zero & size)
+      ..maskRect = offset & size
+      ..blendMode = BlendMode.dstIn;
+    layer = mask;
+    context.pushLayer(mask, (context, offset) => context.paintChild(child, offset), offset);
+  }
+}
+
+/// A computer's or a tablet's detail page: a row over its list with the way back, beside which the page's title ends
+/// up, as in the phone's bar. A title of one line (marked by [PinnedTitleBar.pageTitle]) is taken over by the row as it
+/// reaches the list's top edge, goes on up with the page to the row's middle, and from there shrinks and glides in
+/// beside the way back; a longer one goes under the edge, and the row's own comes in meanwhile. The row stays over the
+/// list, which scrolls under it, fading out there ([_TopFade]). All of it follows the scroll.
+class _WideBackBar extends StatefulWidget {
+  const _WideBackBar({required this.title, required this.onBack, required this.backText, required this.child});
+
+  final String title;
+  final VoidCallback onBack;
+  final String? backText;
+  final Widget child;
+
+  @override
+  State<_WideBackBar> createState() => _WideBackBarState();
+}
+
+class _WideBackBarState extends State<_WideBackBar> {
+  final GlobalKey _title = GlobalKey();
+
+  /// The list's scroll from its top.
+  final ValueNotifier<double> _scrolled = ValueNotifier(0);
+
+  /// Whether the row has taken the header's title over (it is hidden in the header meanwhile).
+  final ValueNotifier<bool> _taken = ValueNotifier(false);
+
+  /// How far a title that doesn't shrink has gone under the list's edge, 0 to 1: the row's comes in with it.
+  final ValueNotifier<double> _titleIn = ValueNotifier(0);
+  late final Listenable _titleMotion = Listenable.merge([_scrolled, _taken]);
+
+  /// Where a shrinking title stands at the list's top, in this box; null while unknown, or for one that doesn't.
+  _TitleRest? _rest;
+
+  /// The top of a title that doesn't shrink at the list's top, as last measured.
+  double? _fadingTitleTop;
+  bool _measureScheduled = false;
+
+  /// The row's title: its left edge (beside the way back), its middle and its size.
+  static const double _rowTop = 8, _left = 20, _right = 30;
+  static const double _titleLeft = _left + PinnedTitleBar.buttonSize + 8;
+  static const double _titleMiddle = _rowTop + (PinnedTitleBar.height - _rowTop) / 2;
+  static const TextStyle _rowTitle = TextStyle(fontSize: 20, letterSpacing: -0.4, fontWeight: FontWeight.w800);
+
+  @override
+  void dispose() {
+    _scrolled.dispose();
+    _taken.dispose();
+    _titleIn.dispose();
+    super.dispose();
+  }
+
+  bool _onScroll(Notification notification) {
+    if (notification case ScrollNotification(depth: 0, :final metrics)) {
+      // The list has scrolled but isn't laid out there yet: the title follows the scroll now, and is measured once it
+      // is (measured in between it would be off by the step, and jitter).
+      _update(metrics, measure: false);
+      if (!_measureScheduled) {
+        _measureScheduled = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _measureScheduled = false;
+          _update(metrics);
+        });
+      }
+    }
+    if (notification case ScrollMetricsNotification(depth: 0, :final metrics)) _update(metrics);
+    return false;
+  }
+
+  void _update(ScrollMetrics metrics, {bool measure = true}) {
+    if (!mounted) return;
+    final own = context.findRenderObject() as RenderBox?;
+    if (own == null || !own.attached) return;
+    final offset = math.max(0.0, metrics.pixels - metrics.minScrollExtent);
+    final box = _title.currentContext?.findRenderObject() as RenderBox?;
+    final title = box != null && box.attached && box.hasSize ? box : null;
+    var rest = _rest;
+    var titleIn = _titleIn.value;
+    if (title != null) {
+      final style = (_title.currentWidget as _TitleMark?)?.shrinkStyle;
+      final topLeft = title.localToGlobal(Offset.zero, ancestor: own);
+      if (style == null) {
+        rest = null;
+        if (measure || _fadingTitleTop == null) _fadingTitleTop = topLeft.dy + offset;
+        final top = _fadingTitleTop! - offset;
+        titleIn = ((PinnedTitleBar.height - top) / title.size.height).clamp(0.0, 1.0);
+      } else if (measure) {
+        rest = (
+          middle: topLeft.dy + title.size.height / 2 + offset,
+          left: topLeft.dx,
+          width: title.size.width,
+          height: title.size.height,
+          style: style,
+        );
+      }
+    } else if (rest == null) {
+      // Far down the page, its header not built: the row's title is there whole.
+      titleIn = offset > 0 ? 1.0 : 0.0;
+    }
+    _scrolled.value = offset;
+    _titleIn.value = titleIn;
+    // Taken as it reaches the list's edge, where it would go under the fade.
+    _taken.value = rest != null && offset >= rest.middle - rest.height / 2 - PinnedTitleBar.height - _TopFade.height;
+    if (rest != _rest) setState(() => _rest = rest);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final rest = _rest;
+    return Stack(
+      children: [
+        // The list reaches under the row (its first sliver keeps the room, [PinnedTitleBar.room]), so that nothing in
+        // its header is cut at the row's edge (the artwork's glow); scrolled, what goes under the row fades out.
+        Positioned.fill(
+          child: NotificationListener<Notification>(
+            onNotification: _onScroll,
+            child: _TopFade(
+              top: PinnedTitleBar.height,
+              child: _WideBackBarScope(title: _title, taken: _taken, child: widget.child),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: SizedBox(
+            height: PinnedTitleBar.height,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(_left, _rowTop, _right, 0),
+              child: Row(
+                children: [
+                  SizedBox.square(
+                    dimension: PinnedTitleBar.buttonSize,
+                    child: IconButton(
+                      tooltip: widget.backText ?? context.tr('Back'),
+                      onPressed: widget.onBack,
+                      icon: Icon(Icons.arrow_back_rounded, size: 24, color: colors.textMain),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // A shrinking title is drawn over the row (below); one that doesn't comes in here.
+                  Expanded(
+                    child: rest != null
+                        ? const SizedBox.shrink()
+                        : ValueListenableBuilder<double>(
+                            valueListenable: _titleIn,
+                            builder: (context, t, child) => Opacity(
+                              opacity: t,
+                              child: Transform.translate(offset: Offset(0, 8 * (1 - t)), child: child),
+                            ),
+                            child: Text(
+                              widget.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _rowTitle.copyWith(color: colors.textMain),
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (rest != null) _shrinkingTitle(rest),
+      ],
+    );
+  }
+
+  /// The header's title once the row has taken it: up with the page to the row's middle, then shrinking and gliding
+  /// from there to beside the way back.
+  Widget _shrinkingTitle(_TitleRest rest) {
+    final colors = context.colors;
+    final end = _rowTitle.fontSize! / (rest.style.fontSize ?? _rowTitle.fontSize!);
+    final shrinksAt = math.max(0.0, rest.middle - _titleMiddle);
+    return Positioned.fill(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = math.max(0.0, constraints.maxWidth - _titleLeft - _right);
+          return ListenableBuilder(
+            listenable: _titleMotion,
+            builder: (context, _) {
+              if (!_taken.value) return const SizedBox.shrink();
+              final scrolled = _scrolled.value;
+              final t = ((scrolled - shrinksAt) / PinnedTitleBar._collapse).clamp(0.0, 1.0);
+              final middle = scrolled < shrinksAt ? rest.middle - scrolled : _titleMiddle;
+              final scale = 1 - t * (1 - end);
+              final width = rest.width + (available - rest.width) * t;
+              return Stack(
+                children: [
+                  Positioned(
+                    left: rest.left + (_titleLeft - rest.left) * t,
+                    top: middle - rest.height / 2,
+                    width: width,
+                    height: rest.height,
+                    child: IgnorePointer(
+                      child: Transform.scale(
+                        scale: scale,
+                        alignment: Alignment.centerLeft,
+                        child: OverflowBox(
+                          minWidth: 0,
+                          // Laid out wider while smaller, so it is cut short only where it has to be.
+                          maxWidth: width / scale + 1,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            widget.title,
+                            maxLines: 1,
+                            softWrap: false,
+                            overflow: TextOverflow.ellipsis,
+                            style: rest.style.copyWith(color: colors.textMain),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RowRoom extends StatelessWidget {
+  const _RowRoom();
+
+  @override
+  Widget build(BuildContext context) => context.getInheritedWidgetOfExactType<_WideBackBarScope>() == null
+      ? const SliverToBoxAdapter()
+      : const PinnedHeaderSliver(
+          child: AbsorbPointer(child: SizedBox(height: PinnedTitleBar.height)),
+        );
+}
+
+/// Where a wide detail page's title is, and whether its row has taken it over ([_WideBackBar]).
+class _WideBackBarScope extends InheritedWidget {
+  const _WideBackBarScope({required this.title, required this.taken, required super.child});
+
+  final GlobalKey title;
+  final ValueListenable<bool> taken;
+
+  @override
+  bool updateShouldNotify(_WideBackBarScope oldWidget) => title != oldWidget.title || taken != oldWidget.taken;
 }
 
 /// A phone page's header: the title (30 px) and its details, the page's buttons below. The buttons at the top right
@@ -230,10 +735,17 @@ int _topButtonCount(BuildContext context) => context.vm.selectedSection == AppSe
 
 Widget _searchButton(BuildContext context) => SizedBox.square(
   dimension: PinnedTitleBar.buttonSize,
-  child: IconButton(
-    tooltip: context.tr('Search'),
-    onPressed: context.vm.openSearch,
-    icon: Icon(Icons.search_rounded, size: 24, color: context.colors.textMain),
+  child: Builder(
+    builder: (button) => IconButton(
+      tooltip: context.tr('Search'),
+      onPressed: () {
+        // The field grows out of this button.
+        final box = button.findRenderObject() as RenderBox?;
+        PinnedTitleBar.searchFrom = box == null || !box.attached ? null : box.localToGlobal(Offset.zero) & box.size;
+        context.vm.openSearch();
+      },
+      icon: Icon(Icons.search_rounded, size: 24, color: context.colors.textMain),
+    ),
   ),
 );
 
@@ -244,14 +756,19 @@ Widget _searchButton(BuildContext context) => SizedBox.square(
 /// the page until it reaches the bar, which then takes it over and shrinks it into its own title, gliding it beside
 /// the way back (a tab page's big title is there from the start). A title that can't shrink so (on two lines, a
 /// playlist's that renames it) fades as it reaches the bar, which then brings the name up into itself. All of it
-/// follows the scroll, never moving by itself. Elsewhere [child] alone. The header marks the part whose leaving
-/// completes the shade ([anchor]): the line of its buttons, else its title. Choosing the page's section again in the
-/// navigation scrolls it back to its top (`MainViewModel.scrollToTopRequested`).
+/// follows the scroll, never moving by itself. Elsewhere a detail page has a row of its own over its list, with the way
+/// back, into which its title goes the same way ([_WideBackBar]); a tab page is [child] alone (its header stays,
+/// [TabPageList]). The header marks the part whose leaving completes the shade ([anchor]): the line of its buttons, else
+/// its title. Choosing the page's section again in the navigation scrolls it back to its top
+/// (`MainViewModel.scrollToTopRequested`).
 class PinnedTitleBar extends StatefulWidget {
-  const PinnedTitleBar({super.key, required this.title, this.onBack, this.menu, required this.child});
+  const PinnedTitleBar({super.key, required this.title, this.onBack, this.backText, this.menu, required this.child});
 
   final String title;
   final VoidCallback? onBack;
+
+  /// Where [onBack] leads (the section, the artist, the search): the tooltip of the way back over a wide page.
+  final String? backText;
 
   /// A detail page's ⋮: the rest of its menu, where a tab page has its account button.
   final Widget? menu;
@@ -264,6 +781,10 @@ class PinnedTitleBar extends StatefulWidget {
   /// The bar's buttons, square.
   static const double buttonSize = 44;
 
+  /// Where on the screen the search was opened from (its button, or the one a pull brought out): the search field
+  /// grows out of it, and goes back into it. Taken by the field as it opens.
+  static Rect? searchFrom;
+
   /// How far the shade reaches below the bar, fading out.
   static const double _shadeFade = 40;
 
@@ -272,6 +793,10 @@ class PinnedTitleBar extends StatefulWidget {
 
   /// The bar's title, as large as a title ends up in it.
   static const TextStyle _barTitle = TextStyle(fontSize: 17, letterSpacing: -0.3, fontWeight: FontWeight.w800);
+
+  /// The page's first sliver: over a computer's or a tablet's detail page, the room its row of the way back stands
+  /// in, which stays (a table's headers pin under it) and takes the pointer there; elsewhere nothing.
+  static const Widget room = _RowRoom();
 
   /// [child] (a part of the page's header), marked as the one whose leaving completes the shade when there is a bar.
   static Widget anchor(BuildContext context, Widget child) {
@@ -284,7 +809,21 @@ class PinnedTitleBar extends StatefulWidget {
   /// reaches the bar, which brings the name up into itself.
   static Widget pageTitle(BuildContext context, Widget child, {TextStyle? shrinkStyle}) {
     final scope = context.dependOnInheritedWidgetOfExactType<_PinnedTitleBarScope>();
-    if (scope == null) return child;
+    if (scope == null) {
+      final wide = context.dependOnInheritedWidgetOfExactType<_WideBackBarScope>();
+      if (wide == null) return child;
+      return _TitleMark(
+        key: wide.title,
+        shrinkStyle: shrinkStyle,
+        child: shrinkStyle == null
+            ? child
+            : ValueListenableBuilder<bool>(
+                valueListenable: wide.taken,
+                builder: (context, taken, child) => Opacity(opacity: taken ? 0 : 1, child: child),
+                child: child,
+              ),
+      );
+    }
     return _TitleMark(
       key: scope.title,
       shrinkStyle: shrinkStyle,
@@ -344,6 +883,9 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
 
   /// How far a tab page is pulled down past its top for search to open when the finger lets go.
   static const double _pullToSearch = 88;
+
+  /// The search that comes out in the bar's middle as the page is pulled, across.
+  static const double _pullHintSize = 40;
 
   /// What the title the bar draws follows.
   late final Listenable _titleMotion = Listenable.merge([_taken, _titleIn, _scrolled]);
@@ -431,7 +973,14 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
       return;
     }
     // The first step after the finger let go.
-    if (_dragging && _pulled >= _pullToSearch) context.vm.openSearch();
+    if (_dragging && _pulled >= _pullToSearch) {
+      PinnedTitleBar.searchFrom = Rect.fromCenter(
+        center: Offset(MediaQuery.sizeOf(context).width / 2, _barMiddle(context)),
+        width: _pullHintSize,
+        height: _pullHintSize,
+      );
+      context.vm.openSearch();
+    }
     _dragging = false;
     _pulled = 0;
   }
@@ -554,7 +1103,12 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
 
   @override
   Widget build(BuildContext context) {
-    if (!PhoneChrome.isPhone(context)) return widget.child;
+    if (!PhoneChrome.isPhone(context)) {
+      final onBack = widget.onBack;
+      return onBack == null
+          ? widget.child
+          : _WideBackBar(title: widget.title, onBack: onBack, backText: widget.backText, child: widget.child);
+    }
     final colors = context.colors;
     final onBack = widget.onBack;
     final background = colors.palette.background;
@@ -642,7 +1196,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   /// fading as it comes): whole, and in the accent, where letting go opens it.
   Widget _pullHint(BuildContext context) {
     final colors = context.colors;
-    const size = 40.0;
+    const size = _pullHintSize;
     return Positioned(
       top: _barMiddle(context) - size / 2,
       left: 0,

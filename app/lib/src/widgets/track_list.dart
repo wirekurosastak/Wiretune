@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
 import 'badges.dart';
 import 'buttons.dart';
+import 'cover_flight.dart';
 import 'cover_image.dart';
 import 'dialogs.dart';
 import 'downloads.dart';
@@ -38,10 +39,10 @@ enum TrackTableKind {
   search,
 }
 
-/// A list of tracks as slivers: on a wide screen a table (a header row with sortable columns over rounded rows that
-/// light up under the mouse), on a phone rows of cover, title, the favourite and a menu. The track that is playing is
-/// washed in the accent and marked by bouncing bars; a downloaded one carries a tick. Playing a track makes the list
-/// the queue, in the order it is shown.
+/// A list of tracks as slivers: on a wide screen a table (a header row with sortable columns, which stays at the list's
+/// top while the rows scroll, over rounded rows that light up under the mouse), on a phone rows of cover, title, the
+/// favourite and a menu. The track that is playing is washed in the accent and marked by bouncing bars; a downloaded one
+/// carries a tick. Playing a track makes the list the queue, in the order it is shown.
 class TrackSliver extends StatefulWidget {
   const TrackSliver({
     super.key,
@@ -50,6 +51,7 @@ class TrackSliver extends StatefulWidget {
     this.kind = TrackTableKind.tracks,
     this.horizontalPadding,
     this.onReorder,
+    this.columnHeaders = true,
   });
 
   final List<Track> tracks;
@@ -65,12 +67,55 @@ class TrackSliver extends StatefulWidget {
   /// rows then move under a long press, or (in a table) by the handle at their start.
   final void Function(int from, int to)? onReorder;
 
+  /// Whether a table has its column headers over its rows; a tab page has them of its own ([TrackColumnHeaders],
+  /// [TabPageList]), which stay put above the list.
+  final bool columnHeaders;
+
+  /// The space at a table's sides.
+  static const double tablePadding = 20;
+
   /// The heights of the wide table's header and of its rows.
   static const double tableHeaderHeight = 40;
   static const double tableRowHeight = 52;
 
   @override
   State<TrackSliver> createState() => _TrackSliverState();
+}
+
+/// Which of a table's columns show at its width, and how they share it.
+class _Columns {
+  const _Columns(this.kind, this.width);
+
+  final TrackTableKind kind;
+  final double width;
+
+  bool get leadIsNumber => kind == TrackTableKind.album;
+  bool get showArtist => kind != TrackTableKind.album && kind != TrackTableKind.artist;
+  bool get showAlbum => kind != TrackTableKind.album && width >= 560;
+  bool get showReleased =>
+      (kind == TrackTableKind.tracks || kind == TrackTableKind.artist || kind == TrackTableKind.playlist) &&
+      width >= 720;
+  bool get showAdded => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && width >= 880;
+  bool get showQuality => kind != TrackTableKind.search && width >= 1060;
+
+  int get titleFlex {
+    if (!showArtist && !showAlbum) return 8; // an album's table shows neither
+    if (!showArtist || !showAlbum) return 7;
+    return 6;
+  }
+
+  int get artistFlex => 4;
+  int get albumFlex => 4;
+
+  // The columns of figures are as wide as their longest header (German) and value; the text columns share the rest.
+  static const double lengthWidth = 76;
+  static const double releasedWidth = 112;
+  static const double addedWidth = 124;
+  static const double qualityWidth = 168;
+  static const double bitrateWidth = 104;
+
+  // The drag handle at the start of a row that can be moved.
+  static const double handleWidth = 24;
 }
 
 class _TrackSliverState extends State<TrackSliver> {
@@ -82,9 +127,6 @@ class _TrackSliverState extends State<TrackSliver> {
 
   // As large as the music apps' rows.
   static const double _phoneRowHeight = 76;
-
-  // The drag handle at the start of a row that can be moved.
-  static const double _handleWidth = 24;
 
   @override
   void didUpdateWidget(TrackSliver oldWidget) {
@@ -107,30 +149,7 @@ class _TrackSliverState extends State<TrackSliver> {
   void _play(Track track) => context.vm.player.playQueue(_tracks, track);
 
   TrackTableKind get kind => widget.kind;
-  bool get _leadIsNumber => kind == TrackTableKind.album;
-  bool get _showArtist => kind != TrackTableKind.album && kind != TrackTableKind.artist;
-  bool get _showAlbum => kind != TrackTableKind.album && _tableWidth >= 560;
-  bool get _showReleased =>
-      (kind == TrackTableKind.tracks || kind == TrackTableKind.artist || kind == TrackTableKind.playlist) &&
-      _tableWidth >= 720;
-  bool get _showAdded => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && _tableWidth >= 880;
-  bool get _showQuality => kind != TrackTableKind.search && _tableWidth >= 1060;
-
-  int get _titleFlex {
-    if (!_showArtist && !_showAlbum) return 8; // an album's table shows neither
-    if (!_showArtist || !_showAlbum) return 7;
-    return 6;
-  }
-
-  int get _artistFlex => 4;
-  int get _albumFlex => 4;
-
-  // The columns of figures are as wide as their longest header (German) and value; the text columns share the rest.
-  static const double _lengthWidth = 76;
-  static const double _releasedWidth = 112;
-  static const double _addedWidth = 124;
-  static const double _qualityWidth = 168;
-  static const double _bitrateWidth = 104;
+  _Columns get _columns => _Columns(kind, _tableWidth);
 
   /// The tracks in the order shown: the page sorts its own, this table those of a list without a page's sort.
   List<Track> get _tracks {
@@ -164,7 +183,7 @@ class _TrackSliverState extends State<TrackSliver> {
       builder: (context, constraints) {
         // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
-        final padding = widget.horizontalPadding ?? (table ? 20.0 : 8.0);
+        final padding = widget.horizontalPadding ?? (table ? TrackSliver.tablePadding : 8.0);
         _tableWidth = constraints.crossAxisExtent - 2 * padding;
         return ListenableBuilder(
           listenable: listenable,
@@ -215,12 +234,18 @@ class _TrackSliverState extends State<TrackSliver> {
             }
             return SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: padding),
-              sliver: SliverMainAxisGroup(
-                slivers: [
-                  SliverToBoxAdapter(child: _header(context)),
-                  list,
-                ],
-              ),
+              sliver: widget.columnHeaders
+                  ? PinnedColumnHeaders(
+                      headers: _ColumnHeaders(
+                        columns: _columns,
+                        reorderable: widget.onReorder != null,
+                        sortField: _sortField,
+                        descending: _descending,
+                        onSort: _sortBy,
+                      ),
+                      rows: list,
+                    )
+                  : list,
             );
           },
         );
@@ -241,13 +266,55 @@ class _TrackSliverState extends State<TrackSliver> {
     }
     return starts.length > 1 ? starts : null;
   }
+}
 
-  Widget _header(BuildContext context) {
+/// A tab page's column headers ([TabPageList]), for a table without its own ([TrackSliver.columnHeaders] off): they stay
+/// put above the list while the rows scroll, and sort the page as the table's own do.
+class TrackColumnHeaders extends StatelessWidget {
+  const TrackColumnHeaders({super.key, required this.sorting});
+
+  final TrackSorting sorting;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: TrackSliver.tablePadding),
+        child: _ColumnHeaders(
+          columns: _Columns(TrackTableKind.tracks, constraints.maxWidth - 2 * TrackSliver.tablePadding),
+          reorderable: false,
+          sortField: sorting.sortField,
+          descending: sorting.isSortDescending,
+          onSort: sorting.setSortField,
+        ),
+      ),
+    );
+  }
+}
+
+/// A table's header row: the columns' names, those of a sortable column sorting by it (again: the other way round).
+class _ColumnHeaders extends StatelessWidget {
+  const _ColumnHeaders({
+    required this.columns,
+    required this.reorderable,
+    required this.sortField,
+    required this.descending,
+    required this.onSort,
+  });
+
+  final _Columns columns;
+  final bool reorderable;
+  final TrackSortField? sortField;
+  final bool descending;
+  final void Function(TrackSortField field) onSort;
+
+  @override
+  Widget build(BuildContext context) {
     final colors = context.colors;
     Widget cell(String label, TrackSortField? column, {int flex = 0, double? width}) {
-      final active = column != null && _sortField == column;
+      final active = column != null && sortField == column;
       final content = column != null
-          ? _HeaderCell(label: label, active: active, descending: _descending, onTap: () => _sortBy(column))
+          ? _HeaderCell(label: label, active: active, descending: descending, onTap: () => onSort(column))
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Align(
@@ -276,16 +343,17 @@ class _TrackSliverState extends State<TrackSliver> {
       ),
       child: Row(
         children: [
-          if (widget.onReorder != null) const SizedBox(width: _handleWidth),
-          cell(_leadIsNumber ? '#' : '', null, width: _leadIsNumber ? 48 : 56),
-          cell(context.tr('ColTitle'), TrackSortField.title, flex: _titleFlex),
-          if (_showArtist) cell(context.tr('ColArtist'), TrackSortField.artist, flex: _artistFlex),
-          if (_showAlbum) cell(context.tr('ColAlbum'), TrackSortField.album, flex: _albumFlex),
-          cell(context.tr('ColLength'), TrackSortField.length, width: _lengthWidth),
-          if (_showReleased) cell(context.tr('ColReleased'), TrackSortField.released, width: _releasedWidth),
-          if (_showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _addedWidth),
-          if (_showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _qualityWidth),
-          if (_showQuality) cell(context.tr('ColBitrate'), TrackSortField.bitrate, width: _bitrateWidth),
+          if (reorderable) const SizedBox(width: _Columns.handleWidth),
+          cell(columns.leadIsNumber ? '#' : '', null, width: columns.leadIsNumber ? 48 : 56),
+          cell(context.tr('ColTitle'), TrackSortField.title, flex: columns.titleFlex),
+          if (columns.showArtist) cell(context.tr('ColArtist'), TrackSortField.artist, flex: columns.artistFlex),
+          if (columns.showAlbum) cell(context.tr('ColAlbum'), TrackSortField.album, flex: columns.albumFlex),
+          cell(context.tr('ColLength'), TrackSortField.length, width: _Columns.lengthWidth),
+          if (columns.showReleased)
+            cell(context.tr('ColReleased'), TrackSortField.released, width: _Columns.releasedWidth),
+          if (columns.showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _Columns.addedWidth),
+          if (columns.showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _Columns.qualityWidth),
+          if (columns.showQuality) cell(context.tr('ColBitrate'), TrackSortField.bitrate, width: _Columns.bitrateWidth),
           const SizedBox(width: 2 * 44),
         ],
       ),
@@ -320,7 +388,7 @@ class _TableRowState extends State<_TableRow> {
     final kind = state.kind;
     final radius = BorderRadius.circular(Radii.medium);
     final Widget lead;
-    if (state._leadIsNumber) {
+    if (state._columns.leadIsNumber) {
       lead = playing
           ? EqualizerBars(playing: vm.player.isPlaying)
           : _hover
@@ -366,7 +434,7 @@ class _TableRowState extends State<_TableRow> {
                       child: MouseRegion(
                         cursor: SystemMouseCursors.grab,
                         child: SizedBox(
-                          width: _TrackSliverState._handleWidth,
+                          width: _Columns.handleWidth,
                           height: TrackSliver.tableRowHeight,
                           child: Tooltip(
                             message: context.tr('TipDragToReorder'),
@@ -380,11 +448,11 @@ class _TableRowState extends State<_TableRow> {
                       ),
                     ),
                   SizedBox(
-                    width: state._leadIsNumber ? 48 : 56,
+                    width: state._columns.leadIsNumber ? 48 : 56,
                     child: Center(child: lead),
                   ),
                   Expanded(
-                    flex: state._titleFlex,
+                    flex: state._columns.titleFlex,
                     // The row plays the track; the title is no link of its own (one more stop for the keyboard). A kept
                     // track carries the download's mark after it, as on a phone.
                     child: Row(
@@ -400,9 +468,9 @@ class _TableRowState extends State<_TableRow> {
                       ],
                     ),
                   ),
-                  if (state._showArtist)
+                  if (state._columns.showArtist)
                     Expanded(
-                      flex: state._artistFlex,
+                      flex: state._columns.artistFlex,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
@@ -416,9 +484,9 @@ class _TableRowState extends State<_TableRow> {
                         ),
                       ),
                     ),
-                  if (state._showAlbum)
+                  if (state._columns.showAlbum)
                     Expanded(
-                      flex: state._albumFlex,
+                      flex: state._columns.albumFlex,
                       child: _CellLink(
                         track.album,
                         hoverColor: colors.palette.purple,
@@ -426,10 +494,10 @@ class _TableRowState extends State<_TableRow> {
                         onTap: () => vm.openAlbumOfTrack(track),
                       ),
                     ),
-                  _FigureCell(track.formattedDuration, width: _TrackSliverState._lengthWidth),
-                  if (state._showReleased)
-                    _FigureCell(track.releaseYear?.toString() ?? '—', width: _TrackSliverState._releasedWidth),
-                  if (state._showAdded)
+                  _FigureCell(track.formattedDuration, width: _Columns.lengthWidth),
+                  if (state._columns.showReleased)
+                    _FigureCell(track.releaseYear?.toString() ?? '—', width: _Columns.releasedWidth),
+                  if (state._columns.showAdded)
                     _FigureCell(
                       // A playlist knows no date of its tracks, only the order they were added in.
                       kind == TrackTableKind.playlist
@@ -438,11 +506,11 @@ class _TableRowState extends State<_TableRow> {
                               final date? => context.trf('DateShort', [date]),
                               null => '—',
                             },
-                      width: _TrackSliverState._addedWidth,
+                      width: _Columns.addedWidth,
                     ),
-                  if (state._showQuality)
+                  if (state._columns.showQuality)
                     SizedBox(
-                      width: _TrackSliverState._qualityWidth,
+                      width: _Columns.qualityWidth,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
@@ -452,9 +520,9 @@ class _TableRowState extends State<_TableRow> {
                       ),
                     ),
                   // The file's average bitrate, in the quality's colours.
-                  if (state._showQuality)
+                  if (state._columns.showQuality)
                     SizedBox(
-                      width: _TrackSliverState._bitrateWidth,
+                      width: _Columns.bitrateWidth,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
@@ -628,8 +696,10 @@ class TrackMenu extends StatelessWidget {
         vm.library.toggleFavorite(track.id);
       case TrackAction.playNext:
         vm.queue([track], next: true, name: track.title);
+        CoverFlight.toPlayer(_Cover.flightTag(track));
       case TrackAction.addToQueue:
         vm.queue([track], next: false, name: track.title);
+        CoverFlight.toPlayer(_Cover.flightTag(track));
       case TrackAction.addToPlaylist:
         showAddTrackToPlaylistDialog(context, track);
       case TrackAction.removeFromPlaylist:
@@ -709,14 +779,24 @@ class _Cover extends StatelessWidget {
   final double size;
   final double radius;
 
+  /// What the cover shows, for it to fly into the player's when the track is queued ([CoverFlight.toPlayer]).
+  static String flightTag(Track track) => 'track:${track.id}';
+
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => CoverFlightSource(
+    tag: flightTag(track),
+    radius: radius,
+    cover: CoverImage(path: track.coverArtPath, size: size, radius: radius, placeholderIcon: Icons.music_note),
+    builder: _build,
+  );
+
+  Widget _build(BuildContext context, Widget cover) => SizedBox(
     width: size,
     height: size,
     child: Stack(
       fit: StackFit.expand,
       children: [
-        CoverImage(path: track.coverArtPath, size: size, radius: radius, placeholderIcon: Icons.music_note),
+        cover,
         if (playing || hover)
           DecoratedBox(
             decoration: BoxDecoration(color: const Color(0x99000000), borderRadius: BorderRadius.circular(radius)),
@@ -774,7 +854,7 @@ class _PhoneRow extends StatelessWidget {
     final playing = context.vm.player.isCurrent(track);
     final subtitle = [
       track.artist,
-      if (state._showAlbum && state.kind != TrackTableKind.artist) track.album,
+      if (state._columns.showAlbum && state.kind != TrackTableKind.artist) track.album,
     ].join(' • ');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -787,7 +867,7 @@ class _PhoneRow extends StatelessWidget {
           child: Row(
             children: [
               const SizedBox(width: 8),
-              if (state._leadIsNumber)
+              if (state._columns.leadIsNumber)
                 SizedBox(
                   width: 56,
                   height: 56,
@@ -918,8 +998,8 @@ class _HeaderCell extends StatelessWidget {
               ),
               if (active) ...[
                 const SizedBox(width: 4),
-                Icon(
-                  descending ? Icons.south_rounded : Icons.north_rounded,
+                SortArrow(
+                  descending: descending,
                   size: 12,
                   color: colors.accent,
                   shadows: lit ? [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 10)] : null,

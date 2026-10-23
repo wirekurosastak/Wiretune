@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -17,7 +18,7 @@ import '../pages/section_page.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../widgets/ambient.dart';
-import '../widgets/cover_colour.dart';
+import '../widgets/cover_flight.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
 import '../widgets/page_parts.dart';
@@ -63,21 +64,11 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
                     const Positioned.fill(child: AmbientBackdrop(colour: 0.70)),
                     Column(
                       children: [
-                        if (vm.isSearchOpen) const SafeArea(bottom: false, child: _SearchBar()),
+                        _SearchBarSlot(open: vm.isSearchOpen),
                         if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
                         Expanded(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 220),
-                            switchInCurve: Curves.easeOutCubic,
-                            layoutBuilder: (currentChild, previousChildren) =>
-                                Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
-                            transitionBuilder: (child, animation) => FadeTransition(
-                              opacity: animation,
-                              child: ScaleTransition(
-                                scale: Tween(begin: 0.985, end: 1.0).animate(animation),
-                                child: child,
-                              ),
-                            ),
+                          child: _PageSwitcher(
+                            section: vm.isSearchOpen ? null : vm.selectedSection,
                             child: vm.isSearchOpen
                                 // A touch on the results puts the keyboard away (as in Spotify): a menu opened there
                                 // then has no field to give the focus back to when it closes.
@@ -108,6 +99,61 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
       ),
     );
   }
+}
+
+/// The page, changing as the tab does: in from the side of the tab it goes to and out to the other, as the tabs are
+/// laid out in the bar; the search, Settings (from the account button) and a page within a tab fade in and grow.
+class _PageSwitcher extends StatefulWidget {
+  const _PageSwitcher({required this.section, required this.child});
+
+  /// The tab on show (null: the search).
+  final AppSection? section;
+  final Widget child;
+
+  @override
+  State<_PageSwitcher> createState() => _PageSwitcherState();
+}
+
+class _PageSwitcherState extends State<_PageSwitcher> {
+  /// Which way the last change went: 1 to a tab further right, -1 to one further left, 0 neither.
+  double _direction = 0;
+
+  @override
+  void didUpdateWidget(_PageSwitcher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section == widget.section) return;
+    int place(AppSection? section) => section == null ? -1 : _BottomNavigation.order.indexOf(section);
+    final from = place(oldWidget.section), to = place(widget.section);
+    _direction = from < 0 || to < 0 ? 0 : (to - from).sign.toDouble();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 260),
+    switchInCurve: Curves.easeOutCubic,
+    switchOutCurve: Curves.easeInCubic,
+    layoutBuilder: (currentChild, previousChildren) =>
+        Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
+    transitionBuilder: (child, animation) {
+      if (_direction == 0) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: Tween(begin: 0.985, end: 1.0).animate(animation), child: child),
+        );
+      }
+      // The page coming in starts a little to the side it comes from; the one going out ends a little to the other.
+      final incoming = child.key == widget.child.key;
+      final side = incoming ? _direction : -_direction;
+      return FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween(begin: Offset(0.12 * side, 0), end: Offset.zero).animate(animation),
+          child: child,
+        ),
+      );
+    },
+    child: widget.child,
+  );
 }
 
 /// The full-screen player, as far open as its [sheet] is: pouring out of the mini player's cover when opened and back
@@ -190,9 +236,19 @@ class _BottomBars extends StatelessWidget {
   }
 }
 
-/// The five sections at the bottom, on a floating pill bar; the active one takes the colour and glow of its section.
+/// The five sections at the bottom, on a floating pill bar; the active one takes the colour of its section, and its
+/// glow glides over from the one that was.
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation();
+
+  /// The tabs as the bar lays them out, left to right.
+  static const List<AppSection> order = [
+    AppSection.artists,
+    AppSection.albums,
+    AppSection.tracks,
+    AppSection.favorites,
+    AppSection.playlists,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -206,24 +262,63 @@ class _BottomNavigation extends StatelessWidget {
       (AppSection.favorites, Icons.favorite_rounded, palette.coral, 'NavFavorites'),
       (AppSection.playlists, Icons.queue_music_rounded, palette.lime, 'NavPlaylistsShort'),
     ];
+    assert(listEquals([for (final item in items) item.$1], order));
+    final active = vm.isSearchOpen ? -1 : items.indexWhere((item) => item.$1 == vm.selectedSection);
     // Room under it, as in TIDAL's pill, so the labels clear the pill's rounded bottom.
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
       child: SizedBox(
         height: 64,
-        child: Row(
-          children: [
-            for (final (section, icon, color, label) in items)
-              Expanded(
-                child: _NavItem(
-                  icon: icon,
-                  label: context.tr(label),
-                  color: color,
-                  active: !vm.isSearchOpen && vm.selectedSection == section,
-                  onTap: () => vm.navigateTo(section),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth / items.length;
+            return Stack(
+              children: [
+                // The glow behind the active icon, moving from tab to tab in the colour of the one it goes to; gone
+                // while none is (the search, Settings).
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  left: width * math.max(active, 0) + (width - _NavItem.glowSize) / 2,
+                  top: _NavItem.iconMiddle - _NavItem.glowSize / 2,
+                  width: _NavItem.glowSize,
+                  height: _NavItem.glowSize,
+                  child: IgnorePointer(
+                    child: TweenAnimationBuilder<Color?>(
+                      tween: ColorTween(end: active < 0 ? items.first.$3.withValues(alpha: 0) : items[active].$3),
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, color, _) => DecoratedBox(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              color!.withValues(alpha: 0.34 * color.a),
+                              color.withValues(alpha: 0),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-          ],
+                Row(
+                  children: [
+                    for (final (i, (section, icon, color, label)) in items.indexed)
+                      Expanded(
+                        child: _NavItem(
+                          icon: icon,
+                          label: context.tr(label),
+                          color: color,
+                          active: i == active,
+                          onTap: () => vm.navigateTo(section),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -245,6 +340,10 @@ class _NavItem extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
+  /// The glow behind the active icon ([_BottomNavigation]'s), and the height of the icon's middle in the bar: the
+  /// icon's 30 and the label's line (about 13 at 11 px) under it, centred in the bar's 64 less the 4 above and below.
+  static const double glowSize = 56, iconMiddle = 4 + (56 - 30 - 3 - 13) / 2 + 15;
+
   @override
   Widget build(BuildContext context) {
     final muted = context.colors.textMuted;
@@ -253,7 +352,7 @@ class _NavItem extends StatelessWidget {
       button: true,
       child: Material(
         type: MaterialType.transparency,
-        // No ripple and no bounce: the section's colour and glow say which is active, as elsewhere.
+        // No ripple: the section's colour and glow say which is active, as elsewhere.
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(Radii.card),
@@ -261,10 +360,11 @@ class _NavItem extends StatelessWidget {
           highlightColor: Colors.transparent,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            // The icon, its glow and the label take the colour together, in step with the page's fade.
+            // The icon and the label take the colour together, in step with the page's fade; the icon that becomes the
+            // active one gives a small bounce.
             child: TweenAnimationBuilder<double>(
               tween: Tween(end: active ? 1 : 0),
-              duration: const Duration(milliseconds: 220),
+              duration: const Duration(milliseconds: 300),
               curve: Curves.easeOutCubic,
               builder: (context, lit, _) {
                 final tint = Color.lerp(muted, color, lit)!;
@@ -273,11 +373,14 @@ class _NavItem extends StatelessWidget {
                   children: [
                     SizedBox(
                       height: 30,
-                      child: Icon(
-                        icon,
-                        size: 24,
-                        color: tint,
-                        shadows: lit > 0 ? [Shadow(color: color.withValues(alpha: 0.75 * lit), blurRadius: 16)] : null,
+                      child: Transform.scale(
+                        scale: active ? 1 + 0.16 * math.sin(math.pi * lit) : 1,
+                        child: Icon(
+                          icon,
+                          size: 24,
+                          color: tint,
+                          shadows: lit > 0 ? [Shadow(color: color.withValues(alpha: 0.4 * lit), blurRadius: 10)] : null,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -298,6 +401,106 @@ class _NavItem extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The search field over the page while the search is open: it grows out of the button that opened it
+/// ([PinnedTitleBar.searchFrom]) into the whole bar, pushing the page down, and goes back into it as the search
+/// closes.
+class _SearchBarSlot extends StatefulWidget {
+  const _SearchBarSlot({required this.open});
+
+  final bool open;
+
+  @override
+  State<_SearchBarSlot> createState() => _SearchBarSlotState();
+}
+
+class _SearchBarSlotState extends State<_SearchBarSlot> with SingleTickerProviderStateMixin {
+  late final AnimationController _shown = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 300),
+    value: widget.open ? 1 : 0,
+  );
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _shown,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
+
+  /// Where it grows out of and goes back into, on the screen (the field's box is at the screen's top left).
+  Rect? _from;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.open) _from = _takeFrom();
+  }
+
+  @override
+  void didUpdateWidget(_SearchBarSlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.open == oldWidget.open) return;
+    if (widget.open) {
+      _from = _takeFrom() ?? _from;
+      _shown.forward(from: 0);
+    } else {
+      _shown.reverse();
+    }
+  }
+
+  static Rect? _takeFrom() {
+    final from = PinnedTitleBar.searchFrom;
+    PinnedTitleBar.searchFrom = null;
+    return from;
+  }
+
+  @override
+  void dispose() {
+    _shown.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _shown,
+    builder: (context, child) {
+      if (_shown.isDismissed) return const SizedBox.shrink();
+      final t = _curve.value;
+      // One tree throughout (the field keeps its focus and its text), clipping only while it moves.
+      return SizeTransition(
+        sizeFactor: _curve,
+        alignment: Alignment.topCenter,
+        child: ClipPath(
+          clipBehavior: t >= 1 ? Clip.none : Clip.antiAlias,
+          clipper: _GrowFrom(from: _from, t: t, top: MediaQuery.paddingOf(context).top),
+          child: Opacity(opacity: (t * 2).clamp(0.0, 1.0), child: child),
+        ),
+      );
+    },
+    child: const SafeArea(bottom: false, child: _SearchBar()),
+  );
+}
+
+/// The part of the search bar shown [t] of the way open: a pill from [from] (the button, else the bar's right end) to
+/// the whole bar below the status bar ([top]).
+class _GrowFrom extends CustomClipper<Path> {
+  const _GrowFrom({required this.from, required this.t, required this.top});
+
+  final Rect? from;
+  final double t;
+  final double top;
+
+  @override
+  Path getClip(Size size) {
+    final whole = Rect.fromLTRB(0, top, size.width, size.height);
+    final start = from ?? Rect.fromLTWH(size.width - 52, top + 8, 44, 44);
+    final rect = Rect.lerp(start, whole, t)!;
+    final radius = Radius.circular(start.shortestSide / 2 * (1 - t));
+    return Path()..addRRect(RRect.fromRectAndRadius(rect, radius));
+  }
+
+  @override
+  bool shouldReclip(_GrowFrom oldClipper) => oldClipper.t != t || oldClipper.from != from || oldClipper.top != top;
 }
 
 class _SearchBar extends StatefulWidget {
@@ -441,116 +644,101 @@ class _MiniPlayer extends StatelessWidget {
         final track = player.currentTrack;
         if (track == null) return const SizedBox.shrink();
 
-        // A faint wash of the cover's colour from the pill's top; Play stays in the section's, as everywhere.
-        return CoverTint(
-          path: track.coverArtPath,
-          builder: (context, wash) => DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: wash == null
-                  ? null
-                  : LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        wash.withValues(alpha: 0.2 * wash.a),
-                        wash.withValues(alpha: 0),
-                      ],
-                    ),
-            ),
-            // Room above it, as in TIDAL's pill, under the pill's rounded top.
-            child: Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: PlayerSheetDrag(
-                // The cover and Play stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
-                // of the pill's width, as they are. A swipe over the track skips (no buttons for it, as in TIDAL and
-                // Spotify).
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    final column = constraints.maxWidth / 5;
-                    return SizedBox(
-                      height: 66,
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _SkipSwipe(
-                              onNext: player.nextTrack,
-                              onPrevious: player.previousTrack,
-                              child: InkWell(
-                                onTap: vm.openNowPlaying,
-                                child: Padding(
-                                  padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
-                                  child: Row(
-                                    children: [
-                                      // The lamp the full-screen player pours out of.
-                                      DecoratedBox(
-                                        key: PlayerSheetScope.maybeOf(context)?.lamp,
-                                        decoration: BoxDecoration(
-                                          borderRadius: BorderRadius.circular(Radii.small),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: colors.palette.shadow,
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 3),
-                                            ),
-                                          ],
-                                        ),
-                                        child: CoverImage(
-                                          path: track.coverArtPath,
-                                          size: _coverSize,
-                                          radius: Radii.small,
-                                        ),
+        // Room above it, as in TIDAL's pill, under the pill's rounded top.
+        return Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: PlayerSheetDrag(
+            // The cover and Play stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
+            // of the pill's width, as they are. A swipe over the track skips (no buttons for it, as in TIDAL and
+            // Spotify).
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final column = constraints.maxWidth / 5;
+                return SizedBox(
+                  height: 66,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _SkipSwipe(
+                          onNext: player.nextTrack,
+                          onPrevious: player.previousTrack,
+                          child: InkWell(
+                            onTap: vm.openNowPlaying,
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
+                              child: Row(
+                                children: [
+                                  // The lamp the full-screen player pours out of, where queued music lands.
+                                  CoverFlightLanding(
+                                    radius: Radii.small,
+                                    child: DecoratedBox(
+                                      key: PlayerSheetScope.maybeOf(context)?.lamp,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(Radii.small),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: colors.palette.shadow,
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              player.nowPlayingTitle,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 14.5,
-                                                fontWeight: FontWeight.w700,
-                                                letterSpacing: -0.2,
-                                                color: colors.textMain,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 1),
-                                            if (player.isRemote && !player.hasError)
-                                              const PlayingOnLabel(fontSize: 11.5)
-                                            else
-                                              Text(
-                                                player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: player.hasError ? colors.danger : colors.textMuted,
-                                                ),
-                                              ),
-                                          ],
-                                        ),
+                                      child: CoverImage(
+                                        path: track.coverArtPath,
+                                        size: _coverSize,
+                                        radius: Radii.small,
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          player.nowPlayingTitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: -0.2,
+                                            color: colors.textMain,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 1),
+                                        if (player.isRemote && !player.hasError)
+                                          const PlayingOnLabel(fontSize: 11.5)
+                                        else
+                                          Text(
+                                            player.hasError ? player.errorMessage! : player.nowPlayingArtist,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w500,
+                                              color: player.hasError ? colors.danger : colors.textMuted,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          // The players' round Play, as in the full-screen player and on a computer.
-                          Padding(
-                            padding: EdgeInsets.only(right: math.max(0, (column - _playSize) / 2)),
-                            child: const PlayButton(size: _playSize),
-                          ),
-                        ],
+                        ),
                       ),
-                    );
-                  },
-                ),
-              ),
+                      // The players' round Play, as in the full-screen player and on a computer.
+                      Padding(
+                        padding: EdgeInsets.only(right: math.max(0, (column - _playSize) / 2)),
+                        child: const PlayButton(size: _playSize),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         );

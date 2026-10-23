@@ -23,6 +23,7 @@ import '../view_models/main_view_model.dart';
 import '../widgets/ambient.dart';
 import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
+import '../widgets/cover_flight.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
 import '../widgets/links.dart';
@@ -1215,64 +1216,68 @@ class _QueueCover extends StatelessWidget {
     final open = player.isQueueOpen;
     return Tooltip(
       message: context.tr('TipQueueToggle'),
-      // A remote's arrows and the keyboard reach it too: the queue opens nowhere else on a wide screen.
-      child: Pressable(
-        onPressed: player.toggleQueue,
-        builder: (context, lit) => AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            color: colors.surface2,
-            borderRadius: BorderRadius.circular(Radii.medium),
-            boxShadow: [
-              BoxShadow(
-                color: player.isPlaying ? colors.accent.withValues(alpha: 0.4) : colors.palette.shadow,
-                blurRadius: 18,
-                spreadRadius: -4,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CoverImage(path: player.currentTrack?.coverArtPath, radius: 0, placeholderColor: colors.palette.cyan),
-              // A touch screen has no mouse to bring the veil: there a small chevron stays at the cover's foot.
-              if (AppPlatform.current.isMobile)
-                AnimatedOpacity(
-                  opacity: lit || open ? 0 : 1,
-                  duration: const Duration(milliseconds: 180),
-                  child: const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0x00000000), Color(0x8C000000)],
-                        stops: [0.45, 1],
+      // A remote's arrows and the keyboard reach it too: the queue opens nowhere else on a wide screen. Queued music lands
+      // on it.
+      child: CoverFlightLanding(
+        radius: Radii.medium,
+        child: Pressable(
+          onPressed: player.toggleQueue,
+          builder: (context, lit) => AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: colors.surface2,
+              borderRadius: BorderRadius.circular(Radii.medium),
+              boxShadow: [
+                BoxShadow(
+                  color: player.isPlaying ? colors.accent.withValues(alpha: 0.4) : colors.palette.shadow,
+                  blurRadius: 18,
+                  spreadRadius: -4,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CoverImage(path: player.currentTrack?.coverArtPath, radius: 0, placeholderColor: colors.palette.cyan),
+                // A touch screen has no mouse to bring the veil: there a small chevron stays at the cover's foot.
+                if (AppPlatform.current.isMobile)
+                  AnimatedOpacity(
+                    opacity: lit || open ? 0 : 1,
+                    duration: const Duration(milliseconds: 180),
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0x00000000), Color(0x8C000000)],
+                          stops: [0.45, 1],
+                        ),
+                      ),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: Colors.white),
                       ),
                     ),
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: Colors.white),
+                  ),
+                AnimatedOpacity(
+                  opacity: lit ? 1 : (open ? 0.85 : 0),
+                  duration: const Duration(milliseconds: 180),
+                  child: ColoredBox(
+                    color: const Color(0x8C000000),
+                    child: AnimatedRotation(
+                      turns: open ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOutCubic,
+                      child: Icon(Icons.keyboard_arrow_up_rounded, size: 26, color: Colors.white),
                     ),
                   ),
                 ),
-              AnimatedOpacity(
-                opacity: lit ? 1 : (open ? 0.85 : 0),
-                duration: const Duration(milliseconds: 180),
-                child: ColoredBox(
-                  color: const Color(0x8C000000),
-                  child: AnimatedRotation(
-                    turns: open ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 250),
-                    curve: Curves.easeOutCubic,
-                    child: Icon(Icons.keyboard_arrow_up_rounded, size: 26, color: Colors.white),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

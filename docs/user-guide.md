@@ -108,8 +108,9 @@ downloads never count as local music.
   Android 13 on that covers audio files only, so a `cover.jpg` beside them isn't seen (pictures inside the files are).
 - **A phone stays upright**, as in TIDAL and Spotify; a tablet turns.
 - **Gestures**: swipe the mini player left or right to skip (a screen reader offers *Next* and *Previous* instead);
-  pull a tab's list down past its top to search; long-press an album, artist or playlist for a preview with its menu,
-  and tap its cover to open it. On a tablet or a computer's touchpad, pinch the tiles to make them larger or smaller.
+  pull a tab's list down past its top to search; long-press an album, artist or playlist for a preview with its menu
+  (slide the finger onto an entry and let go to choose it), and tap its cover to open it. On a tablet or a computer's
+  touchpad, pinch the tiles to make them larger or smaller.
 - **In the full-screen player** a swipe left or right changes the track or switches between *Track*, *Queue* and
   *Lyrics*: the first swipe asks which, and *Settings* changes it later.
 - **TVs** (Android TV, Samsung Tizen) are steered with the remote: the arrows move, the center button plays, Back goes

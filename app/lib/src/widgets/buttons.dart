@@ -418,3 +418,50 @@ class _HeaderIconButtonState extends State<HeaderIconButton> {
     );
   }
 }
+
+/// A sort button's label ("ABC ↑"): the name, and the active one's direction as an arrow that turns round when the
+/// order does.
+class SortLabel extends StatelessWidget {
+  const SortLabel(this.label, {super.key, required this.style});
+
+  final String label;
+  final TextStyle style;
+
+  @override
+  Widget build(BuildContext context) {
+    final up = label.endsWith(' ↑'), down = label.endsWith(' ↓');
+    final name = up || down ? label.substring(0, label.length - 2) : label;
+    final text = Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
+    if (!up && !down) return text;
+    return Semantics(
+      label: label,
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: text),
+          const SizedBox(width: 4),
+          SortArrow(descending: down, size: (style.fontSize ?? 13) + 1, color: style.color),
+        ],
+      ),
+    );
+  }
+}
+
+/// The arrow of a sort's direction: up, turning round to point down when the order does.
+class SortArrow extends StatelessWidget {
+  const SortArrow({super.key, required this.descending, required this.size, this.color, this.shadows});
+
+  final bool descending;
+  final double size;
+  final Color? color;
+  final List<Shadow>? shadows;
+
+  @override
+  Widget build(BuildContext context) => AnimatedRotation(
+    turns: descending ? 0.5 : 0,
+    duration: const Duration(milliseconds: 280),
+    curve: Curves.easeOutBack,
+    child: Icon(Icons.north_rounded, size: size, color: color, shadows: shadows),
+  );
+}

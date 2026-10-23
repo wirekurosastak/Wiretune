@@ -286,6 +286,9 @@ class SeekBar extends StatefulWidget {
 class _SeekBarState extends State<SeekBar> {
   double? _dragValue;
 
+  /// Where the finger last held the knob (0 to 1 of the way), for the time over it to fade out there.
+  double _heldAt = 0;
+
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
@@ -301,15 +304,64 @@ class _SeekBarState extends State<SeekBar> {
       builder: (context, _) {
         final total = player.durationSeconds;
         final value = (_dragValue ?? player.positionSeconds).clamp(0.0, total > 0 ? total : 1.0);
+        final max = total > 0 ? total : 1.0;
+        if (_dragValue != null) _heldAt = value / max;
+        final held = _dragValue != null;
         final slider = SizedBox(
           height: 28,
-          child: Slider(
-            value: value,
-            max: total > 0 ? total : 1.0,
-            onChanged: player.currentTrack == null ? null : (v) => setState(() => _dragValue = v),
-            onChangeEnd: (v) {
-              player.seekTo(Duration(milliseconds: (v * 1000).round()));
-              setState(() => _dragValue = null);
+          // While the knob is held, the time it is at floats over it, where the finger doesn't cover it.
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // The track's ends: the slider keeps the overlay's radius free at each side.
+              const inset = 14.0;
+              final x = inset + (constraints.maxWidth - 2 * inset) * _heldAt;
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: Slider(
+                      value: value,
+                      max: max,
+                      onChanged: player.currentTrack == null ? null : (v) => setState(() => _dragValue = v),
+                      onChangeEnd: (v) {
+                        player.seekTo(Duration(milliseconds: (v * 1000).round()));
+                        setState(() => _dragValue = null);
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    left: x - 40,
+                    width: 80,
+                    bottom: 30,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: held ? 1 : 0,
+                        duration: const Duration(milliseconds: 160),
+                        child: AnimatedSlide(
+                          offset: held ? Offset.zero : const Offset(0, 0.3),
+                          duration: const Duration(milliseconds: 160),
+                          curve: Curves.easeOutCubic,
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: colors.palette.modal,
+                                borderRadius: BorderRadius.circular(Radii.pill),
+                                border: Border.all(color: colors.glassBorder),
+                                boxShadow: [BoxShadow(color: colors.palette.shadow, blurRadius: 12)],
+                              ),
+                              child: Text(
+                                formatClock(Duration(milliseconds: (_heldAt * max * 1000).round())),
+                                style: timeStyle.copyWith(fontSize: 13, color: colors.textMain),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
             },
           ),
         );

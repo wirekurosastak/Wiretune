@@ -310,7 +310,7 @@ class KnobThumbShape extends SliderComponentShape {
   static const double radius = 7;
 
   @override
-  Size getPreferredSize(bool isEnabled, bool isDiscrete) => Size.fromRadius(radius + 2);
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => Size.fromRadius(radius + 4);
 
   @override
   void paint(
@@ -328,7 +328,8 @@ class KnobThumbShape extends SliderComponentShape {
     required Size sizeWithOverflow,
   }) {
     final canvas = context.canvas;
-    final r = radius + 2 * activationAnimation.value;
+    // Larger under the finger that holds it.
+    final r = radius + 4 * activationAnimation.value;
     final color = Color.lerp(sliderTheme.disabledThumbColor, Colors.white, enableAnimation.value)!;
     canvas.drawCircle(
       center.translate(0, 1),

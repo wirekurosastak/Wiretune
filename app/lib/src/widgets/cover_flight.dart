@@ -1,15 +1,19 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'cover_image.dart';
 
 /// A cover that flies: from the tile or the row it was tapped on ([CoverFlightSource]) to the artwork of the page that
-/// opens ([CoverFlightTarget]), and back to it when that page closes, if the tile is on the screen again. The pages
-/// swap within one screen, so Flutter's own flights (between routes) can't do it.
+/// opens ([CoverFlightTarget]), and back to it when that page closes, if the tile is on the screen again; and from
+/// where it is into the player's cover when its music is queued ([toPlayer], [CoverFlightLanding]). The pages swap
+/// within one screen, so Flutter's own flights (between routes) can't do it.
 abstract final class CoverFlight {
   /// The cover last pressed: what it shows, where it is, its corners, when.
   static ({String tag, Rect rect, double? radius, Widget cover, DateTime at})? _pressed;
@@ -17,16 +21,64 @@ abstract final class CoverFlight {
   /// The covers on the screen that a flight can land on, by what they show (a preview's over its row's, for one).
   static final Map<String, List<_CoverFlightSourceState>> _sources = {};
 
-  /// Where the cover showing [tag] is on the screen, the last one built if there are several.
-  static Rect? _sourceRect(String tag) {
-    for (final source in (_sources[tag] ?? const []).reversed) {
-      final rect = source.rect;
-      if (rect != null) return rect;
+  /// The cover showing [tag] on the screen, the last one built if there are several.
+  static _CoverFlightSourceState? _source(String tag) {
+    for (final source in (_sources[tag] ?? const <_CoverFlightSourceState>[]).reversed) {
+      if (source.rect != null) return source;
     }
     return null;
   }
 
   static void _register(String tag, _CoverFlightSourceState source) => (_sources[tag] ??= []).add(source);
+
+  /// The pages' artworks on the screen, by what they show (a queued page's flies from it).
+  static final Map<String, _CoverFlightTargetState> _artworks = {};
+
+  /// The player's cover, where queued music lands.
+  static _CoverFlightLandingState? _player;
+
+  /// The music [tag] shows (`album:<id>`, `track:<id>`) was queued: a small copy of its cover, from its tile, row or
+  /// page on the screen, arcs into the player's cover, which gives a little bump as it lands. Nothing flies when
+  /// neither is on the screen.
+  static void toPlayer(String tag) {
+    final player = _player;
+    final to = player?.rect;
+    if (player == null || to == null) return;
+    BuildContext? from;
+    Rect? rect;
+    Widget? cover;
+    double? radius;
+    if (_source(tag) case final source?) {
+      (from, rect, cover, radius) = (source.context, source.rect, source.widget.cover, source.widget.radius);
+    } else {
+      final artwork = _artworks[tag];
+      final found = artwork != null && artwork.mounted ? _rectOf(artwork.context) : null;
+      if (found != null) {
+        (from, rect, cover, radius) = (
+          artwork!.context,
+          found,
+          artwork.widget.arrival ?? artwork.widget.child,
+          artwork.widget.radius,
+        );
+      }
+    }
+    if (from == null || rect == null || cover == null) return;
+    _fly(
+      Overlay.maybeOf(from, rootOverlay: true),
+      cover,
+      from: rect,
+      to: () => player.mounted ? player.rect ?? to : to,
+      fromRadius: radius,
+      toRadius: player.widget.radius,
+      duration: const Duration(milliseconds: 560),
+      arc: 90,
+      onLanded: () {
+        if (!player.mounted) return;
+        unawaited(HapticFeedback.lightImpact());
+        player.bump();
+      },
+    );
+  }
 
   static void _unregister(String tag, _CoverFlightSourceState source) {
     final sources = _sources[tag];
@@ -59,7 +111,7 @@ abstract final class CoverFlight {
 
   /// [cover] flies from [from] to where [to] is (asked every frame: the page under it may still be settling), its
   /// corners rounding from [fromRadius] to [toRadius] (null: round, as it is), over everything in [overlay] (none: it
-  /// lands at once); then [onLanded].
+  /// lands at once); then [onLanded]. With an [arc] it rises that high on the way, as if thrown.
   static void _fly(
     OverlayState? overlay,
     Widget cover, {
@@ -68,6 +120,8 @@ abstract final class CoverFlight {
     required double? fromRadius,
     required double? toRadius,
     required VoidCallback onLanded,
+    Duration duration = _duration,
+    double arc = 0,
   }) {
     if (overlay == null || !overlay.mounted) {
       onLanded();
@@ -77,7 +131,7 @@ abstract final class CoverFlight {
     entry = OverlayEntry(
       builder: (context) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
-        duration: _duration,
+        duration: duration,
         curve: Curves.easeInOutCubic,
         onEnd: () {
           entry.remove();
@@ -87,7 +141,7 @@ abstract final class CoverFlight {
         builder: (context, t, child) {
           final radius = fromRadius == null || toRadius == null ? null : ui.lerpDouble(fromRadius, toRadius, t)!;
           return Positioned.fromRect(
-            rect: Rect.lerp(from, to() ?? from, t)!,
+            rect: Rect.lerp(from, to() ?? from, t)!.shift(Offset(0, -arc * math.sin(math.pi * t))),
             child: radius == null ? child! : ClipRRect(borderRadius: BorderRadius.circular(radius), child: child),
           );
         },
@@ -201,9 +255,9 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   /// Where the artwork is on the screen, kept up to date while the page scrolls: a closed page can't be measured.
   Rect? _rect;
 
-  /// What flew in, and its corners, to fly back out.
+  /// What flew in, to fly back out; a page opened otherwise (by a link, from the search) sends its
+  /// [CoverFlightTarget.arrival] to its tile.
   Widget? _cover;
-  double? _coverRadius;
 
   /// The screen's overlay, the flights' sky: kept, as a closing page can't look it up.
   OverlayState? _overlay;
@@ -211,6 +265,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   @override
   void initState() {
     super.initState();
+    CoverFlight._artworks[widget.tag] = this;
     final pressed = CoverFlight._pressed;
     if (pressed != null &&
         pressed.tag == widget.tag &&
@@ -218,7 +273,6 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
       CoverFlight._pressed = null;
       _waiting = true;
       _cover = pressed.cover;
-      _coverRadius = pressed.radius;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final to = mounted ? CoverFlight._rectOf(context) : null;
         if (to == null) {
@@ -239,9 +293,15 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
           fromRadius: pressed.radius,
           toRadius: widget.radius,
           onLanded: () {
-            if (mounted) setState(() => _waiting = false);
+            if (!mounted) return;
+            _measure();
+            setState(() => _waiting = false);
           },
         );
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _measure();
       });
     }
   }
@@ -267,14 +327,14 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   @override
   void dispose() {
     _position?.removeListener(_measure);
+    if (CoverFlight._artworks[widget.tag] == this) CoverFlight._artworks.remove(widget.tag);
     super.dispose();
   }
 
   /// The page closes: the cover flies back to its tile, once the list is built again, if the tile is on the screen.
   void _flyBack() {
     final from = _rect;
-    final cover = _cover;
-    final radius = _coverRadius;
+    final cover = _cover ?? widget.arrival;
     if (from == null || cover == null) return;
     _cover = null;
     final tag = widget.tag;
@@ -282,12 +342,18 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
     if (overlay == null || !overlay.mounted) return;
     CoverFlight._landing = tag;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final to = CoverFlight._sourceRect(tag);
+      final source = CoverFlight._source(tag);
+      final to = source?.rect;
       final screen = overlay.mounted ? MediaQuery.maybeSizeOf(overlay.context) : null;
       void landed() => CoverFlight._land(tag);
 
       final onScreen = screen == null ? null : Offset.zero & screen;
-      if (to == null || onScreen == null || !onScreen.overlaps(to) || !onScreen.overlaps(from) || !overlay.mounted) {
+      if (source == null ||
+          to == null ||
+          onScreen == null ||
+          !onScreen.overlaps(to) ||
+          !onScreen.overlaps(from) ||
+          !overlay.mounted) {
         landed();
         return;
       }
@@ -296,9 +362,9 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
         cover,
         from: from,
         // The list grows into place as it comes back, and its tile with it.
-        to: () => CoverFlight._sourceRect(tag) ?? to,
+        to: () => CoverFlight._source(tag)?.rect ?? to,
         fromRadius: widget.radius,
-        toRadius: radius,
+        toRadius: source.widget.radius,
         onLanded: landed,
       );
     });
@@ -306,4 +372,45 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
 
   @override
   Widget build(BuildContext context) => Opacity(opacity: _waiting ? 0 : 1, child: widget.child);
+}
+
+/// The player's cover (the mini player's, the player bar's), where the cover of queued music lands
+/// ([CoverFlight.toPlayer]): it gives a little bump when one does.
+class CoverFlightLanding extends StatefulWidget {
+  const CoverFlightLanding({super.key, required this.radius, required this.child});
+
+  /// The cover's corners.
+  final double radius;
+  final Widget child;
+
+  @override
+  State<CoverFlightLanding> createState() => _CoverFlightLandingState();
+}
+
+class _CoverFlightLandingState extends State<CoverFlightLanding> with SingleTickerProviderStateMixin {
+  late final AnimationController _bump = AnimationController(vsync: this, duration: const Duration(milliseconds: 360));
+
+  @override
+  void initState() {
+    super.initState();
+    CoverFlight._player = this;
+  }
+
+  @override
+  void dispose() {
+    if (CoverFlight._player == this) CoverFlight._player = null;
+    _bump.dispose();
+    super.dispose();
+  }
+
+  Rect? get rect => CoverFlight._rectOf(context);
+
+  void bump() => _bump.forward(from: 0);
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _bump,
+    builder: (context, child) => Transform.scale(scale: 1 + 0.14 * math.sin(math.pi * _bump.value), child: child),
+    child: widget.child,
+  );
 }
