@@ -82,9 +82,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
   String get currentUserName => _session.currentUser?.username ?? '';
   String get currentUserRole => Localizer.get(isAdmin ? 'RoleAdmin' : 'RoleUser');
 
-  /// What the session is doing, in a sentence; empty once connected, and "Ready" before anything happened.
-  String get statusMessage =>
-      _session.statusMessage ?? (_session.state == ServerConnectionState.connected ? '' : Localizer.get('StatusReady'));
+  /// What the session is doing, in a sentence; empty while there is nothing to tell (its badge says how it stands).
+  String get statusMessage => _session.statusMessage ?? '';
 
   String get serverStatusBadge => Localizer.get(switch (_session.state) {
     ServerConnectionState.connected => isLoggedIn ? 'BadgeConnected' : 'BadgeOnline',

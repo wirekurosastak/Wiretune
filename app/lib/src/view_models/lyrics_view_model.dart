@@ -74,8 +74,8 @@ class LyricsViewModel extends ChangeNotifier {
   /// True when there are neither lyrics nor a search in progress.
   bool get showEmptyState => !hasLyrics && !isLoading;
 
-  /// Why there are no lyrics, in the active language.
-  String get emptyText => lookupFailed
+  /// Why there are no lyrics (under "No lyrics"), in the active language.
+  String get emptyHint => lookupFailed
       ? Localizer.get('LyricsLookupFailed')
       : Localizer.get(isOnlineEnabled && online != null ? 'NoLyrics' : 'NoLyricsInTags');
 

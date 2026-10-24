@@ -177,8 +177,9 @@ class _TrackSliverState extends State<TrackSliver> {
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
-    // The rows follow the player (the playing track) and the downloads (their states, not their every byte).
-    final listenable = Listenable.merge([vm.player, vm.downloads.states]);
+    // The rows follow what plays (the playing track's mark), the favourites (the hearts) and the downloads (their
+    // states, not their every byte).
+    final listenable = Listenable.merge([vm.player.nowPlaying, vm.favorites, vm.downloads.states]);
     return SliverWidthBuilder(
       builder: (context, width) {
         // The desktop layout always draws the table; the phone layout draws rows.

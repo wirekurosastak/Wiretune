@@ -186,7 +186,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
       backText: context.tr('NavPlaylists'),
       menu: menu.topBarButton(),
       child: CustomScrollView(
-        key: PageStorageKey('playlist-${playlist.id}'),
+        key: PageStorageKey('playlist-${playlist.id}-${playlists.pageVisit}'),
         slivers: [
           PinnedTitleBar.room,
           SliverToBoxAdapter(

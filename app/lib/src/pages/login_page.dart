@@ -225,8 +225,10 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(server.statusMessage, style: TextStyle(fontSize: 12, color: colors.textMuted)),
+            if (server.statusMessage.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(server.statusMessage, style: TextStyle(fontSize: 12, color: colors.textMuted)),
+            ],
           ],
         ),
       ),
@@ -311,8 +313,10 @@ class _LoginPageState extends State<LoginPage> {
         const SizedBox(height: 8),
         LinearProgressIndicator(minHeight: 3, color: colors.palette.cyan),
       ],
-      const SizedBox(height: 6),
-      Text(server.statusMessage, style: TextStyle(fontSize: 11, color: colors.textMuted)),
+      if (server.statusMessage.isNotEmpty) ...[
+        const SizedBox(height: 6),
+        Text(server.statusMessage, style: TextStyle(fontSize: 11, color: colors.textMuted)),
+      ],
     ];
     return [
       ...field,

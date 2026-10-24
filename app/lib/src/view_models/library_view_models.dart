@@ -195,6 +195,10 @@ int compareFormatQuality(AudioFormat a, AudioFormat b) {
 mixin DetailOrigin on ChangeNotifier {
   void Function(NavWaveDirection direction)? onNavWave;
 
+  /// How many times the page has been opened anew, not returned to (by Back from a page it led to): the page keeps its
+  /// place in the list for a visit, so a new one starts at its top.
+  int pageVisit = 0;
+
   /// What happens when the detail page is closed (returning to the search, another detail page or a tab).
   void Function()? returnAction;
   String Function()? _backTextSource;
@@ -345,6 +349,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   ]) {
     if (album == null) return;
     _setOrigin(backTextSource, onReturn);
+    if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
     selectedAlbum = album;
     isAlbumDetailOpen = true;
     if (waveDirection != null) onNavWave?.call(waveDirection);
@@ -487,6 +492,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   ]) {
     if (artist == null) return;
     _setOrigin(backTextSource, onReturn);
+    if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
     _showArtist(artist, waveDirection);
     notifyListeners();
   }
@@ -750,8 +756,12 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     _refreshSelectedTracks();
   }
 
+  /// How many times a playlist's page has been opened: it keeps its place in the list for a visit.
+  int pageVisit = 0;
+
   void openPlaylist(Playlist? playlist) {
     if (playlist == null) return;
+    pageVisit++;
     _select(playlist);
     isPlaylistDetailOpen = true;
     onNavWave?.call(NavWaveDirection.leftToRight);

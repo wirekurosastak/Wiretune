@@ -120,6 +120,15 @@ class PlayerViewModel extends ChangeNotifier {
   /// second rather than at every position update.
   final ValueNotifier<int> elapsedSeconds = ValueNotifier(0);
 
+  /// What plays: the current track, whether it plays and the queue it is in. Told only when one of them changes, for
+  /// what marks the playing track (rows, tiles, their Plays) and needs nothing else of the player (its volume, its
+  /// modes).
+  final ValueNotifier<({String? track, bool playing, Object queue})> nowPlaying = ValueNotifier((
+    track: null,
+    playing: false,
+    queue: const <Track>[],
+  ));
+
   /// The spectrum bands (0..1), about 30 times a second while playing.
   final ValueNotifier<Float32List> spectrum = ValueNotifier(Float32List(SpectrumAnalyzer.numBands));
 
@@ -504,8 +513,10 @@ class PlayerViewModel extends ChangeNotifier {
 
   void nextTrack() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.next)) : _nextTrackLocal();
 
-  /// Restarts the current track when more than three seconds have played, otherwise goes to the previous one.
-  void previousTrack() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.previous)) : _previousTrackLocal();
+  /// Restarts the current track when more than three seconds have played, otherwise goes to the previous one; with
+  /// [restart] false (a swipe, which shows the track before coming in) it always goes to the previous one.
+  void previousTrack({bool restart = true}) =>
+      isRemote ? _sendRemote(const RemoteCommand(RemoteAction.previous)) : _previousTrackLocal(restart: restart);
 
   void toggleShuffle() => setShuffle(!isShuffle);
 
@@ -570,11 +581,11 @@ class PlayerViewModel extends ChangeNotifier {
     }
   }
 
-  void _previousTrackLocal() {
+  void _previousTrackLocal({required bool restart}) {
     if (_playbackQueue.isEmpty) return;
     // The position shown is this device's own, except while it controls another one.
     final at = isRemote ? _localPosition : position.value;
-    if (at > const Duration(seconds: 3)) {
+    if (restart && at > const Duration(seconds: 3)) {
       _runSafe(() => _engine.seek(Duration.zero));
       return;
     }
@@ -1177,7 +1188,7 @@ class PlayerViewModel extends ChangeNotifier {
       case RemoteAction.next:
         _nextTrackLocal();
       case RemoteAction.previous:
-        _previousTrackLocal();
+        _previousTrackLocal(restart: true);
       case RemoteAction.seek:
         if (_currentTrack != null) _runSafe(() => _engine.seek(command.position));
       case RemoteAction.volume:
@@ -1275,6 +1286,7 @@ class PlayerViewModel extends ChangeNotifier {
   void notifyListeners() {
     _publish();
     _saveChanges();
+    nowPlaying.value = (track: currentTrack?.id, playing: isPlaying, queue: isRemote ? _remoteQueue : _queueTracks);
     super.notifyListeners();
   }
 
@@ -1303,6 +1315,7 @@ class PlayerViewModel extends ChangeNotifier {
     _sleepTimer?.cancel();
     position.dispose();
     elapsedSeconds.dispose();
+    nowPlaying.dispose();
     spectrum.dispose();
     super.dispose();
   }

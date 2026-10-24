@@ -686,7 +686,7 @@ class AlbumDetail extends StatelessWidget {
       backText: albums.backText,
       menu: menu.topBarButton(),
       child: CustomScrollView(
-        key: PageStorageKey('album-${album.id}'),
+        key: PageStorageKey('album-${album.id}-${albums.pageVisit}'),
         slivers: [
           PinnedTitleBar.room,
           SliverToBoxAdapter(
@@ -799,7 +799,7 @@ class ArtistDetail extends StatelessWidget {
       backText: artists.backText,
       menu: menu.topBarButton(),
       child: CustomScrollView(
-        key: PageStorageKey('artist-${artist.id}'),
+        key: PageStorageKey('artist-${artist.id}-${artists.pageVisit}'),
         slivers: [
           PinnedTitleBar.room,
           SliverToBoxAdapter(

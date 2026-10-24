@@ -369,7 +369,7 @@ class _LyricsViewState extends State<LyricsView> {
             ),
           );
         } else if (lyrics.showEmptyState) {
-          body = EmptyState(icon: Icons.lyrics_outlined, title: lyrics.emptyText);
+          body = EmptyState(icon: Icons.lyrics_outlined, title: context.tr('NoLyricsTitle'), hint: lyrics.emptyHint);
         } else if (lyrics.isSynced) {
           body = ShaderMask(
             // The lines fade out towards the top and the bottom edge.

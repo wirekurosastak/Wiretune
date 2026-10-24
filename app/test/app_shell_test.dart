@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -2041,21 +2042,49 @@ void main() {
     }
   });
 
-  testWidgets("a swipe over the mini player's track skips it, left to the next, right back", (tester) async {
-    final vm = await pumpApp(tester, const Size(400, 860));
-    vm.player.playQueue(vm.library.tracks);
-    await settle(tester);
-    final first = vm.player.currentTrack;
-    final mini = find.text(vm.player.nowPlayingTitle).last;
-    await tester.fling(mini, const Offset(-200, 0), 1000);
-    await settle(tester);
-    expect(vm.player.currentTrack, isNot(first));
-    // A short drag, let go slowly: it goes back, the track stays.
-    final second = vm.player.currentTrack;
-    await tester.drag(find.text(vm.player.nowPlayingTitle).last, const Offset(-40, 0));
-    await settle(tester);
-    expect(vm.player.currentTrack, second);
-  });
+  testWidgets(
+    "a swipe over the mini player's track skips it, the next coming in from the right, the one before from the left",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(400, 860));
+      final player = vm.player;
+      player.playQueue(vm.library.tracks);
+      await settle(tester);
+      final queue = player.queueTracks;
+      Finder inPill(Track track) => find.descendant(of: find.byType(PlayerSheetDrag), matching: find.text(track.title));
+      double left(Track track) => tester.getTopLeft(inPill(track)).dx;
+
+      // Dragged left, the next track comes in after it; let go short and slowly, they go back.
+      final finger = await tester.startGesture(tester.getCenter(inPill(queue[0])));
+      await finger.moveBy(const Offset(-20, 0));
+      await finger.moveBy(const Offset(-40, 0));
+      await tester.pump();
+      expect(inPill(queue[1]), findsOneWidget, reason: 'the next beside it');
+      expect(left(queue[1]), greaterThan(left(queue[0])));
+      await finger.up();
+      await settle(tester);
+      expect(player.currentTrack, queue[0]);
+      expect(inPill(queue[1]), findsNothing);
+
+      await tester.fling(inPill(queue[0]), const Offset(-200, 0), 1000);
+      await settle(tester);
+      expect(player.currentTrack, queue[1]);
+      await tester.fling(inPill(queue[1]), const Offset(200, 0), 1000);
+      await settle(tester);
+      expect(player.currentTrack, queue[0], reason: 'right: the one before');
+      // At the start of a queue that doesn't go round there is none before: it stays.
+      await tester.fling(inPill(queue[0]), const Offset(200, 0), 1000);
+      await settle(tester);
+      expect(player.currentTrack, queue[0]);
+
+      // Changed elsewhere (Next in the full-screen player, a headset), the new one comes in from the right too.
+      player.nextTrack();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(left(queue[1]), greaterThan(left(queue[0])), reason: 'the next coming in from the right');
+      await settle(tester);
+      expect(inPill(queue[0]), findsNothing);
+    },
+  );
 
   testWidgets("a detail page's name goes up with the page, step for step, however unevenly it is scrolled", (
     tester,
@@ -2359,6 +2388,24 @@ void main() {
     }
   });
 
+  testWidgets("the rows and tiles follow what plays, not the rest of the player (its volume)", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final built = <String, int>{};
+    vm.player.playQueue(vm.library.tracks);
+    await tester.runAsync(vm.player.pause);
+    for (final (section, item) in [(AppSection.tracks, '_TableRow'), (AppSection.albums, 'CoverFlightSource')]) {
+      vm.navigateTo(section);
+      await settle(tester);
+      debugOnRebuildDirtyWidget = (element, _) =>
+          built.update(element.widget.runtimeType.toString(), (n) => n + 1, ifAbsent: () => 1);
+      built.clear();
+      vm.player.setVolume(vm.player.volume - 5);
+      await tester.pump();
+      debugOnRebuildDirtyWidget = null;
+      expect(built[item] ?? 0, 0, reason: '$section: a volume change');
+    }
+  });
+
   testWidgets("a scrolled table or grid builds only the rows and tiles that come into view", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900), () async {
       final library = createLibrary([
@@ -2389,6 +2436,111 @@ void main() {
       await finger.up();
       expect(built[item] ?? 0, lessThan(most), reason: '$section: not every one at every step');
     }
+  });
+
+  testWidgets("an artist opened again starts at the top; one come back to from its album keeps its place", (
+    tester,
+  ) async {
+    for (final size in const [Size(1400, 900), Size(400, 860)]) {
+      final vm = await pumpApp(tester, size, () async {
+        final library = createLibrary([
+          for (var a = 1; a <= 6; a++)
+            for (var t = 1; t <= 8; t++)
+              TestSupport.makeTrack('$a-$t', 'Song $a.$t', artist: 'Miles Davis', album: 'Album $a', trackNumber: t),
+        ]);
+        library.initialize();
+        return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      });
+      double scrolled() => tester
+          .state<ScrollableState>(
+            find.descendant(of: find.byType(CustomScrollView).first, matching: find.byType(Scrollable)).first,
+          )
+          .position
+          .pixels;
+      final artist = vm.library.artists.single;
+      vm.navigateTo(AppSection.artists);
+      await settle(tester);
+      vm.openArtist(artist);
+      await settle(tester);
+      await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -400));
+      await settle(tester);
+      final place = scrolled();
+      expect(place, greaterThan(0));
+
+      // To one of its albums and Back: where it was.
+      vm.openAlbum(vm.library.albums.first);
+      await settle(tester);
+      vm.albums.closeAlbumDetail();
+      await settle(tester);
+      expect(vm.artists.isArtistDetailOpen, isTrue);
+      expect(scrolled(), closeTo(place, 1), reason: '$size: come back to');
+
+      // Closed, and opened again: at its top.
+      vm.artists.closeArtistDetail();
+      await settle(tester);
+      vm.openArtist(artist);
+      await settle(tester);
+      expect(scrolled(), 0, reason: '$size: opened anew');
+    }
+  });
+
+  testWidgets("a computer's window with nothing playing comes to rest: nothing animates on its own", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    await tester.runAsync(vm.player.pause);
+    // Fails with a timeout while anything still asks for frames.
+    await tester.pumpAndSettle();
+    expect(tester.binding.transientCallbackCount, 0);
+  });
+
+  testWidgets("a cover flying across the screen is blurred along its way, and sharp as it slows to land", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+      final library = createLibrary([
+        for (var a = 1; a <= 40; a++) TestSupport.makeTrack('$a', 'Song $a', album: 'Album $a'),
+      ]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    });
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    final blur = find.byWidgetPredicate((widget) => widget.runtimeType.toString() == '_MotionBlur');
+    int copies() {
+      var layers = 0;
+      expect(
+        blur,
+        paints..everything((method, arguments) {
+          if (method == #saveLayer) layers++;
+          return true;
+        }),
+      );
+      return layers == 0 ? 1 : layers - 1; // the copies' own layers, in the one that holds them
+    }
+
+    // The tile furthest from the page's artwork, at the top left.
+    final tiles = find.byType(CoverFlightSource).evaluate().toList()
+      ..sort(
+        (a, b) => (b.renderObject as RenderBox)
+            .localToGlobal(Offset.zero)
+            .distance
+            .compareTo((a.renderObject as RenderBox).localToGlobal(Offset.zero).distance),
+      );
+    await tester.tap(find.byElementPredicate((element) => element == tiles.first));
+    // Frame by frame at 60 fps, from its first (the frame after the page's), while it flies.
+    final frames = <int>[];
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 17));
+    while (blur.evaluate().isNotEmpty && frames.length < 60) {
+      frames.add(copies());
+      await tester.pump(const Duration(milliseconds: 17));
+    }
+    expect(frames.reduce(math.max), greaterThan(4), reason: 'at full speed: copies along the way ($frames)');
+    expect(frames.first, 1, reason: 'setting off: one sharp cover');
+    expect(frames.last, 1, reason: 'all but landed: one sharp cover');
+    await settle(tester);
+    expect(blur, findsNothing);
   });
 
   testWidgets("a page opened by a link sends its artwork back to its tile when it closes", (tester) async {

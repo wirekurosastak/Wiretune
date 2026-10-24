@@ -982,9 +982,13 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   }
 
   // Found from here, not from the header: far down the page the header isn't built, and a computer's has none marked.
+  // From far down it jumps to a screen from the top and glides the rest, as the phones' own lists do: gliding the whole
+  // way would move it thousands of pixels a frame, building every row it passes.
   void _scrollToTop() {
     final position = _listPosition();
     if (position == null || position.pixels <= position.minScrollExtent) return;
+    final near = position.minScrollExtent + position.viewportDimension;
+    if (position.pixels > near) position.jumpTo(near);
     unawaited(
       position.animateTo(
         position.minScrollExtent,

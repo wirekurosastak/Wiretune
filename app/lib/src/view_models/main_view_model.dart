@@ -339,7 +339,7 @@ class MainViewModel extends ChangeNotifier {
   void swipeNowPlaying({required bool forward}) {
     switch (_playerSwipe) {
       case PlayerSwipe.tracks:
-        forward ? player.nextTrack() : player.previousTrack();
+        forward ? player.nextTrack() : player.previousTrack(restart: false);
       case PlayerSwipe.tabs:
         const tabs = NowPlayingTab.values;
         final index = tabs.indexOf(_nowPlayingTab) + (forward ? 1 : -1);

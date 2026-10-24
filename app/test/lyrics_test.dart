@@ -95,7 +95,7 @@ void main() {
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(await waitUntil(() => lyrics.showEmptyState), isTrue);
       expect(asked, 0);
-      expect(lyrics.emptyText, contains('Settings'));
+      expect(lyrics.emptyHint, contains('Settings'));
 
       lyrics.isOnlineEnabled = true; // switched on while the panel is open: looked up at once
       expect(await waitUntil(() => lyrics.hasLyrics), isTrue);
@@ -110,7 +110,7 @@ void main() {
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(await waitUntil(() => lyrics.showEmptyState), isTrue);
-      expect(lyrics.emptyText, 'No lyrics found for this track.');
+      expect(lyrics.emptyHint, 'None in the file, and none found online.');
       expect(lyrics.sourceText, '');
     });
 
@@ -139,7 +139,7 @@ void main() {
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
       expect(await waitUntil(() => lyrics.lookupFailed), isTrue);
       expect(lyrics.showEmptyState, isTrue);
-      expect(lyrics.emptyText, contains('Lyrics service unreachable'));
+      expect(lyrics.emptyHint, contains('Lyrics service unreachable'));
       expect(asked, 1);
 
       player.isQueueOpen = false;

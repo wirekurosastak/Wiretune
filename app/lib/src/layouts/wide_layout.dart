@@ -639,12 +639,14 @@ class _WindowButtonState extends State<_WindowButton> {
   }
 }
 
-/// The small dot of the status line, slowly fading in and out; a steady one on a phone or tablet.
+/// The small dot of the status line, slowly fading in and out while music plays, as the logo breathes; a steady one
+/// otherwise and on a phone or tablet, so that an idle window draws nothing.
 class _PulsingDot extends StatefulWidget {
-  const _PulsingDot({required this.color, required this.size});
+  const _PulsingDot({required this.color, required this.size, required this.pulsing});
 
   final Color color;
   final double size;
+  final bool pulsing;
 
   @override
   State<_PulsingDot> createState() => _PulsingDotState();
@@ -660,7 +662,23 @@ class _PulsingDotState extends State<_PulsingDot> with SingleTickerProviderState
   @override
   void initState() {
     super.initState();
-    if (!AppPlatform.current.isMobile) _controller.repeat(reverse: true);
+    _animate();
+  }
+
+  @override
+  void didUpdateWidget(_PulsingDot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _animate();
+  }
+
+  void _animate() {
+    final pulse = widget.pulsing && !AppPlatform.current.isMobile;
+    if (pulse && !_controller.isAnimating) {
+      _controller.repeat(reverse: true);
+    } else if (!pulse && _controller.isAnimating) {
+      // Back to full, then still.
+      _controller.animateTo(1, duration: const Duration(milliseconds: 300));
+    }
   }
 
   @override
@@ -969,7 +987,7 @@ class _SidebarItemState extends State<_SidebarItem> {
               type: MaterialType.transparency,
               child: InkWell(
                 autofocus: widget.autofocus,
-                borderRadius: BorderRadius.circular(Radii.card),
+                borderRadius: BorderRadius.circular(Radii.medium),
                 focusColor: color.withValues(alpha: 0.30),
                 onTap: widget.onTap,
                 child: SizedBox(
@@ -1327,7 +1345,7 @@ class _Footer extends StatelessWidget {
                   ),
                 ),
               ] else ...[
-                _PulsingDot(color: colors.palette.success, size: 6),
+                _PulsingDot(color: colors.palette.success, size: 6, pulsing: vm.player.isPlaying),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(

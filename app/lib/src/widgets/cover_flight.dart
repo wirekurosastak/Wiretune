@@ -5,6 +5,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -98,7 +100,10 @@ abstract final class CoverFlight {
     _landed.value++;
   }
 
-  static const Duration _duration = Duration(milliseconds: 380);
+  /// How long a cover takes to fly [distance] pixels: longer the further it goes, so that it moves at most about
+  /// 90 px a frame at 60 fps (the most Linux draws), where a fixed time made a flight across the screen jump.
+  static Duration _durationFor(double distance) =>
+      Duration(milliseconds: (300 + 0.12 * distance).clamp(300.0, 520.0).round());
 
   /// A press opens the page within this long, or the cover doesn't fly.
   static const Duration _pressToOpen = Duration(milliseconds: 1500);
@@ -111,7 +116,10 @@ abstract final class CoverFlight {
 
   /// [cover] flies from [from] to where [to] is (asked every frame: the page under it may still be settling), its
   /// corners rounding from [fromRadius] to [toRadius] (null: round, as it is), over everything in [overlay] (none: it
-  /// lands at once); then [onLanded]. With an [arc] it rises that high on the way, as if thrown.
+  /// lands at once); then [onLanded]. With an [arc] it rises that high on the way, as if thrown. It takes [duration], or
+  /// as long as its distance asks ([_durationFor]); its speed rises and falls gently (an ease in and out whose top
+  /// speed is 1.7 times the average, where a cubic one's is 2.8). Each frame shows it blurred along the way it went
+  /// since the last ([_MotionBlur]), so that it glides even where frames are few and far between.
   static void _fly(
     OverlayState? overlay,
     Widget cover, {
@@ -120,29 +128,57 @@ abstract final class CoverFlight {
     required double? fromRadius,
     required double? toRadius,
     required VoidCallback onLanded,
-    Duration duration = _duration,
+    Duration? duration,
     double arc = 0,
   }) {
     if (overlay == null || !overlay.mounted) {
       onLanded();
       return;
     }
+    // Once, from where it goes at the start: the builder runs again whenever the overlay does.
+    final time = duration ?? _durationFor(((to() ?? from).center - from.center).distance);
     late final OverlayEntry entry;
+    // When the last frame was, how far through the flight, and how much of it its blur spanned.
+    var lastAt = Duration.zero;
+    var lastProgress = 0.0;
+    var span = 16.7 / time.inMilliseconds;
     entry = OverlayEntry(
       builder: (context) => TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
-        duration: duration,
-        curve: Curves.easeInOutCubic,
+        duration: time,
         onEnd: () {
           entry.remove();
           entry.dispose();
           onLanded();
         },
-        builder: (context, t, child) {
-          final radius = fromRadius == null || toRadius == null ? null : ui.lerpDouble(fromRadius, toRadius, t)!;
+        builder: (context, progress, child) {
+          final target = to() ?? from;
+          Rect at(double progress) {
+            final t = Curves.easeInOut.transform(progress.clamp(0.0, 1.0));
+            return Rect.lerp(from, target, t)!.shift(Offset(0, -arc * math.sin(math.pi * t)));
+          }
+
+          // The blur spans a frame's time, centred on now: as long as the last frame came before this one (one
+          // frame at 60 fps for the first, or after frames stopped coming for a while; built again within a frame,
+          // what it was).
+          final now = SchedulerBinding.instance.currentFrameTimeStamp;
+          final gap = now - lastAt;
+          if (gap > Duration.zero) {
+            span = lastAt == Duration.zero || gap > const Duration(milliseconds: 50)
+                ? 16.7 / time.inMilliseconds
+                : progress - lastProgress;
+            lastAt = now;
+            lastProgress = progress;
+          }
+          final rect = at(progress);
+          final radius = fromRadius == null || toRadius == null ? null : ui.lerpDouble(fromRadius, toRadius, progress)!;
           return Positioned.fromRect(
-            rect: Rect.lerp(from, to() ?? from, t)!.shift(Offset(0, -arc * math.sin(math.pi * t))),
-            child: radius == null ? child! : ClipRRect(borderRadius: BorderRadius.circular(radius), child: child),
+            rect: rect,
+            child: _MotionBlur(
+              from: at(progress - span / 2).shift(-rect.topLeft),
+              to: at(progress + span / 2).shift(-rect.topLeft),
+              child: radius == null ? child! : ClipRRect(borderRadius: BorderRadius.circular(radius), child: child),
+            ),
           );
         },
         child: IgnorePointer(child: cover),
@@ -413,4 +449,78 @@ class _CoverFlightLandingState extends State<CoverFlightLanding> with SingleTick
     builder: (context, child) => Transform.scale(scale: 1 + 0.14 * math.sin(math.pi * _bump.value), child: child),
     child: widget.child,
   );
+}
+
+/// Its child, painted as the average of where it is over a frame's time: from [from] to [to] (where it is then, by its
+/// own box), as a film camera's shutter blurs what moves while it is open. A cover crossing the screen in a few dozen
+/// frames then glides instead of jumping from one place to the next; one hardly moving is painted once, sharp.
+class _MotionBlur extends SingleChildRenderObjectWidget {
+  const _MotionBlur({required this.from, required this.to, required super.child});
+
+  final Rect from;
+  final Rect to;
+
+  @override
+  _RenderMotionBlur createRenderObject(BuildContext context) => _RenderMotionBlur(from, to);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderMotionBlur renderObject) => renderObject
+    ..from = from
+    ..to = to;
+}
+
+class _RenderMotionBlur extends RenderProxyBox {
+  _RenderMotionBlur(this._from, this._to);
+
+  /// How far apart the copies the blur is made of may be, in pixels: closer than the eye tells apart in a moving
+  /// cover.
+  static const double _step = 4;
+
+  /// The most copies a frame paints: a cover moving further than this many steps a frame is blurred in coarser
+  /// steps.
+  static const int _copies = 12;
+
+  Rect _from;
+  set from(Rect value) {
+    if (value == _from) return;
+    _from = value;
+    markNeedsPaint();
+  }
+
+  Rect _to;
+  set to(Rect value) {
+    if (value == _to) return;
+    _to = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null) return;
+    final moved = math.max((_to.topLeft - _from.topLeft).distance, (_to.bottomRight - _from.bottomRight).distance);
+    final copies = (moved / _step).ceil().clamp(1, _copies);
+    // Painted more than once only when the child is a plain picture (a cover is); layers can't be.
+    if (copies == 1 || child.needsCompositing) {
+      context.paintChild(child, offset);
+      return;
+    }
+    final canvas = context.canvas;
+    final bounds = _from.expandToInclude(_to).shift(offset).inflate(1);
+    // Each copy adds its share, so that together they make the average, see-through where only some of them are.
+    final share = Paint()
+      ..blendMode = BlendMode.plus
+      ..color = Color.fromRGBO(0, 0, 0, 1 / copies);
+    canvas.saveLayer(bounds, Paint());
+    for (var i = 0; i < copies; i++) {
+      final rect = Rect.lerp(_from, _to, (i + 0.5) / copies)!;
+      canvas
+        ..saveLayer(bounds, share)
+        ..translate(offset.dx + rect.left, offset.dy + rect.top)
+        ..scale(rect.width / size.width, rect.height / size.height);
+      context.paintChild(child, Offset.zero);
+      canvas.restore();
+    }
+    canvas.restore();
+  }
 }

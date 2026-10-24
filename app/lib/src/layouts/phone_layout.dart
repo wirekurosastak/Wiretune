@@ -5,9 +5,10 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
+import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
@@ -17,6 +18,7 @@ import '../pages/search_page.dart';
 import '../pages/section_page.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
+import '../view_models/player_view_model.dart';
 import '../widgets/ambient.dart';
 import '../widgets/cover_flight.dart';
 import '../widgets/cover_image.dart';
@@ -636,13 +638,11 @@ class _MiniPlayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final player = vm.player;
-    final colors = context.colors;
 
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        final track = player.currentTrack;
-        if (track == null) return const SizedBox.shrink();
+        if (player.currentTrack == null) return const SizedBox.shrink();
 
         // Room above it, as in TIDAL's pill, under the pill's rounded top.
         return Padding(
@@ -659,73 +659,13 @@ class _MiniPlayer extends StatelessWidget {
                   child: Row(
                     children: [
                       Expanded(
-                        child: _SkipSwipe(
-                          onNext: player.nextTrack,
-                          onPrevious: player.previousTrack,
-                          child: InkWell(
-                            onTap: vm.openNowPlaying,
-                            child: Padding(
+                        child: InkWell(
+                          onTap: vm.openNowPlaying,
+                          child: _SkipSwipe(
+                            player: player,
+                            builder: (context, track, {required current}) => Padding(
                               padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
-                              child: Row(
-                                children: [
-                                  // The lamp the full-screen player pours out of, where queued music lands.
-                                  CoverFlightLanding(
-                                    radius: Radii.small,
-                                    child: DecoratedBox(
-                                      key: PlayerSheetScope.maybeOf(context)?.lamp,
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(Radii.small),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: colors.palette.shadow,
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 3),
-                                          ),
-                                        ],
-                                      ),
-                                      child: CoverImage(
-                                        path: track.coverArtPath,
-                                        size: _coverSize,
-                                        radius: Radii.small,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          player.nowPlayingTitle,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: -0.2,
-                                            color: colors.textMain,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 1),
-                                        if (player.isRemote && !player.hasError)
-                                          const PlayingOnLabel(fontSize: 11.5)
-                                        else
-                                          Text(
-                                            player.hasError ? player.errorMessage! : player.nowPlayingArtist,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w500,
-                                              color: player.hasError ? colors.danger : colors.textMuted,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              child: _MiniTrack(track: track, current: current),
                             ),
                           ),
                         ),
@@ -747,25 +687,122 @@ class _MiniPlayer extends StatelessWidget {
   }
 }
 
-/// A swipe left or right over the mini player's track (the cover and the titles), as in TIDAL and Spotify: the track
-/// follows the finger, and let go past a third of the way, or flung, it goes on out and the next (left) or the previous
-/// (right) comes in from the other side; else it goes back. A screen reader, which takes the swipes for itself, offers
-/// Next and Previous as its actions.
-class _SkipSwipe extends StatefulWidget {
-  const _SkipSwipe({required this.onNext, required this.onPrevious, required this.child});
+/// A track in the mini player: its cover and titles. The [current] one is where the full-screen player pours out
+/// of and queued music lands, and says what is wrong or where it plays; the one beside it while it changes, only
+/// what it is.
+class _MiniTrack extends StatelessWidget {
+  const _MiniTrack({required this.track, required this.current});
 
-  final VoidCallback onNext;
-  final VoidCallback onPrevious;
-  final Widget child;
+  final Track track;
+  final bool current;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.vm.player;
+    final colors = context.colors;
+    Widget cover = DecoratedBox(
+      key: current ? PlayerSheetScope.maybeOf(context)?.lamp : null,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(Radii.small),
+        boxShadow: [BoxShadow(color: colors.palette.shadow, blurRadius: 8, offset: const Offset(0, 3))],
+      ),
+      child: CoverImage(path: track.coverArtPath, size: _MiniPlayer._coverSize, radius: Radii.small),
+    );
+    if (current) cover = CoverFlightLanding(radius: Radii.small, child: cover);
+    final error = current && player.hasError;
+    return Row(
+      children: [
+        cover,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                current ? player.nowPlayingTitle : track.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                  color: colors.textMain,
+                ),
+              ),
+              const SizedBox(height: 1),
+              if (current && player.isRemote && !error)
+                const PlayingOnLabel(fontSize: 11.5)
+              else
+                Text(
+                  error ? player.errorMessage! : (current ? player.nowPlayingArtist : track.artist),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: error ? colors.danger : colors.textMuted,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The mini player's track as one of the queue's in a row, as in TIDAL and Spotify: a swipe left or right moves it with
+/// the finger, the next track (left) or the one before (right) coming in beside it, and let go past a third of the
+/// way, or flung, that one plays; else they go back. Changed any other way (it ran out, a button, another device),
+/// the new track comes in from the side it lies on in the queue too, so the pill shows which way it can be swiped. A
+/// screen reader, which takes the swipes for itself, offers Next and Previous as its actions.
+class _SkipSwipe extends StatefulWidget {
+  const _SkipSwipe({required this.player, required this.builder});
+
+  final PlayerViewModel player;
+
+  /// A track's part of the mini player: the one playing ([current]) or one beside it.
+  final Widget Function(BuildContext context, Track track, {required bool current}) builder;
 
   @override
   State<_SkipSwipe> createState() => _SkipSwipeState();
 }
 
 class _SkipSwipeState extends State<_SkipSwipe> with SingleTickerProviderStateMixin {
-  /// How far the track is off its place, in pixels (left when negative).
+  /// How far the playing track is off its place, in pixels (left when negative).
   late final AnimationController _offset = AnimationController.unbounded(vsync: this);
   double _width = 1;
+
+  /// The track beside the playing one while they move: on its right (the next) when [_offset] is negative, on its
+  /// left when positive.
+  Track? _beside;
+
+  /// The track last shown as playing, and whether the swipe itself changed it (it is in place already).
+  late Track? _shown = widget.player.currentTrack;
+  bool _swiped = false;
+
+  PlayerViewModel get _player => widget.player;
+
+  @override
+  void didUpdateWidget(_SkipSwipe oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final track = _player.currentTrack;
+    final previous = _shown;
+    if (track == null || identical(track, previous)) return;
+    _shown = track;
+    if (_swiped || previous == null || track.id == previous.id) {
+      _swiped = false;
+      return;
+    }
+    // Changed elsewhere: in from the side it lies on in the queue, the old one going out the other way; from the
+    // right unless it is the one before.
+    final back =
+        identical(_besideOf(track, next: true), previous) && !identical(_besideOf(track, next: false), previous);
+    _beside = previous;
+    _offset.value = back ? -_width : _width;
+    unawaited(_settle(duration: 260));
+  }
 
   @override
   void dispose() {
@@ -773,45 +810,92 @@ class _SkipSwipeState extends State<_SkipSwipe> with SingleTickerProviderStateMi
     super.dispose();
   }
 
+  /// The track after the playing one in the queue, or ([next] false) the one before; none at an end the queue doesn't
+  /// go round.
+  Track? _neighbour({required bool next}) => _besideOf(_player.currentTrack, next: next);
+
+  Track? _besideOf(Track? track, {required bool next}) {
+    final queue = _player.queueTracks;
+    final index = track == null ? -1 : queue.indexWhere((t) => identical(t, track));
+    if (index < 0) return null;
+    final at = index + (next ? 1 : -1);
+    if (at >= 0 && at < queue.length) return queue[at];
+    return _player.repeatMode == RepeatMode.all && queue.length > 1 ? queue[at % queue.length] : null;
+  }
+
+  Future<void> _settle({required int duration}) async {
+    await _offset.animateTo(
+      0,
+      duration: Duration(milliseconds: duration),
+      curve: Curves.easeOutCubic,
+    );
+    if (mounted && _offset.value == 0) setState(() => _beside = null);
+  }
+
+  void _drag(double delta) {
+    final offset = _offset.value;
+    final next = (offset + delta) < 0;
+    final beside = _neighbour(next: next);
+    // Past an end of the queue it gives, but only a little.
+    _offset.value = offset + (beside == null ? delta * 0.3 : delta);
+    if (!identical(beside, _beside)) setState(() => _beside = beside);
+  }
+
   Future<void> _release(double velocity) async {
     final offset = _offset.value;
-    final skip = velocity.abs() > 600 ? velocity.sign : (offset.abs() > _width / 3 ? offset.sign : 0.0);
-    if (skip == 0) {
-      await _offset.animateTo(0, duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic);
+    final skip = velocity.abs() > 600 ? -velocity.sign : (offset.abs() > _width / 3 ? -offset.sign : 0.0);
+    final next = skip > 0;
+    if (skip == 0 || _neighbour(next: next) == null || (velocity.abs() > 600 && velocity.sign == offset.sign * -1)) {
+      await _settle(duration: 220);
       return;
     }
-    // Out the way it went, the other track in from the far side.
-    await _offset.animateTo(skip * _width, duration: const Duration(milliseconds: 140), curve: Curves.easeIn);
+    // On out the way it went, the other in place.
+    await _offset.animateTo(-skip * _width, duration: const Duration(milliseconds: 160), curve: Curves.easeOut);
     if (!mounted) return;
     unawaited(HapticFeedback.lightImpact());
-    skip < 0 ? widget.onNext() : widget.onPrevious();
-    _offset.value = -skip * _width * 0.6;
-    await _offset.animateTo(0, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic);
+    _swiped = true;
+    next ? _player.nextTrack() : _player.previousTrack(restart: false);
+    _offset.value = 0;
+    setState(() => _beside = null);
   }
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       _width = constraints.maxWidth;
+      final track = _player.currentTrack;
+      if (track == null) return const SizedBox.shrink();
       final gestures = GestureDetector(
         onHorizontalDragStart: (_) => _offset.stop(),
-        onHorizontalDragUpdate: (details) => _offset.value += details.primaryDelta ?? 0,
+        onHorizontalDragUpdate: (details) => _drag(details.primaryDelta ?? 0),
         onHorizontalDragEnd: (details) => unawaited(_release(details.primaryVelocity ?? 0)),
         child: ClipRect(
           child: AnimatedBuilder(
             animation: _offset,
-            builder: (context, child) => Opacity(
-              opacity: (1 - _offset.value.abs() / _width).clamp(0.0, 1.0),
-              child: Transform.translate(offset: Offset(_offset.value, 0), child: child),
-            ),
-            child: widget.child,
+            builder: (context, _) {
+              final offset = _offset.value;
+              final beside = _beside;
+              Widget at(double x, Widget child) => Opacity(
+                opacity: (1 - x.abs() / _width).clamp(0.0, 1.0),
+                child: Transform.translate(offset: Offset(x, 0), child: child),
+              );
+              return Stack(
+                children: [
+                  if (beside != null && offset != 0)
+                    Positioned.fill(
+                      child: at(offset - offset.sign * _width, widget.builder(context, beside, current: false)),
+                    ),
+                  Positioned.fill(child: at(offset, widget.builder(context, track, current: true))),
+                ],
+              );
+            },
           ),
         ),
       );
       return Semantics(
         customSemanticsActions: {
-          CustomSemanticsAction(label: context.tr('TipNext')): widget.onNext,
-          CustomSemanticsAction(label: context.tr('TipPrevious')): widget.onPrevious,
+          CustomSemanticsAction(label: context.tr('TipNext')): _player.nextTrack,
+          CustomSemanticsAction(label: context.tr('TipPrevious')): _player.previousTrack,
         },
         child: gestures,
       );

@@ -157,6 +157,12 @@ void main() {
 
       player.previousTrack();
       expect(player.currentTrack, tracks[1]);
+
+      // A swipe shows the one before coming in: it goes there however far the track has played.
+      await driver.seek(const Duration(seconds: 10));
+      await Future<void>.delayed(Duration.zero);
+      player.previousTrack(restart: false);
+      expect(player.currentTrack, tracks[0]);
     });
 
     test('a track that ends moves on; repeat-one plays it again', () {
