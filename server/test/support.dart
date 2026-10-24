@@ -144,7 +144,7 @@ Future<(Api, AuthResponse)> login(
 
 /// Creates a regular account through the admin's client and returns a client signed in as it.
 Future<(Api, UserInfo)> registerGuest(ServerFixture server, Api admin, [String username = 'guest']) async {
-  final created = await admin.post('/api/auth/register', {'username': username, 'password': guestPassword});
+  final created = await admin.post('/api/users', {'username': username, 'password': guestPassword});
   if (created.statusCode != 200) throw StateError('register failed: ${created.statusCode}');
   final user = UserInfo.fromJson(json(created));
   final (client, _) = await login(server, username, guestPassword);

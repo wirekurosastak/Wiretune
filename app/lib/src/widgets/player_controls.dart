@@ -148,7 +148,7 @@ class _PlayButtonState extends State<PlayButton> {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) => Tooltip(
-        message: context.tr(player.isPlaying ? 'TipPause' : 'TipPlay'),
+        message: context.tr(player.isPlaying ? 'Pause' : 'Play'),
         child: AnimatedScale(
           scale: _pressed ? 0.92 : (_hover ? 1.06 : 1),
           duration: const Duration(milliseconds: 160),
@@ -437,7 +437,6 @@ class VolumeControl extends StatelessWidget {
   }
 }
 
-/// The heart of the current track.
 /// The sleep timer: a menu of times after which the music pauses (or the end of the track), and the moon lit while one
 /// is set. Its tooltip and the menu's title say when.
 class SleepTimerButton extends StatelessWidget {
@@ -509,6 +508,7 @@ class SleepTimerButton extends StatelessWidget {
   }
 }
 
+/// The heart of the current track.
 class FavoriteCurrentButton extends StatelessWidget {
   const FavoriteCurrentButton({super.key, this.size = 20, this.visualDensity});
 

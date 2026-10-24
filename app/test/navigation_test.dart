@@ -114,6 +114,41 @@ void main() {
     expect(vm.searchQuery, 'kind');
   });
 
+  test('a playlist is found by its name, and back from it returns to the results', () async {
+    final vm = await create();
+    final mix = vm.library.createPlaylist('Blue Monday');
+    vm.openSearch();
+    vm.searchQuery = 'blue';
+    expect(vm.search.matchingPlaylists.map((p) => p.name), ['Blue Monday']);
+
+    vm.openPlaylist(vm.search.matchingPlaylists.single);
+    expect(vm.selectedSection, AppSection.playlists);
+    expect(vm.playlists.selectedPlaylist?.name, 'Blue Monday');
+    expect(vm.playlists.backText, 'Search');
+
+    expect(vm.tryNavigateBack(), isTrue);
+    expect(vm.playlists.isPlaylistDetailOpen, isFalse);
+    expect(vm.isSearchOpen, isTrue);
+    expect(vm.searchQuery, 'blue');
+
+    vm.library.renamePlaylist(mix.id, 'Monday');
+    expect(vm.search.matchingPlaylists, isEmpty, reason: 'the results follow a rename');
+  });
+
+  test("an album opened on a playlist's page leads back to that page, where it was left", () async {
+    final vm = await create();
+    vm.navigateTo(AppSection.playlists);
+    vm.playlists.createPlaylist('Mix', vm.library.tracks.take(2).toList());
+    final visit = vm.playlists.pageVisit;
+
+    vm.openAlbum(vm.library.albums.first);
+    expect(vm.albums.backText, 'Mix');
+    vm.albums.closeAlbumDetail();
+    expect(vm.selectedSection, AppSection.playlists);
+    expect(vm.playlists.selectedPlaylist?.name, 'Mix');
+    expect(vm.playlists.pageVisit, visit, reason: 'returned to, not opened anew');
+  });
+
   test('an album opened from an artist leads back to that artist', () async {
     final vm = await create();
     final artist = vm.library.artists.firstWhere((a) => a.name == 'Miles Davis');

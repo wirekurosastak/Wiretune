@@ -64,12 +64,10 @@ void main() {
     expect(AudioFormat.compactSpec(QualityTier.bronze, 'MIXED'), 'MIXED');
     expect(AudioFormat.compactSpec(QualityTier.bronze, ''), 'MP3');
 
-    final hiResTrack = _lossless(96000, 24);
-    expect(hiResTrack.compactTagSpec, 'FLAC'); // in gold: the colour says hi-res
-    final cdTrack = _lossless(44100, 16);
-    expect(cdTrack.compactTagSpec, 'FLAC');
-    final mp3Track = _lossy(320);
-    expect(mp3Track.compactTagSpec, 'MP3');
+    // As a list's tag says it: a hi-res FLAC reads FLAC too, in gold.
+    expect(QualitySummary.of([_lossless(96000, 24)])!.compactSpec, 'FLAC');
+    expect(QualitySummary.of([_lossless(44100, 16)])!.compactSpec, 'FLAC');
+    expect(QualitySummary.of([_lossy(320)])!.compactSpec, 'MP3');
   });
 
   test('without a spec the tag is the tier word', () {

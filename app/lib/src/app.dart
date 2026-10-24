@@ -100,23 +100,22 @@ class _WiretuneAppState extends State<WiretuneApp> {
                   // TV remotes: the centre button and the media keys.
                   const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
                   const SingleActivator(LogicalKeyboardKey.gameButtonA): const ActivateIntent(),
-                  const SingleActivator(LogicalKeyboardKey.mediaPlayPause): const _MediaIntent(_MediaCommand.toggle),
-                  const SingleActivator(LogicalKeyboardKey.mediaPlay): const _MediaIntent(_MediaCommand.play),
-                  const SingleActivator(LogicalKeyboardKey.mediaPause): const _MediaIntent(_MediaCommand.pause),
-                  const SingleActivator(LogicalKeyboardKey.mediaStop): const _MediaIntent(_MediaCommand.stop),
-                  const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const _MediaIntent(_MediaCommand.next),
-                  const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): const _MediaIntent(
-                    _MediaCommand.previous,
+                  const SingleActivator(LogicalKeyboardKey.mediaPlayPause): const _PlayerIntent(_PlayerKey.toggle),
+                  const SingleActivator(LogicalKeyboardKey.mediaPlay): const _PlayerIntent(_PlayerKey.play),
+                  const SingleActivator(LogicalKeyboardKey.mediaPause): const _PlayerIntent(_PlayerKey.pause),
+                  const SingleActivator(LogicalKeyboardKey.mediaStop): const _PlayerIntent(_PlayerKey.stop),
+                  const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const _PlayerIntent(_PlayerKey.next),
+                  const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): const _PlayerIntent(
+                    _PlayerKey.previous,
                   ),
                   const SingleActivator(LogicalKeyboardKey.escape): const _BackIntent(),
                   if (platform.isDesktop) ..._desktopShortcuts(platform),
                 },
                 actions: {
                   ...WidgetsApp.defaultActions,
-                  _MediaIntent: CallbackAction<_MediaIntent>(onInvoke: (intent) => _runMedia(intent.command)),
                   _BackIntent: CallbackAction<_BackIntent>(onInvoke: (_) => _goBack()),
                   _SearchIntent: CallbackAction<_SearchIntent>(onInvoke: (_) => vm.focusSearch()),
-                  _PlayerKeyIntent: _PlayerKeyAction(vm),
+                  _PlayerIntent: _PlayerAction(vm),
                 },
                 home: AnnotatedRegion<SystemUiOverlayStyle>(
                   value: (light ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
@@ -181,33 +180,15 @@ class _WiretuneAppState extends State<WiretuneApp> {
     final mac = platform.isMacOS;
     SingleActivator command(LogicalKeyboardKey key) => SingleActivator(key, control: !mac, meta: mac);
     return {
-      const SingleActivator(LogicalKeyboardKey.space): const _PlayerKeyIntent(_PlayerKey.toggle),
+      const SingleActivator(LogicalKeyboardKey.space): const _PlayerIntent.typing(_PlayerKey.toggle),
       command(LogicalKeyboardKey.keyF): const _SearchIntent(),
-      command(LogicalKeyboardKey.arrowRight): const _PlayerKeyIntent(_PlayerKey.next),
-      command(LogicalKeyboardKey.arrowLeft): const _PlayerKeyIntent(_PlayerKey.previous),
-      const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): const _PlayerKeyIntent(_PlayerKey.forward),
-      const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): const _PlayerKeyIntent(_PlayerKey.back),
-      command(LogicalKeyboardKey.arrowUp): const _PlayerKeyIntent(_PlayerKey.louder),
-      command(LogicalKeyboardKey.arrowDown): const _PlayerKeyIntent(_PlayerKey.quieter),
+      command(LogicalKeyboardKey.arrowRight): const _PlayerIntent.typing(_PlayerKey.next),
+      command(LogicalKeyboardKey.arrowLeft): const _PlayerIntent.typing(_PlayerKey.previous),
+      const SingleActivator(LogicalKeyboardKey.arrowRight, shift: true): const _PlayerIntent.typing(_PlayerKey.forward),
+      const SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true): const _PlayerIntent.typing(_PlayerKey.back),
+      command(LogicalKeyboardKey.arrowUp): const _PlayerIntent.typing(_PlayerKey.louder),
+      command(LogicalKeyboardKey.arrowDown): const _PlayerIntent.typing(_PlayerKey.quieter),
     };
-  }
-
-  void _runMedia(_MediaCommand command) {
-    final player = widget.vm.player;
-    switch (command) {
-      case _MediaCommand.toggle:
-        player.togglePlayPause();
-      case _MediaCommand.play:
-        player.play();
-      case _MediaCommand.pause:
-        player.pause();
-      case _MediaCommand.stop:
-        player.stop();
-      case _MediaCommand.next:
-        player.nextTrack();
-      case _MediaCommand.previous:
-        player.previousTrack();
-    }
   }
 
   /// The view model closes a dialog, the full-screen player, a detail page or returns to the previous tab; when nothing
@@ -385,6 +366,14 @@ class _NoticeHostState extends State<_NoticeHost> {
                                           style: TextStyle(fontSize: 13, color: colors.textMain),
                                         ),
                                       ),
+                                      if (notice.undo case final undo?)
+                                        TextButton(
+                                          onPressed: () {
+                                            undo();
+                                            _dismiss();
+                                          },
+                                          child: Text(context.tr('Undo')),
+                                        ),
                                       IconButton(
                                         tooltip: context.tr('TipDismissNotice'),
                                         onPressed: _dismiss,
@@ -455,14 +444,6 @@ class _StartupErrorPage extends StatelessWidget {
   }
 }
 
-enum _MediaCommand { toggle, play, pause, stop, next, previous }
-
-class _MediaIntent extends Intent {
-  const _MediaIntent(this.command);
-
-  final _MediaCommand command;
-}
-
 class _BackIntent extends Intent {
   const _BackIntent();
 }
@@ -471,17 +452,20 @@ class _SearchIntent extends Intent {
   const _SearchIntent();
 }
 
-enum _PlayerKey { toggle, next, previous, forward, back, louder, quieter }
+enum _PlayerKey { toggle, play, pause, stop, next, previous, forward, back, louder, quieter }
 
-class _PlayerKeyIntent extends Intent {
-  const _PlayerKeyIntent(this.key);
+/// What a key asks of the player. A [typing] key (Space, the arrows) belongs to a text field while one has the focus.
+class _PlayerIntent extends Intent {
+  const _PlayerIntent(this.key) : typing = false;
+  const _PlayerIntent.typing(this.key) : typing = true;
 
   final _PlayerKey key;
+  final bool typing;
 }
 
-/// A player key of the desktop: off while a text field has the focus, so the key reaches the field.
-class _PlayerKeyAction extends Action<_PlayerKeyIntent> {
-  _PlayerKeyAction(this._vm);
+/// A key's command for the player; a typing key is off while a text field has the focus, so it reaches the field.
+class _PlayerAction extends Action<_PlayerIntent> {
+  _PlayerAction(this._vm);
 
   final MainViewModel _vm;
 
@@ -489,15 +473,22 @@ class _PlayerKeyAction extends Action<_PlayerKeyIntent> {
   static const double _volumeStep = 5;
 
   @override
-  bool isEnabled(_PlayerKeyIntent intent) =>
+  bool isEnabled(_PlayerIntent intent) =>
+      !intent.typing ||
       FocusManager.instance.primaryFocus?.context?.findAncestorStateOfType<EditableTextState>() == null;
 
   @override
-  void invoke(_PlayerKeyIntent intent) {
+  void invoke(_PlayerIntent intent) {
     final player = _vm.player;
     switch (intent.key) {
       case _PlayerKey.toggle:
         player.togglePlayPause();
+      case _PlayerKey.play:
+        player.play();
+      case _PlayerKey.pause:
+        player.pause();
+      case _PlayerKey.stop:
+        player.stop();
       case _PlayerKey.next:
         player.nextTrack();
       case _PlayerKey.previous:

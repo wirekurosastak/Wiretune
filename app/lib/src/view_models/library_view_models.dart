@@ -601,7 +601,7 @@ List<String> playlistCovers(List<Track> tracks) {
 /// The Playlists section, its dialogs (new playlist, add to playlist, delete) and one playlist's page. The list of
 /// playlists starts with the newest; a playlist's tracks in the order they were added to it (Added ↑), the only date a
 /// playlist knows of them being their place in it.
-class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
+class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin {
   PlaylistsViewModel(this._library, this._player) {
     _unsubscribers.addAll([
       _library.playlistsChanged.listen((_) => refreshPlaylists()),
@@ -613,8 +613,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   final LibraryService _library;
   final PlayerViewModel _player;
   final List<void Function()> _unsubscribers = [];
-
-  void Function(NavWaveDirection direction)? onNavWave;
 
   /// A playlist's own order is the one its tracks were added in: Added ↑.
   @override
@@ -644,9 +642,8 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   String selectedPlaylistTotalDuration = '';
   bool isPlaylistDetailOpen = false;
 
-  // Inline renaming.
+  /// Whether the open playlist's name is being edited in place (its text field holds the new name).
   bool isEditingName = false;
-  String editingPlaylistName = '';
 
   bool get hasPlaylists => playlists.isNotEmpty || automaticPlaylists.isNotEmpty;
 
@@ -700,12 +697,13 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     final epoch = DateTime.fromMillisecondsSinceEpoch(0);
     int recent(Track a, Track b) =>
         (library.lastPlayedAt(b.id) ?? epoch).compareTo(library.lastPlayedAt(a.id) ?? epoch);
-    final most = played.where((t) => library.playCount(t.id) > 0).toList()
-      ..sort((a, b) {
-        final count = library.playCount(b.id).compareTo(library.playCount(a.id));
-        return count != 0 ? count : recent(a, b);
-      });
-    final last = played.where((t) => library.lastPlayedAt(t.id) != null).toList()..sort(recent);
+    final most = sortedBy(
+      played.where((t) => library.playCount(t.id) > 0),
+      (a, b) => library.playCount(a.id).compareTo(library.playCount(b.id)),
+      descending: true,
+      thenBy: recent,
+    );
+    final last = sortedBy(played.where((t) => library.lastPlayedAt(t.id) != null), recent);
     Playlist list(String id, String key, List<Track> tracks) => Playlist(
       id: id,
       name: Localizer.get(key),
@@ -726,7 +724,10 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     selectedPlaylist = selectedId == null
         ? null
         : (_library.getPlaylist(selectedId) ?? automaticPlaylists.where((pl) => pl.id == selectedId).firstOrNull);
-    if (selectedPlaylist == null) isPlaylistDetailOpen = false;
+    if (selectedPlaylist == null) {
+      isPlaylistDetailOpen = false;
+      isEditingName = false;
+    }
     _refreshSelectedTracks();
     notifyListeners();
   }
@@ -756,23 +757,33 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     _refreshSelectedTracks();
   }
 
-  /// How many times a playlist's page has been opened: it keeps its place in the list for a visit.
-  int pageVisit = 0;
+  String get backText => backButtonText('NavPlaylists');
 
-  void openPlaylist(Playlist? playlist) {
+  void openPlaylist(Playlist? playlist) => openPlaylistWithOrigin(playlist, null, null, NavWaveDirection.leftToRight);
+
+  /// [backTextSource] produces the back button's label; it is asked again whenever the language changes.
+  void openPlaylistWithOrigin(
+    Playlist? playlist,
+    String Function()? backTextSource,
+    void Function()? onReturn, [
+    NavWaveDirection? waveDirection = NavWaveDirection.leftToRight,
+  ]) {
     if (playlist == null) return;
-    pageVisit++;
+    _setOrigin(backTextSource, onReturn);
+    if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
     _select(playlist);
     isPlaylistDetailOpen = true;
-    onNavWave?.call(NavWaveDirection.leftToRight);
+    if (waveDirection != null) onNavWave?.call(waveDirection);
     notifyListeners();
   }
 
   void closePlaylistDetail() {
+    final returnAction = _takeOrigin();
     if (isPlaylistDetailOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
     isPlaylistDetailOpen = false;
     _select(null);
     notifyListeners();
+    returnAction?.call();
   }
 
   /// Makes a playlist called [name] (nothing for a blank one) with [tracks] in it, and opens it.
@@ -780,7 +791,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     if (name.trim().isEmpty) return;
     final playlist = _library.createPlaylist(name);
     if (tracks.isNotEmpty) _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
-    refreshPlaylists();
     _select(_library.getPlaylist(playlist.id));
     isPlaylistDetailOpen = true;
     notifyListeners();
@@ -790,37 +800,20 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
   void addTracks(Playlist playlist, List<Track> tracks) =>
       _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
 
-  void deletePlaylist(Playlist? playlist) {
-    if (playlist == null) return;
-    _library.deletePlaylist(playlist.id);
-    if (selectedPlaylist?.id == playlist.id) {
-      _select(null);
-      isPlaylistDetailOpen = false;
-    }
-    refreshPlaylists();
-  }
+  /// The library's change closes the page of [playlist]; offline, an account's playlist stays, and the user is told.
+  void deletePlaylist(Playlist playlist) => _library.deletePlaylist(playlist.id);
 
   void startRename() {
-    final selected = selectedPlaylist;
-    if (selected == null || selected.isAutomatic) return;
-    editingPlaylistName = selected.name;
+    if (selectedPlaylist?.isAutomatic ?? true) return;
     isEditingName = true;
     notifyListeners();
   }
 
-  Future<void> confirmRenamePlaylist([String? name]) async {
-    if (name != null) editingPlaylistName = name;
+  /// Renames the open playlist to [name] (a blank one leaves it as it was) and ends the editing.
+  void confirmRenamePlaylist(String name) {
     final selected = selectedPlaylist;
-    if (selected == null || editingPlaylistName.trim().isEmpty) {
-      isEditingName = false;
-      notifyListeners();
-      return;
-    }
-    final newName = editingPlaylistName.trim();
-    if (newName != selected.name) {
-      _library.renamePlaylist(selected.id, newName);
-      selectedPlaylist = _library.getPlaylist(selected.id);
-      refreshPlaylists();
+    if (selected != null && name.trim().isNotEmpty && name.trim() != selected.name) {
+      _library.renamePlaylist(selected.id, name);
     }
     isEditingName = false;
     notifyListeners();
@@ -837,11 +830,9 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
     if (tracks.isNotEmpty) _player.playQueue(tracks);
   }
 
-  Future<void> removeTrackFromSelected(Track? track) async {
+  void removeTrackFromSelected(Track track) {
     final selected = selectedPlaylist;
-    if (track == null || selected == null) return;
-    _library.removeTrackFromPlaylist(selected.id, track.id);
-    refreshPlaylists();
+    if (selected != null) _library.removeTrackFromPlaylist(selected.id, track.id);
   }
 
   /// Whether the open playlist shows its own order (Added ↑), the only one its tracks can be moved in.
@@ -849,11 +840,9 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting {
       selectedPlaylist?.isAutomatic == false && sortField == TrackSortField.added && !isSortDescending;
 
   /// Moves the open playlist's track shown at [from] to [to] (counted after it has been taken out).
-  Future<void> moveTrack(int from, int to) async {
+  void moveTrack(int from, int to) {
     final selected = selectedPlaylist;
-    if (selected == null || !canReorder) return;
-    _library.movePlaylistTrack(selected.id, from, to);
-    refreshPlaylists();
+    if (selected != null && canReorder) _library.movePlaylistTrack(selected.id, from, to);
   }
 
   @override

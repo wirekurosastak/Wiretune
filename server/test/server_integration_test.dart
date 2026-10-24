@@ -115,14 +115,14 @@ void main() {
   test('the admin policy protects registration and scanning', () async {
     final (admin, _) = await setupAdmin(server);
 
-    final register = await admin.post('/api/auth/register', {'username': 'guest', 'password': guestPassword});
+    final register = await admin.post('/api/users', {'username': 'guest', 'password': guestPassword});
     expect(register.statusCode, 200);
     expect(UserInfo.fromJson(json(register)).isAdmin, isFalse);
-    expect((await admin.post('/api/auth/register', {'username': 'GUEST', 'password': guestPassword})).statusCode, 409);
+    expect((await admin.post('/api/users', {'username': 'GUEST', 'password': guestPassword})).statusCode, 409);
 
     final (guest, _) = await login(server, 'Guest', guestPassword);
     expect((await guest.post('/api/library/scan')).statusCode, 403);
-    expect((await guest.post('/api/auth/register', {'username': 'x', 'password': 'xxxxxxxxxx'})).statusCode, 403);
+    expect((await guest.post('/api/users', {'username': 'x', 'password': 'xxxxxxxxxx'})).statusCode, 403);
     expect((await guest.get('/api/users')).statusCode, 403);
     expect((await guest.get('/api/tracks')).statusCode, 200);
 
@@ -139,7 +139,7 @@ void main() {
   test('a deleted user loses access at once', () async {
     final (admin, _) = await setupAdmin(server);
     final created = UserInfo.fromJson(
-      json(await admin.post('/api/auth/register', {'username': 'guest', 'password': guestPassword})),
+      json(await admin.post('/api/users', {'username': 'guest', 'password': guestPassword})),
     );
     final (guest, _) = await login(server, 'guest', guestPassword, rememberMe: true);
     expect((await guest.get('/api/tracks')).statusCode, 200);
@@ -344,7 +344,7 @@ void main() {
 
   test('bodies over the limit are refused', () async {
     final (client, _) = await setupAdmin(server);
-    final response = await client.post('/api/auth/register', {'username': 'big', 'password': 'x' * (70 * 1024)});
+    final response = await client.post('/api/users', {'username': 'big', 'password': 'x' * (70 * 1024)});
     expect(response.statusCode, 413);
     final invalid = await http.post(Uri.parse('${server.baseUrl}/api/auth/login'), body: '{not json');
     expect(invalid.statusCode, 400);

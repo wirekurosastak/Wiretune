@@ -212,6 +212,15 @@ void main() {
     expect(driver.state, PlaybackState.playing);
   });
 
+  test("a repeat mode another device asks for holds for the next track's gapless start too", () async {
+    player.playQueue(tracks, tracks[0]);
+    await pumpEventQueue();
+    expect(driver.nextSource, tracks[1].filePath);
+    hub.command('desk', const RemoteCommand(RemoteAction.repeat, repeat: RepeatMode.one));
+    await pumpEventQueue();
+    expect(driver.nextSource, tracks[0].filePath, reason: 'repeat one: the same track again');
+  });
+
   test('choosing another device while music plays moves the music there; coming back takes it over again', () async {
     player.playQueue(tracks, tracks[1]);
     await driver.seek(const Duration(seconds: 30));

@@ -241,7 +241,7 @@ void main() {
       expect((mp3.format.codec, mp3.format.isLossless, mp3.format.bitsPerSample), ('MP3', false, 0));
 
       expect(await MetadataScanner.readLyrics(path('t.flac')), 'la la la');
-      expect(await MetadataScanner().extractCoverArt(path('t.m4a')), File(path('cover.png')).readAsBytesSync());
+      expect(await MetadataScanner.extractCoverArt(path('t.m4a')), File(path('cover.png')).readAsBytesSync());
     });
   });
 

@@ -6,7 +6,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 /// HMAC-SHA256 JSON Web Tokens: the header `{"alg":"HS256","typ":"JWT"}` and base64url without padding. The server only
-/// verifies tokens it signed itself, so [verify] checks the signature, the audience and the expiry, and nothing else.
+/// verifies tokens it signed itself, so [verifySigned] checks the signature and the audience, [isExpired] the expiry,
+/// and nothing else.
 class Jwt {
   Jwt(String secret) : _key = utf8.encode(secret);
 
@@ -16,13 +17,6 @@ class Jwt {
     final header = _encode(utf8.encode(jsonEncode({'alg': 'HS256', 'typ': 'JWT'})));
     final payload = _encode(utf8.encode(jsonEncode(claims)));
     return '$header.$payload.${_encode(_signature('$header.$payload'))}';
-  }
-
-  /// The claims of [token] when it carries this key's signature, its `aud` is one of [audiences] and its `exp` is still
-  /// ahead of [now]; null otherwise.
-  Map<String, Object?>? verify(String token, {required Set<String> audiences, DateTime? now}) {
-    final claims = verifySigned(token, audiences: audiences);
-    return claims != null && !isExpired(claims, now: now) ? claims : null;
   }
 
   /// The claims of [token] when it carries this key's signature, its `aud` is one of [audiences] and it has an `exp`,

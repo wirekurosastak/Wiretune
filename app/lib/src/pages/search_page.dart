@@ -14,7 +14,7 @@ import '../widgets/cover_image.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
 
-/// The results of the search: the best match beside the matching tracks, then the artists and the albums.
+/// The results of the search: the best match beside the matching tracks, then the artists, the albums and the playlists.
 class SearchResults extends StatelessWidget {
   const SearchResults({super.key});
 
@@ -27,7 +27,7 @@ class SearchResults extends StatelessWidget {
     return ListenableBuilder(
       listenable: search,
       builder: (context, _) {
-        if (!search.isSearchActive) {
+        if (!search.hasQuery) {
           return EmptyState(icon: Icons.search, title: context.tr('Search'));
         }
         if (!search.hasResults) {
@@ -143,6 +143,23 @@ class SearchResults extends StatelessWidget {
                     albums: search.matchingAlbums,
                     onOpen: context.vm.openAlbum,
                     onPlay: context.vm.albums.playAlbum,
+                  ),
+                ],
+                if (search.hasPlaylists) ...[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: pad,
+                      child: SectionLabel(
+                        context.tr('LabelPlaylists'),
+                        padding: const EdgeInsets.fromLTRB(4, 28, 4, 12),
+                      ),
+                    ),
+                  ),
+                  PlaylistsSliver(
+                    playlists: search.matchingPlaylists,
+                    tracksOf: context.vm.playlists.tracksOf,
+                    onOpen: context.vm.openPlaylist,
+                    onPlay: context.vm.playlists.playPlaylist,
                   ),
                 ],
                 const PageEndSpace(),

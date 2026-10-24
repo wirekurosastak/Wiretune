@@ -83,7 +83,7 @@ void main() {
       // A fresh server needs its administrator... already created by setUp, so this one signs in.
       await session.connect(server.baseUrl);
       expect(session.state, ServerConnectionState.loginRequired);
-      expect(await session.login('owner', 'wrong-password', false), Localizer.get('SessionBadCredentials'));
+      expect(await session.login('owner', 'wrong-password', false), Localizer.get('ErrorWrongCredentials'));
       expect(await session.login('OWNER', adminPassword, true), isNull);
       expect(session.state, ServerConnectionState.connected);
       expect(session.usesServer, isTrue);
@@ -422,6 +422,7 @@ void main() {
           '/api/auth/login' => respond(auth.toJson()),
           '/api/auth/me' => respond(auth.user.toJson()),
           '/api/tracks' => respond([TestSupport.makeTrack('s1', 'Server song').toJson()]),
+          '/api/artists/pictures' => respond(<String, String>{}),
           '/api/me/data' => respond(empty),
           _ => more(request) ?? http.Response('', 404),
         };

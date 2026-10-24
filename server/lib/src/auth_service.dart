@@ -181,16 +181,14 @@ class AuthService {
 
   UserInfo? getUser(String userId) {
     final rows = _db.connection.select(
-      'SELECT id, username, password_hash, is_admin, created_at, last_login_at FROM users WHERE id = ?',
+      'SELECT id, username, is_admin, created_at, last_login_at FROM users WHERE id = ?',
       [userId],
     );
     return rows.isEmpty ? null : _toUserInfo(rows.first);
   }
 
   List<UserInfo> getAllUsers() => _db.connection
-      .select(
-        'SELECT id, username, password_hash, is_admin, created_at, last_login_at FROM users ORDER BY username ASC',
-      )
+      .select('SELECT id, username, is_admin, created_at, last_login_at FROM users ORDER BY username ASC')
       .map(_toUserInfo)
       .toList();
 
@@ -225,7 +223,8 @@ class AuthService {
     final rows = _db.connection.select('SELECT username, is_admin, token_version FROM users WHERE id = ?', [id]);
     if (rows.isEmpty) return const TokenCheck.refused(ErrorCodes.accountRemoved);
     final row = rows.first;
-    // Tokens from before token versions existed carry none, which stands for the first one.
+    // Tokens signed before token versions (added 2026-10-11) carry none, which stands for the first one. They last
+    // 90 days at most, so once the server has issued versions that long, this can expect one.
     final version = claims['ver'];
     if ((version is int ? version : 0) != row['token_version']) {
       return const TokenCheck.refused(ErrorCodes.passwordChanged);

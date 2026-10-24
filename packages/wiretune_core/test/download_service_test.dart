@@ -47,6 +47,7 @@ class FakeServer {
     }
     if (path == '/api/auth/me') return json(UserInfo('u1', 'owner', true, DateTime.utc(2026), null).toJson());
     if (path == '/api/tracks') return json([for (final (t, _) in tracks.values) t.toJson()]);
+    if (path == '/api/artists/pictures') return json({});
     if (path == '/api/me/data') {
       return json(UserDataSnapshot(List.of(favorites), const [], List.of(playlists)).toJson());
     }
@@ -221,7 +222,7 @@ void main() {
     expect(tokenRequests, 1);
   });
 
-  test("an artist's albums are downloaded, also one that arrives later; unmarking deletes them", () async {
+  test("an artist's albums are downloaded, also one that arrives later; removing the download deletes them", () async {
     server
       ..add(serverTrack('a1', 'One', 'Album A'), audio(1))
       ..add(serverTrack('b1', 'Two', 'Album B'), audio(2))
@@ -274,7 +275,7 @@ void main() {
     library.toggleFavorite('t3');
     await until(() => !File(t3Copy).existsSync());
 
-    // A single track that is also in the playlist keeps its copy when the playlist is unmarked.
+    // A single track that is also in the playlist keeps its copy when the playlist's download is removed.
     downloads.setTrackDownloaded('t2', true);
     downloads.setPlaylistDownloaded('p1', false);
     await settle();
@@ -382,7 +383,7 @@ void main() {
     expect(asksForT2(), hasLength(2));
   });
 
-  test('marks made while the server is out of reach wait for it', () async {
+  test('downloads chosen while the server is out of reach wait for it', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
     final repo = testRepository();
     (await signedIn(repo: repo)).close();
@@ -403,7 +404,7 @@ void main() {
     expect(player.downloads.isWaitingForServer, isFalse);
   });
 
-  test('the marks and the copies survive a restart, with nothing downloaded twice', () async {
+  test('what was chosen and the copies survive a restart, with nothing downloaded twice', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
     final repo = testRepository();
     final first = await signedIn(repo: repo);
@@ -585,36 +586,7 @@ void main() {
     expect(again.downloads.bytesOnDisk, 50000 + pngBytes.length);
   });
 
-  test('copies of an earlier version, named by hashes, move into place instead of being downloaded again', () async {
-    final track = serverTrack('t1', 'Song', 'Album');
-    server.add(track, audio(1));
-    final repo = testRepository();
-    final player = await signedIn(repo: repo);
-    final version = stableId('${track.fileSizeBytes}\u001f${track.fileModifiedAt!.millisecondsSinceEpoch ~/ 1000}');
-    final legacy = File(
-      p.join(player.downloads.directory, '${stableId('track\u001ft1')}-${version.substring(0, 8)}-Song.flac'),
-    )..createSync(recursive: true);
-    legacy.writeAsBytesSync(audio(1));
-    final stale = File(p.join(player.downloads.directory, '${'0' * 16}-${'1' * 8}.flac'))..writeAsBytesSync([1, 2]);
-    player.close();
-    players.remove(player);
-
-    final again = await Player.start(server, directory, repo: repo);
-    players.add(again);
-    again.downloads.setTrackDownloaded('t1', true);
-    await again.signIn();
-    await until(() => again.downloads.doneCount == 1);
-    expect(
-      p.relative(again.downloads.localCopy(again.library.getTrack('t1')!)!, from: again.downloads.directory),
-      p.join('Artist', 'Album', '01 - Song.flac'),
-    );
-    expect(server.streamRequests, isEmpty);
-    expect((legacy.existsSync(), stale.existsSync()), (false, false));
-    await until(() => again.downloads.localCover(again.library.getTrack('t1')!.coverArtPath!) != null);
-    expect(again.downloads.bytesOnDisk, 50000 + pngBytes.length); // what was deleted on the way was never counted
-  });
-
-  test('with sync off, a mark downloads what it covers then, and nothing more comes on its own', () async {
+  test('with sync off, a download gets what it covers then, and nothing more comes on its own', () async {
     for (final (id, number) in [('t1', 1), ('t2', 2)]) {
       server.add(serverTrack(id, 'Song $id', 'Album', number: number), audio(number));
     }
@@ -633,11 +605,11 @@ void main() {
     expect(downloads.stateOf(library.getTrack('t2')!), DownloadState.none);
     expect(server.streamRequests, hasLength(1));
 
-    // Marking the track itself is asking for it.
+    // Downloading the track itself is asking for it.
     downloads.setTrackDownloaded('t2', true);
     await until(() => downloads.doneCount == 2);
 
-    // A mark made without the server waits for it, across a restart.
+    // One chosen without the server waits for it, across a restart.
     server.add(serverTrack('t3', 'Song t3', 'Album', number: 3), audio(3));
     await player.session.refreshLibrary();
     player.close();

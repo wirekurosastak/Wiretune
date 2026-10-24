@@ -334,7 +334,6 @@ class WiretuneServer {
     _Route('POST', '/api/auth/login', Access.anonymous, _login, rateLimited: true),
 
     // Authentication (signed in)
-    _Route('POST', '/api/auth/register', Access.admin, _register),
     _Route(
       'POST',
       '/api/auth/stream-token',
@@ -347,6 +346,7 @@ class WiretuneServer {
       return user == null ? unauthorized(ErrorCodes.accountRemoved) : jsonResponse(user.toJson());
     }),
     _Route('GET', '/api/users', Access.admin, (_) => jsonResponse(auth.getAllUsers().map((u) => u.toJson()).toList())),
+    _Route('POST', '/api/users', Access.admin, _addUser),
     _Route('POST', '/api/users/{userId}/password', Access.admin, _adminResetPassword),
     _Route('DELETE', '/api/users/{userId}', Access.admin, (call) {
       final userId = call.params['userId']!;
@@ -469,8 +469,7 @@ class WiretuneServer {
 
   Future<Response> _changePassword(_Call call) async {
     final body = await call.jsonObject();
-    // A signed-in player's word is enough: the current password isn't asked for (one sent by an older player is
-    // ignored).
+    // A signed-in player's word is enough: the current password isn't asked for.
     final replacement = body?['newPassword'];
     if (replacement is! String) {
       return errorResponse(400, ErrorCodes.credentialsRequired, 'The new password is required.');
@@ -505,7 +504,7 @@ class WiretuneServer {
     return jsonResponse({'changed': true});
   }
 
-  Future<Response> _register(_Call call) async {
+  Future<Response> _addUser(_Call call) async {
     final body = await call.jsonObject();
     final username = body?['username'] is String ? body!['username'] as String : null;
     final password = body?['password'] is String ? body!['password'] as String : null;
@@ -646,7 +645,7 @@ class WiretuneServer {
       return fileResponse(request, File(coverPath), ImageFormat.mimeTypeFromPath(coverPath), headers: cache);
     }
 
-    final bytes = File(track.filePath).existsSync() ? await MetadataScanner().extractCoverArt(track.filePath) : null;
+    final bytes = File(track.filePath).existsSync() ? await MetadataScanner.extractCoverArt(track.filePath) : null;
     if (bytes == null || bytes.isEmpty) return notFound();
     return Response.ok(bytes, headers: {...cache, 'content-type': ImageFormat.mimeType(bytes)});
   }

@@ -59,14 +59,12 @@ void main() {
 
   test("the server's artists' own pictures take the place of their album covers, also after a restart", () async {
     final id = stableId('miles davis');
-    Map<String, String>? pictures = {id: 'v1'};
+    var pictures = {id: 'v1'};
     final session = await signedInSession(
       library,
       tracks: [TestSupport.makeTrack('t1', 'So What', artist: 'Miles Davis')],
       respond: (request) => request.url.path != '/api/artists/pictures'
           ? null
-          : pictures == null
-          ? http.Response('{"error":"Not found."}', 404)
           : http.Response(jsonEncode(pictures), 200, headers: {'content-type': 'application/json'}),
     );
     addTearDown(session.dispose);
@@ -81,12 +79,6 @@ void main() {
     pictures = {};
     await session.refreshLibrary();
     expect(miles(library).hasOwnPicture, isFalse);
-    // A server from before them has none.
-    pictures = {id: 'v2'};
-    await session.refreshLibrary();
-    pictures = null;
-    await session.refreshLibrary();
-    expect((miles(library).hasOwnPicture, session.state), (false, ServerConnectionState.connected));
   });
 
   test('a refresh downloads the track list and the account data only when they changed', () async {

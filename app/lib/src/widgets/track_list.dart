@@ -426,7 +426,7 @@ class _TableRowState extends State<_TableRow> {
             child: InkWell(
               borderRadius: radius,
               onTap: () => onPlay(track),
-              onSecondaryTapUp: (details) => _showTrackContextMenu(context, details.globalPosition, track, kind),
+              onSecondaryTapUp: (details) => showTrackContextMenu(context, details.globalPosition, track, kind),
               child: Row(
                 children: [
                   if (state.widget.onReorder != null)
@@ -578,8 +578,8 @@ enum TrackAction {
   hideTrack,
 }
 
-/// A right click on a table row: the row's menu, with the favourite first.
-Future<void> _showTrackContextMenu(BuildContext context, Offset position, Track track, TrackTableKind kind) async {
+/// A right click on a track's row (a table's, the queue's): the track's menu, with the favourite first.
+Future<void> showTrackContextMenu(BuildContext context, Offset position, Track track, TrackTableKind kind) async {
   final action = await showMenu<TrackAction>(
     context: context,
     position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
@@ -715,7 +715,11 @@ class TrackMenu extends StatelessWidget {
       case TrackAction.openArtist:
         vm.openArtistByName(track.primaryArtist);
       case TrackAction.hideTrack:
-        vm.library.setHidden(HiddenKind.track, track.id, !vm.library.isTrackExplicitlyHidden(track.id));
+        if (vm.library.isTrackExplicitlyHidden(track.id)) {
+          vm.library.setHidden(HiddenKind.track, track.id, false);
+        } else {
+          vm.hide(HiddenKind.track, track.id, track.title);
+        }
     }
   }
 

@@ -11,9 +11,6 @@ abstract final class WiretuneInfo {
 
   static const String sourceUrl = 'https://github.com/wirekurosastak/Wiretune';
 
-  /// The SPDX identifier of the license; NOTICE.md adds the terms its section 7 allows.
-  static const String license = 'AGPL-3.0-only';
-
   /// How Wiretune introduces itself to the services it asks (LRCLIB, Deezer).
   static const String userAgent = 'Wiretune/$version (+$sourceUrl)';
 }

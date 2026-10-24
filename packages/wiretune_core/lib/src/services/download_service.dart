@@ -35,9 +35,9 @@ enum DownloadState {
 /// Copies of server tracks kept on this device, so that they play without the server: a track, an album, an artist's
 /// albums, a playlist or the favourites at a time. What the user chose to download is kept in the settings. With sync on (the
 /// default) the copies follow it whenever the library changes: a playlist that grows gets the new track, a copy deleted
-/// outside Wiretune comes back. With sync off, marking something downloads what it covers then, and nothing more is
-/// fetched on its own. Copies are downloaded again when the server's file changes, and deleted as soon as nothing wants
-/// them any more. One file is downloaded at a time, and only while signed in.
+/// outside Wiretune comes back. With sync off, a download gets what it covers then, and nothing more is fetched on its
+/// own. Copies are downloaded again when the server's file changes, and deleted as soon as nothing wants them any more.
+/// One file is downloaded at a time, and only while signed in.
 ///
 /// A copy is a readable file in [directory], `Album artist/Album/01 - Title.flac`, its name made of the tags with
 /// anything a file system or another device could trip on taken out, so no ID or tag a server sends can lead outside
@@ -59,8 +59,7 @@ class DownloadService {
   static const Duration _lastRetry = Duration(minutes: 10);
   static const Duration _idleTimeout = Duration(seconds: 30);
 
-  // The names of earlier versions' copies (stem-version[-name].ext) and of covers (stem.ext).
-  static final RegExp _legacyCopyName = RegExp(r'^([0-9a-f]{16})-([0-9a-f]{8})(?:-[^.]+)?\.([a-z0-9]{1,8})$');
+  // The names of the covers (stem.ext).
   static final RegExp _coverName = RegExp(r'^([0-9a-f]{16})\.([a-z0-9]{1,8})$');
 
   final LibraryService _library;
@@ -280,7 +279,6 @@ class DownloadService {
     _choices = _Choices.fromJson(_decode(_library.getPreference(_choicesPreference)));
     await _loadCopies();
     await _loadCovers();
-    await _adoptLegacyCopies();
     if (!_syncModeEnabled) _dropEmptyChoices();
     _unsubscribers.addAll([
       _library.libraryChanged.listen((_) {
@@ -302,8 +300,8 @@ class DownloadService {
     _schedule();
   }
 
-  void _onListChanged(bool affectsPins) {
-    if (!affectsPins) return;
+  void _onListChanged(bool affectsChoices) {
+    if (!affectsChoices) return;
     _refreshWanted();
     changed.emit(null);
     _schedule();
@@ -345,59 +343,6 @@ class DownloadService {
       if (entity is! File || match == null) continue;
       _covers[match.group(1)!] = entity.path;
       _bytesOnDisk += await entity.length();
-    }
-  }
-
-  /// Earlier versions of Wiretune named copies by hashes (`stem-version-name.ext`), in the app's data or in this
-  /// folder, and kept the covers next to them. The copies of the present server files move into place under their
-  /// readable names; the rest, which nothing could find again, are deleted. Without a library to tell them by (before
-  /// the first sign-in) they wait.
-  Future<void> _adoptLegacyCopies() async {
-    final legacyFolders = {
-      AppPaths.fullPath(directory),
-      AppPaths.fullPath(p.join(AppPaths.getDataDirectory(), 'Downloads')),
-    };
-    final byStem = {for (final t in _library.rawTracks.where((t) => !t.isLocal)) _stem(t.id): t};
-    if (byStem.isEmpty) return;
-    for (final folder in legacyFolders) {
-      final dir = Directory(folder);
-      if (!await dir.exists()) continue;
-      await for (final entity in dir.list(followLinks: false)) {
-        final match = _legacyCopyName.firstMatch(p.basename(entity.path));
-        if (entity is! File || match == null) continue;
-        final track = byStem[match.group(1)!];
-        if (track != null && !_copies.containsKey(track.id) && match.group(2) == _version(track)) {
-          try {
-            await _placeCopy(entity.path, track);
-            continue;
-          } on FileSystemException catch (e) {
-            WiretuneLog.warn('Downloads', 'Could not move an earlier copy into place: $e');
-          }
-        }
-        await _deleteFile(entity.path);
-      }
-      final oldCovers = Directory(p.join(folder, 'covers'));
-      if (await oldCovers.exists()) {
-        await for (final entity in oldCovers.list(followLinks: false)) {
-          final match = _coverName.firstMatch(p.basename(entity.path));
-          if (entity is! File || match == null) continue;
-          if (_covers.containsKey(match.group(1))) {
-            await _deleteFile(entity.path);
-            continue;
-          }
-          try {
-            final target = p.join(_coverDirectory, p.basename(entity.path));
-            await Directory(_coverDirectory).create(recursive: true);
-            await _move(entity.path, target);
-            _covers[match.group(1)!] = target;
-            _bytesOnDisk += await File(target).length();
-          } on FileSystemException {
-            await _deleteFile(entity.path);
-          }
-        }
-        await _deleteIfEmpty(oldCovers);
-      }
-      if (folder != AppPaths.fullPath(directory)) await _deleteIfEmpty(dir);
     }
   }
 

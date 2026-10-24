@@ -25,7 +25,7 @@ class RemoteChannel {
 }
 
 /// Opens a [RemoteChannel] to [uri], signed in with [token]. Throws [RemoteRefusedException] when the server refuses
-/// the token or has no remote control.
+/// the token, or has all of the account's connections taken.
 typedef RemoteConnector = Future<RemoteChannel> Function(Uri uri, String token);
 
 class RemoteRefusedException implements Exception {
@@ -33,7 +33,7 @@ class RemoteRefusedException implements Exception {
 
   final String message;
 
-  /// The HTTP status of the refusal: 404 from a server without remote control, 401 or 403 for the token.
+  /// The HTTP status of the refusal: 401 or 403 for the token, 429 when the account's connections are all taken.
   final int? statusCode;
 
   @override
@@ -42,9 +42,6 @@ class RemoteRefusedException implements Exception {
 
 /// Why remote control isn't running although it is switched on and the session is signed in.
 enum RemoteProblem {
-  /// The server has no remote control (an older version).
-  unsupported,
-
   /// The account has as many devices connected as it may.
   tooManyDevices,
 
@@ -198,7 +195,7 @@ class RemoteClient {
         return;
       }
       _refusedFor = (url, token);
-      _setProblem(e.statusCode == 404 ? RemoteProblem.unsupported : RemoteProblem.ended);
+      _setProblem(RemoteProblem.ended);
       return;
     } catch (e) {
       _connecting = false;
@@ -292,10 +289,9 @@ class RemoteClient {
         headers: {'Authorization': 'Bearer $token'},
       ).timeout(const Duration(seconds: 15));
     } on WebSocketException catch (e) {
-      // The token turned away, or a server from before remote control: asking again would not change the answer.
+      // The token turned away (asking again would not change the answer), or the account's connections all taken.
       final status = e.httpStatusCode;
-      if (status == 401 || status == 403 || status == 404) throw RemoteRefusedException(e.message, status);
-      if (status == 429) throw RemoteRefusedException(e.message, status);
+      if (const {401, 403, 429}.contains(status)) throw RemoteRefusedException(e.message, status);
       rethrow;
     }
     socket.pingInterval = RemoteRules.pingInterval;

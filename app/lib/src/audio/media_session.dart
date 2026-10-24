@@ -273,8 +273,9 @@ class WiretuneMediaSession extends BaseAudioHandler {
             ),
         ];
       case 'playlists':
+        // As the Playlists page lists them: the most and the recently played first.
         return [
-          for (final playlist in _vm.playlists.playlists)
+          for (final playlist in _vm.playlists.allPlaylists)
             MediaItem(
               id: 'playlist:${playlist.id}',
               title: playlist.name,
@@ -301,8 +302,8 @@ class WiretuneMediaSession extends BaseAudioHandler {
     return switch (kind) {
       'album' => library.getAlbum(id)?.tracks ?? const [],
       'artist' => library.getArtist(id)?.tracks ?? const [],
-      'playlist' => switch (library.getPlaylist(id)) {
-        final p? => library.getPlaylistTracks(p),
+      'playlist' => switch (_vm.playlists.allPlaylists.where((p) => p.id == id).firstOrNull) {
+        final p? => _vm.playlists.tracksOf(p),
         null => const [],
       },
       // In the order chosen in the app (without its genre filter).

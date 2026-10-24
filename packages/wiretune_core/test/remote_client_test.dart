@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -92,25 +91,6 @@ void main() {
     expect((attempts, refused.isConnected), (1, false));
   });
 
-  test('a server from before remote control is asked once, not every minute', () async {
-    final old = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    addTearDown(() => old.close(force: true));
-    var asked = 0;
-    old.listen((request) {
-      asked++;
-      request.response
-        ..statusCode = 404
-        ..close();
-    });
-    final elsewhere = await signedInSession(library, serverUrl: 'http://127.0.0.1:${old.port}');
-    addTearDown(elsewhere.dispose);
-    final client = RemoteClient(elsewhere); // the real WebSocket
-    addTearDown(client.dispose);
-    client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-    await Future<void>.delayed(const Duration(milliseconds: 2500));
-    expect((asked, client.isConnected), (1, false));
-  });
-
   test('closed for good: replaced, too many devices or signed out, it stays away', () async {
     for (final code in [RemoteRules.closeReplaced, RemoteRules.closeTooManyDevices, RemoteRules.closeSignedOut]) {
       var connections = 0;
@@ -144,31 +124,17 @@ void main() {
     }
   });
 
-  test(
-    'a server without remote control, or one that refuses the token, is told apart; signing out forgets it',
-    () async {
-      for (final (status, problem) in [(404, RemoteProblem.unsupported), (401, RemoteProblem.ended)]) {
-        final client = RemoteClient(
-          session,
-          connector: (uri, token) async => throw RemoteRefusedException('HTTP $status', status),
-        );
-        client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-        expect(await until(() => client.problem != null), isTrue);
-        expect(client.problem, problem);
-        client.dispose();
-      }
-
-      final client = RemoteClient(
-        session,
-        connector: (uri, token) async => throw const RemoteRefusedException('HTTP 404', 404),
-      );
-      addTearDown(client.dispose);
-      client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-      expect(await until(() => client.problem == RemoteProblem.unsupported), isTrue);
-      await session.logout();
-      expect(client.problem, isNull);
-    },
-  );
+  test('a server that refuses the token says so; signing out forgets it', () async {
+    final client = RemoteClient(
+      session,
+      connector: (uri, token) async => throw const RemoteRefusedException('HTTP 401', 401),
+    );
+    addTearDown(client.dispose);
+    client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
+    expect(await until(() => client.problem == RemoteProblem.ended), isTrue);
+    await session.logout();
+    expect(client.problem, isNull);
+  });
 
   test('the word that the library changed is passed on, and so is coming back after a dropped connection', () async {
     final hub = FakeRemoteHub();

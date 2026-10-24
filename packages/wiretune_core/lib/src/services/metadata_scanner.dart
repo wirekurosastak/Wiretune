@@ -152,7 +152,7 @@ class MetadataScanner {
   static Future<String?> readLyrics(String filePath) => _readLyricsInIsolate(filePath, WiretuneLog.isolateSettings);
 
   /// The embedded cover of [filePath], else a folder image next to it, else null.
-  Future<Uint8List?> extractCoverArt(String filePath) => _extractCoverInIsolate(filePath);
+  static Future<Uint8List?> extractCoverArt(String filePath) => _extractCoverInIsolate(filePath);
 
   /// The first file named like a cover ([folderCoverNames], ignoring case) in [directory].
   static String? findFolderCover(String? directory) => _firstNamed(directory, folderCoverNames);
@@ -286,7 +286,10 @@ List<String> _enumerateAudioFiles(String root, String? skip) {
           if (!AppPaths.isPathUnderRoot(target, root)) continue;
           final type = FileSystemEntity.typeSync(entry.path);
           if (type == FileSystemEntityType.file && AudioFileTypes.isSupported(name)) files.add(entry.path);
-        } catch (_) {}
+        } on FileSystemException catch (e) {
+          // A link to nowhere, or one that may not be followed: the rest of the folder still counts.
+          WiretuneLog.debug('MetadataScanner', "Skipping the link '${entry.path}': ${e.message}");
+        }
       }
     }
   }

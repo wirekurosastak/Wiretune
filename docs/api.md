@@ -20,11 +20,11 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 | `GET /api/auth/setup-required` | anonymous | `{ "setupRequired": true }` while the server has no accounts |
 | `POST /api/auth/setup` | anonymous | Creates the first account, the administrator. Body `{ "username", "password", "setupCode" }`, the code being the one in the server's log. `200` with an `AuthResponse`, `400` for a rule violation, `403` for a missing or wrong code, `409` once set up. Rate limited |
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` for a missing field, `401` for wrong credentials. Rate limited |
-| `POST /api/auth/register` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` when the name is taken |
 | `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't get another one |
 | `POST /api/auth/change-password` | user | Body `{ "newPassword" }`; the current password isn't asked for. `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, which expires when the old one would have. `400` for a password that breaks the rules. Rate limited. Every token issued before (the caller's, other devices', stream tokens) stops working, and the account's remote-control connections close with `4401` |
 | `GET /api/auth/me` | user | The caller's `UserInfo` |
 | `GET /api/users` | admin | Every account |
+| `POST /api/users` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` when the name is taken |
 | `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions, as a change does. `200` `{ "changed": true }`, `400` for a password that breaks the rules or for your own account (change that with `change-password`), `404` for an unknown one |
 | `DELETE /api/users/{userId}` | admin | Deletes an account and its data. `400` for your own account, `404` for an unknown one |
 

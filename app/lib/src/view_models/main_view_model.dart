@@ -38,10 +38,13 @@ class DeviceCapabilities {
 /// A short message that needs no answer: a change that wasn't made, one the server turned down, something that went
 /// through. The app shows the latest for a few seconds.
 class AppNotice {
-  const AppNotice(this.message, {this.isError = false});
+  const AppNotice(this.message, {this.isError = false, this.undo});
 
   final String message;
   final bool isError;
+
+  /// Takes back what the notice tells of: its Undo button is there when this is.
+  final VoidCallback? undo;
 }
 
 /// An artist, album or track the user hid, and the name the settings list it by.
@@ -93,7 +96,7 @@ class MainViewModel extends ChangeNotifier {
       supportsLocalFolder: capabilities.supportsLocalFolder,
       requestFolderAccess: capabilities.requestFolderAccess,
     );
-    search = SearchViewModel(library, player, openAlbum, openArtist);
+    search = SearchViewModel(library, player, openAlbum, openArtist, () => playlists.allPlaylists);
 
     // The full-screen player has nothing to show once nothing is loaded.
     player.addListener(() {
@@ -159,7 +162,8 @@ class MainViewModel extends ChangeNotifier {
   /// What the app shows the user for a few seconds ([showNotice]).
   final Event<AppNotice> notices = Event<AppNotice>();
 
-  void showNotice(String message, {bool isError = false}) => notices.emit(AppNotice(message, isError: isError));
+  void showNotice(String message, {bool isError = false, VoidCallback? undo}) =>
+      notices.emit(AppNotice(message, isError: isError, undo: undo));
 
   // ── Navigation ─────────────────────────────────────────────────────────────────────────────────
 
@@ -220,6 +224,7 @@ class MainViewModel extends ChangeNotifier {
     // A page kept open is its tab's from now on, wherever it was opened from.
     albums.forgetOrigin();
     artists.forgetOrigin();
+    playlists.forgetOrigin();
     searchQuery = '';
     isSearchOpen = false;
     // The automatic playlists follow what was played since.
@@ -237,6 +242,7 @@ class MainViewModel extends ChangeNotifier {
         artists.forgetOrigin();
         artists.closeArtistDetail();
       case AppSection.playlists when playlists.isPlaylistDetailOpen:
+        playlists.forgetOrigin();
         playlists.closePlaylistDetail();
       default:
         return false;
@@ -408,11 +414,28 @@ class MainViewModel extends ChangeNotifier {
     return null;
   }
 
-  // ── Opening albums and artists from anywhere ───────────────────────────────────────────────────
+  // ── Opening albums, artists and playlists from anywhere ────────────────────────────────────────
 
-  /// What "back" does on an album or artist page opened from where the user is now: return to the search results, to
-  /// the detail page the user came from, or to the tab. [target] is the section being opened.
+  /// How many times back has returned to where a page was opened from (another tab, the search). The layouts show that
+  /// place at once, as back within a tab does: a cross-fade would show the tab left, whose page is closed by then, as
+  /// its list, and send the page's cover flying back to that list.
+  int returns = 0;
+
+  /// What "back" does on an album, artist or playlist page opened from where the user is now: return to the search
+  /// results, to the detail page the user came from, or to the tab. [target] is the section being opened.
   (String Function()?, void Function()?) _captureOrigin(AppSection target) {
+    final (backText, onReturn) = _originOf(target);
+    if (onReturn == null) return (backText, null);
+    return (
+      backText,
+      () {
+        returns++;
+        onReturn();
+      },
+    );
+  }
+
+  (String Function()?, void Function()?) _originOf(AppSection target) {
     if (_isSearchActive) {
       final activeQuery = _searchQuery;
       return (
@@ -446,13 +469,14 @@ class MainViewModel extends ChangeNotifier {
             artists.openArtistWithOrigin(returnArtist, null, null, NavWaveDirection.rightToLeft);
           },
         );
-      case AppSection.playlists when playlists.isPlaylistDetailOpen && playlists.selectedPlaylist != null:
+      case AppSection.playlists
+          when target != AppSection.playlists && playlists.isPlaylistDetailOpen && playlists.selectedPlaylist != null:
         final returnPlaylist = playlists.selectedPlaylist!;
         return (
           () => returnPlaylist.name,
           () {
             selectedSection = AppSection.playlists;
-            playlists.openPlaylist(returnPlaylist);
+            playlists.openPlaylistWithOrigin(returnPlaylist, null, null, NavWaveDirection.rightToLeft);
           },
         );
       case AppSection.favorites:
@@ -485,6 +509,16 @@ class MainViewModel extends ChangeNotifier {
     isNowPlayingOpen = false;
     isSearchActive = false;
     selectedSection = AppSection.artists;
+    notifyListeners();
+  }
+
+  void openPlaylist(Playlist? playlist) {
+    if (playlist == null) return;
+    final (backText, onReturn) = _captureOrigin(AppSection.playlists);
+    playlists.openPlaylistWithOrigin(playlist, backText, onReturn);
+    isNowPlayingOpen = false;
+    isSearchActive = false;
+    selectedSection = AppSection.playlists;
     notifyListeners();
   }
 
@@ -719,7 +753,6 @@ class MainViewModel extends ChangeNotifier {
         session.state == ServerConnectionState.offline || session.state == ServerConnectionState.connecting;
     if (!session.isLoggedIn && !waitingForServer) return Localizer.get('RemoteStatusSignedOut');
     return switch (remote.problem) {
-      RemoteProblem.unsupported => Localizer.get('RemoteStatusUnsupported'),
       RemoteProblem.tooManyDevices => Localizer.format('RemoteStatusTooManyDevices', [
         RemoteRules.maxDevicesPerAccount,
       ]),
@@ -822,6 +855,15 @@ class MainViewModel extends ChangeNotifier {
 
   void unhide(HiddenItem item) => library.setHidden(item.kind, item.id, false);
 
+  /// Hides the artist, album or track [id] and says so, naming it [name], with an Undo: a slip in a menu is one tap to
+  /// take back.
+  void hide(HiddenKind kind, String id, String name) {
+    library.setHidden(kind, id, true);
+    // Offline, an account's music can't change, and the library says why itself.
+    if (!library.hidden(kind).contains(id)) return;
+    showNotice(Localizer.format('HiddenNotice', [name]), undo: () => library.setHidden(kind, id, false));
+  }
+
   List<HiddenItem> _describeHidden() {
     final artists = library.hidden(HiddenKind.artist);
     final albums = library.hidden(HiddenKind.album);
@@ -919,6 +961,7 @@ class MainViewModel extends ChangeNotifier {
     _onlineLyrics?.close();
     _artistPictures?.close();
     searchFocusRequests.dispose();
+    tileSize.dispose();
     super.dispose();
   }
 }

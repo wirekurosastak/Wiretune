@@ -32,7 +32,9 @@ class ByteSource {
   void close() {
     try {
       _file.closeSync();
-    } catch (_) {}
+    } catch (_) {
+      // Closed already, or gone with a failed read: there is nothing left to let go of.
+    }
   }
 }
 

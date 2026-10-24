@@ -11,7 +11,7 @@ Thanks for helping out. Building is in [docs/building.md](docs/building.md); whe
   (`ServerFixture` in `server/test/support.dart`), logic in unit tests, what people see in a widget test
   (`app/test/app_shell_test.dart`). A test that needs `ffmpeg` or another tool skips itself without it (`hasTool`).
 - **Errors someone can act on.** Log with `WiretuneLog`, show a message the user can do something with, and never
-  swallow an exception.
+  swallow an exception silently: where letting one go is right (a best-effort cleanup), a comment says why.
 - **Child processes** get an argument list, never a shell string, have a timeout or a way to stop, and are killed when
   they're done.
 - **Isolates** get plain data: give `Isolate.run` a top-level or static function, never a closure.

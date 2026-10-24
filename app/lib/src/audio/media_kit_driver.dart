@@ -150,7 +150,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
           final device = int.parse(m[2]!).toString();
           found.add((card, device, names[card] ?? 'Card $card', m[3]!.trim()));
         }
-      } catch (_) {}
+      } catch (_) {
+        // Neither aplay nor the kernel's list: there are no ALSA devices to offer.
+      }
     }
     return [
       for (final (card, device, cardName, deviceName) in found)
@@ -272,7 +274,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
         final match = RegExp(r'^\s*(\d+)\s+\[([^\]]+)\]').firstMatch(line);
         if (match != null && match.group(2)!.trim() == card) return int.parse(match.group(1)!);
       }
-    } catch (_) {}
+    } catch (_) {
+      // No kernel list to look in: the name may be the number itself.
+    }
     return int.tryParse(card);
   }
 
@@ -486,7 +490,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     unawaited(() async {
       try {
         await _player.stop();
-      } catch (_) {}
+      } catch (_) {
+        // Stopped by the failure already; the card is let go of either way.
+      }
       if (generation == _generation) await _card.release();
     }());
     playbackFailed.emit(

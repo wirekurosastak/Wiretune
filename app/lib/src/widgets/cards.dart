@@ -179,7 +179,7 @@ class ListMenu {
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
       final vm = context.vm;
-      vm.library.setHidden(HiddenKind.album, album.id, true);
+      vm.hide(HiddenKind.album, album.id, album.title);
       if (vm.albums.selectedAlbum?.id == album.id) vm.albums.closeAlbumDetail();
     },
   );
@@ -198,7 +198,7 @@ class ListMenu {
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
       final vm = context.vm;
-      vm.library.setHidden(HiddenKind.artist, artist.id, true);
+      vm.hide(HiddenKind.artist, artist.id, artist.name);
       if (vm.artists.selectedArtist?.id == artist.id) vm.artists.closeArtistDetail();
     },
   );

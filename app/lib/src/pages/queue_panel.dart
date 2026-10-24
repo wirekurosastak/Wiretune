@@ -16,6 +16,7 @@ import '../widgets/buttons.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/equalizer_bars.dart';
 import '../widgets/page_parts.dart';
+import '../widgets/track_list.dart';
 
 /// The queue: jump to an entry, drag entries (or use the arrows) to reorder them, remove them. Another device's queue
 /// (remote control) shows as far as this library knows its tracks, and its changes go to that device.
@@ -128,6 +129,10 @@ class _QueueRowState extends State<_QueueRow> {
           child: InkWell(
             borderRadius: radius,
             onTap: () => player.playQueueItem(item),
+            // A right click opens the track's menu, as on a table's row; a long press doesn't (on a phone it would fight
+            // the finger).
+            onSecondaryTapUp: (details) =>
+                showTrackContextMenu(context, details.globalPosition, item.track, TrackTableKind.tracks),
             child: LayoutBuilder(
               builder: (context, constraints) => Padding(
                 padding: EdgeInsets.fromLTRB(10, phone ? 6 : 7, phone ? 0 : 10, phone ? 6 : 7),

@@ -85,8 +85,8 @@ Macs, [sign and notarize it](#macos).
 ## Android player (phone, tablet, TV, car)
 
 Install [Android Studio](https://developer.android.com/studio), which brings the Android SDK and a JDK that fits
-(without it: the [command-line tools](https://developer.android.com/studio#command-line-tools-only) and a JDK 21 such
-as [Temurin](https://adoptium.net)). Then accept the licenses and build:
+(without it: the [command-line tools](https://developer.android.com/studio#command-line-tools-only) and a JDK 17 or newer
+such as [Temurin](https://adoptium.net)). Then accept the licenses and build:
 
 ```bash
 flutter doctor --android-licenses

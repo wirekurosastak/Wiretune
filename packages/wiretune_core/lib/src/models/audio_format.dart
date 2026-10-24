@@ -71,9 +71,6 @@ class AudioFormat {
     return space > 0 ? trimmed.substring(0, space) : trimmed;
   }
 
-  /// Compact tag text suitable for small thumbnails.
-  String get compactTagSpec => compactSpec(tier, tagSpec);
-
   /// A sample rate in kHz with at most one decimal: `44.1`, `96`, `2822.4`.
   static String _khz(int sampleRate) {
     final text = (sampleRate / 1000.0).toStringAsFixed(1);

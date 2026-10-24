@@ -533,91 +533,80 @@ void main() {
     expect((service.isFavorite(id), service.playCount(id), track.addedAt), (true, 1, added));
   });
 
-  test('content hiding: tracks, albums, artists, precedence, non-destructive hierarchy, and playback', () async {
-    final repo = testRepository();
-    final service = _service(repo);
-    final t1 = Track(
-      id: 't1',
-      title: 'Song 1',
-      artist: 'Artist A',
-      album: 'Album 1',
+  group('hiding', () {
+    // Song 1 and Song 2 are Artist A's, on Album 1; Song 3 is Artist B's, on Album 2. Song 1 is a favourite.
+    Track song(int n, String artist, String album) => Track(
+      id: 't$n',
+      title: 'Song $n',
+      artist: artist,
+      album: album,
       duration: const Duration(seconds: 180),
       format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
     );
-    final t2 = Track(
-      id: 't2',
-      title: 'Song 2',
-      artist: 'Artist A',
-      album: 'Album 1',
-      duration: const Duration(seconds: 200),
-      format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
-    );
-    final t3 = Track(
-      id: 't3',
-      title: 'Song 3',
-      artist: 'Artist B',
-      album: 'Album 2',
-      duration: const Duration(seconds: 210),
-      format: const AudioFormat(sampleRate: 44100, bitsPerSample: 16),
-    );
-    repo
-      ..replaceAllTracks([t1, t2, t3])
-      ..saveUserData(['t1'], {'t1': null}, const {});
-    service.initialize();
+    final t1 = song(1, 'Artist A', 'Album 1');
+    final t2 = song(2, 'Artist A', 'Album 1');
+    final t3 = song(3, 'Artist B', 'Album 2');
 
-    expect(service.tracks, hasLength(3));
-    expect(service.albums, hasLength(2));
-    expect(service.artists, hasLength(2));
-    expect(service.favorites, hasLength(1));
+    LibraryService library() {
+      final repo = testRepository()
+        ..replaceAllTracks([t1, t2, t3])
+        ..saveUserData(['t1'], {'t1': null}, const {});
+      return _service(repo)..initialize();
+    }
 
-    // 1. Hide track 1
-    service.setHidden(HiddenKind.track, 't1', true);
-    expect(service.isTrackHidden(t1), isTrue);
-    expect(service.isTrackExplicitlyHidden('t1'), isTrue);
-    expect(service.tracks.map((t) => t.id), ['t2', 't3']);
-    expect(service.favorites, isEmpty);
-    expect(service.search('Song 1'), isEmpty);
-    expect(service.search('Song 2'), hasLength(1));
+    test('a hidden track leaves the lists, the favourites and the search, but still plays from a playlist', () {
+      final service = library()..setHidden(HiddenKind.track, 't1', true);
+      expect((service.isTrackHidden(t1), service.isTrackExplicitlyHidden('t1')), (true, true));
+      expect(service.tracks.map((t) => t.id), ['t2', 't3']);
+      expect(service.favorites, isEmpty);
+      expect(service.search('Song 1'), isEmpty);
+      expect(service.search('Song 2'), hasLength(1));
+      expect(service.getTrack('t1'), isNotNull);
+      expect(service.resolveTracks(['t1', 't2']).map((t) => t.id), ['t1', 't2']);
+    });
 
-    // Direct playback & playlist resolution still works for hidden track
-    expect(service.getTrack('t1'), isNotNull);
-    expect(service.resolveTracks(['t1', 't2']).map((t) => t.id), ['t1', 't2']);
+    test('a hidden album hides its tracks; shown again, it leaves a track hidden on its own hidden', () {
+      final service = library()..setHidden(HiddenKind.track, 't1', true);
+      service.setHidden(HiddenKind.album, t1.albumId, true);
+      expect(service.hidden(HiddenKind.album), contains(t1.albumId));
+      expect(service.isTrackHidden(t2), isTrue);
+      expect(service.albums.map((a) => a.id), [t3.albumId]);
+      expect(service.tracks.map((t) => t.id), ['t3']);
 
-    // 2. Hide Album 1 (precedence & hierarchy)
-    final album1Id = t1.albumId;
-    service.setHidden(HiddenKind.album, album1Id, true);
-    expect(service.hidden(HiddenKind.album), contains(album1Id));
-    expect(service.isTrackHidden(t2), isTrue); // t2 is hidden via album
-    expect(service.albums.map((a) => a.id), [t3.albumId]);
-    expect(service.tracks.map((t) => t.id), ['t3']);
+      service.setHidden(HiddenKind.album, t1.albumId, false);
+      expect(service.hidden(HiddenKind.album), isNot(contains(t1.albumId)));
+      expect((service.isTrackHidden(t1), service.isTrackHidden(t2)), (true, false));
+      expect(service.tracks.map((t) => t.id), ['t2', 't3']);
+    });
 
-    // 3. Unhide Album 1: Non-destructive hierarchy test!
-    // t1 was explicitly hidden, so when Album 1 is unhidden, t1 MUST STILL be hidden, while t2 reappears.
-    service.setHidden(HiddenKind.album, album1Id, false);
-    expect(service.hidden(HiddenKind.album), isNot(contains(album1Id)));
-    expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
-    expect(service.isTrackHidden(t2), isFalse); // visible again
-    expect(service.tracks.map((t) => t.id), ['t2', 't3']);
+    test('a hidden artist hides their albums and tracks; shown again, it leaves a track hidden on its own hidden', () {
+      final service = library()..setHidden(HiddenKind.track, 't1', true);
+      final artist = service.artists.firstWhere((a) => a.name == 'Artist A').id;
+      service.setHidden(HiddenKind.artist, artist, true);
+      expect(service.hidden(HiddenKind.artist), contains(artist));
+      expect(service.isTrackHidden(t2), isTrue);
+      expect(service.artists.map((a) => a.name), ['Artist B']);
+      expect(service.tracks.map((t) => t.id), ['t3']);
 
-    // 4. Hide Artist A: hides Album 1 and all its tracks
-    final artistAId = service.artists.firstWhere((a) => a.name == 'Artist A').id;
-    service.setHidden(HiddenKind.artist, artistAId, true);
-    expect(service.hidden(HiddenKind.artist), contains(artistAId));
-    expect(service.isTrackHidden(t2), isTrue);
-    expect(service.artists.map((a) => a.name), ['Artist B']);
-    expect(service.tracks.map((t) => t.id), ['t3']);
+      service.setHidden(HiddenKind.artist, artist, false);
+      expect(service.hidden(HiddenKind.artist), isNot(contains(artist)));
+      expect((service.isTrackHidden(t1), service.isTrackHidden(t2)), (true, false));
+    });
 
-    // 5. Unhide Artist A: non-destructive hierarchy
-    service.setHidden(HiddenKind.artist, artistAId, false);
-    expect(service.hidden(HiddenKind.artist), isNot(contains(artistAId)));
-    expect(service.isTrackHidden(t1), isTrue); // still explicitly hidden
-    expect(service.isTrackHidden(t2), isFalse); // visible again
+    test('Unhide all brings everything back, the favourites too', () {
+      final service = library();
+      final artist = service.artists.firstWhere((a) => a.name == 'Artist B').id;
+      service
+        ..setHidden(HiddenKind.track, 't1', true)
+        ..setHidden(HiddenKind.album, t1.albumId, true)
+        ..setHidden(HiddenKind.artist, artist, true);
+      expect(service.tracks, isEmpty);
 
-    // 6. Unhide All
-    service.unhideAll();
-    expect(service.isTrackHidden(t1), isFalse);
-    expect(service.tracks, hasLength(3));
-    expect(service.favorites, hasLength(1));
+      service.unhideAll();
+      expect((service.tracks.length, service.albums.length, service.artists.length), (3, 2, 2));
+      expect(service.isTrackHidden(t1), isFalse);
+      expect(service.favorites, hasLength(1));
+    });
   });
 
   test('content hiding: user switching isolates hidden items', () async {

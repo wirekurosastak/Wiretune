@@ -11,7 +11,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 void main() {
   test('every key used in the app is in the string table', () {
     final call = RegExp(r"""(?:\btr|\btrf|Localizer\.get|Localizer\.format)\(\s*'([A-Za-z_]+)'""");
-    // Keys chosen by a condition: context.tr(playing ? 'TipPause' : 'TipPlay').
+    // Keys chosen by a condition: context.tr(playing ? 'Pause' : 'Play').
     final conditional = RegExp(
       r"""(?:\btr|\btrf|Localizer\.get|Localizer\.format)\([^;)]*\?\s*'([A-Za-z_]+)'\s*:\s*'([A-Za-z_]+)'""",
     );

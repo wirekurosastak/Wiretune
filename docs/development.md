@@ -50,7 +50,7 @@ cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux                # an
   `Track`. For server tracks they belong to the account on the server: a change lands at once and `ServerSession`
   queues it for the server; offline, server tracks are read-only.
 - **The player's connection** (`ServerSession`) is a state machine (`notConfigured`, `connecting`, `offline`,
-  `setupRequired`, `loginRequired`, `connected`) whose commands never throw. It downloads the track list and the account
+  `setupRequired`, `loginRequired`, `connected`): connecting, signing in and refreshing never throw. It downloads the track list and the account
   data with their ETags, so a check is cheap; while the server is out of reach it asks again by itself.
 - **Pushes** ride on the remote-control WebSocket (`RemoteClient`, `RemoteHub`): `dataChanged` when the account's data
   changed elsewhere, `libraryChanged` when a scan changed the library. The same connection carries the players' states
@@ -67,7 +67,7 @@ cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux                # an
 - **The interface**: `ChangeNotifier` view models, handed down by `AppScope` as `context.vm`. Two layouts share them.
   Back and Escape close a dialog or menu first, then `MainViewModel.tryNavigateBack()` walks back (unit-tested). On a
   phone nothing animates by itself, for the battery.
-- **The database**: SQLite in WAL mode, one synchronous connection, schema version 7 (`PRAGMA user_version`). An older
+- **The database**: SQLite in WAL mode, one synchronous connection, schema version 8 (`PRAGMA user_version`). An older
   database runs the upgrade steps after its own in one transaction; a newer one is refused, never misread.
 
 ## Tests
@@ -95,10 +95,11 @@ shells.
 |---|---|
 | Core, server | The tests, on Linux. The server binary has run against a real folder: scanning, sign-in, gzip, ranges, covers, and music copied into the folder picked up by itself |
 | App logic and layouts | View-model and widget tests: every section in both layouts, light and dark, a small phone at 150 % font size, a 1080p TV |
-| Downloads, remote control | Against the real server in the tests: copies byte for byte, played with the server switched off, and two players of one account over real WebSockets. **Not yet tried between two real devices** |
+| Downloads, remote control | Against the real server in the tests: copies byte for byte, played with the server switched off, and two players of one account over real WebSockets. Remote control also works between real devices |
 | Linux desktop | Built and run against a real server and library (1,320 tracks), every screen checked at 1280×820, 900×700 and phone width, and playback, the queue, the spectrum, MPRIS and the device list driven through UI automation. Exclusive and bit-perfect not tried on a DAC |
-| Android | Debug and release APKs build. **Not yet run on a phone, a TV or in a car**; in particular, downloading into the shared *Music* folder without a permission (Android 11 and later) hasn't been tried on a device |
-| Windows, macOS, iOS | Not yet built (they need their own hosts) |
+| Android | Built and run on a phone. **Not yet run on a TV or in a car**, and downloading into the shared *Music* folder without a permission (Android 11 and later) hasn't been tried on a device |
+| Windows | Built and run. Exclusive and bit-perfect not tried on a DAC |
+| macOS, iOS | Not yet built (they need their own hosts) |
 | Tizen | Built on Fedora and quickly tried on a 2024 Samsung TV (Tizen 8.0): it signs in and plays, and the remote reaches everything, but moving around is sluggish and **needs more work** |
 | Bit-perfect, exclusive | Not measured on any platform ([audio.md](audio.md#known-limitations)) |
 
@@ -189,7 +190,7 @@ key, add the constant, a `languages` entry and the case in `Localizer.lookup`, a
 
 A new section is a new `AppSection` value, a page registered in `pages/section_page.dart`, an entry in the wide
 layout's sidebar (and the phone's bottom bar, if it belongs there), a place in `navVisualOrder` (the animated logo's
-order), and an accent in `theme/palette.dart`. A persistent player setting is a key in the `settings` table, read and
+order), an icon in `pages/section_page.dart` and an accent in `theme/palette.dart`. A persistent player setting is a key in the `settings` table, read and
 written through `LibraryService`. Anything the back button has to respect goes into `MainViewModel.tryNavigateBack()`.
 
 ## CI

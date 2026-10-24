@@ -108,7 +108,9 @@ Future<Response> fileResponse(Request request, File file, String contentType, {M
       if (!stat.modified.toUtc().isAfter(since.add(const Duration(seconds: 1)))) {
         return Response.notModified(headers: base);
       }
-    } catch (_) {}
+    } catch (_) {
+      // A date that can't be read sets no condition: the file is sent.
+    }
   }
 
   final range = request.headers['range'];

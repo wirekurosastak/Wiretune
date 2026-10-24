@@ -45,12 +45,14 @@ class BestMatch {
   });
 }
 
-/// The search results: up to 25 tracks, 12 albums and 12 artists, and a best match.
+/// The search results: up to 25 tracks, 12 albums, 12 artists and 12 playlists, and a best match.
 class SearchViewModel extends ChangeNotifier {
-  SearchViewModel(this._library, this._player, this._openAlbum, this._openArtist) {
-    _unsubscribe = _library.libraryChanged.listen((_) {
-      if (isSearchActive) _execute(query);
-    });
+  SearchViewModel(this._library, this._player, this._openAlbum, this._openArtist, this._allPlaylists) {
+    void searchAgain(_) {
+      if (hasQuery) _execute(query);
+    }
+
+    _unsubscribers = [_library.libraryChanged.listen(searchAgain), _library.playlistsChanged.listen(searchAgain)];
   }
 
   static const int maxTracks = 25;
@@ -60,34 +62,41 @@ class SearchViewModel extends ChangeNotifier {
   final PlayerViewModel _player;
   final void Function(Album album) _openAlbum;
   final void Function(Artist artist) _openArtist;
-  late final void Function() _unsubscribe;
+
+  /// The playlists as the Playlists page lists them, the automatic ones first.
+  final List<Playlist> Function() _allPlaylists;
+  late final List<void Function()> _unsubscribers;
 
   String query = '';
-  bool isSearchActive = false;
+
+  /// Whether anything is searched for (`MainViewModel.isSearchActive` says whether the results are on show).
+  bool get hasQuery => query.isNotEmpty;
   BestMatch? bestMatch;
   List<Track> matchingTracks = const [];
   List<Album> matchingAlbums = const [];
   List<Artist> matchingArtists = const [];
+  List<Playlist> matchingPlaylists = const [];
 
   bool get hasTracks => matchingTracks.isNotEmpty;
   bool get hasAlbums => matchingAlbums.isNotEmpty;
   bool get hasArtists => matchingArtists.isNotEmpty;
-  bool get hasResults => hasTracks || hasAlbums || hasArtists;
+  bool get hasPlaylists => matchingPlaylists.isNotEmpty;
+  bool get hasResults => hasTracks || hasAlbums || hasArtists || hasPlaylists;
 
   void refreshLocalizedTexts() {
-    if (isSearchActive) _execute(query);
+    if (hasQuery) _execute(query);
   }
 
   void updateQuery(String? newQuery) {
     query = newQuery?.trim() ?? '';
-    isSearchActive = query.isNotEmpty;
-    if (isSearchActive) {
+    if (hasQuery) {
       _execute(query);
       return;
     }
     matchingTracks = const [];
     matchingAlbums = const [];
     matchingArtists = const [];
+    matchingPlaylists = const [];
     bestMatch = null;
     notifyListeners();
   }
@@ -105,6 +114,7 @@ class SearchViewModel extends ChangeNotifier {
       final guest = _library.getArtistByName(q);
       if (guest != null) matchingArtists = [guest, ...matchingArtists.take(maxCards - 1)];
     }
+    matchingPlaylists = _allPlaylists().where((p) => p.name.toLowerCase().contains(lower)).take(maxCards).toList();
     bestMatch = _computeBestMatch(lower);
     notifyListeners();
   }
@@ -181,7 +191,9 @@ class SearchViewModel extends ChangeNotifier {
 
   @override
   void dispose() {
-    _unsubscribe();
+    for (final unsubscribe in _unsubscribers) {
+      unsubscribe();
+    }
     super.dispose();
   }
 }

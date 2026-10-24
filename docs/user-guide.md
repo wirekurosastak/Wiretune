@@ -49,7 +49,7 @@ No restart, no rescan:
   `.png`) in a folder named after the artist, the one that holds their albums (`Miles Davis/artist.jpg` beside
   `Miles Davis/Kind of Blue/`) or, for an artist without one, a new folder at the top of the music folder holding
   just the picture. With a server, it goes in the server's music folder and every player shows it.
-- **Sorting**: the lists start A→Z, the favorites with the newest. Pressing the active sort again turns it round, and
+- **Sorting**: the lists start A→Z, the favorites and the playlists with the newest. Pressing the active sort again turns it round, and
   what has no year or date goes last. A choice lasts until the app closes.
 - **Tabs keep their place**: an album, artist or playlist you opened is still open when you come back to its tab.
   Pressing the tab you're on returns to its list, and pressing it again goes to the list's top.
@@ -64,7 +64,7 @@ No restart, no rescan:
   leaves a short pause ([audio.md](audio.md#gapless-playback)).
 - The queue comes back after a restart, paused where it was.
 - The **sleep timer** (the moon) pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
-- **Lyrics** load only while they're shown: the file's own first, and timed ones follow the song (tap a line to jump
+- **Lyrics** load only while the queue or the lyrics are open: the file's own first, and timed ones follow the song (tap a line to jump
   there). Otherwise [LRCLIB](https://lrclib.net) is asked; *Settings → Lyrics from the internet* turns that off.
 - A track that can't play stops the queue and says why, instead of skipping through everything after it.
 - **Keyboard** (⌘ for Ctrl on a Mac): Space plays and pauses, Ctrl+→ and Ctrl+← skip, Shift+→ and Shift+← seek 10

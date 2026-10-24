@@ -18,7 +18,8 @@ enum ServerConnectionState { notConfigured, connecting, offline, setupRequired, 
 
 /// The player's connection to a Wiretune server: server address, sign-in, copying the server's track list into the
 /// local [LibraryService], and keeping the signed-in account's favourites, play counts and playlists on the server.
-/// Every failure becomes a [state] with a message the interface can show; the commands never throw.
+/// Connecting, signing in and refreshing never throw: a failure becomes a [state] with a message the interface can
+/// show. The administrator's calls and [changePassword] throw [ServerRequestException], for the caller to show.
 class ServerSession {
   ServerSession(this._library, this._settings, [ServerClient? client]) : _client = client ?? ServerClient() {
     _unsubscribers.addAll([
@@ -116,8 +117,6 @@ class ServerSession {
       return await _client.getLyrics(serverUrl, track.id);
     } on ServerRequestException catch (e) {
       WiretuneLog.debug('ServerSession', "No lyrics for '${track.title}': $e");
-    } on ServerUnauthorizedException catch (e) {
-      WiretuneLog.debug('ServerSession', "No lyrics for '${track.title}': $e");
     }
     return null;
   }
@@ -133,9 +132,9 @@ class ServerSession {
     _setState(usesServer ? ServerConnectionState.offline : ServerConnectionState.notConfigured, null);
   }
 
-  /// The address the user typed, made into a server URL: `http://` is added when no scheme is given, the path and a
-  /// trailing slash are dropped. Null for anything that is not an http(s) address of a host, or that carries
-  /// "user:password@" (which would be stored and logged as part of the address).
+  /// The address the user typed, made into a server URL: `http://` is added when no scheme is given, a query, a
+  /// fragment and trailing slashes are dropped. Null for anything that is not an http(s) address of a host, or that
+  /// carries "user:password@" (which would be stored and logged as part of the address).
   static String? normalizeServerUrl(String? input) {
     if (input == null || input.trim().isEmpty) return null;
     var candidate = input.trim();
@@ -189,10 +188,6 @@ class ServerSession {
 
       final user = currentUser = await _client.getCurrentUser(serverUrl);
       _library.setCurrentUser(user.id);
-      // Kept next to a kept token; one an earlier version kept gets its account here.
-      if ((_settings.getSetting('auth_token') ?? '').isNotEmpty) {
-        _settings.setSetting(_userIdSetting, user.id);
-      }
       await _refreshLibraryCore();
     }),
   );
@@ -213,7 +208,7 @@ class ServerSession {
       _setState(ServerConnectionState.loginRequired, switch (e.code) {
         ErrorCodes.passwordChanged => 'ErrorPasswordChanged',
         ErrorCodes.accountRemoved => 'ErrorAccountRemoved',
-        _ => 'SessionExpired',
+        _ => 'ErrorSessionExpired',
       });
     } on ServerRequestException catch (e) {
       WiretuneLog.warn('ServerSession', "Server '$serverUrl' unavailable: ${e.message}");
@@ -228,7 +223,7 @@ class ServerSession {
   Future<String?> login(String username, String password, bool rememberMe) => _authenticate(
     () => _client.login(serverUrl, username.trim(), password, rememberMe),
     rememberMe,
-    'SessionBadCredentials',
+    'ErrorWrongCredentials',
   );
 
   /// Creates the first (administrator) account. Returns null on success, otherwise a user-facing error message.
@@ -354,8 +349,7 @@ class ServerSession {
 
   Future<List<UserInfo>> getUsers() => _client.getUsers(serverUrl);
 
-  Future<UserInfo> registerUser(String username, String password) =>
-      _client.registerUser(serverUrl, username, password);
+  Future<UserInfo> addUser(String username, String password) => _client.addUser(serverUrl, username, password);
 
   Future<void> deleteUser(String userId) => _client.deleteUser(serverUrl, userId);
 
@@ -411,7 +405,6 @@ class ServerSession {
       _serverTracks = list.tracks;
       _serverTracksVersion = list.version;
     }
-    // A server without the list (from before it) answers every time, with none.
     final pictures = await _client.fetchArtistPictures(serverUrl, _artistPicturesVersion);
     final known = _artistPictures;
     final picturesChanged =
@@ -444,8 +437,6 @@ class ServerSession {
         _streamToken = (issued.token, issued.expiresAt.toUtc());
       } on ServerRequestException catch (e) {
         // The token we hold (if any) may still be valid for a while; otherwise playback fails with the server's answer.
-        WiretuneLog.warn('ServerSession', 'Could not get a stream token: $e');
-      } on ServerUnauthorizedException catch (e) {
         WiretuneLog.warn('ServerSession', 'Could not get a stream token: $e');
       }
       final held = _streamToken;

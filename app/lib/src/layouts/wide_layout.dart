@@ -130,7 +130,8 @@ class _Panel extends StatelessWidget {
   }
 }
 
-/// The page of the selected section, or the search results, or the queue.
+/// The page of the selected section, or the search results, or the queue, fading in. Back to where a page was opened
+/// from shows that place at once ([MainViewModel.returns]), as back within a section does.
 class _Content extends StatelessWidget {
   const _Content({required this.vm});
 
@@ -150,6 +151,7 @@ class _Content extends StatelessWidget {
       }
       return _TilePinch(
         child: AnimatedSwitcher(
+          key: ValueKey(vm.returns),
           duration: const Duration(milliseconds: 220),
           switchInCurve: Curves.easeOutCubic,
           layoutBuilder: (currentChild, previousChildren) =>
@@ -790,17 +792,11 @@ class _Sidebar extends StatelessWidget {
           listenable: Listenable.merge([vm, vm.player, vm.favorites, vm.playlists]),
           builder: (context, _) {
             final library = vm.library;
-            Widget item(
-              AppSection section,
-              IconData icon,
-              Color color,
-              String label,
-              int? count, {
-              bool autofocus = false,
-            }) => _SidebarItem(
+            Widget item(AppSection section, String label, int? count, {bool autofocus = false}) => _SidebarItem(
               selected: vm.selectedSection == section && !vm.isSearchActive && !vm.player.isQueueOpen,
-              icon: icon,
-              color: color,
+              icon: sectionIcon(section),
+              // Settings, apart from the music, in the text's colour.
+              color: section == AppSection.settings ? colors.textMain : palette.accentFor(section),
               label: label,
               count: count,
               compact: compact,
@@ -814,39 +810,19 @@ class _Sidebar extends StatelessWidget {
                   if (!compact) _GroupTitle(context.tr('SectionLibrary')),
                   item(
                     AppSection.artists,
-                    Icons.person_rounded,
-                    palette.coral,
                     context.tr('NavArtists'),
                     library.artists.length,
                     autofocus: AppPlatform.current.isTv,
                   ),
-                  item(AppSection.albums, Icons.album, palette.purple, context.tr('NavAlbums'), library.albums.length),
-                  item(
-                    AppSection.tracks,
-                    Icons.music_note_rounded,
-                    palette.cyan,
-                    context.tr('NavTracks'),
-                    library.tracks.length,
-                  ),
+                  item(AppSection.albums, context.tr('NavAlbums'), library.albums.length),
+                  item(AppSection.tracks, context.tr('NavTracks'), library.tracks.length),
                   const SizedBox(height: 22),
                   if (!compact) _GroupTitle(context.tr('SectionCollection')),
-                  item(
-                    AppSection.favorites,
-                    Icons.favorite_rounded,
-                    palette.coral,
-                    context.tr('NavFavorites'),
-                    vm.favorites.favoriteTracks.length,
-                  ),
-                  item(
-                    AppSection.playlists,
-                    Icons.queue_music_rounded,
-                    palette.lime,
-                    context.tr('NavPlaylists'),
-                    vm.playlists.allPlaylists.length,
-                  ),
+                  item(AppSection.favorites, context.tr('NavFavorites'), vm.favorites.favoriteTracks.length),
+                  item(AppSection.playlists, context.tr('NavPlaylists'), vm.playlists.allPlaylists.length),
                   // Settings alone needs no heading: the gap sets it apart.
                   const SizedBox(height: 22),
-                  item(AppSection.settings, Icons.tune_rounded, colors.textMain, context.tr('NavSettings'), null),
+                  item(AppSection.settings, context.tr('NavSettings'), null),
                 ],
               ),
             );

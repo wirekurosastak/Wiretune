@@ -704,12 +704,11 @@ class LibraryService {
 
 /// Immutable view of the library; replaced wholesale so readers never need a lock or a copy.
 class LibrarySnapshot {
-  LibrarySnapshot._(this.tracks, this.trackById, this.albums, this.albumById, this.artists, this.genres);
+  LibrarySnapshot._(this.tracks, this.albums, this.albumById, this.artists, this.genres);
 
   static final LibrarySnapshot empty = LibrarySnapshot.build(const []);
 
   final List<Track> tracks;
-  final Map<String, Track> trackById;
   final List<Album> albums;
   final Map<String, Album> albumById;
   final List<Artist> artists;
@@ -921,14 +920,7 @@ class LibrarySnapshot {
     final genres = genreNames.values.toList();
     sortStable(genres, compareText);
 
-    return LibrarySnapshot._(
-      tracks,
-      {for (final t in tracks) t.id: t},
-      albums,
-      {for (final a in albums) a.id: a},
-      artists,
-      genres,
-    );
+    return LibrarySnapshot._(tracks, albums, {for (final a in albums) a.id: a}, artists, genres);
   }
 
   /// Files folders put together by hand under one album: a folder whose songs come from several albums but share one

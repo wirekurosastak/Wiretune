@@ -10,7 +10,8 @@ import 'app_paths.dart';
 enum LogLevel { debug, info, warn, error }
 
 /// The log of the player or the server: `[time] [LEVEL] [category] message` lines on the console and in a file that is
-/// moved to `.1` at 10 MiB. Every line passes through [redact], because stream URLs carry tokens.
+/// moved to `.1` at 10 MiB. Every line passes through [redact], because stream URLs carry tokens. Its own failures
+/// (opening, moving or closing its file) are let go of: the log must never stop what it records.
 abstract final class WiretuneLog {
   static const int _maxLogBytes = 10 * 1024 * 1024;
   static final RegExp _tokenPattern = RegExp(r'''token=[^&\s"']+''');

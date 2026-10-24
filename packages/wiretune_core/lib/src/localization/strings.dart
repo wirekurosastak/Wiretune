@@ -171,6 +171,7 @@ const Map<String, (String, String, String)> allStrings = {
   'ColAdded': ('HOZZÁADÁS', 'ADDED', 'HINZUGEFÜGT'),
   'LabelAlbums': ('ALBUMOK', 'ALBUMS', 'ALBEN'),
   'LabelArtists': ('ELŐADÓK', 'ARTISTS', 'KÜNSTLER'),
+  'LabelPlaylists': ('LEJÁTSZÁSI LISTÁK', 'PLAYLISTS', 'PLAYLISTS'),
   'LabelTracks': ('SZÁMOK', 'TRACKS', 'TITEL'),
   'LabelAllTracks': ('ÖSSZES SZÁM', 'ALL TRACKS', 'ALLE TITEL'),
   'LabelPlaylist': ('LEJÁTSZÁSI LISTA', 'PLAYLIST', 'PLAYLIST'),
@@ -196,13 +197,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Mit dem Herz-Symbol neben einem Titel markierst du Favoriten.',
   ),
   'TipAddToPlaylist': ('Hozzáadás lejátszási listához', 'Add to playlist', 'Zur Playlist hinzufügen'),
-  'TipPlay': ('Lejátszás', 'Play', 'Wiedergabe'),
   'TipFavorite': ('Hozzáadás a kedvencekhez', 'Add to favorites', 'Zu Favoriten hinzufügen'),
   'TipRemoveFromFavorites': ('Eltávolítás a kedvencek közül', 'Remove from favorites', 'Aus Favoriten entfernen'),
 
   'Rename': ('Átnevezés', 'Rename', 'Umbenennen'),
 
-  'TipPause': ('Szünet', 'Pause', 'Pause'),
   'Browse': ('Tallózás…', 'Browse…', 'Durchsuchen …'),
   // ── Playlists ───────────────────────────────────────────────────────────────────────────────────────
   'PlaylistNew': ('Új lejátszási lista', 'New playlist', 'Neue Playlist'),
@@ -270,6 +269,8 @@ const Map<String, (String, String, String)> allStrings = {
   'TipRemoveFromQueue': ('Eltávolítás a sorból', 'Remove from queue', 'Aus Warteschlange entfernen'),
   'PlayNext': ('Lejátszás következőként', 'Play next', 'Als Nächstes abspielen'),
   'AddToQueue': ('Hozzáadás a sorhoz', 'Add to queue', 'Zur Warteschlange hinzufügen'),
+  'AddedToPlaylist': ('Hozzáadva ehhez: {0}', 'Added to {0}', 'Hinzugefügt zu {0}'),
+  'AlreadyInPlaylist': ('Már benne van ebben: {0}', 'Already in {0}', 'Schon in {0}'),
   'QueuedNext': ('Következőként szól: {0}', 'Plays next: {0}', 'Als Nächstes: {0}'),
   'QueuedLast': ('A sorba került: {0}', 'Added to the queue: {0}', 'In der Warteschlange: {0}'),
   'Lyrics': ('DALSZÖVEG', 'LYRICS', 'LIEDTEXT'),
@@ -369,7 +370,6 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'SaveFolder': ('Mappa mentése', 'Save folder', 'Ordner speichern'),
 
-  'LocalFolderLabel': ('Helyi mappa', 'Local folder', 'Lokaler Ordner'),
   'LocalFolderPlaceholder': ('/eleresi/ut/zenek', '/path/to/music', '/pfad/zur/musik'),
   'Scan': ('Beolvasás', 'Scan', 'Einlesen'),
   'Reindex': ('Újraindexelés', 'Reindex', 'Neu indizieren'),
@@ -414,7 +414,6 @@ const Map<String, (String, String, String)> allStrings = {
   'ChangePassword': ('Jelszó módosítása', 'Change password', 'Passwort ändern'),
   'NewPassword': ('Új jelszó', 'New password', 'Neues Passwort'),
   'ResetPassword': ('Jelszó visszaállítása', 'Reset password', 'Passwort zurücksetzen'),
-  'TipResetPassword': ('Jelszó visszaállítása', 'Reset password', 'Passwort zurücksetzen'),
   'EnterNewPassword': ('Add meg az új jelszót!', 'Enter a new password!', 'Neues Passwort eingeben!'),
   'PasswordHint': (
     'Jelszó (legalább {0} karakter)',
@@ -618,11 +617,6 @@ const Map<String, (String, String, String)> allStrings = {
     'The server is reachable. Sign in to continue.',
     'Der Server ist erreichbar. Melde dich an, um fortzufahren.',
   ),
-  'SessionExpired': (
-    'A munkamenet lejárt. Jelentkezz be újra.',
-    'Your session has expired. Please sign in again.',
-    'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
-  ),
   'SessionUnreachable': (
     'A szerver ({0}) nem érhető el. {1}',
     'The server ({0}) is unreachable. {1}',
@@ -632,11 +626,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Váratlan hiba a szerverrel való kapcsolat közben: {0}',
     'Unexpected error while talking to the server: {0}',
     'Unerwarteter Fehler bei der Kommunikation mit dem Server: {0}',
-  ),
-  'SessionBadCredentials': (
-    'Hibás felhasználónév vagy jelszó.',
-    'Incorrect username or password.',
-    'Falscher Benutzername oder falsches Passwort.',
   ),
   'SessionRejected': (
     'A szerver elutasította a kérést.',
@@ -846,11 +835,7 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'TipDownload': ('Letöltés erre az eszközre', 'Download to this device', 'Auf dieses Gerät herunterladen'),
   'TipRemoveDownload': ('Letöltés eltávolítása', 'Remove download', 'Download entfernen'),
-  'TipDownloadedWithList': (
-    'Egy albummal, listával vagy a kedvencekkel együtt letöltve',
-    'Downloaded with an album, a playlist or the favorites',
-    'Mit einem Album, einer Playlist oder den Favoriten heruntergeladen',
-  ),
+  'TipDownloaded': ('Letöltve', 'Downloaded', 'Heruntergeladen'),
   'TipMore': ('További lehetőségek', 'More options', 'Weitere Optionen'),
   'GoToAlbum': ('Ugrás az albumra', 'Go to album', 'Zum Album'),
   'GoToArtist': ('Ugrás az előadóra', 'Go to artist', 'Zum Künstler'),
@@ -858,6 +843,8 @@ const Map<String, (String, String, String)> allStrings = {
   'HideAlbum': ('Album elrejtése', 'Hide album', 'Album ausblenden'),
   'HideArtist': ('Előadó elrejtése', 'Hide artist', 'Künstler ausblenden'),
   'Unhide': ('Megjelenítés', 'Unhide', 'Einblenden'),
+  'HiddenNotice': ('Elrejtve: {0}', 'Hidden: {0}', 'Ausgeblendet: {0}'),
+  'Undo': ('Visszavonás', 'Undo', 'Rückgängig'),
 
   'UnhideAll': ('Összes megjelenítése', 'Unhide all', 'Alle einblenden'),
   'HiddenContent': ('Rejtett tartalmak', 'Hidden content', 'Ausgeblendete Inhalte'),
@@ -1236,11 +1223,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Jelentkezz be egy szerverre a távvezérléshez.',
     'Sign in to a server to use remote control.',
     'Melde dich an einem Server an, um die Fernsteuerung zu nutzen.',
-  ),
-  'RemoteStatusUnsupported': (
-    'Ez a szerver nem támogatja a távvezérlést (régebbi verzió?).',
-    "This server doesn't support remote control (an older version?).",
-    'Dieser Server unterstützt keine Fernsteuerung (eine ältere Version?).',
   ),
   'RemoteStatusTooManyDevices': (
     'Túl sok eszköz kapcsolódik ehhez a fiókhoz (legfeljebb {0} lehet).',

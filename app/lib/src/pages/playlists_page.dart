@@ -120,7 +120,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 400),
                   child: TextField(
-                    controller: _name..text = _name.text.isEmpty ? playlists.editingPlaylistName : _name.text,
+                    controller: _name,
                     autofocus: true,
                     maxLength: UserDataRules.maxPlaylistNameLength,
                     decoration: const InputDecoration(
@@ -129,7 +129,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                       contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                    onSubmitted: (value) => playlists.confirmRenamePlaylist(value).then((_) => _name.clear()),
+                    onSubmitted: playlists.confirmRenamePlaylist,
                   ),
                 ),
               ),
@@ -137,15 +137,12 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               IconButton(
                 tooltip: context.tr('Save'),
                 icon: Icon(Icons.check_rounded, color: colors.accent),
-                onPressed: () => playlists.confirmRenamePlaylist(_name.text).then((_) => _name.clear()),
+                onPressed: () => playlists.confirmRenamePlaylist(_name.text),
               ),
               IconButton(
                 tooltip: context.tr('Cancel'),
                 icon: const Icon(Icons.close_rounded),
-                onPressed: () {
-                  _name.clear();
-                  playlists.cancelRename();
-                },
+                onPressed: playlists.cancelRename,
               ),
             ],
           )
@@ -153,7 +150,10 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
             message: context.tr('Rename'),
             child: InkWell(
               borderRadius: BorderRadius.circular(Radii.tag),
-              onTap: playlists.startRename,
+              onTap: () {
+                _name.text = playlist.name;
+                playlists.startRename();
+              },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -183,7 +183,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
     return PinnedTitleBar(
       title: playlist.name,
       onBack: playlists.closePlaylistDetail,
-      backText: context.tr('NavPlaylists'),
+      backText: playlists.backText,
       menu: menu.topBarButton(),
       child: CustomScrollView(
         key: PageStorageKey('playlist-${playlist.id}-${playlists.pageVisit}'),
@@ -191,7 +191,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
           PinnedTitleBar.room,
           SliverToBoxAdapter(
             child: DetailHeader(
-              back: BackLink(text: context.tr('NavPlaylists'), onPressed: playlists.closePlaylistDetail),
+              back: BackLink(text: playlists.backText, onPressed: playlists.closePlaylistDetail),
               artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
               artworkFlight: 'playlist:${playlist.id}',
               artworkBadge: switch (qualityOf(tracks)) {

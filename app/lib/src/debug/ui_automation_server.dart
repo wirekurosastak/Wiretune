@@ -234,7 +234,9 @@ class UiAutomationServer {
       WiretuneLog.error('UiAutomation', 'Request handling error: $e', e, s);
       try {
         await _json(request, 500, {'error': '$e'});
-      } catch (_) {}
+      } catch (_) {
+        // The connection is gone too; the error is in the log already.
+      }
     }
   }
 

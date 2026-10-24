@@ -91,7 +91,7 @@ void main() {
         expect((await media.get(route)).statusCode, 401, reason: route);
       }
       expect((await media.post('/api/auth/stream-token')).statusCode, 401);
-      expect((await media.post('/api/auth/register', {'username': 'x', 'password': 'xxxxxxxxxx'})).statusCode, 401);
+      expect((await media.post('/api/users', {'username': 'x', 'password': 'xxxxxxxxxx'})).statusCode, 401);
 
       // A sign-in token opens the media routes in a header (covers are loaded that way), never in a URL.
       final inUrl = await server.client().get('/api/stream/${track['id']}?token=${Uri.encodeComponent(auth.token)}');
@@ -245,9 +245,9 @@ void main() {
       expect(json(missing)['code'], ErrorCodes.folderMissing);
       expect(json(missing)['path'], '${server.root}/nope');
 
-      final taken = await admin.post('/api/auth/register', {'username': 'GUEST', 'password': guestPassword});
+      final taken = await admin.post('/api/users', {'username': 'GUEST', 'password': guestPassword});
       expect((taken.statusCode, json(taken)['code']), (409, ErrorCodes.usernameTaken));
-      final short = await admin.post('/api/auth/register', {'username': 'x', 'password': 'short'});
+      final short = await admin.post('/api/users', {'username': 'x', 'password': 'short'});
       expect((json(short)['code'], json(short)['min']), (ErrorCodes.passwordTooShort, AuthRules.minPasswordLength));
 
       final name = await guest.put('/api/me/playlists/p1', {'name': 'n' * 300, 'trackIds': <String>[]});
@@ -371,13 +371,14 @@ void main() {
     final jwt = Jwt('secret');
     final now = DateTime.now();
     final token = jwt.sign({'aud': 'wiretune', 'exp': now.millisecondsSinceEpoch ~/ 1000 + 60});
-    expect(jwt.verify(token, audiences: {'wiretune'}), isNotNull);
-    expect(Jwt('other').verify(token, audiences: {'wiretune'}), isNull);
-    expect(jwt.verify(token, audiences: {'wiretune-stream'}), isNull);
-    expect(jwt.verify('${token}x', audiences: {'wiretune'}), isNull);
-    expect(jwt.verify(token, audiences: {'wiretune'}, now: now.add(const Duration(seconds: 59))), isNotNull);
-    expect(jwt.verify(token, audiences: {'wiretune'}, now: now.add(const Duration(seconds: 61))), isNull);
-    expect(jwt.verify(jwt.sign({'aud': 'wiretune'}), audiences: {'wiretune'}), isNull); // no expiry: no token
+    final claims = jwt.verifySigned(token, audiences: {'wiretune'});
+    expect(claims, isNotNull);
+    expect(Jwt('other').verifySigned(token, audiences: {'wiretune'}), isNull);
+    expect(jwt.verifySigned(token, audiences: {'wiretune-stream'}), isNull);
+    expect(jwt.verifySigned('${token}x', audiences: {'wiretune'}), isNull);
+    expect(Jwt.isExpired(claims!, now: now.add(const Duration(seconds: 59))), isFalse);
+    expect(Jwt.isExpired(claims, now: now.add(const Duration(seconds: 61))), isTrue);
+    expect(jwt.verifySigned(jwt.sign({'aud': 'wiretune'}), audiences: {'wiretune'}), isNull); // no expiry: no token
   });
 
   group('malformed input and passwords', () {
@@ -391,7 +392,7 @@ void main() {
       expect(setup.statusCode, 400);
 
       final (admin, _) = await setupAdmin(server);
-      final register = await admin.post('/api/auth/register', {
+      final register = await admin.post('/api/users', {
         'username': ['x'],
         'password': 1,
       });

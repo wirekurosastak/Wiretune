@@ -68,7 +68,7 @@ internet. This page is the honest list of what it does and doesn't do about that
   titles of up to two albums of each (they tell apart artists who share a name). They're cached in
   `artist_pictures.json`. `WIRETUNE_NO_ARTIST_PICTURES=1` turns the lookup off; an artist with a picture of their own
   (`artist.jpg`) isn't looked up.
-- **Lyrics** for a track without any are looked up on LRCLIB when you open the queue panel: title, artist, album and
+- **Lyrics** for a track without any are looked up on LRCLIB when you open the queue or the lyrics: title, artist, album and
   length, sent by the player (not the server) with a `Wiretune/<version>` user agent. Answers are cached in the `lyrics`
   folder under hashed names. Turn it off in Settings, or for the whole process with `WIRETUNE_NO_ONLINE_LYRICS=1`.
 - **Logs** have every `token=` value blanked, but they do contain file paths, server addresses and device names. Read

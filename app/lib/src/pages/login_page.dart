@@ -14,8 +14,6 @@ import '../widgets/nav_visualizer.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/buttons.dart';
 
-const Color _amber = Color(0xFFFFB703);
-
 /// The sign-in and account screen. Signed in: the account, Sign out and Back to music. Signed out: the server's
 /// address, then either the administrator setup (with the setup code from the server's log) or the sign-in, and on a
 /// desktop the way on without a server.
@@ -267,14 +265,14 @@ class _LoginPageState extends State<LoginPage> {
     Widget notice(IconData icon, Widget body) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: _amber.withValues(alpha: 0x28 / 255),
-        border: Border.all(color: _amber.withValues(alpha: 0.6)),
+        color: colors.palette.warning.withValues(alpha: 0x28 / 255),
+        border: Border.all(color: colors.palette.warning.withValues(alpha: 0.6)),
         borderRadius: BorderRadius.circular(Radii.medium),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: _amber),
+          Icon(icon, size: 18, color: colors.palette.warning),
           const SizedBox(width: 8),
           Expanded(child: body),
         ],
@@ -386,7 +384,7 @@ class _LoginPageState extends State<LoginPage> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0x28FF003C),
+            color: colors.danger.withValues(alpha: 0x28 / 255),
             border: Border.all(color: colors.danger.withValues(alpha: 0.6)),
             borderRadius: BorderRadius.circular(Radii.medium),
           ),

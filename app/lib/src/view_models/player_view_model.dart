@@ -199,7 +199,6 @@ class PlayerViewModel extends ChangeNotifier {
 
   void closeQueue() => isQueueOpen = false;
 
-  /// Plays a track of the queue; a track that is not queued yet starts the library.
   /// Plays [item], the entry itself: the same track may be queued more than once.
   void playQueueItem(QueueItem item) {
     if (isRemote) {
@@ -213,6 +212,7 @@ class PlayerViewModel extends ChangeNotifier {
   bool _isEntry(QueueItem item) =>
       item.index >= 0 && item.index < _playbackQueue.length && identical(_playbackQueue[item.index], item.track);
 
+  /// Plays a track of the queue; a track that is not queued yet starts the library.
   void playQueueTrack(Track track) {
     if (isRemote) {
       final item = _remoteQueue.where((item) => identical(item.track, track)).firstOrNull;
@@ -530,11 +530,11 @@ class PlayerViewModel extends ChangeNotifier {
     RepeatMode.one => RepeatMode.off,
   });
 
-  void setRepeatMode(RepeatMode mode) {
-    if (isRemote) {
-      _sendRemote(RemoteCommand(RemoteAction.repeat, repeat: mode));
-      return;
-    }
+  void setRepeatMode(RepeatMode mode) =>
+      isRemote ? _sendRemote(RemoteCommand(RemoteAction.repeat, repeat: mode)) : _setRepeatLocal(mode);
+
+  /// The entry offered ahead depends on the mode (repeat one: the same track again), so it is offered anew.
+  void _setRepeatLocal(RepeatMode mode) {
     _repeat = mode;
     _offerNext();
     notifyListeners();
@@ -1198,8 +1198,7 @@ class PlayerViewModel extends ChangeNotifier {
       case RemoteAction.shuffle:
         _setShuffleLocal(command.on);
       case RemoteAction.repeat:
-        _repeat = command.repeat;
-        notifyListeners();
+        _setRepeatLocal(command.repeat);
       case RemoteAction.playTracks:
         // Music from another device: it plays here now, and this player shows it. The track it was on starts where it
         // was; one this library lacks gives way to the next one it has, from its beginning.

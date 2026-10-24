@@ -252,7 +252,14 @@ class _AccountCardState extends State<_AccountCard> {
     if (mounted) setState(() {});
   }
 
-  void _openChangePasswordDialog(BuildContext context, ServerSettingsViewModel server) {
+  /// Asks for a new password twice and hands it to [submit], which answers what is wrong with it, or null; then the
+  /// notice [done]. The signed-in account's Change password and an administrator's reset of another account's.
+  void _openPasswordDialog(
+    BuildContext context, {
+    required String title,
+    required Future<String?> Function(String password, String confirm) submit,
+    required String done,
+  }) {
     final next = TextEditingController();
     final confirm = TextEditingController();
     String? error;
@@ -264,7 +271,7 @@ class _AccountCardState extends State<_AccountCard> {
         builder: (ctx, setDialogState) {
           final colors = ctx.colors;
           return AppDialog(
-            title: ctx.tr('ChangePassword'),
+            title: title,
             content: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 380),
               child: Column(
@@ -283,10 +290,7 @@ class _AccountCardState extends State<_AccountCard> {
                   TextField(
                     controller: confirm,
                     obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: ctx.tr('PasswordConfirmPlaceholder'),
-                      hintText: ctx.tr('PasswordConfirmPlaceholder'),
-                    ),
+                    decoration: InputDecoration(labelText: ctx.tr('PasswordConfirmPlaceholder')),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 12),
@@ -306,7 +310,7 @@ class _AccountCardState extends State<_AccountCard> {
                             busy = true;
                             error = null;
                           });
-                          final err = await server.changePassword(next.text, confirm.text);
+                          final err = await submit(next.text, confirm.text);
                           if (err != null) {
                             setDialogState(() {
                               busy = false;
@@ -314,84 +318,7 @@ class _AccountCardState extends State<_AccountCard> {
                             });
                           } else {
                             if (ctx.mounted) Navigator.of(ctx).pop();
-                            if (context.mounted) context.vm.showNotice(context.tr('PasswordChangedOthersSignedOut'));
-                          }
-                        },
-                  child: Text(ctx.tr('Save')),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  void _openAdminResetPasswordDialog(BuildContext context, ServerSettingsViewModel server, UserInfo user) {
-    final next = TextEditingController();
-    final confirm = TextEditingController();
-    String? error;
-    bool busy = false;
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final colors = ctx.colors;
-          return AppDialog(
-            title: '${ctx.tr('ResetPassword')}: ${user.username}',
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: next,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: ctx.tr('NewPassword'),
-                      hintText: ctx.tr('PasswordMinPlaceholder'),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: confirm,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: ctx.tr('PasswordConfirmPlaceholder'),
-                      hintText: ctx.tr('PasswordConfirmPlaceholder'),
-                    ),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(error!, style: TextStyle(color: colors.danger, fontSize: 13)),
-                  ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
-              PressShrink(
-                child: FilledButton(
-                  onPressed: busy
-                      ? null
-                      : () async {
-                          setDialogState(() {
-                            busy = true;
-                            error = null;
-                          });
-                          final err = await server.adminResetPassword(user.id, next.text, confirm.text);
-                          if (err != null) {
-                            setDialogState(() {
-                              busy = false;
-                              error = err;
-                            });
-                          } else {
-                            if (ctx.mounted) Navigator.of(ctx).pop();
-                            if (context.mounted) {
-                              context.vm.showNotice(context.trf('PasswordResetDone', [user.username]));
-                            }
+                            if (context.mounted) context.vm.showNotice(done);
                           }
                         },
                   child: Text(ctx.tr('Save')),
@@ -528,7 +455,12 @@ class _AccountCardState extends State<_AccountCard> {
                   runSpacing: 8,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: () => _openChangePasswordDialog(context, server),
+                      onPressed: () => _openPasswordDialog(
+                        context,
+                        title: context.tr('ChangePassword'),
+                        submit: server.changePassword,
+                        done: context.tr('PasswordChangedOthersSignedOut'),
+                      ),
                       icon: const Icon(Icons.key_rounded, size: 16),
                       label: Text(context.tr('ChangePassword')),
                     ),
@@ -647,9 +579,14 @@ class _AccountCardState extends State<_AccountCard> {
                         ),
                         if (user.username != server.currentUserName) ...[
                           IconButton(
-                            tooltip: context.tr('TipResetPassword'),
+                            tooltip: context.tr('ResetPassword'),
                             icon: Icon(Icons.lock_reset_rounded, color: colors.textMuted),
-                            onPressed: () => _openAdminResetPasswordDialog(context, server, user),
+                            onPressed: () => _openPasswordDialog(
+                              context,
+                              title: '${context.tr('ResetPassword')}: ${user.username}',
+                              submit: (password, confirm) => server.adminResetPassword(user.id, password, confirm),
+                              done: context.trf('PasswordResetDone', [user.username]),
+                            ),
                           ),
                           IconButton(
                             tooltip: context.tr('TipDeleteUser'),
@@ -791,7 +728,7 @@ class _LibraryCardState extends State<_LibraryCard> {
                   Divider(color: colors.glassBorder, height: 1),
                   const SizedBox(height: 12),
                 ],
-                SectionLabel(context.tr('LocalFolderLabel'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
+                SectionLabel(context.tr('LocalFolder'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
                 _FieldRow(
                   field: TextField(
                     controller: _localPath,

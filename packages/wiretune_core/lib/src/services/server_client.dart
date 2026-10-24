@@ -14,15 +14,13 @@ import '../models/protocol.dart';
 import '../models/remote.dart';
 
 /// The server rejected the credentials (HTTP 401). [token] is the sign-in token the request carried, if any, and
-/// [code] why ([ErrorCodes]: none sent, expired, the password changed, the account removed …).
-class ServerUnauthorizedException implements Exception {
-  const ServerUnauthorizedException([this.token, this.code]);
+/// [code] why ([ErrorCodes]: none sent, expired, the password changed, the account removed …). Where that makes no
+/// difference it is caught as the [ServerRequestException] it is too.
+class ServerUnauthorizedException extends ServerRequestException {
+  ServerUnauthorizedException([this.token, String? code])
+    : super(describeServerError(code) ?? Localizer.get('ErrorSignInRequired'), 401, code);
 
   final String? token;
-  final String? code;
-
-  @override
-  String toString() => describeServerError(code) ?? Localizer.get('ErrorSignInRequired');
 }
 
 /// A server call failed. [statusCode] is null when no answer arrived (unreachable, timed out, connection cut). The
@@ -125,9 +123,9 @@ class ServerClient {
     return list.map((u) => _parse(UserInfo.fromJson, u)).toList();
   }
 
-  Future<UserInfo> registerUser(String baseUrl, String username, String password) async => _parse(
+  Future<UserInfo> addUser(String baseUrl, String username, String password) async => _parse(
     UserInfo.fromJson,
-    await _send('POST', baseUrl, '/api/auth/register', body: {'username': username, 'password': password}),
+    await _send('POST', baseUrl, '/api/users', body: {'username': username, 'password': password}),
   );
 
   Future<void> deleteUser(String baseUrl, String userId) =>
@@ -212,27 +210,22 @@ class ServerClient {
   }
 
   /// The addresses of the artists' own pictures on the server, by artist ID, with the list's version (its ETag); null
-  /// when it is still the list of [version]. A server from before them has none.
+  /// when it is still the list of [version].
   Future<({Map<String, String> pictures, String? version})?> fetchArtistPictures(
     String baseUrl, [
     String? version,
   ]) async {
-    try {
-      final answer = await _exchange('GET', baseUrl, '/api/artists/pictures', ifNoneMatch: version);
-      if (answer.status == 304) return null;
-      final versions = answer.json;
-      if (versions is! Map) throw ServerRequestException(_notWiretune(), 200);
-      return (
-        pictures: {
-          for (final MapEntry(:key, :value) in versions.entries)
-            if (key is String && value is String) key: buildArtistPictureUrl(baseUrl, key, value),
-        },
-        version: answer.etag,
-      );
-    } on ServerRequestException catch (e) {
-      if (e.statusCode == 404) return (pictures: const <String, String>{}, version: null);
-      rethrow;
-    }
+    final answer = await _exchange('GET', baseUrl, '/api/artists/pictures', ifNoneMatch: version);
+    if (answer.status == 304) return null;
+    final versions = answer.json;
+    if (versions is! Map) throw ServerRequestException(_notWiretune(), 200);
+    return (
+      pictures: {
+        for (final MapEntry(:key, :value) in versions.entries)
+          if (key is String && value is String) key: buildArtistPictureUrl(baseUrl, key, value),
+      },
+      version: answer.etag,
+    );
   }
 
   /// A track of the server's listing ([Track.toJson]'s form, and its album cover's `coverVersion`), with its stream and

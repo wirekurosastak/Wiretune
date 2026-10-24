@@ -197,10 +197,10 @@ void main() {
       });
       vm.openAlbum(vm.library.albums.single);
       await settle(tester);
-      expect(find.text('DISC 1'), findsOneWidget);
-      expect(find.text('DISC 2'), findsOneWidget);
+      expect(find.text(Localizer.format('DiscNumber', [1])), findsOneWidget);
+      expect(find.text(Localizer.format('DiscNumber', [2])), findsOneWidget);
       expect(
-        tester.getTopLeft(find.text('DISC 2')).dy,
+        tester.getTopLeft(find.text(Localizer.format('DiscNumber', [2]))).dy,
         allOf(
           greaterThan(tester.getTopLeft(find.text('Closer')).dy),
           lessThan(tester.getTopLeft(find.text('Second Start')).dy),
@@ -210,7 +210,7 @@ void main() {
       if (size.width > 1000) {
         await tester.tap(find.text(Localizer.get('ColTitle')));
         await settle(tester);
-        expect(find.text('DISC 1'), findsNothing, reason: 'sorted by title the discs mix');
+        expect(find.text(Localizer.format('DiscNumber', [1])), findsNothing, reason: 'sorted by title the discs mix');
       }
     }
   });
@@ -234,19 +234,7 @@ void main() {
     expect(vm.selectedSection, AppSection.albums);
   });
 
-  testWidgets('typing in the search field shows the results, Escape steps back out', (tester) async {
-    final vm = await pumpApp(tester, const Size(1400, 900));
-    await tester.enterText(find.byType(TextField).first, 'daft');
-    await settle(tester);
-    expect(vm.isSearchActive, isTrue);
-    expect(find.text('Random Access Memories'), findsWidgets);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await settle(tester);
-    expect(vm.isSearchActive, isFalse);
-  });
-
-  testWidgets('the search fields follow the query: the clear button comes with the typing, back empties them', (
+  testWidgets('typing in the search shows the results and its clear button; Escape steps out and empties it', (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
@@ -256,9 +244,12 @@ void main() {
 
     await tester.enterText(field(), 'daft');
     await settle(tester);
+    expect(vm.isSearchActive, isTrue);
+    expect(find.text('Random Access Memories'), findsWidgets);
     expect(clear, findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await settle(tester);
+    expect(vm.isSearchActive, isFalse);
     expect(clear, findsNothing);
     expect(tester.widget<TextField>(field()).controller!.text, isEmpty);
 
@@ -472,7 +463,7 @@ void main() {
     vm.navigateTo(AppSection.albums);
     await settle(tester);
     expectRows('Kind of Blue', 'Random Access Memories');
-    expect(find.text('2 albums'), findsOneWidget); // under the title
+    expect(find.text(Localizer.format('AlbumCount', [2])), findsOneWidget); // under the title
     await tester.tap(find.text('Kind of Blue'));
     await settle(tester);
     expect(vm.albums.selectedAlbum?.title, 'Kind of Blue');
@@ -480,8 +471,11 @@ void main() {
     vm.navigateTo(AppSection.artists);
     await settle(tester);
     expectRows('Daft Punk', 'Miles Davis');
-    expect(find.text('2 artists'), findsOneWidget);
-    expect(find.text('1 album  •  2 tracks'), findsOneWidget);
+    expect(find.text(Localizer.format('ArtistCount', [2])), findsOneWidget);
+    expect(
+      find.text('${Localizer.format('AlbumCount', [1])}  •  ${Localizer.format('TrackCount', [2])}'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Miles Davis'));
     await settle(tester);
     expect(vm.artists.selectedArtist?.name, 'Miles Davis');
@@ -679,14 +673,14 @@ void main() {
 
     vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
     await settle(tester);
-    expect(inHeader('Download to this device'), findsNothing);
+    expect(inHeader(Localizer.get('TipDownload')), findsNothing);
     expect(tester.widget<PlayShuffleButtons>(find.byType(PlayShuffleButtons)).download, isNull, reason: 'no button');
-    expect(inRows('Download to this device'), findsNothing);
+    expect(inRows(Localizer.get('TipDownload')), findsNothing);
 
     final album = vm.library.albums.firstWhere((a) => a.title == 'Giant Steps');
     vm.openAlbum(album);
     await settle(tester);
-    await tester.tap(inHeader('Download to this device'));
+    await tester.tap(inHeader(Localizer.get('TipDownload')));
     await settle(tester);
     expect(downloads.isAlbumDownloaded(album), isTrue);
     // On its way: the arrow in progress inside a ring that fills as the tracks arrive (none yet, out of two).
@@ -704,7 +698,7 @@ void main() {
 
     await openRowMenu('Giant Steps');
     final keptByAlbum = find.ancestor(
-      of: find.text(Localizer.get('TipDownloadedWithList')),
+      of: find.text(Localizer.get('TipDownloaded')),
       matching: find.byWidgetPredicate((w) => w is PopupMenuItem),
     );
     expect(tester.widget<PopupMenuItem<Object?>>(keptByAlbum).enabled, isFalse);
@@ -716,13 +710,13 @@ void main() {
       find.descendant(of: find.byType(TrackSliver), matching: find.byIcon(Icons.downloading_rounded)),
       findsNWidgets(2),
     );
-    await tester.tap(inHeader('0 of 2 downloaded – click to remove'));
+    await tester.tap(inHeader(Localizer.format('DownloadsListProgress', [0, 2])));
     await settle(tester);
     expect(downloads.isAlbumDownloaded(album), isFalse);
 
     // One track, from its row's menu.
     await openRowMenu('Giant Steps');
-    await tester.tap(find.text('Download to this device'));
+    await tester.tap(find.text(Localizer.get('TipDownload')));
     await settle(tester);
     expect(downloads.isTrackDownloaded(vm.library.getTrack('s1')!), isTrue);
 
@@ -740,7 +734,7 @@ void main() {
     final coltrane = vm.library.getArtistByName('John Coltrane')!;
     vm.openArtist(coltrane);
     await settle(tester);
-    await tester.tap(inHeader('Download to this device'));
+    await tester.tap(inHeader(Localizer.get('TipDownload')));
     await settle(tester);
     expect(downloads.isArtistDownloaded(coltrane), isTrue);
   });
@@ -758,12 +752,12 @@ void main() {
     final player = find.byType(NowPlayingPage);
     await tester.tap(find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipMore'))));
     await settle(tester);
-    expect(find.text('Go to artist'), findsOneWidget);
-    await tester.tap(find.text('Add to playlist'));
+    expect(find.text(Localizer.get('GoToArtist')), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('TipAddToPlaylist')));
     await settle(tester);
     expect(find.text(Localizer.get('PlaylistNew')), findsOneWidget); // the dialog's way to a new playlist
     // The dialog lies over the player: its button takes the tap, and the player stays open.
-    await tester.tap(find.text('Cancel'));
+    await tester.tap(find.text(Localizer.get('Cancel')));
     await settle(tester);
     expect(find.text(Localizer.get('PlaylistNew')), findsNothing);
     expect(vm.isNowPlayingOpen, isTrue);
@@ -887,8 +881,8 @@ void main() {
     // A local file has nothing to download.
     await tester.tap(menuOf('So What'));
     await settle(tester);
-    expect(find.text('Go to album'), findsOneWidget);
-    expect(find.text('Download to this device'), findsNothing);
+    expect(find.text(Localizer.get('GoToAlbum')), findsOneWidget);
+    expect(find.text(Localizer.get('TipDownload')), findsNothing);
     await tester.tapAt(const Offset(10, 10)); // closes the menu
     await settle(tester);
 
@@ -898,8 +892,8 @@ void main() {
     );
     await tester.tap(menuOf('Giant Steps'));
     await settle(tester);
-    expect(find.text('Add to playlist'), findsOneWidget);
-    await tester.tap(find.text('Download to this device'));
+    expect(find.text(Localizer.get('TipAddToPlaylist')), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('TipDownload')));
     await settle(tester);
     expect(vm.downloads.isTrackDownloaded(vm.library.getTrack('s1')!), isTrue);
     // Waiting for its turn (the downloads have not started in this test): the arrow in progress beside the artist.
@@ -931,7 +925,7 @@ void main() {
     // Online, but nobody else is: the button is there, and its menu says what to do.
     await tester.tap(find.byTooltip(Localizer.get('TipDevices')));
     await settle(tester);
-    expect(find.textContaining('No other devices online'), findsOneWidget);
+    expect(find.textContaining(Localizer.get('DevicesNone')), findsOneWidget);
     await tester.tapAt(const Offset(10, 10));
     await settle(tester);
 
@@ -943,16 +937,19 @@ void main() {
     await settle(tester);
     await tester.tap(find.byTooltip(Localizer.get('TipDevices')));
     await settle(tester);
-    expect(find.text('This device'), findsOneWidget);
+    expect(find.text(Localizer.get('DevicesThisDevice')), findsOneWidget);
     expect(find.text('So What • Miles Davis'), findsOneWidget);
     await tester.tap(find.ancestor(of: find.text('Desk'), matching: find.byType(CheckedPopupMenuItem<String>)));
     await settle(tester);
 
     expect(vm.player.isRemote, isTrue);
-    expect(find.text('Playing on Desk'), findsOneWidget); // in the mini player, in place of the artist
+    expect(
+      find.text(Localizer.format('PlayingOn', ['Desk'])),
+      findsOneWidget,
+    ); // in the mini player, in place of the artist
     expect(find.byType(DevicesButton), findsOneWidget); // the page header's: the mini player has none
     expect(find.text('So What'), findsWidgets);
-    await tester.tap(find.byTooltip(Localizer.get('TipPause')));
+    await tester.tap(find.byTooltip(Localizer.get('Pause')));
     await settle(tester);
     expect(hub.commandsTo('desk'), [
       {'action': 'toggle'},
@@ -964,7 +961,7 @@ void main() {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.navigateTo(AppSection.settings);
     await settle(tester);
-    expect(find.text('Remote control'), findsNothing); // signed out: nothing to control
+    expect(find.text(Localizer.get('RemoteControl')), findsNothing); // signed out: nothing to control
 
     // An app keeps its view model for life: a signed-in one is another app.
     await tester.pumpWidget(const SizedBox());
@@ -972,11 +969,11 @@ void main() {
     final signedIn = createMainViewModel(vm.library, null, session)..navigateTo(AppSection.settings);
     await tester.pumpWidget(WiretuneApp(vm: signedIn));
     await settle(tester);
-    expect(find.text('Downloads'), findsOneWidget);
+    expect(find.text(Localizer.get('Downloads')), findsOneWidget);
     expect(find.textContaining('No downloads yet'), findsOneWidget);
-    expect(find.text('Remote control'), findsOneWidget);
+    expect(find.text(Localizer.get('RemoteControl')), findsOneWidget);
     final toggle = find.descendant(
-      of: find.ancestor(of: find.text('Remote control'), matching: find.byType(Row)).first,
+      of: find.ancestor(of: find.text(Localizer.get('RemoteControl')), matching: find.byType(Row)).first,
       matching: find.byType(Switch),
     );
     expect(tester.widget<Switch>(toggle).value, isFalse, reason: 'the start-up turns it on; this test never started');
@@ -1336,20 +1333,24 @@ void main() {
     expect(says('Play'), findsOneWidget);
   });
 
-  testWidgets("a phone page's top bar keeps its buttons at hand, and takes the page's name over with the scroll", (
+  // Sixty takes on one album: a phone page long enough to scroll its header away.
+  Future<MainViewModel> pumpLongAlbum(WidgetTester tester) => pumpApp(tester, const Size(400, 860), () async {
+    final library = createLibrary([
+      for (var i = 1; i <= 60; i++)
+        TestSupport.makeTrack('$i', 'Take $i', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: i),
+    ]);
+    library.initialize();
+    return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+  });
+  double shownIn(WidgetTester tester, Finder text) =>
+      tester.widget<Opacity>(find.ancestor(of: text, matching: find.byType(Opacity)).first).opacity;
+
+  testWidgets("a phone album's top bar keeps its buttons at hand, and takes the album's name over with the scroll", (
     tester,
   ) async {
-    final vm = await pumpApp(tester, const Size(400, 860), () async {
-      final library = createLibrary([
-        for (var i = 1; i <= 60; i++)
-          TestSupport.makeTrack('$i', 'Take $i', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: i),
-      ]);
-      library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
-    });
+    final vm = await pumpLongAlbum(tester);
     ScrollPosition scroll() => tester.state<ScrollableState>(find.byType(Scrollable).first).position;
-    double shown(Finder text) =>
-        tester.widget<Opacity>(find.ancestor(of: text, matching: find.byType(Opacity)).first).opacity;
+    double shown(Finder text) => shownIn(tester, text);
 
     vm.openAlbum(vm.library.albums.single);
     await settle(tester);
@@ -1398,9 +1399,18 @@ void main() {
     await tester.tap(inBar(find.byTooltip(Localizer.get('Back'))));
     await settle(tester);
     expect(vm.albums.isAlbumDetailOpen, isFalse);
+  });
 
-    // A list page's big title is the bar's from the start, where the header had it, and shrinks into it with the
-    // scroll; no way back, and the header's devices, search and account buttons are the bar's.
+  testWidgets("a phone list page's title is its top bar's, shrinks into it with the scroll, and stays so on return", (
+    tester,
+  ) async {
+    final vm = await pumpLongAlbum(tester);
+    ScrollPosition scroll() => tester.state<ScrollableState>(find.byType(Scrollable).first).position;
+    double shown(Finder text) => shownIn(tester, text);
+    Finder inBar(Finder finder) => find.descendant(of: find.byType(PinnedTitleBar), matching: finder);
+
+    // The big title is the bar's from the start, where the header had it, and shrinks into it with the scroll; no way
+    // back, and the header's devices, search and account buttons are the bar's.
     vm.navigateTo(AppSection.tracks);
     await settle(tester);
     final tracks = Localizer.get('NavTracks');
@@ -1436,8 +1446,15 @@ void main() {
     expect(find.text('Take 2'), findsNothing, reason: 'still scrolled');
     expect(size(), moreOrLessEquals(full * 17 / 30, epsilon: 0.5));
     expect(tester.getCenter(shrinking).dy, moreOrLessEquals(PinnedTitleBar.height / 2, epsilon: 0.5));
+  });
 
-    // A playlist's name, which renames it, doesn't shrink: it fades as it reaches the bar, whose own comes up after.
+  testWidgets("a phone playlist's name, which renames it, fades as it reaches the top bar rather than shrinking", (
+    tester,
+  ) async {
+    final vm = await pumpLongAlbum(tester);
+    double shown(Finder text) => shownIn(tester, text);
+
+    // The bar's own name comes up after.
     vm.navigateTo(AppSection.playlists);
     await settle(tester);
     vm.playlists.createPlaylist('Mix', vm.library.tracks.take(30).toList());
@@ -2396,6 +2413,7 @@ void main() {
     for (final (section, item) in [(AppSection.tracks, '_TableRow'), (AppSection.albums, 'CoverFlightSource')]) {
       vm.navigateTo(section);
       await settle(tester);
+      expect(find.byWidgetPredicate((w) => '${w.runtimeType}' == item), findsWidgets, reason: 'what is counted');
       debugOnRebuildDirtyWidget = (element, _) =>
           built.update(element.widget.runtimeType.toString(), (n) => n + 1, ifAbsent: () => 1);
       built.clear();
@@ -2426,6 +2444,7 @@ void main() {
     ]) {
       vm.navigateTo(section);
       await settle(tester);
+      expect(find.byWidgetPredicate((w) => '${w.runtimeType}' == item), findsWidgets, reason: 'what is counted');
       built.clear();
       // Ten small steps, a row's or a tile row's worth in all.
       final finger = await tester.startGesture(tester.getCenter(find.byType(CustomScrollView).first));
@@ -2541,6 +2560,46 @@ void main() {
     expect(frames.last, 1, reason: 'all but landed: one sharp cover');
     await settle(tester);
     expect(blur, findsNothing);
+  });
+
+  testWidgets("back from an album opened on an artist's page shows that page at once, the cover flying to its tile", (
+    tester,
+  ) async {
+    for (final size in [const Size(400, 860), const Size(1400, 900)]) {
+      final vm = await pumpApp(tester, size);
+      final artist = vm.library.artists.firstWhere((a) => a.name == 'Miles Davis');
+      final album = artist.albums.single;
+      vm.openArtist(artist);
+      await settle(tester);
+      vm.openAlbum(album);
+      await settle(tester);
+
+      expect(vm.tryNavigateBack(), isTrue);
+      await tester.pump();
+      expect(vm.artists.isArtistDetailOpen, isTrue);
+      expect(find.byType(AlbumsPage), findsNothing, reason: '$size: the Albums tab, its page closed, never shows');
+      expect(
+        find.byWidgetPredicate((w) => w is CoverFlightSource && w.tag == 'album:${album.id}'),
+        findsOneWidget,
+        reason: "$size: the cover's one place to land is the artist page's tile",
+      );
+      await settle(tester);
+    }
+  });
+
+  testWidgets("a right click on a queue row opens the track's menu", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.player.playQueue(vm.library.tracks);
+    vm.player.isQueueOpen = true;
+    await settle(tester);
+    await tester.tap(
+      find.descendant(of: find.byType(QueueLyricsPanel), matching: find.text('So What')),
+      buttons: kSecondaryButton,
+    );
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('GoToAlbum')));
+    await settle(tester);
+    expect(vm.albums.selectedAlbum?.title, 'Kind of Blue');
   });
 
   testWidgets("a page opened by a link sends its artwork back to its tile when it closes", (tester) async {

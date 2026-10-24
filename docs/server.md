@@ -55,9 +55,9 @@ code again. Keep it on persistent storage.
 **Back up the database.** A scan rebuilds the index, but nothing rebuilds the accounts, the signing key and
 everybody's playlists. Stop the server first, or copy the `.db` together with its `-wal` and `-shm` files.
 
-The database records its schema version, and a server only opens its own: anything else is refused with a message
-rather than misread. A release that changes the schema upgrades the database in place on its first start, and after
-that an older server won't open it, so keep a backup from before an upgrade.
+The database records its schema version. A server opens its own, and upgrades an older one in place on its first
+start; a newer one is refused with a message rather than misread. After an upgrade an older server won't open it, so
+keep a backup from before an upgrade.
 
 ## Scanning
 

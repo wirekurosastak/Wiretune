@@ -118,8 +118,14 @@ Future<void> showAddToPlaylistDialog(
                 title: Text(playlist.name),
                 subtitle: Text(dialog.trf('TrackCount', [playlist.trackCount])),
                 onTap: () {
+                  final vm = context.vm;
+                  // Offline, an account's playlist can't change, and the library says why itself.
+                  final made = !playlist.isServer || vm.library.serverConnected;
+                  final adds = tracks.any((t) => !playlist.trackIds.contains(t.id));
+                  final notice = dialog.trf(adds ? 'AddedToPlaylist' : 'AlreadyInPlaylist', [playlist.name]);
                   playlists.addTracks(playlist, tracks);
                   Navigator.pop(dialog);
+                  if (made) vm.showNotice(notice);
                 },
               ),
             ListTile(

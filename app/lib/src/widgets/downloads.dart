@@ -66,6 +66,6 @@ IconData? downloadIcon(DownloadState state) => switch (state) {
 /// The tooltip of a track's own download button: download, remove, or why it cannot be removed by itself.
 String downloadTip(BuildContext context, Track track) {
   final downloads = context.vm.downloads;
-  if (downloads.isDownloadedWithList(track)) return context.tr('TipDownloadedWithList');
+  if (downloads.isDownloadedWithList(track)) return context.tr('TipDownloaded');
   return context.tr(downloads.isTrackDownloaded(track) ? 'TipRemoveDownload' : 'TipDownload');
 }

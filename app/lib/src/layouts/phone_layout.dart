@@ -71,6 +71,7 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
                         Expanded(
                           child: _PageSwitcher(
                             section: vm.isSearchOpen ? null : vm.selectedSection,
+                            returns: vm.returns,
                             child: vm.isSearchOpen
                                 // A touch on the results puts the keyboard away (as in Spotify): a menu opened there
                                 // then has no field to give the focus back to when it closes.
@@ -104,12 +105,16 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
 }
 
 /// The page, changing as the tab does: in from the side of the tab it goes to and out to the other, as the tabs are
-/// laid out in the bar; the search, Settings (from the account button) and a page within a tab fade in and grow.
+/// laid out in the bar; the search, Settings (from the account button) and a page within a tab fade in and grow. Back
+/// to where a page was opened from shows that place at once, as back within a tab does.
 class _PageSwitcher extends StatefulWidget {
-  const _PageSwitcher({required this.section, required this.child});
+  const _PageSwitcher({required this.section, required this.returns, required this.child});
 
   /// The tab on show (null: the search).
   final AppSection? section;
+
+  /// [MainViewModel.returns]: a new count is a back to where a page was opened from.
+  final int returns;
   final Widget child;
 
   @override
@@ -131,6 +136,7 @@ class _PageSwitcherState extends State<_PageSwitcher> {
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
+    key: ValueKey(widget.returns),
     duration: const Duration(milliseconds: 260),
     switchInCurve: Curves.easeOutCubic,
     switchOutCurve: Curves.easeInCubic,
@@ -255,14 +261,16 @@ class _BottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
-    final colors = context.colors;
-    final palette = colors.palette;
+    final palette = context.colors.palette;
     final items = [
-      (AppSection.artists, Icons.person_rounded, palette.coral, 'NavArtists'),
-      (AppSection.albums, Icons.album, palette.purple, 'NavAlbums'),
-      (AppSection.tracks, Icons.music_note_rounded, palette.cyan, 'NavTracks'),
-      (AppSection.favorites, Icons.favorite_rounded, palette.coral, 'NavFavorites'),
-      (AppSection.playlists, Icons.queue_music_rounded, palette.lime, 'NavPlaylistsShort'),
+      for (final (section, label) in const [
+        (AppSection.artists, 'NavArtists'),
+        (AppSection.albums, 'NavAlbums'),
+        (AppSection.tracks, 'NavTracks'),
+        (AppSection.favorites, 'NavFavorites'),
+        (AppSection.playlists, 'NavPlaylistsShort'),
+      ])
+        (section, sectionIcon(section), palette.accentFor(section), label),
     ];
     assert(listEquals([for (final item in items) item.$1], order));
     final active = vm.isSearchOpen ? -1 : items.indexWhere((item) => item.$1 == vm.selectedSection);

@@ -39,9 +39,15 @@ abstract final class AppPaths {
       // The directory holds the player's access token or the server's token-signing key, so a directory created here is
       // private to the current user. An existing one is left as the admin set it up.
       if (Platform.isLinux || Platform.isMacOS) {
+        String? problem;
         try {
-          Process.runSync('chmod', ['700', dir]);
-        } catch (_) {}
+          final result = Process.runSync('chmod', ['700', dir]);
+          if (result.exitCode != 0) problem = '${result.stderr}'.trim();
+        } on ProcessException catch (e) {
+          problem = e.message;
+        }
+        // On stderr, as WiretuneLog keeps its file in this very folder.
+        if (problem != null) stderr.writeln('Wiretune: $dir could not be made private to this user: $problem');
       }
     }
     return dir;

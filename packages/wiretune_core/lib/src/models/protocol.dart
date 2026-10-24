@@ -204,8 +204,6 @@ class PlaylistUpdate {
   }
 }
 
-/// Everything the server keeps for one account besides the account itself: favourites, play statistics, playlists,
-/// and hidden items.
 /// What kind of thing someone hid: its name is the `{type}` of `/api/me/hidden/{type}/{itemId}`, and what the databases
 /// store.
 enum HiddenKind {
@@ -217,6 +215,8 @@ enum HiddenKind {
   static HiddenKind? parse(Object? name) => values.asNameMap()[name];
 }
 
+/// Everything the server keeps for one account besides the account itself: favourites, play statistics, playlists,
+/// and hidden items.
 class UserDataSnapshot {
   const UserDataSnapshot(
     this.favorites,
@@ -233,7 +233,7 @@ class UserDataSnapshot {
   final List<TrackPlayStats> plays;
   final List<PlaylistData> playlists;
 
-  /// When each favourite was marked (a server from before this field sends none).
+  /// When each favourite was marked.
   final Map<String, DateTime> favoritedAt;
 
   /// IDs of artists, albums, and tracks hidden by this user.
@@ -276,7 +276,6 @@ class UserDataSnapshot {
   }
 }
 
-/// Limits the server enforces on per-account data.
 /// The `code` of the server's error answers (`{ "error", "code" }`, docs/api.md): what went wrong, for a player to
 /// say in the user's language. The `error` beside it is the same in English, for people reading the HTTP exchange.
 abstract final class ErrorCodes {
@@ -346,6 +345,7 @@ class RuleViolation {
   final Map<String, Object> details;
 }
 
+/// Limits the server enforces on per-account data.
 abstract final class UserDataRules {
   static const int maxIdLength = 128;
   static const int maxPlaylistNameLength = 200;

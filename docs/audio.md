@@ -83,7 +83,7 @@ may resample.
 
 The TV's own media player does the work, so what decodes depends on the firmware: usually FLAC, WAV, MP3, AAC and
 Vorbis, while ALAC, APE, WavPack, DSD and Opus may well fail with an error. The TV's own output and volume apply, and
-there's no device choice or exclusive mode. Not tried on a real TV yet.
+there's no device choice or exclusive mode. It has only been tried quickly, on a 2024 Samsung TV (Tizen 8.0).
 
 ## Gapless playback
 

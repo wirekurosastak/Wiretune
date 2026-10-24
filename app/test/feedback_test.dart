@@ -232,14 +232,104 @@ void main() {
     final session = (await tester.runAsync(() => signedInSession(lib)))!;
     final remote = RemoteClient(
       session,
-      connector: (uri, token) async => throw const RemoteRefusedException('HTTP 404', 404),
+      connector: (uri, token) async => throw const RemoteRefusedException('HTTP 401', 401),
     );
     final vm = createMainViewModel(lib, null, session, remote)..navigateTo(AppSection.settings);
     await show(tester, vm, wide);
     vm.remote.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester);
-    expect(find.text(Localizer.get('RemoteStatusUnsupported')), findsOneWidget);
+    expect(find.text(Localizer.get('RemoteStatusEnded')), findsOneWidget);
+    vm.dispose();
+  });
+
+  testWidgets('adding to a playlist says so, and says when the music is in it already', (tester) async {
+    final lib = await library(tester, [TestSupport.makeTrack('1', 'So What')]);
+    lib.createPlaylist('Mix');
+    final vm = createMainViewModel(lib);
+    await show(tester, vm, wide);
+    for (final key in ['AddedToPlaylist', 'AlreadyInPlaylist']) {
+      final page = tester.element(find.text(Localizer.get('NavArtists')).first);
+      final adding = showAddTrackToPlaylistDialog(page, lib.tracks.single);
+      await settle(tester);
+      await tester.tap(find.text('Mix'));
+      await settle(tester);
+      await adding;
+      expect(find.text(Localizer.format(key, ['Mix'])), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await settle(tester);
+    }
+    expect(lib.getPlaylistTracks(lib.playlists.single), hasLength(1));
+    vm.dispose();
+  });
+
+  test("Reindex is the server's scan: this device's folder can be scanned meanwhile", () async {
+    final lib = createLibrary(const [])..initialize();
+    var serverScanning = true;
+    final session = await signedInSession(
+      lib,
+      respond: (request) => switch ((request.method, request.url.path)) {
+        ('POST', '/api/library/scan') => json(200, <String, Object?>{}),
+        ('GET', '/api/library/status') => json(200, {
+          'trackCount': 0,
+          'albumCount': 0,
+          'artistCount': 0,
+          'isScanning': serverScanning,
+        }),
+        _ => null,
+      },
+    );
+    final vm = createMainViewModel(lib, null, session);
+    addTearDown(vm.dispose);
+    final server = vm.serverSettings;
+
+    final reindexing = server.reindexServer();
+    expect((server.isReindexing, server.canReindexServer), (true, false));
+    expect(server.isScanning, isFalse, reason: "the local folder's Scan stays as it was");
+    serverScanning = false;
+    await reindexing;
+    expect((server.isReindexing, server.canReindexServer), (false, true));
+  });
+
+  test('signing in to the server already connected, typed without http://, does not connect again first', () async {
+    final lib = createLibrary(const [])..initialize();
+    var asked = 0;
+    final session = await signedInSession(
+      lib,
+      respond: (request) {
+        if (request.url.path == '/api/auth/setup-required') asked++;
+        return null;
+      },
+    );
+    await session.logout();
+    final vm = createMainViewModel(lib, null, session);
+    addTearDown(vm.dispose);
+    final server = vm.serverSettings
+      ..serverUrl = 'server:5200'
+      ..username = 'owner'
+      ..password = 'password';
+    final before = asked;
+    await server.login();
+    expect(session.isLoggedIn, isTrue);
+    expect(asked, before);
+    await pumpEventQueue(); // what signing in set off (the server's folder, for an administrator) ends first
+  });
+
+  testWidgets('hiding says so, and its Undo brings it back', (tester) async {
+    final lib = await library(tester, [TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')]);
+    final vm = createMainViewModel(lib);
+    await show(tester, vm, wide);
+    final album = lib.albums.single;
+    final said = find.text(Localizer.format('HiddenNotice', ['Kind of Blue']));
+
+    vm.hide(HiddenKind.album, album.id, album.title);
+    await settle(tester);
+    expect(said, findsOneWidget);
+    expect(lib.albums, isEmpty);
+    await tester.tap(find.text(Localizer.get('Undo')));
+    await settle(tester);
+    expect(lib.albums.map((a) => a.title), ['Kind of Blue']);
+    expect(said, findsNothing);
     vm.dispose();
   });
 

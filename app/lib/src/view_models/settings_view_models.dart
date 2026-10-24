@@ -39,6 +39,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
   /// The address field: the session's address, unless the user is typing another.
   String serverUrl = ServerSession.defaultServerUrl;
   String localFolder = '';
+
+  /// This device's folder is being scanned (the server's: [isReindexing]).
   bool isScanning = false;
   double scanProgress = 0;
 
@@ -51,6 +53,9 @@ class ServerSettingsViewModel extends ChangeNotifier {
 
   String serverFolder = '';
   bool isUpdatingServerConfig = false;
+
+  /// The server is scanning its folder again (Reindex), followed until it settles.
+  bool isReindexing = false;
 
   /// The outcome of saving the server's music folder or reindexing it, shown beside that field.
   String serverFolderMessage = '';
@@ -97,8 +102,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
   bool get hasAuthError => authErrorMessage.isNotEmpty;
   bool get hasUserManagementError => userManagementErrorMessage.isNotEmpty;
   String get passwordHint => Localizer.format('PasswordHint', [AuthRules.minPasswordLength]);
-  bool get isBusy => isConnecting || isAuthenticating || (isScanning && isLoggedIn);
-  bool get canReindexServer => isLoggedIn && isAdmin && !isScanning;
+  bool get isBusy => isConnecting || isAuthenticating || ((isScanning || isReindexing) && isLoggedIn);
+  bool get canReindexServer => isLoggedIn && isAdmin && !isReindexing;
 
   /// Whether connecting to [address] means leaving the server this device is signed in to.
   bool wouldSwitchServer(String address) {
@@ -152,7 +157,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     isAuthenticating = true;
     _showAuthError(null);
     try {
-      final typed = serverUrl.trim().replaceFirst(RegExp(r'/+$'), '').toLowerCase();
+      final typed = ServerSession.normalizeServerUrl(serverUrl)?.toLowerCase();
       if (!_session.isServerReachable ||
           _session.state == ServerConnectionState.setupRequired ||
           typed != _session.serverUrl.toLowerCase()) {
@@ -221,7 +226,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
   /// looks unmounted, or the scan failed. Empty when there is none.
   String _scanProblemText(ServerLibraryStatus status) => switch (status.lastScanProblem) {
     ErrorCodes.folderMissing => Localizer.format('ServerFolderUnavailable', [serverFolder]),
-    null => status.lastScanError ?? '', // a server from before problem codes
+    null => '',
     final code => describeServerError(code) ?? status.lastScanError ?? '',
   };
 
@@ -230,8 +235,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
       serverFolderProblem = _scanProblemText(await _session.getLibraryStatus());
     } on ServerRequestException catch (e) {
       WiretuneLog.warn('Settings', "Could not read the server's library status: ${e.message}");
-    } on ServerUnauthorizedException catch (e) {
-      WiretuneLog.warn('Settings', "Could not read the server's library status: $e");
     }
     notifyListeners();
   }
@@ -242,7 +245,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
       return;
     }
 
-    isScanning = true;
+    isReindexing = true;
     _showServerFolder(Localizer.get('ReindexStarted'));
     try {
       await _session.triggerServerScan();
@@ -270,10 +273,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
       }
     } on ServerRequestException catch (e) {
       _showServerFolder(Localizer.format('ReindexError', [e.message]), isError: true);
-    } on ServerUnauthorizedException catch (e) {
-      _showServerFolder(Localizer.format('ReindexError', ['$e']), isError: true);
     } finally {
-      isScanning = false;
+      isReindexing = false;
       notifyListeners();
     }
   }
@@ -340,8 +341,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
       savedServerFolder = serverFolder;
     } on ServerRequestException catch (e) {
       _showServerFolder(Localizer.format('ServerSettingsLoadError', [e.message]), isError: true);
-    } on ServerUnauthorizedException catch (e) {
-      _showServerFolder(Localizer.format('ServerSettingsLoadError', ['$e']), isError: true);
     }
     await _loadServerFolderProblem();
   }
@@ -368,8 +367,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
     } on ServerRequestException catch (e) {
       // The server's reason is a whole sentence in the user's language when it is one the player knows.
       _showServerFolder(e.code != null ? e.message : Localizer.format('FolderSaveError', [e.message]), isError: true);
-    } on ServerUnauthorizedException catch (e) {
-      _showServerFolder('$e', isError: true);
     } finally {
       isUpdatingServerConfig = false;
       notifyListeners();
@@ -389,23 +386,18 @@ class ServerSettingsViewModel extends ChangeNotifier {
 
   Future<void> addUser() async {
     if (!isLoggedIn || !isAdmin) return;
-    if (newUsername.trim().isEmpty || newPassword.isEmpty) {
-      _showUserManagementError(Localizer.get('AuthEnterCredentials'));
-      return;
-    }
-    if (newPassword.length < AuthRules.minPasswordLength) {
-      _showUserManagementError(Localizer.format('PasswordTooShort', [AuthRules.minPasswordLength]));
-      return;
-    }
-    if (newPassword != confirmPassword) {
-      _showUserManagementError(Localizer.get('PasswordsDontMatch'));
+    final problem = newUsername.trim().isEmpty || newPassword.isEmpty
+        ? Localizer.get('AuthEnterCredentials')
+        : _newPasswordProblem(newPassword, confirmPassword);
+    if (problem != null) {
+      _showUserManagementError(problem);
       return;
     }
 
     isAddingUser = true;
     _showUserManagementError(null);
     try {
-      await _session.registerUser(newUsername, newPassword);
+      await _session.addUser(newUsername, newPassword);
       newUsername = '';
       newPassword = '';
       confirmPassword = '';
@@ -431,12 +423,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
 
   Future<String?> changePassword(String newPassword, String confirmPassword) async {
     if (!isLoggedIn) return Localizer.get('NotSignedIn');
-    if (newPassword.isEmpty) return Localizer.get('EnterNewPassword');
-    if (newPassword.length < AuthRules.minPasswordLength) {
-      return Localizer.format('PasswordTooShort', [AuthRules.minPasswordLength]);
-    }
-    if (newPassword != confirmPassword) return Localizer.get('PasswordsDontMatch');
-
+    if (_newPasswordProblem(newPassword, confirmPassword) case final problem?) return problem;
     try {
       await _session.changePassword(newPassword);
       return null;
@@ -447,18 +434,22 @@ class ServerSettingsViewModel extends ChangeNotifier {
 
   Future<String?> adminResetPassword(String userId, String newPassword, String confirmPassword) async {
     if (!isLoggedIn || !isAdmin) return Localizer.get('SessionRejected');
-    if (newPassword.isEmpty) return Localizer.get('EnterNewPassword');
-    if (newPassword.length < AuthRules.minPasswordLength) {
-      return Localizer.format('PasswordTooShort', [AuthRules.minPasswordLength]);
-    }
-    if (newPassword != confirmPassword) return Localizer.get('PasswordsDontMatch');
-
+    if (_newPasswordProblem(newPassword, confirmPassword) case final problem?) return problem;
     try {
       await _session.adminResetPassword(userId, newPassword);
       return null;
     } catch (e) {
       return '$e';
     }
+  }
+
+  /// What is wrong with [password] as a new one, typed again as [confirm]; null when nothing is.
+  static String? _newPasswordProblem(String password, String confirm) {
+    if (password.isEmpty) return Localizer.get('EnterNewPassword');
+    if (password.length < AuthRules.minPasswordLength) {
+      return Localizer.format('PasswordTooShort', [AuthRules.minPasswordLength]);
+    }
+    return password == confirm ? null : Localizer.get('PasswordsDontMatch');
   }
 
   void _showUserManagementError(String? message) {
