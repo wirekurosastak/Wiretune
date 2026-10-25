@@ -180,6 +180,7 @@ class DetailHeader extends StatelessWidget {
     this.artworkFlight,
     this.back,
     this.details = const [],
+    this.secondaryDetails = const [],
     this.actions = const [],
     this.titleWidget,
   });
@@ -202,7 +203,12 @@ class DetailHeader extends StatelessWidget {
 
   /// Replaces the title text (a playlist's name, which can be clicked to rename it).
   final Widget? titleWidget;
+
+  /// The details under the title (on a wide screen, alongside [secondaryDetails]).
   final List<Widget> details;
+
+  /// Details placed on a second line on an upright phone (or alongside [details] on a wide screen).
+  final List<Widget> secondaryDetails;
   final List<Widget> actions;
 
   /// Below this width the artwork sits above the title; from it on (a phone held sideways, a narrow window) beside it,
@@ -276,17 +282,15 @@ class DetailHeader extends StatelessWidget {
               Positioned(left: 10, bottom: 10, child: badge),
             ],
           );
-    final detailRow = details.isEmpty
-        ? null
-        : Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            alignment: narrow ? WrapAlignment.center : WrapAlignment.start,
-            children: [
-              for (var i = 0; i < details.length; i++) ...[if (i > 0) dot, details[i]],
-            ],
-          );
+    Widget buildRow(List<Widget> items, {required bool narrow}) => Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      alignment: narrow ? WrapAlignment.center : WrapAlignment.start,
+      children: [
+        for (var i = 0; i < items.length; i++) ...[if (i > 0) dot, items[i]],
+      ],
+    );
     if (narrow) {
       // The phone's top bar takes the name over once it has reached it: one of a line shrinks into the bar's title,
       // a longer one (or a playlist's, which renames it) fades over to it.
@@ -297,6 +301,8 @@ class DetailHeader extends StatelessWidget {
         color: colors.textMain,
       );
       final narrowTitle = _pageTitle(context, titleStyle, maxLines: 3, textAlign: TextAlign.center);
+      final firstRow = details.isEmpty ? null : buildRow(details, narrow: true);
+      final secondRow = secondaryDetails.isEmpty ? null : buildRow(secondaryDetails, narrow: true);
       // The phone's header: the 230 px artwork with a glow, the title and the details centred, and a line of buttons
       // as tall as Play (see PlayShuffleButtons), Play over the ⋮ of the rows below.
       return SafeArea(
@@ -313,7 +319,14 @@ class DetailHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   if (actions.isEmpty) PinnedTitleBar.anchor(context, narrowTitle) else narrowTitle,
-                  if (detailRow != null) ...[const SizedBox(height: 6), detailRow],
+                  if (firstRow != null) ...[
+                    const SizedBox(height: 6),
+                    firstRow,
+                    if (secondRow != null) ...[const SizedBox(height: 4), secondRow],
+                  ] else if (secondRow != null) ...[
+                    const SizedBox(height: 6),
+                    secondRow,
+                  ],
                 ],
               ),
             ),
@@ -333,6 +346,8 @@ class DetailHeader extends StatelessWidget {
         ),
       );
     }
+    final allDetails = [...details, ...secondaryDetails];
+    final detailRow = allDetails.isEmpty ? null : buildRow(allDetails, narrow: false);
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -710,6 +725,8 @@ class AlbumDetail extends StatelessWidget {
                   style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.coral),
                 ),
                 if (album.releaseYear != null) DetailText('${album.releaseYear}'),
+              ],
+              secondaryDetails: [
                 DetailText(context.trf('TrackCount', [album.trackCount])),
                 DetailText(album.formattedTotalDuration),
               ],

@@ -116,8 +116,7 @@ class _PageSwitcher extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedSwitcher(
     key: ValueKey(jumps),
     duration: Duration.zero,
-    layoutBuilder: (currentChild, previousChildren) =>
-        Stack(fit: StackFit.expand, children: [?currentChild]),
+    layoutBuilder: (currentChild, previousChildren) => Stack(fit: StackFit.expand, children: [?currentChild]),
     transitionBuilder: (child, animation) => child,
     child: child,
   );
