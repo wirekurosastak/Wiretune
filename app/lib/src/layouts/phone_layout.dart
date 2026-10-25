@@ -104,62 +104,22 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
   }
 }
 
-/// The page, changing as the tab does: in from the side of the tab it goes to and out to the other, as the tabs are
-/// laid out in the bar; the search and Settings (from the account button) fade in and grow. A page opened from another
-/// tab or the search, and back from it to there, shows at once, as within a tab ([MainViewModel.jumps]).
-class _PageSwitcher extends StatefulWidget {
+/// The phone's page on show, switching directly without a transition effect.
+class _PageSwitcher extends StatelessWidget {
   const _PageSwitcher({required this.section, required this.jumps, required this.child});
 
-  /// The tab on show (null: the search).
   final AppSection? section;
-
-  /// [MainViewModel.jumps]: a new count is a page opened from another tab or the search, or back from it to there.
   final int jumps;
   final Widget child;
 
   @override
-  State<_PageSwitcher> createState() => _PageSwitcherState();
-}
-
-class _PageSwitcherState extends State<_PageSwitcher> {
-  /// Which way the last change went: 1 to a tab further right, -1 to one further left, 0 neither.
-  double _direction = 0;
-
-  @override
-  void didUpdateWidget(_PageSwitcher oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.section == widget.section) return;
-    int place(AppSection? section) => section == null ? -1 : _BottomNavigation.order.indexOf(section);
-    final from = place(oldWidget.section), to = place(widget.section);
-    _direction = from < 0 || to < 0 ? 0 : (to - from).sign.toDouble();
-  }
-
-  @override
-  Widget build(BuildContext context) => ClipRect(
-    child: AnimatedSwitcher(
-      key: ValueKey(widget.jumps),
-      duration: const Duration(milliseconds: 260),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      layoutBuilder: (currentChild, previousChildren) =>
-          Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
-      transitionBuilder: (child, animation) {
-        if (_direction == 0) {
-          return FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(scale: Tween(begin: 0.985, end: 1.0).animate(animation), child: child),
-          );
-        }
-        // The page coming in starts to the side it comes from; the one going out ends to the other.
-        final incoming = child.key == widget.child.key;
-        final side = incoming ? _direction : -_direction;
-        return SlideTransition(
-          position: Tween(begin: Offset(side, 0), end: Offset.zero).animate(animation),
-          child: RepaintBoundary(child: child),
-        );
-      },
-      child: widget.child,
-    ),
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    key: ValueKey(jumps),
+    duration: Duration.zero,
+    layoutBuilder: (currentChild, previousChildren) =>
+        Stack(fit: StackFit.expand, children: [?currentChild]),
+    transitionBuilder: (child, animation) => child,
+    child: child,
   );
 }
 

@@ -2750,21 +2750,21 @@ void main() {
     }
   });
 
-  testWidgets('a tab further right slides its page in from the right, one further left from the left', (tester) async {
+  testWidgets('tabs switch at once without transition effects', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.artists);
     await settle(tester);
+    expect(find.byType(ArtistsPage), findsOneWidget);
     vm.navigateTo(AppSection.tracks);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 60));
-    expect(tester.getTopLeft(find.byType(TracksPage)).dx, greaterThan(0));
-    await settle(tester);
+    expect(find.byType(TracksPage), findsOneWidget);
+    expect(find.byType(ArtistsPage), findsNothing);
     expect(tester.getTopLeft(find.byType(TracksPage)).dx, 0);
     vm.navigateTo(AppSection.albums);
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 60));
-    expect(tester.getTopLeft(find.byType(AlbumsPage)).dx, lessThan(0));
-    await settle(tester);
+    expect(find.byType(AlbumsPage), findsOneWidget);
+    expect(find.byType(TracksPage), findsNothing);
+    expect(tester.getTopLeft(find.byType(AlbumsPage)).dx, 0);
   });
 
   testWidgets('the search field grows out of the button that opened it, and keeps its focus once open', (tester) async {
