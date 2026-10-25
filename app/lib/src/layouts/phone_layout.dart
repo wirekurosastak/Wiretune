@@ -71,7 +71,7 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
                         Expanded(
                           child: _PageSwitcher(
                             section: vm.isSearchOpen ? null : vm.selectedSection,
-                            returns: vm.returns,
+                            jumps: vm.jumps,
                             child: vm.isSearchOpen
                                 // A touch on the results puts the keyboard away (as in Spotify): a menu opened there
                                 // then has no field to give the focus back to when it closes.
@@ -105,16 +105,16 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
 }
 
 /// The page, changing as the tab does: in from the side of the tab it goes to and out to the other, as the tabs are
-/// laid out in the bar; the search, Settings (from the account button) and a page within a tab fade in and grow. Back
-/// to where a page was opened from shows that place at once, as back within a tab does.
+/// laid out in the bar; the search and Settings (from the account button) fade in and grow. A page opened from another
+/// tab or the search, and back from it to there, shows at once, as within a tab ([MainViewModel.jumps]).
 class _PageSwitcher extends StatefulWidget {
-  const _PageSwitcher({required this.section, required this.returns, required this.child});
+  const _PageSwitcher({required this.section, required this.jumps, required this.child});
 
   /// The tab on show (null: the search).
   final AppSection? section;
 
-  /// [MainViewModel.returns]: a new count is a back to where a page was opened from.
-  final int returns;
+  /// [MainViewModel.jumps]: a new count is a page opened from another tab or the search, or back from it to there.
+  final int jumps;
   final Widget child;
 
   @override
@@ -136,7 +136,7 @@ class _PageSwitcherState extends State<_PageSwitcher> {
 
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
-    key: ValueKey(widget.returns),
+    key: ValueKey(widget.jumps),
     duration: const Duration(milliseconds: 260),
     switchInCurve: Curves.easeOutCubic,
     switchOutCurve: Curves.easeInCubic,

@@ -870,7 +870,7 @@ Widget _rows(int count, Widget Function(int index) row) => count == 0
     : SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         sliver: SliverPrototypeExtentList.builder(
-          prototypeItem: row(0),
+          prototypeItem: NoCoverFlights(child: row(0)),
           itemCount: count,
           itemBuilder: (context, index) => row(index),
         ),

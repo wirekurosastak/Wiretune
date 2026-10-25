@@ -306,6 +306,28 @@ void main() {
     expect(vm.isNowPlayingOpen, isFalse);
   });
 
+  testWidgets("the phone's full-screen player is drawn into a picture only now and then while it opens", (
+    tester,
+  ) async {
+    // Drawing the whole player into the picture the lamp bends is what a step can least afford: at 120 Hz it used to
+    // happen at most steps (the corners were in the picture).
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.player.currentTrack = vm.library.tracks.first;
+    vm.openNowPlaying();
+    await tester.pump();
+    final controller = tester.widget<SnapshotWidget>(find.byType(SnapshotWidget)).controller;
+    var pictures = 1;
+    controller.addListener(() {
+      if (controller.allowSnapshotting) pictures++;
+    });
+    var steps = 0;
+    for (; controller.allowSnapshotting && steps < 100; steps++) {
+      await tester.pump(const Duration(microseconds: 8333));
+    }
+    expect(steps, greaterThan(30), reason: 'it opened over a third of a second');
+    expect(pictures, lessThanOrEqualTo(4));
+  });
+
   testWidgets('a skip in the full-screen player shows the next track\'s title and cover', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     final tracks = vm.library.tracks.take(2).toList();
@@ -2547,10 +2569,9 @@ void main() {
             .compareTo((a.renderObject as RenderBox).localToGlobal(Offset.zero).distance),
       );
     await tester.tap(find.byElementPredicate((element) => element == tiles.first));
-    // Frame by frame at 60 fps, from its first (the frame after the page's), while it flies.
+    // Frame by frame at 60 fps, from its first (the page's own), while it flies.
     final frames = <int>[];
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 17));
     while (blur.evaluate().isNotEmpty && frames.length < 60) {
       frames.add(copies());
       await tester.pump(const Duration(milliseconds: 17));
@@ -2562,7 +2583,7 @@ void main() {
     expect(blur, findsNothing);
   });
 
-  testWidgets("back from an album opened on an artist's page shows that page at once, the cover flying to its tile", (
+  testWidgets("an album opened on an artist's page shows at once, as does that page back from it, the cover flying", (
     tester,
   ) async {
     for (final size in [const Size(400, 860), const Size(1400, 900)]) {
@@ -2571,8 +2592,14 @@ void main() {
       final album = artist.albums.single;
       vm.openArtist(artist);
       await settle(tester);
+
+      // Another tab's page, yet neither the tabs' slide nor a fade: the cover's flight is the way there.
       vm.openAlbum(album);
+      await tester.pump();
+      expect(find.byType(ArtistDetail), findsNothing, reason: "$size: the artist's page doesn't stay to go out");
+      final opened = tester.getTopLeft(find.byType(AlbumDetail));
       await settle(tester);
+      expect(tester.getTopLeft(find.byType(AlbumDetail)), opened, reason: '$size: in its place from the first frame');
 
       expect(vm.tryNavigateBack(), isTrue);
       await tester.pump();
@@ -2584,6 +2611,36 @@ void main() {
         reason: "$size: the cover's one place to land is the artist page's tile",
       );
       await settle(tester);
+    }
+  });
+
+  testWidgets("a cover is in flight from the frame its page opens or closes in, so nothing shows through first", (
+    tester,
+  ) async {
+    final flying = find.byWidgetPredicate((w) => '${w.runtimeType}' == '_MotionBlur', skipOffstage: false);
+    Finder albumCover() => find.byWidgetPredicate((w) => w is CoverFlightSource && w.tag.startsWith('album:'));
+    // A phone's album opened on its artist's page (another tab), a computer's from the Albums tab itself.
+    for (final (size, section) in [
+      (const Size(400, 860), AppSection.artists),
+      (const Size(1400, 900), AppSection.albums),
+    ]) {
+      final vm = await pumpApp(tester, size);
+      vm.navigateTo(section);
+      if (section == AppSection.artists) vm.openArtist(vm.library.artists.firstWhere((a) => a.name == 'Miles Davis'));
+      await settle(tester);
+      await tester.tap(albumCover().first);
+      await tester.pump();
+      expect(find.byType(AlbumDetail), findsOneWidget);
+      expect(flying, findsOneWidget, reason: '$size: flying in from the first frame');
+      await settle(tester);
+      expect(flying, findsNothing);
+
+      expect(vm.tryNavigateBack(), isTrue);
+      await tester.pump();
+      expect(find.byType(AlbumDetail), findsNothing);
+      expect(flying, findsOneWidget, reason: '$size: flying back from the first frame');
+      await settle(tester);
+      expect(flying, findsNothing);
     }
   });
 

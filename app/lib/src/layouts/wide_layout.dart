@@ -130,8 +130,8 @@ class _Panel extends StatelessWidget {
   }
 }
 
-/// The page of the selected section, or the search results, or the queue, fading in. Back to where a page was opened
-/// from shows that place at once ([MainViewModel.returns]), as back within a section does.
+/// The page of the selected section, or the search results, or the queue, fading in. A page opened from another
+/// section or the search, and back from it to there, shows at once, as within a section ([MainViewModel.jumps]).
 class _Content extends StatelessWidget {
   const _Content({required this.vm});
 
@@ -151,7 +151,7 @@ class _Content extends StatelessWidget {
       }
       return _TilePinch(
         child: AnimatedSwitcher(
-          key: ValueKey(vm.returns),
+          key: ValueKey(vm.jumps),
           duration: const Duration(milliseconds: 220),
           switchInCurve: Curves.easeOutCubic,
           layoutBuilder: (currentChild, previousChildren) =>

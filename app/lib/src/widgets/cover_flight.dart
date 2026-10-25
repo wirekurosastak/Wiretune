@@ -94,6 +94,10 @@ abstract final class CoverFlight {
   static String? _landing;
   static final ValueNotifier<int> _landed = ValueNotifier(0);
 
+  /// The cover of a page that just closed, flying back: the tile showing it ([tag]) carries it when it is built in the
+  /// same frame, so that it is there from the first; else [_CoverFlightTargetState._flyBack] sends it a frame later.
+  static ({String tag, Rect from, Widget cover, double? radius})? _returning;
+
   static void _land(String tag) {
     if (_landing != tag) return;
     _landing = null;
@@ -108,18 +112,18 @@ abstract final class CoverFlight {
   /// A press opens the page within this long, or the cover doesn't fly.
   static const Duration _pressToOpen = Duration(milliseconds: 1500);
 
+  /// Where [context]'s box is on the screen; null for one not laid out, or not placed on the screen at all (a list's
+  /// row kept alive out of sight has no place: its transform is zero).
   static Rect? _rectOf(BuildContext context) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.attached || !box.hasSize) return null;
-    return box.localToGlobal(Offset.zero) & box.size;
+    final rect = box.localToGlobal(Offset.zero) & box.size;
+    return rect.isFinite ? rect : null;
   }
 
-  /// [cover] flies from [from] to where [to] is (asked every frame: the page under it may still be settling), its
-  /// corners rounding from [fromRadius] to [toRadius] (null: round, as it is), over everything in [overlay] (none: it
-  /// lands at once); then [onLanded]. With an [arc] it rises that high on the way, as if thrown. It takes [duration], or
-  /// as long as its distance asks ([_durationFor]); its speed rises and falls gently (an ease in and out whose top
-  /// speed is 1.7 times the average, where a cubic one's is 2.8). Each frame shows it blurred along the way it went
-  /// since the last ([_MotionBlur]), so that it glides even where frames are few and far between.
+  /// [cover] flies over everything in [overlay] (none: it lands at once), as a [_Flight] in an entry of its own: for
+  /// flights set off by an event (queued music). A page's flights are carried by what is built in the frame the page
+  /// changes in (its artwork, the tile it lands on), as that frame can't add to the overlay.
   static void _fly(
     OverlayState? overlay,
     Widget cover, {
@@ -135,53 +139,21 @@ abstract final class CoverFlight {
       onLanded();
       return;
     }
-    // Once, from where it goes at the start: the builder runs again whenever the overlay does.
-    final time = duration ?? _durationFor(((to() ?? from).center - from.center).distance);
     late final OverlayEntry entry;
-    // When the last frame was, how far through the flight, and how much of it its blur spanned.
-    var lastAt = Duration.zero;
-    var lastProgress = 0.0;
-    var span = 16.7 / time.inMilliseconds;
     entry = OverlayEntry(
-      builder: (context) => TweenAnimationBuilder<double>(
-        tween: Tween(begin: 0, end: 1),
-        duration: time,
-        onEnd: () {
+      builder: (context) => _Flight(
+        cover: cover,
+        from: from,
+        to: to,
+        fromRadius: fromRadius,
+        toRadius: toRadius,
+        duration: duration,
+        arc: arc,
+        onLanded: () {
           entry.remove();
           entry.dispose();
           onLanded();
         },
-        builder: (context, progress, child) {
-          final target = to() ?? from;
-          Rect at(double progress) {
-            final t = Curves.easeInOut.transform(progress.clamp(0.0, 1.0));
-            return Rect.lerp(from, target, t)!.shift(Offset(0, -arc * math.sin(math.pi * t)));
-          }
-
-          // The blur spans a frame's time, centred on now: as long as the last frame came before this one (one
-          // frame at 60 fps for the first, or after frames stopped coming for a while; built again within a frame,
-          // what it was).
-          final now = SchedulerBinding.instance.currentFrameTimeStamp;
-          final gap = now - lastAt;
-          if (gap > Duration.zero) {
-            span = lastAt == Duration.zero || gap > const Duration(milliseconds: 50)
-                ? 16.7 / time.inMilliseconds
-                : progress - lastProgress;
-            lastAt = now;
-            lastProgress = progress;
-          }
-          final rect = at(progress);
-          final radius = fromRadius == null || toRadius == null ? null : ui.lerpDouble(fromRadius, toRadius, progress)!;
-          return Positioned.fromRect(
-            rect: rect,
-            child: _MotionBlur(
-              from: at(progress - span / 2).shift(-rect.topLeft),
-              to: at(progress + span / 2).shift(-rect.topLeft),
-              child: radius == null ? child! : ClipRRect(borderRadius: BorderRadius.circular(radius), child: child),
-            ),
-          );
-        },
-        child: IgnorePointer(child: cover),
       ),
     );
     overlay.insert(entry);
@@ -213,25 +185,42 @@ class CoverFlightSource extends StatefulWidget {
 
 class _CoverFlightSourceState extends State<CoverFlightSource> {
   final GlobalKey _cover = GlobalKey();
+  final OverlayPortalController _flight = OverlayPortalController();
+
+  /// The cover flying back onto this one from the page that closed, while it does.
+  ({String tag, Rect from, Widget cover, double? radius})? _returning;
+
+  /// Under [NoCoverFlights]: only measured, never shown, so just the cover.
+  late final bool _measuredOnly = context.getInheritedWidgetOfExactType<NoCoverFlights>() != null;
 
   @override
   void initState() {
     super.initState();
-    CoverFlight._register(widget.tag, this);
+    if (!_measuredOnly) CoverFlight._register(widget.tag, this);
   }
 
   @override
   void didUpdateWidget(CoverFlightSource oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tag == widget.tag) return;
+    if (_measuredOnly || oldWidget.tag == widget.tag) return;
     CoverFlight._unregister(oldWidget.tag, this);
     CoverFlight._register(widget.tag, this);
   }
 
   @override
   void dispose() {
-    CoverFlight._unregister(widget.tag, this);
+    if (!_measuredOnly) {
+      if (_returning != null) CoverFlight._land(widget.tag);
+      CoverFlight._unregister(widget.tag, this);
+    }
     super.dispose();
+  }
+
+  void _landed() {
+    if (!mounted) return;
+    CoverFlight._land(widget.tag);
+    _flight.hide();
+    setState(() => _returning = null);
   }
 
   Rect? get rect {
@@ -240,30 +229,64 @@ class _CoverFlightSourceState extends State<CoverFlightSource> {
   }
 
   @override
-  Widget build(BuildContext context) => Listener(
-    onPointerDown: (_) {
-      final rect = this.rect;
-      if (rect == null) return;
-      CoverFlight._pressed = (
-        tag: widget.tag,
-        rect: rect,
-        radius: widget.radius,
-        cover: widget.cover,
-        at: DateTime.now(),
-      );
-    },
-    child: widget.builder(
-      context,
-      KeyedSubtree(
-        key: _cover,
-        child: ValueListenableBuilder<int>(
-          valueListenable: CoverFlight._landed,
-          builder: (context, _, child) => Opacity(opacity: CoverFlight._landing == widget.tag ? 0 : 1, child: child),
-          child: widget.cover,
+  Widget build(BuildContext context) {
+    if (_measuredOnly) return widget.builder(context, widget.cover);
+    // Built as the page that showed this cover closes: the flight back is this cover's to carry, from this frame on.
+    if (CoverFlight._returning case final flight? when flight.tag == widget.tag) {
+      CoverFlight._returning = null;
+      _returning = flight;
+      _flight.show();
+    }
+    return Listener(
+      onPointerDown: (_) {
+        final rect = this.rect;
+        if (rect == null) return;
+        CoverFlight._pressed = (
+          tag: widget.tag,
+          rect: rect,
+          radius: widget.radius,
+          cover: widget.cover,
+          at: DateTime.now(),
+        );
+      },
+      child: OverlayPortal(
+        overlayLocation: OverlayChildLocation.rootOverlay,
+        controller: _flight,
+        overlayChildBuilder: (context) {
+          final flight = _returning!;
+          return _Flight(
+            cover: flight.cover,
+            from: flight.from,
+            // The list grows into place as it comes back, and this cover with it.
+            to: () => rect ?? CoverFlight._source(widget.tag)?.rect,
+            fromRadius: flight.radius,
+            toRadius: widget.radius,
+            onLanded: _landed,
+          );
+        },
+        child: widget.builder(
+          context,
+          KeyedSubtree(
+            key: _cover,
+            child: ValueListenableBuilder<int>(
+              valueListenable: CoverFlight._landed,
+              builder: (context, _, child) =>
+                  Opacity(opacity: CoverFlight._landing == widget.tag ? 0 : 1, child: child),
+              child: widget.cover,
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+/// Covers under it neither start a flight nor take one: a list's prototype row, which is only measured.
+class NoCoverFlights extends InheritedWidget {
+  const NoCoverFlights({super.key, required super.child});
+
+  @override
+  bool updateShouldNotify(NoCoverFlights oldWidget) => false;
 }
 
 /// A page's artwork that a cover flies into when it opens from a press on that cover ([CoverFlightSource]), and back
@@ -287,6 +310,10 @@ class CoverFlightTarget extends StatefulWidget {
 class _CoverFlightTargetState extends State<CoverFlightTarget> {
   bool _waiting = false;
   ScrollPosition? _position;
+  final OverlayPortalController _flight = OverlayPortalController();
+
+  /// The pressed cover flying in, while it does: what it shows, where from, its corners.
+  ({Widget cover, Rect from, double? radius})? _arriving;
 
   /// Where the artwork is on the screen, kept up to date while the page scrolls: a closed page can't be measured.
   Rect? _rect;
@@ -309,37 +336,29 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
       CoverFlight._pressed = null;
       _waiting = true;
       _cover = pressed.cover;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final to = mounted ? CoverFlight._rectOf(context) : null;
-        if (to == null) {
-          if (mounted) setState(() => _waiting = false);
-          return;
-        }
-        _rect = to;
-        final arrival = widget.arrival;
-        final cover = arrival == null
+      final arrival = widget.arrival;
+      _arriving = (
+        cover: arrival == null
             ? pressed.cover
-            : Stack(fit: StackFit.expand, children: [pressed.cover, CoverImage.withoutPlaceholders(arrival)]);
-        // Towards where the artwork is when it gets there: the page grows into place as it comes in.
-        CoverFlight._fly(
-          _overlay,
-          cover,
-          from: pressed.rect,
-          to: () => mounted ? CoverFlight._rectOf(context) ?? _rect : _rect,
-          fromRadius: pressed.radius,
-          toRadius: widget.radius,
-          onLanded: () {
-            if (!mounted) return;
-            _measure();
-            setState(() => _waiting = false);
-          },
-        );
-      });
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _measure();
-      });
+            : Stack(fit: StackFit.expand, children: [pressed.cover, CoverImage.withoutPlaceholders(arrival)]),
+        from: pressed.rect,
+        radius: pressed.radius,
+      );
+      _flight.show();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _measure();
+    });
+  }
+
+  void _arrived() {
+    if (!mounted) return;
+    _measure();
+    _flight.hide();
+    setState(() {
+      _waiting = false;
+      _arriving = null;
+    });
   }
 
   @override
@@ -367,17 +386,23 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
     super.dispose();
   }
 
-  /// The page closes: the cover flies back to its tile, once the list is built again, if the tile is on the screen.
+  /// The page closes: the cover flies back to its tile, if the tile is on the screen. A tile built in this frame (the
+  /// list coming back) carries it from the start ([CoverFlight._returning]); one that was there already, a frame later.
   void _flyBack() {
     final from = _rect;
     final cover = _cover ?? widget.arrival;
     if (from == null || cover == null) return;
     _cover = null;
     final tag = widget.tag;
+    final radius = widget.radius;
     final overlay = _overlay;
     if (overlay == null || !overlay.mounted) return;
     CoverFlight._landing = tag;
+    final flight = (tag: tag, from: from, cover: cover, radius: radius);
+    CoverFlight._returning = flight;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!identical(CoverFlight._returning, flight)) return; // a tile took it
+      CoverFlight._returning = null;
       final source = CoverFlight._source(tag);
       final to = source?.rect;
       final screen = overlay.mounted ? MediaQuery.maybeSizeOf(overlay.context) : null;
@@ -399,7 +424,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
         from: from,
         // The list grows into place as it comes back, and its tile with it.
         to: () => CoverFlight._source(tag)?.rect ?? to,
-        fromRadius: widget.radius,
+        fromRadius: radius,
         toRadius: source.widget.radius,
         onLanded: landed,
       );
@@ -407,7 +432,23 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   }
 
   @override
-  Widget build(BuildContext context) => Opacity(opacity: _waiting ? 0 : 1, child: widget.child);
+  Widget build(BuildContext context) => OverlayPortal(
+    overlayLocation: OverlayChildLocation.rootOverlay,
+    controller: _flight,
+    overlayChildBuilder: (context) {
+      final arriving = _arriving!;
+      return _Flight(
+        cover: arriving.cover,
+        from: arriving.from,
+        // Towards where the artwork is when it gets there: the page grows into place as it comes in.
+        to: () => mounted ? CoverFlight._rectOf(this.context) ?? _rect : _rect,
+        fromRadius: arriving.radius,
+        toRadius: widget.radius,
+        onLanded: _arrived,
+      );
+    },
+    child: Opacity(opacity: _waiting ? 0 : 1, child: widget.child),
+  );
 }
 
 /// The player's cover (the mini player's, the player bar's), where the cover of queued music lands
@@ -449,6 +490,120 @@ class _CoverFlightLandingState extends State<CoverFlightLanding> with SingleTick
     builder: (context, child) => Transform.scale(scale: 1 + 0.14 * math.sin(math.pi * _bump.value), child: child),
     child: widget.child,
   );
+}
+
+/// A cover in flight, in an overlay: from [from] to where [to] is (asked every frame: the page under it may still be
+/// settling), its corners rounding from [fromRadius] to [toRadius] (null: round, as it is); then [onLanded]. With an
+/// [arc] it rises that high on the way, as if thrown. Its first frame shows it where it sets off, so that it is there
+/// the moment the page under it changes; it moves once that frame is laid out and its way known, taking [duration] or
+/// as long as its distance asks ([CoverFlight._durationFor]), and lands at once when either end is off the screen. Its
+/// speed rises and falls gently (an ease in and out whose top speed is 1.7 times the average, where a cubic one's is
+/// 2.8). Each frame shows it blurred along the way it went since the last ([_MotionBlur]), so that it glides even where
+/// frames are few and far between.
+class _Flight extends StatefulWidget {
+  const _Flight({
+    required this.cover,
+    required this.from,
+    required this.to,
+    required this.fromRadius,
+    required this.toRadius,
+    required this.onLanded,
+    this.duration,
+    this.arc = 0,
+  });
+
+  final Widget cover;
+  final Rect from;
+  final Rect? Function() to;
+  final double? fromRadius;
+  final double? toRadius;
+  final VoidCallback onLanded;
+  final Duration? duration;
+  final double arc;
+
+  @override
+  State<_Flight> createState() => _FlightState();
+}
+
+class _FlightState extends State<_Flight> with SingleTickerProviderStateMixin {
+  /// Started in the frame the cover appears in, so that its clock runs from that frame.
+  late final Ticker _clock = createTicker(_tick);
+
+  /// How long it takes, known once that frame is laid out (and so where it goes); a frame's share of it at 60 fps.
+  Duration? _time;
+  var _frame = 0.0;
+
+  var _progress = 0.0;
+
+  // When the last frame was, how far through the flight then, and how much of it the blur spans.
+  var _lastAt = Duration.zero;
+  var _lastProgress = 0.0;
+  var _span = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _clock.start();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final to = widget.to();
+      final size = MediaQuery.maybeSizeOf(context);
+      final screen = size == null ? null : Offset.zero & size;
+      if (to == null || screen == null || !screen.overlaps(to) || !screen.overlaps(widget.from)) {
+        _clock.stop();
+        widget.onLanded();
+        return;
+      }
+      final time = _time = widget.duration ?? CoverFlight._durationFor((to.center - widget.from.center).distance);
+      _frame = 16.7 / time.inMilliseconds;
+    });
+  }
+
+  void _tick(Duration elapsed) {
+    final time = _time;
+    if (time == null) return;
+    final progress = math.min(1.0, elapsed.inMicroseconds / time.inMicroseconds);
+    // The blur spans a frame's time, centred on now: the last frame's step (one frame at 60 fps for the first, or
+    // after frames stopped coming for a while).
+    final gap = elapsed - _lastAt;
+    _span = _lastAt == Duration.zero || gap > const Duration(milliseconds: 50) ? _frame : progress - _lastProgress;
+    _lastAt = elapsed;
+    _lastProgress = progress;
+    setState(() => _progress = progress);
+    if (progress == 1) {
+      _clock.stop();
+      widget.onLanded();
+    }
+  }
+
+  @override
+  void dispose() {
+    _clock.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _progress;
+    final target = widget.to() ?? widget.from;
+    Rect at(double progress) {
+      final t = Curves.easeInOut.transform(progress.clamp(0.0, 1.0));
+      return Rect.lerp(widget.from, target, t)!.shift(Offset(0, -widget.arc * math.sin(math.pi * t)));
+    }
+
+    final rect = at(progress);
+    final fromRadius = widget.fromRadius, toRadius = widget.toRadius;
+    final radius = fromRadius == null || toRadius == null ? null : ui.lerpDouble(fromRadius, toRadius, progress)!;
+    final cover = IgnorePointer(child: widget.cover);
+    return Positioned.fromRect(
+      rect: rect,
+      child: _MotionBlur(
+        from: at(progress - _span / 2).shift(-rect.topLeft),
+        to: at(progress + _span / 2).shift(-rect.topLeft),
+        child: radius == null ? cover : ClipRRect(borderRadius: BorderRadius.circular(radius), child: cover),
+      ),
+    );
+  }
 }
 
 /// Its child, painted as the average of where it is over a frame's time: from [from] to [to] (where it is then, by its

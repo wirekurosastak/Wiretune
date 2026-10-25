@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 
@@ -165,26 +167,27 @@ class _MagicLampState extends State<MagicLamp> {
     super.dispose();
   }
 
-  /// The corners of the player while it moves, as a window's.
-  static const double _radius = 32;
+  /// How often the picture is taken again while it moves, so that what arrives meanwhile (the cover, its colours)
+  /// shows in it soon rather than when it has opened. Not every frame: drawing the whole player into a picture is the
+  /// one costly part of a step (the corners are the painter's, so they need none).
+  static const Duration _repicture = Duration(milliseconds: 100);
 
-  /// The last part of the way open, over which the corners straighten (where the screen's own rounded corners are).
-  static const double _straighten = 0.15;
+  /// When the picture was taken, by the frames' clock.
+  Duration _pictureAt = Duration.zero;
 
-  /// The corners' radius at [t] of the way open.
-  static double _cornersAt(double t) => _radius * ((1 - t) / _straighten).clamp(0.0, 1.0);
-
-  /// A picture while it moves, itself once it is open. The picture is taken again every few steps, so what arrives
-  /// meanwhile (the cover, its colours) shows in it soon rather than when it has opened, without the cost of a picture
-  /// a frame; at every step while its corners change.
+  /// A picture while it moves, itself once it is open; a new picture as it starts moving, then every [_repicture].
   void _follow() {
-    final t = widget.sheet.position.value;
-    final moving = t < 1;
-    _snapshot.allowSnapshotting = moving;
-    if (moving && (t > 1 - _straighten || _steps++ % 3 == 2)) _snapshot.clear();
+    final moving = widget.sheet.position.value < 1;
+    // The last frame's time: a finger moves it between frames.
+    final now = SchedulerBinding.instance.currentSystemFrameTimeStamp;
+    if (moving != _snapshot.allowSnapshotting) {
+      _snapshot.allowSnapshotting = moving;
+      _pictureAt = now;
+    } else if (moving && now - _pictureAt >= _repicture) {
+      _snapshot.clear();
+      _pictureAt = now;
+    }
   }
-
-  int _steps = 0;
 
   /// The cover, in this widget's box; null while it isn't there.
   Rect? _lamp() {
@@ -195,28 +198,13 @@ class _MagicLampState extends State<MagicLamp> {
   }
 
   @override
-  Widget build(BuildContext context) => SnapshotWidget(
-    controller: _snapshot,
-    painter: _painter,
-    child: ValueListenableBuilder<double>(
-      valueListenable: widget.sheet.position,
-      // Always there (the player under it stays as it is), clipping only while the corners are round.
-      builder: (context, t, child) {
-        final radius = _cornersAt(t);
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(radius),
-          clipBehavior: radius == 0 ? Clip.none : Clip.antiAlias,
-          child: child,
-        );
-      },
-      child: widget.child,
-    ),
-  );
+  Widget build(BuildContext context) => SnapshotWidget(controller: _snapshot, painter: _painter, child: widget.child);
 }
 
 /// Bends the player's picture into the lamp's stream: a fine grid of it (fine enough that no cell shears what it
 /// shows), whose rows come out of the cover top first (the top with the sheet, so with a finger), each widening as it
-/// leaves the cover behind, so that the sides curve into a neck at the cover, as in KDE's magic lamp.
+/// leaves the cover behind, so that the sides curve into a neck at the cover, as in KDE's magic lamp. The stream has a
+/// window's rounded corners, squeezed and stretched with the picture, straightening over the last of the way.
 class _LampPainter extends SnapshotPainter {
   _LampPainter(this.position, this.lamp) {
     position.addListener(notifyListeners);
@@ -244,6 +232,61 @@ class _LampPainter extends SnapshotPainter {
   /// How far behind the top the bottom row starts out of the cover (a part of the whole way); it catches up by the
   /// end.
   static const double _lag = 0.5;
+
+  /// The corners of the stream while it moves, as a window's.
+  static const double _radius = 32;
+
+  /// The last part of the way open, over which the corners straighten (where the screen's own rounded corners are).
+  static const double _straighten = 0.15;
+
+  /// The corners' radius at [t] of the way open.
+  static double _cornersAt(double t) => _radius * ((1 - t) / _straighten).clamp(0.0, 1.0);
+
+  /// The point [distance] along the line through [points] from its first one (its last one past the end).
+  static Offset _along(List<Offset> points, double distance) {
+    for (var i = 1; i < points.length; i++) {
+      final step = (points[i] - points[i - 1]).distance;
+      if (distance <= step && step > 0) return Offset.lerp(points[i - 1], points[i], distance / step)!;
+      distance -= step;
+    }
+    return points.last;
+  }
+
+  /// The points of [points] more than [from] and less than [to] along the line through them.
+  static Iterable<Offset> _between(List<Offset> points, double from, double to) sync* {
+    var travelled = 0.0;
+    for (var i = 1; i < points.length - 1; i++) {
+      travelled += (points[i] - points[i - 1]).distance;
+      if (travelled > from && travelled < to) yield points[i];
+    }
+  }
+
+  /// The stream's outline: the top row, the [right] side down, the bottom row and the [left] side up, each corner
+  /// rounded: [top] and [bottom] are how far the corners reach along their row and along the sides.
+  static Path _outline(List<Offset> left, List<Offset> right, Size top, Size bottom) {
+    var side = 0.0;
+    for (var i = 1; i < right.length; i++) {
+      side += (right[i] - right[i - 1]).distance;
+    }
+    final topX = math.min(top.width, (right.first.dx - left.first.dx) / 2), topY = math.min(top.height, side / 2);
+    final bottomX = math.min(bottom.width, (right.last.dx - left.last.dx) / 2);
+    final bottomY = math.min(bottom.height, side / 2);
+    final up = left.reversed.toList();
+    final path = Path()..moveTo(left.first.dx + topX, left.first.dy);
+    void corner(Offset at, Offset to) => path.quadraticBezierTo(at.dx, at.dy, to.dx, to.dy);
+    void line(Offset to) => path.lineTo(to.dx, to.dy);
+    line(right.first - Offset(topX, 0));
+    corner(right.first, _along(right, topY));
+    _between(right, topY, side - bottomY).forEach(line);
+    line(_along(right, side - bottomY));
+    corner(right.last, right.last - Offset(bottomX, 0));
+    line(left.last + Offset(bottomX, 0));
+    corner(left.last, _along(up, bottomY));
+    _between(up, bottomY, side - topY).forEach(line);
+    line(_along(up, side - topY));
+    corner(left.first, left.first + Offset(topX, 0));
+    return path..close();
+  }
 
   @override
   void paintSnapshot(
@@ -280,7 +323,22 @@ class _LampPainter extends SnapshotPainter {
       ..color = Color.fromRGBO(0, 0, 0, Curves.easeOut.transform((t * 2.5).clamp(0.0, 1.0)))
       ..shader = ImageShader(image, TileMode.clamp, TileMode.clamp, Matrix4.identity().storage)
       ..filterQuality = FilterQuality.medium;
-    context.canvas.drawVertices(vertices, BlendMode.srcOver, paint);
+    final canvas = context.canvas;
+    final radius = _cornersAt(t);
+    if (radius > 0) {
+      final left = [for (var i = 0; i <= _rows; i++) positions[i * (_columns + 1)]];
+      final right = [for (var i = 0; i <= _rows; i++) positions[i * (_columns + 1) + _columns]];
+      // The picture's corners, as far as the stream squeezes or stretches it there.
+      Size corner(int row, int next) => Size(
+        radius * (right[row].dx - left[row].dx) / size.width,
+        radius * (right[next] - right[row]).distance * _rows / size.height,
+      );
+      canvas
+        ..save()
+        ..clipPath(_outline(left, right, corner(0, 1), corner(_rows, _rows - 1)));
+    }
+    canvas.drawVertices(vertices, BlendMode.srcOver, paint);
+    if (radius > 0) canvas.restore();
     vertices.dispose();
   }
 

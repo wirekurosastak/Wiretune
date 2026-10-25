@@ -416,10 +416,16 @@ class MainViewModel extends ChangeNotifier {
 
   // ── Opening albums, artists and playlists from anywhere ────────────────────────────────────────
 
-  /// How many times back has returned to where a page was opened from (another tab, the search). The layouts show that
-  /// place at once, as back within a tab does: a cross-fade would show the tab left, whose page is closed by then, as
-  /// its list, and send the page's cover flying back to that list.
-  int returns = 0;
+  /// How many times a page was opened from another tab or the search, or back went from it to there. The layouts show
+  /// such a jump at once, as a page opened or left within a tab, the cover's flight being the way between the two: the
+  /// tabs' slide would move the page as if a tab had been chosen, and a cross-fade back would show the tab left, whose
+  /// page is closed by then, as its list, and send the page's cover flying back to that list.
+  int jumps = 0;
+
+  /// A page about to open on [target]'s tab: from another tab or the search, a jump ([jumps]).
+  void _jumpTo(AppSection target) {
+    if (target != _selectedSection || _isSearchOpen || _isSearchActive) jumps++;
+  }
 
   /// What "back" does on an album, artist or playlist page opened from where the user is now: return to the search
   /// results, to the detail page the user came from, or to the tab. [target] is the section being opened.
@@ -429,7 +435,7 @@ class MainViewModel extends ChangeNotifier {
     return (
       backText,
       () {
-        returns++;
+        jumps++;
         onReturn();
       },
     );
@@ -490,6 +496,7 @@ class MainViewModel extends ChangeNotifier {
 
   void openAlbum(Album? album) {
     if (album == null) return;
+    _jumpTo(AppSection.albums);
     final (backText, onReturn) = _captureOrigin(AppSection.albums);
     albums.openAlbumWithOrigin(album, backText, onReturn);
     isNowPlayingOpen = false;
@@ -504,6 +511,7 @@ class MainViewModel extends ChangeNotifier {
 
   void openArtist(Artist? artist) {
     if (artist == null) return;
+    _jumpTo(AppSection.artists);
     final (backText, onReturn) = _captureOrigin(AppSection.artists);
     artists.openArtistWithOrigin(artist, backText, onReturn);
     isNowPlayingOpen = false;
@@ -514,6 +522,7 @@ class MainViewModel extends ChangeNotifier {
 
   void openPlaylist(Playlist? playlist) {
     if (playlist == null) return;
+    _jumpTo(AppSection.playlists);
     final (backText, onReturn) = _captureOrigin(AppSection.playlists);
     playlists.openPlaylistWithOrigin(playlist, backText, onReturn);
     isNowPlayingOpen = false;
