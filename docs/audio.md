@@ -117,9 +117,9 @@ stay dark, and the log says why.
 
 ## Known limitations
 
-- **Exclusive and bit-perfect are unverified everywhere.** The Linux path (mpv's ALSA output on a `hw:` device) has been
-  reviewed but never measured; on Windows and macOS the code has never met a DAC. Reports from real setups are very
-  welcome.
+- **Exclusive and bit-perfect are tried on Linux and Windows with an SMSL SU-1 USB DAC**, but have not been measured
+  with bit-exact test streams; on macOS the code has never met a DAC. Reports from further setups and real measurements
+  are very welcome.
 - **The signal-path readout shows what Wiretune asked for, not what it measured.** In bit-perfect mode it says
   *Bit-perfect requested (PCM, no gain, exclusive device access)* (or *Bit-perfect requested (lossy source decoded to
   PCM, no gain, exclusive device access)* when playing a lossy file), and means exactly that.

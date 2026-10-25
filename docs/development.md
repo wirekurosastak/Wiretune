@@ -96,12 +96,12 @@ shells.
 | Core, server | The tests, on Linux. The server binary has run against a real folder: scanning, sign-in, gzip, ranges, covers, and music copied into the folder picked up by itself |
 | App logic and layouts | View-model and widget tests: every section in both layouts, light and dark, a small phone at 150 % font size, a 1080p TV |
 | Downloads, remote control | Against the real server in the tests: copies byte for byte, played with the server switched off, and two players of one account over real WebSockets. Remote control also works between real devices |
-| Linux desktop | Built and run against a real server and library (1,320 tracks), every screen checked at 1280×820, 900×700 and phone width, and playback, the queue, the spectrum, MPRIS and the device list driven through UI automation. Exclusive and bit-perfect not tried on a DAC |
+| Linux desktop | Built and run against a real server and library (1,320 tracks), every screen checked at 1280×820, 900×700 and phone width, and playback, the queue, the spectrum, MPRIS and the device list driven through UI automation. Exclusive and bit-perfect tried on an SMSL SU-1 DAC |
 | Android | Built and run on a phone. **Not yet run on a TV or in a car**, and downloading into the shared *Music* folder without a permission (Android 11 and later) hasn't been tried on a device |
-| Windows | Built and run. Exclusive and bit-perfect not tried on a DAC |
+| Windows | Built and run. Exclusive and bit-perfect tried on an SMSL SU-1 DAC |
 | macOS, iOS | Not yet built (they need their own hosts) |
 | Tizen | Built on Fedora and quickly tried on a 2024 Samsung TV (Tizen 8.0): it signs in and plays, and the remote reaches everything, but moving around is sluggish and **needs more work** |
-| Bit-perfect, exclusive | Not measured on any platform ([audio.md](audio.md#known-limitations)) |
+| Bit-perfect, exclusive | Tried on Linux and Windows with an SMSL SU-1; not measured on any platform ([audio.md](audio.md#known-limitations)) |
 
 "Not yet" means exactly that. If you have one of those devices, you can move a row.
 

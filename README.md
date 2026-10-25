@@ -44,7 +44,7 @@ pictures and lyrics for tracks that have none, and you can turn both off ([SECUR
 |---|---|---|---|---|---|---|---|---|
 | Play a server library | Yes | Yes | Yes | Yes | Yes | Browse and play | Yes | Yes |
 | Play a local folder | Yes | Yes | Yes | Yes | No | No | No | No |
-| Exclusive / bit-perfect | Yes (ALSA `hw:` devices) | Written, **not tried on a DAC** | Written, **not tried on a DAC** | No | No | No | No | No |
+| Exclusive / bit-perfect | Yes (ALSA `hw:`, tried on SMSL SU-1) | Yes (WASAPI, tried on SMSL SU-1) | Written, **not tried on a DAC** | No | No | No | No | No |
 | Spectrum analyzer | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | No | No | No | No | No |
 | System media controls | MPRIS | No | Media keys, Now Playing | Notification, lock screen | Remote | The car | Lock screen, Control Center | Remote, in the app |
 | Run the server | Yes | Yes | Yes | — | — | — | — | — |
