@@ -164,8 +164,8 @@ class _PageSwitcherState extends State<_PageSwitcher> {
   );
 }
 
-/// The full-screen player, as far open as its [sheet] is: pouring out of the mini player's cover when opened and back
-/// into it when closed, or with the finger ([MagicLamp]).
+/// The full-screen player, as far open as its [sheet] is: rising from the screen's bottom when opened and going back
+/// down when closed, or with the finger, its cover flying out of the mini player's and back ([RisingPlayer]).
 class _NowPlayingOverlay extends StatefulWidget {
   const _NowPlayingOverlay({required this.sheet, required this.isOpen});
 
@@ -190,8 +190,10 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> {
       animation: position,
       builder: (context, _) {
         if (position.isDismissed && !widget.isOpen) return const SizedBox.shrink();
-        return MagicLamp(
+        return RisingPlayer(
           sheet: widget.sheet,
+          // The player's own cover's picture, as it is decoded already.
+          cover: CoverArt.provider(context.vm.player.currentTrack?.coverArtPath, decodeWidth: 900),
           child: IgnorePointer(ignoring: !widget.isOpen, child: const NowPlayingPage()),
         );
       },
@@ -695,9 +697,9 @@ class _MiniPlayer extends StatelessWidget {
   }
 }
 
-/// A track in the mini player: its cover and titles. The [current] one is where the full-screen player pours out
-/// of and queued music lands, and says what is wrong or where it plays; the one beside it while it changes, only
-/// what it is.
+/// A track in the mini player: its cover and titles. The [current] one's cover flies into the full-screen player and
+/// back, and queued music lands on it; it says what is wrong or where it plays; the one beside it while it changes,
+/// only what it is.
 class _MiniTrack extends StatelessWidget {
   const _MiniTrack({required this.track, required this.current});
 
@@ -709,14 +711,18 @@ class _MiniTrack extends StatelessWidget {
     final player = context.vm.player;
     final colors = context.colors;
     Widget cover = DecoratedBox(
-      key: current ? PlayerSheetScope.maybeOf(context)?.lamp : null,
+      key: current ? PlayerSheetScope.maybeOf(context)?.miniCover : null,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(Radii.small),
         boxShadow: [BoxShadow(color: colors.palette.shadow, blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: CoverImage(path: track.coverArtPath, size: _MiniPlayer._coverSize, radius: Radii.small),
     );
-    if (current) cover = CoverFlightLanding(radius: Radii.small, child: cover);
+    if (current) {
+      cover = PlayerSheetCover(
+        child: CoverFlightLanding(radius: Radii.small, child: cover),
+      );
+    }
     final error = current && player.hasError;
     return Row(
       children: [

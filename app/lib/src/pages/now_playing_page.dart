@@ -301,35 +301,39 @@ class _TrackTab extends StatelessWidget {
                           scale: player.isPlaying ? 1 : 0.86,
                           duration: const Duration(milliseconds: 520),
                           curve: player.isPlaying ? Curves.easeOutBack : Curves.easeOutCubic,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 520),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(Radii.panel),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0x8C000000),
-                                  blurRadius: player.isPlaying ? 50 : 24,
-                                  spreadRadius: -10,
-                                  offset: Offset(0, player.isPlaying ? 28 : 14),
-                                ),
-                              ],
-                            ),
-                            child: Stack(
-                              fit: StackFit.expand,
-                              children: [
-                                CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
-                                // On the cover, as on the album tiles.
-                                if (player.currentTagSpec.isNotEmpty)
-                                  Positioned(
-                                    left: 14,
-                                    bottom: 14,
-                                    child: QualityTag(
-                                      tier: player.currentTier,
-                                      spec: player.currentTagSpec,
-                                      fontSize: 12,
-                                    ),
+                          // Where the mini player's cover flies as the player opens, and back out of as it closes.
+                          child: PlayerSheetCover(
+                            own: true,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 520),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(Radii.panel),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0x8C000000),
+                                    blurRadius: player.isPlaying ? 50 : 24,
+                                    spreadRadius: -10,
+                                    offset: Offset(0, player.isPlaying ? 28 : 14),
                                   ),
-                              ],
+                                ],
+                              ),
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
+                                  // On the cover, as on the album tiles.
+                                  if (player.currentTagSpec.isNotEmpty)
+                                    Positioned(
+                                      left: 14,
+                                      bottom: 14,
+                                      child: QualityTag(
+                                        tier: player.currentTier,
+                                        spec: player.currentTagSpec,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

@@ -39,6 +39,18 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
   ];
 
   late final AnimationController _drift = AnimationController(vsync: this, duration: const Duration(seconds: 48));
+
+  /// The covers softened last, a few, for the next wash of them: the full-screen player's, rising over a page that
+  /// washes in the same cover or rose before, has its colours from its first frame, rather than fading them in over
+  /// itself as it rises.
+  static final Map<String, ui.Image> _softened = {};
+
+  static void _remember(String path, ui.Image image) {
+    _softened.remove(path)?.dispose();
+    _softened[path] = image.clone();
+    if (_softened.length > 4) _softened.remove(_softened.keys.first)!.dispose();
+  }
+
   ImageStream? _stream;
   ImageStreamListener? _listener;
   ui.Image? _image;
@@ -90,10 +102,18 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
       _show(null);
       return;
     }
+    if (_softened.remove(path) case final softened?) {
+      _softened[path!] = softened; // the latest again
+      // Before this frame's build: no fade.
+      _image?.dispose();
+      _image = softened.clone();
+      return;
+    }
     final listener = ImageStreamListener(
       (info, _) {
         _soften(info.image)
             .then((image) {
+              _remember(path!, image);
               if (!mounted || generation != _generation) {
                 image.dispose();
               } else {

@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/rendering.dart';
@@ -10,12 +11,14 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../theme/app_theme.dart';
 import 'cover_image.dart';
 
 /// A cover that flies: from the tile or the row it was tapped on ([CoverFlightSource]) to the artwork of the page that
-/// opens ([CoverFlightTarget]), and back to it when that page closes, if the tile is on the screen again; and from
-/// where it is into the player's cover when its music is queued ([toPlayer], [CoverFlightLanding]). The pages swap
-/// within one screen, so Flutter's own flights (between routes) can't do it.
+/// opens ([CoverFlightTarget]), and back to it when that page closes, if the tile is on the screen again; from where
+/// it is into the player's cover when its music is queued ([toPlayer], [CoverFlightLanding]); and between the mini
+/// player's cover and the full-screen player's, as far as the phone's player sheet is open ([CoverFlightBetween]). The
+/// pages swap within one screen, so Flutter's own flights (between routes) can't do it.
 abstract final class CoverFlight {
   /// The cover last pressed: what it shows, where it is, its corners, when.
   static ({String tag, Rect rect, double? radius, Widget cover, DateTime at})? _pressed;
@@ -490,6 +493,188 @@ class _CoverFlightLandingState extends State<CoverFlightLanding> with SingleTick
     builder: (context, child) => Transform.scale(scale: 1 + 0.14 * math.sin(math.pi * _bump.value), child: child),
     child: widget.child,
   );
+}
+
+/// A cover in flight held by something other than a clock: [progress] of the way from [from] (0) to [to] (1), such as
+/// the phone's player sheet under a finger or on its way. Its corners round from [fromRadius] to [toRadius]; each frame
+/// shows it blurred along the way it went since the last, as a flight is, but drawn straight from its picture ([image];
+/// without one, in its placeholder's colour): all the blur's copies in one layer, where a flight's widget takes a layer
+/// for each, more than a phone draws in a frame at a full-screen player's cover's size. In a [Stack].
+class CoverFlightBetween extends StatefulWidget {
+  const CoverFlightBetween({
+    super.key,
+    required this.progress,
+    required this.from,
+    required this.to,
+    required this.fromRadius,
+    required this.toRadius,
+    required this.image,
+  });
+
+  final double progress;
+  final Rect from;
+  final Rect to;
+  final double fromRadius;
+  final double toRadius;
+  final ImageProvider? image;
+
+  @override
+  State<CoverFlightBetween> createState() => _CoverFlightBetweenState();
+}
+
+class _CoverFlightBetweenState extends State<CoverFlightBetween> {
+  // When the last frame was, how far along then, and how much of the way the blur spans.
+  var _lastAt = Duration.zero;
+  var _last = 0.0;
+  var _span = 0.0;
+
+  ImageStream? _stream;
+  late final ImageStreamListener _listener = ImageStreamListener(_loaded);
+  ui.Image? _picture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(CoverFlightBetween oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.image != oldWidget.image) _resolve();
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    _picture?.dispose();
+    super.dispose();
+  }
+
+  /// The picture: at once from the cache, where the cover it flies to keeps it.
+  void _resolve() {
+    final stream = widget.image?.resolve(createLocalImageConfiguration(context));
+    if (stream != null && stream.key == _stream?.key) return;
+    _stream?.removeListener(_listener);
+    _stream = stream;
+    _picture?.dispose();
+    _picture = null;
+    stream?.addListener(_listener);
+  }
+
+  void _loaded(ImageInfo info, bool synchronousCall) {
+    final picture = info.image.clone();
+    info.dispose();
+    if (!mounted) {
+      picture.dispose();
+      return;
+    }
+    // From the cache it comes while this is being built.
+    void take() {
+      _picture?.dispose();
+      _picture = picture;
+    }
+
+    synchronousCall ? take() : setState(take);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = widget.progress;
+    final now = SchedulerBinding.instance.currentSystemFrameTimeStamp;
+    if (now != _lastAt) {
+      // The step since the last frame: none after frames stopped coming for a while (a finger held still).
+      _span = _lastAt == Duration.zero || now - _lastAt > const Duration(milliseconds: 50) ? 0 : progress - _last;
+      _lastAt = now;
+      _last = progress;
+    }
+    Rect at(double progress) => Rect.lerp(widget.from, widget.to, progress.clamp(0.0, 1.0))!;
+    final rect = at(progress);
+    return Positioned.fromRect(
+      rect: rect,
+      child: IgnorePointer(
+        child: CustomPaint(
+          painter: _BlurredCover(
+            picture: _picture,
+            colour: context.colors.surface2,
+            from: at(progress - _span / 2).shift(-rect.topLeft),
+            to: at(progress + _span / 2).shift(-rect.topLeft),
+            radius: ui.lerpDouble(widget.fromRadius, widget.toRadius, progress)!,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A cover's [picture] (none: its [colour]) over its box with rounded corners, painted as the average of where it is
+/// over a frame's time, from [from] to [to], as [_MotionBlur] paints a flight; but all the copies in one layer.
+class _BlurredCover extends CustomPainter {
+  const _BlurredCover({
+    required this.picture,
+    required this.colour,
+    required this.from,
+    required this.to,
+    required this.radius,
+  });
+
+  final ui.Image? picture;
+  final Color colour;
+  final Rect from;
+  final Rect to;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final moved = math.max((to.topLeft - from.topLeft).distance, (to.bottomRight - from.bottomRight).distance);
+    final copies = (moved / _RenderMotionBlur._step).ceil().clamp(1, _RenderMotionBlur._copies);
+    final paint = Paint()..color = colour;
+    final picture = this.picture;
+    if (picture != null) {
+      // The picture filling the box, as a cover's does its square.
+      final scale = math.max(size.width / picture.width, size.height / picture.height);
+      final dx = (size.width - picture.width * scale) / 2, dy = (size.height - picture.height * scale) / 2;
+      paint
+        ..color = const Color(0xFF000000)
+        ..shader = ImageShader(
+          picture,
+          TileMode.clamp,
+          TileMode.clamp,
+          Float64List.fromList([scale, 0, 0, 0, 0, scale, 0, 0, 0, 0, 1, 0, dx, dy, 0, 1]),
+          filterQuality: FilterQuality.medium,
+        );
+    }
+    final box = RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius));
+    // A copy where [rect] is: the box, moved and scaled there.
+    void copy(Rect rect) => canvas
+      ..save()
+      ..translate(rect.left, rect.top)
+      ..scale(rect.width / size.width, rect.height / size.height)
+      ..drawRRect(box, paint)
+      ..restore();
+    if (copies == 1) {
+      copy(Rect.lerp(from, to, 0.5)!);
+      return;
+    }
+    // Each copy adds its share, so that together they make the average, see-through where only some of them are.
+    paint
+      ..blendMode = BlendMode.plus
+      ..color = paint.color.withValues(alpha: paint.color.a / copies);
+    canvas.saveLayer(from.expandToInclude(to).inflate(1), Paint());
+    for (var i = 0; i < copies; i++) {
+      copy(Rect.lerp(from, to, (i + 0.5) / copies)!);
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_BlurredCover oldDelegate) =>
+      picture != oldDelegate.picture ||
+      colour != oldDelegate.colour ||
+      from != oldDelegate.from ||
+      to != oldDelegate.to ||
+      radius != oldDelegate.radius;
 }
 
 /// A cover in flight, in an overlay: from [from] to where [to] is (asked every frame: the page under it may still be

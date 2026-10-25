@@ -306,26 +306,43 @@ void main() {
     expect(vm.isNowPlayingOpen, isFalse);
   });
 
-  testWidgets("the phone's full-screen player is drawn into a picture only now and then while it opens", (
+  testWidgets("the mini player's cover flies into the full-screen player's as it rises, and back as it goes down", (
     tester,
   ) async {
-    // Drawing the whole player into the picture the lamp bends is what a step can least afford: at 120 Hz it used to
-    // happen at most steps (the corners were in the picture).
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.player.currentTrack = vm.library.tracks.first;
+    await settle(tester);
+    final sheet = tester.widget<PlayerSheetScope>(find.byType(PlayerSheetScope)).sheet;
+    final flying = find.byType(CoverFlightBetween);
+    Finder end({required bool own}) => find.byWidgetPredicate((w) => w is PlayerSheetCover && w.own == own);
+    double shown({required bool own}) => tester
+        .widget<Opacity>(
+          find
+              .descendant(
+                of: end(own: own),
+                matching: find.byType(Opacity),
+              )
+              .first,
+        )
+        .opacity;
+    final mini = tester.getCenter(find.byKey(sheet.miniCover));
+
     vm.openNowPlaying();
     await tester.pump();
-    final controller = tester.widget<SnapshotWidget>(find.byType(SnapshotWidget)).controller;
-    var pictures = 1;
-    controller.addListener(() {
-      if (controller.allowSnapshotting) pictures++;
-    });
-    var steps = 0;
-    for (; controller.allowSnapshotting && steps < 100; steps++) {
-      await tester.pump(const Duration(microseconds: 8333));
-    }
-    expect(steps, greaterThan(30), reason: 'it opened over a third of a second');
-    expect(pictures, lessThanOrEqualTo(4));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(flying, findsOneWidget, reason: 'on its way');
+    expect((shown(own: false), shown(own: true)), (0, 0), reason: 'the flying one shows for both ends');
+    final between = tester.getCenter(flying).dy;
+    await settle(tester);
+    expect((flying.evaluate().isEmpty, shown(own: true)), (true, 1), reason: 'landed');
+    expect(between, inExclusiveRange(tester.getCenter(end(own: true)).dy, mini.dy), reason: 'up from the mini player');
+
+    vm.closeNowPlaying();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(flying, findsOneWidget, reason: 'on its way back');
+    await settle(tester);
+    expect((flying.evaluate().isEmpty, shown(own: false)), (true, 1), reason: 'home');
   });
 
   testWidgets('a skip in the full-screen player shows the next track\'s title and cover', (tester) async {
@@ -664,6 +681,16 @@ void main() {
       expect(tester.binding.transientCallbackCount, 0);
     });
 
+    testWidgets("the full-screen player rises with its cover's colours, which the page under it shows already", (
+      tester,
+    ) async {
+      final (vm, _) = await playWithCover(tester);
+      vm.openNowPlaying();
+      await tester.pump();
+      expect(washOf(find.byType(NowPlayingPage)), findsWidgets, reason: 'from its first frame, not faded in');
+      await loadCovers(tester, find.byType(NowPlayingPage));
+    });
+
     testWidgets('the progress is drawn once a second, not at every position update', (tester) async {
       final (vm, driver) = await playWithCover(tester);
       vm.openNowPlaying();
@@ -797,28 +824,27 @@ void main() {
     vm.player.playQueue(vm.library.tracks);
     await settle(tester);
     final page = find.byType(NowPlayingPage);
-    // Its top as drawn: it pours out of the mini player's cover, so from there (closed) to the screen's top (open).
+    // Its top as drawn: it rises from the screen's bottom (closed) to its top (open).
     final sheet = tester.widget<PlayerSheetScope>(find.byType(PlayerSheetScope)).sheet;
-    final lamp = tester.getCenter(find.byKey(sheet.lamp)).dy;
-    double top() => lamp * (1 - sheet.position.value);
+    double top() => 860 * (1 - sheet.position.value);
     // A test gesture's moves carry no time: let go, it is still, not flung.
     Future<void> drag(Finder from, double dy, {required double whileHeld}) async {
       final finger = await tester.startGesture(tester.getCenter(from));
       await finger.moveBy(Offset(0, dy.sign * 20)); // past the slop: the drag starts here
       await finger.moveBy(Offset(0, dy));
       await tester.pump();
-      expect(top(), moreOrLessEquals(whileHeld, epsilon: 1), reason: 'under the finger');
+      expect(top(), moreOrLessEquals(whileHeld, epsilon: 1), reason: 'with the finger');
       await finger.up();
       await settle(tester);
     }
 
     // Up from the mini player, short of half the screen: it comes up with the finger, and sinks back.
     final mini = find.text(vm.player.nowPlayingTitle);
-    await drag(mini, -300, whileHeld: lamp - 300);
+    await drag(mini, -300, whileHeld: 860 - 300);
     expect((vm.isNowPlayingOpen, page.evaluate().isEmpty), (false, true));
 
     // Past half: it goes on up, and is open.
-    await drag(mini, -500, whileHeld: lamp - 500);
+    await drag(mini, -500, whileHeld: 860 - 500);
     expect((vm.isNowPlayingOpen, top()), (true, 0));
 
     // Down from the open player, a little: it goes back up, still open.
