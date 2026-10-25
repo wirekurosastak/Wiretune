@@ -28,6 +28,12 @@ jobs:
           cache: true
       # ffmpeg encodes the tag-reader fixtures; without it those tests are skipped.
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Dependencies
+        run: |
+          (cd packages/wiretune_core && dart pub get)
+          (cd packages/wiretune_platform && flutter pub get)
+          (cd server && dart pub get)
+          (cd app && flutter pub get)
       - name: Formatting
         run: dart format --output none --set-exit-if-changed packages server app/lib app/test tool
       - name: License headers
@@ -38,13 +44,13 @@ jobs:
         run: dart analyze --fatal-infos tool
       - name: Core
         working-directory: packages/wiretune_core
-        run: dart pub get && dart analyze --fatal-infos && dart test
+        run: dart analyze --fatal-infos && dart test
       - name: Server
         working-directory: server
-        run: dart pub get && dart analyze --fatal-infos && dart test
+        run: dart analyze --fatal-infos && dart test
       - name: App
         working-directory: app
-        run: flutter pub get && flutter analyze --fatal-infos && flutter test
+        run: flutter analyze --fatal-infos && flutter test
 
   server:
     name: Server executable (${{ matrix.os }})
