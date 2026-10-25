@@ -1362,7 +1362,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
                   overflow: TextOverflow.ellipsis,
                   style: rest.style.copyWith(
                     color: colors.textMain,
-                    shadows: [Shadow(color: background.withValues(alpha: 0.8 * t), blurRadius: 12)],
+                    shadows: t == 0 ? null : [Shadow(color: background.withValues(alpha: 0.8 * t), blurRadius: 12)],
                   ),
                 ),
               ),

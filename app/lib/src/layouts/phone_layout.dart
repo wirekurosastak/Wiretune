@@ -137,30 +137,26 @@ class _PageSwitcherState extends State<_PageSwitcher> {
   @override
   Widget build(BuildContext context) => AnimatedSwitcher(
     key: ValueKey(widget.jumps),
-    duration: const Duration(milliseconds: 300),
-    switchInCurve: Curves.easeInOut,
-    switchOutCurve: Curves.easeInOut,
+    duration: const Duration(milliseconds: 240),
+    switchInCurve: Curves.easeOutCubic,
+    switchOutCurve: Curves.easeInCubic,
     layoutBuilder: (currentChild, previousChildren) =>
         Stack(fit: StackFit.expand, children: [...previousChildren, ?currentChild]),
     transitionBuilder: (child, animation) {
       if (_direction == 0) {
-        return RepaintBoundary(
-          child: FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(scale: Tween(begin: 0.985, end: 1.0).animate(animation), child: child),
-          ),
+        return FadeTransition(
+          opacity: animation,
+          child: RepaintBoundary(child: child),
         );
       }
       // The page coming in starts a little to the side it comes from; the one going out ends a little to the other.
       final incoming = child.key == widget.child.key;
       final side = incoming ? _direction : -_direction;
-      return RepaintBoundary(
-        child: FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween(begin: Offset(0.08 * side, 0), end: Offset.zero).animate(animation),
-            child: child,
-          ),
+      return FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween(begin: Offset(0.04 * side, 0), end: Offset.zero).animate(animation),
+          child: RepaintBoundary(child: child),
         ),
       );
     },
