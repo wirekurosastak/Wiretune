@@ -17,6 +17,7 @@ import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
 import '../widgets/cover_flight.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/downloads.dart';
 import '../widgets/links.dart';
 import '../widgets/page_parts.dart';
@@ -520,63 +521,34 @@ class SortButtons extends StatelessWidget {
               shape: const StadiumBorder(),
             ),
             onPressed: () {
-              showModalBottomSheet<void>(
-                context: context,
-                backgroundColor: colors.palette.modal,
-                shape: RoundedRectangleBorder(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.panel)),
-                  side: BorderSide(color: colors.palette.glassBorder),
-                ),
-                // As tall as its choices (a sheet keeps to 9/16 of the screen otherwise, which cut the last ones off),
-                // and scrolling when even the screen is too short for them.
-                isScrollControlled: true,
-                useSafeArea: true,
-                builder: (ctx) => SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Center(
-                          child: Container(
-                            width: 36,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              color: colors.textMuted.withValues(alpha: 0.3),
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                          child: Text(
-                            context.tr('SortBy'),
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                          ),
-                        ),
-                        for (final (label, selected, onTap) in buttons)
-                          ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                            title: Text(
-                              label,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                color: selected ? colors.accent : colors.textMain,
-                              ),
-                            ),
-                            trailing: selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              onTap();
-                            },
-                          ),
-                      ],
+              showPhoneSheet<void>(
+                context,
+                builder: (sheet) => [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: Text(
+                      context.tr('SortBy'),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
                     ),
                   ),
-                ),
+                  for (final (label, selected, onTap) in buttons)
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                      title: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                          color: selected ? colors.accent : colors.textMain,
+                        ),
+                      ),
+                      trailing: selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
+                      onTap: () {
+                        Navigator.pop(sheet);
+                        onTap();
+                      },
+                    ),
+                ],
               );
             },
             child: Row(
@@ -835,6 +807,8 @@ class AlbumDetail extends StatelessWidget {
                     onPressed: () => vm.downloads.toggleAlbum(album),
                   ),
                   addToPlaylist: menu.addToPlaylistButton(),
+                  playNext: menu.playNextButton(),
+                  addToQueue: menu.addToQueueButton(),
                   menu: menu.headerButton(),
                 ),
               ],
@@ -942,6 +916,8 @@ class ArtistDetail extends StatelessWidget {
                     onPressed: () => vm.downloads.toggleArtist(artist),
                   ),
                   addToPlaylist: menu.addToPlaylistButton(),
+                  playNext: menu.playNextButton(),
+                  addToQueue: menu.addToQueueButton(),
                   menu: menu.headerButton(),
                 ),
               ],

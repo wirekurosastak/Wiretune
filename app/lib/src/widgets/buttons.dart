@@ -148,9 +148,10 @@ class _PopEffectState extends State<PopEffect> {
 
 /// A list's accent-filled, glowing "Play" and the player's shuffle switch beside it ([ShuffleSwitch]: Play starts
 /// the list from its first track, or from any while shuffle is on), then the list's [download], its way into a
-/// playlist ([addToPlaylist]) and [menu]. On a phone Play is round, the largest, at the right edge and shuffle beside
-/// it; an album's, an artist's or a playlist's (the pages with a [menu]) spread over the line, the download and the
-/// playlist at the left edge, as in Spotify; their menu is the top bar's there (`ListMenu.topBarButton`). While the queue is [tracks], Play pauses and resumes it
+/// playlist ([addToPlaylist]), the queue's two ([playNext], [addToQueue]) and [menu]. On a phone Play is round, the
+/// largest, at the right edge and shuffle beside it; an album's, an artist's or a playlist's (the pages with a way into
+/// a playlist) spread over the line, the download, the playlist and the queue's two at the left edge, as in Spotify;
+/// their menu is the top bar's there (`ListMenu.topBarButton`). While the queue is [tracks], Play pauses and resumes it
 /// ([ListPlayButton]).
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({
@@ -159,6 +160,8 @@ class PlayShuffleButtons extends StatelessWidget {
     this.onPlay,
     this.download,
     this.addToPlaylist,
+    this.playNext,
+    this.addToQueue,
     this.menu,
   });
 
@@ -168,6 +171,8 @@ class PlayShuffleButtons extends StatelessWidget {
   final VoidCallback? onPlay;
   final Widget? download;
   final Widget? addToPlaylist;
+  final Widget? playNext;
+  final Widget? addToQueue;
   final Widget? menu;
 
   @override
@@ -175,15 +180,25 @@ class PlayShuffleButtons extends StatelessWidget {
     final play = ListPlayButton(tracks: tracks, onPlay: onPlay);
     final shuffle = ShuffleSwitch(enabled: onPlay != null);
     if (PhoneChrome.isPhone(context)) {
+      final icons = [?download, ?addToPlaylist, ?playNext, ?addToQueue];
+      final page = addToPlaylist != null;
       return Row(
-        mainAxisSize: menu == null ? MainAxisSize.min : MainAxisSize.max,
+        mainAxisSize: page ? MainAxisSize.max : MainAxisSize.min,
         children: [
-          if (menu != null) ...[
-            ?download,
-            if (download != null && addToPlaylist != null) const SizedBox(width: 10),
-            ?addToPlaylist,
-            const Spacer(),
-          ] else if (download != null) ...[
+          if (page)
+            // 10 apart, closer on a narrow phone, where the queue's two leave no room for more.
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: icons.length * PhoneChrome.controlHeight + (icons.length - 1) * 10,
+                  ),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: icons),
+                ),
+              ),
+            )
+          else if (download != null) ...[
             download!,
             const SizedBox(width: 10),
           ],
@@ -193,7 +208,11 @@ class PlayShuffleButtons extends StatelessWidget {
         ],
       );
     }
-    return Wrap(spacing: 12, runSpacing: 8, children: [play, shuffle, ?download, ?addToPlaylist, ?menu]);
+    return Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: [play, shuffle, ?download, ?addToPlaylist, ?playNext, ?addToQueue, ?menu],
+    );
   }
 
   static const TextStyle _labelStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w800, letterSpacing: 0.1);

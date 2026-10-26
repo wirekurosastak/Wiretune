@@ -565,8 +565,16 @@ class LibraryService {
     return list;
   });
 
-  void removeTrackFromPlaylist(String playlistId, String trackId) =>
-      _updatePlaylist(playlistId, (ids) => ids.contains(trackId) ? ids.where((id) => id != trackId).toList() : null);
+  void removeTrackFromPlaylist(String playlistId, String trackId) => removeTracksFromPlaylist(playlistId, [trackId]);
+
+  /// Takes [trackIds] out of the playlist, as one change.
+  void removeTracksFromPlaylist(String playlistId, Iterable<String> trackIds) {
+    final gone = trackIds.toSet();
+    _updatePlaylist(
+      playlistId,
+      (ids) => ids.any(gone.contains) ? ids.where((id) => !gone.contains(id)).toList() : null,
+    );
+  }
 
   void _updatePlaylist(String playlistId, List<String>? Function(List<String> ids) change) {
     final playlist = getPlaylist(playlistId);

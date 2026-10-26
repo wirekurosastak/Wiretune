@@ -54,13 +54,7 @@ class AlbumCard extends StatelessWidget {
       accent: purple,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
-      onLongPress: () => menu.preview(
-        context,
-        cover: albumPreviewCover(context, album),
-        title: album.title,
-        subtitle: album.artist,
-        onOpen: onOpen,
-      ),
+      onLongPress: () => menu.preview(context, onOpen: onOpen),
       flightTag: 'album:${album.id}',
       menu: menu.coverButton(context),
       cover: cover,
@@ -98,14 +92,7 @@ class ArtistCard extends StatelessWidget {
       accent: coral,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
-      onLongPress: () => menu.preview(
-        context,
-        cover: artistPreviewPicture(context, artist),
-        round: true,
-        title: artist.name,
-        subtitle: artistCounts(context, artist),
-        onOpen: onOpen,
-      ),
+      onLongPress: () => menu.preview(context, onOpen: onOpen),
       flightTag: 'artist:${artist.id}',
       menu: menu.coverButton(context),
       circle: true,
@@ -144,9 +131,10 @@ String artistCounts(BuildContext context, Artist artist) =>
 enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, openArtist, remove }
 
 /// The menu of an album, an artist or a playlist: on its tile (the ⋮ on the cover, or a right click), its phone row (the
-/// ⋮) and its page's header (the ⋮ beside play, shuffle, the download and the playlist, which it then leaves out). Play, shuffle, the
-/// queue's two, a playlist, the download (when a track of it can be), an album's way to its artist (whose name is no
-/// link on a tile or a row), and hiding it (deleting a playlist).
+/// ⋮), a long press's preview ([preview]) and its page's header (the ⋮ beside play, shuffle, the download, the playlist
+/// and the queue's two, which it then leaves out). Play, shuffle, the queue's two, a playlist, the download (when a
+/// track of it can be), an album's way to its artist (whose name is no link on a tile or a row), and hiding it
+/// (deleting a playlist). On a phone it is a sheet, with the cover and the names on top ([showMenuSheet]).
 class ListMenu {
   ListMenu._(
     this.tracks, {
@@ -157,6 +145,9 @@ class ListMenu {
     required this.onPlay,
     required this.isDownloaded,
     required this.onDownload,
+    required this.cover,
+    required this.subtitle,
+    this.round = false,
     this.artist,
     this.removeKey,
     this.removeIcon = Icons.delete_outline_rounded,
@@ -174,6 +165,15 @@ class ListMenu {
     onPlay: onPlay,
     isDownloaded: (vm) => vm.downloads.isAlbumDownloaded(album),
     onDownload: (vm) => vm.downloads.toggleAlbum(album),
+    cover: (context, {required large}) => large
+        ? albumPreviewCover(context, album)
+        : CoverImage(
+            path: album.coverArtPath,
+            size: menuSheetCoverSize,
+            placeholderIcon: Icons.album,
+            placeholderColor: context.colors.palette.purple,
+          ),
+    subtitle: (context) => album.artist,
     artist: withArtist ? album.artistNames.first : null,
     removeKey: 'HideAlbum',
     removeIcon: Icons.visibility_off_outlined,
@@ -194,6 +194,17 @@ class ListMenu {
     onPlay: onPlay,
     isDownloaded: (vm) => vm.downloads.isArtistDownloaded(artist),
     onDownload: (vm) => vm.downloads.toggleArtist(artist),
+    cover: (context, {required large}) => large
+        ? artistPreviewPicture(context, artist)
+        : CoverImage(
+            path: artist.picturePath,
+            size: menuSheetCoverSize,
+            circle: true,
+            placeholderIcon: Icons.person,
+            placeholderColor: context.colors.palette.coral,
+          ),
+    subtitle: (context) => artistCounts(context, artist),
+    round: true,
     removeKey: 'HideArtist',
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
@@ -213,6 +224,9 @@ class ListMenu {
     onPlay: onPlay,
     isDownloaded: (vm) => vm.downloads.isPlaylistDownloaded(playlist),
     onDownload: (vm) => vm.downloads.togglePlaylist(playlist),
+    cover: (context, {required large}) =>
+        PlaylistCover(covers: playlistCovers(tracks), radius: large ? Radii.card : Radii.small),
+    subtitle: (context) => context.trf('TrackCount', [playlist.trackCount]),
     removeKey: playlist.isAutomatic ? null : 'PlaylistDeleteAction',
     removeIsDanger: true,
     // Asked first.
@@ -233,6 +247,15 @@ class ListMenu {
   final bool Function(MainViewModel vm) isDownloaded;
   final void Function(MainViewModel vm) onDownload;
 
+  /// Its cover (an artist's picture), [large] as a long press's preview shows it, else as a phone's menu does.
+  final Widget Function(BuildContext context, {required bool large}) cover;
+
+  /// The cover is round (an artist's picture).
+  final bool round;
+
+  /// What is under its [name] on a preview and a phone's menu: the album's artist, the counts.
+  final String Function(BuildContext context) subtitle;
+
   /// The artist "Go to artist" opens; null leaves it out.
   final String? artist;
   final String? removeKey;
@@ -240,7 +263,8 @@ class ListMenu {
   final bool removeIsDanger;
   final void Function(BuildContext context)? onRemove;
 
-  /// [header]: the page's header has play, shuffle, the download and the playlist as buttons of their own.
+  /// [header]: the page's header has play, shuffle, the download, the playlist and the queue's two as buttons of their
+  /// own.
   List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false}) {
     final vm = context.vm;
     final colors = context.colors;
@@ -263,8 +287,10 @@ class ListMenu {
         item(_ListAction.play, Icons.play_arrow_rounded, context.tr('Play')),
         item(_ListAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
       ],
-      item(_ListAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
-      item(_ListAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
+      if (!header) ...[
+        item(_ListAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
+        item(_ListAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
+      ],
       // The page's header has it as a button of its own.
       if (!header) item(_ListAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
       if (!header && downloadable.any(vm.downloads.canDownload))
@@ -305,7 +331,9 @@ class ListMenu {
     }
   }
 
+  /// Opens the menu at [position]; on a phone, as a sheet.
   Future<void> _show(BuildContext context, Offset position, {bool header = false}) async {
+    if (PhoneChrome.isPhone(context)) return _showSheet(context, header: header);
     final action = await showMenu<_ListAction>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
@@ -314,26 +342,33 @@ class ListMenu {
     if (context.mounted) _run(context, action);
   }
 
+  Future<void> _showSheet(BuildContext context, {bool header = false}) async {
+    final action = await showMenuSheet(
+      context,
+      cover: cover(context, large: false),
+      round: round,
+      title: name,
+      subtitle: subtitle(context),
+      items: _items(context, header: header),
+    );
+    if (context.mounted) _run(context, action);
+  }
+
   /// Opens the menu at [position] (a right click on a tile).
   Future<void> showAt(BuildContext context, Offset position) => _show(context, position);
 
-  /// A long press's preview: [cover] large ([round]: an artist's), its [title] and [subtitle] and the whole menu under
+  /// A long press's preview: the [cover] large ([round]: an artist's), the [name] and [subtitle] and the whole menu under
   /// them, floating over the page, which blurs behind it. While the finger that pressed is still down, it can slide
   /// onto an entry and choose it by letting go there ([_PressSlide]); let go elsewhere, the preview stays. A tap on the
   /// cover then opens its page ([onOpen]), the cover flying there; a tap anywhere else but the menu closes it.
-  Future<void> preview(
-    BuildContext context, {
-    required Widget cover,
-    bool round = false,
-    required String title,
-    String? subtitle,
-    required VoidCallback onOpen,
-  }) async {
+  Future<void> preview(BuildContext context, {required VoidCallback onOpen}) async {
     var open = false;
+    final large = cover(context, large: true);
+    final subtitle = this.subtitle(context);
     Widget card(BuildContext dialog, _PressSlide? slide) => _Preview(
-      cover: cover,
+      cover: large,
       round: round,
-      title: title,
+      title: name,
       subtitle: subtitle,
       flightTag: flightTag,
       onOpen: () {
@@ -412,13 +447,18 @@ class ListMenu {
     );
   }
 
-  /// The ⋮ button of a phone row.
-  Widget button(BuildContext context) => PopupMenuButton<_ListAction>(
-    icon: Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted),
-    tooltip: context.tr('TipMore'),
-    onSelected: (action) => _run(context, action),
-    itemBuilder: _items,
-  );
+  /// The ⋮ button of a row (a phone's, the search's).
+  Widget button(BuildContext context) {
+    final icon = Icon(Icons.more_vert_rounded, size: 20, color: context.colors.textMuted);
+    return PhoneChrome.isPhone(context)
+        ? IconButton(icon: icon, tooltip: context.tr('TipMore'), onPressed: () => _showSheet(context))
+        : PopupMenuButton<_ListAction>(
+            icon: icon,
+            tooltip: context.tr('TipMore'),
+            onSelected: (action) => _run(context, action),
+            itemBuilder: _items,
+          );
+  }
 
   /// The ⋮ on a tile's cover: a dark disc, for the white dots to show on any cover.
   Widget coverButton(BuildContext context) => Tooltip(
@@ -429,14 +469,21 @@ class ListMenu {
       clipBehavior: Clip.antiAlias,
       child: SizedBox.square(
         dimension: 32,
-        child: PopupMenuButton<_ListAction>(
-          tooltip: '',
-          padding: EdgeInsets.zero,
-          iconSize: 18,
-          icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
-          onSelected: (action) => _run(context, action),
-          itemBuilder: _items,
-        ),
+        child: PhoneChrome.isPhone(context)
+            ? IconButton(
+                padding: EdgeInsets.zero,
+                iconSize: 18,
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                onPressed: () => _showSheet(context),
+              )
+            : PopupMenuButton<_ListAction>(
+                tooltip: '',
+                padding: EdgeInsets.zero,
+                iconSize: 18,
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+                onSelected: (action) => _run(context, action),
+                itemBuilder: _items,
+              ),
       ),
     ),
   );
@@ -450,34 +497,48 @@ class ListMenu {
     ),
   );
 
-  /// The ⋮ of a phone page's top bar ([PinnedTitleBar.menu]): the rest of the menu (play, shuffle, the download and the
-  /// playlist are the header's), at hand however far the page is scrolled.
-  Widget topBarButton() => Builder(
-    builder: (context) => SizedBox.square(
-      dimension: PinnedTitleBar.buttonSize,
-      child: IconButton(
-        tooltip: context.tr('TipMore'),
-        onPressed: () {
-          final box = context.findRenderObject()! as RenderBox;
-          _show(context, box.localToGlobal(box.size.bottomLeft(Offset.zero)), header: true);
-        },
-        icon: Icon(Icons.more_vert_rounded, size: 24, color: context.colors.textMain),
-      ),
-    ),
+  /// The header's Play next and Add to queue (taken out of its menu).
+  Widget playNextButton() => _queueButton(_ListAction.playNext, Icons.queue_play_next_rounded, 'PlayNext');
+  Widget addToQueueButton() => _queueButton(_ListAction.addToQueue, Icons.add_to_queue_rounded, 'AddToQueue');
+
+  Widget _queueButton(_ListAction action, IconData icon, String key) => Builder(
+    builder: (context) =>
+        HeaderIconButton(tooltip: context.tr(key), icon: icon, onPressed: () => _run(context, action)),
   );
+
+  /// Whether the page's menu has anything left beside the header's buttons: hiding it, deleting it (an automatic
+  /// playlist has neither, and no ⋮).
+  bool get _hasHeaderMenu => removeKey != null;
+
+  /// The ⋮ of a phone page's top bar ([PinnedTitleBar.menu]): the rest of the menu (play, shuffle, the download, the
+  /// playlist and the queue's two are the header's), at hand however far the page is scrolled.
+  Widget? topBarButton() => !_hasHeaderMenu
+      ? null
+      : Builder(
+          builder: (context) => SizedBox.square(
+            dimension: PinnedTitleBar.buttonSize,
+            child: IconButton(
+              tooltip: context.tr('TipMore'),
+              onPressed: () => _showSheet(context, header: true),
+              icon: Icon(Icons.more_vert_rounded, size: 24, color: context.colors.textMain),
+            ),
+          ),
+        );
 
   /// The ⋮ of a page's header, beside play, shuffle and the download: the rest of the menu, opening below it. On a
   /// phone it is in the top bar instead ([topBarButton]).
-  Widget headerButton() => Builder(
-    builder: (context) => HeaderIconButton(
-      tooltip: context.tr('TipMore'),
-      icon: Icons.more_vert_rounded,
-      onPressed: () {
-        final box = context.findRenderObject()! as RenderBox;
-        _show(context, box.localToGlobal(box.size.bottomLeft(Offset.zero)), header: true);
-      },
-    ),
-  );
+  Widget? headerButton() => !_hasHeaderMenu
+      ? null
+      : Builder(
+          builder: (context) => HeaderIconButton(
+            tooltip: context.tr('TipMore'),
+            icon: Icons.more_vert_rounded,
+            onPressed: () {
+              final box = context.findRenderObject()! as RenderBox;
+              _show(context, box.localToGlobal(box.size.bottomLeft(Offset.zero)), header: true);
+            },
+          ),
+        );
 }
 
 /// The card of [ListMenu.preview]: the cover, which opens its page, the names, and the menu's entries, which close it
@@ -712,13 +773,7 @@ class AlbumsSliver extends StatelessWidget {
       final menu = ListMenu.album(album, onPlay: () => onPlay(album), withArtist: withArtist);
       return _ListRow(
         onTap: () => onOpen(album),
-        onLongPress: () => menu.preview(
-          context,
-          cover: albumPreviewCover(context, album),
-          title: album.title,
-          subtitle: album.artist,
-          onOpen: () => onOpen(album),
-        ),
+        onLongPress: () => menu.preview(context, onOpen: () => onOpen(album)),
         flightTag: 'album:${album.id}',
         picture: CoverImage(
           path: album.coverArtPath,
@@ -769,14 +824,7 @@ class ArtistsSliver extends StatelessWidget {
       final menu = ListMenu.artist(artist, onPlay: () => onPlay(artist));
       return _ListRow(
         onTap: () => onOpen(artist),
-        onLongPress: () => menu.preview(
-          context,
-          cover: artistPreviewPicture(context, artist),
-          round: true,
-          title: artist.name,
-          subtitle: artistCounts(context, artist),
-          onOpen: () => onOpen(artist),
-        ),
+        onLongPress: () => menu.preview(context, onOpen: () => onOpen(artist)),
         flightTag: 'artist:${artist.id}',
         circle: true,
         picture: CoverImage(
@@ -845,13 +893,7 @@ class PlaylistsSliver extends StatelessWidget {
       final menu = ListMenu.playlist(playlist, tracks, onPlay: () => onPlay(playlist));
       return _ListRow(
         onTap: () => onOpen(playlist),
-        onLongPress: () => menu.preview(
-          context,
-          cover: PlaylistCover(covers: covers, radius: Radii.card),
-          title: playlist.name,
-          subtitle: context.trf('TrackCount', [playlist.trackCount]),
-          onOpen: () => onOpen(playlist),
-        ),
+        onLongPress: () => menu.preview(context, onOpen: () => onOpen(playlist)),
         flightTag: 'playlist:${playlist.id}',
         picture: PlaylistCover(covers: covers, radius: Radii.small),
         title: playlist.name,
@@ -1042,13 +1084,7 @@ class PlaylistCard extends StatelessWidget {
       accent: lime,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
-      onLongPress: () => menu.preview(
-        context,
-        cover: PlaylistCover(covers: covers, radius: Radii.card),
-        title: playlist.name,
-        subtitle: context.trf('TrackCount', [playlist.trackCount]),
-        onOpen: onOpen,
-      ),
+      onLongPress: () => menu.preview(context, onOpen: onOpen),
       flightTag: 'playlist:${playlist.id}',
       menu: menu.coverButton(context),
       cover: PlaylistCover(covers: covers, radius: Radii.medium),

@@ -910,11 +910,27 @@ void main() {
 
     await tester.tap(menu);
     await settle(tester);
+    expect(find.descendant(of: find.byType(BottomSheet), matching: find.text('Opening')), findsOneWidget);
     expect(find.text(Localizer.get('AddToQueue')), findsOneWidget);
     await tester.tap(find.text(Localizer.get('PlayNext')));
     await settle(tester);
     expect(vm.player.queueTracks[vm.player.currentQueueIndex + 1].title, 'Opening');
     expect(find.text(Localizer.format('QueuedNext', ['Opening'])), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('Undo')));
+    await settle(tester);
+    expect(vm.player.queueTracks.map((t) => t.title), isNot(contains('Opening')));
+  });
+
+  testWidgets("an album's Add to queue button queues it, and says so", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    final album = vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue');
+    vm.player.playQueue(vm.library.tracks.where((t) => t.album != album.title));
+    vm.openAlbum(album);
+    await settle(tester);
+    await tester.tap(find.byTooltip(Localizer.get('AddToQueue')));
+    await settle(tester);
+    expect(vm.player.queueTracks.skip(1).map((t) => t.album), [album.title, album.title]);
+    expect(find.text(Localizer.format('QueuedLast', [album.title])), findsOneWidget);
   });
 
   testWidgets("on a phone a track's menu downloads it, and the row shows that it is kept", (tester) async {
@@ -1124,6 +1140,35 @@ void main() {
     tester.view.physicalSize = const Size(400, 860);
     await settle(tester);
     expect(find.text('$albums  •  $tracks'), findsOneWidget);
+  });
+
+  testWidgets("a playlist's header has the queue's two; an automatic one's, with nothing left for a menu, no ⋮", (
+    tester,
+  ) async {
+    for (final size in const [Size(400, 860), Size(1400, 900)]) {
+      final vm = await pumpApp(tester, size);
+      await tester.runAsync(() async {
+        vm.library.recordPlay('1');
+        vm.library.createPlaylist('Mix');
+      });
+      for (final playlist in [
+        vm.playlists.allPlaylists.firstWhere((p) => p.name == 'Mix'),
+        vm.playlists.allPlaylists.firstWhere((p) => p.isAutomatic),
+      ]) {
+        vm.openPlaylist(playlist);
+        await settle(tester);
+        final header = find.byType(DetailHeader);
+        for (final key in ['PlayNext', 'AddToQueue']) {
+          expect(find.descendant(of: header, matching: find.byTooltip(Localizer.get(key))), findsOneWidget);
+        }
+        final menus = size.width < 720
+            ? (tester.widget<PinnedTitleBar>(find.byType(PinnedTitleBar)).menu == null ? 0 : 1)
+            : find.descendant(of: header, matching: find.byTooltip(Localizer.get('TipMore'))).evaluate().length;
+        expect(menus, playlist.isAutomatic ? 0 : 1, reason: '$size ${playlist.name}');
+        vm.playlists.closePlaylistDetail();
+        await settle(tester);
+      }
+    }
   });
 
   testWidgets("a playlist sorts by its headers on a wide screen and not on a phone; delete is in its header's menu", (
@@ -1440,10 +1485,9 @@ void main() {
     // Scrolled far down, the album's menu is still at hand (the bar's ⋮ is over the rows', the last).
     await tester.tap(find.byTooltip(Localizer.get('TipMore')).last);
     await settle(tester);
-    expect(find.text(Localizer.get('AddToQueue')), findsOneWidget);
-    await tester.tap(find.text(Localizer.get('AddToQueue')));
+    expect(find.text(Localizer.get('HideAlbum')), findsOneWidget);
+    await tester.tapAt(const Offset(5, 5));
     await settle(tester);
-    expect(vm.player.queueTracks, hasLength(60));
     await tester.tap(inBar(find.byTooltip(Localizer.get('Back'))));
     await settle(tester);
     expect(vm.albums.isAlbumDetailOpen, isFalse);
@@ -1944,50 +1988,58 @@ void main() {
     }
   });
 
-  testWidgets("an album's tile (its ⋮ and a right click) and its phone row offer one menu, in the same order", (
-    tester,
-  ) async {
-    final vm = await pumpApp(tester, const Size(1400, 900), createWithServer);
-    vm.navigateTo(AppSection.albums);
-    await settle(tester);
-    final expected = [
-      Localizer.get('Play'),
-      Localizer.get('Shuffle'),
-      Localizer.get('PlayNext'),
-      Localizer.get('AddToQueue'),
-      Localizer.get('TipAddToPlaylist'),
-      Localizer.get('TipDownload'),
-      Localizer.get('GoToArtist'),
-      Localizer.get('HideAlbum'),
-    ];
-    List<String> entries() => [
-      for (final item in tester.widgetList<PopupMenuItem<Object?>>(find.byWidgetPredicate((w) => w is PopupMenuItem)))
-        tester
-            .widgetList<Text>(find.descendant(of: find.byWidget(item), matching: find.byType(Text)))
-            .map((t) => t.data)
-            .join(),
-    ];
+  testWidgets(
+    "an album's tile (its ⋮ and a right click) and its phone row offer one menu, in the same order; on a phone a sheet under the album",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(1400, 900), createWithServer);
+      vm.navigateTo(AppSection.albums);
+      await settle(tester);
+      final expected = [
+        Localizer.get('Play'),
+        Localizer.get('Shuffle'),
+        Localizer.get('PlayNext'),
+        Localizer.get('AddToQueue'),
+        Localizer.get('TipAddToPlaylist'),
+        Localizer.get('TipDownload'),
+        Localizer.get('GoToArtist'),
+        Localizer.get('HideAlbum'),
+      ];
+      List<String> entries() => [
+        for (final item in tester.widgetList<PopupMenuItem<Object?>>(find.byWidgetPredicate((w) => w is PopupMenuItem)))
+          tester
+              .widgetList<Text>(find.descendant(of: find.byWidget(item), matching: find.byType(Text)))
+              .map((t) => t.data)
+              .join(),
+      ];
 
-    await tester.tap(find.text('Giant Steps').first, buttons: kSecondaryButton);
-    await settle(tester);
-    expect(entries(), expected);
-    await tester.tapAt(const Offset(5, 5)); // closes the menu
-    await settle(tester);
+      await tester.tap(find.text('Giant Steps').first, buttons: kSecondaryButton);
+      await settle(tester);
+      expect(entries(), expected);
+      await tester.tapAt(const Offset(5, 5)); // closes the menu
+      await settle(tester);
 
-    final tile = find.ancestor(of: find.text('Giant Steps').first, matching: find.byType(AlbumCard));
-    await tester.tap(find.descendant(of: tile, matching: find.byIcon(Icons.more_vert_rounded)));
-    await settle(tester);
-    expect(entries(), expected);
-    await tester.tapAt(const Offset(5, 5));
-    await settle(tester);
+      final tile = find.ancestor(of: find.text('Giant Steps').first, matching: find.byType(AlbumCard));
+      await tester.tap(find.descendant(of: tile, matching: find.byIcon(Icons.more_vert_rounded)));
+      await settle(tester);
+      expect(entries(), expected);
+      await tester.tapAt(const Offset(5, 5));
+      await settle(tester);
 
-    tester.view.physicalSize = const Size(400, 860);
-    await settle(tester);
-    final row = find.ancestor(of: find.text('Giant Steps'), matching: find.byType(Row)).first;
-    await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
-    await settle(tester);
-    expect(entries(), expected);
-  });
+      tester.view.physicalSize = const Size(400, 860);
+      await settle(tester);
+      final row = find.ancestor(of: find.text('Giant Steps'), matching: find.byType(Row)).first;
+      await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
+      await settle(tester);
+      expect(entries(), expected);
+      final sheet = find.byType(BottomSheet);
+      expect(
+        find.descendant(of: sheet, matching: find.text('Giant Steps')),
+        findsOneWidget,
+        reason: 'the album on top',
+      );
+      expect(find.descendant(of: sheet, matching: find.text('John Coltrane')), findsOneWidget);
+    },
+  );
 
   testWidgets("an album's menu leads to its artist, but not on that artist's page or in the album's header", (
     tester,
@@ -2018,7 +2070,7 @@ void main() {
       find.descendant(of: find.byType(DetailHeader), matching: find.byTooltip(Localizer.get('TipMore'))),
     );
     await settle(tester);
-    expect(find.text(Localizer.get('PlayNext')), findsOneWidget);
+    expect(find.text(Localizer.get('HideAlbum')), findsOneWidget, reason: 'the menu is open');
     expect(find.text(Localizer.get('GoToArtist')), findsNothing, reason: "the artist's name above is the link");
   });
 
@@ -2079,33 +2131,40 @@ void main() {
     expect(tester.getSize(remove.first), const Size(44, 44));
   });
 
-  testWidgets("an album's header puts it into a playlist beside the download; its menu then leaves that out", (
-    tester,
-  ) async {
-    for (final size in const [Size(400, 860), Size(1400, 900)]) {
-      final vm = await pumpApp(tester, size);
-      vm.openAlbum(vm.library.albums.first);
-      await settle(tester);
-      final add = find.descendant(
-        of: find.byType(DetailHeader),
-        matching: find.byTooltip(Localizer.get('TipAddToPlaylist')),
-      );
-      expect(add, findsOneWidget, reason: '$size');
-      // The page's ⋮: the phone's top bar's (over the rows', the last), else the header's.
-      final more = find.byTooltip(Localizer.get('TipMore'));
-      await tester.tap(size.width < 720 ? more.last : find.descendant(of: find.byType(DetailHeader), matching: more));
-      await settle(tester);
-      expect(find.text(Localizer.get('AddToQueue')), findsOneWidget, reason: '$size');
-      expect(find.text(Localizer.get('TipAddToPlaylist')), findsNothing, reason: '$size');
-      await tester.tapAt(const Offset(5, 5));
-      await settle(tester);
-      await tester.tap(add);
-      await settle(tester);
-      expect(find.text(Localizer.get('PlaylistNew')), findsOneWidget, reason: '$size: the playlist dialog');
-      await tester.tap(find.text(Localizer.get('Cancel')));
-      await settle(tester);
-    }
-  });
+  testWidgets(
+    "an album's header puts it into a playlist and the queue beside the download; its menu then leaves those out",
+    (tester) async {
+      for (final size in const [Size(400, 860), Size(1400, 900)]) {
+        final vm = await pumpApp(tester, size);
+        vm.openAlbum(vm.library.albums.first);
+        await settle(tester);
+        final add = find.descendant(
+          of: find.byType(DetailHeader),
+          matching: find.byTooltip(Localizer.get('TipAddToPlaylist')),
+        );
+        expect(add, findsOneWidget, reason: '$size');
+        for (final key in ['PlayNext', 'AddToQueue']) {
+          final button = find.descendant(of: find.byType(DetailHeader), matching: find.byTooltip(Localizer.get(key)));
+          expect(button, findsOneWidget, reason: '$size');
+        }
+        // The page's ⋮: the phone's top bar's (over the rows', the last), else the header's.
+        final more = find.byTooltip(Localizer.get('TipMore'));
+        await tester.tap(size.width < 720 ? more.last : find.descendant(of: find.byType(DetailHeader), matching: more));
+        await settle(tester);
+        expect(find.text(Localizer.get('HideAlbum')), findsOneWidget, reason: '$size');
+        for (final key in ['TipAddToPlaylist', 'PlayNext', 'AddToQueue']) {
+          expect(find.text(Localizer.get(key)), findsNothing, reason: '$size: $key');
+        }
+        await tester.tapAt(const Offset(5, 5));
+        await settle(tester);
+        await tester.tap(add);
+        await settle(tester);
+        expect(find.text(Localizer.get('PlaylistNew')), findsOneWidget, reason: '$size: the playlist dialog');
+        await tester.tap(find.text(Localizer.get('Cancel')));
+        await settle(tester);
+      }
+    },
+  );
 
   testWidgets(
     "a swipe over the mini player's track skips it, the next coming in from the right, the one before from the left",

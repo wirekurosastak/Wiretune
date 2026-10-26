@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -121,11 +123,10 @@ Future<void> showAddToPlaylistDialog(
                   final vm = context.vm;
                   // Offline, an account's playlist can't change, and the library says why itself.
                   final made = !playlist.isServer || vm.library.serverConnected;
-                  final adds = tracks.any((t) => !playlist.trackIds.contains(t.id));
-                  final notice = dialog.trf(adds ? 'AddedToPlaylist' : 'AlreadyInPlaylist', [playlist.name]);
-                  playlists.addTracks(playlist, tracks);
+                  final undo = playlists.addTracks(playlist, tracks);
+                  final notice = dialog.trf(undo != null ? 'AddedToPlaylist' : 'AlreadyInPlaylist', [playlist.name]);
                   Navigator.pop(dialog);
-                  if (made) vm.showNotice(notice);
+                  if (made) vm.showNotice(notice, undo: undo);
                 },
               ),
             ListTile(
@@ -263,3 +264,119 @@ class AppDialog extends StatelessWidget {
     );
   }
 }
+
+/// A sheet over the bottom of a phone's screen, the handle on top, then what [builder] gives: as tall as that (a sheet
+/// keeps to 9/16 of the screen otherwise, which cut the last entries off), and scrolling when even the screen is too
+/// short for it. Returns what the sheet is closed with.
+Future<T?> showPhoneSheet<T>(BuildContext context, {required List<Widget> Function(BuildContext sheet) builder}) {
+  final colors = context.colors;
+  return showModalBottomSheet<T>(
+    context: context,
+    backgroundColor: colors.palette.modal,
+    shape: RoundedRectangleBorder(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(Radii.panel)),
+      side: BorderSide(color: colors.palette.glassBorder),
+    ),
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (sheet) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: colors.textMuted.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            ...builder(sheet),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// A ⋮ menu on a phone, as a sheet ([showPhoneSheet]): what it is for on top, [cover] ([round]: an artist's picture),
+/// [title] and [subtitle], then its [items]. Returns the chosen one's value.
+Future<T?> showMenuSheet<T>(
+  BuildContext context, {
+  required Widget cover,
+  bool round = false,
+  required String title,
+  String? subtitle,
+  required List<PopupMenuEntry<T>> items,
+}) {
+  final colors = context.colors;
+  return showPhoneSheet<T>(
+    context,
+    builder: (sheet) => [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+        child: Row(
+          children: [
+            SizedBox.square(dimension: menuSheetCoverSize, child: cover),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                  ),
+                  if (subtitle != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.5, color: colors.textMuted),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      Divider(height: 16, color: colors.glassBorder),
+      // The menu's entries, in line with the names above; one chosen closes the sheet with its value. A menu, as a
+      // screen reader tells it, as the ⋮'s is.
+      Semantics(
+        role: ui.SemanticsRole.menu,
+        explicitChildNodes: true,
+        label: title,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final entry in items)
+              if (entry case PopupMenuItem<T>(:final value, :final enabled, :final child))
+                PopupMenuItem<T>(
+                  value: value,
+                  enabled: enabled,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: child,
+                )
+              else
+                entry,
+          ],
+        ),
+      ),
+    ],
+  );
+}
+
+/// The size of the cover on top of a [showMenuSheet].
+const double menuSheetCoverSize = 56;

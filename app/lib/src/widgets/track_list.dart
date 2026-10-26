@@ -578,8 +578,10 @@ enum TrackAction {
   hideTrack,
 }
 
-/// A right click on a track's row (a table's, the queue's): the track's menu, with the favourite first.
+/// A right click on a track's row (a table's, the queue's): the track's menu, with the favourite first; on a phone, as
+/// a sheet ([TrackMenu.showSheet]).
 Future<void> showTrackContextMenu(BuildContext context, Offset position, Track track, TrackTableKind kind) async {
+  if (PhoneChrome.isPhone(context)) return TrackMenu.showSheet(context, track, kind, withFavorite: true);
   final action = await showMenu<TrackAction>(
     context: context,
     position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
@@ -590,9 +592,10 @@ Future<void> showTrackContextMenu(BuildContext context, Offset position, Track t
   }
 }
 
-/// The "⋮" menu of a track, on its row (a table's and a phone's), in the player bar and the phone's full-screen player: play next and
-/// add to the queue, a playlist (and, in one, moving and removing the track), the download, the way to the album and the
-/// artist, and hiding it.
+/// The "⋮" menu of a track, on its row (a table's and a phone's), in the player bar and the phone's full-screen player:
+/// play next and add to the queue, a playlist (and, in one, moving and removing the track), the download, the way to
+/// the album and the artist, and hiding it. On a phone it is a sheet, with the track's cover and names on top
+/// ([showSheet]).
 class TrackMenu extends StatelessWidget {
   const TrackMenu({
     super.key,
@@ -723,18 +726,42 @@ class TrackMenu extends StatelessWidget {
     }
   }
 
+  /// The menu as a phone's sheet: the track's cover, title and artist on top.
+  static Future<void> showSheet(
+    BuildContext context,
+    Track track,
+    TrackTableKind kind, {
+    bool withFavorite = false,
+  }) async {
+    final action = await showMenuSheet(
+      context,
+      cover: CoverImage(path: track.coverArtPath, size: menuSheetCoverSize, placeholderIcon: Icons.music_note),
+      title: track.title,
+      subtitle: track.artist,
+      items: buildMenuItems(context, track, kind, withFavorite: withFavorite),
+    );
+    if (action != null && context.mounted) handleAction(context, action, track);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final icon = Icon(Icons.more_vert_rounded, color: color ?? colors.textMuted, size: iconSize);
     return SizedBox(
       width: width,
       child: Center(
-        child: PopupMenuButton<TrackAction>(
-          tooltip: context.tr('TipMore'),
-          icon: Icon(Icons.more_vert_rounded, color: color ?? colors.textMuted, size: iconSize),
-          onSelected: (action) => handleAction(context, action, track),
-          itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
-        ),
+        child: PhoneChrome.isPhone(context)
+            ? IconButton(
+                tooltip: context.tr('TipMore'),
+                icon: icon,
+                onPressed: () => showSheet(context, track, kind, withFavorite: withFavorite),
+              )
+            : PopupMenuButton<TrackAction>(
+                tooltip: context.tr('TipMore'),
+                icon: icon,
+                onSelected: (action) => handleAction(context, action, track),
+                itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
+              ),
       ),
     );
   }

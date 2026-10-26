@@ -303,20 +303,25 @@ class PlayerViewModel extends ChangeNotifier {
     _originalQueue.remove(track); // also while shuffled, or turning shuffle off would bring the track back
 
     if (removedCurrent) {
-      // The playing track was taken out of the queue: carry on with whatever followed it (or stop at the end).
-      _queueIndex = index - 1;
-      _updateQueueState();
-      if (_playbackQueue.isNotEmpty) {
-        _nextTrackLocal();
-      } else {
-        _runSafe(_engine.stop);
-      }
-      notifyListeners();
+      _carryOnFrom(index - 1);
       return;
     }
 
     if (index < _queueIndex) _queueIndex--;
     _updateQueueState();
+    notifyListeners();
+  }
+
+  /// The playing track was taken out of the queue: carry on with whatever followed it, now after [before] (or stop at
+  /// the end).
+  void _carryOnFrom(int before) {
+    _queueIndex = before;
+    _updateQueueState();
+    if (_playbackQueue.isNotEmpty) {
+      _nextTrackLocal();
+    } else {
+      _runSafe(_engine.stop);
+    }
     notifyListeners();
   }
 
@@ -428,41 +433,84 @@ class PlayerViewModel extends ChangeNotifier {
     playQueue(tracks);
   }
 
-  /// Puts [tracks] right after the current track, also while shuffling; with nothing queued they simply play.
-  void playNext(List<Track> tracks) => _addToQueue(tracks, next: true);
+  /// Puts [tracks] right after the current track, also while shuffling; with nothing queued they simply play. Returns
+  /// what takes them out again ([_unqueue]): null when they started playing, or went to the device being controlled.
+  VoidCallback? playNext(List<Track> tracks) => _addToQueue(tracks, next: true);
 
-  /// Puts [tracks] at the end of the queue; with nothing queued they simply play.
-  void addToQueue(List<Track> tracks) => _addToQueue(tracks, next: false);
+  /// Puts [tracks] at the end of the queue; with nothing queued they simply play. Returns what takes them out again, as
+  /// [playNext] does.
+  VoidCallback? addToQueue(List<Track> tracks) => _addToQueue(tracks, next: false);
 
-  void _addToQueue(List<Track> tracks, {required bool next}) {
-    if (tracks.isEmpty) return;
+  VoidCallback? _addToQueue(List<Track> tracks, {required bool next}) {
+    if (tracks.isEmpty) return null;
     if (isRemote) {
       final ids = [for (final track in tracks.take(RemoteRules.maxQueueLength)) _library.sharedId(track)];
       _sendRemote(RemoteCommand(next ? RemoteAction.playNext : RemoteAction.addToQueue, trackIds: ids));
-      return;
+      return null;
     }
-    _queueLocal(tracks, next: next);
+    return _queueLocal(tracks, next: next);
   }
 
-  void _queueLocal(List<Track> tracks, {required bool next}) {
+  VoidCallback? _queueLocal(List<Track> tracks, {required bool next}) {
     if (_playbackQueue.isEmpty) {
       _playQueueInternal(tracks, null);
       notifyListeners();
-      return;
+      return null;
     }
+    final entries = List.of(tracks);
+    final int at, original;
     if (next) {
       // After the current entry (or, past the end, where playing goes on); in the unshuffled order after its track.
-      final at = math.min(_queueIndex + 1, _playbackQueue.length);
-      _playbackQueue.insertAll(math.max(0, at), tracks);
+      at = math.max(0, math.min(_queueIndex + 1, _playbackQueue.length));
+      _playbackQueue.insertAll(at, entries);
       final current = _queueIndex >= 0 && _queueIndex < _playbackQueue.length ? _playbackQueue[_queueIndex] : null;
-      final original = current == null ? -1 : _originalQueue.indexOf(current);
-      _originalQueue.insertAll(original < 0 ? _originalQueue.length : original + 1, tracks);
+      final index = current == null ? -1 : _originalQueue.indexOf(current);
+      original = index < 0 ? _originalQueue.length : index + 1;
+      _originalQueue.insertAll(original, entries);
     } else {
-      _playbackQueue.addAll(tracks);
-      _originalQueue.addAll(tracks);
+      at = _playbackQueue.length;
+      original = _originalQueue.length;
+      _playbackQueue.addAll(entries);
+      _originalQueue.addAll(entries);
     }
     _updateQueueState();
     notifyListeners();
+    return () => _unqueue(entries, at: at, original: original);
+  }
+
+  /// Takes [entries], queued together at [at] (in the unshuffled order at [original]), out of the queue again, wherever
+  /// they have moved since; when the queue no longer holds them together (shuffled, or changed in between), nothing.
+  /// The playing one among them gives way to what follows them.
+  void _unqueue(List<Track> entries, {required int at, required int original}) {
+    final start = _runOf(_playbackQueue, entries, near: at);
+    if (start < 0) return;
+    final originalStart = _runOf(_originalQueue, entries, near: original);
+    _playbackQueue.removeRange(start, start + entries.length);
+    if (originalStart >= 0) _originalQueue.removeRange(originalStart, originalStart + entries.length);
+    if (_queueIndex >= start + entries.length) {
+      _queueIndex -= entries.length;
+    } else if (_queueIndex >= start) {
+      _carryOnFrom(start - 1);
+      return;
+    }
+    _updateQueueState();
+    notifyListeners();
+  }
+
+  /// Where in [queue] [entries] stand together, the run nearest [near]; -1 when nowhere.
+  static int _runOf(List<Track> queue, List<Track> entries, {required int near}) {
+    bool runsAt(int start) {
+      for (var i = 0; i < entries.length; i++) {
+        if (!identical(queue[start + i], entries[i])) return false;
+      }
+      return true;
+    }
+
+    var best = -1;
+    for (var start = 0; start + entries.length <= queue.length; start++) {
+      if (runsAt(start) && (best < 0 || (start - near).abs() < (best - near).abs())) best = start;
+    }
+    return best;
   }
 
   void _playQueueInternal(Iterable<Track> tracks, Track? startTrack, {Duration start = Duration.zero}) {

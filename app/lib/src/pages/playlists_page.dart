@@ -223,6 +223,8 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                           onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                         ),
                   addToPlaylist: menu.addToPlaylistButton(),
+                  playNext: menu.playNextButton(),
+                  addToQueue: menu.addToQueueButton(),
                   menu: menu.headerButton(),
                 ),
               ],

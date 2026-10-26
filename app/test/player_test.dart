@@ -45,6 +45,39 @@ void main() {
       expect(driver.lastSource, extra[0].filePath);
     });
 
+    test(
+      "queued tracks' undo takes back those entries, not other copies; the playing one gives way to what follows",
+      () {
+        final (player, tracks, _) = createQueue(count: 3, startAt: 0);
+        final undoNext = player.playNext([tracks[0], tracks[1]])!; // Song 1, Song 1, Song 2, Song 2, Song 3
+        final undoLast = player.addToQueue([tracks[2]])!; // ..., Song 3, Song 3
+        player.moveQueueTrack(4, 0); // Song 3, Song 1, Song 1, Song 2, Song 2, Song 3
+        expect(player.currentQueueIndex, 1);
+        undoNext();
+        expect(player.queueTracks.map((t) => t.title), ['Song 3', 'Song 1', 'Song 2', 'Song 3']);
+        expect(player.currentQueueIndex, 1, reason: 'the track that plays goes on');
+        undoLast();
+        expect(player.queueTracks.map((t) => t.title), ['Song 3', 'Song 1', 'Song 2']);
+
+        final undo = player.playNext([TestSupport.makeTrack('x', 'Extra'), tracks[0]])!;
+        player.nextTrack();
+        expect(player.currentTrack?.title, 'Extra');
+        undo();
+        expect(player.queueTracks.map((t) => t.title), ['Song 3', 'Song 1', 'Song 2']);
+        expect(player.currentTrack, tracks[1], reason: 'what followed them plays');
+
+        final gone = player.addToQueue([TestSupport.makeTrack('y', 'Gone'), tracks[0]])!;
+        player.removeQueueItem(player.queueItems.last);
+        gone();
+        expect(player.queueTracks.map((t) => t.title), [
+          'Song 3',
+          'Song 1',
+          'Song 2',
+          'Gone',
+        ], reason: 'no longer together');
+      },
+    );
+
     test('while shuffling, play next still plays next, and unshuffling keeps it after the current track', () {
       final (player, tracks, _) = createQueue(count: 5, startAt: 1);
       player.setShuffle(true);

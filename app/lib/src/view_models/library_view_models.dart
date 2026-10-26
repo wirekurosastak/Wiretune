@@ -797,8 +797,16 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   }
 
   /// Puts [tracks] at the end of [playlist], those not in it yet.
-  void addTracks(Playlist playlist, List<Track> tracks) =>
-      _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
+  /// Adds those of [tracks] not in [playlist] yet; returns what takes them out again (null: none was new).
+  VoidCallback? addTracks(Playlist playlist, List<Track> tracks) {
+    final present = playlist.trackIds.toSet();
+    final added = {
+      for (final t in tracks)
+        if (!present.contains(t.id)) t.id,
+    };
+    _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
+    return added.isEmpty ? null : () => _library.removeTracksFromPlaylist(playlist.id, added);
+  }
 
   /// The library's change closes the page of [playlist]; offline, an account's playlist stays, and the user is told.
   void deletePlaylist(Playlist playlist) => _library.deletePlaylist(playlist.id);

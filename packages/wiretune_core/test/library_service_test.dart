@@ -74,6 +74,10 @@ void main() {
     service.removeTrackFromPlaylist(playlist.id, 'track_123');
     expect(playlist.trackCount, 0);
 
+    service.addTracksToPlaylist(playlist.id, ['a', 'b', 'c']);
+    service.removeTracksFromPlaylist(playlist.id, ['a', 'c']);
+    expect(playlist.trackIds, ['b']);
+
     service.deletePlaylist(playlist.id);
     expect(service.playlists, isEmpty);
     expect(repo.getAllPlaylists(), isEmpty);

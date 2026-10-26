@@ -536,12 +536,13 @@ class MainViewModel extends ChangeNotifier {
   }
 
   /// Puts [tracks] right after the current track ([next]) or at the end of the queue, and says so, naming them by
-  /// [name] (a track's title, an album's, an artist's name). With nothing queued they simply play, which says enough.
+  /// [name] (a track's title, an album's, an artist's name), with an Undo (not for a device being controlled). With
+  /// nothing queued they simply play, which says enough.
   void queue(List<Track> tracks, {required bool next, required String name}) {
     if (tracks.isEmpty) return;
     final says = player.queueItems.isNotEmpty;
-    next ? player.playNext(tracks) : player.addToQueue(tracks);
-    if (says) showNotice(Localizer.format(next ? 'QueuedNext' : 'QueuedLast', [name]));
+    final undo = next ? player.playNext(tracks) : player.addToQueue(tracks);
+    if (says) showNotice(Localizer.format(next ? 'QueuedNext' : 'QueuedLast', [name]), undo: undo);
   }
 
   // ── Server and sign-in ─────────────────────────────────────────────────────────────────────────

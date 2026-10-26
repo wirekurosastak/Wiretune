@@ -243,18 +243,28 @@ void main() {
     vm.dispose();
   });
 
-  testWidgets('adding to a playlist says so, and says when the music is in it already', (tester) async {
+  testWidgets('adding to a playlist says so, with an Undo, and says when the music is in it already', (tester) async {
     final lib = await library(tester, [TestSupport.makeTrack('1', 'So What')]);
     lib.createPlaylist('Mix');
     final vm = createMainViewModel(lib);
     await show(tester, vm, wide);
-    for (final key in ['AddedToPlaylist', 'AlreadyInPlaylist']) {
+    Future<void> add() async {
       final page = tester.element(find.text(Localizer.get('NavArtists')).first);
       final adding = showAddTrackToPlaylistDialog(page, lib.tracks.single);
       await settle(tester);
       await tester.tap(find.text('Mix'));
       await settle(tester);
       await adding;
+    }
+
+    await add();
+    expect(find.text(Localizer.format('AddedToPlaylist', ['Mix'])), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('Undo')));
+    await settle(tester);
+    expect(lib.getPlaylistTracks(lib.playlists.single), isEmpty);
+
+    for (final key in ['AddedToPlaylist', 'AlreadyInPlaylist']) {
+      await add();
       expect(find.text(Localizer.format(key, ['Mix'])), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
       await settle(tester);
