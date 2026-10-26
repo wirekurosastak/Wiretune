@@ -416,10 +416,10 @@ class MainViewModel extends ChangeNotifier {
 
   // ── Opening albums, artists and playlists from anywhere ────────────────────────────────────────
 
-  /// How many times a page was opened from another tab or the search, or back went from it to there. The layouts show
-  /// such a jump at once, as a page opened or left within a tab, the cover's flight being the way between the two: the
-  /// tabs' slide would move the page as if a tab had been chosen, and a cross-fade back would show the tab left, whose
-  /// page is closed by then, as its list, and send the page's cover flying back to that list.
+  /// How many times a page was opened from another tab or the search, or back went from it to there. The wide layout
+  /// shows such a jump at once, as a page opened or left within a tab, the cover's flight being the way between the
+  /// two: a cross-fade back would show the tab left, whose page is closed by then, as its list, and send the page's
+  /// cover flying back to that list. (The phone's pages change at once anyway.)
   int jumps = 0;
 
   /// A page about to open on [target]'s tab: from another tab or the search, a jump ([jumps]).

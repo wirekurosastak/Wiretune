@@ -69,9 +69,7 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
                         _SearchBarSlot(open: vm.isSearchOpen),
                         if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
                         Expanded(
-                          child: _PageSwitcher(
-                            section: vm.isSearchOpen ? null : vm.selectedSection,
-                            jumps: vm.jumps,
+                          child: SizedBox.expand(
                             child: vm.isSearchOpen
                                 // A touch on the results puts the keyboard away (as in Spotify): a menu opened there
                                 // then has no field to give the focus back to when it closes.
@@ -102,24 +100,6 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
       ),
     );
   }
-}
-
-/// The phone's page on show, switching directly without a transition effect.
-class _PageSwitcher extends StatelessWidget {
-  const _PageSwitcher({required this.section, required this.jumps, required this.child});
-
-  final AppSection? section;
-  final int jumps;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => AnimatedSwitcher(
-    key: ValueKey(jumps),
-    duration: Duration.zero,
-    layoutBuilder: (currentChild, previousChildren) => Stack(fit: StackFit.expand, children: [?currentChild]),
-    transitionBuilder: (child, animation) => child,
-    child: child,
-  );
 }
 
 /// The full-screen player, as far open as its [sheet] is: rising from the screen's bottom when opened and going back

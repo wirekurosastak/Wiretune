@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
@@ -183,7 +184,6 @@ class DetailHeader extends StatelessWidget {
     this.back,
     this.details = const [],
     this.secondaryDetails = const [],
-    this.fitsOneLine,
     this.actions = const [],
     this.titleWidget,
   });
@@ -207,14 +207,11 @@ class DetailHeader extends StatelessWidget {
   /// Replaces the title text (a playlist's name, which can be clicked to rename it).
   final Widget? titleWidget;
 
-  /// The details under the title (on a wide screen, alongside [secondaryDetails]).
+  /// The details under the title, followed by [secondaryDetails].
   final List<Widget> details;
 
-  /// Details placed on a second line on an upright phone (or alongside [details] on a wide screen).
+  /// On an upright phone, the details on a line of their own under [details] when the two don't fit on one.
   final List<Widget> secondaryDetails;
-
-  /// Whether all details fit on a single line on an upright phone within the given width.
-  final bool Function(double maxWidth)? fitsOneLine;
   final List<Widget> actions;
 
   /// Below this width the artwork sits above the title; from it on (a phone held sideways, a narrow window) beside it,
@@ -288,7 +285,7 @@ class DetailHeader extends StatelessWidget {
               Positioned(left: 10, bottom: 10, child: badge),
             ],
           );
-    Widget buildRow(List<Widget> items, {required bool narrow}) => Wrap(
+    Widget buildRow(List<Widget> items) => Wrap(
       spacing: 8,
       runSpacing: 4,
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -297,6 +294,7 @@ class DetailHeader extends StatelessWidget {
         for (var i = 0; i < items.length; i++) ...[if (i > 0) dot, items[i]],
       ],
     );
+    final allDetails = [...details, ...secondaryDetails];
     if (narrow) {
       // The phone's top bar takes the name over once it has reached it: one of a line shrinks into the bar's title,
       // a longer one (or a playlist's, which renames it) fades over to it.
@@ -307,30 +305,15 @@ class DetailHeader extends StatelessWidget {
         color: colors.textMain,
       );
       final narrowTitle = _pageTitle(context, titleStyle, maxLines: 3, textAlign: TextAlign.center);
-      final allDetails = [...details, ...secondaryDetails];
-      final firstRow = details.isEmpty ? null : buildRow(details, narrow: true);
-      final secondRow = secondaryDetails.isEmpty ? null : buildRow(secondaryDetails, narrow: true);
-      final Widget? detailContent;
-      if (allDetails.isEmpty) {
-        detailContent = null;
-      } else if (secondaryDetails.isEmpty) {
-        detailContent = firstRow;
-      } else {
-        detailContent = LayoutBuilder(
-          builder: (context, constraints) {
-            final fits = fitsOneLine?.call(constraints.maxWidth) ?? false;
-            if (fits) return buildRow(allDetails, narrow: true);
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (firstRow != null) firstRow,
-                if (firstRow != null && secondRow != null) const SizedBox(height: 4),
-                if (secondRow != null) secondRow,
-              ],
-            );
-          },
-        );
-      }
+      final detailContent = details.isNotEmpty && secondaryDetails.isNotEmpty
+          ? _DetailLines(
+              first: buildRow(details),
+              separator: Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: dot),
+              second: buildRow(secondaryDetails),
+            )
+          : allDetails.isEmpty
+          ? null
+          : buildRow(allDetails);
       // The phone's header: the 230 px artwork with a glow, the title and the details centred, and a line of buttons
       // as tall as Play (see PlayShuffleButtons), Play over the ⋮ of the rows below.
       return SafeArea(
@@ -367,8 +350,7 @@ class DetailHeader extends StatelessWidget {
         ),
       );
     }
-    final allDetails = [...details, ...secondaryDetails];
-    final detailRow = allDetails.isEmpty ? null : buildRow(allDetails, narrow: false);
+    final detailRow = allDetails.isEmpty ? null : buildRow(allDetails);
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -404,6 +386,98 @@ class DetailHeader extends StatelessWidget {
     // never does.
     return PhoneChrome.isPhone(context) ? SafeArea(bottom: false, child: header) : header;
   }
+}
+
+/// The phone header's two groups of details: on one line, [separator] between them, when that fits in the width; else
+/// [second] on a line under [first], without the separator. Each line is centred.
+class _DetailLines extends MultiChildRenderObjectWidget {
+  _DetailLines({required Widget first, required Widget separator, required Widget second})
+    : super(children: [first, separator, second]);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderDetailLines();
+}
+
+class _DetailLinesParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderDetailLines extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _DetailLinesParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _DetailLinesParentData> {
+  /// The space between the two lines, as between a [Wrap]'s runs in the header.
+  static const double _lineGap = 4;
+
+  bool _oneLine = true;
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _DetailLinesParentData) child.parentData = _DetailLinesParentData();
+  }
+
+  @override
+  void performLayout() {
+    final first = firstChild!, separator = childAfter(first)!, second = childAfter(separator)!;
+    // Their widths unwrapped decide; then they are laid out in the width there is.
+    double width(RenderBox child) => child.getDryLayout(const BoxConstraints()).width;
+    _oneLine = width(first) + width(separator) + width(second) <= constraints.maxWidth;
+    final loose = BoxConstraints(maxWidth: constraints.maxWidth);
+    for (final child in [first, separator, second]) {
+      child.layout(loose, parentUsesSize: true);
+    }
+    final Size size;
+    if (_oneLine) {
+      final lineWidth = first.size.width + separator.size.width + second.size.width;
+      final height = [first.size.height, separator.size.height, second.size.height].reduce(math.max);
+      size = constraints.constrain(Size(lineWidth, height));
+      var x = (size.width - lineWidth) / 2;
+      for (final child in [first, separator, second]) {
+        (child.parentData! as _DetailLinesParentData).offset = Offset(x, (height - child.size.height) / 2);
+        x += child.size.width;
+      }
+    } else {
+      size = constraints.constrain(
+        Size(math.max(first.size.width, second.size.width), first.size.height + _lineGap + second.size.height),
+      );
+      (first.parentData! as _DetailLinesParentData).offset = Offset((size.width - first.size.width) / 2, 0);
+      (second.parentData! as _DetailLinesParentData).offset = Offset(
+        (size.width - second.size.width) / 2,
+        first.size.height + _lineGap,
+      );
+    }
+    this.size = size;
+  }
+
+  /// The children on show: all three on one line, else the two groups.
+  Iterable<RenderBox> get _shown sync* {
+    final first = firstChild!, separator = childAfter(first)!;
+    yield first;
+    if (_oneLine) yield separator;
+    yield childAfter(separator)!;
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    for (final child in _shown) {
+      context.paintChild(child, (child.parentData! as _DetailLinesParentData).offset + offset);
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    for (final child in _shown.toList().reversed) {
+      final offset = (child.parentData! as _DetailLinesParentData).offset;
+      final hit = result.addWithPaintOffset(
+        offset: offset,
+        position: position,
+        hitTest: (result, transformed) => child.hitTest(result, position: transformed),
+      );
+      if (hit) return true;
+    }
+    return false;
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) => _shown.forEach(visitor);
 }
 
 /// One of the details under a detail page's title: a count, a release year, a length.
@@ -751,41 +825,6 @@ class AlbumDetail extends StatelessWidget {
                 DetailText(context.trf('TrackCount', [album.trackCount])),
                 DetailText(album.formattedTotalDuration),
               ],
-              fitsOneLine: (maxWidth) {
-                final painter = TextPainter(
-                  text: TextSpan(
-                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500),
-                    children: [
-                      TextSpan(
-                        text: album.artistNames.join(', '),
-                        style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800),
-                      ),
-                      if (album.releaseYear != null) ...[
-                        const TextSpan(text: ' • '),
-                        TextSpan(text: '${album.releaseYear}'),
-                      ],
-                      const TextSpan(text: ' • '),
-                      TextSpan(text: context.trf('TrackCount', [album.trackCount])),
-                      if (album.formattedTotalDuration.isNotEmpty) ...[
-                        const TextSpan(text: ' • '),
-                        TextSpan(text: album.formattedTotalDuration),
-                      ],
-                    ],
-                  ),
-                  maxLines: 1,
-                  textDirection: Directionality.of(context),
-                  textScaler: MediaQuery.textScalerOf(context),
-                )..layout();
-                final itemCount =
-                    (album.artistNames.isNotEmpty ? 1 : 0) +
-                    (album.releaseYear != null ? 1 : 0) +
-                    1 +
-                    (album.formattedTotalDuration.isNotEmpty ? 1 : 0);
-                final extraSpacing = math.max(0, itemCount - 1) * 16.0;
-                final fits = painter.width + extraSpacing <= maxWidth;
-                painter.dispose();
-                return fits;
-              },
               actions: [
                 PlayShuffleButtons(
                   tracks: album.tracks,

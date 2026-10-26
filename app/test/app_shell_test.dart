@@ -2767,45 +2767,42 @@ void main() {
     expect(tester.getTopLeft(find.byType(AlbumsPage)).dx, 0);
   });
 
-  testWidgets(
-    "an album's details on a phone place artists on the first line and the rest on the second line unless all fits",
-    (tester) async {
-      final vm = await pumpApp(tester, const Size(400, 860), () async {
-        final library = createLibrary([
-          TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 1)
-            ..releaseYear = 1959,
-          TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2)
-            ..releaseYear = 1959,
-        ]);
-        library.initialize();
-        return createMainViewModel(library);
-      });
-      final album = vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue');
-      vm.openAlbum(album);
-      await settle(tester);
+  testWidgets("an album's details on a phone: the artists on a line, the rest under them, unless all fit on one", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 1)
+          ..releaseYear = 1959,
+        TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2)
+          ..releaseYear = 1959,
+        TestSupport.makeTrack('3', 'Go', artist: 'Mo', album: 'Go'),
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    double line(Finder finder) => tester.getCenter(finder).dy;
 
-      final artistFinder = find.text('Miles Davis').first;
-      final yearFinder = find.text('1959');
-      final tracksFinder = find.text(Localizer.format('TrackCount', [album.trackCount]));
-      final durationFinder = find.text(album.formattedTotalDuration);
+    final long = vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue');
+    vm.openAlbum(long);
+    await settle(tester);
+    final year = find.text('1959');
+    final tracks = find.text(Localizer.format('TrackCount', [long.trackCount]));
+    final duration = find.text(long.formattedTotalDuration);
+    expect(line(year), moreOrLessEquals(line(tracks), epsilon: 1));
+    expect(line(tracks), moreOrLessEquals(line(duration), epsilon: 1));
+    expect(line(year), greaterThan(line(find.text('Miles Davis').first) + 10));
 
-      expect(artistFinder, findsOneWidget);
-      expect(yearFinder, findsOneWidget);
-      expect(tracksFinder, findsOneWidget);
-      expect(durationFinder, findsOneWidget);
-
-      // On phone (not fitting on 1 line): Artist on line 1, the rest (Year, Tracks, Duration) on line 2:
-      expect(tester.getCenter(yearFinder).dy, moreOrLessEquals(tester.getCenter(tracksFinder).dy, epsilon: 1.0));
-      expect(tester.getCenter(tracksFinder).dy, moreOrLessEquals(tester.getCenter(durationFinder).dy, epsilon: 1.0));
-      expect(tester.getCenter(yearFinder).dy, greaterThan(tester.getCenter(artistFinder).dy));
-
-      // When all fits on 1 line (e.g. on a wide screen):
-      tester.view.physicalSize = const Size(1400, 900);
-      await settle(tester);
-      expect(tester.getCenter(artistFinder).dy, moreOrLessEquals(tester.getCenter(yearFinder).dy, epsilon: 1.0));
-      expect(tester.getCenter(yearFinder).dy, moreOrLessEquals(tester.getCenter(tracksFinder).dy, epsilon: 1.0));
-    },
-  );
+    final short = vm.library.albums.firstWhere((a) => a.title == 'Go');
+    vm.openAlbum(short);
+    await settle(tester);
+    final artist = find.descendant(of: find.byType(DetailHeader), matching: find.text('Mo'));
+    expect(
+      line(find.text(Localizer.format('TrackCount', [short.trackCount]))),
+      moreOrLessEquals(line(artist), epsilon: 1),
+    );
+    expect(line(find.text(short.formattedTotalDuration)), moreOrLessEquals(line(artist), epsilon: 1));
+  });
 
   testWidgets('the search field grows out of the button that opened it, and keeps its focus once open', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
