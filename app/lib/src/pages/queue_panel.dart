@@ -44,6 +44,7 @@ class QueueList extends StatelessWidget {
           padding: padding,
           itemCount: items.length,
           onReorderItem: player.moveQueueTrack,
+          proxyDecorator: liftedRow(context, const EdgeInsets.only(bottom: 4)),
           itemBuilder: (context, index) => _QueueRow(
             key: ValueKey(items[index]),
             item: items[index],
@@ -58,7 +59,8 @@ class QueueList extends StatelessWidget {
   }
 }
 
-/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, or the bouncing bars of the
+/// A queue entry, moved by its drag handle or a long press anywhere on it (as a playlist's rows): a rounded row with the
+/// drag handle, the cover (with the entry's number, or the bouncing bars of the
 /// current track), title and artist, format, length, the arrows and the remove button. The current entry is washed in
 /// the accent. On a phone it is as large as the phone's other track rows, its × a finger's target.
 class _QueueRow extends StatefulWidget {
@@ -113,7 +115,7 @@ class _QueueRowState extends State<_QueueRow> {
       ),
     );
     final radius = BorderRadius.circular(Radii.medium);
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
@@ -129,8 +131,7 @@ class _QueueRowState extends State<_QueueRow> {
           child: InkWell(
             borderRadius: radius,
             onTap: () => player.playQueueItem(item),
-            // A right click opens the track's menu, as on a table's row; a long press doesn't (on a phone it would fight
-            // the finger).
+            // A right click opens the track's menu, as on a table's row; a long press grabs the row.
             onSecondaryTapUp: (details) =>
                 showTrackContextMenu(context, details.globalPosition, item.track, TrackTableKind.tracks),
             child: LayoutBuilder(
@@ -262,6 +263,7 @@ class _QueueRowState extends State<_QueueRow> {
         ),
       ),
     );
+    return ReorderableDelayedDragStartListener(index: widget.index, child: row);
   }
 }
 

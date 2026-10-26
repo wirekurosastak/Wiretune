@@ -77,6 +77,8 @@ void main() {
     service.addTracksToPlaylist(playlist.id, ['a', 'b', 'c']);
     service.removeTracksFromPlaylist(playlist.id, ['a', 'c']);
     expect(playlist.trackIds, ['b']);
+    service.addTracksToPlaylist(playlist.id, ['a'], at: 0);
+    expect(playlist.trackIds, ['a', 'b'], reason: 'back in its place');
 
     service.deletePlaylist(playlist.id);
     expect(service.playlists, isEmpty);

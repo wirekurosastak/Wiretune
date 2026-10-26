@@ -14,6 +14,7 @@ import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/widgets/dialogs.dart';
+import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -270,6 +271,30 @@ void main() {
       await settle(tester);
     }
     expect(lib.getPlaylistTracks(lib.playlists.single), hasLength(1));
+    vm.dispose();
+  });
+
+  testWidgets('removing a track from a playlist says so, and its Undo puts it back in its place', (tester) async {
+    final lib = await library(tester, [
+      TestSupport.makeTrack('1', 'So What'),
+      TestSupport.makeTrack('2', 'Blue in Green'),
+      TestSupport.makeTrack('3', 'Opening'),
+    ]);
+    final mix = lib.createPlaylist('Mix');
+    lib.addTracksToPlaylist(mix.id, ['1', '2', '3']);
+    final vm = createMainViewModel(lib);
+    await show(tester, vm, wide);
+    vm.playlists.openPlaylist(mix);
+    await settle(tester);
+
+    final page = tester.element(find.text(Localizer.get('NavArtists')).first);
+    TrackMenu.handleAction(page, TrackAction.removeFromPlaylist, lib.getTrack('2')!);
+    await settle(tester);
+    expect(mix.trackIds, ['1', '3']);
+    expect(find.text(Localizer.format('RemovedFromPlaylist', ['Mix'])), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('Undo')));
+    await settle(tester);
+    expect(mix.trackIds, ['1', '2', '3']);
     vm.dispose();
   });
 

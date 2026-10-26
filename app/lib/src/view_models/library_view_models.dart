@@ -796,8 +796,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
     notifyListeners();
   }
 
-  /// Puts [tracks] at the end of [playlist], those not in it yet.
-  /// Adds those of [tracks] not in [playlist] yet; returns what takes them out again (null: none was new).
+  /// Adds those of [tracks] not in [playlist] yet, at its end; returns what takes them out again (null: none was new).
   VoidCallback? addTracks(Playlist playlist, List<Track> tracks) {
     final present = playlist.trackIds.toSet();
     final added = {
@@ -838,9 +837,15 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
     if (tracks.isNotEmpty) _player.playQueue(tracks);
   }
 
-  void removeTrackFromSelected(Track track) {
+  /// Takes [track] out of the open playlist; returns what puts it back in its place (null: it wasn't taken out).
+  VoidCallback? removeTrackFromSelected(Track track) {
     final selected = selectedPlaylist;
-    if (selected != null) _library.removeTrackFromPlaylist(selected.id, track.id);
+    if (selected == null) return null;
+    final at = selected.trackIds.indexOf(track.id);
+    _library.removeTrackFromPlaylist(selected.id, track.id);
+    // Offline, an account's playlist can't change (the library says why itself).
+    if (at < 0 || (_library.getPlaylist(selected.id)?.trackIds.contains(track.id) ?? true)) return null;
+    return () => _library.addTracksToPlaylist(selected.id, [track.id], at: at);
   }
 
   /// Whether the open playlist shows its own order (Added ↑), the only one its tracks can be moved in.

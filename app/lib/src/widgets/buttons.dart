@@ -147,40 +147,40 @@ class _PopEffectState extends State<PopEffect> {
 }
 
 /// A list's accent-filled, glowing "Play" and the player's shuffle switch beside it ([ShuffleSwitch]: Play starts
-/// the list from its first track, or from any while shuffle is on), then the list's [download], its way into a
-/// playlist ([addToPlaylist]), the queue's two ([playNext], [addToQueue]) and [menu]. On a phone Play is round, the
-/// largest, at the right edge and shuffle beside it; an album's, an artist's or a playlist's (the pages with a way into
-/// a playlist) spread over the line, the download, the playlist and the queue's two at the left edge, as in Spotify;
-/// their menu is the top bar's there (`ListMenu.topBarButton`). While the queue is [tracks], Play pauses and resumes it
-/// ([ListPlayButton]).
+/// the list from its first track, or from any while shuffle is on), then the queue's two ([playNext], [addToQueue]), its
+/// way into a playlist ([addToPlaylist]), the list's [download] and its hide or delete ([remove]): the order of its menu
+/// (`ListMenu`). On a phone Play is round, the largest, at the right edge, and the rest follow it leftwards in that
+/// order: shuffle beside it, then on an album's, an artist's or a playlist's page (the pages with a way into a
+/// playlist) the queue's two, the playlist and the download, spread over the line to the left edge, as in Spotify;
+/// hide or delete is in the top bar's ⋮ there (`ListMenu.topBarButton`). While the queue is [tracks], Play pauses and resumes it ([ListPlayButton]).
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({
     super.key,
     this.tracks = const [],
     this.onPlay,
-    this.download,
-    this.addToPlaylist,
     this.playNext,
     this.addToQueue,
-    this.menu,
+    this.addToPlaylist,
+    this.download,
+    this.remove,
   });
 
   final List<Track> tracks;
 
   /// Null for a list with nothing to play: Play and the switch are then off.
   final VoidCallback? onPlay;
-  final Widget? download;
-  final Widget? addToPlaylist;
   final Widget? playNext;
   final Widget? addToQueue;
-  final Widget? menu;
+  final Widget? addToPlaylist;
+  final Widget? download;
+  final Widget? remove;
 
   @override
   Widget build(BuildContext context) {
     final play = ListPlayButton(tracks: tracks, onPlay: onPlay);
     final shuffle = ShuffleSwitch(enabled: onPlay != null);
     if (PhoneChrome.isPhone(context)) {
-      final icons = [?download, ?addToPlaylist, ?playNext, ?addToQueue];
+      final icons = [?download, ?addToPlaylist, ?addToQueue, ?playNext]; // leftwards from shuffle
       final page = addToPlaylist != null;
       return Row(
         mainAxisSize: page ? MainAxisSize.max : MainAxisSize.min,
@@ -211,7 +211,7 @@ class PlayShuffleButtons extends StatelessWidget {
     return Wrap(
       spacing: 12,
       runSpacing: 8,
-      children: [play, shuffle, ?download, ?addToPlaylist, ?playNext, ?addToQueue, ?menu],
+      children: [play, shuffle, ?playNext, ?addToQueue, ?addToPlaylist, ?download, ?remove],
     );
   }
 

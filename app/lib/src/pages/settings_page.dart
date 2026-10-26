@@ -590,7 +590,7 @@ class _AccountCardState extends State<_AccountCard> {
                           ),
                           IconButton(
                             tooltip: context.tr('TipDeleteUser'),
-                            icon: Icon(Icons.delete_outline, color: colors.danger),
+                            icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
                             onPressed: () => _confirmDeleteUser(context, server, user),
                           ),
                         ],
@@ -1411,7 +1411,7 @@ class _HiddenContentCard extends StatelessWidget {
                         );
                         if (confirmed) vm.library.unhideAll();
                       },
-                      icon: const Icon(Icons.visibility_rounded, size: 16),
+                      icon: const Icon(Icons.visibility_outlined, size: 16),
                       label: Text(context.tr('UnhideAll')),
                     ),
                   ),

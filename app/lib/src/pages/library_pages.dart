@@ -92,6 +92,7 @@ class FavoritesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final favorites = context.vm.favorites;
+    final phone = PhoneChrome.isPhone(context);
     return ListenableBuilder(
       listenable: favorites,
       builder: (context, _) {
@@ -102,6 +103,11 @@ class FavoritesPage extends StatelessWidget {
             hint: context.tr('EmptyFavoritesHint'),
           );
         }
+        final menu = ListMenu.favorites(
+          favorites.favoriteTracks,
+          name: context.tr('NavFavorites'),
+          onPlay: favorites.playAll,
+        );
         return TabPageList(
           title: context.tr('NavFavorites'),
           storageKey: 'favorites',
@@ -110,10 +116,14 @@ class FavoritesPage extends StatelessWidget {
             subtitle:
                 '${context.trf('TrackCount', [favorites.favoriteTracks.length])}  •  ${favorites.totalFavoritesDuration}',
             actions: [
-              if (PhoneChrome.isPhone(context)) TrackSortButtons(favorites), // a wide table sorts by its headers
+              if (phone) TrackSortButtons(favorites), // a wide table sorts by its headers
               PlayShuffleButtons(
                 tracks: favorites.favoriteTracks,
                 onPlay: favorites.playAll,
+                // A list's buttons, on a wide screen; a phone's line has no room for them beside the sort.
+                playNext: phone ? null : menu.playNextButton(),
+                addToQueue: phone ? null : menu.addToQueueButton(),
+                addToPlaylist: phone ? null : menu.addToPlaylistButton(),
                 download: DownloadListButton.forTracks(
                   favorites.favoriteTracks,
                   isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
@@ -801,15 +811,15 @@ class AlbumDetail extends StatelessWidget {
                 PlayShuffleButtons(
                   tracks: album.tracks,
                   onPlay: () => albums.playAlbum(),
+                  playNext: menu.playNextButton(),
+                  addToQueue: menu.addToQueueButton(),
+                  addToPlaylist: menu.addToPlaylistButton(),
                   download: DownloadListButton.forTracks(
                     album.tracks,
                     isDownloaded: () => vm.downloads.isAlbumDownloaded(album),
                     onPressed: () => vm.downloads.toggleAlbum(album),
                   ),
-                  addToPlaylist: menu.addToPlaylistButton(),
-                  playNext: menu.playNextButton(),
-                  addToQueue: menu.addToQueueButton(),
-                  menu: menu.headerButton(),
+                  remove: menu.removeButton(),
                 ),
               ],
             ),
@@ -909,16 +919,16 @@ class ArtistDetail extends StatelessWidget {
                 PlayShuffleButtons(
                   tracks: artist.tracks,
                   onPlay: () => artists.playArtist(),
+                  playNext: menu.playNextButton(),
+                  addToQueue: menu.addToQueueButton(),
+                  addToPlaylist: menu.addToPlaylistButton(),
                   // The artist's albums, also the ones that arrive later.
                   download: DownloadListButton.forTracks(
                     albumTracks,
                     isDownloaded: () => vm.downloads.isArtistDownloaded(artist),
                     onPressed: () => vm.downloads.toggleArtist(artist),
                   ),
-                  addToPlaylist: menu.addToPlaylistButton(),
-                  playNext: menu.playNextButton(),
-                  addToQueue: menu.addToQueueButton(),
-                  menu: menu.headerButton(),
+                  remove: menu.removeButton(),
                 ),
               ],
             ),

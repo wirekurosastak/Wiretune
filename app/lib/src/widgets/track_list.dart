@@ -215,12 +215,7 @@ class _TrackSliverState extends State<TrackSliver> {
                     itemExtent: extent,
                     itemCount: tracks.length,
                     onReorderItem: reorder,
-                    proxyDecorator: (child, index, animation) => Material(
-                      color: context.colors.palette.modal,
-                      elevation: 8,
-                      borderRadius: BorderRadius.circular(Radii.medium),
-                      child: child,
-                    ),
+                    proxyDecorator: liftedRow(context, const EdgeInsets.symmetric(vertical: 2)),
                     itemBuilder: (context, index) => ReorderableDelayedDragStartListener(
                       key: ValueKey(tracks[index].id),
                       index: index,
@@ -546,7 +541,6 @@ class _TableRowState extends State<_TableRow> {
   }
 }
 
-/// The buttons at the end of a row: the favourite, and the menu with the rest (in a table and on a phone alike).
 /// The heart and the ⋮ menu at a row's end; a phone's row has the menu alone, with the favourite in it, so that the title
 /// has the room.
 List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {bool phone = false}) {
@@ -564,6 +558,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
   ];
 }
 
+/// In the order they show in a track's menu: a list's ([ListMenu]) with the track's own among them.
 enum TrackAction {
   favorite,
   playNext,
@@ -576,6 +571,54 @@ enum TrackAction {
   openAlbum,
   openArtist,
   hideTrack,
+}
+
+/// How a row being moved looks (a playlist's, the queue's): lifted off the list as a rounded card, a little larger, on a
+/// soft shadow, easing into it as it is picked up and back as it is let go. [margin]: the room between the list's item
+/// and the row's own rounded shape (its gap to the next). The row is drawn in the screen's overlay, above the phone's
+/// layout: [list] (the list's context) says whether it is a phone's row, as large as the ones it is moved among.
+ReorderItemProxyDecorator liftedRow(BuildContext list, EdgeInsets margin) {
+  final phone = PhoneChrome.isPhone(list);
+  return (child, index, animation) => AnimatedBuilder(
+    animation: animation,
+    builder: (context, child) {
+      final colors = context.colors;
+      final lift = Curves.easeOutCubic.transform(animation.value);
+      final shadow = colors.palette.shadow;
+      return Transform.scale(
+        scale: 1 + 0.02 * lift,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              left: margin.left,
+              top: margin.top,
+              right: margin.right,
+              bottom: margin.bottom,
+              child: Opacity(
+                opacity: lift,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    // As the menus and sheets: black, or white in the light theme.
+                    color: colors.palette.modal,
+                    borderRadius: BorderRadius.circular(Radii.medium),
+                    border: Border.all(color: colors.glassBorder),
+                    boxShadow: [
+                      BoxShadow(color: shadow, blurRadius: 24, spreadRadius: -6, offset: const Offset(0, 10)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            child!,
+          ],
+        ),
+      );
+    },
+    child: Material(
+      type: MaterialType.transparency,
+      child: phone ? PhoneChrome(child: child) : child,
+    ),
+  );
 }
 
 /// A right click on a track's row (a table's, the queue's): the track's menu, with the favourite first; on a phone, as
@@ -621,7 +664,8 @@ class TrackMenu extends StatelessWidget {
   /// Whether the menu has the favourite too: where no heart is beside it (a phone's row).
   final bool withFavorite;
 
-  /// [withFavorite]: a menu without a heart beside it (the right click's, a phone row's) has the favourite too.
+  /// [withFavorite]: a menu without a heart beside it (the right click's, a phone row's) has the favourite too. What
+  /// removes something is red, as in every menu; hiding isn't, a tap on its Undo away.
   static List<PopupMenuEntry<TrackAction>> buildMenuItems(
     BuildContext context,
     Track track,
@@ -632,6 +676,7 @@ class TrackMenu extends StatelessWidget {
     final colors = context.colors;
     final downloads = vm.downloads;
     final isHidden = vm.library.isTrackExplicitlyHidden(track.id);
+    final favorite = vm.library.isFavorite(track.id);
     PopupMenuItem<TrackAction> item(TrackAction action, IconData icon, String text, {Color? color, bool? enabled}) =>
         PopupMenuItem(
           value: action,
@@ -653,8 +698,9 @@ class TrackMenu extends StatelessWidget {
       if (withFavorite)
         item(
           TrackAction.favorite,
-          vm.library.isFavorite(track.id) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          context.tr(vm.library.isFavorite(track.id) ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+          favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+          context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+          color: favorite ? colors.danger : null,
         ),
       item(TrackAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
       item(TrackAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
@@ -681,6 +727,7 @@ class TrackMenu extends StatelessWidget {
           downloadIcon(downloads.stateOf(track)) ?? Icons.download_rounded,
           downloadTip(context, track),
           enabled: !downloads.isDownloadedWithList(track),
+          color: downloads.isTrackDownloaded(track) && !downloads.isDownloadedWithList(track) ? colors.danger : null,
         ),
       if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
       if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
@@ -688,7 +735,6 @@ class TrackMenu extends StatelessWidget {
         TrackAction.hideTrack,
         isHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,
         context.tr(isHidden ? 'Unhide' : 'HideTrack'),
-        color: colors.textMuted,
       ),
     ];
   }
@@ -707,7 +753,9 @@ class TrackMenu extends StatelessWidget {
       case TrackAction.addToPlaylist:
         showAddTrackToPlaylistDialog(context, track);
       case TrackAction.removeFromPlaylist:
-        vm.playlists.removeTrackFromSelected(track);
+        final playlist = vm.playlists.selectedPlaylist;
+        final undo = vm.playlists.removeTrackFromSelected(track);
+        if (undo != null) vm.showNotice(context.trf('RemovedFromPlaylist', [playlist!.name]), undo: undo);
       case TrackAction.moveUp || TrackAction.moveDown:
         final place = vm.playlists.positionOf(track);
         if (place != null) vm.playlists.moveTrack(place - 1, place - 1 + (action == TrackAction.moveUp ? -1 : 1));

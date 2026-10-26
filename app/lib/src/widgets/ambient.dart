@@ -220,22 +220,27 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
 /// while it plays, on a desktop), under a veil that keeps what is on top readable. [colour] sets how much of the cover
 /// shows: a little behind the phone's pages, more behind the wide layout, all of it behind the full-screen player.
 class AmbientBackdrop extends StatelessWidget {
-  const AmbientBackdrop({super.key, this.colour = 0.55});
+  const AmbientBackdrop({super.key, this.colour = 0.55, this.nowPlaying = false});
 
   final double colour;
 
-  /// The cover whose colours wash the backdrop: the album's or the artist's whose page is open, else the cover of the
-  /// track that plays, the one the player shows (none when it has none).
-  static String? activeCoverPath(MainViewModel vm) {
+  /// Behind the full-screen player: the colours of the track that plays, whatever page is open under it.
+  final bool nowPlaying;
+
+  /// The cover whose colours wash the backdrop: the album's or the artist's whose page is open (unless [nowPlaying]),
+  /// else the cover of the track that plays, the one the player shows (none when it has none).
+  static String? activeCoverPath(MainViewModel vm, {bool nowPlaying = false}) {
     String? cover(String? path) => path == null || path.isEmpty ? null : path;
     final artist = vm.artists.selectedArtist;
-    final viewed = switch (vm.selectedSection) {
-      AppSection.albums when vm.albums.isAlbumDetailOpen => cover(vm.albums.selectedAlbum?.coverArtPath),
-      AppSection.artists when vm.artists.isArtistDetailOpen => cover(
-        artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath,
-      ),
-      _ => null,
-    };
+    final viewed = nowPlaying
+        ? null
+        : switch (vm.selectedSection) {
+            AppSection.albums when vm.albums.isAlbumDetailOpen => cover(vm.albums.selectedAlbum?.coverArtPath),
+            AppSection.artists when vm.artists.isArtistDetailOpen => cover(
+              artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath,
+            ),
+            _ => null,
+          };
     return viewed ?? cover(vm.player.currentTrack?.coverArtPath);
   }
 
@@ -256,7 +261,7 @@ class AmbientBackdrop extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([vm, player, vm.albums, vm.artists]),
       builder: (context, _) {
-        final cover = activeCoverPath(vm);
+        final cover = activeCoverPath(vm, nowPlaying: nowPlaying);
         return Stack(
           fit: StackFit.expand,
           children: [

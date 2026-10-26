@@ -215,6 +215,9 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                 PlayShuffleButtons(
                   tracks: tracks,
                   onPlay: tracks.isEmpty ? null : () => playlists.playPlaylist(),
+                  playNext: menu.playNextButton(),
+                  addToQueue: menu.addToQueueButton(),
+                  addToPlaylist: menu.addToPlaylistButton(),
                   download: playlist.isAutomatic
                       ? null
                       : DownloadListButton.forTracks(
@@ -222,10 +225,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                           isDownloaded: () => context.vm.downloads.isPlaylistDownloaded(playlist),
                           onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                         ),
-                  addToPlaylist: menu.addToPlaylistButton(),
-                  playNext: menu.playNextButton(),
-                  addToQueue: menu.addToQueueButton(),
-                  menu: menu.headerButton(),
+                  remove: menu.removeButton(),
                 ),
               ],
             ),

@@ -128,11 +128,13 @@ Widget artistPreviewPicture(BuildContext context, Artist artist) => CoverImage(
 String artistCounts(BuildContext context, Artist artist) =>
     '${context.trf('AlbumCount', [artist.albumCount])}  •  ${context.trf('TrackCount', [artist.trackCount])}';
 
+/// In the order they show, in the menu and as a page's header buttons ([PlayShuffleButtons]); a track's ([TrackAction])
+/// are in the same.
 enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, openArtist, remove }
 
 /// The menu of an album, an artist or a playlist: on its tile (the ⋮ on the cover, or a right click), its phone row (the
-/// ⋮), a long press's preview ([preview]) and its page's header (the ⋮ beside play, shuffle, the download, the playlist
-/// and the queue's two, which it then leaves out). Play, shuffle, the queue's two, a playlist, the download (when a
+/// ⋮), a long press's preview ([preview]) and a phone page's top bar (which leaves out the header's buttons; a wide
+/// page's header has hiding or deleting as a button too). Play, shuffle, the queue's two, a playlist, the download (when a
 /// track of it can be), an album's way to its artist (whose name is no link on a tile or a row), and hiding it
 /// (deleting a playlist). On a phone it is a sheet, with the cover and the names on top ([showMenuSheet]).
 class ListMenu {
@@ -233,6 +235,21 @@ class ListMenu {
     onRemove: (context) => confirmDeletePlaylist(context, playlist),
   );
 
+  /// The favourite tracks, as a list: [name] is the page's.
+  factory ListMenu.favorites(List<Track> tracks, {required String name, required VoidCallback onPlay}) => ListMenu._(
+    tracks,
+    flightTag: 'favorites',
+    name: name,
+    label: name,
+    downloadable: tracks,
+    onPlay: onPlay,
+    isDownloaded: (vm) => vm.downloads.areFavoritesDownloaded,
+    onDownload: (vm) => vm.downloads.toggleFavorites(),
+    cover: (context, {required large}) =>
+        PlaylistCover(covers: playlistCovers(tracks), radius: large ? Radii.card : Radii.small),
+    subtitle: (context) => context.trf('TrackCount', [tracks.length]),
+  );
+
   /// What playing, shuffling, queueing and a playlist take.
   final List<Track> tracks;
 
@@ -264,7 +281,7 @@ class ListMenu {
   final void Function(BuildContext context)? onRemove;
 
   /// [header]: the page's header has play, shuffle, the download, the playlist and the queue's two as buttons of their
-  /// own.
+  /// own. What removes something (the download, a playlist) is red, as in every menu.
   List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false}) {
     final vm = context.vm;
     final colors = context.colors;
@@ -298,6 +315,7 @@ class ListMenu {
           _ListAction.download,
           downloaded ? Icons.download_done_rounded : Icons.download_rounded,
           context.tr(downloaded ? 'TipRemoveDownload' : 'TipDownload'),
+          color: downloaded ? colors.danger : null,
         ),
       // The page's header has the artist's name as a link.
       if (!header && artist != null) item(_ListAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
@@ -332,12 +350,12 @@ class ListMenu {
   }
 
   /// Opens the menu at [position]; on a phone, as a sheet.
-  Future<void> _show(BuildContext context, Offset position, {bool header = false}) async {
-    if (PhoneChrome.isPhone(context)) return _showSheet(context, header: header);
+  Future<void> _show(BuildContext context, Offset position) async {
+    if (PhoneChrome.isPhone(context)) return _showSheet(context);
     final action = await showMenu<_ListAction>(
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx, position.dy),
-      items: _items(context, header: header),
+      items: _items(context),
     );
     if (context.mounted) _run(context, action);
   }
@@ -506,13 +524,13 @@ class ListMenu {
         HeaderIconButton(tooltip: context.tr(key), icon: icon, onPressed: () => _run(context, action)),
   );
 
-  /// Whether the page's menu has anything left beside the header's buttons: hiding it, deleting it (an automatic
-  /// playlist has neither, and no ⋮).
-  bool get _hasHeaderMenu => removeKey != null;
+  /// Whether the page has anything beside the header's buttons: hiding it, deleting it (an automatic playlist has
+  /// neither, and no ⋮).
+  bool get _removable => removeKey != null;
 
   /// The ⋮ of a phone page's top bar ([PinnedTitleBar.menu]): the rest of the menu (play, shuffle, the download, the
   /// playlist and the queue's two are the header's), at hand however far the page is scrolled.
-  Widget? topBarButton() => !_hasHeaderMenu
+  Widget? topBarButton() => !_removable
       ? null
       : Builder(
           builder: (context) => SizedBox.square(
@@ -525,18 +543,16 @@ class ListMenu {
           ),
         );
 
-  /// The ⋮ of a page's header, beside play, shuffle and the download: the rest of the menu, opening below it. On a
-  /// phone it is in the top bar instead ([topBarButton]).
-  Widget? headerButton() => !_hasHeaderMenu
+  /// A wide page's hide or delete, as a header button of its own beside the others: there is room for it there. On a
+  /// phone it is in the top bar's ⋮ instead ([topBarButton]).
+  Widget? removeButton() => !_removable
       ? null
       : Builder(
           builder: (context) => HeaderIconButton(
-            tooltip: context.tr('TipMore'),
-            icon: Icons.more_vert_rounded,
-            onPressed: () {
-              final box = context.findRenderObject()! as RenderBox;
-              _show(context, box.localToGlobal(box.size.bottomLeft(Offset.zero)), header: true);
-            },
+            tooltip: context.tr(removeKey!),
+            icon: removeIcon,
+            color: removeIsDanger ? context.colors.danger : null,
+            onPressed: () => _run(context, _ListAction.remove),
           ),
         );
 }

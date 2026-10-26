@@ -77,7 +77,7 @@ class NowPlayingPage extends StatelessWidget {
           color: colors.palette.background,
           child: Stack(
             children: [
-              const Positioned.fill(child: AmbientBackdrop(colour: 1)),
+              const Positioned.fill(child: AmbientBackdrop(colour: 1, nowPlaying: true)),
               // The queue and the lyrics are read on a layer of the background's colour, so their grey text holds on a
               // bright cover; the track's tab keeps the cover's colours at full strength.
               Positioned.fill(

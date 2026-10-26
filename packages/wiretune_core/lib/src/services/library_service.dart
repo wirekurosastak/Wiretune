@@ -539,15 +539,17 @@ class LibraryService {
     return playlist;
   }
 
-  /// Adds [trackIds] to the end of the playlist, those not in it yet and in their order, as one change.
-  void addTracksToPlaylist(String playlistId, Iterable<String> trackIds) => _updatePlaylist(playlistId, (ids) {
-    final present = ids.toSet();
-    final added = [
-      for (final id in trackIds)
-        if (present.add(id)) id,
-    ];
-    return added.isEmpty ? null : [...ids, ...added];
-  });
+  /// Adds [trackIds] to the end of the playlist, or [at] that place among its entries (also the ones not shown), those
+  /// not in it yet and in their order, as one change.
+  void addTracksToPlaylist(String playlistId, Iterable<String> trackIds, {int? at}) =>
+      _updatePlaylist(playlistId, (ids) {
+        final present = ids.toSet();
+        final added = [
+          for (final id in trackIds)
+            if (present.add(id)) id,
+        ];
+        return added.isEmpty ? null : (List.of(ids)..insertAll((at ?? ids.length).clamp(0, ids.length), added));
+      });
 
   /// Moves the entry shown at [from] among the playlist's tracks ([getPlaylistTracks]) to [to], counted after it has
   /// been taken out. Entries of tracks this library doesn't have (which aren't shown) keep their places among the rest.
