@@ -9,8 +9,8 @@ you before anything is disclosed. Fixes go to the latest release, or to the defa
 
 ## What Wiretune is built for
 
-A home network: one administrator and a handful of people who are allowed to listen. It is not hardened for the open
-internet. This page is the honest list of what it does and doesn't do about that.
+A home network: one administrator and a few trusted listeners. It is not hardened for the open internet. What follows
+is what it does and doesn't protect against.
 
 ## Server
 

@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for helping out. Building is in [docs/building.md](docs/building.md); where the code is, and how to test it, in
-[docs/development.md](docs/development.md). This page is what a change has to look like.
+Building: [docs/building.md](docs/building.md). Code layout and testing: [docs/development.md](docs/development.md).
+This page covers what a change must satisfy.
 
 ## The rules
 
@@ -36,13 +36,12 @@ Thanks for helping out. Building is in [docs/building.md](docs/building.md); whe
 
   What you contribute is licensed the same way ([NOTICE.md](NOTICE.md)); opening a pull request says you have the
   right to contribute it on those terms.
-- **Docs tell the truth.** Unverified or known to be missing? Say so, the way
+- **Docs state what's unverified.** If something is untested or missing, say so, as
   [audio.md](docs/audio.md#known-limitations) does.
 
 ## Pull requests
 
-CI analyses, tests and builds everything but Tizen, but it runs nothing on a device and can't hear a thing. Run the
-checks yourself first:
+CI analyzes, tests and builds everything except Tizen, but runs nothing on a device. Run the checks locally first:
 
 ```bash
 dart format packages server app/lib app/test tool       # CI fails on anything this would change
@@ -53,7 +52,7 @@ dart analyze --fatal-infos tool
 git ls-files '*.dart' '*.kt' '*.cs' | xargs grep -L 'SPDX-License-Identifier: AGPL-3.0-only'   # must print nothing
 ```
 
-One logical change per pull request. Say what was wrong, why the fix is right, and what you couldn't test (a platform,
-a DAC, a TV, a car). Update the docs when behavior, configuration or the API changes.
+One logical change per pull request. State what was wrong, why the fix is right, and what you couldn't test (platform,
+DAC, TV, car). Update the docs when behavior, configuration or the API changes.
 
 Security problems go through [SECURITY.md](SECURITY.md), never a public issue.

@@ -1,18 +1,12 @@
 # Wiretune
 
-**Your lossless collection, on your own hardware, played properly.**
+Cross-platform music player for self-hosted libraries and local files.
 
-You have a folder of FLACs: a few hundred albums ripped over the years, maybe a pile of 24/96 downloads. You don't want
-a subscription, you don't want to upload anything, and you'd like the player to stay out of the way between the file
-and the DAC.
-
-Wiretune is two programs. A **server** you run at home indexes the folder and streams it over your network. A
-**player** browses, queues and plays it, on Linux, Windows, macOS, Android (phone, tablet, TV and Auto), iOS and
-Samsung's Tizen TVs. On a computer it can skip the system mixer and play bit-perfect to your DAC. It also plays a plain
-folder with no server at all, or both at once.
-
-No cloud, no account on somebody else's computer, no telemetry. The only things that reach the internet are artist
-pictures and lyrics for tracks that have none, and you can turn both off ([SECURITY.md](SECURITY.md#players)).
+- Exclusive and bit-perfect output: plays straight to the DAC, around the system mixer (desktop only).
+- Windows, Linux, macOS, Android (phone, tablet, TV, Auto), iOS, Tizen TV.
+- A **server** indexes your music folder; the **player** streams from it, plays a local folder, or both.
+- No cloud, no third-party account, no telemetry. Only artist pictures and missing lyrics come from the internet, and both can be
+  turned off ([SECURITY.md](SECURITY.md#players)).
 
 ![The albums on a computer](docs/images/albums.png)
 
@@ -20,25 +14,22 @@ pictures and lyrics for tracks that have none, and you can turn both off ([SECUR
 
 <sub>The albums, artists and covers in these pictures are made up.</sub>
 
-## What you get
+## Features
 
-- Artists, albums, tracks, search, a queue with shuffle and repeat, favorites, playlists, a sleep timer, and lyrics
-  that follow the song (from the file, or from [LRCLIB](https://lrclib.net) when the file has none).
-- New music shows up by itself: copy it into the folder, and about ten seconds after the copying stops every player
-  shows it. No rescan, no restart.
-- A quality tag on every album and track: **gold** for hi-res, **silver** for CD-quality lossless, **bronze** for
-  lossy. A 64-band spectrum analyzer on the desktop.
-- Favorites, play counts and playlists kept on your server, per account, so they follow you from device to device.
-- Downloads for offline listening (a track, an album, an artist, a playlist or your favorites), kept in step with the
-  server.
-- Remote control between your devices: see and steer what the desktop plays from your phone, or move the music from
-  one to the other.
-- Gapless playback, and one decoder everywhere but Tizen (FFmpeg, inside libmpv): FLAC, ALAC, WAV, AIFF, APE,
-  WavPack, DSD, MP3, AAC, Vorbis, Opus.
-- Lock-screen controls on phones, Android Auto in the car, a remote-friendly TV layout, MPRIS on Linux, and the
-  interface in English, Hungarian or German.
+- Artists, albums, tracks, search, queue, favorites, playlists, sleep timer.
+- Synced lyrics, from the file or [LRCLIB](https://lrclib.net).
+- Gapless playback. FLAC, ALAC, WAV, AIFF, APE, WavPack, DSD, MP3, AAC, Vorbis, Opus (FFmpeg via libmpv; Tizen uses
+  the TV's decoder).
+- New files in the music folder show up on their own, about ten seconds after copying stops.
+- Quality tag per album and track: gold (hi-res), silver (CD-quality lossless), bronze (lossy).
+- Favorites, play counts and playlists live on the server, per account.
+- Offline downloads, synced with the server.
+- Remote control: steer one device from another.
+- 64-band spectrum analyzer on desktop.
+- Lock-screen controls, Android Auto, TV layout, MPRIS on Linux.
+- English, Hungarian, German.
 
-## What works where
+## Platform support
 
 | | Linux | Windows | macOS | Android | Android TV | Android Auto | iOS | Tizen TV |
 |---|---|---|---|---|---|---|---|---|
@@ -49,14 +40,12 @@ pictures and lyrics for tracks that have none, and you can turn both off ([SECUR
 | System media controls | MPRIS | No | Media keys, Now Playing | Notification, lock screen | Remote | The car | Lock screen, Control Center | Remote, in the app |
 | Run the server | Yes | Yes | Yes | — | — | — | — | — |
 
-"Supported" isn't the same as "tried on the real thing":
-[development.md](docs/development.md#what-has-actually-been-tried) says which platforms have actually run. And
-bit-perfect is only as good as the path behind it, so read [audio.md](docs/audio.md) before you lean on the word.
+Supported doesn't mean tried on real hardware: see [what has actually been tried](docs/development.md#what-has-actually-been-tried).
+Bit-perfect depends on the whole path to the DAC: see [audio.md](docs/audio.md).
 
-## Build and start
+## Quick start
 
-Install what your system needs ([building.md](docs/building.md) has one command per system), then build the server
-and a player, for example on Linux:
+Build the server and a player ([building.md](docs/building.md) lists what to install per system), e.g. on Linux:
 
 ```bash
 dart tool/build.dart server linux
@@ -64,29 +53,28 @@ dist/server/bin/wiretune_server --library ~/Music      # the server
 dist/linux/wiretune                                     # the player
 ```
 
-In the player, enter `http://<server-ip>:5200` and press **Connect**. A fresh server asks you to create the first
-account, which becomes the administrator, with the **setup code** the server printed in its log. There are no default
-passwords. Only want to play a folder on this computer or Android phone? Choose **Continue without a server** and point
-*Settings* at your music.
+In the player, enter `http://<server-ip>:5200` and press **Connect**. A new server asks for the first account, which
+becomes the administrator, using the **setup code** from the server log. There are no default passwords.
+
+No server? Choose **Continue without a server** and point *Settings* at your music folder.
+
+The server speaks plain HTTP. Keep it on your LAN, or put a TLS proxy or VPN in front of it.
 
 ## Documentation
 
-- [User guide](docs/user-guide.md): what the player doesn't say out loud, and where it keeps its files.
-- [Server](docs/server.md): options, accounts, backups, Docker, systemd, and putting it behind a proxy.
-- [Audio](docs/audio.md): what each output mode really does, and what isn't verified.
-- [Building](docs/building.md) and [Development](docs/development.md): building it, and changing it.
-- [HTTP API](docs/api.md), [Security](SECURITY.md) and [Contributing](CONTRIBUTING.md).
-
-The server speaks plain HTTP. Keep it on your LAN, or put a TLS proxy or a VPN in front of it.
+- [User guide](docs/user-guide.md): library rules, playback, file locations, troubleshooting.
+- [Server](docs/server.md): options, accounts, backups, Docker, systemd, reverse proxy.
+- [Audio](docs/audio.md): output modes and their limits.
+- [Building](docs/building.md), [Development](docs/development.md), [Contributing](CONTRIBUTING.md).
+- [HTTP API](docs/api.md), [Security](SECURITY.md).
 
 ## Credits
 
-Playback is [media_kit](https://github.com/media-kit/media-kit) (libmpv, with FFmpeg underneath); the system media
-controls are [audio_service](https://pub.dev/packages/audio_service).
+Playback: [media_kit](https://github.com/media-kit/media-kit) (libmpv, FFmpeg). System media controls:
+[audio_service](https://pub.dev/packages/audio_service).
 
 ## License
 
-Copyright (C) 2026 wirekurosastak. Wiretune is free software under the [GNU Affero General Public License,
-version 3](LICENSE), with the additional terms in [NOTICE.md](NOTICE.md). Anyone may use, change and share it. A changed
-version has to stay under the same license with its source available, also to people who only use it over a network,
-keep Wiretune's copyright notices, say that it's based on Wiretune, and go by a name of its own.
+Copyright (C) 2026 wirekurosastak. [GNU AGPL v3](LICENSE) with the additional terms in [NOTICE.md](NOTICE.md).
+A modified version must stay under the same license with source available (also to network users), keep Wiretune's
+copyright notices, say it's based on Wiretune, and use a different name.
