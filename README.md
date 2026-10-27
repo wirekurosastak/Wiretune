@@ -1,6 +1,6 @@
 # Wiretune
 
-**Your lossless collection, on your own hardware, played properly.**
+**Cross-platform lossless music player for self-hosted libraries and local files.**
 
 You have a folder of FLACs: a few hundred albums ripped over the years, maybe a pile of 24/96 downloads. You don't want
 a subscription, you don't want to upload anything, and you'd like the player to stay out of the way between the file
