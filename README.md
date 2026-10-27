@@ -1,6 +1,6 @@
 # Wiretune
 
-Cross-platform music player for self-hosted libraries and local files.
+**Cross-platform lossless music player for self-hosted libraries and local files.**
 
 - Exclusive and bit-perfect output: plays straight to the DAC, around the system mixer (desktop only).
 - Windows, Linux, macOS, Android (phone, tablet, TV, Auto), iOS, Tizen TV.
