@@ -86,11 +86,11 @@ Future<void> main() async {
   unawaited(platform.excludeFromBackup(vm.downloadService.workDirectory));
 
   // A failed command (locked database, full disk, ...) must not take the whole player down: log it with its stack
-  // trace and show it in the player's error line instead. The line is updated after the frame that is being built,
-  // never in the middle of it.
+  // trace and show it as an error notice instead, over either layout (a phone's player line is gone without a track).
+  // The notice is shown after the frame that is being built, never in the middle of it.
   void report(Object error, StackTrace? stack, {required bool show}) {
     WiretuneLog.error('App', 'Unhandled exception', error, stack);
-    if (show) scheduleMicrotask(() => vm.player.showError(Localizer.format('UnexpectedError', ['$error'])));
+    if (show) scheduleMicrotask(() => vm.showNotice(Localizer.format('UnexpectedError', ['$error']), isError: true));
   }
 
   FlutterError.onError = (details) {
