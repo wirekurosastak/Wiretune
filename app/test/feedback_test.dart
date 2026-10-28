@@ -217,7 +217,7 @@ void main() {
 
     final address = find.byWidgetPredicate((w) => w is TextField && w.controller?.text == 'http://server:5200');
     await tester.enterText(address, 'http://elsewhere:5200');
-    final connect = find.widgetWithText(FilledButton, Localizer.get('ConnectShort'));
+    final connect = find.widgetWithText(FilledButton, Localizer.get('Connect'));
     await tester.ensureVisible(connect);
     await settle(tester);
     await tester.tap(connect);

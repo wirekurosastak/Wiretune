@@ -2136,7 +2136,7 @@ void main() {
     vm.navigateTo(AppSection.settings);
     await settle(tester);
     for (final label in [
-      Localizer.get('ConnectShort'),
+      Localizer.get('Connect'),
       'Magyar',
       'Deutsch',
       Localizer.get('ThemeDark'),

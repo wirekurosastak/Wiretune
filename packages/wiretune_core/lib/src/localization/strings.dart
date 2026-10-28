@@ -17,7 +17,6 @@ const Map<String, (String, String, String)> allStrings = {
   'Create': ('Létrehozás', 'Create', 'Erstellen'),
   'Refresh': ('Frissítés', 'Refresh', 'Aktualisieren'),
   'Connect': ('Csatlakozás', 'Connect', 'Verbinden'),
-  'ConnectShort': ('Kapcsolódás', 'Connect', 'Verbinden'),
   'Reconnect': ('Újracsatlakozás', 'Reconnect', 'Erneut verbinden'),
   'Play': ('Lejátszás', 'Play', 'Wiedergabe'),
   'Pause': ('Szünet', 'Pause', 'Pause'),

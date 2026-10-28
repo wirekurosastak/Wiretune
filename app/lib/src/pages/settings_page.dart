@@ -229,7 +229,7 @@ class _AccountCardState extends State<_AccountCard> {
         context,
         title: context.tr('SwitchServerConfirm'),
         message: context.trf('SwitchServerConfirmHint', [server.connectedServerUrl]),
-        confirmLabel: context.tr('ConnectShort'),
+        confirmLabel: context.tr('Connect'),
         destructive: true,
       );
       if (!confirmed) return;
@@ -417,7 +417,7 @@ class _AccountCardState extends State<_AccountCard> {
                       onPressed: server.isConnecting ? null : () => _connect(server),
                       child: server.isConnecting
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : Text(context.tr('ConnectShort')),
+                          : Text(context.tr('Connect')),
                     ),
                   ),
                 ],
