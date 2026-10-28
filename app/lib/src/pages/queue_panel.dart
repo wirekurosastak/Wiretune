@@ -518,8 +518,8 @@ class _LyricLineState extends State<_LyricLine> {
   }
 }
 
-/// The wide layout's queue page: the title with the number of tracks, Clear and Close, and a glass panel with the
-/// queue on the left and the lyrics on the right.
+/// The wide layout's queue page: the title with the number of tracks, Clear, and a glass panel with the queue on the
+/// left and the lyrics on the right. The player bar's cover (or Back) closes it.
 class QueueLyricsPanel extends StatelessWidget {
   const QueueLyricsPanel({super.key});
 
