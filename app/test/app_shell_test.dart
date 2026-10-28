@@ -648,6 +648,21 @@ void main() {
     }
   });
 
+  testWidgets("a phone's favourites have the list's whole menu: queue them, or add them to a playlist", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.library.toggleFavorite('1');
+    vm.navigateTo(AppSection.favorites);
+    await settle(tester);
+    await tester.tap(find.descendant(of: find.byType(PageHeader), matching: find.byIcon(Icons.more_vert_rounded)));
+    await settle(tester);
+    for (final key in ['PlayNext', 'AddToQueue', 'TipAddToPlaylist']) {
+      expect(find.text(Localizer.get(key)), findsOneWidget, reason: key);
+    }
+    await tester.tap(find.text(Localizer.get('AddToQueue')));
+    await settle(tester);
+    expect(vm.player.queueTracks.map((t) => t.id), contains('1'));
+  });
+
   testWidgets('a small phone with a large font, and a 1080p TV, render every section without overflow', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 1.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);

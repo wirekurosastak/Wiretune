@@ -140,6 +140,8 @@ class FavoritesPage extends StatelessWidget {
             subtitle: '${context.trf('TrackCount', [favorites.tracks.length])}  •  ${favorites.totalDuration}',
             actions: [
               if (phone) TrackSortButtons(favorites), // a wide table sorts by its headers
+              // The list's whole menu, as an album's or a playlist's ⋮ has it: Play next, Add to queue, Add to playlist.
+              if (phone) menu.button(context),
               PlayShuffleButtons(
                 tracks: favorites.tracks,
                 onPlay: favorites.playAll,
