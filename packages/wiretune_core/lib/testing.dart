@@ -37,9 +37,10 @@ LibraryRepository testRepository() {
 
 /// An audio driver that plays nothing, so engine and player tests never touch audio hardware.
 class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
-  FakeAudioDriver({this.devices});
+  FakeAudioDriver({List<AudioOutputDevice>? devices}) : devices = devices ?? [TestSupport.capableDevice];
 
-  final List<AudioOutputDevice>? devices;
+  /// What [detectDevices] finds; a test changes it to plug a device in or out.
+  List<AudioOutputDevice> devices;
 
   @override
   PlaybackState state = PlaybackState.stopped;
@@ -59,7 +60,7 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   bool isBitPerfect = false;
 
   @override
-  Future<List<AudioOutputDevice>> detectDevices() async => devices ?? [TestSupport.capableDevice];
+  Future<List<AudioOutputDevice>> detectDevices() async => devices;
 
   @override
   Future<void> initialize(AudioOutputDevice device, {required bool exclusive, required bool bitPerfect}) async {
@@ -158,8 +159,9 @@ abstract final class TestSupport {
   );
 
   static WiretuneAudioEngine createEngine([FakeAudioDriver? driver, List<AudioOutputDevice>? devices]) {
-    final list = devices ?? [capableDevice];
-    return WiretuneAudioEngine(driver ?? FakeAudioDriver(), deviceDetector: () async => list);
+    final fake = driver ?? FakeAudioDriver();
+    if (devices != null) fake.devices = devices;
+    return WiretuneAudioEngine(fake);
   }
 
   static Track makeTrack(

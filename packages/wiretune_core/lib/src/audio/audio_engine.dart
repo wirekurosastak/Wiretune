@@ -18,8 +18,7 @@ import 'audio_driver.dart';
 /// the engine says so through [playbackFailed] and the mode stays off. Changing mode or device mid-track restarts the
 /// track at the current position.
 class WiretuneAudioEngine {
-  WiretuneAudioEngine(this._driver, {Future<List<AudioOutputDevice>> Function()? deviceDetector})
-    : _detectDevices = deviceDetector ?? _driver.detectDevices {
+  WiretuneAudioEngine(this._driver) {
     _subscriptions.addAll([
       _driver.stateChanged.listen(stateChanged.emit),
       _driver.positionChanged.listen(positionChanged.emit),
@@ -32,7 +31,6 @@ class WiretuneAudioEngine {
   }
 
   final AudioDriver _driver;
-  final Future<List<AudioOutputDevice>> Function() _detectDevices;
   final List<void Function()> _subscriptions = [];
   late final Future<void> _initialDeviceScan;
 
@@ -137,7 +135,7 @@ class WiretuneAudioEngine {
   Future<void> refreshDevices() async {
     List<AudioOutputDevice> devices;
     try {
-      devices = await _detectDevices();
+      devices = await _driver.detectDevices();
     } catch (e) {
       WiretuneLog.warn('AudioEngine', 'Audio device detection failed: $e');
       devices = [];

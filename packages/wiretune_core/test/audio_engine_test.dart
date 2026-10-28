@@ -72,15 +72,14 @@ void main() {
     'when the device of exclusive and bit-perfect is gone, the default output takes over without the modes',
     () async {
       const systemDefault = AudioOutputDevice(id: 'auto', name: 'Default', driverType: 'System', isDefault: true);
-      final driver = FakeAudioDriver();
-      var devices = [systemDefault, TestSupport.capableDevice];
-      final engine = WiretuneAudioEngine(driver, deviceDetector: () async => devices);
+      final driver = FakeAudioDriver(devices: [systemDefault, TestSupport.capableDevice]);
+      final engine = WiretuneAudioEngine(driver);
       await engine.ready;
       engine.setVolume(0.4);
       await engine.setBitPerfectMode(true);
       expect((engine.isExclusiveMode, engine.isBitPerfect, driver.device?.id), (true, true, 'hw:1,0'));
 
-      devices = [systemDefault]; // the DAC was unplugged
+      driver.devices = [systemDefault]; // the DAC was unplugged
       await engine.refreshDevices();
       expect(engine.currentDevice?.id, 'auto');
       expect((engine.isExclusiveMode, engine.isBitPerfect), (false, false));
