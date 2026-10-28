@@ -65,6 +65,18 @@ void main() {
     expect(vm.selectedSection, AppSection.albums);
   });
 
+  test('back while renaming a playlist ends the renaming, and the playlist stays open', () async {
+    final vm = await create();
+    vm.openPlaylist(vm.library.createPlaylist('Mix'));
+    vm.playlists.startRename();
+    expect(vm.tryNavigateBack(), isTrue);
+    expect(vm.playlists.isEditingName, isFalse);
+    expect(vm.playlists.isPlaylistDetailOpen, isTrue);
+
+    expect(vm.tryNavigateBack(), isTrue);
+    expect(vm.playlists.isPlaylistDetailOpen, isFalse);
+  });
+
   test('back from the settings returns to the tab the user came from', () async {
     final vm = await create();
     vm.navigateTo(AppSection.favorites);

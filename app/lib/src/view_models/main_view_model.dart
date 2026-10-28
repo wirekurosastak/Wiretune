@@ -393,6 +393,9 @@ class MainViewModel extends ChangeNotifier {
         return albums.closeAlbumDetail;
       case AppSection.artists when artists.isArtistDetailOpen:
         return artists.closeArtistDetail;
+      // Back while renaming a playlist ends the renaming, as its Cancel does; the playlist stays open.
+      case AppSection.playlists when playlists.isEditingName:
+        return playlists.cancelRename;
       case AppSection.playlists when playlists.isPlaylistDetailOpen:
         return playlists.closePlaylistDetail;
       default:
