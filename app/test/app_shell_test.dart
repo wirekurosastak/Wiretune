@@ -3162,6 +3162,25 @@ void main() {
     }
   });
 
+  testWidgets('a tap on the best match opens the artist or the album, and plays a track', (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    for (final query in ['miles', 'kind', 'so what']) {
+      vm
+        ..openSearch()
+        ..searchQuery = query;
+      await settle(tester);
+      final card = find.ancestor(
+        of: find.text(Localizer.get('BestMatch').toUpperCase()),
+        matching: find.byType(Column),
+      );
+      await tester.tap(find.descendant(of: card.first, matching: find.byType(CoverImage)).first);
+      await settle(tester);
+    }
+    expect(vm.artists.selectedArtist?.name, 'Miles Davis');
+    expect(vm.albums.selectedAlbum?.title, 'Kind of Blue');
+    expect(vm.player.currentTrack?.title, 'So What');
+  });
+
   testWidgets("the best match has its ⋮, the menu its row or tile has", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.openSearch();

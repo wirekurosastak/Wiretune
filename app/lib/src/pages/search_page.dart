@@ -193,7 +193,12 @@ class _BestMatchCard extends StatelessWidget {
       child: _MetricCard(
         accent: typeColor,
         padding: 20,
-        onTap: match.open,
+        // An artist or an album opens, like the cards under it; a track plays.
+        onTap: switch (match.item) {
+          final Artist artist => () => context.vm.openArtist(artist),
+          final Album album => () => context.vm.openAlbum(album),
+          _ => match.play,
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

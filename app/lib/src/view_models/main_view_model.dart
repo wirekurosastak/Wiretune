@@ -96,7 +96,7 @@ class MainViewModel extends ChangeNotifier {
       supportsLocalFolder: capabilities.supportsLocalFolder,
       requestFolderAccess: capabilities.requestFolderAccess,
     );
-    search = SearchViewModel(library, player, openAlbum, openArtist, () => playlists.allPlaylists);
+    search = SearchViewModel(library, player, () => playlists.allPlaylists);
 
     // The full-screen player has nothing to show once nothing is loaded.
     player.addListener(() {

@@ -19,7 +19,6 @@ class BestMatch {
     required this.coverPath,
     required this.tracks,
     required this.play,
-    required this.open,
   });
 
   final BestMatchKind kind;
@@ -35,9 +34,6 @@ class BestMatch {
   final List<Track> tracks;
   final void Function() play;
 
-  /// What a tap on the card does: an artist or an album opens, a track plays.
-  final void Function() open;
-
   String get typeLabel => Localizer.get(switch (kind) {
     BestMatchKind.artist => 'TypeArtist',
     BestMatchKind.album => 'TypeAlbum',
@@ -47,7 +43,7 @@ class BestMatch {
 
 /// The search results: up to 25 tracks, 12 albums, 12 artists and 12 playlists, and a best match.
 class SearchViewModel extends ChangeNotifier {
-  SearchViewModel(this._library, this._player, this._openAlbum, this._openArtist, this._allPlaylists) {
+  SearchViewModel(this._library, this._player, this._allPlaylists) {
     void searchAgain(_) {
       if (hasQuery) _execute(query);
     }
@@ -60,8 +56,6 @@ class SearchViewModel extends ChangeNotifier {
 
   final LibraryService _library;
   final PlayerViewModel _player;
-  final void Function(Album album) _openAlbum;
-  final void Function(Artist artist) _openArtist;
 
   /// The playlists as the Playlists page lists them, the automatic ones first.
   final List<Playlist> Function() _allPlaylists;
@@ -155,7 +149,6 @@ class SearchViewModel extends ChangeNotifier {
     play: () {
       if (artist.tracks.isNotEmpty) _player.playQueue(artist.tracks);
     },
-    open: () => _openArtist(artist),
   );
 
   BestMatch _albumMatch(Album album) => BestMatch(
@@ -171,23 +164,18 @@ class SearchViewModel extends ChangeNotifier {
     play: () {
       if (album.tracks.isNotEmpty) _player.playQueue(album.tracks);
     },
-    open: () => _openAlbum(album),
   );
 
-  BestMatch _trackMatch(Track track) {
-    void play() => _player.playQueue([track], track);
-    return BestMatch(
-      kind: BestMatchKind.track,
-      item: track,
-      title: track.title,
-      subtitle: '${track.artist} • ${track.album}',
-      meta: '${track.formattedDuration} • ${track.format.tagSpec}',
-      coverPath: track.coverArtPath,
-      tracks: [track],
-      play: play,
-      open: play,
-    );
-  }
+  BestMatch _trackMatch(Track track) => BestMatch(
+    kind: BestMatchKind.track,
+    item: track,
+    title: track.title,
+    subtitle: '${track.artist} • ${track.album}',
+    meta: '${track.formattedDuration} • ${track.format.tagSpec}',
+    coverPath: track.coverArtPath,
+    tracks: [track],
+    play: () => _player.playQueue([track], track),
+  );
 
   @override
   void dispose() {
