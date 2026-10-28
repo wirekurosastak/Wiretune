@@ -109,6 +109,34 @@ void main() {
     expect(playlist.trackIds, hasLength(4));
   });
 
+  test('offline mode shows only what plays without the server, everywhere, and a playlist moves what it shows', () {
+    final repo = testRepository();
+    final service = _service(repo);
+    repo.replaceAllTracks([TestSupport.makeTrack('local', 'Mine', album: 'Here')]);
+    service.initialize();
+    service.mergeServerTracks([
+      TestSupport.makeServerTrack('kept', 'Downloaded', album: 'There'),
+      TestSupport.makeServerTrack('away', 'Streamed', album: 'Elsewhere'),
+    ], const UserDataSnapshot(['kept', 'away'], [], []));
+    final playlist = service.createPlaylist('Mix');
+    service.addTracksToPlaylist(playlist.id, ['away', 'local', 'kept']);
+
+    service.showOnly((t) => t.isLocal || t.id == 'kept');
+    expect(service.tracks.map((t) => t.id), unorderedEquals(['local', 'kept']));
+    expect(service.albums.map((a) => a.title), unorderedEquals(['Here', 'There']));
+    expect(service.favorites.map((t) => t.id), ['kept']);
+    expect(service.getPlaylistTracks(playlist).map((t) => t.id), ['local', 'kept']);
+    expect(service.whole.tracks, hasLength(3), reason: 'the rest stay in the library');
+
+    // The second entry shown goes to the top of what is shown; the one not shown keeps its place.
+    service.movePlaylistTrack(playlist.id, 1, 0);
+    expect(playlist.trackIds, ['away', 'kept', 'local']);
+
+    service.showOnly(null);
+    expect(service.tracks, hasLength(3));
+    expect(service.getPlaylistTracks(playlist).map((t) => t.id), ['away', 'kept', 'local']);
+  });
+
   test('a compilation in one folder becomes Various Artists, and guests stay out of the artist list', () async {
     final repo = testRepository();
     final service = _service(repo);

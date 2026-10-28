@@ -404,6 +404,30 @@ void main() {
     expect(player.downloads.isWaitingForServer, isFalse);
   });
 
+  test('offline mode shows the copies, and deletes none: the downloads follow the whole library', () async {
+    server
+      ..add(serverTrack('a1', 'One', 'Album A'), audio(1))
+      ..add(serverTrack('a2', 'Two', 'Album A', number: 2), audio(2))
+      ..add(serverTrack('b1', 'Other', 'Album B'), audio(3));
+    final player = await signedIn();
+    final downloads = player.downloads;
+    final library = player.library;
+    downloads.setAlbumDownloaded(library.albums.firstWhere((a) => a.title == 'Album A').id, true);
+    await until(() => downloads.doneCount == 2);
+    await player.session.setOfflineMode(true);
+
+    // Even shown nothing of the server's, the library's choices still cover the copies.
+    library.showOnly((t) => t.isLocal);
+    expect(library.albums, isEmpty);
+    await settle();
+    expect(downloads.doneCount, 2);
+    expect(filesIn(downloads.directory), hasLength(2));
+
+    library.showOnly((t) => t.isLocal || downloads.hasCopy(t));
+    expect(library.albums.map((a) => a.title), ['Album A']);
+    expect(library.whole.albums, hasLength(2));
+  });
+
   test('what was chosen and the copies survive a restart, with nothing downloaded twice', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
     final repo = testRepository();

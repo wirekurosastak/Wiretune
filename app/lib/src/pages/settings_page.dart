@@ -381,6 +381,8 @@ class _AccountCardState extends State<_AccountCard> {
         }
         final badgeColor = server.isLoggedIn
             ? colors.palette.success
+            : server.isOfflineMode
+            ? colors.textMuted
             : (server.isServerOffline ? colors.danger : colors.palette.warning);
         return GlassCard(
           opaque: true,
@@ -425,6 +427,26 @@ class _AccountCardState extends State<_AccountCard> {
                 ],
               ),
               _StatusLine(server.statusMessage, isError: server.isServerOffline),
+              if (server.offersOfflineMode) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('OfflineMode'),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                          ),
+                          Text(context.tr('OfflineModeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                        ],
+                      ),
+                    ),
+                    Switch(value: server.isOfflineMode, onChanged: (v) => server.setOfflineMode(v)),
+                  ],
+                ),
+              ],
               const SizedBox(height: 16),
               Divider(color: colors.glassBorder, height: 1),
               const SizedBox(height: 16),

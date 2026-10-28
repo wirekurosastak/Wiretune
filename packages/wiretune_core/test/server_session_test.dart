@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -56,6 +57,59 @@ void main() {
 
     down = false;
     expect(await until(() => session.state == ServerConnectionState.connected), isTrue);
+  });
+
+  test('offline mode leaves the server alone, and says nothing of it, until it is turned off', () async {
+    final saved = ServerSession.firstRetry;
+    ServerSession.firstRetry = const Duration(milliseconds: 20);
+    addTearDown(() => ServerSession.firstRetry = saved);
+    var asked = 0;
+    final session = await signedInSession(
+      library,
+      respond: (_) {
+        asked++;
+        return null;
+      },
+    );
+    addTearDown(session.dispose);
+
+    await session.setOfflineMode(true);
+    expect((session.state, session.statusMessage), (ServerConnectionState.offline, null));
+    expect(library.serverConnected, isFalse, reason: "the account's data isn't changed meanwhile");
+    asked = 0;
+    await session.connect();
+    await session.resume();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(asked, 0, reason: 'neither connecting nor asking now and then whether the server is back');
+
+    await session.setOfflineMode(false);
+    expect(session.state, ServerConnectionState.connected);
+  });
+
+  test('offline mode lasts across a restart, and connecting to a server ends it', () async {
+    (await signedInSession(library, tracks: [TestSupport.makeTrack('t1', 'One')])).dispose();
+    final settings = testRepository();
+    var asked = 0;
+    ServerSession start() {
+      final client = MockClient((request) async {
+        asked++;
+        return http.Response(jsonEncode({'setupRequired': false}), 200, headers: {'content-type': 'application/json'});
+      });
+      final session = ServerSession(library, settings, ServerClient(client))..initialize();
+      addTearDown(session.dispose);
+      return session;
+    }
+
+    await start().setOfflineMode(true);
+    final restarted = start();
+    expect(restarted.isOfflineMode, isTrue);
+    await restarted.connect();
+    expect(asked, 0);
+
+    await restarted.connect('http://server:5200');
+    expect(restarted.isOfflineMode, isFalse);
+    expect(restarted.state, ServerConnectionState.loginRequired);
+    expect(start().isOfflineMode, isFalse);
   });
 
   test("the server's artists' own pictures take the place of their album covers, also after a restart", () async {

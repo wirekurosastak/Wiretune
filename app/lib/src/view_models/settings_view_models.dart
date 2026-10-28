@@ -79,7 +79,13 @@ class ServerSettingsViewModel extends ChangeNotifier {
   String? _adminDataKey;
 
   bool get isServerReachable => _session.isServerReachable;
-  bool get isServerOffline => _session.state == ServerConnectionState.offline;
+
+  /// The server can't be reached; not in offline mode, which leaves it alone on purpose.
+  bool get isServerOffline => _session.state == ServerConnectionState.offline && !isOfflineMode;
+  bool get isOfflineMode => _session.isOfflineMode;
+
+  /// Offline mode is offered to a device that plays from a server.
+  bool get offersOfflineMode => _session.usesServer || isOfflineMode;
   bool get isConnecting => _session.state == ServerConnectionState.connecting;
   bool get isSetupRequired => _session.state == ServerConnectionState.setupRequired;
   bool get isLoggedIn => _session.isLoggedIn;
@@ -95,7 +101,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     ServerConnectionState.connecting => 'BadgeConnecting',
     ServerConnectionState.loginRequired => 'BadgeLoginRequired',
     ServerConnectionState.setupRequired => 'BadgeSetupRequired',
-    ServerConnectionState.offline => 'BadgeOffline',
+    ServerConnectionState.offline => isOfflineMode ? 'BadgeOfflineMode' : 'BadgeOffline',
     ServerConnectionState.notConfigured => 'BadgeNoConnection',
   });
 
@@ -145,6 +151,11 @@ class ServerSettingsViewModel extends ChangeNotifier {
   Future<void> connectServer() async {
     _showAuthError(null);
     await _session.connect(serverUrl);
+    syncWithSession();
+  }
+
+  Future<void> setOfflineMode(bool enabled) async {
+    await _session.setOfflineMode(enabled);
     syncWithSession();
   }
 

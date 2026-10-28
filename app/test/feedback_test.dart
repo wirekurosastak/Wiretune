@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/platform.dart';
@@ -89,6 +90,53 @@ void main() {
     await settle(tester);
     expect(find.text(Localizer.get('OfflineReadOnly')), findsOneWidget);
     expect(lib.isFavorite('s1'), isFalse);
+    vm.dispose();
+  });
+
+  test('offline mode drops the banner and shows only the downloaded music, until it is turned off', () async {
+    final downloaded = TestSupport.makeServerTrack('s2', 'Blue Train', artist: 'John Coltrane', album: 'Blue Train');
+    final lib = createLibrary([serverTrack, downloaded]);
+    final unreachable = MockClient((_) async => throw const SocketException('Connection refused'));
+    final vm = createMainViewModel(lib, null, ServerSession(lib, lib.repository, ServerClient(unreachable)));
+    addTearDown(vm.dispose);
+    final copy = File(p.join(vm.downloadService.directory, 'John Coltrane', 'Blue Train', '01 - Blue Train.flac'))
+      ..createSync(recursive: true)
+      ..writeAsBytesSync(List.filled(2048, 1));
+    addTearDown(() => copy.existsSync() ? copy.deleteSync() : null);
+    lib.repository.saveDownload('s2', 'v1', p.relative(copy.path, from: vm.downloadService.directory));
+    await vm.start();
+    expect(vm.isServerOfflineBannerVisible, isTrue);
+
+    await vm.serverSettings.setOfflineMode(true);
+    expect(vm.isServerOfflineBannerVisible, isFalse);
+    expect(vm.serverSettings.serverStatusBadge, Localizer.get('BadgeOfflineMode'));
+    expect(lib.tracks.map((t) => t.title), ['Blue Train']);
+
+    await vm.serverSettings.setOfflineMode(false);
+    expect(vm.isServerOfflineBannerVisible, isTrue);
+    expect(lib.tracks, hasLength(2));
+  });
+
+  testWidgets('offline mode is a switch in Settings, and a library it leaves empty says so', (tester) async {
+    final lib = await library(tester, [serverTrack]);
+    final session = ServerSession(lib, lib.repository);
+    final vm = createMainViewModel(lib, null, session)..navigateTo(AppSection.settings);
+    session.initialize(); // the server is out of reach until it is asked
+    await show(tester, vm, wide);
+    expect(find.text(Localizer.get('Reconnect')), findsOneWidget);
+
+    final hint = find.text(Localizer.get('OfflineModeHint'));
+    await tester.ensureVisible(hint);
+    await settle(tester);
+    final row = find.ancestor(of: hint, matching: find.byType(Row)).first;
+    await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
+    await settle(tester);
+    expect(session.isOfflineMode, isTrue);
+    expect(find.text(Localizer.get('Reconnect')), findsNothing);
+
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    expect(find.text(Localizer.get('OfflineModeEmptyTitle')), findsOneWidget);
     vm.dispose();
   });
 

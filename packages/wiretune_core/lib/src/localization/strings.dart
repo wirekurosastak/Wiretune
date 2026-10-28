@@ -140,6 +140,12 @@ const Map<String, (String, String, String)> allStrings = {
     'Connect to your Wiretune server.',
     'Verbinde dich mit deinem Wiretune-Server.',
   ),
+  'OfflineModeEmptyTitle': ('Nincs letöltött zene', 'No downloaded music', 'Keine heruntergeladene Musik'),
+  'OfflineModeEmptyHint': (
+    'Offline módban csak a letöltött és a helyi zenék látszanak. A Beállításokban kikapcsolhatod.',
+    'In offline mode only downloaded and local music shows. You can turn it off in Settings.',
+    'Im Offlinemodus wird nur heruntergeladene und lokale Musik angezeigt. Du kannst ihn in den Einstellungen ausschalten.',
+  ),
   'LocalFolder': ('Helyi mappa', 'Local folder', 'Lokaler Ordner'),
   'ConnectToServer': ('Csatlakozás szerverhez', 'Connect to server', 'Mit Server verbinden'),
   'ColTitle': ('CÍM', 'TITLE', 'TITEL'),
@@ -448,6 +454,7 @@ const Map<String, (String, String, String)> allStrings = {
   'BadgeConnected': ('Csatlakoztatva', 'Connected', 'Verbunden'),
   'BadgeOnline': ('Online', 'Online', 'Online'),
   'BadgeOffline': ('Offline', 'Offline', 'Offline'),
+  'BadgeOfflineMode': ('Offline mód', 'Offline mode', 'Offlinemodus'),
   'BadgeConnecting': ('Kapcsolódás…', 'Connecting…', 'Verbinde …'),
   'BadgeLoginRequired': ('Bejelentkezés szükséges', 'Sign-in required', 'Anmeldung erforderlich'),
   'BadgeSetupRequired': ('Beállítás szükséges', 'Setup required', 'Einrichtung erforderlich'),
@@ -1169,6 +1176,22 @@ const Map<String, (String, String, String)> allStrings = {
     'A lista csak ezen az eszközön jött létre, mert a szerver nem érhető el.',
     'The playlist was created on this device only: the server is out of reach.',
     'Die Playlist wurde nur auf diesem Gerät angelegt: Der Server ist nicht erreichbar.',
+  ),
+  'OfflineMode': ('Offline mód', 'Offline mode', 'Offlinemodus'),
+  'OfflineModeHint': (
+    'Csak a letöltött és a helyi zenék látszanak, és a lejátszó nem keresi a szervert.',
+    'Only downloaded and local music shows, and the player leaves the server alone.',
+    'Nur heruntergeladene und lokale Musik wird angezeigt, und der Player sucht nicht nach dem Server.',
+  ),
+  'OfflineModeReadOnly': (
+    'Offline módban ez nem módosítható. Kapcsold ki a Beállításokban, és próbáld meg ismét.',
+    "This can't be changed in offline mode. Turn it off in Settings and try again.",
+    'Im Offlinemodus lässt sich das nicht ändern. Schalte ihn in den Einstellungen aus und versuche es noch einmal.',
+  ),
+  'OfflineModePlaylistLocal': (
+    'A lista csak ezen az eszközön jött létre, mert offline mód van bekapcsolva.',
+    'The playlist was created on this device only: offline mode is on.',
+    'Die Playlist wurde nur auf diesem Gerät angelegt: Der Offlinemodus ist an.',
   ),
   'ChangeRefused': (
     'A szerver nem fogadta el a módosítást: {0}',

@@ -117,12 +117,18 @@ class MainViewModel extends ChangeNotifier {
       library.scanningStateChanged.listen((_) => _updateStatusText()),
       session.stateChanged.listen((_) => _onSessionStateChanged()),
       Localizer.instance.languageChanged.listen((_) => _refreshLocalizedTexts()),
+      // In offline mode, being out of touch with the server is no error.
       library.changeNotice.listen(
         (notice) => switch (notice) {
+          ChangeNotice.readOnlyOffline when session.isOfflineMode => showNotice(Localizer.get('OfflineModeReadOnly')),
           ChangeNotice.readOnlyOffline => showNotice(Localizer.get('OfflineReadOnly'), isError: true),
-          ChangeNotice.playlistKeptOnDevice => showNotice(Localizer.get('OfflinePlaylistLocal')),
+          ChangeNotice.playlistKeptOnDevice => showNotice(
+            Localizer.get(session.isOfflineMode ? 'OfflineModePlaylistLocal' : 'OfflinePlaylistLocal'),
+          ),
         },
       ),
+      // In offline mode, a copy removed is a track no longer shown.
+      this.downloadService.changed.listen((_) => _followOfflineMode()),
       session.changeRefused.listen((reason) => showNotice(Localizer.format('ChangeRefused', [reason]), isError: true)),
       // Another player of the account changed its favourites, playlists or hidden items: this one shows them too.
       this.remote.accountDataChanged.listen((_) => unawaited(session.refreshUserData())),
@@ -629,9 +635,10 @@ class MainViewModel extends ChangeNotifier {
 
   void _onSessionStateChanged() {
     onServerCredentialsChanged?.call(session.serverUrl, session.authToken);
+    _followOfflineMode();
     final offline = session.state == ServerConnectionState.offline;
     serverBannerNeedsSignIn = session.state == ServerConnectionState.loginRequired && session.authToken == null;
-    isServerOfflineBannerVisible = session.usesServer && (offline || serverBannerNeedsSignIn);
+    isServerOfflineBannerVisible = session.usesServer && !session.isOfflineMode && (offline || serverBannerNeedsSignIn);
     serverBannerMessage = serverBannerNeedsSignIn
         ? session.statusMessage ?? Localizer.get('SessionLoginRequired')
         : session.usesLocalFolder && offline
@@ -640,6 +647,19 @@ class MainViewModel extends ChangeNotifier {
 
     if (session.isLoggedIn) _isLoginViewActive = false;
     _updateStatusText();
+  }
+
+  // What the library shows for offline mode: whether it's on, and how many copies there were.
+  bool _showsOffline = false;
+  int _copiesShown = 0;
+
+  /// In offline mode the library shows only what plays without the server: the local files and the downloaded copies.
+  void _followOfflineMode() {
+    final offline = session.isOfflineMode;
+    if (offline == _showsOffline && (!offline || downloadService.copyCount == _copiesShown)) return;
+    _showsOffline = offline;
+    _copiesShown = downloadService.copyCount;
+    library.showOnly(offline ? (t) => t.isLocal || downloadService.hasCopy(t) : null);
   }
 
   // ── Status lines ───────────────────────────────────────────────────────────────────────────────

@@ -85,6 +85,10 @@ the download button next to *Play*, or *⋮ → Download to this device*. With *
 follow changes on the server; with it off, each download fetches its tracks once. Files are saved in the
 [downloads folder](#where-things-are) as `Album artist/Album/01 - Title.flac`, and signing out deletes them.
 
+Away from the server, turn on *Settings → Account & connection → Offline mode*: the library then shows only your downloads
+and local music, and the player stops looking for the server (no banner, no reconnecting). Turning it off, or connecting
+to a server, brings everything back.
+
 ## Remote control
 
 Every player signed in to the same account sees the others. Pick a device with the cast button and this player becomes

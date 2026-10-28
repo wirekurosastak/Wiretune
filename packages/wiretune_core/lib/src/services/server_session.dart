@@ -37,6 +37,8 @@ class ServerSession {
   /// The account the stored sign-in token belongs to.
   static const String _userIdSetting = 'auth_user_id';
 
+  static const String _offlineModeSetting = 'offline_mode';
+
   /// A stream token is replaced once it has less than this left, so one handed out just now outlasts the longest track.
   static const Duration _streamTokenRefreshMargin = Duration(hours: 4);
 
@@ -74,6 +76,7 @@ class ServerSession {
   (String token, DateTime expiresUtc)? _streamToken;
   String? _statusKey;
   List<Object?> _statusArgs = const [];
+  bool _offlineMode = false;
 
   bool _disposed = false;
 
@@ -129,7 +132,31 @@ class ServerSession {
     _client.authToken = token == null || token.isEmpty ? null : token;
     // Until the server confirms the account, what the device kept of it (its hidden items) applies, also offline.
     if (_client.authToken != null) _library.setCurrentUser(_settings.getSetting(_userIdSetting));
+    _offlineMode = _settings.getSetting(_offlineModeSetting) == '1';
     _setState(usesServer ? ServerConnectionState.offline : ServerConnectionState.notConfigured, null);
+  }
+
+  /// Offline mode: the server is left alone, so nothing says it can't be reached. The session doesn't connect, nor ask
+  /// now and then whether the server is back; it stays "offline" until offline mode is turned off, which connects, or
+  /// the user connects to a server ([connect] with an address), which ends it. It lasts across restarts.
+  bool get isOfflineMode => _offlineMode;
+
+  Future<void> setOfflineMode(bool enabled) async {
+    if (enabled == _offlineMode) return;
+    _storeOfflineMode(enabled);
+    if (!usesServer) return stateChanged.emit(null);
+    if (enabled) {
+      // Once a connection under way has finished. Changes made before still go to the server, should it answer.
+      await _gate.synchronized(() => _setState(ServerConnectionState.offline, null));
+    } else {
+      await connect();
+    }
+  }
+
+  void _storeOfflineMode(bool enabled) {
+    _offlineMode = enabled;
+    _settings.setSetting(_offlineModeSetting, enabled ? '1' : '');
+    WiretuneLog.info('ServerSession', 'Offline mode ${enabled ? 'on' : 'off'}.');
   }
 
   /// The address the user typed, made into a server URL: `http://` is added when no scheme is given, a query, a
@@ -158,9 +185,14 @@ class ServerSession {
     return normalized;
   }
 
-  /// Checks the server and, if already signed in, refreshes the library from it.
+  /// Checks the server and, if already signed in, refreshes the library from it. In offline mode only the user's
+  /// connecting to an address does (and ends offline mode).
   Future<void> connect([String? newServerUrl]) => _gate.synchronized(
     () => _guarded(() async {
+      if (_offlineMode) {
+        if (newServerUrl == null) return;
+        _storeOfflineMode(false);
+      }
       if (newServerUrl != null) {
         final normalized = normalizeServerUrl(newServerUrl);
         if (normalized == null) {
@@ -463,9 +495,12 @@ class ServerSession {
 
   /// [messageKey] is the key of the status text; the text is rendered on demand so that it follows language changes.
   void _setState(ServerConnectionState newState, String? messageKey, [List<Object?> args = const []]) {
+    // In offline mode being out of touch is what was asked for, whatever happened (a change sent earlier failing), and
+    // nothing to tell.
+    final asked = _offlineMode && newState == ServerConnectionState.offline;
     state = newState;
-    _statusKey = messageKey;
-    _statusArgs = args;
+    _statusKey = asked ? null : messageKey;
+    _statusArgs = asked ? const [] : args;
     _library.serverConnected = isLoggedIn;
     if (newState == ServerConnectionState.offline) {
       _retryLater();
@@ -482,7 +517,7 @@ class ServerSession {
   /// While the server is out of reach, it is asked now and then whether it is back, quietly: the session shows
   /// "offline" until it answers, and then connects.
   void _retryLater() {
-    if (_retry != null || _disposed) return;
+    if (_retry != null || _disposed || _offlineMode) return;
     _retry = Timer(_retryDelay, () {
       _retry = null;
       final doubled = _retryDelay * 2;
@@ -492,7 +527,7 @@ class ServerSession {
   }
 
   Future<void> _retryConnect() async {
-    if (state != ServerConnectionState.offline || !usesServer) return;
+    if (state != ServerConnectionState.offline || !usesServer || _offlineMode) return;
     try {
       await _client.checkSetupRequired(serverUrl);
     } on Exception {

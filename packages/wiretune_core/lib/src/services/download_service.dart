@@ -135,27 +135,38 @@ class DownloadService {
 
   void setAlbumDownloaded(String albumId, bool downloaded) => _changeChoices(
     (choices) => _toggle(choices.albums, albumId, downloaded),
-    downloaded ? _library.getAlbum(albumId)?.tracks ?? const [] : const [],
+    downloaded ? _albumTracks(albumId) : const [],
   );
 
   /// Every album filed under the artist, also the ones that arrive later.
   void setArtistDownloaded(String artistId, bool downloaded) => _changeChoices(
     (choices) => _toggle(choices.artists, artistId, downloaded),
-    downloaded
-        ? [for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) ...album.tracks]
-        : const [],
+    downloaded ? _artistTracks(artistId) : const [],
   );
 
-  void setPlaylistDownloaded(String playlistId, bool downloaded) {
-    final playlist = _library.getPlaylist(playlistId);
-    _changeChoices(
-      (choices) => _toggle(choices.playlists, playlistId, downloaded),
-      downloaded && playlist != null ? _library.getPlaylistTracks(playlist) : const [],
-    );
-  }
+  void setPlaylistDownloaded(String playlistId, bool downloaded) => _changeChoices(
+    (choices) => _toggle(choices.playlists, playlistId, downloaded),
+    downloaded ? _playlistTracks(playlistId) : const [],
+  );
 
   void setFavoritesDownloaded(bool downloaded) =>
-      _changeChoices((choices) => choices.favorites = downloaded, downloaded ? _library.favorites : const []);
+      _changeChoices((choices) => choices.favorites = downloaded, downloaded ? _favorites : const []);
+
+  // What a choice covers comes from the whole library, also the tracks that offline mode doesn't show
+  // (LibraryService.showOnly): a copy they don't show is still wanted, and is never deleted for it.
+  Iterable<Track> _albumTracks(String albumId) => _library.whole.albumById[albumId]?.tracks ?? const [];
+
+  Iterable<Track> _artistTracks(String artistId) => [
+    for (final album in _library.whole.artists.where((a) => a.id == artistId).firstOrNull?.albums ?? const <Album>[])
+      ...album.tracks,
+  ];
+
+  Iterable<Track> _playlistTracks(String playlistId) => switch (_library.getPlaylist(playlistId)) {
+    final playlist? => _library.resolveTracks(playlist.trackIds),
+    null => const [],
+  };
+
+  Iterable<Track> get _favorites => _library.whole.tracks.where((t) => _library.isFavorite(t.id));
 
   /// Whether the copies follow the choices on their own: tracks that join a chosen list later are downloaded, and so is a
   /// copy that was deleted outside Wiretune. Off, a choice downloads what it covers when it is made, and nothing else.
@@ -221,6 +232,9 @@ class DownloadService {
     final path = _absolute(copy.path);
     return File(path).existsSync() ? path : null;
   }
+
+  /// Whether [track] has a copy here, as recorded: [localCopy] without a look at the disk, for a whole library at once.
+  bool hasCopy(Track track) => !track.isLocal && _copies[track.id]?.isMoving == false;
 
   /// The downloaded copy of a cover the server serves at [url], or null.
   String? localCover(String url) => _covers[_coverStem(url)];
@@ -353,13 +367,10 @@ class DownloadService {
         tracks.any((t) => !t.isLocal && (_copies.containsKey(t.id) || _choices.pending.contains(t.id)));
     final before = jsonEncode(_choices.toJson());
     _choices.tracks.removeWhere((id) => !_copies.containsKey(id) && !_choices.pending.contains(id));
-    _choices.albums.removeWhere((id) => !keeps(_library.getAlbum(id)?.tracks ?? const []));
-    _choices.artists.removeWhere((id) => !keeps(_library.getArtist(id)?.albums.expand((a) => a.tracks) ?? const []));
-    _choices.playlists.removeWhere((id) {
-      final playlist = _library.getPlaylist(id);
-      return !keeps(playlist == null ? const [] : _library.getPlaylistTracks(playlist));
-    });
-    if (_choices.favorites && !keeps(_library.favorites)) _choices.favorites = false;
+    _choices.albums.removeWhere((id) => !keeps(_albumTracks(id)));
+    _choices.artists.removeWhere((id) => !keeps(_artistTracks(id)));
+    _choices.playlists.removeWhere((id) => !keeps(_playlistTracks(id)));
+    if (_choices.favorites && !keeps(_favorites)) _choices.favorites = false;
     if (jsonEncode(_choices.toJson()) != before) _saveChoices();
   }
 
@@ -374,18 +385,15 @@ class DownloadService {
     }
 
     for (final albumId in _choices.albums) {
-      _library.getAlbum(albumId)?.tracks.forEach(add);
+      _albumTracks(albumId).forEach(add);
     }
     for (final artistId in _choices.artists) {
-      for (final album in _library.getArtist(artistId)?.albums ?? const <Album>[]) {
-        album.tracks.forEach(add);
-      }
+      _artistTracks(artistId).forEach(add);
     }
     for (final playlistId in _choices.playlists) {
-      final playlist = _library.getPlaylist(playlistId);
-      if (playlist != null) _library.getPlaylistTracks(playlist).forEach(add);
+      _playlistTracks(playlistId).forEach(add);
     }
-    if (_choices.favorites) _library.favorites.forEach(add);
+    if (_choices.favorites) _favorites.forEach(add);
     for (final trackId in _choices.tracks) {
       add(_library.getTrack(trackId));
     }
@@ -662,7 +670,7 @@ class DownloadService {
     final title = safeFileName(track.title, fallback: 'Track', maxLength: 80);
     final number = track.trackNumber;
     final disc = track.discNumber ?? 1;
-    final discs = _library.getAlbumForTrack(track)?.tracks.map((t) => t.discNumber ?? 1).toSet().length ?? 1;
+    final discs = _albumTracks(track.albumId).map((t) => t.discNumber ?? 1).toSet().length;
     final prefix = [
       if (number != null && number > 0) ...[
         discs > 1 || disc > 1 ? '$disc-' : '',

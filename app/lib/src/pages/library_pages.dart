@@ -24,7 +24,7 @@ import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
 
 /// What an empty library says, with the two ways to fill it: a server, or a folder of this computer. While a scan or a
-/// download from the server is filling it, it says that instead.
+/// download from the server is filling it, it says that instead, and in offline mode that nothing is downloaded.
 class EmptyLibrary extends StatelessWidget {
   const EmptyLibrary({super.key});
 
@@ -41,6 +41,20 @@ class EmptyLibrary extends StatelessWidget {
             title: vm.library.isScanning
                 ? context.tr('FooterScanning')
                 : vm.session.statusMessage ?? context.tr('SessionConnecting'),
+          );
+        }
+        if (vm.session.isOfflineMode) {
+          return EmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: context.tr('OfflineModeEmptyTitle'),
+            hint: context.tr('OfflineModeEmptyHint'),
+            actions: [
+              OutlinedButton.icon(
+                onPressed: () => vm.navigateTo(AppSection.settings),
+                icon: Icon(Icons.settings_outlined, size: 18, color: colors.accent),
+                label: Text(context.tr('NavSettings')),
+              ),
+            ],
           );
         }
         return EmptyState(

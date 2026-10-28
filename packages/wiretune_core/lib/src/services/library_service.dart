@@ -112,8 +112,29 @@ class LibraryService {
 
   void _rebuildSnapshot() {
     final visible = _rawTracks.where((t) => !isTrackHidden(t)).toList();
-    _snapshot = LibrarySnapshot.build(visible, musicFolder: musicFolder, artistPictures: _artistPictures);
+    LibrarySnapshot build(List<Track> tracks) =>
+        LibrarySnapshot.build(tracks, musicFolder: musicFolder, artistPictures: _artistPictures);
+    _whole = build(visible);
+    final shown = _shown;
+    // Both see the same local files (the filter keeps them all), so they file them alike.
+    _snapshot = shown == null ? _whole : build(visible.where(shown).toList());
   }
+
+  // Offline mode's filter ([showOnly]); null shows every track.
+  bool Function(Track track)? _shown;
+  LibrarySnapshot _whole = LibrarySnapshot.empty;
+
+  /// Offline mode: only the tracks [test] passes are shown (the local files and the downloaded copies), in the lists,
+  /// the albums, the artists, the favourites and the playlists. The rest stay in the library, and the downloads still
+  /// follow them ([whole]). Null shows every track again.
+  void showOnly(bool Function(Track track)? test) {
+    _shown = test;
+    _rebuildSnapshot();
+    libraryChanged.emit(null);
+  }
+
+  /// Every track that isn't hidden, also the ones [showOnly] leaves out: what the downloads follow.
+  LibrarySnapshot get whole => _whole;
 
   // The artists' own pictures (`artist.jpg`) by artist ID: the files of the local folder's, the addresses of the
   // server's (kept, so they show offline too). A local one wins.
@@ -554,13 +575,15 @@ class LibraryService {
       });
 
   /// Moves the entry shown at [from] among the playlist's tracks ([getPlaylistTracks]) to [to], counted after it has
-  /// been taken out. Entries of tracks this library doesn't have (which aren't shown) keep their places among the rest.
+  /// been taken out. Entries that aren't shown (tracks this library doesn't have, or that offline mode leaves out)
+  /// keep their places among the rest.
   void movePlaylistTrack(String playlistId, int from, int to) => _updatePlaylist(playlistId, (ids) {
     final byId = _rawTrackById;
     final aliases = _serverAliases;
+    final test = _shown;
     final shown = [
       for (var i = 0; i < ids.length; i++)
-        if (byId[ids[i]] != null || byId[aliases[ids[i]]] != null) i,
+        if (byId[ids[i]] ?? byId[aliases[ids[i]]] case final track? when test == null || test(track)) i,
     ];
     if (from == to || from < 0 || to < 0 || from >= shown.length || to >= shown.length) return null;
     final at = shown[to];
@@ -688,7 +711,12 @@ class LibraryService {
 
   Playlist? getPlaylist(String playlistId) => _playlists.where((pl) => pl.id == playlistId).firstOrNull;
 
-  List<Track> getPlaylistTracks(Playlist playlist) => resolveTracks(playlist.trackIds);
+  /// The playlist's tracks that are shown (see [showOnly]).
+  List<Track> getPlaylistTracks(Playlist playlist) {
+    final tracks = resolveTracks(playlist.trackIds);
+    final test = _shown;
+    return test == null ? tracks : tracks.where(test).toList();
+  }
 
   /// The tracks with these IDs, in their order; a server ID also finds the local file it was matched to. Unknown IDs
   /// are left out.
