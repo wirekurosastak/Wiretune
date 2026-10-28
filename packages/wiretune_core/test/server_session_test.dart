@@ -30,8 +30,9 @@ void main() {
   });
 
   test('a server that went away is asked again by itself, quietly, and the session connects when it answers', () async {
+    final saved = ServerSession.firstRetry;
     ServerSession.firstRetry = const Duration(milliseconds: 20);
-    addTearDown(() => ServerSession.firstRetry = const Duration(seconds: 5));
+    addTearDown(() => ServerSession.firstRetry = saved);
     var down = false;
     var asked = 0;
     final session = await signedInSession(
