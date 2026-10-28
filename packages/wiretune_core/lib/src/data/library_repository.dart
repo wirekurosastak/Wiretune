@@ -12,7 +12,7 @@ import 'database_manager.dart';
 /// The player's (and the server's) track index, playlists and settings in SQLite. SQLite answers at once, so every
 /// method does its work before it returns.
 class LibraryRepository {
-  LibraryRepository([DatabaseManager? database]) : _db = database ?? DatabaseManager();
+  LibraryRepository(this._db);
 
   final DatabaseManager _db;
 
@@ -264,7 +264,7 @@ class LibraryRepository {
   }
 
   /// What [userId] hid ('local': this device's own), by kind.
-  Map<HiddenKind, Set<String>> getHiddenItems([String userId = 'local']) {
+  Map<HiddenKind, Set<String>> getHiddenItems(String userId) {
     final rows = _db.connection.select('SELECT item_type, item_id FROM user_hidden WHERE user_id = ?', [userId]);
     final result = {for (final kind in HiddenKind.values) kind: <String>{}};
     for (final r in rows) {
@@ -273,7 +273,7 @@ class LibraryRepository {
     return result;
   }
 
-  void setHiddenItem(HiddenKind kind, String id, bool hidden, [String userId = 'local']) {
+  void setHiddenItem(HiddenKind kind, String id, bool hidden, String userId) {
     if (hidden) {
       _db.connection.execute(
         'INSERT OR REPLACE INTO user_hidden (user_id, item_type, item_id, hidden_at) VALUES (?, ?, ?, ?)',
@@ -308,7 +308,7 @@ class LibraryRepository {
     });
   }
 
-  void clearHiddenItems([String userId = 'local']) {
+  void clearHiddenItems(String userId) {
     _db.connection.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
   }
 

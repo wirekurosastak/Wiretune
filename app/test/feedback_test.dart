@@ -433,6 +433,8 @@ Future<void> settle(WidgetTester tester) async {
 
 /// The database of a newer Wiretune.
 class _NewerDatabase extends LibraryRepository {
+  _NewerDatabase() : super(DatabaseManager());
+
   @override
   void initialize() => throw const IncompatibleDatabaseException('made by another version', '/data/wiretune.db');
 }
