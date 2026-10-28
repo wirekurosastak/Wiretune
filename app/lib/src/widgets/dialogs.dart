@@ -119,6 +119,10 @@ Future<void> showAddToPlaylistDialog(
                 leading: const Icon(Icons.queue_music),
                 title: Text(playlist.name),
                 subtitle: Text(dialog.trf('TrackCount', [playlist.trackCount])),
+                // Ticked when everything is in it already: seen before it is chosen, not told after.
+                trailing: tracks.every((t) => playlist.trackIds.contains(t.id))
+                    ? Icon(Icons.check_rounded, color: dialog.colors.accent)
+                    : null,
                 onTap: () {
                   final vm = context.vm;
                   // Offline, an account's playlist can't change, and the library says why itself.

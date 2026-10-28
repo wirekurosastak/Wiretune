@@ -329,6 +329,26 @@ void main() {
     vm.dispose();
   });
 
+  testWidgets('the playlist picker ticks the playlists the music is in already', (tester) async {
+    final lib = await library(tester, [TestSupport.makeTrack('1', 'So What')]);
+    final mix = lib.createPlaylist('Mix');
+    lib.createPlaylist('Other');
+    lib.addTracksToPlaylist(mix.id, ['1']);
+    final vm = createMainViewModel(lib);
+    await showApp(tester, vm, wide);
+    final page = tester.element(find.text(Localizer.get('NavArtists')).first);
+    final picking = showAddTrackToPlaylistDialog(page, lib.getTrack('1')!);
+    await settle(tester);
+    Finder tick(String name) =>
+        find.descendant(of: find.widgetWithText(ListTile, name), matching: find.byIcon(Icons.check_rounded));
+    expect(tick('Mix'), findsOneWidget);
+    expect(tick('Other'), findsNothing);
+    await tester.tap(find.text(Localizer.get('Cancel')));
+    await settle(tester);
+    await picking;
+    vm.dispose();
+  });
+
   testWidgets('removing a track from a playlist says so, and its Undo puts it back in its place', (tester) async {
     final lib = await library(tester, [
       TestSupport.makeTrack('1', 'So What'),
