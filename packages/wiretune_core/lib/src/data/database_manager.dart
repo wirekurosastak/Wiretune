@@ -245,14 +245,7 @@ const String _schema =
       PRIMARY KEY (user_id, id)
   );
 
-  CREATE TABLE user_hidden (
-      user_id TEXT NOT NULL,
-      item_type TEXT NOT NULL,
-      item_id TEXT NOT NULL,
-      hidden_at INTEGER NOT NULL,
-      PRIMARY KEY (user_id, item_type, item_id)
-  );
-
+  $_userHiddenTable
   $_downloadsTable
 ''';
 
@@ -266,6 +259,8 @@ const String _downloadsTable = '''
   );
 ''';
 
+/// What each account hid (artists, albums, tracks), also the device's own ('local'); in a new database and in one
+/// upgraded from version 3.
 const String _userHiddenTable = '''
   CREATE TABLE IF NOT EXISTS user_hidden (
       user_id TEXT NOT NULL,
