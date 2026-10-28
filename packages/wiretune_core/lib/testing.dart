@@ -280,9 +280,12 @@ bool hasTool(String tool) {
   }
 }
 
+/// The routes that change the account's data (favourites, hidden items, plays, playlists), as the server has them.
+final _accountChange = RegExp(r'^/api/me/(favorites/[^/]+|hidden/[^/]+/[^/]+|plays/[^/]+|playlists/[^/]+)$');
+
 /// A session signed in to a server that answers just enough for that: no tracks of its own unless [tracks] are given,
-/// an account with nothing in it. Its token is "sign-in-token"; [serverUrl] is the address the session believes in, and
-/// [respond] may answer any request in place of that stand-in.
+/// an account with nothing in it, and any other route not found. Its token is "sign-in-token"; [serverUrl] is the
+/// address the session believes in, and [respond] may answer any request in place of that stand-in.
 Future<ServerSession> signedInSession(
   LibraryService library, {
   List<Track> tracks = const [],
@@ -300,8 +303,12 @@ Future<ServerSession> signedInSession(
       '/api/auth/me' => user.toJson(),
       '/api/tracks' => [for (final t in tracks) t.toJson()],
       '/api/me/data' => const UserDataSnapshot([], [], []).toJson(),
-      _ => <String, Object?>{},
+      '/api/artists/pictures' => <String, Object?>{},
+      _ when request.method != 'GET' && _accountChange.hasMatch(request.url.path) => <String, Object?>{},
+      _ => null,
     };
+    // Not found, as the real server answers a route it doesn't have: a misspelled one can't pass.
+    if (body == null) return http.Response('', 404);
     return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
   });
   final session = ServerSession(library, testRepository(), ServerClient(client));
