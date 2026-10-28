@@ -115,7 +115,7 @@ The server keeps its data in [its own folder](server.md#data-directory).
 
 | Variable | Effect |
 |---|---|
-| `WIRETUNE_DATA_DIR` | Use another data folder, for example a throw-away one for testing |
+| `WIRETUNE_DATA_DIR` | Use another data folder, for example a throw-away one for testing. The server reads it too (as `--data-dir`): a server and a player on one machine need different ones, or they delete each other's cached covers |
 | `WIRETUNE_LOG_LEVEL` | `debug`, `info` (the default), `warn` or `error`; `debug` also logs paths and device names |
 | `WIRETUNE_NO_ARTIST_PICTURES=1` | Don't fetch artist pictures |
 | `WIRETUNE_NO_ONLINE_LYRICS=1` | Don't fetch lyrics, whatever the setting says |
