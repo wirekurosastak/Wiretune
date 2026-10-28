@@ -37,9 +37,7 @@ class TokenCheck {
 
 /// Accounts, passwords (bcrypt, work factor 12) and tokens (HS256 JWTs).
 class AuthService {
-  AuthService(this._db, String signingSecret) : _jwt = Jwt(signingSecret) {
-    _db.initializeSchema();
-  }
+  AuthService(this._db, String signingSecret) : _jwt = Jwt(signingSecret);
 
   /// The audience of a sign-in token, which opens the whole API.
   static const String audience = 'wiretune';

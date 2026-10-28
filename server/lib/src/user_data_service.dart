@@ -10,9 +10,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 /// Every method takes the account ID from the validated token; nothing here can reach another account's rows. The
 /// limits are part of each insert's SQL, so parallel requests cannot go past them.
 class UserDataService {
-  UserDataService(this._db) {
-    _db.initializeSchema();
-  }
+  UserDataService(this._db);
 
   final DatabaseManager _db;
 
