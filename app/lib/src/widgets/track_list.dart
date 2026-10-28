@@ -22,17 +22,17 @@ import 'player_controls.dart';
 /// Which list a track table shows; each has its own columns, as far as the width allows. Every row ends in the
 /// favourite and a menu with the rest.
 enum TrackTableKind {
-  /// The library, and the favourites: cover, title, artist, album, length, released, added, quality, bitrate.
+  /// The library, and the favourites: cover, title, artist, album, length, released, added, BPM, quality, bitrate.
   tracks,
 
-  /// An album: track number, title, length, quality, bitrate; a heading over each disc of several.
+  /// An album: track number, title, length, BPM, quality, bitrate; a heading over each disc of several.
   album,
 
-  /// An artist: cover, title, album, length, released, quality, bitrate.
+  /// An artist: cover, title, album, length, released, BPM, quality, bitrate.
   artist,
 
-  /// A playlist: cover, title, artist, album, length, released, the place in the playlist, quality, bitrate; its menu also
-  /// removes the track and, in the playlist's own order, moves it.
+  /// A playlist: cover, title, artist, album, length, released, the place in the playlist, BPM, quality, bitrate; its menu
+  /// also removes the track and, in the playlist's own order, moves it.
   playlist,
 
   /// Search results: cover, title, artist, album, length.
@@ -97,6 +97,7 @@ class _Columns {
       width >= 720;
   bool get showAdded => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && width >= 880;
   bool get showQuality => kind != TrackTableKind.search && width >= 1060;
+  bool get showBpm => showQuality && width >= 1130;
 
   int get titleFlex {
     if (!showArtist && !showAlbum) return 8; // an album's table shows neither
@@ -111,6 +112,7 @@ class _Columns {
   static const double lengthWidth = 76;
   static const double releasedWidth = 112;
   static const double addedWidth = 124;
+  static const double bpmWidth = 70;
   static const double qualityWidth = 168;
   static const double bitrateWidth = 104;
 
@@ -348,6 +350,8 @@ class _ColumnHeaders extends StatelessWidget {
           if (columns.showReleased)
             cell(context.tr('ColReleased'), TrackSortField.released, width: _Columns.releasedWidth),
           if (columns.showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _Columns.addedWidth),
+          // The same in every language.
+          if (columns.showBpm) cell('BPM', TrackSortField.bpm, width: _Columns.bpmWidth),
           if (columns.showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _Columns.qualityWidth),
           if (columns.showQuality) cell(context.tr('ColBitrate'), TrackSortField.bitrate, width: _Columns.bitrateWidth),
           const SizedBox(width: 2 * 44),
@@ -504,6 +508,11 @@ class _TableRowState extends State<_TableRow> {
                             },
                       width: _Columns.addedWidth,
                     ),
+                  if (state._columns.showBpm)
+                    _FigureCell(switch (track.bpm) {
+                      final bpm? when bpm > 0 => '$bpm',
+                      _ => '—',
+                    }, width: _Columns.bpmWidth),
                   if (state._columns.showQuality)
                     SizedBox(
                       width: _Columns.qualityWidth,

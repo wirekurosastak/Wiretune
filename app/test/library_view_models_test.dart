@@ -158,6 +158,32 @@ void main() {
     expect(titles(), ['MP3', 'CD', 'Hi-res', 'Unknown']);
   });
 
+  test('the tracks sort by BPM, the slowest first, a track without one last either way', () async {
+    final lib = await library([
+      track('1', 'Album')
+        ..title = 'House'
+        ..bpm = 124,
+      track('2', 'Album')..title = 'Untagged',
+      track('3', 'Album')
+        ..title = 'Ballad'
+        ..bpm = 72,
+      track('4', 'Album')
+        ..title = 'Zero'
+        ..bpm = 0,
+      track('5', 'Album')
+        ..title = 'Drum and bass'
+        ..bpm = 174,
+    ]);
+    final tracks = TrackListViewModel.allTracks(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    List<String> titles() => [for (final t in tracks.tracks) t.title];
+
+    tracks.setSortField(TrackSortField.bpm);
+    expect(tracks.sortLabel(TrackSortField.bpm), 'BPM ↑');
+    expect(titles(), ['Ballad', 'House', 'Drum and bass', 'Untagged', 'Zero']);
+    tracks.setSortField(TrackSortField.bpm);
+    expect(titles(), ['Drum and bass', 'House', 'Ballad', 'Untagged', 'Zero']);
+  });
+
   test('the favourites can sort by date added with newest first', () async {
     final lib = await library(
       [
@@ -187,6 +213,7 @@ void main() {
       TrackSortField.length,
       TrackSortField.released,
       TrackSortField.added,
+      TrackSortField.bpm, // a track's, among the figures before the tags
       TrackSortField.quality,
       TrackSortField.bitrate, // a track's, beside its quality
     ]);

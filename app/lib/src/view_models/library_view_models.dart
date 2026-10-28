@@ -11,15 +11,19 @@ String formatTotal(Iterable<Track> tracks) =>
     Localizer.formatTotalDuration(tracks.fold(Duration.zero, (sum, t) => sum + t.duration));
 
 /// What a list of tracks sorts by, in the order the sort buttons and the table's columns show them: the title, the
-/// track's own fields, then the release year, the date added, the quality and the bitrate, as on the albums and the
-/// artists pages.
-enum TrackSortField { title, artist, album, length, released, added, quality, bitrate }
+/// track's own fields, then the release year, the date added, the BPM, the quality and the bitrate, as on the albums and
+/// the artists pages.
+enum TrackSortField { title, artist, album, length, released, added, bpm, quality, bitrate }
 
 /// Whether [field] starts with its highest values (the newest release or date, the best quality, the highest bitrate)
-/// rather than A to Z or the shortest first.
+/// rather than A to Z, the shortest or the slowest first.
 bool startsDescending(TrackSortField field) => switch (field) {
   TrackSortField.released || TrackSortField.added || TrackSortField.quality || TrackSortField.bitrate => true,
-  TrackSortField.title || TrackSortField.artist || TrackSortField.album || TrackSortField.length => false,
+  TrackSortField.title ||
+  TrackSortField.artist ||
+  TrackSortField.album ||
+  TrackSortField.length ||
+  TrackSortField.bpm => false,
 };
 
 /// The order of a list: the field it sorts by and the direction. Choosing the active field again flips the direction;
@@ -49,7 +53,7 @@ class SortOrder<F extends Enum> {
 }
 
 /// [tracks] ordered by [field]; tracks that tie keep their order in [tracks], and one without a release year, a date
-/// ([addedAt], the date added to the library unless given) or a known bitrate goes last in either direction.
+/// ([addedAt], the date added to the library unless given), a BPM or a known bitrate goes last in either direction.
 List<Track> sortTracks(
   List<Track> tracks,
   TrackSortField field, {
@@ -66,6 +70,7 @@ List<Track> sortTracks(
       TrackSortField.length => (a, b) => a.duration.compareTo(b.duration),
       TrackSortField.released => (a, b) => a.releaseYear!.compareTo(b.releaseYear!),
       TrackSortField.added => (a, b) => added(a)!.compareTo(added(b)!),
+      TrackSortField.bpm => (a, b) => a.bpm!.compareTo(b.bpm!),
       TrackSortField.quality => (a, b) => compareFormatQuality(a.format, b.format),
       TrackSortField.bitrate => (a, b) => a.format.bitrateKbps.compareTo(b.format.bitrateKbps),
     },
@@ -73,6 +78,7 @@ List<Track> sortTracks(
     missing: switch (field) {
       TrackSortField.released => (t) => t.releaseYear == null,
       TrackSortField.added => (t) => added(t) == null,
+      TrackSortField.bpm => (t) => (t.bpm ?? 0) <= 0,
       TrackSortField.bitrate => (t) => t.format.bitrateKbps <= 0,
       _ => null,
     },
@@ -117,6 +123,7 @@ mixin TrackSorting on ChangeNotifier {
     TrackSortField.length => Localizer.get('SortLength'),
     TrackSortField.released => Localizer.get('SortReleased'),
     TrackSortField.added => Localizer.get('SortAdded'),
+    TrackSortField.bpm => 'BPM',
     TrackSortField.quality => Localizer.get('SortQuality'),
     TrackSortField.bitrate => Localizer.get('SortBitrate'),
   });

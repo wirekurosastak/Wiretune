@@ -1573,6 +1573,39 @@ void main() {
     expect(tester.widget<AnimatedRotation>(arrow).turns, 0.5);
   });
 
+  testWidgets("a wide track table has a BPM column before the quality, which sorts the slowest first", (tester) async {
+    final vm = await pumpApp(tester, const Size(1700, 900), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'House')..bpm = 124,
+        TestSupport.makeTrack('2', 'Untagged'),
+        TestSupport.makeTrack('3', 'Ballad')..bpm = 72,
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final header = tester.getRect(find.text('BPM'));
+    expect(header.right, lessThan(tester.getRect(find.text(Localizer.get('ColQuality'))).left));
+    // Each row's BPM under the header, a dash for a track without one.
+    for (final bpm in ['124', '72']) {
+      expect(tester.getRect(find.text(bpm)).left, moreOrLessEquals(header.left, epsilon: 0.5));
+    }
+    final dashes = find.text('—');
+    final underHeader = [
+      for (var i = 0; i < dashes.evaluate().length; i++)
+        if ((tester.getRect(dashes.at(i)).left - header.left).abs() < 0.5) tester.getRect(dashes.at(i)).center.dy,
+    ];
+    // Rows are 52 px apart: the dash is in the untagged track's.
+    expect(underHeader, [moreOrLessEquals(tester.getRect(find.text('Untagged')).center.dy, epsilon: 20)]);
+
+    await tester.tap(find.text('BPM'));
+    await settle(tester);
+    expect(vm.tracks.sortField, TrackSortField.bpm);
+    double top(String title) => tester.getRect(find.text(title)).top;
+    expect(top('Ballad') < top('House') && top('House') < top('Untagged'), isTrue);
+  });
+
   testWidgets("a list's shuffle is the player's switch: Play starts at the first track while it is off", (
     tester,
   ) async {
