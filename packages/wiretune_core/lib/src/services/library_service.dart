@@ -758,7 +758,7 @@ class LibrarySnapshot {
   static int _number(Track t) => t.trackNumber ?? 0x7FFFFFFF;
 
   /// What a folder of one artist's songs from several albums is called when the folder is named after the artist.
-  static const String essentialsSuffix = 'Essentials';
+  static const String _essentialsSuffix = 'Essentials';
 
   /// Builds the library from [source]. [musicFolder] is the local music folder: its loose files are never one album.
   /// [artistPictures] are the artists' own pictures by artist ID, which an artist then shows instead of an album cover.
@@ -1007,7 +1007,7 @@ class LibrarySnapshot {
       if (named.isEmpty) continue;
       final matching = albums.values.where((a) => simple(a) == named).firstOrNull;
       if (matching == null && albumTracks.values.any(_isWholeAlbum)) continue;
-      final title = matching ?? (named == simple(artist) ? '$artist $essentialsSuffix' : folderName);
+      final title = matching ?? (named == simple(artist) ? '$artist $_essentialsSuffix' : folderName);
 
       final ordered = List<Track>.of(folderTracks);
       if (matching == null) sortStable(ordered, (a, b) => compareText(a.title, b.title));

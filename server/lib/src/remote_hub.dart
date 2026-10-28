@@ -14,7 +14,7 @@ import 'auth_service.dart';
 /// stored, and a player is forgotten the moment its connection closes.
 class RemoteHub {
   /// A player has this long to introduce itself.
-  static const Duration helloTimeout = Duration(seconds: 10);
+  static const Duration _helloTimeout = Duration(seconds: 10);
 
   /// More messages than this in [_rateWindow] close the connection: a player sends a few on each change, not a stream.
   static const int _rateLimit = 200;
@@ -35,7 +35,7 @@ class RemoteHub {
     socket.pingInterval = RemoteRules.pingInterval;
     final peer = _Peer(socket, principal.userId);
     _peers.add(peer);
-    peer.helloTimer = Timer(helloTimeout, () => _close(peer, 1008, 'No hello.'));
+    peer.helloTimer = Timer(_helloTimeout, () => _close(peer, 1008, 'No hello.'));
     final expires = principal.expiresAt;
     if (expires != null) {
       final left = expires.difference(DateTime.now().toUtc());

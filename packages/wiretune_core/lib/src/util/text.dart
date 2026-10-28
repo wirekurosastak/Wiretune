@@ -74,7 +74,7 @@ const Map<String, String> _foldMap = {
 /// symbols (in ICU's order, with typographic variants such as `…`, `–` or `’` treated as their ASCII counterparts),
 /// then digits, then letters, case-insensitively and without accents (`Ábel` sorts with `abel`, not after `zebra`;
 /// `…I Care` before `0`). Each character becomes one code unit of the key, so keys compare with [String.compareTo].
-String collationKey(String text) {
+String _collationKey(String text) {
   final cached = _keyCache[text];
   if (cached != null) return cached;
   if (_keyCache.length >= _keyCacheLimit) _keyCache.clear();
@@ -166,10 +166,10 @@ final RegExp _whitespace = RegExp(r'\s', unicode: true);
 final RegExp _letter = RegExp(r'\p{L}', unicode: true);
 final RegExp _digit = RegExp(r'\p{N}', unicode: true);
 
-/// Compares like a culture-aware, case-insensitive comparer: by [collationKey] first, then case-insensitively, then
+/// Compares like a culture-aware, case-insensitive comparer: by [_collationKey] first, then case-insensitively, then
 /// ordinally, so that the order is total and stable.
 int compareText(String a, String b) {
-  final primary = collationKey(a).compareTo(collationKey(b));
+  final primary = _collationKey(a).compareTo(_collationKey(b));
   if (primary != 0) return primary;
   final secondary = a.toLowerCase().compareTo(b.toLowerCase());
   return secondary != 0 ? secondary : a.compareTo(b);
@@ -188,7 +188,7 @@ final RegExp _letterOrDigit = RegExp(r'[\p{L}\p{Nd}]', unicode: true);
 final RegExp _control = RegExp(r'\p{Cc}', unicode: true);
 
 /// True for a letter or a decimal digit.
-bool isLetterOrDigit(String char) => _letterOrDigit.hasMatch(char);
+bool _isLetterOrDigit(String char) => _letterOrDigit.hasMatch(char);
 
 /// True when [text] contains a control character.
 bool hasControlCharacters(String text) => _control.hasMatch(text);
@@ -201,7 +201,7 @@ String lettersAndDigits(String text) {
   final buffer = StringBuffer();
   for (final rune in text.runes) {
     final char = String.fromCharCode(rune);
-    if (isLetterOrDigit(char)) buffer.write(char);
+    if (_isLetterOrDigit(char)) buffer.write(char);
   }
   return buffer.toString();
 }

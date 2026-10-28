@@ -48,9 +48,9 @@ String? describeServerError(String? code, [Object? detail]) {
 class ServerClient {
   ServerClient([http.Client? client]) : _ownsClient = client == null, _http = client ?? http.Client();
 
-  static const Duration probeTimeout = Duration(seconds: 15); // initial reachability check
-  static const Duration defaultTimeout = Duration(seconds: 30); // normal API calls
-  static const Duration libraryTimeout = Duration(minutes: 3); // large library fetch
+  static const Duration _probeTimeout = Duration(seconds: 15); // initial reachability check
+  static const Duration _defaultTimeout = Duration(seconds: 30); // normal API calls
+  static const Duration _libraryTimeout = Duration(minutes: 3); // large library fetch
 
   final http.Client _http;
   final bool _ownsClient;
@@ -65,21 +65,21 @@ class ServerClient {
 
   static String _base(String baseUrl) => baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
 
-  static String buildStreamUrl(String baseUrl, String trackId) =>
+  static String _buildStreamUrl(String baseUrl, String trackId) =>
       '${_base(baseUrl)}/api/stream/${Uri.encodeComponent(trackId)}';
 
   /// The cover of a whole album, so that the tracks of one album share one image (and one download). The [version] the
   /// server gives it is part of the address, so a changed cover is a new image, never a stale one from a cache.
-  static String buildAlbumCoverUrl(String baseUrl, String albumId, [String? version]) =>
+  static String _buildAlbumCoverUrl(String baseUrl, String albumId, [String? version]) =>
       '${_base(baseUrl)}/api/cover/album/${Uri.encodeComponent(albumId)}'
       '${version == null || version.isEmpty ? '' : '?v=${Uri.encodeQueryComponent(version)}'}';
 
   /// An artist's own picture on the server (`artist.jpg`); [version] changes with the file.
-  static String buildArtistPictureUrl(String baseUrl, String artistId, String version) =>
+  static String _buildArtistPictureUrl(String baseUrl, String artistId, String version) =>
       '${_base(baseUrl)}/api/cover/artist/${Uri.encodeComponent(artistId)}?v=${Uri.encodeQueryComponent(version)}';
 
   Future<bool> checkSetupRequired(String baseUrl) async {
-    final element = await _send('GET', baseUrl, '/api/auth/setup-required', authorize: false, timeout: probeTimeout);
+    final element = await _send('GET', baseUrl, '/api/auth/setup-required', authorize: false, timeout: _probeTimeout);
     if (element is! Map || element['setupRequired'] is! bool) throw ServerRequestException(_notWiretune(), 200);
     return element['setupRequired'] as bool;
   }
@@ -202,11 +202,11 @@ class ServerClient {
   /// and cover URLs are token-free; authorisation is added at playback time. The tracks of an album point to the
   /// album's cover, so each cover is downloaded and cached once, not once per track.
   Future<({List<Track> tracks, String? version})?> fetchTracks(String baseUrl, [String? version]) async {
-    final answer = await _exchange('GET', baseUrl, '/api/tracks', timeout: libraryTimeout, ifNoneMatch: version);
+    final answer = await _exchange('GET', baseUrl, '/api/tracks', timeout: _libraryTimeout, ifNoneMatch: version);
     if (answer.status == 304) return null;
     final list = answer.json;
     if (list is! List) throw ServerRequestException(_notWiretune(), 200);
-    return (tracks: [for (final item in list) serverTrack(baseUrl, item)], version: answer.etag);
+    return (tracks: [for (final item in list) _serverTrack(baseUrl, item)], version: answer.etag);
   }
 
   /// The addresses of the artists' own pictures on the server, by artist ID, with the list's version (its ETag); null
@@ -222,7 +222,7 @@ class ServerClient {
     return (
       pictures: {
         for (final MapEntry(:key, :value) in versions.entries)
-          if (key is String && value is String) key: buildArtistPictureUrl(baseUrl, key, value),
+          if (key is String && value is String) key: _buildArtistPictureUrl(baseUrl, key, value),
       },
       version: answer.etag,
     );
@@ -230,12 +230,12 @@ class ServerClient {
 
   /// A track of the server's listing ([Track.toJson]'s form, and its album cover's `coverVersion`), with its stream and
   /// cover URLs.
-  Track serverTrack(String baseUrl, Object? json) {
+  Track _serverTrack(String baseUrl, Object? json) {
     final track = _parse(Track.fromJson, json);
     final coverVersion = json is Map ? json['coverVersion'] : null;
-    track.streamUrl = buildStreamUrl(baseUrl, track.id);
+    track.streamUrl = _buildStreamUrl(baseUrl, track.id);
     track.coverArtPath = track.hasCoverArt
-        ? buildAlbumCoverUrl(baseUrl, track.albumId, coverVersion is String ? coverVersion : null)
+        ? _buildAlbumCoverUrl(baseUrl, track.albumId, coverVersion is String ? coverVersion : null)
         : null;
     return track;
   }
@@ -257,7 +257,7 @@ class ServerClient {
     String path, {
     Object? body,
     bool authorize = true,
-    Duration timeout = defaultTimeout,
+    Duration timeout = _defaultTimeout,
   }) async => (await _exchange(method, baseUrl, path, body: body, authorize: authorize, timeout: timeout)).json;
 
   /// [_send], with the answer's status and ETag; with [ifNoneMatch], "not modified" (304) is an answer too.
@@ -267,7 +267,7 @@ class ServerClient {
     String path, {
     Object? body,
     bool authorize = true,
-    Duration timeout = defaultTimeout,
+    Duration timeout = _defaultTimeout,
     String? ifNoneMatch,
   }) async {
     final Uri uri;

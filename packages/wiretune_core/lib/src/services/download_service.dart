@@ -106,12 +106,12 @@ class DownloadService {
   /// Where the copies go unless the app says otherwise: `Wiretune` in the user's music folder on a computer (and on
   /// Android, whose music folder the app sets in [AppPaths.platformMusicFolder]); `Downloads` in the app's own data on
   /// the other devices.
-  static String defaultDownloadDirectory() => AppPaths.platformMusicFolder == null && AppPaths.platformDataRoot != null
+  static String _defaultDownloadDirectory() => AppPaths.platformMusicFolder == null && AppPaths.platformDataRoot != null
       ? p.join(AppPaths.getDataDirectory(), 'Downloads')
       : p.join(AppPaths.defaultMusicFolder(), 'Wiretune');
 
   /// The folder of the copies, where people find them.
-  String get directory => _directory ??= defaultDownloadDirectory();
+  String get directory => _directory ??= _defaultDownloadDirectory();
 
   /// The app's own folder for downloads in progress and the covers.
   String get workDirectory => _workDirectory ??= p.join(AppPaths.getDataDirectory(), 'DownloadCache');
@@ -514,7 +514,7 @@ class DownloadService {
       final contentType = await _fetch(job, token);
       if (job.isCover) {
         await Directory(_coverDirectory).create(recursive: true);
-        final target = p.join(_coverDirectory, '${job.id}.${imageExtension(contentType)}');
+        final target = p.join(_coverDirectory, '${job.id}.${_imageExtension(contentType)}');
         await _move(job.partPath, target);
         _covers[job.id] = target;
         _bytesOnDisk += await File(target).length();
@@ -579,7 +579,7 @@ class DownloadService {
       await _deleteFile(job.partPath); // the partial file is longer than the server's: start again next time
       throw const HttpException('The partial download did not match the server file.');
     }
-    final resumed = status == 206 && rangeStart(response.headers['content-range']) == offset;
+    final resumed = status == 206 && _rangeStart(response.headers['content-range']) == offset;
     if (status != 200 && !resumed) throw HttpException('HTTP $status');
     if (!resumed) offset = 0;
 
@@ -606,7 +606,7 @@ class DownloadService {
     }
 
     final size = await part.length();
-    if ((length != null && size != offset + length) || (!job.isCover && !matchesServer(job.track, size))) {
+    if ((length != null && size != offset + length) || (!job.isCover && !_matchesServer(job.track, size))) {
       await _deleteFile(job.partPath);
       throw HttpException('The download ended early ($size bytes).');
     }
@@ -710,9 +710,9 @@ class DownloadService {
   }
 
   /// The server's listing gives the file's size; a copy of another size is not a whole copy of it.
-  static bool matchesServer(Track track, int size) => track.fileSizeBytes <= 0 || track.fileSizeBytes == size;
+  static bool _matchesServer(Track track, int size) => track.fileSizeBytes <= 0 || track.fileSizeBytes == size;
 
-  static int? rangeStart(String? contentRange) {
+  static int? _rangeStart(String? contentRange) {
     final match = RegExp(r'^bytes (\d+)-\d+/(\d+|\*)$').firstMatch(contentRange?.trim() ?? '');
     return match == null ? null : int.tryParse(match.group(1)!);
   }
@@ -813,7 +813,7 @@ class DownloadService {
     _ => 'audio',
   };
 
-  static String imageExtension(String? contentType) => switch (contentType?.split(';').first.trim().toLowerCase()) {
+  static String _imageExtension(String? contentType) => switch (contentType?.split(';').first.trim().toLowerCase()) {
     'image/png' => 'png',
     'image/jpeg' => 'jpg',
     _ => 'img',

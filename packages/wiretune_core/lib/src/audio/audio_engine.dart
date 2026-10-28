@@ -174,7 +174,7 @@ class WiretuneAudioEngine {
       if (request != _request || _disposed) return;
     }
 
-    final source = resolveSource(track);
+    final source = _resolveSource(track);
     if (source == null || source.isEmpty) {
       playbackFailed.emit(Localizer.format('EngineNoSource', [track.title]));
       return;
@@ -200,7 +200,7 @@ class WiretuneAudioEngine {
       await _refreshStreamToken();
       if (_disposed || !identical(track, _nextTrack)) return;
     }
-    final source = track == null ? null : resolveSource(track);
+    final source = track == null ? null : _resolveSource(track);
     if (source == _nextSource) return;
     _nextSource = source;
     await _driver.setNext(source);
@@ -371,7 +371,7 @@ class WiretuneAudioEngine {
 
     final track = _currentTrack;
     if (track != null && state == PlaybackState.playing) {
-      final source = resolveSource(track);
+      final source = _resolveSource(track);
       if (source != null) {
         await _driver.play(source, track.format, currentPosition);
         _nextSource = null;
@@ -392,7 +392,7 @@ class WiretuneAudioEngine {
 
   /// The file path of a local track; for a server track the downloaded copy, or else the stream URL with the stream
   /// token appended.
-  String? resolveSource(Track track) {
+  String? _resolveSource(Track track) {
     final url = track.streamUrl;
     if (url == null || url.isEmpty) return track.filePath.isEmpty ? null : track.filePath;
     final copy = _offlineCopy?.call(track);
