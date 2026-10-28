@@ -271,10 +271,10 @@ List<int> _littleEndian(int value) => [for (var shift = 0; shift < 32; shift += 
 
 List<int> _syncSafe(int value) => [for (var shift = 21; shift >= 0; shift -= 7) (value >> shift) & 0x7F];
 
-/// True when [tool] can be started (tests that need it are skipped without it).
-bool hasTool(String tool) {
+/// True when [tool] can be started, asked for its version with [versionFlag] (tests that need it are skipped without it).
+bool hasTool(String tool, [String versionFlag = '-version']) {
   try {
-    return Process.runSync(tool, ['-version']).exitCode == 0;
+    return Process.runSync(tool, [versionFlag]).exitCode == 0;
   } catch (_) {
     return false;
   }

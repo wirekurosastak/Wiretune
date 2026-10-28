@@ -16,13 +16,8 @@ import 'support.dart';
 void main() {
   setUpAll(useTempDataDirectory);
 
-  final hasBus = () {
-    try {
-      return Process.runSync('dbus-daemon', ['--version']).exitCode == 0;
-    } catch (_) {
-      return false;
-    }
-  }();
+  final hasBus = hasTool('dbus-daemon', '--version');
+  final noBus = hasBus ? false : 'dbus-daemon is not installed';
 
   late Process daemon;
   late String address;
@@ -71,7 +66,7 @@ void main() {
     expect(reservation, isNotNull);
     expect(server.requests, [AlsaCardReservation.priority]);
     expect(await connect().getNameOwner(name), bus.uniqueName);
-  }, skip: !hasBus);
+  }, skip: noBus);
 
   test('while Wiretune plays, nobody else takes the card', () async {
     await soundServer();
@@ -90,7 +85,7 @@ void main() {
 
     expect(asked.returnValues.single.asBoolean(), isFalse);
     expect(replaced, DBusRequestNameReply.exists);
-  }, skip: !hasBus);
+  }, skip: noBus);
 
   test('the card goes back when Wiretune\'s connection ends, released or not', () async {
     await soundServer();
@@ -107,7 +102,7 @@ void main() {
       await serverAgain.requestName(name, flags: {DBusRequestNameFlag.doNotQueue}),
       DBusRequestNameReply.primaryOwner,
     );
-  }, skip: !hasBus);
+  }, skip: noBus);
 
   test('a holder that does not let go leaves the card alone', () async {
     final bus = connect();
@@ -116,7 +111,7 @@ void main() {
 
     expect(await AlsaCardReservation.acquire(card, bus: connect()), isNull);
     expect(await connect().getNameOwner(name), bus.uniqueName);
-  }, skip: !hasBus);
+  }, skip: noBus);
 
   test('without a bus there is no reservation, and no error', () async {
     final unreachable = DBusClient(DBusAddress('unix:path=/nonexistent/wiretune-test-bus'));
