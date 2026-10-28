@@ -181,7 +181,14 @@ class ListMenu {
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
       final vm = context.vm;
-      vm.hide(HiddenKind.album, album.id, album.title);
+      final open = vm.albums.selectedAlbum?.id == album.id;
+      // Shown again, it is a new album of the library's: found by its ID.
+      vm.hide(
+        HiddenKind.album,
+        album.id,
+        album.title,
+        reopen: open ? () => vm.openAlbum(vm.library.getAlbum(album.id)) : null,
+      );
       if (vm.albums.selectedAlbum?.id == album.id) vm.albums.closeAlbumDetail();
     },
   );
@@ -211,7 +218,13 @@ class ListMenu {
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
       final vm = context.vm;
-      vm.hide(HiddenKind.artist, artist.id, artist.name);
+      final open = vm.artists.selectedArtist?.id == artist.id;
+      vm.hide(
+        HiddenKind.artist,
+        artist.id,
+        artist.name,
+        reopen: open ? () => vm.openArtist(vm.library.getArtist(artist.id)) : null,
+      );
       if (vm.artists.selectedArtist?.id == artist.id) vm.artists.closeArtistDetail();
     },
   );

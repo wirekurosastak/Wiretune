@@ -876,12 +876,18 @@ class MainViewModel extends ChangeNotifier {
   void unhide(HiddenItem item) => library.setHidden(item.kind, item.id, false);
 
   /// Hides the artist, album or track [id] and says so, naming it [name], with an Undo: a slip in a menu is one tap to
-  /// take back.
-  void hide(HiddenKind kind, String id, String name) {
+  /// take back. [reopen] opens again the page the hiding closed, so the Undo leads back to where the user was.
+  void hide(HiddenKind kind, String id, String name, {VoidCallback? reopen}) {
     library.setHidden(kind, id, true);
     // Offline, an account's music can't change, and the library says why itself.
     if (!library.hidden(kind).contains(id)) return;
-    showNotice(Localizer.format('HiddenNotice', [name]), undo: () => library.setHidden(kind, id, false));
+    showNotice(
+      Localizer.format('HiddenNotice', [name]),
+      undo: () {
+        library.setHidden(kind, id, false);
+        reopen?.call();
+      },
+    );
   }
 
   List<HiddenItem> _describeHidden() {

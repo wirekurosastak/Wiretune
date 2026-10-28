@@ -440,6 +440,22 @@ void main() {
     vm.dispose();
   });
 
+  testWidgets("an album hidden from its page comes back with its page on Undo", (tester) async {
+    final lib = await library(tester, [TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')]);
+    final vm = createMainViewModel(lib);
+    await showApp(tester, vm, wide);
+    vm.openAlbum(lib.albums.single);
+    await settle(tester);
+
+    await tester.tap(find.byTooltip(Localizer.get('HideAlbum')));
+    await settle(tester);
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+    await tester.tap(find.text(Localizer.get('Undo')));
+    await settle(tester);
+    expect(vm.albums.selectedAlbum?.title, 'Kind of Blue');
+    vm.dispose();
+  });
+
   testWidgets('a player that cannot start says why, and shows nothing else', (tester) async {
     final broken = LibraryService(_NewerDatabase(), MetadataScanner(), coverCacheDirectory: '/nonexistent');
     final vm = createMainViewModel(broken);
