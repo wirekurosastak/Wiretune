@@ -3226,24 +3226,24 @@ void main() {
     expect([for (final t in vm.player.queueTracks) t.title], ['Blue in Green', 'So What']);
   });
 
-  testWidgets('the sign-in page covers the app while it is active', (tester) async {
-    final vm = await pumpApp(tester, const Size(1400, 900));
-    expect(find.text(Localizer.get('Connect')), findsNothing);
-    vm.showLoginScreen();
-    await settle(tester);
-    expect(find.text(Localizer.get('Connect')), findsWidgets);
-  });
-
-  testWidgets('the page opened while signed in, without the address field, closes cleanly', (tester) async {
-    final vm = await pumpApp(tester, const Size(1400, 900), () async {
+  testWidgets('the sign-in page covers the app while it is active, and closes cleanly signed in or out', (
+    tester,
+  ) async {
+    Future<MainViewModel> signedIn() async {
       final library = createLibrary();
       return createMainViewModel(library, null, await signedInSession(library));
-    });
-    vm.showLoginScreen();
-    await settle(tester);
-    expect(find.text(Localizer.get('Connect')), findsNothing);
-    vm.isLoginViewActive = false;
-    await settle(tester);
-    expect(tester.takeException(), isNull);
+    }
+
+    for (final (account, build) in [('signed out', null), ('signed in', signedIn)]) {
+      final vm = await pumpApp(tester, const Size(1400, 900), build);
+      expect(find.text(Localizer.get('Connect')), findsNothing, reason: account);
+      vm.showLoginScreen();
+      await settle(tester);
+      // Signed in, the page has no server to connect to.
+      expect(find.text(Localizer.get('Connect')), build == null ? findsWidgets : findsNothing, reason: account);
+      vm.isLoginViewActive = false;
+      await settle(tester);
+      expect(tester.takeException(), isNull, reason: account);
+    }
   });
 }
