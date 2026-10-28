@@ -709,7 +709,6 @@ class MainViewModel extends ChangeNotifier {
 
   bool _isLight = false;
   bool _showPerformanceStats = false;
-  bool _useOnlineLyrics = true;
 
   bool get isLight => _isLight;
 
@@ -728,9 +727,8 @@ class MainViewModel extends ChangeNotifier {
   }
 
   /// Whether a track without lyrics of its own is looked up online (LRCLIB); on by default.
-  bool get useOnlineLyrics => _useOnlineLyrics;
+  bool get useOnlineLyrics => lyrics.isOnlineEnabled;
   set useOnlineLyrics(bool value) {
-    _useOnlineLyrics = value;
     lyrics.isOnlineEnabled = value;
     _remember(_onlineLyricsPreference, value ? '1' : '0');
     notifyListeners();
@@ -837,8 +835,7 @@ class MainViewModel extends ChangeNotifier {
     if (theme != null) _isLight = theme == 'light';
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
-    _useOnlineLyrics = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
-    lyrics.isOnlineEnabled = _useOnlineLyrics;
+    lyrics.isOnlineEnabled = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
     if (normalization != null) audioEngine.setNormalization(normalization);
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
