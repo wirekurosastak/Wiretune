@@ -550,7 +550,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
   return [
     _IconCell(
       width: 44,
-      tooltip: context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+      tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
       icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted, size: 18),
       onPressed: () => context.vm.library.toggleFavorite(track.id),
     ),
@@ -699,18 +699,18 @@ class TrackMenu extends StatelessWidget {
         item(
           TrackAction.favorite,
           favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+          context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
           color: favorite ? colors.danger : null,
         ),
       item(TrackAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
       item(TrackAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
-      item(TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
+      item(TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('AddToPlaylist')),
       if (place != null) ...[
-        item(TrackAction.moveUp, Icons.arrow_upward_rounded, context.tr('TipMoveUp'), enabled: place > 1),
+        item(TrackAction.moveUp, Icons.arrow_upward_rounded, context.tr('MoveUp'), enabled: place > 1),
         item(
           TrackAction.moveDown,
           Icons.arrow_downward_rounded,
-          context.tr('TipMoveDown'),
+          context.tr('MoveDown'),
           enabled: place < playlists.selectedPlaylistTracks.length,
         ),
       ],
@@ -730,7 +730,7 @@ class TrackMenu extends StatelessWidget {
         item(
           TrackAction.removeFromPlaylist,
           Icons.playlist_remove_rounded,
-          context.tr('TipRemoveFromPlaylist'),
+          context.tr('RemoveFromPlaylist'),
           color: colors.danger,
         ),
       item(

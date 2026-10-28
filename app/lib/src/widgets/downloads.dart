@@ -51,8 +51,8 @@ class DownloadListButton extends StatelessWidget {
         final complete = downloaded && done == total;
         return HeaderIconButton(
           tooltip: !downloaded
-              ? context.tr('TipDownload')
-              : (complete ? context.tr('TipRemoveDownload') : context.trf('DownloadsListProgress', [done, total])),
+              ? context.tr('Download')
+              : (complete ? context.tr('RemoveDownload') : context.trf('DownloadsListProgress', [done, total])),
           icon: complete
               ? Icons.download_done_rounded
               : (downloaded ? Icons.downloading_rounded : Icons.download_rounded),
@@ -78,5 +78,5 @@ IconData? downloadIcon(DownloadState state) => switch (state) {
 String downloadTip(BuildContext context, Track track) {
   final downloads = context.vm.downloads;
   if (downloads.isDownloadedWithList(track)) return context.tr('TipDownloaded');
-  return context.tr(downloads.isTrackDownloaded(track) ? 'TipRemoveDownload' : 'TipDownload');
+  return context.tr(downloads.isTrackDownloaded(track) ? 'RemoveDownload' : 'Download');
 }

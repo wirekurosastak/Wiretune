@@ -102,7 +102,7 @@ Future<void> showAddToPlaylistDialog(
   final createNew = await showDialog<bool>(
     context: context,
     builder: (dialog) => AppDialog(
-      title: dialog.tr('TipAddToPlaylist'),
+      title: dialog.tr('AddToPlaylist'),
       subtitle: label,
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 320),

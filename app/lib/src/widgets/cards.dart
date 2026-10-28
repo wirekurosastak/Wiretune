@@ -309,12 +309,12 @@ class ListMenu {
         item(_ListAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
       ],
       // The page's header has it as a button of its own.
-      if (!header) item(_ListAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
+      if (!header) item(_ListAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('AddToPlaylist')),
       if (!header && downloadable.any(vm.downloads.canDownload))
         item(
           _ListAction.download,
           downloaded ? Icons.download_done_rounded : Icons.download_rounded,
-          context.tr(downloaded ? 'TipRemoveDownload' : 'TipDownload'),
+          context.tr(downloaded ? 'RemoveDownload' : 'Download'),
           color: downloaded ? colors.danger : null,
         ),
       // The page's header has the artist's name as a link.
@@ -512,7 +512,7 @@ class ListMenu {
   /// The header's button that puts the tracks into a playlist (taken out of its menu), beside the download.
   Widget addToPlaylistButton() => Builder(
     builder: (context) => HeaderIconButton(
-      tooltip: context.tr('TipAddToPlaylist'),
+      tooltip: context.tr('AddToPlaylist'),
       icon: Icons.playlist_add_rounded,
       onPressed: () => showAddToPlaylistDialog(context, tracks, label: label, suggestedName: name),
     ),

@@ -244,13 +244,13 @@ class _QueueRowState extends State<_QueueRow> {
                     if (widget.showMoveButtons) ...[
                       small(
                         Icons.keyboard_arrow_up_rounded,
-                        'TipMoveUp',
+                        'MoveUp',
                         widget.index > 0 ? () => player.moveQueueTrackUp(item) : null,
                       ),
                       const SizedBox(width: 4),
                       small(
                         Icons.keyboard_arrow_down_rounded,
-                        'TipMoveDown',
+                        'MoveDown',
                         widget.index < widget.itemCount - 1 ? () => player.moveQueueTrackDown(item) : null,
                       ),
                       const SizedBox(width: 8),

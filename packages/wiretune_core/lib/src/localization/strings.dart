@@ -201,9 +201,9 @@ const Map<String, (String, String, String)> allStrings = {
     'Use the heart icon next to a track to mark favorites.',
     'Mit dem Herz-Symbol neben einem Titel markierst du Favoriten.',
   ),
-  'TipAddToPlaylist': ('Hozzáadás listához', 'Add to playlist', 'Zur Playlist hinzufügen'),
-  'TipFavorite': ('Hozzáadás a kedvencekhez', 'Add to favorites', 'Zu Favoriten hinzufügen'),
-  'TipRemoveFromFavorites': ('Eltávolítás a kedvencek közül', 'Remove from favorites', 'Aus Favoriten entfernen'),
+  'AddToPlaylist': ('Hozzáadás listához', 'Add to playlist', 'Zur Playlist hinzufügen'),
+  'Favorite': ('Hozzáadás a kedvencekhez', 'Add to favorites', 'Zu Favoriten hinzufügen'),
+  'RemoveFromFavorites': ('Eltávolítás a kedvencek közül', 'Remove from favorites', 'Aus Favoriten entfernen'),
 
   'Rename': ('Átnevezés', 'Rename', 'Umbenennen'),
 
@@ -237,7 +237,7 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'PlaylistDeleteAction': ('Lista törlése', 'Delete playlist', 'Playlist löschen'),
   'PlaylistDeleteConfirm': ('Törlöd a(z) „{0}” listát?', 'Delete the playlist “{0}”?', 'Die Playlist „{0}“ löschen?'),
-  'TipRemoveFromPlaylist': ('Eltávolítás a listából', 'Remove from playlist', 'Aus Playlist entfernen'),
+  'RemoveFromPlaylist': ('Eltávolítás a listából', 'Remove from playlist', 'Aus Playlist entfernen'),
 
   // ── Search ──────────────────────────────────────────────────────────────────────────────────────────
   'NoResultsTitle': ('Nincs találat', 'No results found', 'Keine Treffer'),
@@ -272,8 +272,8 @@ const Map<String, (String, String, String)> allStrings = {
     'Starte ein Album oder einen Titel.',
   ),
   'TipDragToReorder': ('Húzd az áthelyezéshez', 'Drag to reorder', 'Zum Umsortieren ziehen'),
-  'TipMoveUp': ('Mozgatás feljebb', 'Move up', 'Nach oben'),
-  'TipMoveDown': ('Mozgatás lejjebb', 'Move down', 'Nach unten'),
+  'MoveUp': ('Mozgatás feljebb', 'Move up', 'Nach oben'),
+  'MoveDown': ('Mozgatás lejjebb', 'Move down', 'Nach unten'),
   'TipRemoveFromQueue': ('Eltávolítás a sorból', 'Remove from queue', 'Aus Warteschlange entfernen'),
   'PlayNext': ('Lejátszás következőként', 'Play next', 'Als Nächstes abspielen'),
   'AddToQueue': ('Hozzáadás a sorhoz', 'Add to queue', 'Zur Warteschlange hinzufügen'),
@@ -844,8 +844,8 @@ const Map<String, (String, String, String)> allStrings = {
     '{0} of {1} downloaded – click to remove',
     '{0} von {1} heruntergeladen – zum Entfernen klicken',
   ),
-  'TipDownload': ('Letöltés erre az eszközre', 'Download to this device', 'Auf dieses Gerät herunterladen'),
-  'TipRemoveDownload': ('Letöltés eltávolítása', 'Remove download', 'Download entfernen'),
+  'Download': ('Letöltés erre az eszközre', 'Download to this device', 'Auf dieses Gerät herunterladen'),
+  'RemoveDownload': ('Letöltés eltávolítása', 'Remove download', 'Download entfernen'),
   'DownloadRemoveConfirm': (
     'Törlöd a(z) „{0}” letöltését?',
     'Delete the download of “{0}”?',

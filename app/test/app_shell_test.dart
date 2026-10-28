@@ -117,7 +117,7 @@ void main() {
     for (final (size, shown) in const [(Size(1400, 900), true), (Size(400, 860), false)]) {
       tester.view.physicalSize = size;
       await settle(tester);
-      for (final key in ['PlayNext', 'AddToQueue', 'TipAddToPlaylist']) {
+      for (final key in ['PlayNext', 'AddToQueue', 'AddToPlaylist']) {
         final button = find.descendant(of: find.byType(PageHeader), matching: find.byTooltip(Localizer.get(key)));
         expect(button, shown ? findsOneWidget : findsNothing, reason: '$size $key');
       }
@@ -482,8 +482,8 @@ void main() {
 
     await tester.tap(inList(Icons.more_vert_rounded));
     await settle(tester);
-    expect(find.text(Localizer.get('TipAddToPlaylist')), findsOneWidget);
-    expect(find.text(Localizer.get('TipRemoveFromFavorites')), findsNothing, reason: 'the heart beside it has it');
+    expect(find.text(Localizer.get('AddToPlaylist')), findsOneWidget);
+    expect(find.text(Localizer.get('RemoveFromFavorites')), findsNothing, reason: 'the heart beside it has it');
     await tester.tapAt(const Offset(5, 5));
     await settle(tester);
 
@@ -492,9 +492,9 @@ void main() {
     // Removing is red, as in every menu; hiding isn't.
     final danger = tester.element(find.text(favorite.title).first).colors.danger;
     Color? colorOf(String key) => tester.widget<Text>(find.text(Localizer.get(key)).last).style?.color;
-    expect(colorOf('TipRemoveFromFavorites'), danger);
+    expect(colorOf('RemoveFromFavorites'), danger);
     expect(colorOf('HideTrack'), isNot(danger));
-    await tester.tap(find.text(Localizer.get('TipRemoveFromFavorites')).last);
+    await tester.tap(find.text(Localizer.get('RemoveFromFavorites')).last);
     await settle(tester);
     expect(vm.library.isFavorite(favorite.id), isFalse);
   });
@@ -509,7 +509,7 @@ void main() {
     expect(find.descendant(of: row, matching: find.byType(HeartIcon)), findsNothing);
     await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
     await settle(tester);
-    await tester.tap(find.text(Localizer.get('TipFavorite')));
+    await tester.tap(find.text(Localizer.get('Favorite')));
     await settle(tester);
     expect(vm.library.isFavorite('1'), isTrue);
   });
@@ -678,7 +678,7 @@ void main() {
     await settle(tester);
     await tester.tap(find.descendant(of: find.byType(PageHeader), matching: find.byIcon(Icons.more_vert_rounded)));
     await settle(tester);
-    for (final key in ['PlayNext', 'AddToQueue', 'TipAddToPlaylist']) {
+    for (final key in ['PlayNext', 'AddToQueue', 'AddToPlaylist']) {
       expect(find.text(Localizer.get(key)), findsOneWidget, reason: key);
     }
     await tester.tap(find.text(Localizer.get('AddToQueue')));
@@ -825,14 +825,14 @@ void main() {
 
     vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
     await settle(tester);
-    expect(inHeader(Localizer.get('TipDownload')), findsNothing);
+    expect(inHeader(Localizer.get('Download')), findsNothing);
     expect(tester.widget<PlayShuffleButtons>(find.byType(PlayShuffleButtons)).download, isNull, reason: 'no button');
-    expect(inRows(Localizer.get('TipDownload')), findsNothing);
+    expect(inRows(Localizer.get('Download')), findsNothing);
 
     final album = vm.library.albums.firstWhere((a) => a.title == 'Giant Steps');
     vm.openAlbum(album);
     await settle(tester);
-    await tester.tap(inHeader(Localizer.get('TipDownload')));
+    await tester.tap(inHeader(Localizer.get('Download')));
     await settle(tester);
     expect(downloads.isAlbumDownloaded(album), isTrue);
     // On its way: the arrow in progress inside a ring that fills as the tracks arrive (none yet, out of two).
@@ -877,7 +877,7 @@ void main() {
 
     // One track, from its row's menu.
     await openRowMenu('Giant Steps');
-    await tester.tap(find.text(Localizer.get('TipDownload')));
+    await tester.tap(find.text(Localizer.get('Download')));
     await settle(tester);
     expect(downloads.isTrackDownloaded(vm.library.getTrack('s1')!), isTrue);
 
@@ -886,7 +886,7 @@ void main() {
     vm.navigateTo(AppSection.favorites);
     await settle(tester);
     await tester.tap(
-      find.descendant(of: find.byType(PlayShuffleButtons), matching: find.byTooltip(Localizer.get('TipDownload'))),
+      find.descendant(of: find.byType(PlayShuffleButtons), matching: find.byTooltip(Localizer.get('Download'))),
     );
     await settle(tester);
     expect(downloads.areFavoritesDownloaded, isTrue);
@@ -895,7 +895,7 @@ void main() {
     final coltrane = vm.library.getArtistByName('John Coltrane')!;
     vm.openArtist(coltrane);
     await settle(tester);
-    await tester.tap(inHeader(Localizer.get('TipDownload')));
+    await tester.tap(inHeader(Localizer.get('Download')));
     await settle(tester);
     expect(downloads.isArtistDownloaded(coltrane), isTrue);
   });
@@ -914,7 +914,7 @@ void main() {
     await tester.tap(find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipMore'))));
     await settle(tester);
     expect(find.text(Localizer.get('GoToArtist')), findsOneWidget);
-    await tester.tap(find.text(Localizer.get('TipAddToPlaylist')));
+    await tester.tap(find.text(Localizer.get('AddToPlaylist')));
     await settle(tester);
     expect(find.text(Localizer.get('PlaylistNew')), findsOneWidget); // the dialog's way to a new playlist
     // The dialog lies over the player: its button takes the tap, and the player stays open.
@@ -1058,7 +1058,7 @@ void main() {
     await tester.tap(menuOf('So What'));
     await settle(tester);
     expect(find.text(Localizer.get('GoToAlbum')), findsOneWidget);
-    expect(find.text(Localizer.get('TipDownload')), findsNothing);
+    expect(find.text(Localizer.get('Download')), findsNothing);
     await tester.tapAt(const Offset(10, 10)); // closes the menu
     await settle(tester);
 
@@ -1068,8 +1068,8 @@ void main() {
     );
     await tester.tap(menuOf('Giant Steps'));
     await settle(tester);
-    expect(find.text(Localizer.get('TipAddToPlaylist')), findsOneWidget);
-    await tester.tap(find.text(Localizer.get('TipDownload')));
+    expect(find.text(Localizer.get('AddToPlaylist')), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('Download')));
     await settle(tester);
     expect(vm.downloads.isTrackDownloaded(vm.library.getTrack('s1')!), isTrue);
     // Waiting for its turn (the downloads have not started in this test): the arrow in progress beside the artist.
@@ -1388,7 +1388,7 @@ void main() {
     final row = find.ancestor(of: find.text('So What'), matching: find.byType(InkWell)).first;
     await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
     await settle(tester);
-    await tester.tap(find.text(Localizer.get('TipMoveUp')));
+    await tester.tap(find.text(Localizer.get('MoveUp')));
     await settle(tester);
     expect(order(), ['1', '3', '2']);
 
@@ -1414,10 +1414,10 @@ void main() {
 
     double top(String key) => tester.getTopLeft(find.text(Localizer.get(key)).last).dy;
     final line = tester.getTopLeft(find.byType(PopupMenuDivider)).dy;
-    expect(top('TipAddToPlaylist'), lessThan(top('GoToArtist')));
+    expect(top('AddToPlaylist'), lessThan(top('GoToArtist')));
     expect(top('GoToArtist'), lessThan(line));
-    expect(line, lessThan(top('TipRemoveFromPlaylist')));
-    expect(top('TipRemoveFromPlaylist'), lessThan(top('HideTrack')));
+    expect(line, lessThan(top('RemoveFromPlaylist')));
+    expect(top('RemoveFromPlaylist'), lessThan(top('HideTrack')));
   });
 
   testWidgets("a phone's play and shuffle are round buttons without words, on one line with the sort, Play last", (
@@ -2200,8 +2200,8 @@ void main() {
         Localizer.get('Shuffle'),
         Localizer.get('PlayNext'),
         Localizer.get('AddToQueue'),
-        Localizer.get('TipAddToPlaylist'),
-        Localizer.get('TipDownload'),
+        Localizer.get('AddToPlaylist'),
+        Localizer.get('Download'),
         Localizer.get('GoToArtist'),
         Localizer.get('HideAlbum'),
       ];
@@ -2257,8 +2257,8 @@ void main() {
           },
         );
         final buttons = size.width < 720
-            ? ['TipDownload', 'TipAddToPlaylist', 'AddToQueue', 'PlayNext', 'Shuffle', 'Play']
-            : ['Play', 'Shuffle', 'PlayNext', 'AddToQueue', 'TipAddToPlaylist', 'TipDownload', 'HideAlbum'];
+            ? ['Download', 'AddToPlaylist', 'AddToQueue', 'PlayNext', 'Shuffle', 'Play']
+            : ['Play', 'Shuffle', 'PlayNext', 'AddToQueue', 'AddToPlaylist', 'Download', 'HideAlbum'];
         final lefts = [for (final key in buttons) tester.getCenter(button(key).first).dx];
         expect(lefts, [...lefts]..sort(), reason: '$size: left to right, $buttons');
       }
@@ -2395,7 +2395,7 @@ void main() {
         await settle(tester);
         final add = find.descendant(
           of: find.byType(DetailHeader),
-          matching: find.byTooltip(Localizer.get('TipAddToPlaylist')),
+          matching: find.byTooltip(Localizer.get('AddToPlaylist')),
         );
         expect(add, findsOneWidget, reason: '$size');
         for (final key in ['PlayNext', 'AddToQueue']) {
@@ -2407,7 +2407,7 @@ void main() {
           await tester.tap(find.byTooltip(Localizer.get('TipMore')).last);
           await settle(tester);
           expect(find.text(Localizer.get('HideAlbum')), findsOneWidget, reason: '$size');
-          for (final key in ['TipAddToPlaylist', 'PlayNext', 'AddToQueue']) {
+          for (final key in ['AddToPlaylist', 'PlayNext', 'AddToQueue']) {
             expect(find.text(Localizer.get(key)), findsNothing, reason: '$size: $key');
           }
           await tester.tapAt(const Offset(5, 5));
@@ -2580,7 +2580,7 @@ void main() {
     final album = vm.library.albums.first;
     await tester.longPress(find.text(album.title).first);
     await settle(tester);
-    for (final key in ['Play', 'Shuffle', 'PlayNext', 'AddToQueue', 'TipAddToPlaylist', 'GoToArtist']) {
+    for (final key in ['Play', 'Shuffle', 'PlayNext', 'AddToQueue', 'AddToPlaylist', 'GoToArtist']) {
       expect(find.text(Localizer.get(key)), findsOneWidget, reason: key);
     }
     await tester.tap(find.text(Localizer.get('PlayNext')));

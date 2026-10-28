@@ -562,7 +562,7 @@ class FavoriteCurrentButton extends StatelessWidget {
         final favorite = track != null && vm.library.isFavorite(track.id);
         return IconButton(
           visualDensity: visualDensity,
-          tooltip: context.tr(favorite ? 'TipRemoveFromFavorites' : 'TipFavorite'),
+          tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
           iconSize: size,
           onPressed: player.currentTrack == null ? null : player.toggleFavoriteCurrent,
           icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted),
