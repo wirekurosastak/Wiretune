@@ -567,6 +567,42 @@ void main() {
     expect((service.isFavorite(id), service.playCount(id), track.addedAt), (true, 1, added));
   });
 
+  test("a rescan keeps the server's playlists on the files their tracks were matched to", () async {
+    final folder = Directory.systemTemp.createTempSync('wiretune_aliases_');
+    addTearDown(() => folder.deleteSync(recursive: true));
+    writeWav('${folder.path}/Song.wav', 44100, artist: 'Artist');
+    final service = _service(testRepository());
+    service.initialize();
+    expect(await service.scanFolder(folder.path), isTrue);
+    final file = service.tracks.single.id;
+    final now = DateTime.utc(2026);
+    final song = TestSupport.makeServerTrack('s1', 'Song', artist: 'Artist', minutes: 1 / 60);
+    List<String> mix() => [for (final t in service.getPlaylistTracks(service.getPlaylist('p1')!)) t.id];
+
+    // The server's copy of the song is matched to the file; another server track is not.
+    service.mergeServerTracks(
+      [song, TestSupport.makeServerTrack('s2', 'Other', artist: 'Artist')],
+      UserDataSnapshot(const [], const [], [
+        PlaylistData('p1', 'Mix', null, ['s1', 's2'], now, now),
+      ]),
+    );
+    expect(mix(), [file, 's2']);
+    writeWav('${folder.path}/New.wav', 44100, artist: 'Artist'); // a change, so the scan merges again
+    expect(await service.scanFolder(folder.path), isTrue);
+    expect(mix(), [file, 's2']);
+
+    // Every server track matched to a file.
+    service.mergeServerTracks(
+      [song],
+      UserDataSnapshot(const [], const [], [
+        PlaylistData('p1', 'Mix', null, ['s1'], now, now),
+      ]),
+    );
+    File('${folder.path}/New.wav').deleteSync();
+    expect(await service.scanFolder(folder.path), isTrue);
+    expect(mix(), [file]);
+  });
+
   group('hiding', () {
     // Song 1 and Song 2 are Artist A's, on Album 1; Song 3 is Artist B's, on Album 2. Song 1 is a favourite.
     Track song(int n, String artist, String album) => Track(

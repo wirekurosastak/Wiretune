@@ -303,17 +303,17 @@ class LibraryService {
         _repository.setSetting('music_folder', root);
 
         // From here on nothing waits, so a server refresh can't interleave with this one.
-        final existingServerTracks = _rawTracks.where((t) => !t.isLocal).toList();
-        List<Track> toSave;
-        if (existingServerTracks.isNotEmpty) {
-          final aliased = <String, String>{};
-          toSave = TrackDeduplication.mergeTracks(scanned, existingServerTracks, aliased);
-          _serverAliases = aliased;
-          _foldServerData(aliased);
-          _updatePlaylistsWithAliases(aliased);
-        } else {
-          toSave = scanned;
+        final aliased = <String, String>{};
+        final toSave = TrackDeduplication.mergeTracks(scanned, _rawTracks.where((t) => !t.isLocal), aliased);
+        _foldServerData(aliased);
+        _updatePlaylistsWithAliases(aliased);
+        // A server track matched to a file earlier is no longer among the tracks to merge: its match stays as long as
+        // the file does, or the server's playlists would lose it until the next download from the server.
+        final files = {for (final t in scanned) t.id};
+        for (final MapEntry(key: serverId, value: localId) in _serverAliases.entries) {
+          if (files.contains(localId)) aliased.putIfAbsent(serverId, () => localId);
         }
+        _serverAliases = aliased;
         _findArtistPictures(toSave);
         _replaceTracksCore(toSave);
         _pruneCoverCache();
