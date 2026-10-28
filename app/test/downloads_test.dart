@@ -54,7 +54,7 @@ void main() {
 
     final track = library.getTrack('s1')!;
     vm.downloads.toggleTrack(track);
-    expect(await waitUntil(() => downloads.doneCount == 1), isTrue);
+    await until(() => downloads.doneCount == 1);
     final copy = downloads.localCopy(track)!;
     expect(File(copy).readAsBytesSync(), audio);
 
@@ -70,7 +70,7 @@ void main() {
 
     await vm.logout();
     expect(vm.downloads.isTrackDownloaded(track), isFalse);
-    expect(await waitUntil(() => !File(copy).existsSync()), isTrue);
+    await until(() => !File(copy).existsSync());
     expect(downloads.bytesOnDisk, 0);
   });
 }

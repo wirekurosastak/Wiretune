@@ -34,7 +34,7 @@ void main() {
     player = vm.player;
     tracks = library.tracks; // the library's own instances
     remote.configure(id: 'phone-id', name: 'Phone', kind: DeviceKind.phone, enabled: true);
-    expect(await waitUntil(() => remote.isConnected), isTrue);
+    await until(() => remote.isConnected);
     hub.devices([('desk', 'Desk', DeviceKind.desktop)]);
     await pumpEventQueue();
   });
@@ -289,7 +289,7 @@ void main() {
     expect(hub.commandsTo('desk'), isEmpty, reason: 'the music there is left as it is');
 
     vm.isRemoteEnabled = true;
-    expect(await waitUntil(() => vm.remote.isConnected), isTrue);
+    await until(() => vm.remote.isConnected);
     hub.devices([('desk', 'Desk', DeviceKind.desktop)]);
     await pumpEventQueue();
     player.selectDevice('desk');

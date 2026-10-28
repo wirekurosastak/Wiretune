@@ -36,14 +36,6 @@ LibraryService createLibrary([
   return LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
 }
 
-/// Waits (briefly) until [condition] holds; true when it does.
-Future<bool> waitUntil(bool Function() condition) async {
-  for (var i = 0; i < 300 && !condition(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  return condition();
-}
-
 /// Writes a small cover (a 4 x 4 PNG in four colours) into [directory] and returns its path.
 String writeCover(Directory directory) {
   final file = File(p.join(directory.path, 'cover.png'));

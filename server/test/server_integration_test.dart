@@ -300,9 +300,7 @@ void main() {
     Future<String?> coverVersion() async {
       final scanned = server.server.scanner.lastScanAt;
       await client.post('/api/library/scan');
-      for (var i = 0; i < 100 && server.server.scanner.lastScanAt == scanned; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      }
+      await until(() => server.server.scanner.lastScanAt != scanned);
       final tracks = (json(await client.get('/api/tracks')) as List).cast<Map<String, dynamic>>();
       return tracks.firstWhere((t) => t['title'] == '01 First')['coverVersion'] as String?;
     }

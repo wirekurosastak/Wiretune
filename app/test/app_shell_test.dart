@@ -458,7 +458,7 @@ void main() {
     vm.openNowPlaying();
     vm.nowPlayingTab = NowPlayingTab.lyrics;
     await tester.runAsync(() async {
-      await waitUntil(() => vm.lyrics.isSynced);
+      await until(() => vm.lyrics.isSynced);
       await driver.seek(const Duration(seconds: 1));
     });
     await settle(tester);
@@ -1077,7 +1077,7 @@ void main() {
       final remote = RemoteClient(session, connector: hub.connect);
       final withRemote = createMainViewModel(vm.library, null, session, remote);
       remote.configure(id: 'phone', name: '', kind: DeviceKind.phone, enabled: true);
-      await waitUntil(() => remote.isConnected);
+      await until(() => remote.isConnected);
       return withRemote;
     }))!;
     await tester.pumpWidget(WiretuneApp(vm: vm));

@@ -29,6 +29,17 @@ Directory useTempDataDirectory() {
   return dir;
 }
 
+/// Waits until [condition] holds, looking every 10 ms; throws [StateError] ([reason]) when it still doesn't after
+/// [within], so a test that waits for work in the background fails when the work never comes. (A [StateError], as this
+/// file can't use package:test's expect.)
+Future<void> until(bool Function() condition, {Duration within = const Duration(seconds: 5), String? reason}) async {
+  final deadline = DateTime.now().add(within);
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) throw StateError(reason ?? 'Timed out waiting for a condition.');
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+}
+
 /// A repository on a database file of its own in the temporary folder, as the player keeps one.
 LibraryRepository testRepository() {
   final folder = Directory.systemTemp.createTempSync('wiretune_db_');

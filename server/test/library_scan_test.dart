@@ -67,16 +67,12 @@ void main() {
     addTearDown(scans.stop);
 
     scans.start();
-    for (var i = 0; i < 300 && scanned == 0; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
+    await until(() => scanned > 0);
     expect(library.tracks, hasLength(1));
 
     writeWav(p.join(music, 'Album', '02 Two.wav'), 44100);
     writeWav(p.join(music, 'Album', '03 Three.wav'), 44100);
-    for (var i = 0; i < 300 && library.tracks.length < 3; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
+    await until(() => library.tracks.length == 3);
     expect(library.tracks, hasLength(3));
   }, testOn: 'linux || mac-os || windows');
 }

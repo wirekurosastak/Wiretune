@@ -35,14 +35,6 @@ class Device {
   }
 }
 
-/// Waits (up to three seconds) until [condition] holds.
-Future<void> waitFor(bool Function() condition) async {
-  for (var i = 0; i < 300 && !condition(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  expect(condition(), isTrue);
-}
-
 /// The player keeps the signed-in account's favourites, play counts and playlists on the server: what it shows is what
 /// the server holds, so it follows the account to other devices and survives a sign-out.
 void main() {
@@ -217,15 +209,15 @@ void main() {
 
       final phoneRemote = online(phone, 'phone');
       final laptopRemote = online(laptop, 'laptop');
-      await waitFor(() => phoneRemote.devices.length == 1 && laptopRemote.devices.length == 1);
+      await until(() => phoneRemote.devices.length == 1 && laptopRemote.devices.length == 1);
 
       final track = phone.library.tracks.first;
       phone.library.toggleFavorite(track.id);
-      await waitFor(() => laptop.library.isFavorite(track.id));
+      await until(() => laptop.library.isFavorite(track.id));
       expect(laptop.library.favorites.single.id, track.id);
 
       laptop.library.createPlaylist('Shared');
-      await waitFor(() => phone.library.playlists.any((pl) => pl.name == 'Shared'));
+      await until(() => phone.library.playlists.any((pl) => pl.name == 'Shared'));
       expect(phone.library.isFavorite(track.id), isTrue, reason: 'the refresh keeps what the phone holds');
       expect(told, {'phone': 1, 'laptop': 1}, reason: "each is told of the other's change, not of its own");
     });
@@ -241,18 +233,18 @@ void main() {
         told++;
         phone.session.refreshLibrary();
       });
-      await waitFor(() => server.server.remote.devicesOf(phone.session.currentUser!.id) == 1);
+      await until(() => server.server.remote.devicesOf(phone.session.currentUser!.id) == 1);
 
       // The scan an administrator asks for here is the one the folder watch asks for a few seconds after a copy.
       writeWav(p.join(server.musicFolder, 'Artist C', 'Album 3', '01 Fourth.wav'), 44100);
       await admin.post('/api/library/scan');
-      await waitFor(() => phone.library.tracks.length == 4);
+      await until(() => phone.library.tracks.length == 4);
       expect(told, 1);
       expect(phone.session.state, ServerConnectionState.connected);
 
       final scanned = server.server.scanner.lastScanAt;
       await admin.post('/api/library/scan');
-      await waitFor(() => server.server.scanner.lastScanAt != scanned);
+      await until(() => server.server.scanner.lastScanAt != scanned);
       await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(told, 1);
     });

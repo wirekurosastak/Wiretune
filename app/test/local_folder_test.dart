@@ -54,7 +54,7 @@ void main() {
     writeWav(p.join(root.path, 'Music', 'Wiretune', 'Artist', 'Album', '01 Downloaded.wav'), 44100);
 
     await startPlayer();
-    expect(await waitUntil(() => library.tracks.length == 2), isTrue);
+    await until(() => library.tracks.length == 2);
     expect(library.tracks.map((t) => t.title), unorderedEquals(['01 One', '02 Two']));
   });
 

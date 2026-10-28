@@ -40,9 +40,7 @@ void main() {
     // The fixture's files carry no tags: all three are tracks of "Unknown album".
     final album = library.albums.single;
     downloads.setAlbumDownloaded(album.id, true);
-    for (var i = 0; i < 500 && downloads.doneCount < 3; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
+    await until(() => downloads.doneCount == 3);
     expect((downloads.doneCount, downloads.wantedCount), (3, 3));
     final files = {
       '01 First': p.join('Artist A', 'Album 1', '01 First.wav'),

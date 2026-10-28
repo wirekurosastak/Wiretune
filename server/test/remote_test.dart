@@ -47,13 +47,6 @@ class Peer {
 Future<WebSocket> openSocket(ServerFixture server, String token) =>
     WebSocket.connect('ws://127.0.0.1:${server.server.port}/api/remote', headers: {'Authorization': 'Bearer $token'});
 
-Future<void> until(bool Function() condition, [String reason = 'timed out']) async {
-  for (var i = 0; i < 300 && !condition(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  expect(condition(), isTrue, reason: reason);
-}
-
 /// Waits for the server's close (the socket's stream must be listened to); its code. Watches the state rather than
 /// `done`, which never completes for a socket that sent nothing.
 Future<int?> closedWith(WebSocket socket) async {

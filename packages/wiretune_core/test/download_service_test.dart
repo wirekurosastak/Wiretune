@@ -131,13 +131,6 @@ class Player {
   }
 }
 
-Future<void> until(bool Function() condition, [String? reason]) async {
-  for (var i = 0; i < 500 && !condition(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  expect(condition(), isTrue, reason: reason ?? 'timed out');
-}
-
 /// Lets every pending event and file operation run.
 Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 100));
 

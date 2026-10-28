@@ -187,11 +187,7 @@ void main() {
     });
   }
 
-  Future<void> resolving(List<Artist> resolved, int count) async {
-    for (var i = 0; i < 200 && resolved.length < count; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-    }
-  }
+  Future<void> resolving(List<Artist> resolved, int count) => until(() => resolved.length >= count);
 
   test("resolving sets the artist's picture, also over a server's album cover", () async {
     useDeezer(artists: [('Somebody', 1, 'https://cdn.example/a.jpg'), ('Co Lee', 1, 'https://cdn.example/b.jpg')]);

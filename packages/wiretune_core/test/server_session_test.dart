@@ -11,13 +11,6 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
 
-Future<bool> until(bool Function() condition) async {
-  for (var i = 0; i < 300 && !condition(); i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  return condition();
-}
-
 /// The session against a stand-in server: it comes back by itself, and a refresh downloads only what changed.
 void main() {
   setUpAll(useTempDataDirectory);
@@ -52,11 +45,11 @@ void main() {
     final states = <ServerConnectionState>[];
     session.stateChanged.listen((_) => states.add(session.state));
 
-    expect(await until(() => asked >= 3), isTrue);
+    await until(() => asked >= 3);
     expect(states, isEmpty, reason: 'asking does not say "connecting" each time');
 
     down = false;
-    expect(await until(() => session.state == ServerConnectionState.connected), isTrue);
+    await until(() => session.state == ServerConnectionState.connected);
   });
 
   test('offline mode leaves the server alone, and says nothing of it, until it is turned off', () async {

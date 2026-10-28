@@ -9,14 +9,6 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
 
-Future<bool> until(bool Function() condition, {Duration within = const Duration(seconds: 5)}) async {
-  final end = DateTime.now().add(within);
-  while (!condition() && DateTime.now().isBefore(end)) {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-  }
-  return condition();
-}
-
 /// The remote-control client on its own: when it connects, how it comes back, when it gives up, and what it accepts.
 void main() {
   setUpAll(useTempDataDirectory);
@@ -46,7 +38,7 @@ void main() {
     expect(hub.connections, 0);
 
     client.configure(id: 'desk', name: '  Living\troom  ', kind: DeviceKind.desktop, enabled: true);
-    expect(await until(() => client.isConnected), isTrue);
+    await until(() => client.isConnected);
     expect(hub.ofType('hello').single, {
       'type': 'hello',
       'device': {'id': 'desk', 'name': 'Livingroom', 'kind': 'desktop'},
@@ -68,7 +60,7 @@ void main() {
     final client = RemoteClient(session, connector: hub.connect);
     addTearDown(client.dispose);
     client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-    expect(await until(() => client.isConnected), isTrue);
+    await until(() => client.isConnected);
     client.publish(const RemotePlayback(playing: true, position: Duration(seconds: 7)));
     await pumpEventQueue();
     expect(hub.ofType('state'), hasLength(1));
@@ -76,8 +68,8 @@ void main() {
     await hub.drop();
     await pumpEventQueue();
     expect(client.isConnected, isFalse);
-    expect(await until(() => hub.connections == 2), isTrue);
-    expect(await until(() => hub.ofType('state').length == 2), isTrue);
+    await until(() => hub.connections == 2);
+    await until(() => hub.ofType('state').length == 2);
     expect((hub.ofType('state').last['state'] as Map)['positionMs'], 7000);
 
     // The server turns the token away: asking again with the same one would only be turned away again.
@@ -113,7 +105,7 @@ void main() {
         },
       );
       client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-      expect(await until(() => client.isConnected), isTrue);
+      await until(() => client.isConnected);
       expect(client.problem, isNull);
       await incoming.close();
       await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -135,7 +127,7 @@ void main() {
     );
     addTearDown(client.dispose);
     client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-    expect(await until(() => client.problem == RemoteProblem.ended), isTrue);
+    await until(() => client.problem == RemoteProblem.ended);
     await session.logout();
     expect(client.problem, isNull);
   });
@@ -147,16 +139,16 @@ void main() {
     var changed = 0;
     client.libraryChanged.listen((_) => changed++);
     client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-    expect(await until(() => client.isConnected), isTrue);
+    await until(() => client.isConnected);
     expect(changed, 0);
 
     hub.deliver({'type': 'libraryChanged'});
-    expect(await until(() => changed == 1), isTrue);
+    await until(() => changed == 1);
 
     // What the server said while the connection was down is lost: coming back counts as a change.
     await hub.drop();
-    expect(await until(() => hub.connections == 2), isTrue);
-    expect(await until(() => changed == 2), isTrue);
+    await until(() => hub.connections == 2);
+    await until(() => changed == 2);
   });
 
   test('what does not keep to the protocol is ignored', () async {
@@ -166,7 +158,7 @@ void main() {
     final commands = <(String, RemoteCommand)>[];
     client.commandReceived.listen(commands.add);
     client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-    expect(await until(() => client.isConnected), isTrue);
+    await until(() => client.isConnected);
     hub.devices([('phone', 'Phone', DeviceKind.phone), ('desk', 'Me myself', DeviceKind.desktop)]);
     await pumpEventQueue();
     expect([for (final d in client.devices) d.id], ['phone'], reason: 'this device is not one of the others');

@@ -37,10 +37,10 @@ void main() {
       expect(lyrics.hasLyrics, isFalse);
 
       player.isQueueOpen = true;
-      expect(await waitUntil(() => lyrics.plainText == 'Lyrics of t1'), isTrue);
+      await until(() => lyrics.plainText == 'Lyrics of t1');
 
       player.currentTrack = TestSupport.makeTrack('t2', 'Two');
-      expect(await waitUntil(() => lyrics.plainText == 'Lyrics of t2'), isTrue);
+      await until(() => lyrics.plainText == 'Lyrics of t2');
 
       player.isQueueOpen = false;
       player.isQueueOpen = true; // reopening does not fetch again
@@ -63,7 +63,7 @@ void main() {
       );
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => lyrics.hasLyrics), isTrue);
+      await until(() => lyrics.hasLyrics);
       expect(lyrics.plainText, 'From the tag');
       expect(lyrics.origin, LyricsOrigin.tags);
       expect(lyrics.sourceText, "Source: the track's own tags");
@@ -74,7 +74,7 @@ void main() {
       final (player, lyrics) = createLyrics(own: nothing, online: (_) async => 'From the internet');
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => lyrics.hasLyrics), isTrue);
+      await until(() => lyrics.hasLyrics);
       expect(lyrics.origin, LyricsOrigin.online);
       expect(lyrics.sourceText, 'Source: LRCLIB');
       expect(lyrics.isLoading, isFalse);
@@ -93,23 +93,23 @@ void main() {
       lyrics.isOnlineEnabled = false;
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => lyrics.showEmptyState), isTrue);
+      await until(() => lyrics.showEmptyState);
       expect(asked, 0);
       expect(lyrics.emptyHint, contains('Settings'));
 
       lyrics.isOnlineEnabled = true; // switched on while the panel is open: looked up at once
-      expect(await waitUntil(() => lyrics.hasLyrics), isTrue);
+      await until(() => lyrics.hasLyrics);
       expect(lyrics.origin, LyricsOrigin.online);
 
       lyrics.isOnlineEnabled = false; // and off again: the internet's lyrics go away
-      expect(await waitUntil(() => !lyrics.hasLyrics && !lyrics.isLoading), isTrue);
+      await until(() => !lyrics.hasLyrics && !lyrics.isLoading);
     });
 
     test('when nothing is found the panel says so', () async {
       final (player, lyrics) = createLyrics(own: nothing, online: nothing);
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => lyrics.showEmptyState), isTrue);
+      await until(() => lyrics.showEmptyState);
       expect(lyrics.emptyHint, 'None in the file, and none found online.');
       expect(lyrics.sourceText, '');
     });
@@ -122,7 +122,7 @@ void main() {
       expect(lyrics.isLoading, isTrue);
       expect(lyrics.showEmptyState, isFalse);
       pending.complete('Done');
-      expect(await waitUntil(() => lyrics.hasLyrics), isTrue);
+      await until(() => lyrics.hasLyrics);
       expect(lyrics.isLoading, isFalse);
     });
 
@@ -137,14 +137,14 @@ void main() {
       );
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => lyrics.lookupFailed), isTrue);
+      await until(() => lyrics.lookupFailed);
       expect(lyrics.showEmptyState, isTrue);
       expect(lyrics.emptyHint, contains('Lyrics service unreachable'));
       expect(asked, 1);
 
       player.isQueueOpen = false;
       player.isQueueOpen = true;
-      expect(await waitUntil(() => asked == 2), isTrue);
+      await until(() => asked == 2);
     });
 
     test('a failing own provider does not stop the internet lookup', () async {
@@ -154,7 +154,7 @@ void main() {
       );
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => lyrics.hasLyrics), isTrue);
+      await until(() => lyrics.hasLyrics);
       expect(lyrics.origin, LyricsOrigin.online);
     });
 
@@ -171,9 +171,9 @@ void main() {
       );
       player.isQueueOpen = true;
       player.currentTrack = TestSupport.makeTrack('t1', 'One');
-      expect(await waitUntil(() => asked), isTrue);
+      await until(() => asked);
       player.currentTrack = TestSupport.makeTrack('t2', 'Two');
-      expect(await waitUntil(() => lyrics.plainText == 'Lyrics of t2'), isTrue);
+      await until(() => lyrics.plainText == 'Lyrics of t2');
 
       slow.complete('Lyrics of t1 (late)');
       await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -187,7 +187,7 @@ void main() {
       final lyrics = LyricsViewModel(player, own: (_) async => '[00:01.00]One\n[00:05.00]Two\n[00:09.00]Three');
       player.isQueueOpen = true;
       player.playQueue([TestSupport.makeTrack('t1', 'Song')]);
-      expect(await waitUntil(() => lyrics.isSynced), isTrue);
+      await until(() => lyrics.isSynced);
       expect(lyrics.currentLine.value, -1);
 
       await driver.seek(const Duration(seconds: 6));
