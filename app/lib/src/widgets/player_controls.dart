@@ -1,7 +1,11 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
@@ -420,13 +424,7 @@ class VolumeControl extends StatelessWidget {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        final slider = Slider(
-          // Grey while muted.
-          activeColor: player.isMuted ? colors.textMuted : null,
-          value: player.isVolumeLocked ? 100 : (player.isMuted ? 0 : player.volume),
-          max: 100,
-          onChanged: player.isVolumeDisabledOrMuted ? null : player.setVolume,
-        );
+        final slider = _volumeSlider(player, colors);
         return Row(
           mainAxisSize: sliderWidth == null ? MainAxisSize.max : MainAxisSize.min,
           children: [
@@ -434,19 +432,210 @@ class VolumeControl extends StatelessWidget {
               tooltip: player.volumeToolTip,
               iconSize: 20,
               onPressed: player.isVolumeLocked ? null : player.toggleMute,
-              icon: Icon(
-                player.isMuted
-                    ? Icons.volume_off_rounded
-                    : (player.volume < 50 && !player.isVolumeLocked
-                          ? Icons.volume_down_rounded
-                          : Icons.volume_up_rounded),
-                color: player.isVolumeDisabledOrMuted ? colors.textMuted : colors.accent,
-              ),
+              icon: _volumeIcon(player, colors),
             ),
             if (sliderWidth case final width?) SizedBox(width: width, child: slider) else Expanded(child: slider),
           ],
         );
       },
+    );
+  }
+}
+
+/// The speaker: muted, quiet or loud, in the accent while the volume can be changed.
+Icon _volumeIcon(PlayerViewModel player, WiretuneColors colors, {String? semanticLabel}) => Icon(
+  player.isMuted
+      ? Icons.volume_off_rounded
+      : (player.volume < 50 && !player.isVolumeLocked ? Icons.volume_down_rounded : Icons.volume_up_rounded),
+  color: player.isVolumeDisabledOrMuted ? colors.textMuted : colors.accent,
+  semanticLabel: semanticLabel,
+);
+
+/// The volume's slider: at 100 % and still while it is locked, at 0 and grey while muted.
+Slider _volumeSlider(PlayerViewModel player, WiretuneColors colors) => Slider(
+  activeColor: player.isMuted ? colors.textMuted : null,
+  value: player.isVolumeLocked ? 100 : (player.isMuted ? 0 : player.volume),
+  max: 100,
+  onChanged: player.isVolumeDisabledOrMuted ? null : player.setVolume,
+);
+
+/// A computer's volume, as in Tidal's player: the speaker, which mutes and unmutes on a click, and above it, while the
+/// mouse is over either or the keyboard is on the speaker, the volume on an upright slider. The mouse's wheel over them,
+/// and ↑ and ↓ on the speaker, turn it up and down. A touch on the speaker shows the slider rather than muting, and a
+/// touch elsewhere puts it away. Locked in bit-perfect mode, it shows no slider and its tooltip says why.
+class VolumeButton extends StatefulWidget {
+  const VolumeButton({super.key, this.iconSize = 19, this.dimension = 40});
+
+  final double iconSize;
+  final double dimension;
+
+  @override
+  State<VolumeButton> createState() => _VolumeButtonState();
+}
+
+class _VolumeButtonState extends State<VolumeButton> {
+  /// As much as Ctrl+↑ and Ctrl+↓ turn it.
+  static const double _step = 5;
+
+  final _slider = OverlayPortalController();
+  final _link = LayerLink();
+  bool _hovered = false;
+  bool _focused = false;
+  bool _touched = false;
+
+  /// Whether the last press on the speaker was a finger's.
+  bool _touch = false;
+  Timer? _hide;
+
+  /// Shows the slider while the mouse, the keyboard or a touch wants it; puts it away a moment after none does, for the
+  /// mouse on its way between the speaker and the slider.
+  void _update({bool? hovered, bool? focused, bool? touched}) {
+    if (!mounted) return;
+    _hovered = hovered ?? _hovered;
+    _focused = focused ?? _focused;
+    _touched = touched ?? _touched;
+    _hide?.cancel();
+    _hide = null;
+    final wanted = (_hovered || _focused || _touched) && !context.vm.player.isVolumeLocked;
+    if (wanted && !_slider.isShowing) _slider.show();
+    if (!wanted && _slider.isShowing) {
+      _hide = Timer(const Duration(milliseconds: 300), () {
+        _hide = null;
+        if (mounted && _slider.isShowing) _slider.hide();
+      });
+    }
+  }
+
+  void _nudge(double by) {
+    final player = context.vm.player;
+    if (!player.isVolumeDisabledOrMuted) player.setVolume(player.volume + by);
+  }
+
+  void _scroll(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) return;
+    GestureBinding.instance.pointerSignalResolver.register(
+      event,
+      (event) => _nudge((event as PointerScrollEvent).scrollDelta.dy < 0 ? _step : -_step),
+    );
+  }
+
+  @override
+  void dispose() {
+    _hide?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.vm.player;
+    final colors = context.colors;
+    return TapRegion(
+      groupId: this,
+      onTapOutside: (_) => _update(touched: false),
+      child: Listener(
+        onPointerDown: (event) => _touch = event.kind == PointerDeviceKind.touch,
+        onPointerSignal: _scroll,
+        child: MouseRegion(
+          onEnter: (_) => _update(hovered: true),
+          onExit: (_) => _update(hovered: false),
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.arrowUp): () => _nudge(_step),
+              const SingleActivator(LogicalKeyboardKey.arrowDown): () => _nudge(-_step),
+            },
+            child: Focus(
+              canRequestFocus: false,
+              skipTraversal: true,
+              onFocusChange: (focused) => _update(focused: focused),
+              child: CompositedTransformTarget(
+                link: _link,
+                child: OverlayPortal(
+                  controller: _slider,
+                  overlayChildBuilder: _buildSlider,
+                  child: ListenableBuilder(
+                    listenable: player,
+                    builder: (context, _) {
+                      final locked = player.isVolumeLocked;
+                      return SizedBox.square(
+                        dimension: widget.dimension,
+                        child: IconButton(
+                          // The slider stands where a tooltip would: one only to say why there is none.
+                          tooltip: locked ? player.volumeToolTip : null,
+                          iconSize: widget.iconSize,
+                          onPressed: locked
+                              ? null
+                              : () => _touch ? _update(touched: !_slider.isShowing) : player.toggleMute(),
+                          icon: _volumeIcon(player, colors, semanticLabel: locked ? null : player.volumeToolTip),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSlider(BuildContext context) {
+    final player = context.vm.player;
+    final colors = context.colors;
+    return Positioned(
+      left: 0,
+      top: 0,
+      child: CompositedTransformFollower(
+        link: _link,
+        targetAnchor: Alignment.topCenter,
+        followerAnchor: Alignment.bottomCenter,
+        child: TapRegion(
+          groupId: this,
+          child: MouseRegion(
+            onEnter: (_) => _update(hovered: true),
+            onExit: (_) => _update(hovered: false),
+            child: Listener(
+              onPointerSignal: _scroll,
+              // The gap down to the speaker is the slider's too, for the mouse on its way.
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Container(
+                  width: 48,
+                  height: 172,
+                  padding: const EdgeInsets.only(top: 10, bottom: 4),
+                  decoration: BoxDecoration(
+                    color: colors.palette.modal,
+                    borderRadius: BorderRadius.circular(Radii.medium),
+                    border: Border.all(color: colors.palette.panelBorder),
+                    boxShadow: [BoxShadow(color: colors.palette.shadow, blurRadius: 18, offset: const Offset(0, 6))],
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ListenableBuilder(
+                      listenable: player,
+                      builder: (context, _) => Column(
+                        children: [
+                          Text(
+                            '${player.isMuted ? 0 : player.volume.round()}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: colors.textMuted,
+                              fontFeatures: const [FontFeature.tabularFigures()],
+                            ),
+                          ),
+                          // Turned a quarter: louder upwards.
+                          Expanded(child: RotatedBox(quarterTurns: 3, child: _volumeSlider(player, colors))),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -1146,9 +1146,18 @@ class _PlayerBar extends StatelessWidget {
                     final scale = MediaQuery.textScalerOf(context).scale(1);
                     // The devices button (while there are other devices to reach) takes its place first.
                     final devices = player.canReachDevices || player.isRemote;
-                    // A tablet's and a TV's own buttons set their own volume, but not another device's.
-                    final volume = (platform.isDesktop || player.isRemote) && constraints.maxWidth >= 12 + 36 + 8 + 95;
-                    final room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0) - 40 - 8;
+                    // A computer's volume is a button with its slider above it. A tablet's and a TV's own buttons set
+                    // their own volume, but not another device's: a slider in the bar for that, where it fits.
+                    final volumeButton = platform.isDesktop;
+                    final volumeSlider = !volumeButton && player.isRemote && constraints.maxWidth >= 12 + 36 + 8 + 95;
+                    final room =
+                        constraints.maxWidth -
+                        12 -
+                        (volumeButton ? 40 : 0) -
+                        (volumeSlider ? 36 + 8 + 95 : 0) -
+                        (devices ? 40 : 0) -
+                        40 -
+                        8;
                     final showTags = !compact && track != null && room >= 125 * scale;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -1185,7 +1194,8 @@ class _PlayerBar extends StatelessWidget {
                           ],
                           const SleepTimerButton(iconSize: 19, dimension: 40),
                           if (devices) const DevicesButton(iconSize: 19, dimension: 40),
-                          if (volume) const VolumeControl(sliderWidth: 95),
+                          if (volumeButton) const VolumeButton(iconSize: 19, dimension: 40),
+                          if (volumeSlider) const VolumeControl(sliderWidth: 95),
                         ],
                       ),
                     );

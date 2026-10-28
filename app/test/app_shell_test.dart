@@ -1906,6 +1906,72 @@ void main() {
     expect(quality.center.dy, moreOrLessEquals(bpm.center.dy, epsilon: 0.5));
   });
 
+  testWidgets("a computer's volume stands upright over its speaker while the mouse is there, as in Tidal", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'windows');
+    final vm = await pumpApp(tester, const Size(1920, 1000));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    final player = vm.player;
+    final speaker = find.byType(VolumeButton);
+    // Left of the tags, over the spectrum: nothing there to hover or press.
+    final away = tester.getRect(find.byType(PlayerTags)).centerLeft - const Offset(40, 0);
+    expect(find.byType(VolumeControl), findsNothing);
+
+    // The mouse over the speaker: a slider stands above it, louder upwards.
+    final slider = find.descendant(of: find.byType(RotatedBox), matching: find.byType(Slider));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    expect(slider, findsNothing);
+    await mouse.moveTo(tester.getCenter(speaker));
+    await tester.pump();
+    final upright = tester.getRect(slider);
+    expect(upright.bottom, lessThanOrEqualTo(tester.getRect(speaker).top));
+    expect(upright.height, greaterThan(2 * upright.width));
+    await tester.tapAt(Offset(upright.center.dx, upright.top + upright.height * 0.8));
+    await tester.pump();
+    expect(player.volume, lessThan(40));
+    await tester.tapAt(Offset(upright.center.dx, upright.top + upright.height * 0.2));
+    await tester.pump();
+    expect(player.volume, greaterThan(60));
+
+    // The wheel turns it by a step, over the speaker as over the slider.
+    final wheel = TestPointer(9, PointerDeviceKind.mouse)..hover(tester.getCenter(speaker));
+    final before = player.volume;
+    await tester.sendEventToBinding(wheel.scroll(const Offset(0, -40)));
+    expect(player.volume, before + 5);
+    wheel.hover(upright.center);
+    await tester.sendEventToBinding(wheel.scroll(const Offset(0, 40)));
+    expect(player.volume, before);
+
+    // A click mutes and unmutes.
+    await mouse.down(tester.getCenter(speaker));
+    await mouse.up();
+    await tester.pump();
+    expect(player.isMuted, isTrue);
+    await mouse.down(tester.getCenter(speaker));
+    await mouse.up();
+    await tester.pump();
+    expect(player.isMuted, isFalse);
+
+    // The mouse away: the slider stays a moment, for the way between the two, then goes.
+    await mouse.moveTo(away);
+    await tester.pump();
+    expect(slider, findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(slider, findsNothing);
+
+    // A finger shows it rather than muting, and a touch elsewhere puts it away.
+    await tester.tap(speaker);
+    await tester.pump();
+    expect((slider.evaluate().length, player.isMuted), (1, false));
+    await tester.tapAt(away);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(slider, findsNothing);
+  });
+
   testWidgets("the full-screen player's artist is in the artists' red, whatever the section's colour", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis')]);
