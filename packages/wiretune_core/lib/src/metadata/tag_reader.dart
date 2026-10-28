@@ -27,16 +27,17 @@ abstract final class TagReader {
     }
   }
 
-  /// Reads the file behind [source]; [path] decides the format by its extension, the content confirms it.
+  /// Reads the file behind [source]; [path] decides the format by its extension, the content confirms it. The
+  /// extensions are `AudioFileTypes`'s: only those files are indexed (a download is named after its codec, the same).
   static AudioTags? readFrom(ByteSource source, String path, {bool wantLyrics = false}) {
     final AudioTags? tags = switch (p.extension(path).toLowerCase()) {
       '.flac' => readFlac(source, wantLyrics: wantLyrics),
-      '.ogg' || '.opus' || '.oga' => readOgg(source, wantLyrics: wantLyrics),
-      '.mp3' || '.mp2' => readMpeg(source, wantLyrics: wantLyrics),
-      '.m4a' || '.mp4' || '.m4b' || '.alac' => readMp4(source, wantLyrics: wantLyrics),
+      '.ogg' || '.opus' => readOgg(source, wantLyrics: wantLyrics),
+      '.mp3' => readMpeg(source, wantLyrics: wantLyrics),
+      '.m4a' => readMp4(source, wantLyrics: wantLyrics),
       '.aac' => readAdts(source, wantLyrics: wantLyrics),
       '.wav' => readWav(source, wantLyrics: wantLyrics),
-      '.aiff' || '.aif' || '.aifc' => readAiff(source, wantLyrics: wantLyrics),
+      '.aiff' || '.aif' => readAiff(source, wantLyrics: wantLyrics),
       '.dsf' => readDsf(source, wantLyrics: wantLyrics),
       '.wv' => readWavPack(source, wantLyrics: wantLyrics),
       '.ape' => readMonkeysAudio(source, wantLyrics: wantLyrics),
