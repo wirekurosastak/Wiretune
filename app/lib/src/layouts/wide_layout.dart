@@ -425,7 +425,14 @@ class _SearchFieldState extends State<_SearchField> {
         child: TextField(
           controller: _controller,
           focusNode: _focus,
-          onChanged: (text) => vm.searchQuery = text,
+          // The header's field has no open page of its own: emptied, the search is over, as with Escape.
+          onChanged: (text) {
+            if (text.isEmpty) {
+              vm.closeSearch();
+            } else {
+              vm.searchQuery = text;
+            }
+          },
           textInputAction: TextInputAction.search,
           style: TextStyle(fontSize: 14, color: colors.textMain),
           decoration: InputDecoration(
@@ -440,7 +447,7 @@ class _SearchFieldState extends State<_SearchField> {
             suffixIcon: vm.isSearchActive
                 ? IconButton(
                     tooltip: context.tr('TipClearSearch'),
-                    onPressed: vm.clearSearch,
+                    onPressed: vm.closeSearch,
                     iconSize: 16,
                     icon: Icon(Icons.cancel_rounded, color: colors.textMuted),
                   )

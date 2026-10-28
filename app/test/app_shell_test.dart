@@ -286,6 +286,42 @@ void main() {
     expect(vm.searchQuery, isEmpty);
   });
 
+  testWidgets("a search emptied in the header's field is over: the sidebar's section closes the open album again", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    Finder field() => find.byType(TextField).first;
+    Future<void> openAlbum() async {
+      vm.navigateTo(AppSection.albums);
+      vm.openAlbum(vm.library.albums.first);
+      await settle(tester);
+    }
+
+    Future<void> tapAlbums() async {
+      await tester.tap(find.text(Localizer.get('NavAlbums')).first);
+      await settle(tester);
+    }
+
+    // Cleared with its button...
+    await openAlbum();
+    await tester.enterText(field(), 'daft');
+    await settle(tester);
+    await tester.tap(find.byTooltip(Localizer.get('TipClearSearch')));
+    await settle(tester);
+    expect(vm.albums.isAlbumDetailOpen, isTrue);
+    await tapAlbums();
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+
+    // ...or by deleting what was typed.
+    await openAlbum();
+    await tester.enterText(field(), 'daft');
+    await settle(tester);
+    await tester.enterText(field(), '');
+    await settle(tester);
+    await tapAlbums();
+    expect(vm.albums.isAlbumDetailOpen, isFalse);
+  });
+
   testWidgets('a narrow window gets the phone layout with the bottom navigation', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     expect(find.byType(PhoneLayout), findsOneWidget);
