@@ -9,14 +9,15 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
 
-/// Downloads against the real server: the copies are the server's files byte for byte, and they play once the server
-/// is gone.
+/// Downloads against the real server: the copies are the server's files byte for byte. (That a copy plays without the
+/// server is the core's download_service_test.)
 void main() {
   setUpAll(useTempDataDirectory);
   setUp(() => Localizer.instance.setLanguage('en'));
 
-  test('a downloaded album is the server files, and plays with the server switched off', () async {
+  test('a downloaded album is the server files, byte for byte', () async {
     final server = await ServerFixture.start();
+    addTearDown(server.close);
     final (admin, _) = await setupAdmin(server);
     await server.waitForTracks(admin, 3);
 
@@ -51,14 +52,5 @@ void main() {
       final original = File(p.join(server.musicFolder, files[track.title])).readAsBytesSync();
       expect(File(downloads.localCopy(track)!).readAsBytesSync(), original, reason: track.title);
     }
-
-    await server.close();
-    final driver = FakeAudioDriver();
-    final engine = TestSupport.createEngine(driver)
-      ..setStreamTokenProvider(session.getStreamToken)
-      ..setOfflineCopyProvider(downloads.localCopy);
-    await engine.playTrack(album.tracks[1]);
-    expect(driver.lastSource, downloads.localCopy(album.tracks[1]));
-    expect(driver.state, PlaybackState.playing);
   });
 }
