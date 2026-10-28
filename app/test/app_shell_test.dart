@@ -108,7 +108,7 @@ void main() {
     expect(find.text('Blue in Green'), findsOneWidget);
   });
 
-  testWidgets("the favorites' header has a list's queue and playlist buttons on a wide screen, not on a phone", (
+  testWidgets("the favorites' header has a list's queue buttons on a wide screen, not on a phone, and no playlist's", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
@@ -117,10 +117,15 @@ void main() {
     for (final (size, shown) in const [(Size(1400, 900), true), (Size(400, 860), false)]) {
       tester.view.physicalSize = size;
       await settle(tester);
-      for (final key in ['PlayNext', 'AddToQueue', 'AddToPlaylist']) {
+      for (final key in ['PlayNext', 'AddToQueue']) {
         final button = find.descendant(of: find.byType(PageHeader), matching: find.byTooltip(Localizer.get(key)));
         expect(button, shown ? findsOneWidget : findsNothing, reason: '$size $key');
       }
+      final playlist = find.descendant(
+        of: find.byType(PageHeader),
+        matching: find.byTooltip(Localizer.get('AddToPlaylist')),
+      );
+      expect(playlist, findsNothing, reason: '$size');
     }
     tester.view.physicalSize = const Size(1400, 900);
     await settle(tester);

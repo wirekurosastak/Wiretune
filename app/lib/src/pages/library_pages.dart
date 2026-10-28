@@ -143,10 +143,10 @@ class FavoritesPage extends StatelessWidget {
               PlayShuffleButtons(
                 tracks: favorites.tracks,
                 onPlay: favorites.playAll,
-                // A list's buttons, on a wide screen; a phone's line has no room for them beside the sort.
+                // A list's buttons, on a wide screen; a phone's line has no room for them beside the sort. No Add to
+                // playlist on either: the favourites are a list of their own already.
                 playNext: phone ? null : menu.playNextButton(),
                 addToQueue: phone ? null : menu.addToQueueButton(),
-                addToPlaylist: phone ? null : menu.addToPlaylistButton(),
                 // A phone's ⋮ in the download's place: Play next, Add to queue and the download, beside the sort.
                 download: phone
                     ? menu.queueAndDownloadButton()
