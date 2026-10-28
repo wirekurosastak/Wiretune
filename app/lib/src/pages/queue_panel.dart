@@ -60,10 +60,11 @@ class QueueList extends StatelessWidget {
   }
 }
 
-/// A queue entry, moved by its drag handle or a long press anywhere on it (as a playlist's rows): a rounded row with the
-/// drag handle, the cover (with the entry's number, or the bouncing bars of the
+/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, or the bouncing bars of the
 /// current track), title and artist, format, length, the arrows and the remove button. The current entry is washed in
-/// the accent. On a phone it is as large as the phone's other track rows, its × a finger's target.
+/// the accent. It moves by its handle, and on a computer by a long press anywhere on it too (as a playlist's rows); its
+/// menu opens on a right click. On a phone it is as large as the phone's other track rows, without the length, its × a
+/// finger's target, and a long press opens its menu, as on every other track row there.
 class _QueueRow extends StatefulWidget {
   const _QueueRow({
     super.key,
@@ -132,9 +133,12 @@ class _QueueRowState extends State<_QueueRow> {
           child: InkWell(
             borderRadius: radius,
             onTap: () => player.playQueueItem(item),
-            // A right click opens the track's menu, as on a table's row; a long press grabs the row.
+            // A right click opens the track's menu, as on a table's row; on a phone a long press does.
             onSecondaryTapUp: (details) =>
                 showTrackContextMenu(context, details.globalPosition, item.track, TrackTableKind.tracks),
+            onLongPress: phone
+                ? () => TrackMenu.showSheet(context, item.track, TrackTableKind.tracks, withFavorite: true)
+                : null,
             child: LayoutBuilder(
               builder: (context, constraints) => Padding(
                 padding: EdgeInsets.fromLTRB(10, phone ? 6 : 7, phone ? 0 : 10, phone ? 6 : 7),
@@ -223,16 +227,19 @@ class _QueueRowState extends State<_QueueRow> {
                       const SizedBox(width: 12),
                       QualityTag(tier: track.format.tier, spec: track.format.tagSpec),
                     ],
-                    const SizedBox(width: 12),
-                    Text(
-                      track.formattedDuration,
-                      style: TextStyle(
-                        fontSize: phone ? 13 : 12,
-                        fontWeight: FontWeight.w500,
-                        color: colors.textMuted,
-                        fontFeatures: const [FontFeature.tabularFigures()],
+                    // A phone's row leaves the length out: the title keeps the room.
+                    if (!phone) ...[
+                      const SizedBox(width: 12),
+                      Text(
+                        track.formattedDuration,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: colors.textMuted,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
-                    ),
+                    ],
                     SizedBox(width: phone ? 4 : 12),
                     if (widget.showMoveButtons) ...[
                       small(
@@ -264,7 +271,8 @@ class _QueueRowState extends State<_QueueRow> {
         ),
       ),
     );
-    return ReorderableDelayedDragStartListener(index: widget.index, child: row);
+    // On a phone the long press is the menu's: the handle moves the row.
+    return phone ? row : ReorderableDelayedDragStartListener(index: widget.index, child: row);
   }
 }
 

@@ -2291,17 +2291,29 @@ void main() {
     expect(find.byTooltip(Localizer.get('Search')), findsNothing);
   });
 
-  testWidgets("a phone's queue row moves by a long press anywhere on it, as by its handle", (tester) async {
+  testWidgets("a phone's queue row opens its menu on a long press, moves by its handle, and leaves its length out", (
+    tester,
+  ) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
     vm.nowPlayingTab = NowPlayingTab.queue;
     await settle(tester);
     final before = [for (final item in vm.player.queueItems) item.track.title];
-    final row = find.descendant(of: find.byType(NowPlayingPage), matching: find.text(before[1]));
+    final title = find.descendant(of: find.byType(NowPlayingPage), matching: find.text(before[1]));
+    final row = find.ancestor(of: title, matching: find.byType(InkWell)).first;
+    final length = vm.player.queueItems[1].track.formattedDuration;
+    expect(find.descendant(of: row, matching: find.text(length)), findsNothing);
 
-    final finger = await tester.startGesture(tester.getCenter(row));
-    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+    await tester.longPress(title);
+    await settle(tester);
+    expect(find.text(Localizer.get('PlayNext')), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+    expect(find.text(Localizer.get('PlayNext')), findsNothing);
+
+    final handle = find.descendant(of: row, matching: find.byIcon(Icons.drag_indicator_rounded));
+    final finger = await tester.startGesture(tester.getCenter(handle));
     for (var i = 0; i < 12; i++) {
       await finger.moveBy(const Offset(0, 10));
       await tester.pump(const Duration(milliseconds: 50));
