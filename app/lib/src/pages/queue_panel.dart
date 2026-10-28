@@ -577,6 +577,7 @@ class QueueLyricsPanel extends StatelessWidget {
                   PopEffect(
                     enabled: count > 0,
                     glowColor: colors.danger,
+                    lift: false,
                     child: TextButton.icon(
                       style: TextButton.styleFrom(
                         foregroundColor: colors.danger,

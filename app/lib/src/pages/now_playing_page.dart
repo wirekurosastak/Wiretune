@@ -412,6 +412,7 @@ class _QueueTab extends StatelessWidget {
               PopEffect(
                 enabled: player.queueItems.isNotEmpty,
                 glowColor: colors.danger,
+                lift: false,
                 child: TextButton.icon(
                   style: TextButton.styleFrom(
                     foregroundColor: colors.danger,

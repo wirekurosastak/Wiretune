@@ -101,15 +101,26 @@ class _PressShrinkState extends State<PressShrink> {
   );
 }
 
-/// Lifts [child] and makes it a little larger under the mouse; with a [glowColor], a pill of its glow rises behind it.
-/// A Play ([press]) also gives under the finger or the click ([PressShrink]), as the players' round Play does.
+/// Lifts [child] and makes it a little larger under the mouse ([lift]); with a [glowColor], a pill of its glow rises
+/// behind it. A Play ([press]) also gives under the finger or the click ([PressShrink]), as the players' round Play does.
 class PopEffect extends StatefulWidget {
-  const PopEffect({super.key, required this.child, this.enabled = true, this.glowColor, this.press = false});
+  const PopEffect({
+    super.key,
+    required this.child,
+    this.enabled = true,
+    this.glowColor,
+    this.press = false,
+    this.lift = true,
+  });
 
   final Widget child;
   final bool enabled;
   final Color? glowColor;
   final bool press;
+
+  /// Whether it rises and grows under the mouse. Off for a button with words on it: on a computer its words were seen to
+  /// trail behind the button as it rose, so such a button only glows.
+  final bool lift;
 
   @override
   State<PopEffect> createState() => _PopEffectState();
@@ -122,7 +133,8 @@ class _PopEffectState extends State<PopEffect> {
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
     final glow = widget.glowColor;
-    final scale = _hover ? 1.05 : 1.0;
+    final up = _hover && widget.lift;
+    final scale = up ? 1.05 : 1.0;
     final effect = MouseRegion(
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
@@ -131,7 +143,7 @@ class _PopEffectState extends State<PopEffect> {
         curve: Curves.easeOutCubic,
         transformAlignment: Alignment.center,
         transform: Matrix4.identity()
-          ..translateByDouble(0.0, _hover ? -3.0 : 0.0, 0.0, 1.0)
+          ..translateByDouble(0.0, up ? -3.0 : 0.0, 0.0, 1.0)
           ..scaleByDouble(scale, scale, 1.0, 1.0),
         decoration: glow != null && _hover
             ? BoxDecoration(
@@ -331,6 +343,8 @@ class ListPlayButton extends StatelessWidget {
     return PopEffect(
       enabled: onPressed != null,
       press: true,
+      // A wide screen's Play has its word on it: it glows under the mouse (the theme's), without rising.
+      lift: phone,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Radii.pill),
