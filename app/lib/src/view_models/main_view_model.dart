@@ -500,15 +500,21 @@ class MainViewModel extends ChangeNotifier {
     }
   }
 
-  void openAlbum(Album? album) {
-    if (album == null) return;
-    _jumpTo(AppSection.albums);
-    final (backText, onReturn) = _captureOrigin(AppSection.albums);
-    albums.openAlbumWithOrigin(album, backText, onReturn);
+  /// Opens a page of [section] (an album's, an artist's, a playlist's) with [open], from wherever the user is: Back
+  /// leads there again.
+  void _openPage(AppSection section, void Function(String Function()? backText, void Function()? onReturn) open) {
+    _jumpTo(section);
+    final (backText, onReturn) = _captureOrigin(section);
+    open(backText, onReturn);
     isNowPlayingOpen = false;
     isSearchActive = false;
-    selectedSection = AppSection.albums;
+    selectedSection = section;
     notifyListeners();
+  }
+
+  void openAlbum(Album? album) {
+    if (album == null) return;
+    _openPage(AppSection.albums, (backText, onReturn) => albums.openAlbumWithOrigin(album, backText, onReturn));
   }
 
   void openAlbumOfTrack(Track? track) {
@@ -517,24 +523,15 @@ class MainViewModel extends ChangeNotifier {
 
   void openArtist(Artist? artist) {
     if (artist == null) return;
-    _jumpTo(AppSection.artists);
-    final (backText, onReturn) = _captureOrigin(AppSection.artists);
-    artists.openArtistWithOrigin(artist, backText, onReturn);
-    isNowPlayingOpen = false;
-    isSearchActive = false;
-    selectedSection = AppSection.artists;
-    notifyListeners();
+    _openPage(AppSection.artists, (backText, onReturn) => artists.openArtistWithOrigin(artist, backText, onReturn));
   }
 
   void openPlaylist(Playlist? playlist) {
     if (playlist == null) return;
-    _jumpTo(AppSection.playlists);
-    final (backText, onReturn) = _captureOrigin(AppSection.playlists);
-    playlists.openPlaylistWithOrigin(playlist, backText, onReturn);
-    isNowPlayingOpen = false;
-    isSearchActive = false;
-    selectedSection = AppSection.playlists;
-    notifyListeners();
+    _openPage(
+      AppSection.playlists,
+      (backText, onReturn) => playlists.openPlaylistWithOrigin(playlist, backText, onReturn),
+    );
   }
 
   void openArtistByName(String? artistName) {

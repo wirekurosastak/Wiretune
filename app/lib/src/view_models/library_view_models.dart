@@ -228,6 +228,29 @@ mixin DetailOrigin on ChangeNotifier {
     _backTextSource = null;
     return action;
   }
+
+  /// Opens the page that [show] puts up: where it was opened from is kept, a visit anew counts, and the wave runs.
+  void _openPage(
+    String Function()? backTextSource,
+    void Function()? onReturn,
+    NavWaveDirection? waveDirection,
+    void Function() show,
+  ) {
+    _setOrigin(backTextSource, onReturn);
+    if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
+    show();
+    if (waveDirection != null) onNavWave?.call(waveDirection);
+    notifyListeners();
+  }
+
+  /// Closes the page that [hide] takes down (with the wave when [isOpen]), then goes back to where it was opened from.
+  void _closePage(bool isOpen, void Function() hide) {
+    final returnAction = _takeOrigin();
+    if (isOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
+    hide();
+    notifyListeners();
+    returnAction?.call();
+  }
 }
 
 /// The Albums section: the album grid and one album's page.
@@ -347,21 +370,10 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
     void Function()? onReturn, [
     NavWaveDirection? waveDirection = NavWaveDirection.leftToRight,
   ]) {
-    if (album == null) return;
-    _setOrigin(backTextSource, onReturn);
-    if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
-    selectedAlbum = album;
-    if (waveDirection != null) onNavWave?.call(waveDirection);
-    notifyListeners();
+    if (album != null) _openPage(backTextSource, onReturn, waveDirection, () => selectedAlbum = album);
   }
 
-  void closeAlbumDetail() {
-    final returnAction = _takeOrigin();
-    if (isAlbumDetailOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
-    selectedAlbum = null;
-    notifyListeners();
-    returnAction?.call();
-  }
+  void closeAlbumDetail() => _closePage(isAlbumDetailOpen, () => selectedAlbum = null);
 
   void playAlbum([Album? album]) {
     final target = album ?? selectedAlbum;
@@ -475,7 +487,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
         closeArtistDetail();
         return;
       }
-      _showArtist(updated, null); // keep where "back" leads to
+      _showArtist(updated); // keep where "back" leads to
     }
     notifyListeners();
   }
@@ -488,26 +500,15 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     void Function()? onReturn, [
     NavWaveDirection? waveDirection = NavWaveDirection.leftToRight,
   ]) {
-    if (artist == null) return;
-    _setOrigin(backTextSource, onReturn);
-    if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
-    _showArtist(artist, waveDirection);
-    notifyListeners();
+    if (artist != null) _openPage(backTextSource, onReturn, waveDirection, () => _showArtist(artist));
   }
 
-  void _showArtist(Artist artist, NavWaveDirection? waveDirection) {
+  void _showArtist(Artist artist) {
     selectedArtist = artist;
     _pictures?.resolveArtistPicture(artist);
-    if (waveDirection != null) onNavWave?.call(waveDirection);
   }
 
-  void closeArtistDetail() {
-    final returnAction = _takeOrigin();
-    if (isArtistDetailOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
-    selectedArtist = null;
-    notifyListeners();
-    returnAction?.call();
-  }
+  void closeArtistDetail() => _closePage(isArtistDetailOpen, () => selectedArtist = null);
 
   void playArtist([Artist? artist]) {
     final target = artist ?? selectedArtist;
@@ -761,21 +762,10 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
     void Function()? onReturn, [
     NavWaveDirection? waveDirection = NavWaveDirection.leftToRight,
   ]) {
-    if (playlist == null) return;
-    _setOrigin(backTextSource, onReturn);
-    if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
-    _select(playlist);
-    if (waveDirection != null) onNavWave?.call(waveDirection);
-    notifyListeners();
+    if (playlist != null) _openPage(backTextSource, onReturn, waveDirection, () => _select(playlist));
   }
 
-  void closePlaylistDetail() {
-    final returnAction = _takeOrigin();
-    if (isPlaylistDetailOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
-    _select(null);
-    notifyListeners();
-    returnAction?.call();
-  }
+  void closePlaylistDetail() => _closePage(isPlaylistDetailOpen, () => _select(null));
 
   /// Makes a playlist called [name] (nothing for a blank one) with [tracks] in it, and opens it.
   void createPlaylist(String name, [List<Track> tracks = const []]) {
