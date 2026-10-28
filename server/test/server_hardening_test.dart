@@ -186,6 +186,14 @@ void main() {
       final (guest, guestInfo) = await registerGuest(server, admin);
       expect((await guest.get('/api/auth/me')).statusCode, 200);
 
+      // Refused as Change password refuses them: missing, or too short.
+      for (final body in [
+        <String, Object?>{},
+        {'newPassword': 'short'},
+      ]) {
+        final refused = await admin.post('/api/users/${guestInfo.id}/password', body);
+        expect(refused.statusCode, 400, reason: '$body');
+      }
       final reset = await admin.post('/api/users/${guestInfo.id}/password', {'newPassword': 'reset-by-admin'});
       expect(reset.statusCode, 200);
       expect((await guest.get('/api/auth/me')).statusCode, 401);

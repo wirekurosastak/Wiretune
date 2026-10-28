@@ -434,10 +434,26 @@ class WiretuneServer {
     }),
   ];
 
+  /// The text field [key] of a request body; null when it is missing or not text.
+  static String? _text(Map<Object?, Object?>? body, String key) => switch (body?[key]) {
+    final String value => value,
+    _ => null,
+  };
+
+  /// Why the body's `newPassword` can't be the new password (a 400 answer), or null when it can.
+  static Response? _newPasswordProblem(Map<Object?, Object?>? body) {
+    final replacement = _text(body, 'newPassword');
+    if (replacement == null) {
+      return errorResponse(400, ErrorCodes.credentialsRequired, 'The new password is required.');
+    }
+    final error = AuthService.validatePassword(replacement);
+    return error == null ? null : violationResponse(error);
+  }
+
   Future<Response> _setup(_Call call) async {
     final body = await call.jsonObject();
-    final username = body?['username'] is String ? body!['username'] as String : null;
-    final password = body?['password'] is String ? body!['password'] as String : null;
+    final username = _text(body, 'username');
+    final password = _text(body, 'password');
     final error = AuthService.validateCredentials(username, password);
     if (error != null) return violationResponse(error);
 
@@ -470,13 +486,8 @@ class WiretuneServer {
   Future<Response> _changePassword(_Call call) async {
     final body = await call.jsonObject();
     // A signed-in player's word is enough: the current password isn't asked for.
-    final replacement = body?['newPassword'];
-    if (replacement is! String) {
-      return errorResponse(400, ErrorCodes.credentialsRequired, 'The new password is required.');
-    }
-    final error = AuthService.validatePassword(replacement);
-    if (error != null) return violationResponse(error);
-    final renewed = await auth.changePassword(call.principal!, replacement);
+    if (_newPasswordProblem(body) case final refusal?) return refusal;
+    final renewed = await auth.changePassword(call.principal!, _text(body, 'newPassword')!);
     if (renewed == null) return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
     // The account's open remote-control connections were signed in with the old password; this player reconnects with
     // the token it gets here.
@@ -491,13 +502,8 @@ class WiretuneServer {
       return errorResponse(400, ErrorCodes.cannotResetOwnPassword, 'Change your own password with Change password.');
     }
     final body = await call.jsonObject();
-    final replacement = body?['newPassword'];
-    if (replacement is! String) {
-      return errorResponse(400, ErrorCodes.credentialsRequired, 'A new password is required.');
-    }
-    final error = AuthService.validatePassword(replacement);
-    if (error != null) return violationResponse(error);
-    if (!await auth.resetPassword(userId, replacement)) {
+    if (_newPasswordProblem(body) case final refusal?) return refusal;
+    if (!await auth.resetPassword(userId, _text(body, 'newPassword')!)) {
       return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
     }
     remote.disconnectAccount(userId, 'The password was reset.');
@@ -506,8 +512,8 @@ class WiretuneServer {
 
   Future<Response> _addUser(_Call call) async {
     final body = await call.jsonObject();
-    final username = body?['username'] is String ? body!['username'] as String : null;
-    final password = body?['password'] is String ? body!['password'] as String : null;
+    final username = _text(body, 'username');
+    final password = _text(body, 'password');
     final error = AuthService.validateCredentials(username, password);
     if (error != null) return violationResponse(error);
     final user = await auth.register(username!, password!);
