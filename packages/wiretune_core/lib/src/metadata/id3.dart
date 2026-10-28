@@ -275,7 +275,7 @@ const Map<String, TagField> _v22Frames = {
 };
 
 /// Reads the ID3v2 tag at [offset]; null when there is none or it cannot be read.
-AudioTags? readId3v2(ByteSource source, int offset, {bool wantLyrics = true}) {
+AudioTags? readId3v2(ByteSource source, int offset, {required bool wantLyrics}) {
   final header = source.readExact(offset, 10);
   if (header == null || !header.matches(0, 'ID3')) return null;
   final major = header[3];

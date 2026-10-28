@@ -323,7 +323,7 @@ void main() {
 
     AudioTags read(List<String> entries) {
       final tags = AudioTags();
-      readVorbisComment(comment(entries), 0, tags);
+      readVorbisComment(comment(entries), 0, tags, wantLyrics: true);
       return tags;
     }
 

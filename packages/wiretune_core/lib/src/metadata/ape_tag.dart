@@ -44,7 +44,7 @@ const Map<String, TagField> _apeFields = {
 }
 
 /// Reads the APEv2 tag at the end of the file (before an ID3v1 tag, if there is one); null when there is none.
-AudioTags? readApeTag(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readApeTag(ByteSource source, {required bool wantLyrics}) {
   if (_apeFooter(source) case (:final footerEnd, :final size, :final count, flags: _)) {
     final itemsStart = footerEnd - size;
     final itemsEnd = footerEnd - 32;

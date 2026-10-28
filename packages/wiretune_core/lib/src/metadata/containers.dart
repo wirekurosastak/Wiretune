@@ -68,7 +68,7 @@ _MpegFrame? _parseMpegHeader(Uint8List b, int o) {
 }
 
 /// MP3 (and MP2): the first frame and its Xing/Info or VBRI header for length and bitrate; ID3v2, APE and ID3v1 tags.
-AudioTags? readMpeg(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readMpeg(ByteSource source, {required bool wantLyrics}) {
   final audioStart = skipLeadingId3v2(source);
   final tags = readId3v2(source, 0, wantLyrics: wantLyrics) ?? AudioTags();
   final ape = readApeTag(source, wantLyrics: wantLyrics);
@@ -133,7 +133,7 @@ AudioTags? readMpeg(ByteSource source, {bool wantLyrics = true}) {
 const List<int> _aacRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
 
 /// A raw AAC (ADTS) stream: the first frames give the format, their average size the bitrate and the length.
-AudioTags? readAdts(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readAdts(ByteSource source, {required bool wantLyrics}) {
   final start = skipLeadingId3v2(source);
   final tags = readId3v2(source, 0, wantLyrics: wantLyrics) ?? AudioTags();
   final ape = readApeTag(source, wantLyrics: wantLyrics);
@@ -225,7 +225,7 @@ const Map<String, TagField> _mp4Fields = {
 };
 
 /// MP4 audio (`.m4a`): the audio track's sample entry (AAC or ALAC), its length, and the iTunes-style `ilst` tags.
-AudioTags? readMp4(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readMp4(ByteSource source, {required bool wantLyrics}) {
   final top = _children(source, 0, source.length);
   if (top.isEmpty || !top.any((b) => b.type == 'ftyp' || b.type == 'moov')) return null;
   final moov = top.where((b) => b.type == 'moov').firstOrNull;
@@ -417,7 +417,7 @@ const Map<String, TagField> _infoFields = {
   'IPRT': TagField.track,
 };
 
-AudioTags? readWav(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readWav(ByteSource source, {required bool wantLyrics}) {
   final header = source.readExact(0, 12);
   if (header == null || !(header.matches(0, 'RIFF') || header.matches(0, 'RF64')) || !header.matches(8, 'WAVE')) {
     return null;
@@ -495,7 +495,7 @@ double _extended80(Uint8List b, int o) {
   return (b[o] & 0x80) != 0 ? -value : value;
 }
 
-AudioTags? readAiff(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readAiff(ByteSource source, {required bool wantLyrics}) {
   final header = source.readExact(0, 12);
   if (header == null || !header.matches(0, 'FORM') || !(header.matches(8, 'AIFF') || header.matches(8, 'AIFC'))) {
     return null;
@@ -534,7 +534,7 @@ AudioTags? readAiff(ByteSource source, {bool wantLyrics = true}) {
 
 // ── DSF (DSD stream file) ───────────────────────────────────────────────────────────────────────────
 
-AudioTags? readDsf(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readDsf(ByteSource source, {required bool wantLyrics}) {
   final header = source.readExact(0, 28 + 52);
   if (header == null || !header.matches(0, 'DSD ') || !header.matches(28, 'fmt ')) return null;
   final metadataOffset = header.u64le(20);
@@ -578,7 +578,7 @@ const List<int> _wavPackRates = [
   0,
 ];
 
-AudioTags? readWavPack(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readWavPack(ByteSource source, {required bool wantLyrics}) {
   final start = skipLeadingId3v2(source);
   final tags = readApeTag(source, wantLyrics: wantLyrics) ?? AudioTags();
   final v1 = readId3v1(source);
@@ -638,7 +638,7 @@ AudioTags? readWavPack(ByteSource source, {bool wantLyrics = true}) {
 
 // ── Monkey's Audio (APE) ────────────────────────────────────────────────────────────────────────────
 
-AudioTags? readMonkeysAudio(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readMonkeysAudio(ByteSource source, {required bool wantLyrics}) {
   final start = skipLeadingId3v2(source);
   final h = source.readExact(start, 76);
   if (h == null || !h.matches(0, 'MAC ')) return null;

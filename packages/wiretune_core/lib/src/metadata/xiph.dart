@@ -33,7 +33,7 @@ const Map<String, TagField> _vorbisFields = {
 };
 
 /// Reads a Vorbis comment block (FLAC's VORBIS_COMMENT, the comment packet of Ogg Vorbis and Opus) into [tags].
-void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyrics = true}) {
+void readVorbisComment(Uint8List data, int offset, AudioTags tags, {required bool wantLyrics}) {
   try {
     var position = offset;
     final vendorLength = data.u32le(position);
@@ -136,7 +136,7 @@ int _readStreamInfo(Uint8List info, AudioTags tags) {
 }
 
 /// FLAC: STREAMINFO for the properties, VORBIS_COMMENT for the tags, PICTURE blocks located for later.
-AudioTags? readFlac(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readFlac(ByteSource source, {required bool wantLyrics}) {
   final start = skipLeadingId3v2(source);
   final marker = source.readExact(start, 4);
   if (marker == null || !marker.matches(0, 'fLaC')) return null;
@@ -257,7 +257,7 @@ int lastOggGranule(ByteSource source, int serial) {
 }
 
 /// Ogg Vorbis and Opus.
-AudioTags? readOgg(ByteSource source, {bool wantLyrics = true}) {
+AudioTags? readOgg(ByteSource source, {required bool wantLyrics}) {
   final first = source.readExact(0, 4);
   if (first == null || !first.matches(0, 'OggS')) return null;
   final serialBytes = source.readExact(14, 4);
