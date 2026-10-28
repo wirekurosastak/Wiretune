@@ -492,8 +492,9 @@ class AudioSettingsViewModel extends ChangeNotifier {
   final WiretuneAudioEngine _engine;
   final List<void Function()> _unsubscribers = [];
 
-  bool isExclusiveMode = false;
-  bool isBitPerfect = false;
+  // The engine's own: it tells of a change at once, before the slow restart of the output.
+  bool get isExclusiveMode => _engine.isExclusiveMode;
+  bool get isBitPerfect => _engine.isBitPerfect;
   bool isExclusiveAvailable = false;
   bool isBitPerfectAvailable = false;
   AudioOutputDevice? selectedDevice;
@@ -513,8 +514,6 @@ class AudioSettingsViewModel extends ChangeNotifier {
   }
 
   void _syncWithEngine() {
-    isExclusiveMode = _engine.isExclusiveMode;
-    isBitPerfect = _engine.isBitPerfect;
     selectedDevice = availableDevices.where((d) => d.id == _engine.currentDevice?.id).firstOrNull ?? selectedDevice;
     _updateSignalPath();
   }
@@ -535,16 +534,11 @@ class AudioSettingsViewModel extends ChangeNotifier {
   }
 
   Future<void> setExclusiveMode(bool value) async {
-    isExclusiveMode = value;
-    notifyListeners();
     await _engine.setExclusiveMode(value);
     _syncWithEngine();
   }
 
   Future<void> setBitPerfect(bool value) async {
-    isBitPerfect = value;
-    if (value) isExclusiveMode = true;
-    notifyListeners();
     await _engine.setBitPerfectMode(value);
     _syncWithEngine();
   }

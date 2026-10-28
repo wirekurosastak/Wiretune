@@ -3,6 +3,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/view_models/player_view_model.dart';
+import 'package:wiretune/src/view_models/settings_view_models.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -379,6 +380,22 @@ void main() {
       await player.toggleBitPerfect();
       expect(player.volume, 40);
     });
+
+    test(
+      "the audio settings' switches are the engine's: bit-perfect brings exclusive, exclusive off ends both",
+      () async {
+        final settings = AudioSettingsViewModel(TestSupport.createEngine());
+        addTearDown(settings.dispose);
+        var told = 0;
+        settings.addListener(() => told++);
+
+        await settings.setBitPerfect(true);
+        expect((settings.isBitPerfect, settings.isExclusiveMode), (true, true));
+        expect(told, greaterThan(0));
+        await settings.setExclusiveMode(false);
+        expect((settings.isBitPerfect, settings.isExclusiveMode), (false, false));
+      },
+    );
 
     test('the spectrum follows the driver while playing and falls silent when stopped', () async {
       final (player, _, driver) = createQueue();
