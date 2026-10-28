@@ -10,9 +10,11 @@ such as a platform, a DAC, a TV or a car. CI analyzes, tests and builds everythi
 device ([what CI covers](docs/development.md#ci)). Update the docs when behavior, configuration or the API changes, and
 say plainly what's unverified, the way [audio.md](docs/audio.md#bit-perfect) does.
 
-Run the checks before you push:
+Run the checks before you push (on Windows, in the Git Bash that comes with Git):
 
 ```bash
+(cd packages/wiretune_core && dart pub get); (cd packages/wiretune_platform && flutter pub get)
+(cd server && dart pub get); (cd app && flutter pub get)
 dart format packages server app/lib app/test tool       # CI fails on anything this would change
 dart analyze --fatal-infos tool
 (cd packages/wiretune_core && dart analyze --fatal-infos && dart test)

@@ -105,7 +105,8 @@ out everywhere, which is how you cut off a lost phone. Sign-in and token details
 [SECURITY.md](../SECURITY.md#server).
 
 **Lost the administrator password?** There's no reset. Stop the server, delete the rows of the `users` table in
-`wiretune-server.db`, and start it again to set it up from scratch. Everyone starts over, and the old accounts'
+`wiretune-server.db` (`sqlite3 wiretune-server.db 'DELETE FROM users;'` with your system's `sqlite3`; for Docker, on
+the `/data` volume, as the image has none), and start it again to set it up from scratch. Everyone starts over, and the old accounts'
 favorites and playlists become unreachable.
 
 ## Data directory

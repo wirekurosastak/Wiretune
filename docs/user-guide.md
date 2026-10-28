@@ -54,7 +54,7 @@ Clicking a track plays the list it's in, and every *⋮* menu has **Play next** 
 restart. The sleep timer (the moon) pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
 
 Lyrics come from the file when it has them, and timed lyrics follow the song: tap a line to jump there. For other tracks
-the player asks [LRCLIB](https://lrclib.net), unless *Settings → Lyrics from the internet* is off.
+the player asks [LRCLIB](https://lrclib.net), unless *Settings → Appearance → Lyrics from the internet* is off.
 
 Tracks of the same format play without a gap ([audio.md](audio.md#gapless-playback)). A track that can't play stops the
 queue and says why, instead of skipping ahead.

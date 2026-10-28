@@ -94,8 +94,8 @@ names. Every line passes through `WiretuneLog.redact`, which blanks `token=` val
 URL.
 
 mpv's warnings and errors are logged under `MediaKitDriver`. The device list is mpv's own (`mpv --audio-device=help`)
-plus, on Linux, the ALSA hardware from `aplay -l`. *Settings → Performance statistics* shows Flutter's performance
-overlay.
+plus, on Linux, the ALSA hardware from `aplay -l`. *Settings → Appearance → Performance statistics* shows Flutter's
+performance overlay.
 
 ## Platform code
 

@@ -179,5 +179,5 @@ it. The workflow needs these secrets:
 
 ## Starting clean
 
-Delete `dist/`, run `flutter clean` in `app/`, and delete `build/` and `.dart_tool/` in `server/` and
-`packages/wiretune_core/`.
+Delete `dist/`, run `flutter clean` in `app/`, and delete `build/` and `.dart_tool/` in `server/` and both
+`packages/`, along with the packages' `pubspec.lock`.

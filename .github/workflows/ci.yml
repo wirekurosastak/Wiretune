@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # Also in release.yml (with the Dart it brings, DART_VERSION) and as server/Dockerfile's DART_VERSION default.
   FLUTTER_VERSION: 3.47.6
 
 jobs:

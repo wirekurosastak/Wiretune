@@ -3,7 +3,8 @@
 #   docker build -f server/Dockerfile -t wiretune-server .
 #   docker run -d -p 5200:5200 -v /srv/music:/music:ro -v wiretune-data:/data wiretune-server
 #
-# docs/server.md#docker says more. DART_VERSION is the Dart of the Flutter that CI uses (.github/workflows/ci.yml).
+# docs/server.md#docker says more. DART_VERSION is the Dart of the Flutter that CI uses (DART_VERSION in
+# .github/workflows/release.yml).
 ARG DART_VERSION=3.13.5
 
 FROM dart:${DART_VERSION} AS build
