@@ -338,6 +338,74 @@ Future<T?> showPhoneSheet<T>(BuildContext context, {required List<Widget> Functi
   );
 }
 
+/// One entry of a [showChoiceSheet]: what choosing it gives back, its [label], and an [icon] and a [subtitle] if it has
+/// them.
+class SheetChoice<T extends Object> {
+  const SheetChoice(this.value, this.label, {this.selected = false, this.icon, this.subtitle});
+
+  final T value;
+  final String label;
+  final bool selected;
+  final IconData? icon;
+  final String? subtitle;
+}
+
+/// A phone's menu of [choices] as a sheet ([showPhoneSheet]), under [title], with [note] under them if given: the
+/// chosen one in the accent, ticked. What a popup does on a wide screen (the sort, the genre, the device, the sleep
+/// timer), within the thumb's reach. Returns the value of the one tapped; null when the sheet was closed without.
+Future<T?> showChoiceSheet<T extends Object>(
+  BuildContext context, {
+  required String title,
+  required List<SheetChoice<T>> choices,
+  String? note,
+}) {
+  final colors = context.colors;
+  return showPhoneSheet<T>(
+    context,
+    builder: (sheet) => [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        child: Text(
+          title,
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+        ),
+      ),
+      for (final choice in choices)
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading: choice.icon == null
+              ? null
+              : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted),
+          title: Text(
+            choice.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: choice.selected ? FontWeight.w700 : FontWeight.w500,
+              color: choice.selected ? colors.accent : colors.textMain,
+            ),
+          ),
+          subtitle: choice.subtitle == null
+              ? null
+              : Text(
+                  choice.subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: colors.textMuted),
+                ),
+          trailing: choice.selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
+          onTap: () => Navigator.pop(sheet, choice.value),
+        ),
+      if (note != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+          child: Text(note, style: TextStyle(fontSize: 12.5, height: 1.4, color: colors.textMuted)),
+        ),
+    ],
+  );
+}
+
 /// A ⋮ menu on a phone, as a sheet ([showPhoneSheet]): what it is for on top, [cover] ([round]: an artist's picture),
 /// [title] and [subtitle], then its [items]. Returns the chosen one's value.
 Future<T?> showMenuSheet<T>(

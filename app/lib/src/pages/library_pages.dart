@@ -556,36 +556,15 @@ class SortButtons extends StatelessWidget {
               side: BorderSide(color: colors.glassBorder),
               shape: const StadiumBorder(),
             ),
-            onPressed: () {
-              showPhoneSheet<void>(
+            onPressed: () async {
+              final chosen = await showChoiceSheet<int>(
                 context,
-                builder: (sheet) => [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                    child: Text(
-                      context.tr('SortBy'),
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                    ),
-                  ),
-                  for (final (label, selected, onTap) in buttons)
-                    ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                      title: Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                          color: selected ? colors.accent : colors.textMain,
-                        ),
-                      ),
-                      trailing: selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
-                      onTap: () {
-                        Navigator.pop(sheet);
-                        onTap();
-                      },
-                    ),
+                title: context.tr('SortBy'),
+                choices: [
+                  for (final (i, (label, selected, _)) in buttons.indexed) SheetChoice(i, label, selected: selected),
                 ],
               );
+              if (chosen != null) buttons[chosen].$3();
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -695,51 +674,80 @@ class _GenreFilter extends StatelessWidget {
     final colors = context.colors;
     final active = selected != null;
     final color = active ? colors.accent : colors.textMuted;
+    final phone = PhoneChrome.isPhone(context);
+    final pill = Container(
+      height: phone ? PhoneChrome.controlHeight : 38,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
+        borderRadius: BorderRadius.circular(Radii.pill),
+        border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.filter_list_rounded, size: 16, color: color),
+          const SizedBox(width: 6),
+          // A long genre is cut short, also where the phone's header leaves the pill less than its 180 px.
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 180),
+              child: Text(
+                selected ?? context.tr('AllGenres'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: active ? colors.accent : colors.textMain,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.expand_more_rounded, size: 18, color: color),
+        ],
+      ),
+    );
+    // The menu's "all" entry has the empty string as its value: a null reads as "closed without a choice".
+    void choose(String? value) {
+      if (value != null) onSelected(value.isEmpty ? null : value);
+    }
+
+    // A phone's opens as a sheet, as the sort beside it does.
+    if (phone) {
+      return Tooltip(
+        message: context.tr('TipGenreFilter'),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            customBorder: const StadiumBorder(),
+            onTap: () async => choose(
+              await showChoiceSheet<String>(
+                context,
+                title: context.tr('TipGenreFilter'),
+                choices: [
+                  SheetChoice('', context.tr('AllGenres'), selected: !active),
+                  for (final genre in genres) SheetChoice(genre, genre, selected: equalsIgnoreCase(genre, selected)),
+                ],
+              ),
+            ),
+            child: pill,
+          ),
+        ),
+      );
+    }
     return PopupMenuButton<String>(
       tooltip: context.tr('TipGenreFilter'),
       position: PopupMenuPosition.under,
-      // The menu's "all" entry has the empty string as its value: a null would read as "closed without a choice".
-      onSelected: (value) => onSelected(value.isEmpty ? null : value),
+      onSelected: choose,
       itemBuilder: (context) => [
         CheckedPopupMenuItem(value: '', checked: !active, child: Text(context.tr('AllGenres'))),
         const PopupMenuDivider(),
         for (final genre in genres)
           CheckedPopupMenuItem(value: genre, checked: equalsIgnoreCase(genre, selected), child: Text(genre)),
       ],
-      child: Container(
-        height: PhoneChrome.isPhone(context) ? PhoneChrome.controlHeight : 38,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
-          borderRadius: BorderRadius.circular(Radii.pill),
-          border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.filter_list_rounded, size: 16, color: color),
-            const SizedBox(width: 6),
-            // A long genre is cut short, also where the phone's header leaves the pill less than its 180 px.
-            Flexible(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 180),
-                child: Text(
-                  selected ?? context.tr('AllGenres'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: active ? colors.accent : colors.textMain,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(Icons.expand_more_rounded, size: 18, color: color),
-          ],
-        ),
-      ),
+      child: pill,
     );
   }
 }

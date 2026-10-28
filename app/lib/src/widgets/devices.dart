@@ -7,6 +7,8 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
+import 'dialogs.dart';
+import 'page_parts.dart';
 
 /// The name a device goes by: the one its user gave it, or what kind of device it is.
 String deviceLabel(BuildContext context, String name, DeviceKind kind) => name.isNotEmpty
@@ -66,19 +68,60 @@ class DevicesButton extends StatelessWidget {
             ),
           ],
         );
+        final tooltip = remote
+            ? context.trf('PlayingOn', [deviceLabel(context, player.remoteDeviceName, player.remoteDeviceKind)])
+            : context.tr('TipDevices');
+        final icon = Icon(
+          remote ? Icons.cast_connected_rounded : Icons.cast_rounded,
+          color: remote ? colors.accent : colors.textMain,
+        );
+        // This device is the empty string: a null reads as "closed without a choice".
+        void choose(String? id) {
+          if (id != null) player.selectDevice(id.isEmpty ? null : id);
+        }
+
+        // A phone's opens as a sheet, within the thumb's reach.
+        if (PhoneChrome.isPhone(context)) {
+          return SizedBox.square(
+            dimension: dimension,
+            child: IconButton(
+              tooltip: tooltip,
+              iconSize: iconSize,
+              icon: icon,
+              onPressed: () async => choose(
+                await showChoiceSheet<String>(
+                  context,
+                  title: context.tr('DevicesTitle'),
+                  choices: [
+                    SheetChoice(
+                      '',
+                      here,
+                      subtitle: context.tr('DevicesThisDevice'),
+                      icon: deviceIcon(vm.capabilities.kind),
+                      selected: !remote,
+                    ),
+                    for (final device in player.otherDevices)
+                      SheetChoice(
+                        device.id,
+                        deviceLabel(context, device.name, device.kind),
+                        subtitle: _playing(context, device.playback),
+                        icon: deviceIcon(device.kind),
+                        selected: player.remoteDeviceId == device.id,
+                      ),
+                  ],
+                  note: player.otherDevices.isEmpty ? context.tr('DevicesNone') : null,
+                ),
+              ),
+            ),
+          );
+        }
         return SizedBox.square(
           dimension: dimension,
           child: PopupMenuButton<String>(
-            tooltip: remote
-                ? context.trf('PlayingOn', [deviceLabel(context, player.remoteDeviceName, player.remoteDeviceKind)])
-                : context.tr('TipDevices'),
+            tooltip: tooltip,
             iconSize: iconSize,
-            icon: Icon(
-              remote ? Icons.cast_connected_rounded : Icons.cast_rounded,
-              color: remote ? colors.accent : colors.textMain,
-            ),
-            // This device is the empty string: a null would read as "closed without a choice".
-            onSelected: (id) => player.selectDevice(id.isEmpty ? null : id),
+            icon: icon,
+            onSelected: choose,
             itemBuilder: (context) => [
               PopupMenuItem<String>(
                 enabled: false,

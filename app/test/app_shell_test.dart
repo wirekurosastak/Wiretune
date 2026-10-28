@@ -1113,9 +1113,11 @@ void main() {
     await settle(tester);
     await tester.tap(find.byTooltip(Localizer.get('TipDevices')));
     await settle(tester);
+    // A phone's menu is a sheet, as its sort's is.
+    expect(find.byType(BottomSheet), findsOneWidget);
     expect(find.text(Localizer.get('DevicesThisDevice')), findsOneWidget);
     expect(find.text('So What • Miles Davis'), findsOneWidget);
-    await tester.tap(find.ancestor(of: find.text('Desk'), matching: find.byType(CheckedPopupMenuItem<String>)));
+    await tester.tap(find.ancestor(of: find.text('Desk'), matching: find.byType(ListTile)));
     await settle(tester);
 
     expect(vm.player.isRemote, isTrue);
@@ -1930,6 +1932,36 @@ void main() {
     await settle(tester);
     expect(tester.takeException(), isNull);
     expect(find.text(genre), findsOneWidget);
+  });
+
+  testWidgets("a phone's genre filter and sleep timer open as sheets, as its sort does", (tester) async {
+    const genre = 'Jazz';
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue')..genre = genre,
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    await tester.tap(find.byTooltip(Localizer.get('TipGenreFilter')));
+    await settle(tester);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, genre));
+    await settle(tester);
+    expect(vm.albums.genre, genre);
+
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    await settle(tester);
+    await tester.tap(find.byTooltip(Localizer.get('SleepTimer')));
+    await settle(tester);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.tap(find.widgetWithText(ListTile, Localizer.format('SleepTimerMinutes', [30])));
+    await settle(tester);
+    expect(vm.player.sleepAt, isNotNull);
+    vm.player.setSleepTimer(null);
   });
 
   testWidgets("a phone's header buttons are one height, the sort first, and it carries no sort icon", (tester) async {

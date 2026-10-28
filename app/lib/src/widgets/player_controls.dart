@@ -9,6 +9,8 @@ import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/player_view_model.dart';
+import 'dialogs.dart';
+import 'page_parts.dart';
 
 /// The tooltip of the shuffle button: what pressing it does.
 String shuffleTip(PlayerViewModel player) => player.isShuffle ? 'TipShuffleOff' : 'TipShuffleOn';
@@ -467,20 +469,53 @@ class SleepTimerButton extends StatelessWidget {
                 ),
               ])
             : (player.sleepsAtTrackEnd ? context.tr('SleepTimerAtTrackEnd') : null);
+        final icon = Icon(
+          status != null ? Icons.bedtime_rounded : Icons.bedtime_outlined,
+          color: status != null ? colors.accent : colors.textMain,
+        );
+        void choose(int? value) {
+          switch (value) {
+            case null:
+              return;
+            case _trackEnd:
+              player.sleepAtTrackEnd();
+            case _off:
+              player.setSleepTimer(null);
+            case final minutes:
+              player.setSleepTimer(Duration(minutes: minutes));
+          }
+        }
+
+        // A phone's opens as a sheet, within the thumb's reach.
+        if (PhoneChrome.isPhone(context)) {
+          return SizedBox.square(
+            dimension: dimension,
+            child: IconButton(
+              tooltip: status ?? context.tr('SleepTimer'),
+              iconSize: iconSize,
+              icon: icon,
+              onPressed: () async => choose(
+                await showChoiceSheet<int>(
+                  context,
+                  title: status ?? context.tr('SleepTimer'),
+                  choices: [
+                    for (final minutes in _minutes) SheetChoice(minutes, context.trf('SleepTimerMinutes', [minutes])),
+                    if (!player.isRemote)
+                      SheetChoice(_trackEnd, context.tr('SleepTimerTrackEnd'), selected: player.sleepsAtTrackEnd),
+                    if (status != null) SheetChoice(_off, context.tr('SleepTimerOff')),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
         return SizedBox.square(
           dimension: dimension,
           child: PopupMenuButton<int>(
             tooltip: status ?? context.tr('SleepTimer'),
             iconSize: iconSize,
-            icon: Icon(
-              status != null ? Icons.bedtime_rounded : Icons.bedtime_outlined,
-              color: status != null ? colors.accent : colors.textMain,
-            ),
-            onSelected: (value) => switch (value) {
-              _trackEnd => player.sleepAtTrackEnd(),
-              _off => player.setSleepTimer(null),
-              _ => player.setSleepTimer(Duration(minutes: value)),
-            },
+            icon: icon,
+            onSelected: choose,
             itemBuilder: (context) => [
               PopupMenuItem<int>(
                 enabled: false,
