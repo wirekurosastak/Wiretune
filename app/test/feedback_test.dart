@@ -192,6 +192,23 @@ void main() {
     vm.dispose();
   });
 
+  testWidgets('signing out asks first also without downloads: signing in again takes the password', (tester) async {
+    final lib = await library(tester);
+    final session = (await tester.runAsync(() => signedInSession(lib)))!;
+    final vm = createMainViewModel(lib, null, session)..navigateTo(AppSection.settings);
+    await showApp(tester, vm, wide);
+    final button = find.text(Localizer.get('SignOut')).first;
+    await tester.ensureVisible(button);
+    await settle(tester);
+    await tester.tap(button);
+    await settle(tester);
+    expect(find.text(Localizer.get('SignOutConfirmHint')), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('Cancel')));
+    await settle(tester);
+    expect(session.isLoggedIn, isTrue);
+    vm.dispose();
+  });
+
   testWidgets('switching servers while signed in asks first', (tester) async {
     final lib = await library(tester);
     final session = (await tester.runAsync(() => signedInSession(lib)))!;

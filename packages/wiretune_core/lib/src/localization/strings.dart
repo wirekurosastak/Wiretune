@@ -237,11 +237,7 @@ const Map<String, (String, String, String)> allStrings = {
     'Die neue Playlist beginnt mit: {0}',
   ),
   'PlaylistDeleteAction': ('Lista törlése', 'Delete playlist', 'Playlist löschen'),
-  'PlaylistDeleteConfirm': (
-    'Biztosan törlöd a(z) „{0}” listát? A számok a könyvtárban maradnak.',
-    'Really delete the playlist “{0}”? The tracks stay in your library.',
-    'Möchtest du die Playlist „{0}“ wirklich löschen? Die Titel bleiben in deiner Bibliothek.',
-  ),
+  'PlaylistDeleteConfirm': ('Törlöd a(z) „{0}” listát?', 'Delete the playlist “{0}”?', 'Die Playlist „{0}“ löschen?'),
   'TipRemoveFromPlaylist': ('Eltávolítás a listából', 'Remove from playlist', 'Aus Playlist entfernen'),
 
   // ── Search ──────────────────────────────────────────────────────────────────────────────────────────
@@ -263,10 +259,11 @@ const Map<String, (String, String, String)> allStrings = {
   'Queue': ('Következik', 'Queue', 'Warteschlange'),
   'NowPlaying': ('MOST SZÓL', 'NOW PLAYING', 'WIRD GESPIELT'),
   'ClearQueue': ('Sor kiürítése', 'Clear queue', 'Warteschlange leeren'),
-  'ClearQueueConfirm': (
-    'Biztosan kiüríted a sort? A számok a könyvtárban maradnak.',
-    'Really clear the queue? The tracks stay in your library.',
-    'Möchtest du die Warteschlange wirklich leeren? Die Titel bleiben in deiner Bibliothek.',
+  'ClearQueueConfirm': ('Kiüríted a sort?', 'Clear the queue?', 'Die Warteschlange leeren?'),
+  'TracksStayInLibrary': (
+    'A számok a könyvtárban maradnak.',
+    'The tracks stay in your library.',
+    'Die Titel bleiben in deiner Bibliothek.',
   ),
   'Clear': ('Kiürítés', 'Clear', 'Leeren'),
   'QueueEmptyTitle': ('Nem következik semmi', 'The queue is empty', 'Die Warteschlange ist leer'),
@@ -830,7 +827,8 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'DownloadsNone': ('Még nincsenek letöltések.', 'No downloads yet.', 'Noch keine Downloads.'),
   'DownloadsRemoveAll': ('Összes letöltés törlése', 'Remove all downloads', 'Alle Downloads entfernen'),
-  'DownloadsRemoveConfirm': ('Igen, mind törlődjön', 'Yes, remove them all', 'Ja, alle entfernen'),
+  'DownloadsRemoveConfirm': ('Összes törlése', 'Delete all', 'Alle löschen'),
+  'DownloadsRemoveAllQuestion': ('Törlöd az összes letöltést?', 'Delete all downloads?', 'Alle Downloads löschen?'),
   'DownloadsRemoveAllConfirm': (
     '{0} letöltött szám ({1}) törlődik erről az eszközről.',
     '{0} downloaded tracks ({1}) are deleted from this device.',
@@ -850,9 +848,9 @@ const Map<String, (String, String, String)> allStrings = {
   'TipDownload': ('Letöltés erre az eszközre', 'Download to this device', 'Auf dieses Gerät herunterladen'),
   'TipRemoveDownload': ('Letöltés eltávolítása', 'Remove download', 'Download entfernen'),
   'DownloadRemoveConfirm': (
-    'Biztosan törlöd a(z) „{0}” letöltését erről az eszközről? A számok a könyvtárban maradnak.',
-    'Really remove the download of “{0}” from this device? The tracks stay in your library.',
-    'Möchtest du den Download von „{0}“ wirklich von diesem Gerät entfernen? Die Titel bleiben in deiner Bibliothek.',
+    'Törlöd a(z) „{0}” letöltését?',
+    'Delete the download of “{0}”?',
+    'Den Download von „{0}“ löschen?',
   ),
   'TipDownloaded': ('Letöltve', 'Downloaded', 'Heruntergeladen'),
   'TipMore': ('További lehetőségek', 'More options', 'Weitere Optionen'),
@@ -1209,6 +1207,11 @@ const Map<String, (String, String, String)> allStrings = {
     '{0} hat ein neues Passwort und wurde auf allen Geräten abgemeldet.',
   ),
   'SignOutConfirm': ('Kijelentkezel?', 'Sign out?', 'Abmelden?'),
+  'SignOutConfirmHint': (
+    'A szerver zenéihez újra be kell majd jelentkezned.',
+    "To play the server's music again, you'll have to sign in again.",
+    'Für die Musik des Servers musst du dich erneut anmelden.',
+  ),
   'SignOutConfirmDownloads': (
     '{0} letöltött szám ({1}) törlődik erről az eszközről. Bejelentkezés után újra letölthetők.',
     '{0} downloaded tracks ({1}) are deleted from this device. They can be downloaded again after signing in.',

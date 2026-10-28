@@ -853,7 +853,7 @@ class _DownloadsCard extends StatelessWidget {
                   onPressed: () async {
                     final confirmed = await confirmAction(
                       context,
-                      title: context.tr('DownloadsRemoveAll'),
+                      title: context.tr('DownloadsRemoveAllQuestion'),
                       message: context.trf('DownloadsRemoveAllConfirm', [downloads.copyCount, downloads.sizeLabel]),
                       confirmLabel: context.tr('DownloadsRemoveConfirm'),
                       destructive: true,

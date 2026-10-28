@@ -60,21 +60,21 @@ Future<PlayerSwipe?> askPlayerSwipe(BuildContext context) => showDialog<PlayerSw
   ),
 );
 
-/// Signs out of the server; first asks when that deletes the downloads on this device.
+/// Signs out of the server, asked first: signing in again takes the address and the password (on a TV with a remote),
+/// and the downloads on this device are deleted.
 Future<void> confirmAndSignOut(BuildContext context) async {
   final vm = context.vm;
   final downloads = vm.downloads;
-  if (downloads.copyCount > 0) {
-    final confirmed = await confirmAction(
-      context,
-      title: context.tr('SignOutConfirm'),
-      message: context.trf('SignOutConfirmDownloads', [downloads.copyCount, downloads.sizeLabel]),
-      confirmLabel: context.tr('SignOut'),
-      destructive: true,
-    );
-    if (!confirmed) return;
-  }
-  await vm.logout();
+  final confirmed = await confirmAction(
+    context,
+    title: context.tr('SignOutConfirm'),
+    message: downloads.copyCount > 0
+        ? context.trf('SignOutConfirmDownloads', [downloads.copyCount, downloads.sizeLabel])
+        : context.tr('SignOutConfirmHint'),
+    confirmLabel: context.tr('SignOut'),
+    destructive: true,
+  );
+  if (confirmed) await vm.logout();
 }
 
 /// Asks for a name and makes a playlist, starting with [tracks] (called [adding] in the dialog) when there are any, and
@@ -153,8 +153,8 @@ Future<void> showAddTrackToPlaylistDialog(BuildContext context, Track track) =>
 Future<void> confirmDeletePlaylist(BuildContext context, Playlist playlist) async {
   final confirmed = await confirmAction(
     context,
-    title: context.tr('PlaylistDeleteAction'),
-    message: context.trf('PlaylistDeleteConfirm', [playlist.name]),
+    title: context.trf('PlaylistDeleteConfirm', [playlist.name]),
+    message: context.tr('TracksStayInLibrary'),
     confirmLabel: context.tr('Delete'),
     destructive: true,
   );
@@ -165,8 +165,8 @@ Future<void> confirmDeletePlaylist(BuildContext context, Playlist playlist) asyn
 Future<void> confirmClearQueue(BuildContext context) async {
   final confirmed = await confirmAction(
     context,
-    title: context.tr('ClearQueue'),
-    message: context.tr('ClearQueueConfirm'),
+    title: context.tr('ClearQueueConfirm'),
+    message: context.tr('TracksStayInLibrary'),
     confirmLabel: context.tr('Clear'),
     destructive: true,
   );
@@ -184,8 +184,8 @@ Future<void> toggleListDownload(
   if (downloaded) {
     final confirmed = await confirmAction(
       context,
-      title: context.tr('TipRemoveDownload'),
-      message: context.trf('DownloadRemoveConfirm', [name]),
+      title: context.trf('DownloadRemoveConfirm', [name]),
+      message: context.tr('TracksStayInLibrary'),
       confirmLabel: context.tr('Delete'),
       destructive: true,
     );
