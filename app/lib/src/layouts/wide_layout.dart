@@ -1141,7 +1141,7 @@ class _PlayerBar extends StatelessWidget {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // Spectrum, tags and volume, as many as fit: the volume first, then the track's tags, then the
+                    // Spectrum, quality and volume, as many as fit: the volume first, then the quality tag, then the
                     // spectrum in what is left, down to 160 px.
                     final scale = MediaQuery.textScalerOf(context).scale(1);
                     // The devices button (while there are other devices to reach) takes its place first.
@@ -1158,7 +1158,7 @@ class _PlayerBar extends StatelessWidget {
                         (devices ? 40 : 0) -
                         40 -
                         8;
-                    final showTags = !compact && track != null && room >= 125 * scale;
+                    final showTag = !compact && track != null && room >= 125 * scale;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Row(
@@ -1185,10 +1185,19 @@ class _PlayerBar extends StatelessWidget {
                                 },
                               ),
                             ),
-                          if (showTags) ...[
+                          // The quality's tag alone, to keep the bar calm; its tooltip tells the bitrate and the BPM.
+                          if (showTag) ...[
                             ConstrainedBox(
                               constraints: BoxConstraints(maxWidth: room),
-                              child: PlayerTags(track: track, stacked: true),
+                              child: QualityTag(
+                                tier: track.format.tier,
+                                spec: track.format.tagSpec,
+                                details: [
+                                  if (PlayerTags.bitrateShown(track.format))
+                                    context.trf('BitrateKbps', [track.format.bitrateKbps]),
+                                  if (track.bpm case final bpm? when bpm > 0) '$bpm BPM',
+                                ].join(' · '),
+                              ),
                             ),
                             const SizedBox(width: 8),
                           ],

@@ -1879,7 +1879,7 @@ void main() {
     }
   });
 
-  testWidgets("a computer's player bar has the track's BPM and bitrate over its quality on its right, by its buttons", (
+  testWidgets("a computer's player bar has the quality's tag alone on its right, the bitrate and BPM in its tooltip", (
     tester,
   ) async {
     AppPlatform.forTesting(system: 'windows');
@@ -1899,20 +1899,20 @@ void main() {
     vm.player.playQueue(vm.library.tracks);
     await settle(tester);
 
-    // The BPM and the bitrate side by side, the quality's tag under them, between the seek bar and the buttons; not by
-    // the title.
-    final bpm = tester.getRect(find.text('136 BPM'));
-    final bitrate = tester.getRect(find.text(Localizer.format('BitrateKbps', [912])));
-    final quality = tester.getRect(find.text('FLAC 16bit/44.1kHz'));
-    expect(bpm.left, greaterThan(tester.getRect(find.byType(SeekBar)).right));
-    expect(bitrate.left, greaterThan(bpm.right));
-    expect(bitrate.center.dy, moreOrLessEquals(bpm.center.dy, epsilon: 0.5));
-    expect(quality.top, greaterThan(bpm.bottom));
-    final buttons = math.min(
-      tester.getRect(find.byType(SleepTimerButton)).left,
-      tester.getRect(find.byType(VolumeButton)).left,
+    // The quality's tag between the seek bar and the buttons; the bitrate and the BPM only in its tooltip, not beside it
+    // nor by the title.
+    final bar = find.ancestor(of: find.byType(VolumeButton), matching: find.byType(Row)).first;
+    final tag = find.descendant(of: bar, matching: find.byType(QualityTag));
+    expect(tester.widget<QualityTag>(tag).spec, 'FLAC 16bit/44.1kHz');
+    expect(find.descendant(of: bar, matching: find.text(Localizer.format('BitrateKbps', [912]))), findsNothing);
+    expect(find.text('136 BPM'), findsNothing);
+    final rect = tester.getRect(tag);
+    expect(rect.left, greaterThan(tester.getRect(find.byType(SeekBar)).right));
+    expect(rect.right, lessThan(tester.getRect(find.byType(VolumeButton)).left));
+    expect(
+      tester.widget<Tooltip>(find.descendant(of: tag, matching: find.byType(Tooltip))).message,
+      '${Localizer.format('BitrateKbps', [912])} · 136 BPM\n${QualityTier.silver.hint}',
     );
-    expect((bitrate.right < buttons, quality.right < buttons), (true, true));
   });
 
   testWidgets("a computer's volume stands upright over its speaker while the mouse is there, as in Tidal", (
@@ -1924,8 +1924,10 @@ void main() {
     await settle(tester);
     final player = vm.player;
     final speaker = find.byType(VolumeButton);
-    // Left of the tags, over the spectrum: nothing there to hover or press.
-    final away = tester.getRect(find.byType(PlayerTags)).centerLeft - const Offset(40, 0);
+    // Left of the quality's tag, over the spectrum: nothing there to hover or press.
+    final bar = find.ancestor(of: speaker, matching: find.byType(Row)).first;
+    final away =
+        tester.getRect(find.descendant(of: bar, matching: find.byType(QualityTag))).centerLeft - const Offset(40, 0);
     expect(find.byType(VolumeControl), findsNothing);
     // The first of the bar's buttons, before the sleep timer.
     expect(tester.getRect(speaker).right, lessThanOrEqualTo(tester.getRect(find.byType(SleepTimerButton)).left));

@@ -12,7 +12,7 @@ import '../theme/palette.dart';
 /// (gold), `FLAC 16bit/44.1kHz` (silver) or `MP3 320kbps` (bronze); the colour alone names the tier. It has a fill and
 /// an outline of its own, so the three medal colours keep their contrast in both themes. Hovering explains the tier.
 class QualityTag extends StatelessWidget {
-  const QualityTag({super.key, required this.tier, this.spec, this.fontSize = 10, this.padding});
+  const QualityTag({super.key, required this.tier, this.spec, this.fontSize = 10, this.padding, this.details});
 
   final QualityTier tier;
 
@@ -21,13 +21,16 @@ class QualityTag extends StatelessWidget {
   final double fontSize;
   final EdgeInsetsGeometry? padding;
 
+  /// A line over the tier's explanation in the tooltip: the player bar's bitrate and BPM.
+  final String? details;
+
   @override
   Widget build(BuildContext context) {
     context.tr('QualityGold'); // rebuild when the language changes
     final text = tier.tagText(spec);
     final hint = tier.hint;
     return Tooltip(
-      message: hint,
+      message: details == null || details!.isEmpty ? hint : '$details\n$hint',
       child: Container(
         padding: padding ?? const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
         decoration: BoxDecoration(
@@ -53,55 +56,35 @@ class QualityTag extends StatelessWidget {
   }
 }
 
-/// The playing track's tags in a player: its BPM, its quality, and its bitrate in the quality's colours where the
-/// quality's tag doesn't say it already (a lossy file's does: "MP3 320kbps"). In a row under the phone's full-screen
-/// cover; stacked in the player bar, the quality under the other two. Where room is short they end in an ellipsis.
+/// The playing track's tags under the phone's full-screen cover: its BPM, its quality, and its bitrate in the quality's
+/// colours where the quality's tag doesn't say it already (a lossy file's does: "MP3 320kbps"). Where room is short the
+/// quality's tag ends in an ellipsis.
 class PlayerTags extends StatelessWidget {
-  const PlayerTags({super.key, required this.track, this.fontSize = 10, this.stacked = false});
+  const PlayerTags({super.key, required this.track, this.fontSize = 10});
 
   final Track track;
   final double fontSize;
-
-  /// The quality's tag under the BPM and the bitrate rather than between them.
-  final bool stacked;
 
   @override
   Widget build(BuildContext context) {
     final bpm = track.bpm;
     final format = track.format;
-    final tempo = bpm != null && bpm > 0 ? PlayerMetaBadge(text: '$bpm BPM', fontSize: fontSize) : null;
-    final quality = QualityTag(tier: format.tier, spec: format.tagSpec, fontSize: fontSize);
-    final bitrate = format.isLossless && format.bitrateKbps > 0
-        ? QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: fontSize)
-        : null;
-    if (!stacked) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 8,
-        children: [
-          ?tempo,
-          Flexible(child: quality),
-          ?bitrate,
-        ],
-      );
-    }
-    return Column(
+    return Row(
       mainAxisSize: MainAxisSize.min,
-      spacing: 4,
+      spacing: 8,
       children: [
-        if (tempo != null || bitrate != null)
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 6,
-            children: [
-              if (tempo != null) Flexible(child: tempo),
-              if (bitrate != null) Flexible(child: bitrate),
-            ],
-          ),
-        quality,
+        if (bpm != null && bpm > 0) PlayerMetaBadge(text: '$bpm BPM', fontSize: fontSize),
+        Flexible(
+          child: QualityTag(tier: format.tier, spec: format.tagSpec, fontSize: fontSize),
+        ),
+        if (bitrateShown(format))
+          QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: fontSize),
       ],
     );
   }
+
+  /// Whether a tag of its own says [format]'s bitrate: a lossy file's quality tag says it already.
+  static bool bitrateShown(AudioFormat format) => format.isLossless && format.bitrateKbps > 0;
 }
 
 /// A small pill tinted with its colour: "ARTIST", "ALBUM", "TRACK", a counter.
