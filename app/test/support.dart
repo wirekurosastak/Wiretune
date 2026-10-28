@@ -4,7 +4,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune_core/testing.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -34,6 +37,22 @@ LibraryService createLibrary([
     ..replaceAllTracks(tracks)
     ..saveUserData([for (final t in tracks) t.id], favorites, plays);
   return LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
+}
+
+/// Shows the app of [vm] on a screen of [size] (logical pixels), and lets it settle.
+Future<void> showApp(WidgetTester tester, MainViewModel vm, Size size) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(WiretuneApp(vm: vm));
+  await settle(tester);
+}
+
+/// Settles the transitions, without waiting for what keeps animating (while something plays, that never ends).
+Future<void> settle(WidgetTester tester) async {
+  for (var i = 0; i < 5; i++) {
+    await tester.pump(const Duration(milliseconds: 120));
+  }
 }
 
 /// Writes a small cover (a 4 x 4 PNG in four colours) into [directory] and returns its path.

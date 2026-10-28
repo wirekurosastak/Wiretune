@@ -75,13 +75,6 @@ void main() {
     return vm;
   }
 
-  // Animations that run while something plays never settle; a few frames are enough to see the result.
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 5; i++) {
-      await tester.pump(const Duration(milliseconds: 120));
-    }
-  }
-
   // Covers are read from disk and decoded for real, in steps that each need the real event loop: until [shown] finds
   // the result. Then the transitions run out.
   Future<void> loadCovers(WidgetTester tester, Finder shown) async {

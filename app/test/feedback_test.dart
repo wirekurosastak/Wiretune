@@ -10,10 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
-import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
-import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/widgets/dialogs.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -38,14 +36,6 @@ void main() {
   const wide = Size(1400, 900);
   const phone = Size(400, 860);
 
-  Future<void> show(WidgetTester tester, MainViewModel vm, Size size) async {
-    tester.view.physicalSize = size;
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(WiretuneApp(vm: vm));
-    await settle(tester);
-  }
-
   final serverTrack = TestSupport.makeServerTrack('s1', 'Giant Steps', artist: 'John Coltrane', album: 'Giant Steps');
 
   // Made in the real event loop: the library's locks wait for it, and a widget test's own clock only moves on a pump.
@@ -62,7 +52,7 @@ void main() {
   testWidgets('a notice shows over either layout, and goes by itself or when tapped', (tester) async {
     for (final size in [wide, phone]) {
       final vm = createMainViewModel(await library(tester));
-      await show(tester, vm, size);
+      await showApp(tester, vm, size);
 
       vm.showNotice('Saved.');
       await settle(tester);
@@ -84,7 +74,7 @@ void main() {
   testWidgets("a change the server's data can't take while it is out of reach says why", (tester) async {
     final lib = await library(tester, [serverTrack]);
     final vm = createMainViewModel(lib);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
 
     lib.toggleFavorite('s1');
     await settle(tester);
@@ -122,7 +112,7 @@ void main() {
     final session = ServerSession(lib, lib.repository);
     final vm = createMainViewModel(lib, null, session)..navigateTo(AppSection.settings);
     session.initialize(); // the server is out of reach until it is asked
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
     expect(find.text(Localizer.get('Reconnect')), findsOneWidget);
 
     final hint = find.text(Localizer.get('OfflineModeHint'));
@@ -153,7 +143,7 @@ void main() {
       ),
     ))!;
     final vm = createMainViewModel(lib, null, session);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
 
     revoked = true;
     await tester.runAsync(session.refreshLibrary);
@@ -176,7 +166,7 @@ void main() {
     addTearDown(() => copy.existsSync() ? copy.deleteSync() : null);
     lib.repository.saveDownload('s1', 'v1', p.relative(copy.path, from: vm.downloadService.directory));
     await tester.runAsync(vm.downloadService.initialize);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
 
     Future<void> pressSignOut() async {
       final button = find.text(Localizer.get('SignOut')).first;
@@ -206,7 +196,7 @@ void main() {
     final lib = await library(tester);
     final session = (await tester.runAsync(() => signedInSession(lib)))!;
     final vm = createMainViewModel(lib, null, session)..navigateTo(AppSection.settings);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
 
     final address = find.byWidgetPredicate((w) => w is TextField && w.controller?.text == 'http://server:5200');
     await tester.enterText(address, 'http://elsewhere:5200');
@@ -247,7 +237,7 @@ void main() {
       ),
     ))!;
     final vm = createMainViewModel(lib, null, session)..navigateTo(AppSection.settings);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
     await tester.runAsync(vm.serverSettings.loadServerFolder);
     await settle(tester);
     expect(find.text(Localizer.format('ServerFolderUnavailable', ['/mnt/nas/music'])), findsOneWidget);
@@ -284,7 +274,7 @@ void main() {
       connector: (uri, token) async => throw const RemoteRefusedException('HTTP 401', 401),
     );
     final vm = createMainViewModel(lib, null, session, remote)..navigateTo(AppSection.settings);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
     vm.remote.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
     await tester.runAsync(() => until(() => vm.remote.problem == RemoteProblem.ended));
     await settle(tester);
@@ -296,7 +286,7 @@ void main() {
     final lib = await library(tester, [TestSupport.makeTrack('1', 'So What')]);
     lib.createPlaylist('Mix');
     final vm = createMainViewModel(lib);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
     Future<void> add() async {
       final page = tester.element(find.text(Localizer.get('NavArtists')).first);
       final adding = showAddTrackToPlaylistDialog(page, lib.tracks.single);
@@ -331,7 +321,7 @@ void main() {
     final mix = lib.createPlaylist('Mix');
     lib.addTracksToPlaylist(mix.id, ['1', '2', '3']);
     final vm = createMainViewModel(lib);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
     vm.playlists.openPlaylist(mix);
     await settle(tester);
 
@@ -398,7 +388,7 @@ void main() {
   testWidgets('hiding says so, and its Undo brings it back', (tester) async {
     final lib = await library(tester, [TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')]);
     final vm = createMainViewModel(lib);
-    await show(tester, vm, wide);
+    await showApp(tester, vm, wide);
     final album = lib.albums.single;
     final said = find.text(Localizer.format('HiddenNotice', ['Kind of Blue']));
 
@@ -417,18 +407,11 @@ void main() {
     final broken = LibraryService(_NewerDatabase(), MetadataScanner(), coverCacheDirectory: '/nonexistent');
     final vm = createMainViewModel(broken);
     await tester.runAsync(vm.start);
-    await show(tester, vm, phone);
+    await showApp(tester, vm, phone);
     expect(find.text(Localizer.get('StartupFailedTitle')), findsOneWidget);
     expect(find.textContaining('/data/wiretune.db'), findsOneWidget);
     vm.dispose();
   });
-}
-
-/// Settles the transitions, without waiting for what keeps animating.
-Future<void> settle(WidgetTester tester) async {
-  for (var i = 0; i < 5; i++) {
-    await tester.pump(const Duration(milliseconds: 120));
-  }
 }
 
 /// The database of a newer Wiretune.
