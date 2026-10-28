@@ -91,16 +91,18 @@ Remote control runs over a WebSocket (`/api/remote`). Caddy passes WebSockets th
 
 ## Accounts
 
-The administrator adds and removes everyone else in *Settings → Users*. Those accounts are regular users and can't be
-promoted, and the administrator can't delete their own account. Names can be up to 64 characters and must be unique,
-ignoring case. Passwords need at least 8 characters and at most 72 bytes, because bcrypt ignores anything longer.
+The administrator adds and removes everyone else in *Settings → Account & connection*. Those accounts are regular users
+and can't be promoted, and the administrator can't delete their own account. Names can be up to 64 characters and must
+be unique, ignoring case. Passwords need at least 8 characters and at most 72 bytes, because bcrypt ignores anything
+longer.
 
 Each account's favorites, play counts, playlists and hidden items live on the server, so they're the same on every
 device and are deleted with the account ([limits](api.md#your-data)).
 
 Changing your own password in the player doesn't ask for the current one, and it signs out the account's other devices.
-When the administrator resets another account's password (*Settings → Users*), that account is signed out everywhere,
-which is how you cut off a lost phone. Sign-in and token details are in [SECURITY.md](../SECURITY.md#server).
+When the administrator resets another account's password (*Settings → Account & connection*), that account is signed
+out everywhere, which is how you cut off a lost phone. Sign-in and token details are in
+[SECURITY.md](../SECURITY.md#server).
 
 **Lost the administrator password?** There's no reset. Stop the server, delete the rows of the `users` table in
 `wiretune-server.db`, and start it again to set it up from scratch. Everyone starts over, and the old accounts'

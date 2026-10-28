@@ -3,11 +3,12 @@
 ## Running from source
 
 ```bash
-cd server && dart run bin/wiretune_server.dart --library /path/to/music      # one terminal
-cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux                # another; or -d windows, -d macos, a phone
+cd server && dart run bin/wiretune_server.dart --library /path/to/music --data-dir /tmp/wt-dev-server   # one terminal
+cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux       # another; or -d windows, -d macos, a phone
 ```
 
-`WIRETUNE_DATA_DIR` gives the player a throw-away data folder, so your real library and sign-in stay untouched.
+`--data-dir` and `WIRETUNE_DATA_DIR` give the server and the player throw-away data folders, so a Wiretune you really
+use on this machine stays untouched.
 
 ### On a phone, TV or car
 
