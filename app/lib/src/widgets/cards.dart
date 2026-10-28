@@ -319,11 +319,9 @@ class ListMenu {
         ),
       // The page's header has the artist's name as a link.
       if (!header && artist != null) item(_ListAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
-      // Hiding or deleting comes last, apart from the rest (the header's menu has nothing else).
-      if (removeKey case final key?) ...[
-        if (!header) const PopupMenuDivider(),
+      // Hiding or deleting comes last.
+      if (removeKey case final key?)
         item(_ListAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
-      ],
     ];
   }
 

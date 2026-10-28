@@ -727,8 +727,7 @@ class TrackMenu extends StatelessWidget {
           ),
       if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
       if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
-      // What takes the track away comes last, apart from the rest: a slip of one row can't remove instead of add.
-      const PopupMenuDivider(),
+      // What takes the track away comes last, away from Add to playlist: a slip of one row can't remove instead of add.
       if (kind == TrackTableKind.playlist && playlists.selectedPlaylist?.isAutomatic == false)
         item(
           TrackAction.removeFromPlaylist,
