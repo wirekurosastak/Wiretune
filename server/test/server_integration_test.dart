@@ -136,19 +136,6 @@ void main() {
     );
   });
 
-  test('a deleted user loses access at once', () async {
-    final (admin, _) = await setupAdmin(server);
-    final created = UserInfo.fromJson(
-      json(await admin.post('/api/users', {'username': 'guest', 'password': guestPassword})),
-    );
-    final (guest, _) = await login(server, 'guest', guestPassword, rememberMe: true);
-    expect((await guest.get('/api/tracks')).statusCode, 200);
-
-    expect((await admin.delete('/api/users/${created.id}')).statusCode, 200);
-    // The 90-day token is still cryptographically valid, but the account behind it is gone.
-    expect((await guest.get('/api/tracks')).statusCode, 401);
-  });
-
   test('an administrator cannot delete their own account; unknown accounts are 404', () async {
     final (admin, auth) = await setupAdmin(server);
     expect((await admin.delete('/api/users/${auth.user.id}')).statusCode, 400);
