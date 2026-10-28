@@ -1927,6 +1927,8 @@ void main() {
     // Left of the tags, over the spectrum: nothing there to hover or press.
     final away = tester.getRect(find.byType(PlayerTags)).centerLeft - const Offset(40, 0);
     expect(find.byType(VolumeControl), findsNothing);
+    // The first of the bar's buttons, before the sleep timer.
+    expect(tester.getRect(speaker).right, lessThanOrEqualTo(tester.getRect(find.byType(SleepTimerButton)).left));
 
     // The mouse over the speaker: a slider stands above it, louder upwards.
     final slider = find.descendant(of: find.byType(RotatedBox), matching: find.byType(Slider));
