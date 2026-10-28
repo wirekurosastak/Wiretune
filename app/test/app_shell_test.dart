@@ -671,15 +671,28 @@ void main() {
     expect(find.text(Localizer.get('PlayNext')), findsNothing, reason: 'there it lifts the row to move it');
   });
 
-  testWidgets("a phone's favourites have the list's whole menu: queue them, or add them to a playlist", (tester) async {
-    final vm = await pumpApp(tester, const Size(400, 860));
-    vm.library.toggleFavorite('1');
+  testWidgets("a phone's favourites have a ⋮ in the download's place: queue them, or download them", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860), createWithServer);
+    vm.library
+      ..toggleFavorite('1')
+      ..setFavorite('s1', true); // not signed in: as the server told it
     vm.navigateTo(AppSection.favorites);
     await settle(tester);
-    await tester.tap(find.descendant(of: find.byType(PageHeader), matching: find.byIcon(Icons.more_vert_rounded)));
+    final more = find.descendant(of: find.byType(PageHeader), matching: find.byIcon(Icons.more_vert_rounded));
+    final sort = find.descendant(of: find.byType(PageHeader), matching: find.byType(SortButtons));
+    expect(tester.getRect(sort).right, lessThanOrEqualTo(tester.getRect(more).left), reason: 'beside the sort');
+    expect(find.descendant(of: find.byType(PageHeader), matching: find.byIcon(Icons.download_rounded)), findsNothing);
+
+    await tester.tap(more);
     await settle(tester);
-    for (final key in ['PlayNext', 'AddToQueue', 'AddToPlaylist']) {
-      expect(find.text(Localizer.get(key)), findsOneWidget, reason: key);
+    Finder inSheet(String key) =>
+        find.descendant(of: find.byType(BottomSheet), matching: find.text(Localizer.get(key)));
+    for (final key in ['PlayNext', 'AddToQueue', 'Download']) {
+      expect(inSheet(key), findsOneWidget, reason: key);
+    }
+    // Play and Shuffle are beside it already; the favourites need no playlist of their own.
+    for (final key in ['Play', 'Shuffle', 'AddToPlaylist']) {
+      expect(inSheet(key), findsNothing, reason: key);
     }
     await tester.tap(find.text(Localizer.get('AddToQueue')));
     await settle(tester);

@@ -140,8 +140,6 @@ class FavoritesPage extends StatelessWidget {
             subtitle: '${context.trf('TrackCount', [favorites.tracks.length])}  •  ${favorites.totalDuration}',
             actions: [
               if (phone) TrackSortButtons(favorites), // a wide table sorts by its headers
-              // The list's whole menu, as an album's or a playlist's ⋮ has it: Play next, Add to queue, Add to playlist.
-              if (phone) menu.button(context),
               PlayShuffleButtons(
                 tracks: favorites.tracks,
                 onPlay: favorites.playAll,
@@ -149,12 +147,15 @@ class FavoritesPage extends StatelessWidget {
                 playNext: phone ? null : menu.playNextButton(),
                 addToQueue: phone ? null : menu.addToQueueButton(),
                 addToPlaylist: phone ? null : menu.addToPlaylistButton(),
-                download: DownloadListButton.forTracks(
-                  favorites.tracks,
-                  name: context.tr('NavFavorites'),
-                  isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
-                  onPressed: context.vm.downloads.toggleFavorites,
-                ),
+                // A phone's ⋮ in the download's place: Play next, Add to queue and the download, beside the sort.
+                download: phone
+                    ? menu.queueAndDownloadButton()
+                    : DownloadListButton.forTracks(
+                        favorites.tracks,
+                        name: context.tr('NavFavorites'),
+                        isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
+                        onPressed: context.vm.downloads.toggleFavorites,
+                      ),
               ),
             ],
           ),

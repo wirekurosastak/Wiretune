@@ -294,8 +294,8 @@ class ListMenu {
   final void Function(BuildContext context)? onRemove;
 
   /// [header]: the page's header has play, shuffle, the download, the playlist and the queue's two as buttons of their
-  /// own. What removes something (the download, a playlist) is red, as in every menu.
-  List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false}) {
+  /// own. [only]: just those entries. What removes something (the download, a playlist) is red, as in every menu.
+  List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false, Set<_ListAction>? only}) {
     final vm = context.vm;
     final colors = context.colors;
     PopupMenuItem<_ListAction> item(_ListAction action, IconData icon, String text, {Color? color}) => PopupMenuItem(
@@ -312,7 +312,7 @@ class ListMenu {
       ),
     );
     final downloaded = isDownloaded(vm);
-    return [
+    final entries = [
       if (!header) ...[
         item(_ListAction.play, Icons.play_arrow_rounded, context.tr('Play')),
         item(_ListAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
@@ -336,6 +336,12 @@ class ListMenu {
       if (removeKey case final key?)
         item(_ListAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
     ];
+    return only == null
+        ? entries
+        : [
+            for (final entry in entries)
+              if (only.contains(entry.value)) entry,
+          ];
   }
 
   void _run(BuildContext context, _ListAction? action) {
@@ -374,14 +380,14 @@ class ListMenu {
     if (context.mounted) _run(context, action);
   }
 
-  Future<void> _showSheet(BuildContext context, {bool header = false}) async {
+  Future<void> _showSheet(BuildContext context, {bool header = false, Set<_ListAction>? only}) async {
     final action = await showMenuSheet(
       context,
       cover: cover(context, large: false),
       round: round,
       title: name,
       subtitle: subtitle(context),
-      items: _items(context, header: header),
+      items: _items(context, header: header, only: only),
     );
     if (context.mounted) _run(context, action);
   }
@@ -536,6 +542,17 @@ class ListMenu {
   Widget _queueButton(_ListAction action, IconData icon, String key) => Builder(
     builder: (context) =>
         HeaderIconButton(tooltip: context.tr(key), icon: icon, onPressed: () => _run(context, action)),
+  );
+
+  /// A phone tab's ⋮ in place of its download button, beside Play and Shuffle (the favourites'): Play next, Add to
+  /// queue and the download, the rest of what the list does.
+  Widget queueAndDownloadButton() => Builder(
+    builder: (context) => HeaderIconButton(
+      tooltip: context.tr('TipMore'),
+      icon: Icons.more_vert_rounded,
+      onPressed: () =>
+          _showSheet(context, only: const {_ListAction.playNext, _ListAction.addToQueue, _ListAction.download}),
+    ),
   );
 
   /// Whether the page has anything beside the header's buttons: hiding it, deleting it (an automatic playlist has
