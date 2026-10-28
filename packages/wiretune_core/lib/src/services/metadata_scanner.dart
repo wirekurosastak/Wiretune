@@ -331,7 +331,7 @@ bool _tryReuse(String file, _Known? known, Map<String, String?> folderCovers) {
 Track? _readTrack(
   String filePath,
   String? coverCacheDirectory,
-  Map<String, String?>? folderCoverCache,
+  Map<String, String?> folderCoverCache,
   DateTime? added,
 ) {
   try {
@@ -377,9 +377,7 @@ Track? _readTrack(
             albumArtist ?? tags.artists.firstOrNull ?? artist,
             album,
           ) ??
-          (folderCoverCache != null
-              ? folderCoverCache.putIfAbsent(directory, () => MetadataScanner.findFolderCover(directory))
-              : MetadataScanner.findFolderCover(directory));
+          folderCoverCache.putIfAbsent(directory, () => MetadataScanner.findFolderCover(directory));
 
       int? positive(int? value) => value != null && value > 0 ? value : null;
       return Track(

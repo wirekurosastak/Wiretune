@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -189,15 +188,6 @@ class _BottomBars extends StatelessWidget {
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation();
 
-  /// The tabs as the bar lays them out, left to right.
-  static const List<AppSection> order = [
-    AppSection.artists,
-    AppSection.albums,
-    AppSection.tracks,
-    AppSection.favorites,
-    AppSection.playlists,
-  ];
-
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
@@ -212,7 +202,6 @@ class _BottomNavigation extends StatelessWidget {
       ])
         (section, sectionIcon(section), palette.accentFor(section), label),
     ];
-    assert(listEquals([for (final item in items) item.$1], order));
     final active = vm.isSearchOpen ? -1 : items.indexWhere((item) => item.$1 == vm.selectedSection);
     // Room under it, as in TIDAL's pill, so the labels clear the pill's rounded bottom.
     return Padding(
