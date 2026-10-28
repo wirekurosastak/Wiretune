@@ -307,8 +307,8 @@ class WiretuneMediaSession extends BaseAudioHandler {
         null => const [],
       },
       // In the order chosen in the app (without its genre filter).
-      'favorites' => _vm.favorites.favoriteTracks,
-      'tracks' => _vm.tracks.displayedTracks,
+      'favorites' => _vm.favorites.tracks,
+      'tracks' => _vm.tracks.tracks,
       'search' => _found(id),
       _ => const [],
     };

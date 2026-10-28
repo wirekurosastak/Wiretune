@@ -83,11 +83,11 @@ class MainViewModel extends ChangeNotifier {
     player = PlayerViewModel(audioEngine, library)..attachRemote(this.remote);
     lyrics = LyricsViewModel(player, own: _ownLyrics, online: onlineLyrics?.find);
 
-    tracks = TracksViewModel(library, player);
+    tracks = TrackListViewModel.allTracks(library, player);
     albums = AlbumsViewModel(library, player)..onNavWave = triggerNavWave;
     artists = ArtistsViewModel(library, player, artistPictures)..onNavWave = triggerNavWave;
     playlists = PlaylistsViewModel(library, player)..onNavWave = triggerNavWave;
-    favorites = FavoritesViewModel(library, player);
+    favorites = TrackListViewModel.favorites(library, player);
     downloads = DownloadsViewModel(this.downloadService);
     audioSettings = AudioSettingsViewModel(audioEngine);
     serverSettings = ServerSettingsViewModel(
@@ -152,11 +152,11 @@ class MainViewModel extends ChangeNotifier {
 
   late final PlayerViewModel player;
   late final LyricsViewModel lyrics;
-  late final TracksViewModel tracks;
+  late final TrackListViewModel tracks;
   late final AlbumsViewModel albums;
   late final ArtistsViewModel artists;
   late final PlaylistsViewModel playlists;
-  late final FavoritesViewModel favorites;
+  late final TrackListViewModel favorites;
   late final DownloadsViewModel downloads;
   late final AudioSettingsViewModel audioSettings;
   late final ServerSettingsViewModel serverSettings;
@@ -852,13 +852,13 @@ class MainViewModel extends ChangeNotifier {
 
   void _refreshLocalizedTexts() {
     _onSessionStateChanged();
-    tracks.refreshTracks();
+    tracks.refresh();
     albums.refreshLocalizedTexts();
     artists.refreshLocalizedTexts();
     player.refreshLocalizedTexts();
     lyrics.refreshLocalizedTexts();
     playlists.refreshLocalizedTexts();
-    favorites.refreshLocalizedTexts();
+    favorites.refresh();
     search.refreshLocalizedTexts();
     audioSettings.refreshLocalizedTexts();
     serverSettings.refreshLocalizedTexts();

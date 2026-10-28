@@ -825,7 +825,7 @@ class _Sidebar extends StatelessWidget {
                   item(AppSection.tracks, context.tr('NavTracks'), library.tracks.length),
                   const SizedBox(height: 22),
                   if (!compact) _GroupTitle(context.tr('SectionCollection')),
-                  item(AppSection.favorites, context.tr('NavFavorites'), vm.favorites.favoriteTracks.length),
+                  item(AppSection.favorites, context.tr('NavFavorites'), vm.favorites.tracks.length),
                   item(AppSection.playlists, context.tr('NavPlaylists'), vm.playlists.allPlaylists.length),
                   // Settings alone needs no heading: the gap sets it apart.
                   const SizedBox(height: 22),

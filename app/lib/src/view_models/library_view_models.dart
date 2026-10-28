@@ -127,42 +127,68 @@ mixin TrackSorting on ChangeNotifier {
       sortTracks(tracks, sortField, descending: isSortDescending, addedAt: addedAt);
 }
 
-/// The Tracks section: the whole library.
-class TracksViewModel extends ChangeNotifier with TrackSorting {
-  TracksViewModel(this._library, this._player) {
-    _unsubscribe = _library.libraryChanged.listen((_) => refreshTracks());
-    refreshTracks();
+/// A page of tracks in the order the user chose, with their total length: the Tracks section and the Favorites section.
+class TrackListViewModel extends ChangeNotifier with TrackSorting {
+  /// The Tracks section: the whole library, A to Z.
+  TrackListViewModel.allTracks(LibraryService library, this._player)
+    : _source = (() => library.tracks),
+      _favoritedAt = null,
+      _order = SortOrder(TrackSortField.title, startsDescending: startsDescending) {
+    _unsubscribers.add(library.libraryChanged.listen((_) => refresh()));
+    refresh();
   }
 
-  final LibraryService _library;
+  /// The Favorites section; the newest favourites first unless the user sorts otherwise.
+  TrackListViewModel.favorites(LibraryService library, this._player)
+    : _source = (() => library.favorites),
+      _favoritedAt = library.favoritedAt,
+      _order = SortOrder(TrackSortField.added, startsDescending: startsDescending) {
+    _unsubscribers.addAll([
+      library.libraryChanged.listen((_) => refresh()),
+      library.favoriteChanged.listen((_) => refresh()),
+    ]);
+    refresh();
+  }
+
+  final List<Track> Function() _source;
+  final DateTime? Function(String trackId)? _favoritedAt;
   final PlayerViewModel _player;
-  late final void Function() _unsubscribe;
+  final List<void Function()> _unsubscribers = [];
 
   @override
-  final SortOrder<TrackSortField> _order = SortOrder(TrackSortField.title, startsDescending: startsDescending);
+  final SortOrder<TrackSortField> _order;
 
-  List<Track> displayedTracks = const [];
-  int get totalTracksCount => displayedTracks.length;
-  bool get hasTracks => displayedTracks.isNotEmpty;
-  String totalTracksDuration = '';
+  List<Track> tracks = const [];
+  String totalDuration = '';
+  bool get isEmpty => tracks.isEmpty;
 
-  void refreshTracks() {
+  /// Reads the tracks again; also in a new language (the total's units).
+  void refresh() {
     _applySort();
-    totalTracksDuration = formatTotal(displayedTracks);
+    totalDuration = formatTotal(tracks);
     notifyListeners();
   }
 
+  /// On the favourites page, when the track became a favourite.
   @override
-  void _applySort() => displayedTracks = _sorted(_library.tracks);
+  DateTime? addedAt(Track track) => switch (_favoritedAt) {
+    final favoritedAt? => favoritedAt(track.id),
+    null => track.addedAt,
+  };
+
+  @override
+  void _applySort() => tracks = _sorted(_source());
 
   /// Plays the page from its first track, or from any while shuffle is on (the header's shuffle switch shows which).
   void playAll() {
-    if (displayedTracks.isNotEmpty) _player.playQueue(displayedTracks);
+    if (tracks.isNotEmpty) _player.playQueue(tracks);
   }
 
   @override
   void dispose() {
-    _unsubscribe();
+    for (final unsubscribe in _unsubscribers) {
+      unsubscribe();
+    }
     super.dispose();
   }
 }
@@ -514,55 +540,6 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
     final target = artist ?? selectedArtist;
     if (target == null || target.tracks.isEmpty) return;
     _player.playQueue(target.tracks);
-  }
-
-  @override
-  void dispose() {
-    for (final unsubscribe in _unsubscribers) {
-      unsubscribe();
-    }
-    super.dispose();
-  }
-}
-
-/// The Favorites section; the newest favourites first unless the user sorts otherwise.
-class FavoritesViewModel extends ChangeNotifier with TrackSorting {
-  FavoritesViewModel(this._library, this._player) {
-    _unsubscribers.addAll([
-      _library.libraryChanged.listen((_) => refreshFavorites()),
-      _library.favoriteChanged.listen((_) => refreshFavorites()),
-    ]);
-    refreshFavorites();
-  }
-
-  final LibraryService _library;
-  final PlayerViewModel _player;
-  final List<void Function()> _unsubscribers = [];
-
-  @override
-  final SortOrder<TrackSortField> _order = SortOrder(TrackSortField.added, startsDescending: startsDescending);
-
-  List<Track> favoriteTracks = const [];
-  String totalFavoritesDuration = '';
-  bool get isEmpty => favoriteTracks.isEmpty;
-
-  void refreshLocalizedTexts() => refreshFavorites();
-
-  void refreshFavorites() {
-    _applySort();
-    totalFavoritesDuration = formatTotal(favoriteTracks);
-    notifyListeners();
-  }
-
-  /// When the track became a favourite.
-  @override
-  DateTime? addedAt(Track track) => _library.favoritedAt(track.id);
-
-  @override
-  void _applySort() => favoriteTracks = _sorted(_library.favorites);
-
-  void playAll() {
-    if (favoriteTracks.isNotEmpty) _player.playQueue(favoriteTracks);
   }
 
   @override

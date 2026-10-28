@@ -140,7 +140,7 @@ void main() {
     final vm = await pumpApp(tester, const Size(1400, 900));
     final navFavorites = Localizer.get('NavFavorites');
     expect(find.text(navFavorites), findsOneWidget);
-    expect(vm.favorites.favoriteTracks, isEmpty);
+    expect(vm.favorites.tracks, isEmpty);
 
     final favoritesItem = find.ancestor(of: find.text(navFavorites), matching: find.byType(InkWell));
     expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
@@ -149,14 +149,14 @@ void main() {
     await tester.pump();
     await settle(tester);
 
-    expect(vm.favorites.favoriteTracks, hasLength(1));
+    expect(vm.favorites.tracks, hasLength(1));
     expect(find.descendant(of: favoritesItem, matching: find.text('1')), findsOneWidget);
 
     vm.library.toggleFavorite('1');
     await tester.pump();
     await settle(tester);
 
-    expect(vm.favorites.favoriteTracks, isEmpty);
+    expect(vm.favorites.tracks, isEmpty);
     expect(find.descendant(of: favoritesItem, matching: find.text('0')), findsOneWidget);
   });
 
@@ -1210,7 +1210,7 @@ void main() {
       find.byWidgetPredicate((w) => w is SortLabel && w.label == '${Localizer.get('SortArtist')} ↑'),
       findsOneWidget,
     ); // the phone's button, with the direction
-    expect([for (final t in vm.tracks.displayedTracks) t.artist], ['Daft Punk', 'Miles Davis', 'Miles Davis']);
+    expect([for (final t in vm.tracks.tracks) t.artist], ['Daft Punk', 'Miles Davis', 'Miles Davis']);
   });
 
   testWidgets('the keyboard and a remote reach what the mouse clicks: the queue cover, a column header', (

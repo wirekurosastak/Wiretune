@@ -87,25 +87,25 @@ class TracksPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tracks = context.vm.tracks;
+    final page = context.vm.tracks;
     return ListenableBuilder(
-      listenable: tracks,
+      listenable: page,
       builder: (context, _) {
-        if (!tracks.hasTracks) return const EmptyLibrary();
+        if (page.isEmpty) return const EmptyLibrary();
         return TabPageList(
           title: context.tr('NavTracks'),
           storageKey: 'tracks',
           header: PageHeader(
             title: context.tr('NavTracks'),
-            subtitle: '${context.trf('TrackCount', [tracks.totalTracksCount])}  •  ${tracks.totalTracksDuration}',
+            subtitle: '${context.trf('TrackCount', [page.tracks.length])}  •  ${page.totalDuration}',
             actions: [
-              if (PhoneChrome.isPhone(context)) TrackSortButtons(tracks), // a wide table sorts by its headers
-              PlayShuffleButtons(tracks: tracks.displayedTracks, onPlay: tracks.playAll),
+              if (PhoneChrome.isPhone(context)) TrackSortButtons(page), // a wide table sorts by its headers
+              PlayShuffleButtons(tracks: page.tracks, onPlay: page.playAll),
             ],
           ),
-          columnHeaders: TrackColumnHeaders(sorting: tracks),
+          columnHeaders: TrackColumnHeaders(sorting: page),
           slivers: [
-            TrackSliver(tracks: tracks.displayedTracks, sorting: tracks, columnHeaders: false),
+            TrackSliver(tracks: page.tracks, sorting: page, columnHeaders: false),
             const PageEndSpace(),
           ],
         );
@@ -131,29 +131,24 @@ class FavoritesPage extends StatelessWidget {
             hint: context.tr('EmptyFavoritesHint'),
           );
         }
-        final menu = ListMenu.favorites(
-          favorites.favoriteTracks,
-          name: context.tr('NavFavorites'),
-          onPlay: favorites.playAll,
-        );
+        final menu = ListMenu.favorites(favorites.tracks, name: context.tr('NavFavorites'), onPlay: favorites.playAll);
         return TabPageList(
           title: context.tr('NavFavorites'),
           storageKey: 'favorites',
           header: PageHeader(
             title: context.tr('NavFavorites'),
-            subtitle:
-                '${context.trf('TrackCount', [favorites.favoriteTracks.length])}  •  ${favorites.totalFavoritesDuration}',
+            subtitle: '${context.trf('TrackCount', [favorites.tracks.length])}  •  ${favorites.totalDuration}',
             actions: [
               if (phone) TrackSortButtons(favorites), // a wide table sorts by its headers
               PlayShuffleButtons(
-                tracks: favorites.favoriteTracks,
+                tracks: favorites.tracks,
                 onPlay: favorites.playAll,
                 // A list's buttons, on a wide screen; a phone's line has no room for them beside the sort.
                 playNext: phone ? null : menu.playNextButton(),
                 addToQueue: phone ? null : menu.addToQueueButton(),
                 addToPlaylist: phone ? null : menu.addToPlaylistButton(),
                 download: DownloadListButton.forTracks(
-                  favorites.favoriteTracks,
+                  favorites.tracks,
                   name: context.tr('NavFavorites'),
                   isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
                   onPressed: context.vm.downloads.toggleFavorites,
@@ -163,7 +158,7 @@ class FavoritesPage extends StatelessWidget {
           ),
           columnHeaders: TrackColumnHeaders(sorting: favorites),
           slivers: [
-            TrackSliver(tracks: favorites.favoriteTracks, sorting: favorites, columnHeaders: false),
+            TrackSliver(tracks: favorites.tracks, sorting: favorites, columnHeaders: false),
             const PageEndSpace(),
           ],
         );

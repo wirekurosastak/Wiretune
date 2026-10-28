@@ -123,8 +123,8 @@ void main() {
           ..title = 'Alpha'
           ..addedAt = DateTime.utc(2026, 1, 2),
       ]);
-      final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
-      List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
+      final tracks = TrackListViewModel.allTracks(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+      List<String> titles() => [for (final t in tracks.tracks) t.title];
 
       expect(titles(), ['Alpha', 'Beta', 'Gamma']); // ABC default
       tracks.setSortField(TrackSortField.title);
@@ -148,8 +148,8 @@ void main() {
       track('3', 'Album', format: kbps(3100))..title = 'Hi-res',
       track('4', 'Album', format: kbps(320))..title = 'MP3',
     ]);
-    final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
-    List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
+    final tracks = TrackListViewModel.allTracks(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    List<String> titles() => [for (final t in tracks.tracks) t.title];
 
     tracks.setSortField(TrackSortField.bitrate);
     expect(tracks.sortLabel(TrackSortField.bitrate), 'Bitrate ↓');
@@ -168,15 +168,15 @@ void main() {
       ],
       favorites: {'1': DateTime.utc(2026, 1, 1), '2': DateTime.utc(2026, 3, 1), '3': null},
     );
-    final favorites = FavoritesViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
-    expect([for (final t in favorites.favoriteTracks) t.id], ['2', '1', '3']); // Date added newest first default
+    final favorites = TrackListViewModel.favorites(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    expect([for (final t in favorites.tracks) t.id], ['2', '1', '3']); // Date added newest first default
     expect(favorites.sortLabel(TrackSortField.added), 'Added ↓');
     favorites.setSortField(TrackSortField.title);
-    expect([for (final t in favorites.favoriteTracks) t.id], ['3', '2', '1']);
+    expect([for (final t in favorites.tracks) t.id], ['3', '2', '1']);
 
     lib.toggleFavorite('4'); // marked just now: the newest
     favorites.setSortField(TrackSortField.added);
-    expect(favorites.favoriteTracks.first.id, '4');
+    expect(favorites.tracks.first.id, '4');
   });
 
   test('every list offers ABC first, then its own fields, then the shared year, date added and quality', () {
@@ -214,8 +214,8 @@ void main() {
         ..releaseYear = 2020
         ..duration = const Duration(minutes: 3),
     ]);
-    final tracks = TracksViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
-    List<String> titles() => [for (final t in tracks.displayedTracks) t.title];
+    final tracks = TrackListViewModel.allTracks(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    List<String> titles() => [for (final t in tracks.tracks) t.title];
 
     tracks.setSortField(TrackSortField.released);
     expect(titles(), ['Recent', 'Dated', 'Undated']);
@@ -343,21 +343,21 @@ void main() {
   test('the favourites follow a track toggled anywhere, and tell their listeners', () async {
     final t1 = track('1', 'Album');
     final lib = await library([t1]);
-    final favorites = FavoritesViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    final favorites = TrackListViewModel.favorites(lib, PlayerViewModel(TestSupport.createEngine(), lib));
     addTearDown(favorites.dispose);
 
-    expect(favorites.favoriteTracks, isEmpty);
+    expect(favorites.tracks, isEmpty);
 
     var notified = 0;
     favorites.addListener(() => notified++);
 
     lib.toggleFavorite(t1.id);
-    expect([for (final t in favorites.favoriteTracks) t.id], [t1.id]);
+    expect([for (final t in favorites.tracks) t.id], [t1.id]);
     expect(notified, greaterThan(0));
 
     final countAfterAdd = notified;
     lib.toggleFavorite(t1.id);
-    expect(favorites.favoriteTracks, isEmpty);
+    expect(favorites.tracks, isEmpty);
     expect(notified, greaterThan(countAfterAdd));
   });
 }
