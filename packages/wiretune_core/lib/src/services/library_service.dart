@@ -104,8 +104,8 @@ class LibraryService {
     final artists = _hidden[HiddenKind.artist]!;
     return _hidden[HiddenKind.track]!.contains(track.id) ||
         _hidden[HiddenKind.album]!.contains(track.albumId) ||
-        artists.contains(stableId(track.primaryArtist.toLowerCase())) ||
-        track.albumArtistNames.any((name) => artists.contains(stableId(name.toLowerCase())));
+        artists.contains(artistIdOf(track.primaryArtist)) ||
+        track.albumArtistNames.any((name) => artists.contains(artistIdOf(name)));
   }
 
   bool isTrackExplicitlyHidden(String trackId) => _hidden[HiddenKind.track]!.contains(trackId);
@@ -704,7 +704,7 @@ class LibraryService {
         .where((t) => t.artistNames.any((n) => equalsIgnoreCase(n, trimmed)))
         .toList();
     if (matchingTracks.isEmpty) return null;
-    final id = stableId(trimmed.toLowerCase());
+    final id = artistIdOf(trimmed);
     final picture = _artistPictures[id];
     return Artist(id: id, name: trimmed, picturePath: picture, hasOwnPicture: picture != null, tracks: matchingTracks);
   }
@@ -938,7 +938,7 @@ class LibrarySnapshot {
           (a, b) => _number(a).compareTo(_number(b)),
         ]),
       );
-      final id = stableId(name.toLowerCase());
+      final id = artistIdOf(name);
       final own = artistPictures[id];
       artists.add(
         Artist(

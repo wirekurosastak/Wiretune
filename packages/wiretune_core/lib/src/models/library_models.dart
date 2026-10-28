@@ -14,6 +14,10 @@ import 'audio_format.dart';
 /// A short ID that is the same on every machine for the same key: the first 16 hex digits of the key's SHA-256.
 String stableId(String key) => sha256.convert(utf8.encode(key)).toString().substring(0, 16);
 
+/// The ID of the artist called [name], ignoring case and surrounding space: the `{artistId}` of the API (an artist's
+/// picture, a hidden artist), the same on every device and on the server.
+String artistIdOf(String name) => stableId(name.trim().toLowerCase());
+
 final Random _random = Random.secure();
 
 /// A new random ID: 32 lower-case hex digits.

@@ -30,6 +30,11 @@ void main() {
     expect(Track(album: 'Discovery', artist: 'Someone Else').albumId, isNot(track.albumId));
   });
 
+  test('artist IDs are the same for a name in any case and spacing, as they always were', () {
+    expect(artistIdOf('Daft Punk'), stableId('daft punk'));
+    expect(artistIdOf(' DAFT PUNK '), artistIdOf('Daft Punk'));
+  });
+
   test('a track survives the JSON round trip of the API, without anything that stays on the server', () {
     final track = TestSupport.makeTrack('abc', 'Title', album: 'Album')
       ..releaseYear = 1999

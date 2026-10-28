@@ -185,7 +185,7 @@ class MetadataScanner {
     for (final folder in folders) {
       final name = p.basename(folder).trim().toLowerCase();
       if (!wanted.contains(name) || !p.isWithin(musicFolder, folder)) continue;
-      final id = stableId(name);
+      final id = artistIdOf(name);
       if (pictures.containsKey(id)) continue;
       if (_firstNamed(folder, artistPictureNames) case final picture?) pictures[id] = picture;
     }
