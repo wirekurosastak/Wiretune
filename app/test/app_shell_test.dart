@@ -2331,7 +2331,7 @@ void main() {
     expect(find.byTooltip(Localizer.get('Search')), findsNothing);
   });
 
-  testWidgets("a phone's queue row opens its menu on a long press, moves by its handle, and leaves its length out", (
+  testWidgets("a phone's queue row moves by a long press anywhere on it, as by its handle, and leaves its length out", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860));
@@ -2345,15 +2345,9 @@ void main() {
     final length = vm.player.queueItems[1].track.formattedDuration;
     expect(find.descendant(of: row, matching: find.text(length)), findsNothing);
 
-    await tester.longPress(title);
-    await settle(tester);
-    expect(find.text(Localizer.get('PlayNext')), findsOneWidget);
-    await tester.binding.handlePopRoute();
-    await settle(tester);
-    expect(find.text(Localizer.get('PlayNext')), findsNothing);
-
-    final handle = find.descendant(of: row, matching: find.byIcon(Icons.drag_indicator_rounded));
-    final finger = await tester.startGesture(tester.getCenter(handle));
+    final finger = await tester.startGesture(tester.getCenter(title));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+    expect(find.text(Localizer.get('PlayNext')), findsNothing, reason: 'it grabs the row, it opens no menu');
     for (var i = 0; i < 12; i++) {
       await finger.moveBy(const Offset(0, 10));
       await tester.pump(const Duration(milliseconds: 50));
