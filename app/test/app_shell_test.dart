@@ -1398,6 +1398,15 @@ void main() {
     expect(handles, findsNothing);
   });
 
+  testWidgets("a computer's player buttons name their keys in their tooltips; a tablet's don't", (tester) async {
+    for (final (system, keys) in [('windows', ' (Ctrl+→)'), ('macos', ' (⌘→)'), ('android', '')]) {
+      AppPlatform.forTesting(system: system);
+      await tester.pumpWidget(const SizedBox()); // the last one's buttons are built anew, for this platform
+      await pumpApp(tester, const Size(1400, 900));
+      expect(find.byTooltip('${Localizer.get('TipNext')}$keys'), findsWidgets, reason: system);
+    }
+  });
+
   testWidgets("in a playlist, what takes a track away comes last in its menu", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     final mix = (await tester.runAsync(() async {

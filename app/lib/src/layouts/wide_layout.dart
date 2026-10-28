@@ -436,7 +436,7 @@ class _SearchFieldState extends State<_SearchField> {
           textInputAction: TextInputAction.search,
           style: TextStyle(fontSize: 14, color: colors.textMain),
           decoration: InputDecoration(
-            hintText: context.tr('SearchPlaceholder'),
+            hintText: withShortcut(context.tr('SearchPlaceholder'), 'Ctrl+F'),
             filled: true,
             fillColor: colors.palette.modal,
             prefixIcon: Padding(

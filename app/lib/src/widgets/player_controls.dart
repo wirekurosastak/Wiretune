@@ -22,6 +22,14 @@ String repeatTip(PlayerViewModel player) => switch (player.repeatMode) {
   RepeatMode.one => 'TipRepeatOff',
 };
 
+/// [tip] with the keys that do the same on a computer, "Next track (Ctrl+→)", ⌘ in place of Ctrl on a Mac (as
+/// `WiretuneApp`'s shortcuts are); elsewhere, without a keyboard to speak of, [tip] alone.
+String withShortcut(String tip, String keys) {
+  final platform = AppPlatform.current;
+  if (!platform.isDesktop) return tip;
+  return '$tip (${platform.isMacOS ? keys.replaceAll('Ctrl+', '⌘') : keys})';
+}
+
 /// The repeat button's icon: repeat one, or repeat (the whole queue, or off).
 IconData repeatIcon(PlayerViewModel player) =>
     player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded;
@@ -100,7 +108,7 @@ class TransportControls extends StatelessWidget {
             ),
             const SizedBox(width: 4),
             IconButton(
-              tooltip: context.tr('TipPrevious'),
+              tooltip: withShortcut(context.tr('TipPrevious'), 'Ctrl+←'),
               iconSize: skip,
               onPressed: player.previousTrack,
               icon: const Icon(Icons.skip_previous_rounded),
@@ -109,7 +117,7 @@ class TransportControls extends StatelessWidget {
             const PlayButton(),
             const SizedBox(width: 8),
             IconButton(
-              tooltip: context.tr('TipNext'),
+              tooltip: withShortcut(context.tr('TipNext'), 'Ctrl+→'),
               iconSize: skip,
               onPressed: player.nextTrack,
               icon: const Icon(Icons.skip_next_rounded),
@@ -150,7 +158,7 @@ class _PlayButtonState extends State<PlayButton> {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) => Tooltip(
-        message: context.tr(player.isPlaying ? 'Pause' : 'Play'),
+        message: withShortcut(context.tr(player.isPlaying ? 'Pause' : 'Play'), context.tr('KeySpace')),
         child: AnimatedScale(
           scale: _pressed ? 0.92 : (_hover ? 1.06 : 1),
           duration: const Duration(milliseconds: 160),

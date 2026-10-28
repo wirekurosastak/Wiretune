@@ -20,6 +20,7 @@ const Map<String, (String, String, String)> allStrings = {
   'Reconnect': ('Újracsatlakozás', 'Reconnect', 'Erneut verbinden'),
   'Play': ('Lejátszás', 'Play', 'Wiedergabe'),
   'Pause': ('Szünet', 'Pause', 'Pause'),
+  'KeySpace': ('Szóköz', 'Space', 'Leertaste'),
   'Shuffle': ('Keverés', 'Shuffle', 'Zufällig'),
   'Or': ('VAGY', 'OR', 'ODER'),
   'Language': ('Nyelv', 'Language', 'Sprache'),
