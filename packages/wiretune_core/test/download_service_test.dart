@@ -496,6 +496,7 @@ void main() {
     expect(safe('Console'), 'Console');
     expect(safe('  ..  '), 'Track');
     expect(safe('tab\there'), 'tab_here');
+    expect(safe('next\u0085line'), 'next_line'); // a C1 control, as an ID refuses it
     final long = safe('x' * 300);
     expect(long.length, 80);
     final wide = DownloadService.safeFileName('🎵' * 100, fallback: 'Track', maxLength: 100);

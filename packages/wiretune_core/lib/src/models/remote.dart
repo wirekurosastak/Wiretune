@@ -4,6 +4,7 @@
 // The messages of remote control (`GET /api/remote`, see docs/api.md#remote-control): the players of one account tell
 // each other what they play, and send each other commands, through the server.
 
+import '../util/text.dart';
 import 'library_models.dart';
 import 'protocol.dart';
 
@@ -44,7 +45,7 @@ abstract final class RemoteRules {
   /// [value] as a device name: without control characters, trimmed, at most [maxDeviceNameLength] characters.
   static String cleanName(Object? value) {
     if (value is! String) return '';
-    final text = value.replaceAll(RegExp(r'[\u0000-\u001f\u007f]'), '').trim();
+    final text = withoutControlCharacters(value).trim();
     return text.length <= maxDeviceNameLength ? text : text.substring(0, maxDeviceNameLength).trim();
   }
 }

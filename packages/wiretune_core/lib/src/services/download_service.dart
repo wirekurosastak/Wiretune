@@ -684,7 +684,7 @@ class DownloadService {
   /// control characters, no leading dots (a hidden file) or trailing dots and spaces (which Windows drops), no device
   /// names such as `CON`, at most [maxLength] characters and 200 bytes. [fallback] when nothing is left.
   static String safeFileName(String name, {required String fallback, int maxLength = 80}) {
-    var safe = name.replaceAll(RegExp(r'[\x00-\x1f\x7f/\\:*?"<>|]'), '_').trim();
+    var safe = name.replaceAll(RegExp(r'[\p{Cc}/\\:*?"<>|]', unicode: true), '_').trim();
     safe = safe.replaceFirst(RegExp(r'^[. ]+'), '').replaceFirst(RegExp(r'[. ]+$'), '');
     final runes = safe.runes.toList();
     if (runes.length > maxLength) safe = String.fromCharCodes(runes.take(maxLength)).trimRight();

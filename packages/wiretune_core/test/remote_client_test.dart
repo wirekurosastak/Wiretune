@@ -254,5 +254,6 @@ void main() {
     );
     expect(RemoteCommand.fromJson({'action': 'mute'}), isNull);
     expect(RemoteRules.cleanName('x' * 100), hasLength(RemoteRules.maxDeviceNameLength));
+    expect(RemoteRules.cleanName(' Desk\ttop\u0085 '), 'Desktop', reason: 'every control character goes, C1 too');
   });
 }

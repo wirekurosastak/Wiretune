@@ -193,6 +193,9 @@ bool isLetterOrDigit(String char) => _letterOrDigit.hasMatch(char);
 /// True when [text] contains a control character.
 bool hasControlCharacters(String text) => _control.hasMatch(text);
 
+/// [text] without its control characters (those [hasControlCharacters] finds).
+String withoutControlCharacters(String text) => text.replaceAll(_control, '');
+
 /// Keeps only the letters and digits of [text].
 String lettersAndDigits(String text) {
   final buffer = StringBuffer();
