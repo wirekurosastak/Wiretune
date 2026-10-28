@@ -1157,7 +1157,8 @@ class _PlayerBar extends StatelessWidget {
                     final scale = MediaQuery.textScalerOf(context).scale(1);
                     // The devices button (while there are other devices to reach) takes its place first.
                     final devices = player.canReachDevices || player.isRemote;
-                    final volume = platform.isDesktop && constraints.maxWidth >= 12 + 36 + 8 + 95;
+                    // A tablet's and a TV's own buttons set their own volume, but not another device's.
+                    final volume = (platform.isDesktop || player.isRemote) && constraints.maxWidth >= 12 + 36 + 8 + 95;
                     var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0) - 40;
                     final showTag = !compact && track != null && room >= 125 * scale;
                     if (showTag) room -= 125 * scale + 8;

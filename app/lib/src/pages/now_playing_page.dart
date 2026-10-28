@@ -530,6 +530,8 @@ class _Transport extends StatelessWidget {
               ],
             ),
           ),
+          // Another device's volume, which the phone's own buttons don't reach.
+          if (player.isRemote) const VolumeControl.fill(),
         ],
       ),
     );

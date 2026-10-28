@@ -1137,6 +1137,56 @@ void main() {
     vm.dispose();
   });
 
+  testWidgets("another device's volume is set from a phone's player and a tablet's bar, which leave their own alone", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'android');
+    tester.view.physicalSize = const Size(400, 860);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final hub = FakeRemoteHub();
+    final vm = (await tester.runAsync(() async {
+      final vm = await createWithServer();
+      final session = await signedInSession(vm.library);
+      final remote = RemoteClient(session, connector: hub.connect);
+      final withRemote = createMainViewModel(vm.library, null, session, remote);
+      remote.configure(id: 'phone', name: '', kind: DeviceKind.phone, enabled: true);
+      await until(() => remote.isConnected);
+      hub.devices([('desk', 'Desk', DeviceKind.desktop)]);
+      hub.state('desk', RemotePlayback(track: vm.library.tracks.first, volume: 80, queue: ['1'], queueIndex: 0));
+      await pumpEventQueue();
+      return withRemote;
+    }))!;
+    await tester.pumpWidget(WiretuneApp(vm: vm));
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    await settle(tester);
+    // Playing here: the phone's own buttons set its volume.
+    expect(find.byType(VolumeControl), findsNothing);
+
+    vm.player.selectDevice('desk');
+    await settle(tester);
+    final slider = find.descendant(of: find.byType(VolumeControl), matching: find.byType(Slider));
+    expect(tester.widget<Slider>(slider).value, 80);
+    await tester.tap(slider); // its middle
+    await settle(tester);
+    final volumes = [
+      for (final command in hub.commandsTo('desk'))
+        if (command case {'action': 'volume', 'volume': final volume}) volume,
+    ];
+    expect(volumes, [moreOrLessEquals(50, epsilon: 1)]);
+
+    vm.closeNowPlaying();
+    tester.view.physicalSize = const Size(1280, 800);
+    await settle(tester);
+    expect(find.byType(WideLayout), findsOneWidget);
+    expect(find.byType(VolumeControl), findsOneWidget);
+    vm.player.selectDevice(null);
+    await settle(tester);
+    expect(find.byType(VolumeControl), findsNothing);
+    vm.dispose();
+  });
+
   testWidgets('signed in, the settings show the downloads and remote control', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.navigateTo(AppSection.settings);

@@ -403,11 +403,15 @@ class _SeekBarState extends State<SeekBar> {
   }
 }
 
-/// Mute button and volume slider; locked at 100 % in bit-perfect mode.
+/// Mute button and volume slider; locked at 100 % in bit-perfect mode. While another device is controlled, they set its
+/// volume.
 class VolumeControl extends StatelessWidget {
-  const VolumeControl({super.key, this.sliderWidth = 100});
+  const VolumeControl({super.key, double this.sliderWidth = 100});
 
-  final double sliderWidth;
+  /// The slider as wide as the row has room for.
+  const VolumeControl.fill({super.key}) : sliderWidth = null;
+
+  final double? sliderWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -415,34 +419,34 @@ class VolumeControl extends StatelessWidget {
     final colors = context.colors;
     return ListenableBuilder(
       listenable: player,
-      builder: (context, _) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: player.volumeToolTip,
-            iconSize: 20,
-            onPressed: player.isVolumeLocked ? null : player.toggleMute,
-            icon: Icon(
-              player.isMuted
-                  ? Icons.volume_off_rounded
-                  : (player.volume < 50 && !player.isVolumeLocked
-                        ? Icons.volume_down_rounded
-                        : Icons.volume_up_rounded),
-              color: player.isVolumeDisabledOrMuted ? colors.textMuted : colors.accent,
+      builder: (context, _) {
+        final slider = Slider(
+          // Grey while muted.
+          activeColor: player.isMuted ? colors.textMuted : null,
+          value: player.isVolumeLocked ? 100 : (player.isMuted ? 0 : player.volume),
+          max: 100,
+          onChanged: player.isVolumeDisabledOrMuted ? null : player.setVolume,
+        );
+        return Row(
+          mainAxisSize: sliderWidth == null ? MainAxisSize.max : MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: player.volumeToolTip,
+              iconSize: 20,
+              onPressed: player.isVolumeLocked ? null : player.toggleMute,
+              icon: Icon(
+                player.isMuted
+                    ? Icons.volume_off_rounded
+                    : (player.volume < 50 && !player.isVolumeLocked
+                          ? Icons.volume_down_rounded
+                          : Icons.volume_up_rounded),
+                color: player.isVolumeDisabledOrMuted ? colors.textMuted : colors.accent,
+              ),
             ),
-          ),
-          SizedBox(
-            width: sliderWidth,
-            child: Slider(
-              // Grey while muted.
-              activeColor: player.isMuted ? colors.textMuted : null,
-              value: player.isVolumeLocked ? 100 : (player.isMuted ? 0 : player.volume),
-              max: 100,
-              onChanged: player.isVolumeDisabledOrMuted ? null : player.setVolume,
-            ),
-          ),
-        ],
-      ),
+            if (sliderWidth case final width?) SizedBox(width: width, child: slider) else Expanded(child: slider),
+          ],
+        );
+      },
     );
   }
 }
