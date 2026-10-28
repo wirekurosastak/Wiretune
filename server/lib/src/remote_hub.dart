@@ -82,6 +82,7 @@ class RemoteHub {
     for (final peer in peers) {
       _close(peer, WebSocketStatus.goingAway, 'The server is stopping.');
     }
+    // A connection that ends in an error has ended too: that is all the server waits for.
     await Future.wait([for (final peer in peers) peer.socket.done.catchError((Object _) => null)]);
   }
 
@@ -202,6 +203,7 @@ class RemoteHub {
   void _close(_Peer peer, int code, String reason) {
     if (code != WebSocketStatus.goingAway) WiretuneLog.debug('Remote', 'Closing a connection ($code): $reason');
     _leave(peer);
+    // Best effort: the other side may be gone already.
     unawaited(peer.socket.close(code, reason).catchError((Object _) => null));
   }
 }

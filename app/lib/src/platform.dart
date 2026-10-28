@@ -96,8 +96,11 @@ class AppPlatform {
     try {
       return await _channel.invokeMethod<bool>(method) ?? false;
     } on PlatformException {
+      // A failed answer is no. Not logged: at start ([detect]) the log isn't set up yet, and would open in the wrong
+      // folder.
       return false;
     } on MissingPluginException {
+      // No handler, as on a computer's Linux (no Tizen side): no.
       return false;
     }
   }

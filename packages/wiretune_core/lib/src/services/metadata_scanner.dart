@@ -257,6 +257,7 @@ Future<Uint8List?> _extractCoverInIsolate(String filePath) => Isolate.run(() {
   try {
     return folderCover == null ? null : File(folderCover).readAsBytesSync();
   } catch (_) {
+    // Unreadable, or gone since it was found: no cover.
     return null;
   }
 });

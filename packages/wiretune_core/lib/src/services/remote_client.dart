@@ -212,7 +212,12 @@ class RemoteClient {
     _channel = channel;
     _channelUrl = url;
     _setProblem(null);
-    channel.messages.listen(_onMessage, onDone: () => _onClosed(channel, url, token), onError: (Object _) {});
+    channel.messages.listen(
+      _onMessage,
+      onDone: () => _onClosed(channel, url, token),
+      // Only logged: the connection's end follows, and its handler reconnects.
+      onError: (Object e) => WiretuneLog.debug('RemoteClient', 'The remote-control connection failed: $e'),
+    );
     _sendHello();
     final playback = _playback;
     if (playback != null) _sendState(playback);

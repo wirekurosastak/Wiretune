@@ -273,10 +273,15 @@ class AuthService {
 Future<String> _hash(String password) =>
     Isolate.run(() => BCrypt.hashpw(password, BCrypt.gensalt(logRounds: AuthService._bcryptWorkFactor)));
 
-Future<bool> _verify(String password, String hash) => Isolate.run(() {
+/// False also for a hash that can't be checked (a damaged users table), which is logged: the account can't sign in.
+Future<bool> _verify(String password, String hash) async {
   try {
-    return BCrypt.checkpw(password, hash);
-  } catch (_) {
+    return await Isolate.run(() => BCrypt.checkpw(password, hash));
+  } catch (e) {
+    WiretuneLog.error(
+      'Auth',
+      'A stored password hash cannot be checked (${e.runtimeType}); is the users table damaged?',
+    );
     return false;
   }
-});
+}
