@@ -648,6 +648,29 @@ void main() {
     }
   });
 
+  testWidgets("a long press on a phone's track row opens its menu, but not in a playlist it reorders", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    await tester.longPress(find.text('So What').first);
+    await settle(tester);
+    expect(find.text(Localizer.get('PlayNext')), findsOneWidget);
+    await tester.tapAt(const Offset(200, 20));
+    await settle(tester);
+
+    final mix = (await tester.runAsync(() async {
+      final created = vm.library.createPlaylist('Mix');
+      vm.library.addTracksToPlaylist(created.id, ['1', '2']);
+      return created;
+    }))!;
+    vm.navigateTo(AppSection.playlists);
+    vm.playlists.openPlaylist(vm.library.getPlaylist(mix.id));
+    await settle(tester);
+    await tester.longPress(find.text('So What').first);
+    await settle(tester);
+    expect(find.text(Localizer.get('PlayNext')), findsNothing, reason: 'there it lifts the row to move it');
+  });
+
   testWidgets("a phone's favourites have the list's whole menu: queue them, or add them to a playlist", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.library.toggleFavorite('1');

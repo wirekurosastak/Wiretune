@@ -946,6 +946,10 @@ class _PhoneRow extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(Radii.medium),
           onTap: () => state._play(track),
+          // A long press opens its menu, as on every other row; in a playlist that can be reordered it is the drag.
+          onLongPress: state.widget.onReorder != null
+              ? null
+              : () => TrackMenu.showSheet(context, track, state.kind, withFavorite: true),
           child: Row(
             children: [
               const SizedBox(width: 8),
