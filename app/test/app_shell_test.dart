@@ -1829,7 +1829,7 @@ void main() {
     expect((vm.artists.isArtistDetailOpen, offset()), (false, again));
   });
 
-  testWidgets("the player's BPM and quality with bitrate sit midway between the cover, at full size, and the title", (
+  testWidgets("the player's BPM, quality and bitrate sit midway between the cover, at its full size, and the title", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
@@ -1868,16 +1868,18 @@ void main() {
             .first,
       ); // unscaled
       final bpm = tester.getCenter(find.text('136 BPM'));
-      // Under the cover, not on it: the cover is all picture. The quality and the bitrate in one tag.
-      final quality = tester.getCenter(find.text('FLAC 16bit/44.1kHz · ${Localizer.format('BitrateKbps', [912])}'));
+      // Under the cover, not on it: the cover is all picture.
+      final quality = tester.getCenter(find.text('FLAC 16bit/44.1kHz'));
+      final bitrate = tester.getCenter(find.text(Localizer.format('BitrateKbps', [912])));
       final title = tester.getRect(find.descendant(of: page, matching: find.text('So What')));
       expect(bpm.dy, moreOrLessEquals((cover.bottom + title.top) / 2, epsilon: 0.5), reason: 'playing: $playing');
       expect(quality.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
-      expect(quality.dx, greaterThan(bpm.dx));
+      expect(bitrate.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
+      expect((quality.dx > bpm.dx, bitrate.dx > quality.dx), (true, true));
     }
   });
 
-  testWidgets("a computer's player bar has the track's BPM and quality with bitrate on its right, by its buttons", (
+  testWidgets("a computer's player bar has the track's BPM and bitrate over its quality on its right, by its buttons", (
     tester,
   ) async {
     AppPlatform.forTesting(system: 'windows');
@@ -1897,13 +1899,20 @@ void main() {
     vm.player.playQueue(vm.library.tracks);
     await settle(tester);
 
-    // The BPM beside the quality's tag, the bitrate in it, between the seek bar and the buttons; not by the title.
+    // The BPM and the bitrate side by side, the quality's tag under them, between the seek bar and the buttons; not by
+    // the title.
     final bpm = tester.getRect(find.text('136 BPM'));
-    final quality = tester.getRect(find.text('FLAC 16bit/44.1kHz · ${Localizer.format('BitrateKbps', [912])}'));
+    final bitrate = tester.getRect(find.text(Localizer.format('BitrateKbps', [912])));
+    final quality = tester.getRect(find.text('FLAC 16bit/44.1kHz'));
     expect(bpm.left, greaterThan(tester.getRect(find.byType(SeekBar)).right));
-    expect(quality.left, greaterThan(bpm.right));
-    expect(quality.right, lessThan(tester.getRect(find.byType(SleepTimerButton)).left));
-    expect(quality.center.dy, moreOrLessEquals(bpm.center.dy, epsilon: 0.5));
+    expect(bitrate.left, greaterThan(bpm.right));
+    expect(bitrate.center.dy, moreOrLessEquals(bpm.center.dy, epsilon: 0.5));
+    expect(quality.top, greaterThan(bpm.bottom));
+    final buttons = math.min(
+      tester.getRect(find.byType(SleepTimerButton)).left,
+      tester.getRect(find.byType(VolumeButton)).left,
+    );
+    expect((bitrate.right < buttons, quality.right < buttons), (true, true));
   });
 
   testWidgets("a computer's volume stands upright over its speaker while the mouse is there, as in Tidal", (

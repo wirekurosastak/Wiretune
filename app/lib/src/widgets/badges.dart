@@ -53,30 +53,52 @@ class QualityTag extends StatelessWidget {
   }
 }
 
-/// The playing track's tags in a player, as under the phone's full-screen cover and in the player bar: its BPM, and its
-/// quality with the bitrate in the same tag ("FLAC 16bit/44.1kHz · 912 kbps"; a lossy file's says its bitrate already:
-/// "MP3 320kbps"). Where room is short the quality's tag ends in an ellipsis.
+/// The playing track's tags in a player: its BPM, its quality, and its bitrate in the quality's colours where the
+/// quality's tag doesn't say it already (a lossy file's does: "MP3 320kbps"). In a row under the phone's full-screen
+/// cover; stacked in the player bar, the quality under the other two. Where room is short they end in an ellipsis.
 class PlayerTags extends StatelessWidget {
-  const PlayerTags({super.key, required this.track, this.fontSize = 10});
+  const PlayerTags({super.key, required this.track, this.fontSize = 10, this.stacked = false});
 
   final Track track;
   final double fontSize;
+
+  /// The quality's tag under the BPM and the bitrate rather than between them.
+  final bool stacked;
 
   @override
   Widget build(BuildContext context) {
     final bpm = track.bpm;
     final format = track.format;
-    final spec = format.isLossless && format.bitrateKbps > 0
-        ? '${format.tagSpec} · ${context.trf('BitrateKbps', [format.bitrateKbps])}'
-        : format.tagSpec;
-    return Row(
+    final tempo = bpm != null && bpm > 0 ? PlayerMetaBadge(text: '$bpm BPM', fontSize: fontSize) : null;
+    final quality = QualityTag(tier: format.tier, spec: format.tagSpec, fontSize: fontSize);
+    final bitrate = format.isLossless && format.bitrateKbps > 0
+        ? QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: fontSize)
+        : null;
+    if (!stacked) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 8,
+        children: [
+          ?tempo,
+          Flexible(child: quality),
+          ?bitrate,
+        ],
+      );
+    }
+    return Column(
       mainAxisSize: MainAxisSize.min,
-      spacing: 8,
+      spacing: 4,
       children: [
-        if (bpm != null && bpm > 0) PlayerMetaBadge(text: '$bpm BPM', fontSize: fontSize),
-        Flexible(
-          child: QualityTag(tier: format.tier, spec: spec, fontSize: fontSize),
-        ),
+        if (tempo != null || bitrate != null)
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            spacing: 6,
+            children: [
+              if (tempo != null) Flexible(child: tempo),
+              if (bitrate != null) Flexible(child: bitrate),
+            ],
+          ),
+        quality,
       ],
     );
   }

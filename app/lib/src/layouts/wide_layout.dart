@@ -1188,7 +1188,7 @@ class _PlayerBar extends StatelessWidget {
                           if (showTags) ...[
                             ConstrainedBox(
                               constraints: BoxConstraints(maxWidth: room),
-                              child: PlayerTags(track: track),
+                              child: PlayerTags(track: track, stacked: true),
                             ),
                             const SizedBox(width: 8),
                           ],
