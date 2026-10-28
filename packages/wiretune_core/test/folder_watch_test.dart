@@ -10,6 +10,8 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
+import 'support.dart';
+
 /// The folder watch: a burst of changes to the music is one call, once things are quiet; other changes are none.
 void main() {
   test(
@@ -37,11 +39,14 @@ void main() {
         File(p.join(album.path, name)).writeAsStringSync('x');
         await Future<void>.delayed(const Duration(milliseconds: 100));
       }
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      // However long the system takes to tell, and then no second call once it has settled.
+      await until(() => settled > 0);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(settled, 1);
 
       File(p.join(album.path, '02.flac')).deleteSync();
-      await Future<void>.delayed(const Duration(milliseconds: 800));
+      await until(() => settled > 1);
+      await Future<void>.delayed(const Duration(milliseconds: 500));
       expect(settled, 2);
     },
   );

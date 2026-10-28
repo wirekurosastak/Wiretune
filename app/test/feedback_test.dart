@@ -196,7 +196,7 @@ void main() {
 
     await pressSignOut();
     await tester.tap(find.descendant(of: find.byType(AppDialog), matching: find.text(Localizer.get('SignOut'))));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.runAsync(() => until(() => !session.isLoggedIn));
     await settle(tester);
     expect(session.isLoggedIn, isFalse);
     vm.dispose();
@@ -270,7 +270,7 @@ void main() {
     await settle(tester);
     expect(find.text(Localizer.get('ServerFolderConfirm')), findsOneWidget);
     await tester.tap(find.descendant(of: find.byType(AppDialog), matching: find.text(Localizer.get('SaveFolder'))));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.runAsync(() => until(() => vm.serverSettings.serverFolderIsError));
     await settle(tester);
     expect(find.text(Localizer.get('ErrorFolderWholeDisk')), findsOneWidget);
     vm.dispose();
@@ -286,7 +286,7 @@ void main() {
     final vm = createMainViewModel(lib, null, session, remote)..navigateTo(AppSection.settings);
     await show(tester, vm, wide);
     vm.remote.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.runAsync(() => until(() => vm.remote.problem == RemoteProblem.ended));
     await settle(tester);
     expect(find.text(Localizer.get('RemoteStatusEnded')), findsOneWidget);
     vm.dispose();

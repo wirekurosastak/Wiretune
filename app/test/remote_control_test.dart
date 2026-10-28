@@ -166,8 +166,9 @@ void main() {
 
   test('this device tells the others what it plays, at changes only, and does what they ask', () async {
     player.playQueue(tracks, tracks[0]);
-    await Future<void>.delayed(const Duration(milliseconds: 200)); // states go out at most every 150 ms
     Map<Object?, Object?> lastState() => hub.ofType('state').last['state'] as Map;
+    await until(() => hub.ofType('state').isNotEmpty && lastState()['playing'] == true);
+    await Future<void>.delayed(const Duration(milliseconds: 200)); // states go out at most every 150 ms
     expect(((lastState()['track'] as Map)['id'], lastState()['playing'], lastState()['queueIndex']), ('t1', true, 0));
     expect(lastState()['queue'], ['t1', 't2', 't3', 't4']);
 
@@ -182,7 +183,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200)); // past the publishing interval
     expect(hub.ofType('state'), hasLength(told));
     await driver.seek(const Duration(minutes: 2));
-    await Future<void>.delayed(const Duration(milliseconds: 200));
+    await until(() => hub.ofType('state').length > told);
     expect(hub.ofType('state'), hasLength(told + 1));
     expect(lastState()['positionMs'], 120000);
 
@@ -262,8 +263,7 @@ void main() {
     expect(player.isRemote, isTrue, reason: 'a dropped connection gets a moment to come back');
     expect(player.currentTrack, same(tracks[0]), reason: 'meanwhile the last known state stays');
 
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    expect(player.isRemote, isFalse);
+    await until(() => !player.isRemote);
     expect(player.errorMessage, 'Desk can no longer be reached: back to this device.');
   });
 
