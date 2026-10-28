@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 import 'package:wiretune_server/wiretune_server.dart';
@@ -48,7 +49,7 @@ void main() {
       final (client, _) = await setupAdmin(server);
       await server.waitForTracks(client, 3);
 
-      final folderName = server.root.split('/').last;
+      final folderName = p.basename(server.root);
       final body = (await client.get('/api/tracks')).body;
       expect(body, isNot(contains(folderName)));
       expect(body.toLowerCase(), isNot(contains('path')));
@@ -243,7 +244,7 @@ void main() {
       expect((disk.statusCode, json(disk)['code']), (400, ErrorCodes.folderWholeDisk));
       final missing = await admin.post('/api/config/music-folder', {'musicFolder': '${server.root}/nope'});
       expect(json(missing)['code'], ErrorCodes.folderMissing);
-      expect(json(missing)['path'], '${server.root}/nope');
+      expect(json(missing)['path'], AppPaths.fullPath('${server.root}/nope'));
 
       final taken = await admin.post('/api/users', {'username': 'GUEST', 'password': guestPassword});
       expect((taken.statusCode, json(taken)['code']), (409, ErrorCodes.usernameTaken));

@@ -96,7 +96,7 @@ abstract final class AppPaths {
     final value = match?.group(1);
     if (value == null) return null;
     if (value == r'$HOME' || value == r'$HOME/') return null;
-    if (value.startsWith(r'$HOME/')) return p.join(home, value.substring(6));
+    if (value.startsWith(r'$HOME/')) return p.posix.join(home, value.substring(6));
     return p.isAbsolute(value) ? value : null;
   }
 

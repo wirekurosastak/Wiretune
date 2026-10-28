@@ -24,6 +24,8 @@ Directory useTempDataDirectory() {
   final dir = Directory.systemTemp.createTempSync('wiretune_test_');
   AppPaths.platformDataRoot = dir.path;
   WiretuneLog.writeToConsole = false;
+  // The log stays open until the tests end: outside the folder, which a test may delete (Windows can't delete it open).
+  WiretuneLog.initialize(path: p.join(Directory.systemTemp.path, 'wiretune_test.log'));
   return dir;
 }
 

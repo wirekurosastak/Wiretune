@@ -64,8 +64,10 @@ class LibraryScanService {
   Future<void> _run() async {
     await Future<void>.delayed(Duration.zero);
     while (!_stopped) {
-      // Also follows the folder an administrator picked, and one that was missing until now.
+      // Also follows the folder an administrator picked, and one that was missing until now. Watching before the scan
+      // (Windows takes a moment to start) catches music copied in while it runs; one that never starts holds nothing up.
       _watch.watch(_paths.musicFolder);
+      await _watch.ready.timeout(const Duration(seconds: 2), onTimeout: () {});
       await scanOnce();
       if (_stopped) break;
 
