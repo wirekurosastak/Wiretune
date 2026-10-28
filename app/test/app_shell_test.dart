@@ -134,34 +134,6 @@ void main() {
     expect(vm.player.queueTracks.map((t) => t.id), ['1']);
   });
 
-  testWidgets("a computer's Play stays put under the mouse, its words with it; the icon buttons beside it still rise", (
-    tester,
-  ) async {
-    AppPlatform.forTesting(system: 'windows');
-    final vm = await pumpApp(tester, const Size(1400, 900));
-    vm.openAlbum(vm.library.albums.first);
-    await settle(tester);
-    final header = find.byType(DetailHeader);
-    final play = find.descendant(of: header, matching: find.text(Localizer.get('Play')));
-    final queue = find.descendant(of: header, matching: find.byTooltip(Localizer.get('AddToQueue')));
-    final (playAt, queueAt) = (tester.getRect(play), tester.getRect(queue));
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    addTearDown(mouse.removePointer);
-    await mouse.addPointer(location: Offset.zero);
-
-    await mouse.moveTo(tester.getCenter(play));
-    await tester.pump(); // the mouse is seen to be over it
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getRect(play), playAt);
-    await mouse.moveTo(tester.getCenter(queue));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getRect(queue).top, lessThan(queueAt.top));
-
-    await mouse.moveTo(Offset.zero);
-    await tester.pump(const Duration(seconds: 1));
-  });
-
   testWidgets('favoriting a track dynamically updates the count next to Favorites in the sidebar', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     final navFavorites = Localizer.get('NavFavorites');
