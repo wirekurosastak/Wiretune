@@ -525,7 +525,7 @@ void main() {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue')]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.player.playQueue(vm.library.tracks);
     vm.navigateTo(AppSection.tracks);
@@ -1412,7 +1412,7 @@ void main() {
           TestSupport.makeTrack('3', 'Opening', artist: 'Daft Punk', album: 'Random Access Memories'),
         ]);
         library.initialize();
-        return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+        return createMainViewModel(library);
       });
       final player = vm.player;
       vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
@@ -1481,7 +1481,7 @@ void main() {
         for (var i = 1; i <= 12; i++) TestSupport.makeTrack('$i', 'Take $i', album: 'Kind of Blue', trackNumber: i),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     final player = vm.player;
     vm.openAlbum(vm.library.albums.single);
@@ -1539,7 +1539,7 @@ void main() {
         TestSupport.makeTrack('2', 'Blue in Green', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: 2),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.searchQuery = 'Kind of Blue';
     await settle(tester);
@@ -1563,7 +1563,7 @@ void main() {
         TestSupport.makeTrack('$i', 'Take $i', artist: 'Miles Davis', album: 'Kind of Blue', trackNumber: i),
     ]);
     library.initialize();
-    return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    return createMainViewModel(library);
   });
   double shownIn(WidgetTester tester, Finder text) =>
       tester.widget<Opacity>(find.ancestor(of: text, matching: find.byType(Opacity)).first).opacity;
@@ -1697,7 +1697,7 @@ void main() {
           TestSupport.makeTrack('$i', 'Song $i', artist: 'Artist ${'$i'.padLeft(2, '0')}', album: 'Album $i'),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.artists);
     await settle(tester);
@@ -1749,7 +1749,7 @@ void main() {
         )..bpm = 136,
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
@@ -1780,7 +1780,7 @@ void main() {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis')]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.albums); // the albums' purple is the accent
     vm.player.playQueue(vm.library.tracks);
@@ -1797,7 +1797,7 @@ void main() {
         TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.playerSwipe = PlayerSwipe.tracks;
     vm.player.playQueue(vm.library.tracks);
@@ -1820,7 +1820,7 @@ void main() {
         TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     final player = vm.player;
     player.playQueue(vm.library.tracks);
@@ -2557,7 +2557,7 @@ void main() {
         for (var i = 1; i <= 40; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Long Album', trackNumber: i),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.albums);
     await settle(tester);
@@ -2601,7 +2601,7 @@ void main() {
         for (var i = 1; i <= 40; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Long Album', trackNumber: i),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.albums);
     await settle(tester);
@@ -2637,7 +2637,7 @@ void main() {
         for (var i = 1; i <= 40; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Long Album', trackNumber: i),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.albums);
     await settle(tester);
@@ -2672,7 +2672,7 @@ void main() {
         for (var i = 1; i <= 60; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Album ${i % 6}', trackNumber: i),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     for (final (section, name) in [(AppSection.tracks, 'NavTracks'), (AppSection.settings, 'NavSettings')]) {
       vm.navigateTo(section);
@@ -2718,7 +2718,7 @@ void main() {
           for (var t = 1; t <= 3; t++) TestSupport.makeTrack('$a-$t', 'Song $a.$t', album: 'Album $a', trackNumber: t),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     final built = <String, int>{};
     debugOnRebuildDirtyWidget = (element, _) =>
@@ -2755,7 +2755,7 @@ void main() {
               TestSupport.makeTrack('$a-$t', 'Song $a.$t', artist: 'Miles Davis', album: 'Album $a', trackNumber: t),
         ]);
         library.initialize();
-        return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+        return createMainViewModel(library);
       });
       double scrolled() => tester
           .state<ScrollableState>(
@@ -2808,7 +2808,7 @@ void main() {
         for (var a = 1; a <= 40; a++) TestSupport.makeTrack('$a', 'Song $a', album: 'Album $a'),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.albums);
     await settle(tester);
@@ -3095,7 +3095,7 @@ void main() {
         for (var i = 1; i <= 60; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Album ${i % 6}', trackNumber: i),
       ]);
       library.initialize();
-      return createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      return createMainViewModel(library);
     });
     vm.navigateTo(AppSection.tracks);
     await settle(tester);

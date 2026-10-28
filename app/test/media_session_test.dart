@@ -76,7 +76,7 @@ void main() {
       TestSupport.makeTrack('b2', 'Giant Steps', album: 'B'),
     ]);
     library.initialize();
-    final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    final vm = createMainViewModel(library);
     final session = WiretuneMediaSession(vm);
     List<String> published() => [for (final item in session.queue.value) item.id];
 
@@ -105,7 +105,7 @@ void main() {
       TestSupport.makeTrack('2', 'Alpha', artist: 'Abba', album: 'New')..addedAt = DateTime.utc(2026),
     ]);
     library.initialize();
-    final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+    final vm = createMainViewModel(library);
     final session = WiretuneMediaSession(vm);
     Future<List<String?>> titles(String id) async => [for (final item in await session.getChildren(id)) item.title];
 
