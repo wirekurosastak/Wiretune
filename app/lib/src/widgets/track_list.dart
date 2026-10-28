@@ -705,13 +705,6 @@ class TrackMenu extends StatelessWidget {
       item(TrackAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
       item(TrackAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
       item(TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('TipAddToPlaylist')),
-      if (kind == TrackTableKind.playlist && playlists.selectedPlaylist?.isAutomatic == false)
-        item(
-          TrackAction.removeFromPlaylist,
-          Icons.playlist_remove_rounded,
-          context.tr('TipRemoveFromPlaylist'),
-          color: colors.danger,
-        ),
       if (place != null) ...[
         item(TrackAction.moveUp, Icons.arrow_upward_rounded, context.tr('TipMoveUp'), enabled: place > 1),
         item(
@@ -731,6 +724,15 @@ class TrackMenu extends StatelessWidget {
         ),
       if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
       if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
+      // What takes the track away comes last, apart from the rest: a slip of one row can't remove instead of add.
+      const PopupMenuDivider(),
+      if (kind == TrackTableKind.playlist && playlists.selectedPlaylist?.isAutomatic == false)
+        item(
+          TrackAction.removeFromPlaylist,
+          Icons.playlist_remove_rounded,
+          context.tr('TipRemoveFromPlaylist'),
+          color: colors.danger,
+        ),
       item(
         TrackAction.hideTrack,
         isHidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,

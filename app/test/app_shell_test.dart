@@ -1358,6 +1358,28 @@ void main() {
     expect(handles, findsNothing);
   });
 
+  testWidgets("in a playlist, what takes a track away comes last in its menu, under a line", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final mix = (await tester.runAsync(() async {
+      final created = vm.library.createPlaylist('Mix');
+      vm.library.addTracksToPlaylist(created.id, ['1']);
+      return created;
+    }))!;
+    vm.navigateTo(AppSection.playlists);
+    vm.playlists.openPlaylist(vm.library.getPlaylist(mix.id));
+    await settle(tester);
+    final row = find.ancestor(of: find.text('So What'), matching: find.byType(InkWell)).first;
+    await tester.tap(find.descendant(of: row, matching: find.byIcon(Icons.more_vert_rounded)));
+    await settle(tester);
+
+    double top(String key) => tester.getTopLeft(find.text(Localizer.get(key)).last).dy;
+    final line = tester.getTopLeft(find.byType(PopupMenuDivider)).dy;
+    expect(top('TipAddToPlaylist'), lessThan(top('GoToArtist')));
+    expect(top('GoToArtist'), lessThan(line));
+    expect(line, lessThan(top('TipRemoveFromPlaylist')));
+    expect(top('TipRemoveFromPlaylist'), lessThan(top('HideTrack')));
+  });
+
   testWidgets("a phone's play and shuffle are round buttons without words, on one line with the sort, Play last", (
     tester,
   ) async {
