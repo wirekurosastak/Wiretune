@@ -103,7 +103,9 @@ performance overlay.
   permission to read audio and the CPU and Wi-Fi locks are in `packages/wiretune_platform`. The application ID is
   `com.wiretune.player`.
 - **iOS and macOS**: `ios/Runner/Info.plist` declares background audio, local network access and plain HTTP;
-  `macos/Runner/*.entitlements` leaves the app unsandboxed, and its comment says why.
+  `ios/Runner/AppDelegate.swift` answers `excludeFromBackup` on the `wiretune/platform` channel, which keeps the
+  downloads out of iCloud backups; `macos/Runner/*.entitlements` leaves the app unsandboxed, and its comment says why.
+  The channel's methods on every platform are listed on `AppPlatform._channel` (`app/lib/src/platform.dart`).
 - **Linux and Windows**: `main.dart` hides the system title bar, and the header draws its own window buttons.
 - **Tizen**: `tizen/` is the .NET runner. Dart sees Tizen as Linux, so `App.cs` answers the `wiretune/platform` channel
   to report a TV. The TV can't load the SQLite library the sqlite3 package downloads for Linux on ARM, so

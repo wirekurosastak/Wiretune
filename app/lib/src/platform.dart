@@ -45,10 +45,12 @@ class AppPlatform {
   /// Control Center (iOS, macOS) and MPRIS (Linux desktop, through audio_service_mpris).
   bool get supportsMediaSession => isAndroid || isIOS || isMacOS || isLinuxDesktop;
 
+  /// Who answers what on it: the Android plugin (packages/wiretune_platform) `isTelevision`, `musicDirectory` and
+  /// `requestAudioAccess`; the Tizen runner (tizen/App.cs) `isTizen` and `isTelevision`; the iOS runner
+  /// (ios/Runner/AppDelegate.swift) `excludeFromBackup`. Elsewhere a call finds no handler.
   static const MethodChannel _channel = MethodChannel('wiretune/platform');
 
-  /// Asks the native side: the Android plugin and the Tizen runner answer on `wiretune/platform`; a desktop has no
-  /// handler, which reads as "no".
+  /// Asks the native side ([_channel]); a platform without a handler, such as a desktop, reads as "no".
   static Future<AppPlatform> detect() async {
     final system = _hostSystem;
     var tizen = false;
