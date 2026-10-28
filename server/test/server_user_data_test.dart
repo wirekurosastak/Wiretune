@@ -12,7 +12,7 @@ void main() {
 
   test('they belong to the account and survive a restart', () async {
     final first = await ServerFixture.start();
-    first.keepFiles = true;
+    addTearDown(first.close);
     final (admin, _) = await setupAdmin(first);
     final (guest, _) = await registerGuest(first, admin);
 
@@ -51,13 +51,8 @@ void main() {
     expect((await data(guest)).playlists.single.name, 'Mine');
     expect((await data(admin)).playlists.single.name, 'Road trip');
 
-    await first.close();
-    final restarted = await ServerFixture.start(existingRoot: first.root);
-    addTearDown(() async {
-      await restarted.close();
-      first.keepFiles = false;
-      await first.close().catchError((_) {});
-    });
+    final restarted = await first.restart();
+    addTearDown(restarted.close);
     final (admin2, _) = await login(restarted, 'owner', adminPassword);
     final after = await data(admin2);
     expect(after.favorites, ['track-a']);

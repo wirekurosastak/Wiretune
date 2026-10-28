@@ -312,16 +312,11 @@ void main() {
 
   test('a restart keeps accounts and tokens, and setup stays closed', () async {
     final first = await ServerFixture.start();
-    first.keepFiles = true;
+    addTearDown(first.close);
     final (_, auth) = await setupAdmin(first);
-    await first.close();
 
-    final restarted = await ServerFixture.start(existingRoot: first.root);
-    addTearDown(() async {
-      await restarted.close();
-      first.keepFiles = false;
-      await first.close().catchError((_) {});
-    });
+    final restarted = await first.restart();
+    addTearDown(restarted.close);
 
     // The token signed before the restart is still valid: the signing key lives in the database.
     expect((await restarted.client(auth.token).get('/api/auth/me')).statusCode, 200);
@@ -332,21 +327,15 @@ void main() {
     'a library folder chosen by the admin is kept when it is missing at start-up, e.g. an unmounted share',
     () async {
       final first = await ServerFixture.start();
-      first.keepFiles = true;
+      addTearDown(first.close);
       final (admin, _) = await setupAdmin(first);
       final share = Directory('${first.root}/share')..createSync();
       writeWav('${share.path}/Artist/Album/01 Track.wav', 44100);
       expect((await admin.post('/api/config/music-folder', {'musicFolder': share.path})).statusCode, 200);
       await first.waitForTracks(admin, 1);
-      await first.close();
 
-      share.renameSync('${first.root}/unmounted');
-      final second = await ServerFixture.start(existingRoot: first.root);
-      addTearDown(() async {
-        await second.close();
-        first.keepFiles = false;
-        await first.close().catchError((_) {});
-      });
+      final second = await first.restart(() => share.renameSync('${first.root}/unmounted'));
+      addTearDown(second.close);
       final (admin2, _) = await login(second, 'owner', adminPassword);
       expect(json(await admin2.get('/api/config'))['musicFolder'], AppPaths.fullPath(share.path));
       // The scan waits for the share instead of putting the configured folder (three tracks) in its place.
@@ -360,18 +349,13 @@ void main() {
 
   test('a library folder chosen by the admin survives a restart', () async {
     final first = await ServerFixture.start();
-    first.keepFiles = true;
+    addTearDown(first.close);
     final (admin, _) = await setupAdmin(first);
     final other = '${first.root}/library2';
     expect((await admin.post('/api/config/music-folder', {'musicFolder': other})).statusCode, 200);
-    await first.close();
 
-    final second = await ServerFixture.start(existingRoot: first.root);
-    addTearDown(() async {
-      await second.close();
-      first.keepFiles = false;
-      await first.close().catchError((_) {});
-    });
+    final second = await first.restart();
+    addTearDown(second.close);
     final (admin2, _) = await login(second, 'owner', adminPassword);
     expect(json(await admin2.get('/api/config'))['musicFolder'], AppPaths.fullPath(other));
   });

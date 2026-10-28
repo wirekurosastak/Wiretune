@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -22,10 +23,8 @@ class ServerFixture {
 
   final String root;
   final WiretuneServer server;
-  final bool _ownsRoot;
-
-  /// Leaves the files behind on [close], e.g. to start a second server on the same data ("restart").
-  bool keepFiles = false;
+  bool _ownsRoot;
+  bool _closed = false;
 
   String get musicFolder => p.join(root, 'library');
   String get dataPath => p.join(root, 'data');
@@ -68,13 +67,28 @@ class ServerFixture {
     throw StateError('The server did not finish its scan.');
   }
 
+  /// Stops the server, and deletes its folders unless a [restart] handed them on. Safe to call again.
   Future<void> close() async {
-    await server.close();
-    if (_ownsRoot && !keepFiles) {
+    if (!_closed) {
+      _closed = true;
+      await server.close();
+    }
+    if (_ownsRoot) {
       try {
         Directory(root).deleteSync(recursive: true);
       } catch (_) {}
     }
+  }
+
+  /// Stops this server and starts another on its folders, as a restart does; [between] runs while neither is up. The
+  /// new one owns the folders from then on, so a test can close this one in its tear-down before or after.
+  Future<ServerFixture> restart([FutureOr<void> Function()? between]) async {
+    final owned = _ownsRoot;
+    _ownsRoot = false;
+    await close();
+    await between?.call();
+    final again = await start(existingRoot: root);
+    return ServerFixture._(root, again.server, owned);
   }
 }
 
