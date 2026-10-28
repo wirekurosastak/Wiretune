@@ -64,23 +64,17 @@ class _LoginPageState extends State<LoginPage> {
     field.requestFocus();
   }
 
-  void _copyFields() {
+  void _connect() {
     context.vm.serverSettings
       ..serverUrl = _url.text
-      ..username = _username.text
-      ..password = _password.text
-      ..setupCode = _setupCode.text;
-  }
-
-  void _connect() {
-    _copyFields();
-    context.vm.serverSettings.connectServer();
+      ..connectServer();
   }
 
   void _submit() {
-    _copyFields();
-    final server = context.vm.serverSettings;
-    server.isSetupRequired ? server.setupAdmin() : server.login();
+    final server = context.vm.serverSettings..serverUrl = _url.text;
+    server.isSetupRequired
+        ? server.setupAdmin(_username.text, _password.text, _setupCode.text)
+        : server.login(_username.text, _password.text);
   }
 
   @override

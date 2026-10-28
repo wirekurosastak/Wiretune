@@ -145,10 +145,7 @@ class UiAutomationServer {
         case '/api/ui/login':
           final user = query['user'];
           if (user == null || user.isEmpty) break;
-          _vm.serverSettings
-            ..username = user
-            ..password = query['password'] ?? '';
-          await _vm.serverSettings.login();
+          await _vm.serverSettings.login(user, query['password'] ?? '');
           final error = _vm.serverSettings.hasAuthError ? _vm.serverSettings.authErrorMessage : null;
           return await _json(request, 200, {'success': error == null, 'error': error, 'state': _vm.session.state.name});
         case '/api/ui/logout':

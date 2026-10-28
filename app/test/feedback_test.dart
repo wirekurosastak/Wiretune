@@ -387,12 +387,9 @@ void main() {
     await session.logout();
     final vm = createMainViewModel(lib, null, session);
     addTearDown(vm.dispose);
-    final server = vm.serverSettings
-      ..serverUrl = 'server:5200'
-      ..username = 'owner'
-      ..password = 'password';
+    final server = vm.serverSettings..serverUrl = 'server:5200';
     final before = asked;
-    await server.login();
+    await server.login('owner', 'password');
     expect(session.isLoggedIn, isTrue);
     expect(asked, before);
     await pumpEventQueue(); // what signing in set off (the server's folder, for an administrator) ends first

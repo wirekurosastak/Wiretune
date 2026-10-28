@@ -44,10 +44,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
   bool isScanning = false;
   double scanProgress = 0;
 
-  String username = '';
-  String password = '';
   bool stayLoggedIn = true;
-  String setupCode = '';
   String authErrorMessage = '';
   bool isAuthenticating = false;
 
@@ -69,9 +66,6 @@ class ServerSettingsViewModel extends ChangeNotifier {
   String localFolderMessage = '';
   bool localFolderIsError = false;
   List<UserInfo> serverUsers = const [];
-  String newUsername = '';
-  String newPassword = '';
-  String confirmPassword = '';
   bool isAddingUser = false;
   String userManagementErrorMessage = '';
 
@@ -159,7 +153,8 @@ class ServerSettingsViewModel extends ChangeNotifier {
     syncWithSession();
   }
 
-  Future<void> login() async {
+  /// Signs in to the server at [serverUrl] (connecting to it first when needed); what went wrong is [authErrorMessage].
+  Future<void> login(String username, String password) async {
     if (username.trim().isEmpty || password.isEmpty) {
       _showAuthError(Localizer.get('AuthEnterCredentials'));
       return;
@@ -183,21 +178,17 @@ class ServerSettingsViewModel extends ChangeNotifier {
         _showAuthError(Localizer.get('AuthSetupFirst'));
         return;
       }
-      if (_session.isLoggedIn) {
-        password = '';
-        return;
-      }
+      if (_session.isLoggedIn) return;
 
-      final error = await _session.login(username, password, stayLoggedIn);
-      _showAuthError(error);
-      if (error == null) password = '';
+      _showAuthError(await _session.login(username, password, stayLoggedIn));
     } finally {
       isAuthenticating = false;
       syncWithSession();
     }
   }
 
-  Future<void> setupAdmin() async {
+  /// Creates the server's first account, its administrator; what went wrong is [authErrorMessage].
+  Future<void> setupAdmin(String username, String password, String setupCode) async {
     if (username.trim().isEmpty || password.isEmpty) {
       _showAuthError(Localizer.get('AuthEnterAdminCredentials'));
       return;
@@ -210,12 +201,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     isAuthenticating = true;
     _showAuthError(null);
     try {
-      final error = await _session.setupAdmin(username, password, setupCode);
-      _showAuthError(error);
-      if (error == null) {
-        password = '';
-        setupCode = '';
-      }
+      _showAuthError(await _session.setupAdmin(username, password, setupCode));
     } finally {
       isAuthenticating = false;
       syncWithSession();
@@ -395,11 +381,12 @@ class ServerSettingsViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addUser() async {
+  /// Adds an account to the server (for its administrator); what went wrong is [userManagementErrorMessage].
+  Future<void> addUser(String username, String password, String confirmPassword) async {
     if (!isLoggedIn || !isAdmin) return;
-    final problem = newUsername.trim().isEmpty || newPassword.isEmpty
+    final problem = username.trim().isEmpty || password.isEmpty
         ? Localizer.get('AuthEnterCredentials')
-        : _newPasswordProblem(newPassword, confirmPassword);
+        : _newPasswordProblem(password, confirmPassword);
     if (problem != null) {
       _showUserManagementError(problem);
       return;
@@ -408,10 +395,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     isAddingUser = true;
     _showUserManagementError(null);
     try {
-      await _session.addUser(newUsername, newPassword);
-      newUsername = '';
-      newPassword = '';
-      confirmPassword = '';
+      await _session.addUser(username, password);
       await loadUsers();
     } catch (e) {
       _showUserManagementError(Localizer.format('UserAddError', ['$e']));

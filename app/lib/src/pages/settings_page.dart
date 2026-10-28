@@ -239,11 +239,7 @@ class _AccountCardState extends State<_AccountCard> {
   }
 
   Future<void> _add(ServerSettingsViewModel server) async {
-    server
-      ..newUsername = _username.text
-      ..newPassword = _password.text
-      ..confirmPassword = _confirm.text;
-    await server.addUser();
+    await server.addUser(_username.text, _password.text, _confirm.text);
     if (!server.hasUserManagementError) {
       _username.clear();
       _password.clear();
