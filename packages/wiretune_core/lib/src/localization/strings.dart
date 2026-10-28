@@ -257,6 +257,12 @@ const Map<String, (String, String, String)> allStrings = {
   'Queue': ('Következik', 'Queue', 'Warteschlange'),
   'NowPlaying': ('MOST SZÓL', 'NOW PLAYING', 'WIRD GESPIELT'),
   'ClearQueue': ('Sor kiürítése', 'Clear queue', 'Warteschlange leeren'),
+  'ClearQueueConfirm': (
+    'Biztosan kiüríted a sort? A számok a könyvtárban maradnak.',
+    'Really clear the queue? The tracks stay in your library.',
+    'Möchtest du die Warteschlange wirklich leeren? Die Titel bleiben in deiner Bibliothek.',
+  ),
+  'Clear': ('Kiürítés', 'Clear', 'Leeren'),
   'QueueEmptyTitle': ('Nem következik semmi', 'The queue is empty', 'Die Warteschlange ist leer'),
   'QueueEmptyHint': (
     'Indíts el egy számot vagy albumot.',
@@ -836,6 +842,11 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'TipDownload': ('Letöltés erre az eszközre', 'Download to this device', 'Auf dieses Gerät herunterladen'),
   'TipRemoveDownload': ('Letöltés eltávolítása', 'Remove download', 'Download entfernen'),
+  'DownloadRemoveConfirm': (
+    'Biztosan törlöd a(z) „{0}” letöltését erről az eszközről? A számok a könyvtárban maradnak.',
+    'Really remove the download of “{0}” from this device? The tracks stay in your library.',
+    'Möchtest du den Download von „{0}“ wirklich von diesem Gerät entfernen? Die Titel bleiben in deiner Bibliothek.',
+  ),
   'TipDownloaded': ('Letöltve', 'Downloaded', 'Heruntergeladen'),
   'TipMore': ('További lehetőségek', 'More options', 'Weitere Optionen'),
   'GoToAlbum': ('Ugrás az albumra', 'Go to album', 'Zum Album'),

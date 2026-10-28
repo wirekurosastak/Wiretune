@@ -14,6 +14,7 @@ import '../view_models/player_view_model.dart';
 import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
 import '../widgets/cover_image.dart';
+import '../widgets/dialogs.dart';
 import '../widgets/equalizer_bars.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
@@ -578,7 +579,7 @@ class QueueLyricsPanel extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         overlayColor: Colors.transparent,
                       ),
-                      onPressed: count == 0 ? null : player.clearQueue,
+                      onPressed: count == 0 ? null : () => confirmClearQueue(context),
                       icon: Icon(Icons.playlist_remove_rounded, size: 18, color: count == 0 ? null : colors.danger),
                       label: Text(context.tr('ClearQueue')),
                     ),

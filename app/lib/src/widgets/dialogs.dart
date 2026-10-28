@@ -161,6 +161,39 @@ Future<void> confirmDeletePlaylist(BuildContext context, Playlist playlist) asyn
   if (confirmed && context.mounted) context.vm.playlists.deletePlaylist(playlist);
 }
 
+/// Asks before the queue is cleared.
+Future<void> confirmClearQueue(BuildContext context) async {
+  final confirmed = await confirmAction(
+    context,
+    title: context.tr('ClearQueue'),
+    message: context.tr('ClearQueueConfirm'),
+    confirmLabel: context.tr('Clear'),
+    destructive: true,
+  );
+  if (confirmed && context.mounted) context.vm.player.clearQueue();
+}
+
+/// Downloads the list called [name] with [toggle], or, when it is [downloaded], lets it go: that deletes its copies on
+/// this device, so it is asked first.
+Future<void> toggleListDownload(
+  BuildContext context,
+  String name, {
+  required bool downloaded,
+  required VoidCallback toggle,
+}) async {
+  if (downloaded) {
+    final confirmed = await confirmAction(
+      context,
+      title: context.tr('TipRemoveDownload'),
+      message: context.trf('DownloadRemoveConfirm', [name]),
+      confirmLabel: context.tr('Delete'),
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+  }
+  toggle();
+}
+
 class _NewPlaylistDialog extends StatefulWidget {
   const _NewPlaylistDialog({required this.tracks, required this.name, required this.adding});
 

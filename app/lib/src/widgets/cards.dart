@@ -341,7 +341,7 @@ class ListMenu {
       case _ListAction.addToPlaylist:
         showAddToPlaylistDialog(context, tracks, label: label, suggestedName: name);
       case _ListAction.download:
-        onDownload(vm);
+        toggleListDownload(context, name, downloaded: isDownloaded(vm), toggle: () => onDownload(vm));
       case _ListAction.openArtist:
         vm.openArtistByName(artist);
       case _ListAction.remove:

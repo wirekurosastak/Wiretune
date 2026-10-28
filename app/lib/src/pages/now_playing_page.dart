@@ -448,7 +448,7 @@ class _QueueTab extends StatelessWidget {
                     minimumSize: const Size(0, 40),
                     overlayColor: Colors.transparent,
                   ),
-                  onPressed: player.queueItems.isEmpty ? null : player.clearQueue,
+                  onPressed: player.queueItems.isEmpty ? null : () => confirmClearQueue(context),
                   icon: const Icon(Icons.playlist_remove_rounded, size: 20),
                   label: Text(
                     context.tr('ClearQueue'),

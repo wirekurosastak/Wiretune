@@ -126,6 +126,7 @@ class FavoritesPage extends StatelessWidget {
                 addToPlaylist: phone ? null : menu.addToPlaylistButton(),
                 download: DownloadListButton.forTracks(
                   favorites.favoriteTracks,
+                  name: context.tr('NavFavorites'),
                   isDownloaded: () => context.vm.downloads.areFavoritesDownloaded,
                   onPressed: context.vm.downloads.toggleFavorites,
                 ),
@@ -816,6 +817,7 @@ class AlbumDetail extends StatelessWidget {
                   addToPlaylist: menu.addToPlaylistButton(),
                   download: DownloadListButton.forTracks(
                     album.tracks,
+                    name: album.title,
                     isDownloaded: () => vm.downloads.isAlbumDownloaded(album),
                     onPressed: () => vm.downloads.toggleAlbum(album),
                   ),
@@ -925,6 +927,7 @@ class ArtistDetail extends StatelessWidget {
                   // The artist's albums, also the ones that arrive later.
                   download: DownloadListButton.forTracks(
                     albumTracks,
+                    name: artist.name,
                     isDownloaded: () => vm.downloads.isArtistDownloaded(artist),
                     onPressed: () => vm.downloads.toggleArtist(artist),
                   ),

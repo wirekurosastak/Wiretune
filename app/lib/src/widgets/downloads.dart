@@ -8,24 +8,35 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import 'buttons.dart';
+import 'dialogs.dart';
 
 /// The download button of a list (an album, a playlist, the favourites): keeps the whole list on this device, or lets
-/// it go again. While the copies arrive a ring around it fills up (only as they do: nothing moves on its own). Not
-/// there for a list without server tracks, which has nothing to download.
+/// it go again (asked first). While the copies arrive a ring around it fills up (only as they do: nothing moves on its
+/// own). Not there for a list without server tracks, which has nothing to download.
 class DownloadListButton extends StatelessWidget {
-  const DownloadListButton({super.key, required this.tracks, required this.isDownloaded, required this.onPressed});
+  const DownloadListButton({
+    super.key,
+    required this.tracks,
+    required this.name,
+    required this.isDownloaded,
+    required this.onPressed,
+  });
 
   final List<Track> tracks;
+
+  /// What the question before letting it go calls it.
+  final String name;
   final bool Function() isDownloaded;
   final VoidCallback onPressed;
 
   /// The button for [tracks]; null when none of them can be downloaded (the list gets no button).
   static Widget? forTracks(
     List<Track> tracks, {
+    required String name,
     required bool Function() isDownloaded,
     required VoidCallback onPressed,
   }) => tracks.any(DownloadService.canDownload)
-      ? DownloadListButton(tracks: tracks, isDownloaded: isDownloaded, onPressed: onPressed)
+      ? DownloadListButton(tracks: tracks, name: name, isDownloaded: isDownloaded, onPressed: onPressed)
       : null;
 
   @override
@@ -48,7 +59,7 @@ class DownloadListButton extends StatelessWidget {
           // Muted like the buttons beside it (bright under the mouse) until it is kept: then the accent.
           color: downloaded ? context.colors.accent : null,
           progress: downloaded && !complete ? done / total : null,
-          onPressed: onPressed,
+          onPressed: () => toggleListDownload(context, name, downloaded: downloaded, toggle: onPressed),
         );
       },
     );

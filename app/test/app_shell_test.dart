@@ -810,7 +810,16 @@ void main() {
       find.descendant(of: find.byType(TrackSliver), matching: find.byIcon(Icons.downloading_rounded)),
       findsNWidgets(2),
     );
-    await tester.tap(inHeader(Localizer.format('DownloadsListProgress', [0, 2])));
+    // Letting it go deletes its copies: asked first, and Cancel keeps it.
+    final letGo = inHeader(Localizer.format('DownloadsListProgress', [0, 2]));
+    await tester.tap(letGo);
+    await settle(tester);
+    await tester.tap(find.widgetWithText(TextButton, Localizer.get('Cancel')));
+    await settle(tester);
+    expect(downloads.isAlbumDownloaded(album), isTrue);
+    await tester.tap(letGo);
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilledButton, Localizer.get('Delete')));
     await settle(tester);
     expect(downloads.isAlbumDownloaded(album), isFalse);
 

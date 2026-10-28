@@ -222,6 +222,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                       ? null
                       : DownloadListButton.forTracks(
                           tracks,
+                          name: playlist.name,
                           isDownloaded: () => context.vm.downloads.isPlaylistDownloaded(playlist),
                           onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                         ),
