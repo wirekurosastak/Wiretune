@@ -23,7 +23,8 @@ import '../widgets/links.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
 
-/// What an empty library says, with the two ways to fill it: a server, or a folder of this computer.
+/// What an empty library says, with the two ways to fill it: a server, or a folder of this computer. While a scan or a
+/// download from the server is filling it, it says that instead.
 class EmptyLibrary extends StatelessWidget {
   const EmptyLibrary({super.key});
 
@@ -31,25 +32,38 @@ class EmptyLibrary extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
-    return EmptyState(
-      icon: Icons.library_music_outlined,
-      title: context.tr('EmptyLibraryTitle'),
-      hint: context.tr(vm.capabilities.supportsLocalFolder ? 'EmptyLibraryHint' : 'EmptyLibraryHintServer'),
-      actions: [
-        PressShrink(
-          child: FilledButton.icon(
-            onPressed: vm.showLoginScreen,
-            icon: const Icon(Icons.dns_outlined, size: 18),
-            label: Text(context.tr('ConnectToServer')),
-          ),
-        ),
-        if (vm.capabilities.supportsLocalFolder)
-          OutlinedButton.icon(
-            onPressed: () => vm.navigateTo(AppSection.settings),
-            icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.accent),
-            label: Text(context.tr('LocalFolder')),
-          ),
-      ],
+    return ListenableBuilder(
+      listenable: vm,
+      builder: (context, _) {
+        if (vm.library.isScanning || vm.session.state == ServerConnectionState.connecting) {
+          return EmptyState(
+            icon: Icons.sync_rounded,
+            title: vm.library.isScanning
+                ? context.tr('FooterScanning')
+                : vm.session.statusMessage ?? context.tr('SessionConnecting'),
+          );
+        }
+        return EmptyState(
+          icon: Icons.library_music_outlined,
+          title: context.tr('EmptyLibraryTitle'),
+          hint: context.tr(vm.capabilities.supportsLocalFolder ? 'EmptyLibraryHint' : 'EmptyLibraryHintServer'),
+          actions: [
+            PressShrink(
+              child: FilledButton.icon(
+                onPressed: vm.showLoginScreen,
+                icon: const Icon(Icons.dns_outlined, size: 18),
+                label: Text(context.tr('ConnectToServer')),
+              ),
+            ),
+            if (vm.capabilities.supportsLocalFolder)
+              OutlinedButton.icon(
+                onPressed: () => vm.navigateTo(AppSection.settings),
+                icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.accent),
+                label: Text(context.tr('LocalFolder')),
+              ),
+          ],
+        );
+      },
     );
   }
 }
