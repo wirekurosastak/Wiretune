@@ -145,9 +145,6 @@ class PlayerViewModel extends ChangeNotifier {
   bool get isBitPerfect => _engine.isBitPerfect;
   String? errorMessage;
 
-  QualityTier get currentTier => currentTrack?.format.tier ?? QualityTier.silver;
-  String get currentTagSpec => currentTrack?.format.tagSpec ?? '';
-
   bool get hasError => errorMessage != null && errorMessage!.isNotEmpty;
   bool get isPlaying => playbackState == PlaybackState.playing;
 

@@ -1829,7 +1829,7 @@ void main() {
     expect((vm.artists.isArtistDetailOpen, offset()), (false, again));
   });
 
-  testWidgets("the player's BPM, format and bitrate sit midway between the cover, at its full size, and the title", (
+  testWidgets("the player's BPM and quality with bitrate sit midway between the cover, at full size, and the title", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
@@ -1868,15 +1868,42 @@ void main() {
             .first,
       ); // unscaled
       final bpm = tester.getCenter(find.text('136 BPM'));
-      // Under the cover, not on it: the cover is all picture.
-      final format = tester.getCenter(find.text('FLAC 16bit/44.1kHz'));
-      final bitrate = tester.getCenter(find.text(Localizer.format('BitrateKbps', [912])));
+      // Under the cover, not on it: the cover is all picture. The quality and the bitrate in one tag.
+      final quality = tester.getCenter(find.text('FLAC 16bit/44.1kHz · ${Localizer.format('BitrateKbps', [912])}'));
       final title = tester.getRect(find.descendant(of: page, matching: find.text('So What')));
       expect(bpm.dy, moreOrLessEquals((cover.bottom + title.top) / 2, epsilon: 0.5), reason: 'playing: $playing');
-      expect(format.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
-      expect(bitrate.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
-      expect((format.dx > bpm.dx, bitrate.dx > format.dx), (true, true));
+      expect(quality.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
+      expect(quality.dx, greaterThan(bpm.dx));
     }
+  });
+
+  testWidgets("a computer's player bar has the track's BPM and quality with bitrate on its right, by its buttons", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'windows');
+    final vm = await pumpApp(tester, const Size(1920, 1000), () async {
+      final library = createLibrary([
+        Track(
+          id: '1',
+          title: 'So What',
+          album: 'Kind of Blue',
+          filePath: '/music/1.flac',
+          format: const AudioFormat(bitrateKbps: 912, isLossless: true),
+        )..bpm = 136,
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+
+    // The BPM beside the quality's tag, the bitrate in it, between the seek bar and the buttons; not by the title.
+    final bpm = tester.getRect(find.text('136 BPM'));
+    final quality = tester.getRect(find.text('FLAC 16bit/44.1kHz · ${Localizer.format('BitrateKbps', [912])}'));
+    expect(bpm.left, greaterThan(tester.getRect(find.byType(SeekBar)).right));
+    expect(quality.left, greaterThan(bpm.right));
+    expect(quality.right, lessThan(tester.getRect(find.byType(SleepTimerButton)).left));
+    expect(quality.center.dy, moreOrLessEquals(bpm.center.dy, epsilon: 0.5));
   });
 
   testWidgets("the full-screen player's artist is in the artists' red, whatever the section's colour", (tester) async {

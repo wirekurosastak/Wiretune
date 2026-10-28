@@ -53,6 +53,35 @@ class QualityTag extends StatelessWidget {
   }
 }
 
+/// The playing track's tags in a player, as under the phone's full-screen cover and in the player bar: its BPM, and its
+/// quality with the bitrate in the same tag ("FLAC 16bit/44.1kHz · 912 kbps"; a lossy file's says its bitrate already:
+/// "MP3 320kbps"). Where room is short the quality's tag ends in an ellipsis.
+class PlayerTags extends StatelessWidget {
+  const PlayerTags({super.key, required this.track, this.fontSize = 10});
+
+  final Track track;
+  final double fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final bpm = track.bpm;
+    final format = track.format;
+    final spec = format.isLossless && format.bitrateKbps > 0
+        ? '${format.tagSpec} · ${context.trf('BitrateKbps', [format.bitrateKbps])}'
+        : format.tagSpec;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 8,
+      children: [
+        if (bpm != null && bpm > 0) PlayerMetaBadge(text: '$bpm BPM', fontSize: fontSize),
+        Flexible(
+          child: QualityTag(tier: format.tier, spec: spec, fontSize: fontSize),
+        ),
+      ],
+    );
+  }
+}
+
 /// A small pill tinted with its colour: "ARTIST", "ALBUM", "TRACK", a counter.
 class TagBadge extends StatelessWidget {
   const TagBadge(this.text, {super.key, required this.color});

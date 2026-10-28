@@ -1037,30 +1037,19 @@ class _PlayerBar extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Flexible(
-                                  child: Tooltip(
-                                    message: track?.title ?? '',
-                                    child: Text(
-                                      player.nowPlayingTitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -0.1,
-                                        color: colors.textMain,
-                                      ),
-                                    ),
-                                  ),
+                            Tooltip(
+                              message: track?.title ?? '',
+                              child: Text(
+                                player.nowPlayingTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.1,
+                                  color: colors.textMain,
                                 ),
-                                if (track != null && track.bpm != null && track.bpm! > 0) ...[
-                                  const SizedBox(width: 6),
-                                  PlayerMetaBadge(text: '${track.bpm} BPM', fontSize: 10),
-                                ],
-                              ],
+                              ),
                             ),
                             const SizedBox(height: 3),
                             if (player.hasError)
@@ -1152,35 +1141,45 @@ class _PlayerBar extends StatelessWidget {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    // Spectrum, quality and volume, as many as fit: the volume first, then the quality tag, then the
-                    // spectrum in what is left, down to 80 px.
+                    // Spectrum, tags and volume, as many as fit: the volume first, then the track's tags, then the
+                    // spectrum in what is left, down to 160 px.
                     final scale = MediaQuery.textScalerOf(context).scale(1);
                     // The devices button (while there are other devices to reach) takes its place first.
                     final devices = player.canReachDevices || player.isRemote;
                     // A tablet's and a TV's own buttons set their own volume, but not another device's.
                     final volume = (platform.isDesktop || player.isRemote) && constraints.maxWidth >= 12 + 36 + 8 + 95;
-                    var room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0) - 40;
-                    final showTag = !compact && track != null && room >= 125 * scale;
-                    if (showTag) room -= 125 * scale + 8;
-                    final spectrumWidth = math.min(260.0, room - 14);
-                    final showSpectrum = !compact && platform.isDesktop && spectrumWidth >= 160;
+                    final room = constraints.maxWidth - 12 - (volume ? 36 + 8 + 95 : 0) - (devices ? 40 : 0) - 40 - 8;
+                    final showTags = !compact && track != null && room >= 125 * scale;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          if (showSpectrum) ...[
-                            SpectrumVisualizer(
-                              bands: player.spectrum,
-                              color: colors.accent,
-                              highlight: colors.hover,
-                              width: spectrumWidth,
-                            ),
-                            const SizedBox(width: 14),
-                          ],
-                          if (showTag) ...[
+                          if (!compact && platform.isDesktop)
                             Flexible(
-                              child: QualityTag(tier: player.currentTier, spec: player.currentTagSpec),
+                              child: LayoutBuilder(
+                                builder: (context, space) {
+                                  final width = math.min(260.0, space.maxWidth - 14);
+                                  if (width < 160) return const SizedBox.shrink();
+                                  return Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SpectrumVisualizer(
+                                        bands: player.spectrum,
+                                        color: colors.accent,
+                                        highlight: colors.hover,
+                                        width: width,
+                                      ),
+                                      const SizedBox(width: 14),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          if (showTags) ...[
+                            ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: room),
+                              child: PlayerTags(track: track),
                             ),
                             const SizedBox(width: 8),
                           ],

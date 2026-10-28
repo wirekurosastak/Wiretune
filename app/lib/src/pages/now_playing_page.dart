@@ -261,20 +261,6 @@ class _TrackTab extends StatelessWidget {
     final player = vm.player;
     final colors = context.colors;
     final track = player.currentTrack;
-    final bpm = switch (track?.bpm) {
-      final value? when value > 0 => value,
-      _ => null,
-    };
-    // The format's tag between the BPM and the bitrate, under the cover rather than on it; the bitrate in the quality's
-    // colours as in the desktop's table, where the tag doesn't say it already (a lossy file's does: "MP3 320kbps").
-    final format = track?.format;
-    final meta = [
-      if (bpm != null) PlayerMetaBadge(text: '$bpm BPM', fontSize: 11),
-      if (player.currentTagSpec.isNotEmpty)
-        QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 11),
-      if (format != null && format.isLossless && format.bitrateKbps > 0)
-        QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: 11),
-    ];
     // The queue and the lyrics scroll vertically themselves; here a drag down takes the player down.
     return PlayerSheetDrag(
       child: Column(
@@ -285,9 +271,9 @@ class _TrackTab extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // The cover at its size while playing (paused, it sits back within the same room), centred above the
-                  // title with at least [below] under it; a track's BPM, format and bitrate sit midway between that edge
-                  // and the title.
-                  final below = meta.isNotEmpty ? 48.0 : 16.0;
+                  // title with at least [below] under it; a track's tags sit midway between that edge and the title,
+                  // under the cover rather than on it.
+                  final below = track != null ? 48.0 : 16.0;
                   final side = math.max(
                     0.0,
                     math.min(420.0, math.min(constraints.maxWidth, constraints.maxHeight - below)),
@@ -325,13 +311,7 @@ class _TrackTab extends StatelessWidget {
                         ),
                       ),
                       Expanded(
-                        child: Center(
-                          // Scaled down rather than cut off on a narrow screen with a large font.
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: meta),
-                          ),
-                        ),
+                        child: Center(child: track == null ? null : PlayerTags(track: track, fontSize: 11)),
                       ),
                     ],
                   );
