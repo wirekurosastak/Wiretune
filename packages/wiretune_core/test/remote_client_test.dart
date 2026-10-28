@@ -26,6 +26,10 @@ void main() {
   late ServerSession session;
 
   setUp(() async {
+    // Reconnects in a blink; "not again" is then checked after many of them would have happened.
+    final saved = RemoteClient.firstRetry;
+    RemoteClient.firstRetry = const Duration(milliseconds: 20);
+    addTearDown(() => RemoteClient.firstRetry = saved);
     library = LibraryService(testRepository(), MetadataScanner(), coverCacheDirectory: '/nonexistent');
     library.initialize();
     session = await signedInSession(library);
@@ -72,7 +76,7 @@ void main() {
     await hub.drop();
     await pumpEventQueue();
     expect(client.isConnected, isFalse);
-    expect(await until(() => hub.connections == 2, within: const Duration(seconds: 4)), isTrue);
+    expect(await until(() => hub.connections == 2), isTrue);
     expect(await until(() => hub.ofType('state').length == 2), isTrue);
     expect((hub.ofType('state').last['state'] as Map)['positionMs'], 7000);
 
@@ -87,7 +91,7 @@ void main() {
     );
     addTearDown(refused.dispose);
     refused.configure(id: 'phone', name: '', kind: DeviceKind.phone, enabled: true);
-    await Future<void>.delayed(const Duration(milliseconds: 2500));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
     expect((attempts, refused.isConnected), (1, false));
   });
 
@@ -112,7 +116,7 @@ void main() {
       expect(await until(() => client.isConnected), isTrue);
       expect(client.problem, isNull);
       await incoming.close();
-      await Future<void>.delayed(const Duration(milliseconds: 2500));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
       expect((connections, client.isConnected), (1, false), reason: 'close code $code');
       // The settings say why it stopped.
       expect(client.problem, switch (code) {
@@ -151,7 +155,7 @@ void main() {
 
     // What the server said while the connection was down is lost: coming back counts as a change.
     await hub.drop();
-    expect(await until(() => hub.connections == 2, within: const Duration(seconds: 4)), isTrue);
+    expect(await until(() => hub.connections == 2), isTrue);
     expect(await until(() => changed == 2), isTrue);
   });
 

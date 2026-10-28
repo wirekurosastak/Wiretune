@@ -60,7 +60,9 @@ class RemoteClient {
     _unsubscribe = _session.stateChanged.listen((_) => _update());
   }
 
-  static const Duration _firstRetry = Duration(seconds: 2);
+  /// How long a lost connection is left before it is tried again: twice as long each time, up to [_lastRetry]. Tests
+  /// shorten it.
+  static Duration firstRetry = const Duration(seconds: 2);
   static const Duration _lastRetry = Duration(minutes: 1);
   static const Duration _publishInterval = Duration(milliseconds: 150);
 
@@ -88,7 +90,7 @@ class RemoteClient {
   bool _connecting = false;
   (String url, String token)? _refusedFor;
   Timer? _retry;
-  Duration _retryDelay = _firstRetry;
+  Duration _retryDelay = firstRetry;
   final Map<String, RemoteDevice> _devices = {};
   RemotePlayback? _playback;
   Timer? _publishTimer;
@@ -353,7 +355,7 @@ class RemoteClient {
 
   void _onDevices(Object? list) {
     if (list is! List) return;
-    _retryDelay = _firstRetry; // the server took this player in
+    _retryDelay = firstRetry; // the server took this player in
     final online = <String, RemoteDevice>{};
     for (final entry in list) {
       if (entry is! Map) continue;
