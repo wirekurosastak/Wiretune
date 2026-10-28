@@ -12,10 +12,11 @@ void main() {
   setUpAll(useTempDataDirectory);
   setUp(() => Localizer.instance.setLanguage('en'));
 
-  test('bit-perfect locks the volume to unity gain', () async {
+  test('bit-perfect locks the volume at unity gain, and the volume set before comes back after', () async {
     final driver = FakeAudioDriver();
     final engine = TestSupport.createEngine(driver);
-    engine.setVolume(0.5);
+    engine.setVolume(0.75);
+    expect(engine.volume, closeTo(0.75, 0.001));
     await engine.setBitPerfectMode(true);
     expect(engine.isBitPerfect, isTrue);
     expect(driver.volume, 1.0);
@@ -23,16 +24,7 @@ void main() {
     engine.setVolume(0.5); // must stay at 0 dB: no digital attenuation of the bits
     expect(driver.volume, 1.0);
     expect(engine.volume, 1.0);
-  });
 
-  test('without bit-perfect the volume can be set, and restored after bit-perfect', () async {
-    final driver = FakeAudioDriver();
-    final engine = TestSupport.createEngine(driver);
-    engine.setVolume(0.75);
-    expect(engine.volume, closeTo(0.75, 0.001));
-
-    await engine.setBitPerfectMode(true);
-    expect(driver.volume, 1.0);
     await engine.setBitPerfectMode(false);
     expect(engine.volume, closeTo(0.75, 0.001));
     expect(driver.volume, closeTo(0.75, 0.001));
