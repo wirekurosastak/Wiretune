@@ -2072,6 +2072,7 @@ void main() {
       Localizer.get('ThemeDark'),
       Localizer.get('ThemeLight'),
     ]) {
+      expect(find.text(label), findsWidgets, reason: label); // or the loop below would check nothing
       for (final element in find.text(label).evaluate()) {
         expect(find.ancestor(of: find.byWidget(element.widget), matching: find.byType(Tooltip)), findsNothing);
       }
