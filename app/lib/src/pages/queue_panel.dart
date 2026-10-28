@@ -588,7 +588,7 @@ class QueueLyricsPanel extends StatelessWidget {
                         overlayColor: Colors.transparent,
                       ),
                       onPressed: count == 0 ? null : () => confirmClearQueue(context),
-                      icon: Icon(Icons.playlist_remove_rounded, size: 18, color: count == 0 ? null : colors.danger),
+                      icon: Icon(Icons.clear_all_rounded, size: 18, color: count == 0 ? null : colors.danger),
                       label: Text(context.tr('ClearQueue')),
                     ),
                   ),

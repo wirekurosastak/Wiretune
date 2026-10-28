@@ -313,7 +313,7 @@ class ListMenu {
       if (!header && downloadable.any(vm.downloads.canDownload))
         item(
           _ListAction.download,
-          downloaded ? Icons.download_done_rounded : Icons.download_rounded,
+          downloaded ? Icons.delete_outline_rounded : Icons.download_rounded,
           context.tr(downloaded ? 'RemoveDownload' : 'Download'),
           color: downloaded ? colors.danger : null,
         ),

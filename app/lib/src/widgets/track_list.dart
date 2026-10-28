@@ -715,13 +715,16 @@ class TrackMenu extends StatelessWidget {
         ),
       ],
       if (downloads.canDownload(track))
-        item(
-          TrackAction.download,
-          downloadIcon(downloads.stateOf(track)) ?? Icons.download_rounded,
-          downloadTip(context, track),
-          enabled: !downloads.isDownloadedWithList(track),
-          color: downloads.isTrackDownloaded(track) && !downloads.isDownloadedWithList(track) ? colors.danger : null,
-        ),
+        // Removing its own download is a bin, as in Settings; downloaded with a list, it shows how it stands.
+        if (downloads.isTrackDownloaded(track) && !downloads.isDownloadedWithList(track))
+          item(TrackAction.download, Icons.delete_outline_rounded, downloadTip(context, track), color: colors.danger)
+        else
+          item(
+            TrackAction.download,
+            downloadIcon(downloads.stateOf(track)) ?? Icons.download_rounded,
+            downloadTip(context, track),
+            enabled: !downloads.isDownloadedWithList(track),
+          ),
       if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
       if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
       // What takes the track away comes last, apart from the rest: a slip of one row can't remove instead of add.

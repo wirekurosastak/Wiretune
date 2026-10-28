@@ -2379,7 +2379,7 @@ void main() {
     vm.nowPlayingTab = NowPlayingTab.queue;
     await settle(tester);
     expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [3]))), findsOneWidget);
-    expect(find.descendant(of: player, matching: find.byIcon(Icons.playlist_remove_rounded)), findsOneWidget);
+    expect(find.descendant(of: player, matching: find.byIcon(Icons.clear_all_rounded)), findsOneWidget);
     // A phone's queue rows are its track rows' size, their red × a finger's target.
     final remove = find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipRemoveFromQueue')));
     expect(remove, findsNWidgets(3));
