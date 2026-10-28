@@ -77,10 +77,11 @@ Future<void> main() async {
       name: platform.isDesktop ? Platform.localHostname : '',
     ),
   );
-  vm.onServerCredentialsChanged = (serverUrl, token) {
-    CoverArt.serverUrl = serverUrl.isEmpty ? null : serverUrl;
-    CoverArt.authToken = token;
-  };
+  // Cover requests to the server carry the sign-in token.
+  session.stateChanged.listen((_) {
+    CoverArt.serverUrl = session.serverUrl.isEmpty ? null : session.serverUrl;
+    CoverArt.authToken = session.authToken;
+  });
   CoverArt.localCopy = vm.downloadService.localCover;
   unawaited(platform.excludeFromBackup(vm.downloadService.directory));
   unawaited(platform.excludeFromBackup(vm.downloadService.workDirectory));

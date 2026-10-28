@@ -162,9 +162,6 @@ class MainViewModel extends ChangeNotifier {
   late final ServerSettingsViewModel serverSettings;
   late final SearchViewModel search;
 
-  /// Called whenever the session's address or token changes, so cover requests to the server carry the token.
-  void Function(String serverUrl, String? token)? onServerCredentialsChanged;
-
   /// What the app shows the user for a few seconds ([showNotice]).
   final Event<AppNotice> notices = Event<AppNotice>();
 
@@ -628,7 +625,6 @@ class MainViewModel extends ChangeNotifier {
   }
 
   void _onSessionStateChanged() {
-    onServerCredentialsChanged?.call(session.serverUrl, session.authToken);
     _followOfflineMode();
     final offline = session.state == ServerConnectionState.offline;
     serverBannerNeedsSignIn = session.state == ServerConnectionState.loginRequired && session.authToken == null;
