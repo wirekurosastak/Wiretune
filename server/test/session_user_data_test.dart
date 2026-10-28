@@ -1,11 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import 'dart:convert';
 import 'dart:io';
 
-import 'package:http/http.dart' as http;
-import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -390,125 +387,5 @@ void main() {
       expect(d.session.state, ServerConnectionState.offline);
       expect(d.session.statusMessage, contains('is this a Wiretune server?'));
     });
-  });
-
-  group('against a scripted server', () {
-    final auth = AuthResponse(
-      't0ken',
-      UserInfo('u1', 'owner', true, DateTime.now().toUtc(), null),
-      DateTime.now().toUtc().add(const Duration(days: 1)),
-    );
-
-    http.Response respond(Object value, [int status = 200]) =>
-        http.Response(jsonEncode(value), status, headers: {'content-type': 'application/json'});
-    final empty = const UserDataSnapshot([], [], []).toJson();
-
-    Future<(ServerSession, LibraryService, List<String>)> scripted(
-      http.Response? Function(http.Request request) more,
-    ) async {
-      final requests = <String>[];
-      final client = MockClient((request) async {
-        requests.add('${request.method} ${request.url.path}');
-        return switch (request.url.path) {
-          '/api/auth/setup-required' => respond({'setupRequired': false}),
-          '/api/auth/login' => respond(auth.toJson()),
-          '/api/auth/me' => respond(auth.user.toJson()),
-          '/api/tracks' => respond([TestSupport.makeTrack('s1', 'Server song').toJson()]),
-          '/api/artists/pictures' => respond(<String, String>{}),
-          '/api/me/data' => respond(empty),
-          _ => more(request) ?? http.Response('', 404),
-        };
-      });
-      final repo = testRepository();
-      final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
-      library.initialize();
-      final session = ServerSession(library, repo, ServerClient(client));
-      session.initialize();
-      await session.connect('http://wiretune.test');
-      expect(await session.login('owner', 'correct horse', true), isNull);
-      return (session, library, requests);
-    }
-
-    test('a server that refuses a change can be reached, so the session stays connected', () async {
-      final (session, library, requests) = await scripted(
-        (request) => switch (request.url.path) {
-          final path when path.startsWith('/api/me/playlists/') => respond({
-            'error': 'An account can have at most 500 playlists.',
-          }, 409),
-          _ => null,
-        },
-      );
-      addTearDown(session.dispose);
-
-      library.createPlaylist('One too many');
-      await session.flushUserData();
-      expect(requests.where((r) => r.startsWith('PUT /api/me/playlists/')), hasLength(1)); // sent, and refused
-      expect(session.state, ServerConnectionState.connected);
-      expect(library.serverConnected, isTrue);
-    });
-
-    test('a favourite the server refuses is shown as what it really is', () async {
-      final (session, library, requests) = await scripted(
-        (request) => switch (request.url.path) {
-          '/api/me/favorites/s1' => respond({'error': 'Database is locked.'}, 500),
-          _ => null,
-        },
-      );
-      addTearDown(session.dispose);
-      expect(library.serverConnected, isTrue);
-
-      library.toggleFavorite('s1');
-      await session.flushUserData();
-      expect(requests, contains('PUT /api/me/favorites/s1'));
-      expect(library.isFavorite('s1'), isFalse);
-    });
-
-    test('a connection cut in the middle of the library download is reported', () async {
-      final client = MockClient.streaming((request, _) async {
-        if (request.url.path == '/api/auth/setup-required') {
-          return http.StreamedResponse(Stream.value(utf8.encode('{"setupRequired":false}')), 200);
-        }
-        if (request.url.path == '/api/auth/me') {
-          return http.StreamedResponse(Stream.value(utf8.encode(jsonEncode(auth.user.toJson()))), 200);
-        }
-        return http.StreamedResponse(Stream<List<int>>.error(const SocketException('Connection reset by peer')), 200);
-      });
-      final repo = testRepository()
-        ..setSetting('server_url', 'http://wiretune.test')
-        ..setSetting('auth_token', 'stored');
-      final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
-      library.initialize();
-      final session = ServerSession(library, repo, ServerClient(client));
-      addTearDown(session.dispose);
-      session.initialize();
-      expect(session.state, ServerConnectionState.offline); // a stored server source starts offline
-      await session.connect();
-      expect(session.state, ServerConnectionState.offline);
-      expect(session.statusMessage, contains('connection was lost'));
-    });
-  });
-
-  test("while the server cannot be reached its tracks cannot be changed, but local ones can", () async {
-    final repo = testRepository()
-      ..replaceAllTracks([TestSupport.makeServerTrack('s1', 'Server song'), TestSupport.makeTrack('l1', 'Local song')]);
-    final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
-    library.initialize();
-
-    final session = ServerSession(
-      library,
-      repo,
-      ServerClient(MockClient((_) => throw StateError('no request expected'))),
-    );
-    addTearDown(session.dispose);
-    session.initialize();
-    expect(library.serverConnected, isFalse);
-
-    library.toggleFavorite('s1');
-    library.recordPlay('s1');
-    expect(library.isFavorite('s1'), isFalse);
-    expect(library.playCount('s1'), 0);
-
-    library.toggleFavorite('l1');
-    expect(library.isFavorite('l1'), isTrue);
   });
 }

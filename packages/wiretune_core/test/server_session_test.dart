@@ -170,4 +170,92 @@ void main() {
     await session.refreshLibrary();
     expect(downloaded.last, '/api/me/data');
   });
+
+  http.Response refusal(int status, String error) =>
+      http.Response(jsonEncode({'error': error}), status, headers: {'content-type': 'application/json'});
+
+  test('a server that refuses a change can be reached, so the session stays connected', () async {
+    final requests = <String>[];
+    final session = await signedInSession(
+      library,
+      respond: (request) {
+        requests.add('${request.method} ${request.url.path}');
+        return request.url.path.startsWith('/api/me/playlists/')
+            ? refusal(409, 'An account can have at most 500 playlists.')
+            : null;
+      },
+    );
+    addTearDown(session.dispose);
+
+    library.createPlaylist('One too many');
+    await session.flushUserData();
+    expect(requests.where((r) => r.startsWith('PUT /api/me/playlists/')), hasLength(1)); // sent, and refused
+    expect(session.state, ServerConnectionState.connected);
+    expect(library.serverConnected, isTrue);
+  });
+
+  test('a favourite the server refuses is shown as what it really is', () async {
+    final requests = <String>[];
+    final session = await signedInSession(
+      library,
+      tracks: [TestSupport.makeTrack('s1', 'Server song')],
+      respond: (request) {
+        requests.add('${request.method} ${request.url.path}');
+        return request.url.path == '/api/me/favorites/s1' ? refusal(500, 'Database is locked.') : null;
+      },
+    );
+    addTearDown(session.dispose);
+    expect(library.serverConnected, isTrue);
+
+    library.toggleFavorite('s1');
+    await session.flushUserData();
+    expect(requests, contains('PUT /api/me/favorites/s1'));
+    expect(library.isFavorite('s1'), isFalse);
+  });
+
+  test('a connection cut in the middle of the library download is reported', () async {
+    final user = UserInfo('u1', 'owner', true, DateTime.now().toUtc(), null);
+    final client = MockClient.streaming((request, _) async {
+      if (request.url.path == '/api/auth/setup-required') {
+        return http.StreamedResponse(Stream.value(utf8.encode('{"setupRequired":false}')), 200);
+      }
+      if (request.url.path == '/api/auth/me') {
+        return http.StreamedResponse(Stream.value(utf8.encode(jsonEncode(user.toJson()))), 200);
+      }
+      return http.StreamedResponse(Stream<List<int>>.error(const SocketException('Connection reset by peer')), 200);
+    });
+    final repo = testRepository()
+      ..setSetting('server_url', 'http://wiretune.test')
+      ..setSetting('auth_token', 'stored');
+    final cut = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent')..initialize();
+    final session = ServerSession(cut, repo, ServerClient(client));
+    addTearDown(session.dispose);
+    session.initialize();
+    expect(session.state, ServerConnectionState.offline); // a stored server source starts offline
+    await session.connect();
+    expect(session.state, ServerConnectionState.offline);
+    expect(session.statusMessage, contains('connection was lost'));
+  });
+
+  test('while the server cannot be reached its tracks cannot be changed, but local ones can', () async {
+    final repo = testRepository()
+      ..replaceAllTracks([TestSupport.makeServerTrack('s1', 'Server song'), TestSupport.makeTrack('l1', 'Local song')]);
+    final offline = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent')..initialize();
+    final session = ServerSession(
+      offline,
+      repo,
+      ServerClient(MockClient((_) => throw StateError('no request expected'))),
+    );
+    addTearDown(session.dispose);
+    session.initialize();
+    expect(offline.serverConnected, isFalse);
+
+    offline.toggleFavorite('s1');
+    offline.recordPlay('s1');
+    expect(offline.isFavorite('s1'), isFalse);
+    expect(offline.playCount('s1'), 0);
+
+    offline.toggleFavorite('l1');
+    expect(offline.isFavorite('l1'), isTrue);
+  });
 }
