@@ -157,25 +157,6 @@ void main() {
     expect(users.single['username'], 'owner');
   });
 
-  test('a query token is accepted on the media routes only', () async {
-    final (client, auth) = await setupAdmin(server);
-    final track = (await server.waitForTracks(client, 3)).first;
-    final anonymous = server.client();
-    final issued = StreamTokenResponse.fromJson(json(await client.post('/api/auth/stream-token')));
-    final stream = Uri.encodeComponent(issued.token);
-
-    expect((await anonymous.get('/api/stream/${track['id']}?token=$stream')).statusCode, 200);
-    final cover = '/api/cover/album/${Track.fromJson(track).albumId}?token=$stream';
-    expect((await anonymous.get(cover)).statusCode, 404); // let in; no cover
-
-    // A token that leaked through a URL must not be usable against the rest of the API, whichever kind it is.
-    for (final token in [stream, Uri.encodeComponent(auth.token)]) {
-      for (final route in ['/api/tracks', '/api/auth/me', '/api/users']) {
-        expect((await anonymous.get('$route?token=$token')).statusCode, 401, reason: route);
-      }
-    }
-  });
-
   test('sign-in is rate limited with a readable error', () async {
     final client = server.client();
     late http.Response last;

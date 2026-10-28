@@ -98,6 +98,13 @@ void main() {
       final inUrl = await server.client().get('/api/stream/${track['id']}?token=${Uri.encodeComponent(auth.token)}');
       expect(inUrl.statusCode, 401);
       expect((await server.client(auth.token).get('/api/stream/${track['id']}')).statusCode, 200);
+
+      // A token that leaked through a URL opens nothing else, whichever kind it is.
+      for (final leaked in [token, Uri.encodeComponent(auth.token)]) {
+        for (final route in ['/api/tracks', '/api/auth/me', '/api/users']) {
+          expect((await server.client().get('$route?token=$leaked')).statusCode, 401, reason: route);
+        }
+      }
     });
 
     test("an administrator's stream token never carries the admin role", () async {
