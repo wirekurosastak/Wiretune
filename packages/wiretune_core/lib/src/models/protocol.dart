@@ -80,9 +80,9 @@ class ServerLibraryStatus {
     this.artistCount,
     this.isScanning,
     this.lastScanAt,
-    this.lastScanError, [
+    this.lastScanError,
     this.lastScanProblem,
-  ]);
+  );
 
   final int trackCount;
   final int albumCount;

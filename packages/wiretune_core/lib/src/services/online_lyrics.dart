@@ -84,7 +84,7 @@ class OnlineLyrics {
     if (query == null) return null;
 
     final cached = await _readCache(query);
-    if (cached != null) return cached.$1;
+    if (cached != null) return cached.text;
 
     final text = await _fetch(query);
     await _writeCache(query, text);
@@ -281,8 +281,8 @@ class OnlineLyrics {
   String? _cachePathFor(LyricsQuery query) =>
       _cacheDirectory == null ? null : p.join(_cacheDirectory, '${query.cacheKey}.json');
 
-  /// (text, true) for a usable cache entry (text null for a cached "nothing found"), null when there is none.
-  Future<(String?, bool)?> _readCache(LyricsQuery query) async {
+  /// A usable cache entry (its text null for a cached "nothing found"), or null when there is none.
+  Future<({String? text})?> _readCache(LyricsQuery query) async {
     final path = _cachePathFor(query);
     if (path == null) return null;
     final file = File(path);
@@ -295,9 +295,9 @@ class OnlineLyrics {
         // "Nothing found" is only believed for a while: LRCLIB's collection keeps growing.
         final fetched = DateTime.tryParse(root['fetchedUtc'] as String? ?? '')?.toUtc();
         if (fetched == null || _now().difference(fetched) > _missLifetime) return null;
-        return (null, true);
+        return (text: null);
       }
-      return (text, true);
+      return (text: text);
     } catch (e) {
       WiretuneLog.debug('OnlineLyrics', 'Ignoring an unreadable cache entry: $e');
       return null;
