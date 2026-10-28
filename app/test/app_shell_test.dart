@@ -626,21 +626,6 @@ void main() {
     expect(find.descendant(of: find.byType(QueueList), matching: find.byType(QualityTag)), findsNothing);
   });
 
-  testWidgets('the phone search page opens from the page header and back closes it', (tester) async {
-    final vm = await pumpApp(tester, const Size(400, 860));
-    await tester.tap(find.byIcon(Icons.search_rounded));
-    await settle(tester);
-    expect(vm.isSearchOpen, isTrue);
-
-    await tester.enterText(find.byType(TextField), 'miles');
-    await settle(tester);
-    expect(find.text('Miles Davis'), findsWidgets);
-
-    await tester.binding.handlePopRoute();
-    await settle(tester);
-    expect(vm.isSearchOpen, isFalse);
-  });
-
   testWidgets('a TV always gets the wide layout, whatever the reported size', (tester) async {
     AppPlatform.forTesting(tv: true);
     await pumpApp(tester, const Size(640, 360));
@@ -3053,14 +3038,17 @@ void main() {
     await tester.enterText(find.byType(TextField), 'So');
     await settle(tester);
     expect(vm.searchQuery, 'So');
+    expect(find.text('So What'), findsWidgets, reason: 'what it found');
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, 'So', reason: 'kept through the end');
     expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextField>(), isNotNull);
-    vm.closeSearch();
+    // The system's Back closes it.
+    await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(TextField), findsOneWidget, reason: 'going back into the button');
     await settle(tester);
     expect(find.byType(TextField), findsNothing);
+    expect(vm.isSearchOpen, isFalse);
   });
 
   testWidgets("the seek bar's time floats over the knob while it is held", (tester) async {
