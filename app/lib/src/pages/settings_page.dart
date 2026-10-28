@@ -270,61 +270,66 @@ class _AccountCardState extends State<_AccountCard> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           final colors = ctx.colors;
-          return AppDialog(
-            title: title,
-            content: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 380),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: next,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: ctx.tr('NewPassword'),
-                      hintText: ctx.tr('PasswordMinPlaceholder'),
+          Future<void> save() async {
+            setDialogState(() {
+              busy = true;
+              error = null;
+            });
+            final err = await submit(next.text, confirm.text);
+            if (err != null) {
+              setDialogState(() {
+                busy = false;
+                error = err;
+              });
+            } else {
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (context.mounted) context.vm.showNotice(done);
+            }
+          }
+
+          // While it saves, neither Back nor a tap beside it closes it (Cancel can't either).
+          return PopScope(
+            canPop: !busy,
+            child: AppDialog(
+              title: title,
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // The caret starts here, and Enter goes on to the second field, where it saves.
+                    TextField(
+                      controller: next,
+                      autofocus: true,
+                      obscureText: true,
+                      textInputAction: TextInputAction.next,
+                      decoration: InputDecoration(
+                        labelText: ctx.tr('NewPassword'),
+                        hintText: ctx.tr('PasswordMinPlaceholder'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: confirm,
-                    obscureText: true,
-                    decoration: InputDecoration(labelText: ctx.tr('PasswordConfirmPlaceholder')),
-                  ),
-                  if (error != null) ...[
                     const SizedBox(height: 12),
-                    Text(error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+                    TextField(
+                      controller: confirm,
+                      obscureText: true,
+                      decoration: InputDecoration(labelText: ctx.tr('PasswordConfirmPlaceholder')),
+                      onSubmitted: (_) => busy ? null : save(),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+                    ],
                   ],
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
-              PressShrink(
-                child: FilledButton(
-                  onPressed: busy
-                      ? null
-                      : () async {
-                          setDialogState(() {
-                            busy = true;
-                            error = null;
-                          });
-                          final err = await submit(next.text, confirm.text);
-                          if (err != null) {
-                            setDialogState(() {
-                              busy = false;
-                              error = err;
-                            });
-                          } else {
-                            if (ctx.mounted) Navigator.of(ctx).pop();
-                            if (context.mounted) context.vm.showNotice(done);
-                          }
-                        },
-                  child: Text(ctx.tr('Save')),
                 ),
               ),
-            ],
+              actions: [
+                TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
+                PressShrink(
+                  child: FilledButton(onPressed: busy ? null : save, child: Text(ctx.tr('Save'))),
+                ),
+              ],
+            ),
           );
         },
       ),

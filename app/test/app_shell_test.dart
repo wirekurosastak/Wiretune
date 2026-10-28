@@ -1145,6 +1145,32 @@ void main() {
     signedIn.dispose();
   });
 
+  testWidgets('the password dialog starts in its first field; Enter goes on to the second, and there saves', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    await tester.pumpWidget(const SizedBox());
+    final session = (await tester.runAsync(() => signedInSession(vm.library)))!;
+    final signedIn = createMainViewModel(vm.library, null, session)..navigateTo(AppSection.settings);
+    await tester.pumpWidget(WiretuneApp(vm: signedIn));
+    await settle(tester);
+    final open = find.text(Localizer.get('ChangePassword'));
+    await tester.ensureVisible(open);
+    await settle(tester);
+    await tester.tap(open);
+    await settle(tester);
+
+    // Typed where the caret is, with no tap first.
+    tester.testTextInput.enterText('first-password');
+    await tester.testTextInput.receiveAction(TextInputAction.next);
+    await settle(tester);
+    tester.testTextInput.enterText('other-password');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await settle(tester);
+    expect(find.text(Localizer.get('PasswordsDontMatch')), findsOneWidget, reason: 'saving checked what was typed');
+    signedIn.dispose();
+  });
+
   testWidgets('a sortable column takes a click anywhere it lights up, not just on the letters', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
 
