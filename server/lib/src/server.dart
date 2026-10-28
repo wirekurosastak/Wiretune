@@ -765,7 +765,7 @@ class WiretuneServer {
     PlaylistUpdate? update;
     try {
       update = body == null ? null : PlaylistUpdate.fromJson(body);
-    } on Object {
+    } on FormatException {
       return errorResponse(400, ErrorCodes.playlistInvalid, 'The playlist is not valid.');
     }
     final error = UserDataService.validatePlaylist(playlistId, update);

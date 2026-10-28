@@ -31,7 +31,7 @@ class UserInfo {
     return UserInfo(
       _string(map, 'id'),
       _string(map, 'username'),
-      map['isAdmin'] as bool? ?? false,
+      jsonField<bool>(map, 'isAdmin') ?? false,
       parseIsoUtc(map['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       parseIsoUtc(map['lastLoginAt']),
     );
@@ -109,13 +109,13 @@ class ServerLibraryStatus {
   static ServerLibraryStatus fromJson(Object? json) {
     final map = _object(json);
     return ServerLibraryStatus(
-      (map['trackCount'] as num?)?.toInt() ?? 0,
-      (map['albumCount'] as num?)?.toInt() ?? 0,
-      (map['artistCount'] as num?)?.toInt() ?? 0,
-      map['isScanning'] as bool? ?? false,
+      jsonField<num>(map, 'trackCount')?.toInt() ?? 0,
+      jsonField<num>(map, 'albumCount')?.toInt() ?? 0,
+      jsonField<num>(map, 'artistCount')?.toInt() ?? 0,
+      jsonField<bool>(map, 'isScanning') ?? false,
       parseIsoUtc(map['lastScanAt']),
-      map['lastScanError'] as String?,
-      map['lastScanProblem'] as String?,
+      jsonField<String>(map, 'lastScanError'),
+      jsonField<String>(map, 'lastScanProblem'),
     );
   }
 }
@@ -147,8 +147,8 @@ class TrackPlayStats {
   static TrackPlayStats fromJson(Object? json) {
     final map = _object(json);
     return TrackPlayStats(
-      map['trackId'] as String? ?? '',
-      (map['playCount'] as num?)?.toInt() ?? 0,
+      jsonField<String>(map, 'trackId') ?? '',
+      jsonField<num>(map, 'playCount')?.toInt() ?? 0,
       parseIsoUtc(map['lastPlayedAt']),
     );
   }
@@ -177,9 +177,9 @@ class PlaylistData {
   static PlaylistData fromJson(Object? json) {
     final map = _object(json);
     return PlaylistData(
-      map['id'] as String? ?? '',
-      map['name'] as String? ?? '',
-      map['description'] as String?,
+      jsonField<String>(map, 'id') ?? '',
+      jsonField<String>(map, 'name') ?? '',
+      jsonField<String>(map, 'description'),
       _stringList(map['trackIds']),
       parseIsoUtc(map['createdAt']) ?? DateTime.now().toUtc(),
       parseIsoUtc(map['modifiedAt']) ?? DateTime.now().toUtc(),
@@ -200,7 +200,11 @@ class PlaylistUpdate {
   static PlaylistUpdate fromJson(Object? json) {
     final map = _object(json);
     final ids = map['trackIds'];
-    return PlaylistUpdate(map['name'] as String?, map['description'] as String?, ids == null ? null : _stringList(ids));
+    return PlaylistUpdate(
+      jsonField<String>(map, 'name'),
+      jsonField<String>(map, 'description'),
+      ids == null ? null : _stringList(ids),
+    );
   }
 }
 
@@ -262,8 +266,8 @@ class UserDataSnapshot {
     final times = map['favoritedAt'];
     return UserDataSnapshot(
       _stringList(map['favorites']),
-      (map['plays'] as List? ?? const []).map(TrackPlayStats.fromJson).toList(),
-      (map['playlists'] as List? ?? const []).map(PlaylistData.fromJson).toList(),
+      (jsonField<List>(map, 'plays') ?? const []).map(TrackPlayStats.fromJson).toList(),
+      (jsonField<List>(map, 'playlists') ?? const []).map(PlaylistData.fromJson).toList(),
       {
         if (times is Map)
           for (final MapEntry(:key, :value) in times.entries)
@@ -383,5 +387,13 @@ String _string(Map<Object?, Object?> map, String key) {
   if (value is String) return value;
   throw FormatException("Expected the text field '$key'.");
 }
+
+/// The field [key] of a JSON object as a [T]; null when it is absent or null. Throws [FormatException] when it is
+/// something else: a field of the wrong type makes a malformed message, like a missing one.
+T? jsonField<T extends Object>(Map<Object?, Object?> map, String key) => switch (map[key]) {
+  null => null,
+  final T value => value,
+  _ => throw FormatException("The field '$key' has the wrong type."),
+};
 
 List<String> _stringList(Object? value) => value is List ? value.whereType<String>().toList() : <String>[];

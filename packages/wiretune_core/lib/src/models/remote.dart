@@ -121,8 +121,6 @@ class RemotePlayback {
         track = Track.fromJson(json['track']);
       } on FormatException {
         return null;
-      } on TypeError {
-        return null;
       }
     }
     final queue = _ids(json['queue']);

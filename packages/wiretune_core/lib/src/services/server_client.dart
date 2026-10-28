@@ -246,8 +246,6 @@ class ServerClient {
       return parse(json);
     } on FormatException {
       throw ServerRequestException(_notWiretune(), 200);
-    } on TypeError {
-      throw ServerRequestException(_notWiretune(), 200);
     }
   }
 

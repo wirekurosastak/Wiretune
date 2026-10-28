@@ -30,6 +30,20 @@ void main() {
     expect(Track(album: 'Discovery', artist: 'Someone Else').albumId, isNot(track.albumId));
   });
 
+  test('a field of the wrong type is a malformed message, like a missing one', () {
+    expect(() => Track.fromJson({'id': 't1', 'title': 1}), throwsFormatException);
+    expect(
+      () => Track.fromJson({
+        'id': 't1',
+        'format': {'sampleRate': '44100'},
+      }),
+      throwsFormatException,
+    );
+    expect(() => PlaylistUpdate.fromJson({'name': 3}), throwsFormatException);
+    expect(() => UserDataSnapshot.fromJson({'plays': 'none'}), throwsFormatException);
+    expect(Track.fromJson({'id': 't1', 'title': null}).title, Track.unknownTitle, reason: 'null is absent');
+  });
+
   test('artist IDs are the same for a name in any case and spacing, as they always were', () {
     expect(artistIdOf('Daft Punk'), stableId('daft punk'));
     expect(artistIdOf(' DAFT PUNK '), artistIdOf('Daft Punk'));

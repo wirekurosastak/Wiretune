@@ -4,6 +4,7 @@
 import 'package:path/path.dart' as p;
 
 import '../localization/localizer.dart';
+import 'protocol.dart';
 
 /// How good a recording is, as a three-step medal the whole interface uses for its quality tags: [gold] is hi-res
 /// (24 bit, or a sample rate above 48 kHz), [silver] is lossless at CD resolution (16 bit), [bronze] is everything that
@@ -89,12 +90,12 @@ class AudioFormat {
   static AudioFormat fromJson(Object? json) {
     if (json is! Map) return const AudioFormat();
     return AudioFormat(
-      codec: json['codec'] as String? ?? 'FLAC',
-      sampleRate: (json['sampleRate'] as num?)?.toInt() ?? 44100,
-      bitsPerSample: (json['bitsPerSample'] as num?)?.toInt() ?? 16,
-      channels: (json['channels'] as num?)?.toInt() ?? 2,
-      bitrateKbps: (json['bitrateKbps'] as num?)?.toInt() ?? 1411,
-      isLossless: json['isLossless'] as bool? ?? true,
+      codec: jsonField<String>(json, 'codec') ?? 'FLAC',
+      sampleRate: jsonField<num>(json, 'sampleRate')?.toInt() ?? 44100,
+      bitsPerSample: jsonField<num>(json, 'bitsPerSample')?.toInt() ?? 16,
+      channels: jsonField<num>(json, 'channels')?.toInt() ?? 2,
+      bitrateKbps: jsonField<num>(json, 'bitrateKbps')?.toInt() ?? 1411,
+      isLossless: jsonField<bool>(json, 'isLossless') ?? true,
     );
   }
 

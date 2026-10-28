@@ -10,6 +10,7 @@ import '../localization/localizer.dart';
 import '../util/text.dart';
 import '../util/time.dart';
 import 'audio_format.dart';
+import 'protocol.dart';
 
 /// A short ID that is the same on every machine for the same key: the first 16 hex digits of the key's SHA-256.
 String stableId(String key) => sha256.convert(utf8.encode(key)).toString().substring(0, 16);
@@ -171,29 +172,29 @@ class Track {
     if (json is! Map) throw const FormatException('A track must be a JSON object.');
     final id = json['id'];
     if (id is! String || id.isEmpty) throw const FormatException('A track has no ID.');
-    int? integer(String key) => (json[key] as num?)?.toInt();
+    int? integer(String key) => jsonField<num>(json, key)?.toInt();
     List<String> names(String key) => [
-      for (final name in json[key] as List? ?? const [])
+      for (final name in jsonField<List>(json, key) ?? const [])
         if (name is String && name.trim().isNotEmpty) name,
     ];
     return Track(
       id: id,
-      title: json['title'] as String? ?? unknownTitle,
-      artist: json['artist'] as String? ?? unknownArtist,
+      title: jsonField<String>(json, 'title') ?? unknownTitle,
+      artist: jsonField<String>(json, 'artist') ?? unknownArtist,
       artists: names('artists'),
-      album: json['album'] as String? ?? unknownAlbum,
-      albumArtist: json['albumArtist'] as String?,
+      album: jsonField<String>(json, 'album') ?? unknownAlbum,
+      albumArtist: jsonField<String>(json, 'albumArtist'),
       albumArtists: names('albumArtists'),
       trackNumber: integer('trackNumber'),
       trackCount: integer('trackCount'),
       discNumber: integer('discNumber'),
       releaseYear: integer('releaseYear'),
       bpm: integer('bpm'),
-      genre: json['genre'] as String?,
+      genre: jsonField<String>(json, 'genre'),
       duration: Duration(milliseconds: integer('durationMs') ?? 0),
       fileSizeBytes: integer('fileSizeBytes') ?? 0,
       fileModifiedAt: parseIsoUtc(json['fileModifiedAt']),
-      hasCoverArt: json['hasCoverArt'] as bool? ?? false,
+      hasCoverArt: jsonField<bool>(json, 'hasCoverArt') ?? false,
       format: AudioFormat.fromJson(json['format']),
       addedAt: parseIsoUtc(json['addedAt']),
     );
