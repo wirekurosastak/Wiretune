@@ -33,7 +33,7 @@ class UiAutomationServer {
   /// Closes the dialogs and menus over the layout, as the user would before acting on the page.
   static void _closeDialogs() => AppScope.navigatorKey.currentState?.popUntil((route) => route.isFirst);
 
-  static bool get isEnabled => kDebugMode && !kIsWeb && Platform.environment[enableEnvironmentVariable] == '1';
+  static bool get isEnabled => kDebugMode && Platform.environment[enableEnvironmentVariable] == '1';
 
   final MainViewModel _vm;
   final int port;

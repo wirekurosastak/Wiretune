@@ -147,14 +147,14 @@ class _DesktopWindowListener with WindowListener {
   }
 }
 
-/// What the account's other players see this one as. A phone or a tablet tells by its screen: a tablet's shorter side
-/// is at least 600 points.
+/// What the account's other players see this one as. A phone or a tablet tells by its screen, as the layout does
+/// ([WiretuneApp.phoneShortestSide]).
 DeviceKind _deviceKind(AppPlatform platform) {
   if (platform.isTv) return DeviceKind.tv;
   if (!platform.isMobile) return DeviceKind.desktop;
   final view = PlatformDispatcher.instance.views.firstOrNull;
   final shortest = view == null ? 0 : view.physicalSize.shortestSide / view.devicePixelRatio;
-  return shortest >= 600 ? DeviceKind.tablet : DeviceKind.phone;
+  return shortest >= WiretuneApp.phoneShortestSide ? DeviceKind.tablet : DeviceKind.phone;
 }
 
 /// The desktop window: on Linux and Windows without the system's title bar (the header is the title bar, with its own

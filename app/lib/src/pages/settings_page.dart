@@ -34,7 +34,7 @@ class SettingsPage extends StatelessWidget {
         final library = (server.isLoggedIn && server.isAdmin) || server.supportsLocalFolder;
         final account = [const _AccountCard(), if (library) const _LibraryCard()];
         final options = [
-          // The TV has neither an output to choose nor gapless playback or normalization.
+          // The Tizen TV's player has neither an output to choose nor gapless playback or normalization.
           if (vm.audioSettings.hasDeviceChoice || !AppPlatform.current.isTizen) const _AudioCard(),
           const _AppearanceCard(),
           const _HiddenContentCard(),
@@ -950,7 +950,7 @@ class _AudioCard extends StatelessWidget {
       listenable: Listenable.merge([vm, audio]),
       builder: (context, _) {
         final devices = audio.availableDevices;
-        final tv = AppPlatform.current.isTizen;
+        final tizen = AppPlatform.current.isTizen;
         TextStyle heading() => TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain);
         TextStyle hint() => TextStyle(fontSize: 12, color: colors.textMuted);
 
@@ -1019,8 +1019,8 @@ class _AudioCard extends StatelessWidget {
                       )
                     : null,
               ),
-              // The TV's player starts each track on its own and reads no ReplayGain tags.
-              if (!tv) ...[
+              // The Tizen TV's player starts each track on its own and reads no ReplayGain tags.
+              if (!tizen) ...[
                 Row(
                   children: [
                     Expanded(
@@ -1058,7 +1058,7 @@ class _AudioCard extends StatelessWidget {
                 ),
               ],
               if (audio.hasDeviceChoice) ...[
-                if (!tv) ...[
+                if (!tizen) ...[
                   const SizedBox(height: 18),
                   Divider(color: colors.glassBorder, height: 1),
                   const SizedBox(height: 14),

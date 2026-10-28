@@ -3,7 +3,6 @@
 
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -90,7 +89,7 @@ class AppPlatform {
   /// yet; elsewhere always true. Asked only when a folder is scanned, not at start.
   Future<bool> requestAudioAccess() async => !isAndroid || await _ask('requestAudioAccess');
 
-  static String get _hostSystem => kIsWeb ? 'web' : Platform.operatingSystem;
+  static String get _hostSystem => Platform.operatingSystem;
 
   static Future<bool> _ask(String method) async {
     try {

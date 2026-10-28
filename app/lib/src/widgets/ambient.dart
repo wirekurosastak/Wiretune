@@ -266,11 +266,7 @@ class AmbientBackdrop extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             AnimatedContainer(duration: const Duration(milliseconds: 450), color: base),
-            AmbientArtwork(
-              path: cover,
-              drift: player.isPlaying && !platform.isTv && !platform.isMobile,
-              opacity: artworkOpacity,
-            ),
+            AmbientArtwork(path: cover, drift: player.isPlaying && platform.isDesktop, opacity: artworkOpacity),
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
