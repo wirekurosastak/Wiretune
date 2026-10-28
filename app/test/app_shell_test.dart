@@ -575,25 +575,14 @@ void main() {
     expect(vm.artists.selectedArtist?.name, 'Miles Davis');
   });
 
-  testWidgets('the quality tag sits on the cover: the full-screen player, an album, a playlist', (tester) async {
+  testWidgets('the quality tag sits on the cover: an album, a playlist', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     void expectOnCover(Finder page, Finder cover) {
-      // The format's tag; the player's bitrate below the cover is a tag too.
-      final tag = find.descendant(
-        of: page,
-        matching: find.byWidgetPredicate((w) => w is QualityTag && !(w.spec ?? '').endsWith('kbps')),
-      );
+      final tag = find.descendant(of: page, matching: find.byType(QualityTag));
       expect(tag, findsOneWidget); // and nowhere else on the page
       final (on, under) = (tester.getRect(tag), tester.getRect(cover));
       expect(under.intersect(on), on, reason: '$on lies inside $under');
     }
-
-    vm.player.playQueue(vm.library.tracks);
-    vm.openNowPlaying();
-    await settle(tester);
-    final player = find.byType(NowPlayingPage);
-    expectOnCover(player, find.descendant(of: player, matching: find.byType(CoverImage)));
-    vm.closeNowPlaying();
 
     vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
     await settle(tester);
@@ -1790,7 +1779,7 @@ void main() {
     expect((vm.artists.isArtistDetailOpen, offset()), (false, again));
   });
 
-  testWidgets("the player's BPM and bitrate sit midway between the cover, at its size while playing, and the title", (
+  testWidgets("the player's BPM, format and bitrate sit midway between the cover, at its full size, and the title", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
@@ -1829,11 +1818,14 @@ void main() {
             .first,
       ); // unscaled
       final bpm = tester.getCenter(find.text('136 BPM'));
+      // Under the cover, not on it: the cover is all picture.
+      final format = tester.getCenter(find.text('FLAC 16bit/44.1kHz'));
       final bitrate = tester.getCenter(find.text(Localizer.format('BitrateKbps', [912])));
       final title = tester.getRect(find.descendant(of: page, matching: find.text('So What')));
       expect(bpm.dy, moreOrLessEquals((cover.bottom + title.top) / 2, epsilon: 0.5), reason: 'playing: $playing');
+      expect(format.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
       expect(bitrate.dy, moreOrLessEquals(bpm.dy, epsilon: 0.5), reason: 'beside it');
-      expect(bitrate.dx, greaterThan(bpm.dx));
+      expect((format.dx > bpm.dx, bitrate.dx > format.dx), (true, true));
     }
   });
 

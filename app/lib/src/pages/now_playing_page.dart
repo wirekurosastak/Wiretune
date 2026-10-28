@@ -265,11 +265,13 @@ class _TrackTab extends StatelessWidget {
       final value? when value > 0 => value,
       _ => null,
     };
-    // The bitrate, in the quality's colours as in the desktop's table, where the cover's tag doesn't say it already (a
-    // lossy file's does: "MP3 320kbps").
+    // The format's tag between the BPM and the bitrate, under the cover rather than on it; the bitrate in the quality's
+    // colours as in the desktop's table, where the tag doesn't say it already (a lossy file's does: "MP3 320kbps").
     final format = track?.format;
     final meta = [
       if (bpm != null) PlayerMetaBadge(text: '$bpm BPM', fontSize: 11),
+      if (player.currentTagSpec.isNotEmpty)
+        QualityTag(tier: player.currentTier, spec: player.currentTagSpec, fontSize: 11),
       if (format != null && format.isLossless && format.bitrateKbps > 0)
         QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: 11),
     ];
@@ -283,8 +285,8 @@ class _TrackTab extends StatelessWidget {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // The cover at its size while playing (paused, it sits back within the same room), centred above the
-                  // title with at least [below] under it; a track's BPM and bitrate sit midway between that edge and the
-                  // title.
+                  // title with at least [below] under it; a track's BPM, format and bitrate sit midway between that edge
+                  // and the title.
                   final below = meta.isNotEmpty ? 48.0 : 16.0;
                   final side = math.max(
                     0.0,
@@ -317,30 +319,18 @@ class _TrackTab extends StatelessWidget {
                                   ),
                                 ],
                               ),
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
-                                  // On the cover, as on the album tiles.
-                                  if (player.currentTagSpec.isNotEmpty)
-                                    Positioned(
-                                      left: 14,
-                                      bottom: 14,
-                                      child: QualityTag(
-                                        tier: player.currentTier,
-                                        spec: player.currentTagSpec,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              child: CoverImage(path: track?.coverArtPath, radius: Radii.panel, decodeWidth: 900),
                             ),
                           ),
                         ),
                       ),
                       Expanded(
                         child: Center(
-                          child: Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: meta),
+                          // Scaled down rather than cut off on a narrow screen with a large font.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: meta),
+                          ),
                         ),
                       ),
                     ],
