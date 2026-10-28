@@ -82,7 +82,9 @@ class LibraryService {
   /// Switches to the hidden items of the server account [userId] (null or empty: no account), as this device last saw
   /// them.
   void setCurrentUser(String? userId) {
-    _currentUserId = (userId != null && userId.isNotEmpty) ? userId : _noAccount;
+    final id = (userId != null && userId.isNotEmpty) ? userId : _noAccount;
+    if (id == _currentUserId) return; // every reconnect names the account again: its hidden items are loaded already
+    _currentUserId = id;
     _loadHidden();
     _rebuildSnapshot();
     libraryChanged.emit(null);

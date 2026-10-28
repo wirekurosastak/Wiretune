@@ -644,6 +644,13 @@ void main() {
     service.setCurrentUser('user_alpha');
     expect(service.isTrackHidden(t1), isTrue);
     expect(service.tracks, isEmpty);
+
+    // The same account again, as every reconnect names it: nothing is reloaded or rebuilt.
+    var changes = 0;
+    service.libraryChanged.listen((_) => changes++);
+    service.setCurrentUser('user_alpha');
+    expect(changes, 0);
+    expect(service.isTrackHidden(t1), isTrue);
   });
 
   test(
