@@ -464,8 +464,7 @@ class MainViewModel extends ChangeNotifier {
     }
 
     switch (_selectedSection) {
-      case AppSection.albums
-          when target != AppSection.albums && albums.isAlbumDetailOpen && albums.selectedAlbum != null:
+      case AppSection.albums when target != AppSection.albums && albums.selectedAlbum != null:
         final returnAlbum = albums.selectedAlbum!;
         return (
           () => returnAlbum.title,
@@ -474,8 +473,7 @@ class MainViewModel extends ChangeNotifier {
             albums.openAlbumWithOrigin(returnAlbum, null, null, NavWaveDirection.rightToLeft);
           },
         );
-      case AppSection.artists
-          when target != AppSection.artists && artists.isArtistDetailOpen && artists.selectedArtist != null:
+      case AppSection.artists when target != AppSection.artists && artists.selectedArtist != null:
         final returnArtist = artists.selectedArtist!;
         return (
           () => returnArtist.name,
@@ -484,8 +482,7 @@ class MainViewModel extends ChangeNotifier {
             artists.openArtistWithOrigin(returnArtist, null, null, NavWaveDirection.rightToLeft);
           },
         );
-      case AppSection.playlists
-          when target != AppSection.playlists && playlists.isPlaylistDetailOpen && playlists.selectedPlaylist != null:
+      case AppSection.playlists when target != AppSection.playlists && playlists.selectedPlaylist != null:
         final returnPlaylist = playlists.selectedPlaylist!;
         return (
           () => returnPlaylist.name,

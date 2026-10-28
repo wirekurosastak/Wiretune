@@ -243,7 +243,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
 
   List<Album> displayedAlbums = const [];
   Album? selectedAlbum;
-  bool isAlbumDetailOpen = false;
+  bool get isAlbumDetailOpen => selectedAlbum != null;
 
   // A to Z for titles and artists; the newest years and additions, and the best quality, first.
   final SortOrder<AlbumSortField> _order = SortOrder(
@@ -351,7 +351,6 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
     _setOrigin(backTextSource, onReturn);
     if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
     selectedAlbum = album;
-    isAlbumDetailOpen = true;
     if (waveDirection != null) onNavWave?.call(waveDirection);
     notifyListeners();
   }
@@ -359,7 +358,6 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   void closeAlbumDetail() {
     final returnAction = _takeOrigin();
     if (isAlbumDetailOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
-    isAlbumDetailOpen = false;
     selectedAlbum = null;
     notifyListeners();
     returnAction?.call();
@@ -396,7 +394,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
 
   List<Artist> displayedArtists = const [];
   Artist? selectedArtist;
-  bool isArtistDetailOpen = false;
+  bool get isArtistDetailOpen => selectedArtist != null;
 
   // A to Z for the name; the most albums and the newest first.
   final SortOrder<ArtistSortField> _order = SortOrder(
@@ -500,14 +498,12 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   void _showArtist(Artist artist, NavWaveDirection? waveDirection) {
     selectedArtist = artist;
     _pictures?.resolveArtistPicture(artist);
-    isArtistDetailOpen = true;
     if (waveDirection != null) onNavWave?.call(waveDirection);
   }
 
   void closeArtistDetail() {
     final returnAction = _takeOrigin();
     if (isArtistDetailOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
-    isArtistDetailOpen = false;
     selectedArtist = null;
     notifyListeners();
     returnAction?.call();
@@ -640,7 +636,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   List<Track> selectedPlaylistTracks = const [];
   Map<String, int> _positions = const {};
   String selectedPlaylistTotalDuration = '';
-  bool isPlaylistDetailOpen = false;
+  bool get isPlaylistDetailOpen => selectedPlaylist != null;
 
   /// Whether the open playlist's name is being edited in place (its text field holds the new name).
   bool isEditingName = false;
@@ -724,10 +720,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
     selectedPlaylist = selectedId == null
         ? null
         : (_library.getPlaylist(selectedId) ?? automaticPlaylists.where((pl) => pl.id == selectedId).firstOrNull);
-    if (selectedPlaylist == null) {
-      isPlaylistDetailOpen = false;
-      isEditingName = false;
-    }
+    if (selectedPlaylist == null) isEditingName = false;
     _refreshSelectedTracks();
     notifyListeners();
   }
@@ -772,7 +765,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
     _setOrigin(backTextSource, onReturn);
     if (waveDirection == NavWaveDirection.leftToRight) pageVisit++;
     _select(playlist);
-    isPlaylistDetailOpen = true;
     if (waveDirection != null) onNavWave?.call(waveDirection);
     notifyListeners();
   }
@@ -780,7 +772,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   void closePlaylistDetail() {
     final returnAction = _takeOrigin();
     if (isPlaylistDetailOpen) onNavWave?.call(NavWaveDirection.rightToLeft);
-    isPlaylistDetailOpen = false;
     _select(null);
     notifyListeners();
     returnAction?.call();
@@ -792,7 +783,6 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
     final playlist = _library.createPlaylist(name);
     if (tracks.isNotEmpty) _library.addTracksToPlaylist(playlist.id, [for (final t in tracks) t.id]);
     _select(_library.getPlaylist(playlist.id));
-    isPlaylistDetailOpen = true;
     notifyListeners();
   }
 

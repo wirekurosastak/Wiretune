@@ -27,7 +27,7 @@ class PlaylistsPage extends StatelessWidget {
       listenable: playlists,
       builder: (context, _) {
         final selected = playlists.selectedPlaylist;
-        if (playlists.isPlaylistDetailOpen && selected != null) return PlaylistDetail(playlist: selected);
+        if (selected != null) return PlaylistDetail(playlist: selected);
         if (!playlists.hasPlaylists) {
           return EmptyState(
             icon: Icons.queue_music,

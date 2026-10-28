@@ -759,7 +759,7 @@ class AlbumsPage extends StatelessWidget {
       listenable: albums,
       builder: (context, _) {
         final selected = albums.selectedAlbum;
-        if (albums.isAlbumDetailOpen && selected != null) return AlbumDetail(album: selected);
+        if (selected != null) return AlbumDetail(album: selected);
         if (albums.displayedAlbums.isEmpty) {
           return const EmptyLibrary(); // nothing to list means nothing in the library
         }
@@ -874,7 +874,7 @@ class ArtistsPage extends StatelessWidget {
       listenable: artists,
       builder: (context, _) {
         final selected = artists.selectedArtist;
-        if (artists.isArtistDetailOpen && selected != null) return ArtistDetail(artist: selected);
+        if (selected != null) return ArtistDetail(artist: selected);
         if (artists.displayedArtists.isEmpty) {
           return const EmptyLibrary(); // nothing to list means nothing in the library
         }
