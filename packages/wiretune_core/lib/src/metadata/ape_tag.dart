@@ -23,28 +23,29 @@ const Map<String, TagField> _apeFields = {
   'bpm': TagField.bpm,
 };
 
-/// The byte range an APEv2 tag occupies at the end of the file (header included), or null when there is none.
-(int start, int end)? apeTagRange(ByteSource source) {
+/// The footer of the APEv2 tag at the end of the file (before an ID3v1 tag, if there is one): where it ends, the size of
+/// the items and the footer (without the header), the number of items and the flags. Null when there is none.
+({int footerEnd, int size, int count, int flags})? _apeFooter(ByteSource source) {
   for (final footerEnd in [source.length, if (hasId3v1(source)) source.length - 128]) {
     final footer = source.readExact(footerEnd - 32, 32);
     if (footer == null || !footer.matches(0, 'APETAGEX')) continue;
-    final size = footer.u32le(12); // items and footer, without the header
-    final flags = footer.u32le(20);
-    final hasHeader = (flags & 0x80000000) != 0;
-    final start = footerEnd - size - (hasHeader ? 32 : 0);
-    if (start < 0) return null;
-    return (start, footerEnd);
+    return (footerEnd: footerEnd, size: footer.u32le(12), count: footer.u32le(16), flags: footer.u32le(20));
   }
   return null;
 }
 
+/// The byte range an APEv2 tag occupies at the end of the file (header included), or null when there is none.
+(int start, int end)? apeTagRange(ByteSource source) {
+  final footer = _apeFooter(source);
+  if (footer == null) return null;
+  final hasHeader = (footer.flags & 0x80000000) != 0;
+  final start = footer.footerEnd - footer.size - (hasHeader ? 32 : 0);
+  return start < 0 ? null : (start, footer.footerEnd);
+}
+
 /// Reads the APEv2 tag at the end of the file (before an ID3v1 tag, if there is one); null when there is none.
 AudioTags? readApeTag(ByteSource source, {bool wantLyrics = true}) {
-  for (final footerEnd in [source.length, if (hasId3v1(source)) source.length - 128]) {
-    final footer = source.readExact(footerEnd - 32, 32);
-    if (footer == null || !footer.matches(0, 'APETAGEX')) continue;
-    final size = footer.u32le(12);
-    final count = footer.u32le(16);
+  if (_apeFooter(source) case (:final footerEnd, :final size, :final count, flags: _)) {
     final itemsStart = footerEnd - size;
     final itemsEnd = footerEnd - 32;
     if (itemsStart < 0 || size < 32) return null;

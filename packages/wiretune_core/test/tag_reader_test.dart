@@ -8,7 +8,7 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/src/metadata/id3.dart' show inflateFrame;
-import 'package:wiretune_core/src/metadata/xiph.dart' show readVorbisComment;
+import 'package:wiretune_core/src/metadata/xiph.dart' show parseFlacPicture, readVorbisComment;
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -260,6 +260,21 @@ void main() {
     },
   );
 
+  test('FLAC: a PICTURE block is found, and read; the same block as METADATA_BLOCK_PICTURE too', () {
+    final file = path('cover.flac');
+    final bytes = _buildFlac(['TITLE=With a cover'], picture: [9, 8, 7, 6, 5]);
+    File(file).writeAsBytesSync(bytes);
+    expect(TagReader.read(file)!.hasPicture, isTrue);
+    expect(TagReader.readPicture(file), [9, 8, 7, 6, 5]);
+
+    final mime = ascii.encode('image/png');
+    final block = [..._u32be(3), ..._u32be(mime.length), ...mime, ..._u32be(0), ...List.filled(16, 0), ..._u32be(2)];
+    final (data, type) = parseFlacPicture([...block, 1, 2])!;
+    expect(data, [1, 2]);
+    expect(type, 3);
+    expect(parseFlacPicture([...block, 1]), isNull, reason: 'the data is cut short');
+  });
+
   test('DSF: the DSD and fmt chunks and the ID3 tag at the metadata offset', () {
     final file = path('built.dsf');
     File(file).writeAsBytesSync(_buildDsf());
@@ -394,8 +409,9 @@ List<int> _id3v23(Map<String, String> frames) {
 
 List<int> _u32be(int v) => [(v >> 24) & 0xFF, (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF];
 
-/// A FLAC file: STREAMINFO (44.1 kHz, 16 bit, stereo, two seconds), a Vorbis comment with [comments], and some "audio".
-Uint8List _buildFlac(List<String> comments) {
+/// A FLAC file: STREAMINFO (44.1 kHz, 16 bit, stereo, two seconds), a Vorbis comment with [comments], with [picture]
+/// a PICTURE block (a front cover), and some "audio".
+Uint8List _buildFlac(List<String> comments, {List<int>? picture}) {
   const sampleRate = 44100, channels = 2, bits = 16, samples = 2 * sampleRate;
   const packed = sampleRate << 44 | (channels - 1) << 41 | (bits - 1) << 36 | samples;
   final info = [...List.filled(10, 0), ..._u32be(packed >> 32), ..._u32be(packed & 0xFFFFFFFF), ...List.filled(16, 0)];
@@ -410,12 +426,23 @@ Uint8List _buildFlac(List<String> comments) {
       ..add(entry);
   }
   List<int> header(int type, int length, {bool last = false}) => [(last ? 0x80 : 0) | type, ..._u32be(length).skip(1)];
+  final mime = ascii.encode('image/png');
+  final pictureBlock = [
+    ..._u32be(3), // front cover
+    ..._u32be(mime.length),
+    ...mime,
+    ..._u32be(0), // no description
+    ...List.filled(16, 0),
+    ..._u32be(picture?.length ?? 0),
+    ...?picture,
+  ];
   return (BytesBuilder()
         ..add(ascii.encode('fLaC'))
         ..add(header(0, info.length))
         ..add(info)
-        ..add(header(4, comment.length, last: true))
+        ..add(header(4, comment.length, last: picture == null))
         ..add(comment.takeBytes())
+        ..add(picture == null ? const [] : [...header(6, pictureBlock.length, last: true), ...pictureBlock])
         ..add(List.filled(4096, 0)))
       .takeBytes();
 }

@@ -102,22 +102,26 @@ void readVorbisComment(Uint8List data, int offset, AudioTags tags, {bool wantLyr
   }
 }
 
+/// The head of a FLAC PICTURE block: the picture type, and where the picture's data starts and how long it is. Throws
+/// [RangeError] when [head] ends before that.
+(int type, int offset, int length) _flacPictureHeader(Uint8List head) {
+  var position = 0;
+  final type = head.u32be(position);
+  position += 4;
+  position += 4 + head.u32be(position); // the MIME type
+  position += 4 + head.u32be(position); // the description
+  position += 16; // width, height, depth, colours
+  final length = head.u32be(position);
+  return (type, position + 4, length);
+}
+
 /// (data, picture type) of a FLAC PICTURE block (also the payload of METADATA_BLOCK_PICTURE).
 (Uint8List, int)? parseFlacPicture(List<int> bytes) {
   final data = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
   try {
-    var position = 0;
-    final type = data.u32be(position);
-    position += 4;
-    final mimeLength = data.u32be(position);
-    position += 4 + mimeLength;
-    final descriptionLength = data.u32be(position);
-    position += 4 + descriptionLength;
-    position += 16; // width, height, depth, colours
-    final length = data.u32be(position);
-    position += 4;
-    if (position + length > data.length || length == 0) return null;
-    return (Uint8List.fromList(Uint8List.sublistView(data, position, position + length)), type);
+    final (type, offset, length) = _flacPictureHeader(data);
+    if (offset + length > data.length || length == 0) return null;
+    return (Uint8List.fromList(Uint8List.sublistView(data, offset, offset + length)), type);
   } on RangeError {
     return null;
   }
@@ -159,17 +163,13 @@ AudioTags? readFlac(ByteSource source, {bool wantLyrics = true}) {
         if (length > 64 * 1024 * 1024) break;
         readVorbisComment(source.read(body, length), 0, tags, wantLyrics: wantLyrics);
       case 6: // PICTURE
-        final head = source.read(body, length < 4096 ? length : 4096);
         try {
-          final pictureType = head.u32be(0);
-          var p = 4;
-          p += 4 + head.u32be(p);
-          p += 4 + head.u32be(p);
-          p += 16;
-          final dataLength = head.u32be(p);
-          p += 4;
-          if (dataLength > 0 && p + dataLength <= length) {
-            tags.offerPicture(location: PictureLocation(body + p, dataLength), type: pictureType);
+          // Located, not read: the head is enough, and the picture must lie inside the block.
+          final (pictureType, offset, dataLength) = _flacPictureHeader(
+            source.read(body, length < 4096 ? length : 4096),
+          );
+          if (dataLength > 0 && offset + dataLength <= length) {
+            tags.offerPicture(location: PictureLocation(body + offset, dataLength), type: pictureType);
           }
         } on RangeError {
           // A picture block whose header does not fit what was read: ignore it.
