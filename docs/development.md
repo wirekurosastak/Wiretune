@@ -224,8 +224,8 @@ Measured on the Linux desktop (server built with `dart build cli`; the player si
 
 | Tracks | Scan | `/api/tracks` (plain, gzip) | Answering 304 | Fetch and decode | Snapshot | Merge (SQLite and snapshot) |
 |---|---|---|---|---|---|---|
-| 10,000 | 0.5 s | 4.9 MB, 0.5 MB | 26 ms | 0.12 s | 93 ms | 0.19 s |
-| 50,000 | 2.3 s | 24 MB, 2.6 MB | 118 ms | 0.6 s | 236 ms | 0.55 s |
-| 100,000 | 4.8 s | 49 MB, 5.3 MB | 241 ms | 1.3 s | 396 ms | 1.1 s |
+| 10,000 | 0.4 s | 4.9 MB, 0.5 MB | 2 ms | 0.07 s | 91 ms | 0.19 s |
+| 50,000 | 2.2 s | 24 MB, 2.6 MB | 1 ms | 0.4 s | 232 ms | 0.55 s |
+| 100,000 | 4.6 s | 49 MB, 5.3 MB | 1 ms | 0.8 s | 373 ms | 1.1 s |
 
-Decoding, the snapshot and the merge run on the UI isolate, and the server hashes the whole list again for every request, even one that ends in a 304. The player process grew by about 5 KB per track in this run (resident memory, before garbage collection).
+The server hashes and compresses each list once after a scan, not for every request (before, a 304 for 100,000 tracks took 241 ms, and a fetch with decoding 1.3 s). Decoding, the snapshot and the merge still run on the UI isolate: about two seconds at 100,000 tracks here, more on a phone. The player process grew by about 5 KB per track in this run (resident memory, before garbage collection).

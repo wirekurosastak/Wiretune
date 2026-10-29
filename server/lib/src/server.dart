@@ -142,13 +142,13 @@ class WiretuneServer {
 
   /// The track list as `/api/tracks` serves it (encoded); listed again after every scan, since a cover can change while
   /// the tracks stay the same.
-  List<int>? _trackList;
+  JsonDocument? _trackList;
 
   /// The artists' own pictures as `/api/artists/pictures` serves them (encoded): each one's version by artist ID.
-  List<int>? _artistPictureList;
+  JsonDocument? _artistPictureList;
 
-  /// The digest of the lists the players were last told about.
-  Digest? _announcedLibrary;
+  /// The version of the lists the players were last told about.
+  String? _announcedLibrary;
 
   /// The port the server listens on (useful when started on port 0).
   int get port => _http!.port;
@@ -206,7 +206,7 @@ class WiretuneServer {
       );
     }
     // What the players may already have, so that the start-up scan tells them when it found something new.
-    server._announcedLibrary = server._libraryDigest;
+    server._announcedLibrary = await server._libraryVersion();
     scanner.onScanned = server._scanned;
 
     final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
@@ -404,7 +404,7 @@ class WiretuneServer {
       'GET',
       '/api/me/data',
       Access.user,
-      (call) => versionedJson(call.request, utf8.encode(jsonEncode(userData.get(call.userId).toJson()))),
+      (call) => versionedJson(call.request, JsonDocument(utf8.encode(jsonEncode(userData.get(call.userId).toJson())))),
     ),
     _Route('PUT', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, true)),
     _Route('DELETE', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, false)),
@@ -583,11 +583,11 @@ class WiretuneServer {
     return fileResponse(call.request, File(track.filePath), AudioFileTypes.mimeType(track.filePath));
   }
 
-  List<int> get _tracks => _trackList ??= _listTracks();
+  JsonDocument get _tracks => _trackList ??= _listTracks();
 
   /// Each track as [Track.toJson] gives it, and with a cover the version of the album's cover, which the players put
   /// in its address: a changed cover gets a new one, and a player shows it at once.
-  List<int> _listTracks() {
+  JsonDocument _listTracks() {
     final coverVersions = <String, String?>{};
     final json = jsonEncode([
       for (final track in library.tracks)
@@ -597,7 +597,7 @@ class WiretuneServer {
             'coverVersion': coverVersions.putIfAbsent(track.albumId, () => _coverVersion(track.albumId)),
         },
     ]);
-    return utf8.encode(json);
+    return JsonDocument(utf8.encode(json));
   }
 
   /// Changes with what [_cover] serves for the album: the size and time of the cover's file, or of the audio file
@@ -616,25 +616,27 @@ class WiretuneServer {
     return '${stat.size.toRadixString(36)}-${stat.modified.millisecondsSinceEpoch.toRadixString(36)}';
   }
 
-  List<int> get _artistPictures => _artistPictureList ??= utf8.encode(
-    jsonEncode({
-      for (final MapEntry(key: id, value: path) in library.artistPictureFiles.entries) id: ?_fileVersion(path),
-    }),
+  JsonDocument get _artistPictures => _artistPictureList ??= JsonDocument(
+    utf8.encode(
+      jsonEncode({
+        for (final MapEntry(key: id, value: path) in library.artistPictureFiles.entries) id: ?_fileVersion(path),
+      }),
+    ),
   );
 
-  /// Both lists the players download, which a scan may change.
-  Digest get _libraryDigest => sha1.convert([..._tracks, ..._artistPictures]);
+  /// The version of both lists the players download, which a scan may change.
+  Future<String> _libraryVersion() async => '${await _tracks.etag}${await _artistPictures.etag}';
 
   /// The track whose picture is the album's cover.
   Track? _coverTrack(String albumId) => library.getAlbum(albumId)?.tracks.where((t) => t.hasCoverArt).firstOrNull;
 
   /// A scan ended: when the lists the players get changed, they are told.
-  void _scanned() {
+  Future<void> _scanned() async {
     _trackList = null;
     _artistPictureList = null;
-    final digest = _libraryDigest;
-    if (digest == _announcedLibrary) return;
-    _announcedLibrary = digest;
+    final version = await _libraryVersion();
+    if (version == _announcedLibrary) return;
+    _announcedLibrary = version;
     remote.libraryChanged();
   }
 
