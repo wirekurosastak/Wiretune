@@ -91,8 +91,7 @@ WIRETUNE_MACOS_SIGN_IDENTITY="Developer ID Application: …" WIRETUNE_NOTARY_PRO
 ```
 
 Without them the app is ad-hoc signed: it runs on the Mac that built it, and on other Macs only after allowing it in
-*System Settings → Privacy & Security*. The app isn't sandboxed (`app/macos/Runner/Release.entitlements` says why), so
-it can't go on the Mac App Store.
+*System Settings → Privacy & Security*.
 
 ## Android player (phone, tablet, TV, car)
 
@@ -102,7 +101,7 @@ Install [Android Studio](https://developer.android.com/studio), which brings the
 
 ```bash
 flutter doctor --android-licenses
-dart tool/build.dart android        # or appbundle, for Google Play
+dart tool/build.dart android
 ```
 
 Output: one APK per processor in `dist/android/`:
@@ -111,10 +110,7 @@ Output: one APK per processor in `dist/android/`:
 - `app-armeabi-v7a-release.apk`: older 32-bit devices and many TV boxes
 - `app-x86_64-release.apk`: the emulator
 
-The same APK covers phone, tablet, TV and car. `appbundle` builds `dist/android/app-release.aab` instead.
-
-Both include the permission to install apps, which in-app updates need. Google Play only allows it for apps whose
-purpose is installing apps, so a bundle for Play would have to drop it; Play then handles updates.
+The same APK covers phone, tablet, TV and car.
 
 To install on a device with USB debugging on: `adb install -r dist/android/app-arm64-v8a-release.apk`.
 
@@ -144,13 +140,12 @@ Needs a Mac with [Xcode](https://apps.apple.com/app/xcode/id497799835) and Cocoa
 dart tool/build.dart ios
 ```
 
-Output: `dist/ios/*.ipa`. Upload it to TestFlight or the App Store with
-[Transporter](https://apps.apple.com/app/transporter/id1450874784). Bundle ID: `com.wiretune.player`.
+Output: `dist/ios/*.ipa`. Bundle ID: `com.wiretune.player`.
 
 ## Samsung TV player (Tizen)
 
 Install the [Tizen SDK with the TV extensions](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html)
-(or the *Tizen* extension for VS Code) and [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen):
+and [flutter-tizen](https://github.com/flutter-tizen/flutter-tizen):
 
 ```bash
 git clone https://github.com/flutter-tizen/flutter-tizen.git ~/flutter-tizen
@@ -182,7 +177,7 @@ Pushing a tag `v<version>` (the pubspec version without the build number: `v1.0.
 - the server for Linux (x64, arm64), Windows and macOS, plus a container image for both processors
   (`ghcr.io/<owner>/wiretune-server`)
 - the players for Linux (`.deb`, `.rpm`, and a `.tar.gz` with `install.sh`), Windows (installer and portable zip),
-  macOS (disk image) and Android (APKs and App Bundle)
+  macOS (disk image) and Android (APKs)
 
 The result is a draft release with a `SHA256SUMS.txt`, for you to review and publish. iOS and Tizen aren't included.
 

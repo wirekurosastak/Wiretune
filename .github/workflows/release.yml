@@ -103,7 +103,7 @@ jobs:
   linux:
     name: Linux player
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -223,7 +223,7 @@ jobs:
           echo "$ANDROID_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$RUNNER_TEMP/upload.jks" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > app/android/key.properties
-      - run: dart tool/build.dart android appbundle
+      - run: dart tool/build.dart android
       - run: |
           version=${{ needs.version.outputs.version }}
           mkdir -p out

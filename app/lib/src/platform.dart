@@ -46,7 +46,7 @@ class AppPlatform {
   bool get supportsMediaSession => isAndroid || isIOS || isMacOS || isLinuxDesktop;
 
   /// Who answers what on it: the Android plugin (packages/wiretune_platform) `isTelevision`, `musicDirectory`,
-  /// `requestAudioAccess`, `installerPackage` and `installUpdate`; the Tizen runner (tizen/App.cs) `isTizen` and
+  /// `requestAudioAccess` and `installUpdate`; the Tizen runner (tizen/App.cs) `isTizen` and
   /// `isTelevision`; the iOS runner (ios/Runner/AppDelegate.swift) `excludeFromBackup`. Elsewhere a call finds no
   /// handler.
   static const MethodChannel _channel = MethodChannel('wiretune/platform');
@@ -91,20 +91,6 @@ class AppPlatform {
   /// Whether the app may read the audio files on an Android device, asking the user first if it hasn't been allowed
   /// yet; elsewhere always true. Asked only when a folder is scanned, not at start.
   Future<bool> requestAudioAccess() async => !isAndroid || await _ask('requestAudioAccess');
-
-  /// The app that installed this one on an Android device (`com.android.vending` for Google Play), or null for an APK
-  /// installed by hand, and elsewhere.
-  Future<String?> androidInstallerPackage() async {
-    if (!isAndroid) return null;
-    try {
-      return await _channel.invokeMethod<String>('installerPackage');
-    } on PlatformException catch (e) {
-      WiretuneLog.warn('Platform', 'Cannot tell which app installed this one: $e');
-    } on MissingPluginException {
-      // An engine without the plugin.
-    }
-    return null;
-  }
 
   /// Hands the APK at [path] to Android's installer, which asks the user before it installs it over this app.
   Future<void> installAndroidUpdate(String path) => _channel.invokeMethod<void>('installUpdate', path);

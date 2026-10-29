@@ -23,7 +23,6 @@ Usage: dart tool/build.dart <target>...
   windows-installer  windows, and its installer (Inno Setup 6)         → dist/windows-installer/*.exe
   macos       the macOS player and its disk image, on macOS            → dist/macos/Wiretune.app, Wiretune.dmg
   android     one APK per processor type                               → dist/android/*.apk
-  appbundle   the Android App Bundle for Google Play                   → dist/android/*.aab
   ios         the .ipa, on a Mac with a signing team                   → dist/ios/*.ipa
   tizen       the .tpk for Samsung TVs, with flutter-tizen on the PATH → dist/tizen/*.tpk
 
@@ -70,13 +69,6 @@ final Map<String, Future<void> Function()> _targets = {
     ['build', 'apk', '--release', '--split-per-abi'],
     'app/build/app/outputs/flutter-apk',
     '.apk',
-    'android',
-  ),
-  'appbundle': () => _buildPackages(
-    'flutter',
-    ['build', 'appbundle', '--release'],
-    'app/build/app/outputs/bundle/release',
-    '.aab',
     'android',
   ),
   'ios': () => _buildPackages('flutter', ['build', 'ipa', '--release'], 'app/build/ios/ipa', '.ipa', 'ios'),

@@ -43,7 +43,6 @@ void main() {
     'wiretune-1.1.2026-arm64-v8a-release.apk': _url,
     'wiretune-1.1.2026-armeabi-v7a-release.apk': _url,
     'wiretune-1.1.2026-x86_64-release.apk': _url,
-    'wiretune-1.1.2026-release.aab': _url,
     'wiretune-server-1.1.2026-linux-x64.tar.gz': _url,
     'SHA256SUMS.txt': _url,
   });

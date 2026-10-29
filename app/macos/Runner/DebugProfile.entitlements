@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Not sandboxed (distributed outside the App Store): the library folder the user picks stays
+	<!-- Not sandboxed: the library folder the user picks stays
 	     readable after a restart, the data stays in ~/Library/Application Support/Wiretune, and ffmpeg can be run for the
 	     spectrum. -->
 	<key>com.apple.security.app-sandbox</key>

@@ -11,7 +11,7 @@ import '../update_installer.dart';
 /// Looks for a newer release when the player starts and every 24 hours while it stays open, offers it in a banner,
 /// and downloads and installs it when the user presses Update. Nothing installs on its own.
 class UpdateViewModel extends ChangeNotifier {
-  /// [check] and [installer] null: this copy isn't updated from releases (a debug build, iOS, Tizen, Google Play, …).
+  /// [check] and [installer] null: this copy isn't updated from releases (a debug build, iOS, Tizen, …).
   /// [isOffline] skips the check in offline mode; [notify] shows a notice; [quit] ends the player for the install.
   UpdateViewModel(
     this._check,

@@ -1350,7 +1350,7 @@ class _AboutCard extends StatelessWidget {
             ),
             style: text,
           ),
-          // Only a copy that a release can update looks for one (not a debug build, iOS, Tizen or Google Play's).
+          // Only a copy that a release can update looks for one (not a debug build, iOS or Tizen).
           if (vm.updates.isSupported) ...[
             const SizedBox(height: 14),
             Row(

@@ -27,7 +27,7 @@ enum InstallKind {
   /// The macOS app: the new disk image opens, and the user drags the app over the old one.
   macosApp,
 
-  /// An APK installed by hand (not by Google Play): Android's installer takes the new one, after asking.
+  /// An APK: Android's installer takes the new one, after asking.
   androidApk,
 }
 
@@ -45,9 +45,8 @@ class UpdateInstaller {
 
   static const String _linuxPackageFolder = '/usr/lib/wiretune';
 
-  /// How this copy was installed, or null when no release file updates it: iOS and Tizen (no release has them), a
-  /// copy from Google Play (which updates it), the portable Windows folder, and a Linux or macOS copy in a shape this
-  /// doesn't know.
+  /// How this copy was installed, or null when no release file updates it: iOS and Tizen (no release has them), the
+  /// portable Windows folder, and a Linux or macOS copy in a shape this doesn't know.
   static Future<UpdateInstaller?> detect(AppPlatform platform) async {
     final executable = Platform.resolvedExecutable;
     final folder = File(executable).parent.path;
@@ -63,7 +62,7 @@ class UpdateInstaller {
     } else if (platform.isMacOS) {
       kind = executable.contains('.app/Contents/MacOS/') ? InstallKind.macosApp : null;
     } else if (platform.isAndroid) {
-      kind = await platform.androidInstallerPackage() == 'com.android.vending' ? null : InstallKind.androidApk;
+      kind = InstallKind.androidApk;
     } else {
       kind = null;
     }

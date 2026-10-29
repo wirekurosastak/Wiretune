@@ -52,7 +52,6 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                     "isTelevision" -> result.success(isTelevision(context))
                     "musicDirectory" -> result.success(musicDirectory(context))
                     "requestAudioAccess" -> requestAudioAccess(context, result)
-                    "installerPackage" -> result.success(installerPackage(context))
                     "installUpdate" -> installUpdate(context, call.arguments as? String, result)
                     else -> result.notImplemented()
                 }
@@ -145,15 +144,6 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
             Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath
         } else {
             context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.absolutePath
-        }
-
-    /** The app that installed this one (com.android.vending for Google Play), or null for an APK installed by hand. */
-    private fun installerPackage(context: Context): String? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
-        } else {
-            @Suppress("DEPRECATION") // its replacement, getInstallSourceInfo, is Android 11 and later only
-            context.packageManager.getInstallerPackageName(context.packageName)
         }
 
     /**

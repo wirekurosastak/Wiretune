@@ -99,7 +99,7 @@ check. Nothing installs unless you press **Update**.
 | The macOS disk image | Opens the new disk image: drag Wiretune into *Applications* over the old one |
 | An Android APK | Hands the new APK to Android, which asks before installing |
 
-Copies from Google Play, iPhone and iPad, Tizen TVs and the portable Windows folder don't check for updates.
+Copies on iPhone and iPad, Tizen TVs and the portable Windows folder don't check for updates.
 
 The player checks at start and once a day, never in offline mode. *Settings → About → Look for updates* turns it off
 ([what's sent](../SECURITY.md#what-leaves-your-network)). The server doesn't update with the player: update it too and
