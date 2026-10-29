@@ -11,7 +11,8 @@ import '../services/wiretune_log.dart';
 /// analyser can read the window at the playback position. It never touches the audio that is being played.
 ///
 /// Decoding stops after 20 minutes of audio (about 106 MB), so a very long mix cannot exhaust memory. A server track is
-/// requested from the server a second time for this.
+/// requested from the server a second time for this; the player downloads it and hands it to `ffmpeg` on its standard
+/// input, so the address with the stream token never stands in the process list.
 class PcmCache {
   static const int sampleRate = 44100;
   static const int _maxSamples = sampleRate * 60 * 20;
@@ -19,6 +20,7 @@ class PcmCache {
   Int16List _samples = Int16List(0);
   int _sampleCount = 0;
   Process? _process;
+  HttpClient? _download;
   StreamSubscription<List<int>>? _subscription;
   String? _currentSource;
   int _generation = 0;
@@ -47,7 +49,7 @@ class PcmCache {
         '-loglevel',
         'error',
         '-i',
-        audioSource,
+        _isUrl(audioSource) ? 'pipe:0' : audioSource,
         '-f',
         's16le',
         '-ac',
@@ -70,6 +72,9 @@ class PcmCache {
     }
     _process = process;
     unawaited(process.stderr.drain<void>());
+    if (_isUrl(audioSource)) {
+      unawaited(_feed(process, audioSource, generation));
+    }
     _subscription = process.stdout.listen(
       (chunk) => _append(chunk, generation),
       onError: (Object e) {
@@ -77,6 +82,32 @@ class PcmCache {
       },
       cancelOnError: true,
     );
+  }
+
+  static bool _isUrl(String source) => source.startsWith('http://') || source.startsWith('https://');
+
+  /// Downloads [url] into the standard input of [process]. It ends when the file does, or when decoding stops and
+  /// `ffmpeg` closes its input (the 20-minute limit, a new track).
+  Future<void> _feed(Process process, String url, int generation) async {
+    // ffmpeg closing its input is an error on the pipe; nobody else waits for it.
+    unawaited(process.stdin.done.then<void>((_) {}, onError: (Object _) {}));
+    final client = _download = HttpClient();
+    try {
+      final request = await client.getUrl(Uri.parse(url));
+      final response = await request.close();
+      if (response.statusCode != HttpStatus.ok) {
+        if (generation == _generation) WiretuneLog.info('PcmCache', 'The server answered ${response.statusCode}.');
+        process.kill();
+        return;
+      }
+      await process.stdin.addStream(response);
+      await process.stdin.close();
+    } on Object catch (e) {
+      if (generation == _generation) WiretuneLog.debug('PcmCache', 'The download for the spectrum ended: $e');
+    } finally {
+      client.close(force: true);
+      if (identical(_download, client)) _download = null;
+    }
   }
 
   void _append(List<int> chunk, int generation) {
@@ -123,6 +154,8 @@ class PcmCache {
   }
 
   void _stopProcess() {
+    _download?.close(force: true);
+    _download = null;
     _subscription?.cancel();
     _subscription = null;
     _process?.kill();

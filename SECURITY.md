@@ -41,9 +41,10 @@ Pictures and lyrics are cached in the player's data folder.
 - **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. Every request checks the token
   against the account: a deleted user is locked out at once. A password change or an administrator's reset ends every
   earlier session, stream tokens included.
-- **Tokens in URLs.** libmpv, the TV player and `ffmpeg` can't send headers, so audio and cover URLs carry `?token=`.
-  Only a **stream token** is accepted there: valid 8 hours, audio and covers only, never logged. These URLs can still
-  end up in a proxy's access log and, on a desktop with the spectrum analyzer, in the process list.
+- **Tokens in URLs.** libmpv and the TV player can't send headers, so audio and cover URLs carry `?token=`. Only a
+  **stream token** is accepted there: valid 8 hours, audio and covers only, never logged. These URLs can still end up in
+  a proxy's access log. The spectrum analyzer's `ffmpeg` doesn't get the URL: the player downloads the track and hands
+  it over on standard input.
 - **The setup code** ([how it's used](docs/server.md#start-it)) stops strangers from creating the first account on a
   server with an empty data folder, such as after a wrong path or an unmounted disk. It protects the first account
   only.

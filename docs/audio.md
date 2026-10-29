@@ -69,4 +69,4 @@ Off by default. Untagged files are unchanged. Ignored in bit-perfect mode.
 
 ## Spectrum analyzer
 
-Desktop only: 64 bands from 20 Hz to 20 kHz. Needs `ffmpeg` on the `PATH`. Never affects playback.
+Desktop only: 64 bands from 20 Hz to 20 kHz. Needs `ffmpeg` on the `PATH`. Never affects playback. A server track is downloaded a second time for it.
