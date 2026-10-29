@@ -567,6 +567,37 @@ void main() {
     expect((service.isFavorite(id), service.playCount(id), track.addedAt), (true, 1, added));
   });
 
+  test('a file that was moved or renamed keeps its favourite, play count and playlists', () async {
+    final folder = Directory.systemTemp.createTempSync('wiretune_moved_');
+    addTearDown(() => folder.deleteSync(recursive: true));
+    writeWav('${folder.path}/Song.wav', 44100, seconds: 2);
+    writeWav('${folder.path}/Other.wav', 44100, seconds: 3);
+    final service = _service(testRepository());
+    service.initialize();
+    expect(await service.scanFolder(folder.path), isTrue);
+    final song = service.tracks.firstWhere((t) => t.title == 'Song').id;
+    final other = service.tracks.firstWhere((t) => t.title == 'Other').id;
+    service.toggleFavorite(song);
+    service.recordPlay(song);
+    final playlist = service.createPlaylist('Mix');
+    service.addTracksToPlaylist(playlist.id, [other, song]);
+    final moved = <Map<String, String>>[];
+    service.onTracksMoved = moved.add;
+
+    Directory('${folder.path}/Sorted').createSync();
+    File('${folder.path}/Song.wav').renameSync('${folder.path}/Sorted/Song, renamed.wav');
+    expect(await service.scanFolder(folder.path), isTrue);
+
+    final renamed = service.tracks.firstWhere((t) => t.title == 'Song, renamed').id;
+    expect(renamed, isNot(song));
+    expect(moved, [
+      {song: renamed},
+    ]);
+    expect((service.isFavorite(renamed), service.playCount(renamed)), (true, 1));
+    expect(service.isFavorite(song), isFalse);
+    expect([for (final t in service.getPlaylistTracks(service.getPlaylist(playlist.id)!)) t.id], [other, renamed]);
+  });
+
   test("a rescan keeps the server's playlists on the files their tracks were matched to", () async {
     final folder = Directory.systemTemp.createTempSync('wiretune_aliases_');
     addTearDown(() => folder.deleteSync(recursive: true));

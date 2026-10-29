@@ -19,6 +19,7 @@ import '../util/text.dart';
 import 'app_paths.dart';
 import 'metadata_scanner.dart';
 import 'track_deduplication.dart';
+import 'track_moves.dart';
 import 'wiretune_log.dart';
 
 /// Why a change the user asked for was not made as asked, for the interface to say: the server account's data can't be
@@ -52,6 +53,11 @@ class LibraryService {
   /// of the account's, which the server's replace at every refresh, so they also apply while it cannot be reached.
   static const String _noAccount = 'local';
   String _currentUserId = _noAccount;
+
+  /// Called when a scan finds files that were moved or renamed, as old track ID -> new track ID, before the library
+  /// changes. The library has moved its own favourites, play counts, playlists and hidden items along by then; the
+  /// server moves its accounts' with this.
+  void Function(Map<String, String> moved)? onTracksMoved;
 
   // Server track ID -> ID of the local file it was folded into (see TrackDeduplication); server playlists and the
   // server's favourites still refer to the server ID.
@@ -301,6 +307,7 @@ class LibraryService {
 
         musicFolder = root;
         _repository.setSetting('music_folder', root);
+        _followMovedFiles(known, scanned);
 
         // From here on nothing waits, so a server refresh can't interleave with this one.
         final aliased = <String, String>{};
@@ -332,6 +339,33 @@ class LibraryService {
       }
     });
     return result;
+  }
+
+  /// A file that was moved or renamed is a new track to the scan (the ID comes from the path) and the old one is gone;
+  /// the data of the old one is given to the new one ([TrackMoves] says which is which).
+  void _followMovedFiles(Map<String, Track> known, List<Track> scanned) {
+    final paths = {for (final t in scanned) t.filePath};
+    final ids = {for (final t in known.values) t.id};
+    final moved = TrackMoves.pair(
+      known.values.where((t) => t.isLocal && !paths.contains(t.filePath)),
+      scanned.where((t) => !ids.contains(t.id)),
+    );
+    if (moved.isEmpty) return;
+    WiretuneLog.info('LibraryService', '${moved.length} moved or renamed files found; their data goes with them.');
+
+    _foldServerData(moved);
+    _updatePlaylistsWithAliases(moved);
+    // The account's hidden items belong to the server; the device's own are kept here.
+    final hidden = _hidden[HiddenKind.track]!;
+    if (_currentUserId == _noAccount) {
+      for (final MapEntry(key: before, value: after) in moved.entries) {
+        if (!hidden.remove(before)) continue;
+        hidden.add(after);
+        _repository.setHiddenItem(HiddenKind.track, before, false, _currentUserId);
+        _repository.setHiddenItem(HiddenKind.track, after, true, _currentUserId);
+      }
+    }
+    onTracksMoved?.call(moved);
   }
 
   /// Deletes the covers cached from files that no track shows any more: an album that went, a picture that changed.

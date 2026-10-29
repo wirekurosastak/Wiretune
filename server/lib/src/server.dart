@@ -208,6 +208,7 @@ class WiretuneServer {
     // What the players may already have, so that the start-up scan tells them when it found something new.
     server._announcedLibrary = await server._libraryVersion();
     scanner.onScanned = server._scanned;
+    library.onTracksMoved = server._tracksMoved;
 
     final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
     http.autoCompress = false; // JSON is compressed by the handler, audio never
@@ -629,6 +630,21 @@ class WiretuneServer {
 
   /// The track whose picture is the album's cover.
   Track? _coverTrack(String albumId) => library.getAlbum(albumId)?.tracks.where((t) => t.hasCoverArt).firstOrNull;
+
+  /// A scan found files that were moved or renamed: what the accounts have on them goes to the new track IDs, and the
+  /// players of those accounts download it again.
+  void _tracksMoved(Map<String, String> moved) {
+    try {
+      final accounts = userData.moveTracks(moved);
+      WiretuneLog.info(
+        'Server',
+        '${moved.length} moved files; the data of ${accounts.length} accounts went with them.',
+      );
+      accounts.forEach(remote.dataChanged);
+    } catch (e, s) {
+      WiretuneLog.error('Server', 'Could not move the accounts\' data to the moved files: $e', e, s);
+    }
+  }
 
   /// A scan ended: when the lists the players get changed, they are told.
   Future<void> _scanned() async {

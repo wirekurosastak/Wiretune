@@ -65,7 +65,8 @@ For server music, favorites and playlists belong to your account, so every devic
 read-only while the player is offline. For local music they're stored on the device, but a playlist created while
 signed in is a server playlist.
 
-The server identifies a track by its file path, so moving or renaming a file drops it from favorites and playlists.
+The server identifies a track by its file path. When you move or rename a file, the next scan finds it again and keeps its
+favorites and playlists, unless several files are so alike that it can't tell which is which.
 **Most played** and **Recently played** are built from your plays and hold 50 tracks each. To reorder a playlist, drag
 its tracks (on a phone, long-press first).
 

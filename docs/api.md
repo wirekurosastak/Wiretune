@@ -77,7 +77,8 @@ IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000. Ov
 | `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` invalid type or ID, `409` at the limit |
 | `DELETE /api/me/hidden/{type}/{itemId}` | user | Unhides it. `200 { "itemType", "itemId", "hidden": false }` |
 
-The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept.
+The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept. A scan that
+finds a moved or renamed file moves the data to the new ID and sends `dataChanged`.
 
 ## Media
 

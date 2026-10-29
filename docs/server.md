@@ -166,8 +166,10 @@ plays depends on the player ([audio.md](audio.md)). Missing tags fall back to th
 `Unknown album`. If the folder suddenly looks empty, the server skips the scan and reports *Library folder is empty
 (unmounted share?)*, so an unmounted NAS doesn't wipe your library.
 
-A track's ID comes from its full file path. Moving or renaming a file gives it a new ID, and its favorites and playlist
-entries are lost.
+A track's ID comes from its full file path, so a moved or renamed file is a new track to a scan. The scan pairs it with
+the one that went when it is the only file of that size and length, or the only one with that title, artist and album and
+nearly that length, and moves the accounts' favorites, plays, hidden tracks and playlist entries over. Files that can't
+be told apart aren't guessed: their data stays with the old IDs, which no longer match anything.
 
 ## Options
 

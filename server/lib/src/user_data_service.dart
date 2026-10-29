@@ -156,6 +156,62 @@ class UserDataService {
     return _db.connection.updatedRows > 0;
   }
 
+  /// Moves what every account has on tracks to their new IDs ([moved]: old ID -> new ID), for files that were moved or
+  /// renamed: favourites, play counts, hidden tracks and playlist entries. All or nothing. Returns the accounts that
+  /// had something on a moved track.
+  Set<String> moveTracks(Map<String, String> moved) {
+    if (moved.isEmpty) return const {};
+    return _db.transaction((db) {
+      final touched = <String>{};
+
+      // Each row is looked up by its key, not by the track: a whole library can move, and the rows are far fewer.
+      for (final (table, column, only) in const [
+        ('user_favorites', 'track_id', ''),
+        ('user_plays', 'track_id', ''),
+        ('user_hidden', 'item_id', " AND item_type = 'track'"),
+      ]) {
+        final rows = [
+          for (final row in db.select('SELECT user_id, $column AS id FROM $table WHERE 1 = 1$only'))
+            if (moved.containsKey(row['id'])) (row['user_id'] as String, row['id'] as String),
+        ];
+        // A row moves unless the account has one on the new ID already; either way the old one goes.
+        final move = db.prepare('UPDATE OR IGNORE $table SET $column = ?3 WHERE user_id = ?1 AND $column = ?2$only');
+        final leave = db.prepare('DELETE FROM $table WHERE user_id = ?1 AND $column = ?2$only');
+        try {
+          for (final (user, before) in rows) {
+            move.execute([user, before, moved[before]]);
+            leave.execute([user, before]);
+            touched.add(user);
+          }
+        } finally {
+          move.close();
+          leave.close();
+        }
+      }
+
+      final update = db.prepare(
+        'UPDATE user_playlists SET track_ids_json = ?3, modified_at = ?4 WHERE user_id = ?1 AND id = ?2',
+      );
+      try {
+        final now = toDbTime(DateTime.now());
+        for (final row in db.select('SELECT user_id, id, track_ids_json FROM user_playlists')) {
+          final ids = decodeTrackIds(row['track_ids_json']);
+          if (!ids.any(moved.containsKey)) continue;
+          final seen = <String>{};
+          final renamed = [
+            for (final id in ids)
+              if (seen.add(moved[id] ?? id)) moved[id] ?? id,
+          ];
+          update.execute([row['user_id'], row['id'], jsonEncode(renamed), now]);
+          touched.add(row['user_id'] as String);
+        }
+      } finally {
+        update.close();
+      }
+      return touched;
+    });
+  }
+
   /// Null when the playlist may be stored, otherwise the rule it breaks.
   static RuleViolation? validatePlaylist(String playlistId, PlaylistUpdate? update) {
     final idError = UserDataRules.validateId(playlistId);
