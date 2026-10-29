@@ -2623,6 +2623,21 @@ void main() {
     expect(find.descendant(of: header, matching: find.byTooltip(Localizer.get('GoToArtist'))), findsNothing);
   });
 
+  testWidgets('the add-to-playlist dialog says to create one when you have none, whatever the automatic lists are', (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    expect(vm.playlists.automaticPlaylists, isNotEmpty, reason: 'the recently added tracks are a list');
+    expect(vm.playlists.playlists, isEmpty);
+    await tester.tap(find.byType(Scaffold).first); // a context to open the dialog from
+    final context = tester.element(find.byType(Scaffold).first);
+    unawaited(
+      showAddToPlaylistDialog(context, vm.library.tracks.take(1).toList(), label: 'Song', suggestedName: 'Mix'),
+    );
+    await settle(tester);
+    expect(find.text(Localizer.get('NoPlaylistsCreateOne')), findsOneWidget);
+  });
+
   testWidgets('the playlists page and the sidebar count the automatic playlists too', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     await tester.runAsync(() async {

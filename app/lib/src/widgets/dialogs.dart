@@ -109,7 +109,8 @@ Future<void> showAddToPlaylistDialog(
         child: ListView(
           shrinkWrap: true,
           children: [
-            if (!playlists.hasPlaylists)
+            // Their own: the automatic ones can't be added to, and are not listed here.
+            if (playlists.playlists.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(8),
                 child: Text(dialog.tr('NoPlaylistsCreateOne'), style: TextStyle(color: dialog.colors.textMuted)),

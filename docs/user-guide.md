@@ -67,7 +67,7 @@ signed in is a server playlist.
 
 The server identifies a track by its file path. When you move or rename a file, the next scan finds it again and keeps its
 favorites and playlists, unless several files are so alike that it can't tell which is which.
-**Most played** and **Recently played** are built from your plays and hold 50 tracks each. To reorder a playlist, drag
+**Most played** and **Recently played** are built from your plays, and **Recently added** from when music came into the library; each holds 50 tracks. To reorder a playlist, drag
 its tracks (on a phone, long-press first).
 
 ## Downloads

@@ -354,8 +354,11 @@ void main() {
     final playlists = PlaylistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
     List<String?> titles(Playlist playlist) => [for (final t in playlists.tracksOf(playlist)) t.title];
 
-    expect([for (final pl in playlists.automaticPlaylists) pl.name], ['Most played', 'Recently played']);
-    final [most, recent] = playlists.automaticPlaylists;
+    expect(
+      [for (final pl in playlists.automaticPlaylists) pl.name],
+      ['Most played', 'Recently played', 'Recently added'],
+    );
+    final [most, recent, _] = playlists.automaticPlaylists;
     expect(titles(most), ['Song b', 'Song c', 'Song a'], reason: 'equal counts: the more recent first');
     expect(titles(recent), ['Song c', 'Song a', 'Song b']);
     expect(playlists.playlists, isEmpty, reason: 'not among the own playlists (the dialogs, the car)');
@@ -365,6 +368,49 @@ void main() {
     expect(playlists.canReorder, isFalse);
     playlists.startRename();
     expect(playlists.isEditingName, isFalse);
+  });
+
+  test('the recently added playlist holds the 50 newest tracks, newest first, without the hidden ones', () async {
+    final start = DateTime.utc(2026, 1, 1);
+    final lib = await library([
+      for (var i = 0; i < 60; i++)
+        Track(
+          id: 't$i',
+          title: 'Song $i',
+          artist: 'Artist',
+          album: 'Album $i',
+          addedAt: start.add(Duration(hours: i)),
+        ),
+    ]);
+    final playlists = PlaylistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    addTearDown(playlists.dispose);
+    Playlist added() => playlists.automaticPlaylists.singleWhere((pl) => pl.id == 'automatic:recently-added');
+
+    expect(playlists.automaticPlaylists.map((pl) => pl.name), ['Recently added'], reason: 'nothing was played');
+    expect(added().trackIds, hasLength(50));
+    expect(added().trackIds.first, 't59');
+    expect(added().trackIds.last, 't10');
+    expect(added().isAutomatic, isTrue);
+
+    lib.setHidden(HiddenKind.track, 't59', true);
+    playlists.refreshPlaylists();
+    expect(added().trackIds.first, 't58');
+    expect(added().trackIds.last, 't9', reason: 'one more from below takes its place');
+    expect(added().trackIds, isNot(contains('t59')));
+  });
+
+  test('tracks added together are listed by title', () async {
+    final when = DateTime.utc(2026, 5, 5);
+    final lib = await library([
+      for (final (id, title) in [('x', 'Charlie'), ('y', 'alpha'), ('z', 'Bravo')])
+        Track(id: id, title: title, artist: 'Artist', album: 'Album', addedAt: when),
+    ]);
+    final playlists = PlaylistsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
+    addTearDown(playlists.dispose);
+    expect(
+      [for (final t in playlists.tracksOf(playlists.automaticPlaylists.single)) t.title],
+      ['alpha', 'Bravo', 'Charlie'],
+    );
   });
 
   test('the favourites follow a track toggled anywhere, and tell their listeners', () async {

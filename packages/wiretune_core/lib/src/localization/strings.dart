@@ -185,6 +185,7 @@ const Map<String, (String, String, String)> allStrings = {
   'DiscNumber': ('{0}. LEMEZ', 'DISC {0}', 'DISC {0}'),
   'AutoMostPlayed': ('Legtöbbet játszott', 'Most played', 'Meistgespielt'),
   'AutoRecentlyPlayed': ('Nemrég játszott', 'Recently played', 'Zuletzt gespielt'),
+  'AutoRecentlyAdded': ('Nemrég hozzáadott', 'Recently added', 'Zuletzt hinzugefügt'),
   'SortBy': ('Rendezés:', 'Sort by:', 'Sortieren nach:'),
   'SortReleased': ('Megjelenés', 'Released', 'Erschienen'),
   'SortQuality': ('Minőség', 'Quality', 'Qualität'),

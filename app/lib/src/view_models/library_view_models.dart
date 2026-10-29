@@ -668,13 +668,42 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   static const int _automaticLength = 50;
   static const String _mostPlayedId = 'automatic:most-played';
   static const String _recentlyPlayedId = 'automatic:recently-played';
+  static const String _recentlyAddedId = 'automatic:recently-added';
 
-  /// The automatic playlists as the play counts stand now: the [_automaticLength] most played tracks (the more recent
-  /// first among equals), and the last played ones.
+  // The newest tracks of the library as it was last looked at: worked out once per library, not at every play.
+  List<Track>? _newestOf;
+  List<Track> _newest = const [];
+
+  /// The [_automaticLength] tracks added last, newest first (those added together by title). One pass over the library,
+  /// keeping the best so far, since a library can hold a hundred thousand tracks and this runs at every play.
+  List<Track> _newestTracks() {
+    final tracks = _library.tracks;
+    if (identical(tracks, _newestOf)) return _newest;
+    int newer(Track a, Track b) {
+      final byDate = b.addedAt.compareTo(a.addedAt);
+      return byDate != 0 ? byDate : compareText(a.title, b.title);
+    }
+
+    final best = <Track>[];
+    for (final track in tracks) {
+      if (best.length == _automaticLength && newer(track, best.last) >= 0) continue;
+      var at = best.length;
+      while (at > 0 && newer(track, best[at - 1]) < 0) {
+        at--;
+      }
+      best.insert(at, track);
+      if (best.length > _automaticLength) best.removeLast();
+    }
+    _newestOf = tracks;
+    return _newest = best;
+  }
+
+  /// The automatic playlists as the library stands now: the [_automaticLength] most played tracks (the more recent
+  /// first among equals), the last played ones, and the last added.
   List<Playlist> _automatic() {
     final library = _library;
+    final added = _newestTracks();
     final played = library.tracks.where((t) => library.playCount(t.id) > 0 || library.lastPlayedAt(t.id) != null);
-    if (played.isEmpty) return const [];
     final epoch = DateTime.fromMillisecondsSinceEpoch(0);
     int recent(Track a, Track b) =>
         (library.lastPlayedAt(b.id) ?? epoch).compareTo(library.lastPlayedAt(a.id) ?? epoch);
@@ -694,6 +723,7 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
     return [
       if (most.isNotEmpty) list(_mostPlayedId, 'AutoMostPlayed', most),
       if (last.isNotEmpty) list(_recentlyPlayedId, 'AutoRecentlyPlayed', last),
+      if (added.isNotEmpty) list(_recentlyAddedId, 'AutoRecentlyAdded', added),
     ];
   }
 
