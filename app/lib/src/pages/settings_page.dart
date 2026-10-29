@@ -1320,6 +1320,7 @@ class _AboutCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.vm;
     final colors = context.colors;
     final text = TextStyle(fontSize: 12.5, height: 1.45, color: colors.textMuted);
     return GlassCard(
@@ -1349,6 +1350,30 @@ class _AboutCard extends StatelessWidget {
             ),
             style: text,
           ),
+          // Only a copy that a release can update looks for one (not a debug build, iOS, Tizen or Google Play's).
+          if (vm.updates.isSupported) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        context.tr('SettingsUpdateCheck'),
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                      ),
+                      Text(
+                        context.tr('SettingsUpdateCheckHint'),
+                        style: TextStyle(fontSize: 12, color: colors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(value: vm.checkForUpdates, onChanged: (v) => vm.checkForUpdates = v),
+              ],
+            ),
+          ],
           const SizedBox(height: 14),
           OutlinedButton.icon(
             onPressed: () => showLicensePage(

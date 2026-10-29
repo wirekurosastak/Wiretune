@@ -30,6 +30,7 @@ export 'src/services/remote_client.dart';
 export 'src/services/server_client.dart';
 export 'src/services/server_session.dart';
 export 'src/services/track_deduplication.dart';
+export 'src/services/update_check.dart';
 export 'src/services/wiretune_log.dart';
 export 'src/util/async_lock.dart';
 export 'src/util/cancellation.dart';

@@ -59,3 +59,6 @@ Name: "{autodesktop}\Wiretune"; Filename: "{app}\wiretune.exe"; Tasks: desktopic
 
 [Run]
 Filename: "{app}\wiretune.exe"; Description: "{cm:LaunchProgram,Wiretune}"; Flags: nowait postinstall skipifsilent
+; An update from the player itself (update_installer.dart) runs the installer silently once the player has closed: it
+; starts the new player again.
+Filename: "{app}\wiretune.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent

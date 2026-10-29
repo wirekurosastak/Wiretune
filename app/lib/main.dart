@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
@@ -20,6 +21,7 @@ import 'src/audio/mobile_audio.dart';
 import 'src/audio/tizen_driver.dart';
 import 'src/debug/ui_automation_server.dart';
 import 'src/platform.dart';
+import 'src/update_installer.dart';
 import 'src/view_models/main_view_model.dart';
 import 'src/widgets/cover_image.dart';
 
@@ -63,7 +65,10 @@ Future<void> main() async {
   final repository = LibraryRepository(DatabaseManager());
   final library = LibraryService(repository, MetadataScanner());
   final session = ServerSession(library, repository);
-  final vm = MainViewModel(
+  // Only a release build looks for updates: one built from source would replace itself with the release.
+  final updateInstaller = kReleaseMode ? await UpdateInstaller.detect(platform) : null;
+  late final MainViewModel vm;
+  vm = MainViewModel(
     WiretuneAudioEngine(driver),
     library,
     session,
@@ -76,6 +81,13 @@ Future<void> main() async {
       // A computer goes by its host name; a phone's is "localhost", so it goes by "Phone" until it is given a name.
       name: platform.isDesktop ? Platform.localHostname : '',
     ),
+    updateCheck: updateInstaller == null ? null : UpdateCheck(),
+    updateInstaller: updateInstaller,
+    quit: ({relaunch}) async {
+      await _shutDown(vm);
+      if (relaunch != null) await Process.start(relaunch, const [], mode: ProcessStartMode.detached);
+      await windowManager.destroy();
+    },
   );
   // Cover requests to the server carry the sign-in token.
   session.stateChanged.listen((_) {
@@ -136,14 +148,19 @@ class _DesktopWindowListener with WindowListener {
 
   @override
   void onWindowClose() async {
-    try {
-      _vm.player.saveSession();
-      await _vm.audioEngine.dispose();
-      _vm.dispose();
-    } catch (e, s) {
-      WiretuneLog.error('App', 'Error during desktop window close disposal', e, s);
-    }
+    await _shutDown(_vm);
     await windowManager.destroy();
+  }
+}
+
+/// What closing a computer's window does before the window goes: the queue saved, the audio and the rest let go.
+Future<void> _shutDown(MainViewModel vm) async {
+  try {
+    vm.player.saveSession();
+    await vm.audioEngine.dispose();
+    vm.dispose();
+  } catch (e, s) {
+    WiretuneLog.error('App', 'Error during desktop window close disposal', e, s);
   }
 }
 

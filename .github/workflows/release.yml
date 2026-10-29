@@ -233,6 +233,8 @@ jobs:
           name: release-android
           path: out/*
 
+  # The players find their update among these files by name (app/lib/src/update_installer.dart) and check it against
+  # SHA256SUMS.txt: a file renamed above has to be renamed there too.
   publish:
     name: Draft release
     needs: [version, server, docker-manifest, linux, windows, macos, android]

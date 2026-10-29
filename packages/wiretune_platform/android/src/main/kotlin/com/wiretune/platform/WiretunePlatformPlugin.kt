@@ -6,14 +6,20 @@ package com.wiretune.platform
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.PendingIntent
 import android.app.UiModeManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
+import java.io.File
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -21,8 +27,8 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 
 /**
- * Answers `wiretune/platform` (is this a television? where do downloads go? may the app read the music on the device?)
- * and `wiretune/power` (playback started or stopped).
+ * Answers `wiretune/platform` (is this a television? where do downloads go? may the app read the music on the
+ * device? which app installed this one? install this update) and `wiretune/power` (playback started or stopped).
  *
  * The permission to read audio files is asked for only when the user scans a folder of the phone's own, never at start:
  * a player that streams from its server needs none.
@@ -46,6 +52,8 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                     "isTelevision" -> result.success(isTelevision(context))
                     "musicDirectory" -> result.success(musicDirectory(context))
                     "requestAudioAccess" -> requestAudioAccess(context, result)
+                    "installerPackage" -> result.success(installerPackage(context))
+                    "installUpdate" -> installUpdate(context, call.arguments as? String, result)
                     else -> result.notImplemented()
                 }
             }
@@ -139,6 +147,72 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
             context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)?.absolutePath
         }
 
+    /** The app that installed this one (com.android.vending for Google Play), or null for an APK installed by hand. */
+    private fun installerPackage(context: Context): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+        } else {
+            @Suppress("DEPRECATION") // its replacement, getInstallSourceInfo, is Android 11 and later only
+            context.packageManager.getInstallerPackageName(context.packageName)
+        }
+
+    /**
+     * Hands the APK at [path] to the system's installer, which asks the user first (and, the first time, to allow
+     * Wiretune to install apps). Android only installs it over this app when it is signed with the same key. Answers
+     * once the installer has it; installing ends this process.
+     */
+    private fun installUpdate(context: Context, path: String?, result: MethodChannel.Result) {
+        val apk = path?.let(::File)
+        if (apk == null || !apk.isFile) {
+            result.error("missing", "No update at $path", null)
+            return
+        }
+        try {
+            val installer = context.packageManager.packageInstaller
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+            val sessionId = installer.createSession(params)
+            installer.openSession(sessionId).use { session ->
+                apk.inputStream().use { input ->
+                    session.openWrite("update.apk", 0, apk.length()).use { output ->
+                        input.copyTo(output)
+                        session.fsync(output)
+                    }
+                }
+                listenForInstallStatus(context)
+                val status = Intent(INSTALL_STATUS).setPackage(context.packageName)
+                // The installer adds its status to the intent, so it has to stay mutable.
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                    (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
+                session.commit(PendingIntent.getBroadcast(context, sessionId, status, flags).intentSender)
+            }
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("failed", e.message, null)
+        }
+    }
+
+    /** Shows the installer's confirmation when it asks for one; any other status (done, cancelled, failed) ends it. */
+    private fun listenForInstallStatus(context: Context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(receiverContext: Context, intent: Intent) {
+                val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+                if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+                    @Suppress("DEPRECATION") // the typed getParcelableExtra is Android 13 and later only
+                    val confirm = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT) ?: return
+                    receiverContext.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } else {
+                    receiverContext.applicationContext.unregisterReceiver(this)
+                }
+            }
+        }
+        val filter = IntentFilter(INSTALL_STATUS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+    }
+
     /**
      * The CPU stays awake while music plays, the Wi-Fi radio only while it is [streaming] over the network: a local file
      * or a download leaves the radio free to sleep. The locks are released when playback stops, so they need no timeout.
@@ -174,5 +248,6 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
 
     private companion object {
         const val AUDIO_REQUEST = 0x5754 // "WT"
+        const val INSTALL_STATUS = "com.wiretune.platform.INSTALL_STATUS"
     }
 }

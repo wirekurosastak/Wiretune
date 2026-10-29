@@ -360,6 +360,33 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'AboutSource': ('Forráskód', 'Source code', 'Quellcode'),
   'AboutLicenses': ('Licencek', 'Licenses', 'Lizenzen'),
+  'SettingsUpdateCheck': ('Frissítések keresése', 'Look for updates', 'Nach Updates suchen'),
+  'SettingsUpdateCheckHint': (
+    'Induláskor és naponta egyszer, a GitHubon.',
+    'At start and once a day, on GitHub.',
+    'Beim Start und einmal am Tag, auf GitHub.',
+  ),
+
+  // ── Updates ─────────────────────────────────────────────────────────────────────────────────────────
+  'UpdateAvailable': ('Elérhető a Wiretune {0}', 'Wiretune {0} is available', 'Wiretune {0} ist verfügbar'),
+  'UpdateDownloading': (
+    'A Wiretune {0} letöltése… {1}%',
+    'Downloading Wiretune {0}… {1}%',
+    'Wiretune {0} wird geladen … {1} %',
+  ),
+  'UpdateInstalling': ('A Wiretune {0} telepítése…', 'Installing Wiretune {0}…', 'Wiretune {0} wird installiert …'),
+  'Update': ('Frissítés', 'Update', 'Aktualisieren'),
+  'Later': ('Később', 'Later', 'Später'),
+  'UpdateFailed': (
+    'A frissítés nem települt. A naplóban látszik, miért.',
+    "The update didn't install. The log says why.",
+    'Das Update wurde nicht installiert. Das Protokoll sagt, warum.',
+  ),
+  'UpdateDiskImageOpened': (
+    'A befejezéshez húzd a Wiretune-t az Alkalmazások mappába.',
+    'Drag Wiretune into Applications to finish.',
+    'Zieh Wiretune zum Abschließen in „Programme“.',
+  ),
   'SettingsLanguageHint': ('A felület nyelve.', 'Interface language.', 'Die Sprache der Oberfläche.'),
   'SettingsThemeHint': (
     'Sötét vagy világos megjelenés.',

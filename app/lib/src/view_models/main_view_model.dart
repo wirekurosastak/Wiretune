@@ -12,8 +12,10 @@ import 'downloads_view_model.dart';
 import 'library_view_models.dart';
 import 'lyrics_view_model.dart';
 import 'player_view_model.dart';
+import '../update_installer.dart';
 import 'search_view_model.dart';
 import 'settings_view_models.dart';
+import 'update_view_model.dart';
 
 /// What the device the app runs on can do; decided once at start-up.
 class DeviceCapabilities {
@@ -68,6 +70,9 @@ class MainViewModel extends ChangeNotifier {
     this.capabilities = const DeviceCapabilities(),
     DownloadService? downloadService,
     RemoteClient? remote,
+    UpdateCheck? updateCheck,
+    UpdateInstaller? updateInstaller,
+    Future<void> Function({String? relaunch})? quit,
   }) : _onlineLyrics = onlineLyrics,
        _artistPictures = artistPictures,
        downloadService = downloadService ?? DownloadService(library, session),
@@ -97,6 +102,13 @@ class MainViewModel extends ChangeNotifier {
       requestFolderAccess: capabilities.requestFolderAccess,
     );
     search = SearchViewModel(library, player, () => playlists.allPlaylists);
+    updates = UpdateViewModel(
+      updateCheck,
+      updateInstaller,
+      isOffline: () => session.isOfflineMode,
+      notify: (message, {isError = false}) => showNotice(message, isError: isError),
+      quit: quit ?? ({relaunch}) async {},
+    );
 
     // The full-screen player has nothing to show once nothing is loaded.
     player.addListener(() {
@@ -161,6 +173,7 @@ class MainViewModel extends ChangeNotifier {
   late final AudioSettingsViewModel audioSettings;
   late final ServerSettingsViewModel serverSettings;
   late final SearchViewModel search;
+  late final UpdateViewModel updates;
 
   /// What the app shows the user for a few seconds ([showNotice]).
   final Event<AppNotice> notices = Event<AppNotice>();
@@ -702,6 +715,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _normalizationPreference = 'volume_normalization';
   static const String _gaplessPreference = 'gapless';
   static const String _playerSwipePreference = 'player_swipe';
+  static const String _updateCheckPreference = 'update_check';
 
   bool _isLight = false;
   bool _showPerformanceStats = false;
@@ -720,6 +734,15 @@ class MainViewModel extends ChangeNotifier {
     _showPerformanceStats = value;
     _remember(_performanceStatsPreference, value ? '1' : '0');
     notifyListeners();
+  }
+
+  /// Whether the player looks for a newer release on GitHub, at start and once a day; on by default.
+  bool get checkForUpdates => updates.isEnabled;
+  set checkForUpdates(bool value) {
+    updates.isEnabled = value;
+    _remember(_updateCheckPreference, value ? '1' : '0');
+    notifyListeners();
+    if (value) unawaited(updates.checkNow());
   }
 
   /// Whether a track without lyrics of its own is looked up online (LRCLIB); on by default.
@@ -832,6 +855,7 @@ class MainViewModel extends ChangeNotifier {
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
     lyrics.isOnlineEnabled = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
+    updates.isEnabled = library.getPreference(_updateCheckPreference) != '0'; // on unless turned off
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
     if (normalization != null) audioEngine.setNormalization(normalization);
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
@@ -944,6 +968,7 @@ class MainViewModel extends ChangeNotifier {
     _updateStatusText();
     unawaited(_readLocalFolder());
     _followLocalFolder();
+    updates.start();
 
     if (session.usesServer) await session.connect();
 
@@ -979,6 +1004,7 @@ class MainViewModel extends ChangeNotifier {
     audioSettings.dispose();
     serverSettings.dispose();
     search.dispose();
+    updates.dispose();
     unawaited(audioEngine.dispose());
     remote.dispose();
     downloadService.dispose();

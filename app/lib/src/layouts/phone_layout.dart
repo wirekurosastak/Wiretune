@@ -25,6 +25,7 @@ import '../widgets/devices.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/player_sheet.dart';
+import '../widgets/update_banner.dart';
 
 /// The phone layout: the page (each draws its own header with the search and account buttons) over the ambient
 /// backdrop, and floating over its lower edge the unified pill with the mini player and bottom navigation;
@@ -67,6 +68,7 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
                       children: [
                         _SearchBarSlot(open: vm.isSearchOpen),
                         if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
+                        const UpdateBanner(phone: true, margin: EdgeInsets.fromLTRB(12, 4, 12, 4)),
                         Expanded(
                           child: SizedBox.expand(
                             child: vm.isSearchOpen

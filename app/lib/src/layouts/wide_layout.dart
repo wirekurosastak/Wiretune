@@ -33,6 +33,7 @@ import '../widgets/player_controls.dart';
 import '../widgets/spectrum_visualizer.dart';
 import '../widgets/track_list.dart';
 import '../widgets/tv_focus.dart';
+import '../widgets/update_banner.dart';
 
 /// The desktop, tablet and TV layout: the header (logo, search, the mode pills, account, language, theme and, without a
 /// system title bar, the window buttons), then floating panels over the ambient backdrop: the sidebar, the page and the
@@ -65,6 +66,10 @@ class WideLayout extends StatelessWidget {
                   children: [
                     const TvFocusArea(area: TvArea.header, child: _Header()),
                     if (vm.isServerOfflineBannerVisible) const _OfflineBanner(),
+                    const UpdateBanner(
+                      phone: false,
+                      margin: EdgeInsets.fromLTRB(WideLayout.gap, 0, WideLayout.gap, WideLayout.gap),
+                    ),
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: gap),
