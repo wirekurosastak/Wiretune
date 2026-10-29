@@ -1,0 +1,39 @@
+# The Wiretune server in Docker (docs/server.md#docker):
+#
+#   docker compose up -d          # uses the published image; "docker compose up -d --build" builds it from this folder
+#   docker compose logs           # the setup code, on the first start
+#
+# Change /srv/music to your music folder. The data volume holds the accounts, favorites and playlists: keep it.
+services:
+  wiretune:
+    image: ghcr.io/wirekurosastak/wiretune-server:latest
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5200:5200"
+    volumes:
+      - /srv/music:/music:ro
+      - wiretune-data:/data
+    # More options as WIRETUNE_* variables (docs/server.md#options), for example:
+    # environment:
+    #   WIRETUNE_SCAN_INTERVAL: "0"
+    healthcheck:
+      # The image has no curl: bash opens the port and asks the one route that needs no account. Over HTTPS (--tls-cert),
+      # replace it, or turn it off with "disable: true".
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/5200 &&
+          printf 'GET /api/auth/setup-required HTTP/1.0\r\n\r\n' >&3 &&
+          head -n1 <&3 | grep -q ' 200 '
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  wiretune-data:

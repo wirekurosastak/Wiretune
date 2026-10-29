@@ -1,9 +1,9 @@
 # Running the server
 
 The server is one program. It indexes one music folder (read-only), keeps its own SQLite database, and serves the
-players over the [HTTP API](api.md). It speaks plain HTTP: for access away from home, use
-[Tailscale or HTTPS](#away-from-home). Read [SECURITY.md](../SECURITY.md) before exposing it to a network you don't
-fully trust.
+players over the [HTTP API](api.md). It speaks plain HTTP unless you give it a certificate
+([HTTPS](#https-without-a-proxy)); for access away from home, use [Tailscale or HTTPS](#away-from-home). Read
+[SECURITY.md](../SECURITY.md) before exposing it to a network you don't fully trust.
 
 ## Start it
 
@@ -33,9 +33,13 @@ docker run -d --name wiretune -p 5200:5200 -v /srv/music:/music:ro -v wiretune-d
 docker logs wiretune        # the setup code, on the first start
 ```
 
-Once a release is published, the image is also at `ghcr.io/<owner>/wiretune-server`. Set other options as `WIRETUNE_*`
-variables (`-e WIRETUNE_SCAN_INTERVAL=0`). Keep `/data` on a volume, or every new container starts with an empty
-database.
+Once a release is published, the image is also at `ghcr.io/wirekurosastak/wiretune-server`. Set other options as
+`WIRETUNE_*` variables (`-e WIRETUNE_SCAN_INTERVAL=0`). Keep `/data` on a volume, or every new container starts with an
+empty database.
+
+With Docker Compose, [`docker-compose.yml`](../docker-compose.yml) in the repository root does the same, with a restart
+policy and a health check. Change the music folder in it, then `docker compose up -d` (add `--build` to build the image
+from the checkout instead of pulling it) and `docker compose logs` for the setup code.
 
 ## Running it as a service
 
@@ -109,6 +113,18 @@ proxy.
 Remote control uses a WebSocket (`/api/remote`). Caddy passes it through by default. nginx needs
 `proxy_http_version 1.1;`, `proxy_set_header Upgrade $http_upgrade;` and `proxy_set_header Connection "upgrade";` in
 its `location` block.
+
+### HTTPS without a proxy
+
+If you already have a certificate and its key as PEM files (from Let's Encrypt, for example), the server can serve HTTPS
+itself:
+
+```bash
+wiretune_server --library /srv/music --tls-cert /etc/ssl/fullchain.pem --tls-key /etc/ssl/privkey.pem
+```
+
+Use the full chain, as Let's Encrypt's `fullchain.pem`. The files are read at start, so restart the server after a
+renewal. The players accept only certificates their system trusts: a self-signed one is refused.
 
 ## Accounts
 
@@ -185,6 +201,7 @@ be told apart aren't guessed: their data stays with the old IDs, which no longer
 | `--scan-interval <minutes>` | `30` | Background rescans. `0` turns them off. |
 | `--setup-code <code>` | random | The code for creating the first account. Without it, a new one each start. Case, spaces and dashes are ignored. |
 | `--trust-proxy` | off | Take the client address from `X-Forwarded-For`. Only behind a reverse proxy ([above](#https-with-no-ip-and-caddy)). |
+| `--tls-cert <file>`, `--tls-key <file>` | off | Serve HTTPS with this certificate chain and private key (PEM). Both or neither ([HTTPS](#https-without-a-proxy)). |
 | `--log-level <level>` | `info` | `debug`, `info`, `warn` or `error`. |
 
 ## Troubleshooting

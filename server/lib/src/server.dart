@@ -160,6 +160,9 @@ class WiretuneServer {
     WiretuneLog.info('Server', '=== Starting the Wiretune server ${WiretuneInfo.version} ===');
     WiretuneLog.info('Server', '${WiretuneInfo.copyright}. GNU AGPL v3, source: ${WiretuneInfo.sourceUrl}');
 
+    // Before anything is opened: a certificate that can't be used stops the start with its own message.
+    final tls = options.securityContext();
+
     final database = DatabaseManager(p.join(dataDirectory, 'wiretune-server.db'));
     database.initializeSchema();
     final repository = LibraryRepository(database);
@@ -210,11 +213,11 @@ class WiretuneServer {
     scanner.onScanned = server._scanned;
     library.onTracksMoved = server._tracksMoved;
 
-    final http = server._http = await shelf_io.serve(server.handler, options.host, options.port);
+    final http = server._http = await shelf_io.serve(server.handler, options.host, options.port, securityContext: tls);
     http.autoCompress = false; // JSON is compressed by the handler, audio never
     http.idleTimeout = const Duration(seconds: 120);
     final host = options.host.contains(':') ? '[${options.host}]' : options.host;
-    WiretuneLog.info('Server', 'Listening on http://$host:${http.port}');
+    WiretuneLog.info('Server', 'Listening on http${tls == null ? '' : 's'}://$host:${http.port}');
     scanner.start();
     return server;
   }

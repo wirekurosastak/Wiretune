@@ -30,8 +30,9 @@ Pictures and lyrics are cached in the player's data folder.
 
 ## Server
 
-- **Plain HTTP.** Passwords and tokens are sent unencrypted. Keep the port on your LAN. From outside, use Tailscale or
-  an HTTPS proxy ([how](docs/server.md#away-from-home)). Never expose the port to the internet.
+- **Plain HTTP unless you give the server a certificate** (`--tls-cert`, `--tls-key`). Passwords and tokens are sent
+  unencrypted over HTTP. Keep the port on your LAN. From outside, use Tailscale, HTTPS or an HTTPS proxy
+  ([how](docs/server.md#away-from-home)). Never expose a plain HTTP port to the internet.
 - **The database** (`wiretune-server.db`) holds the token-signing key and the password hashes. Whoever can read it can
   create tokens. On Linux, a data folder the server creates itself is private to its user. A folder you created keeps
   your permissions.

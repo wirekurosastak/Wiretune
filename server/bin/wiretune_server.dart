@@ -45,6 +45,12 @@ Future<void> main(List<String> args) async {
     stderr.writeln(e.message);
     exitCode = 1;
     return;
+  } on TlsException catch (e) {
+    stderr.writeln(
+      'Cannot use the certificate or key: ${e.message}${e.osError == null ? '' : ' (${e.osError!.message})'}',
+    );
+    exitCode = 1;
+    return;
   } on SocketException catch (e) {
     stderr.writeln('Cannot listen on ${options.host}:${options.port}: ${e.osError?.message ?? e.message}');
     exitCode = 1;

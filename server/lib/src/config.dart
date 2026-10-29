@@ -18,6 +18,8 @@ class ServerOptions {
     this.scanIntervalMinutes = 30,
     this.setupCode,
     this.trustProxy = false,
+    this.tlsCertificate,
+    this.tlsKey,
     this.logLevel = LogLevel.info,
   });
 
@@ -42,6 +44,11 @@ class ServerOptions {
   /// Whether the client's address comes from `X-Forwarded-For`: only behind a reverse proxy.
   final bool trustProxy;
 
+  /// The PEM files of the certificate (with its chain) and the private key: the server then speaks HTTPS itself. Both or
+  /// neither; null: plain HTTP, for a reverse proxy or a network you trust.
+  final String? tlsCertificate;
+  final String? tlsKey;
+
   final LogLevel logLevel;
 
   static final ArgParser parser = ArgParser(usageLineLength: 120)
@@ -60,6 +67,12 @@ class ServerOptions {
       help: 'The code for creating the first account. Default: a random one.',
     )
     ..addFlag('trust-proxy', negatable: false, help: 'Take the client address from X-Forwarded-For (behind a proxy).')
+    ..addOption(
+      'tls-cert',
+      valueHelp: 'file',
+      help: 'The certificate (PEM, with its chain): serve HTTPS. Needs --tls-key.',
+    )
+    ..addOption('tls-key', valueHelp: 'file', help: 'The private key (PEM) of the certificate.')
     ..addOption('log-level', valueHelp: 'level', defaultsTo: 'info', help: 'debug, info, warn or error.')
     ..addFlag('version', negatable: false, help: 'Show the version.')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.');
@@ -84,6 +97,17 @@ class ServerOptions {
       return parsed;
     }
 
+    final certificate = text('tls-cert');
+    final key = text('tls-key');
+    if ((certificate == null) != (key == null)) {
+      throw const FormatException('--tls-cert (WIRETUNE_TLS_CERT) and --tls-key (WIRETUNE_TLS_KEY) go together.');
+    }
+    for (final (name, path) in [('tls-cert', certificate), ('tls-key', key)]) {
+      if (path != null && !File(path).existsSync()) {
+        throw FormatException('--$name (${variable(name)}): there is no file "$path".');
+      }
+    }
+
     final level = text('log-level')!;
     return ServerOptions(
       musicFolder: text('library'),
@@ -93,10 +117,22 @@ class ServerOptions {
       scanIntervalMinutes: number('scan-interval', 60 * 24 * 365),
       setupCode: text('setup-code'),
       trustProxy: results.flag('trust-proxy') || const {'1', 'true', 'yes'}.contains(fromEnv('trust-proxy')),
+      tlsCertificate: certificate,
+      tlsKey: key,
       logLevel:
           LogLevel.values.asNameMap()[level.toLowerCase()] ??
           (throw FormatException('--log-level (WIRETUNE_LOG_LEVEL) must be debug, info, warn or error, not "$level".')),
     );
+  }
+
+  /// The HTTPS settings, or null for plain HTTP. Throws [TlsException] for a certificate or key that can't be used.
+  SecurityContext? securityContext() {
+    final certificate = tlsCertificate;
+    final key = tlsKey;
+    if (certificate == null || key == null) return null;
+    return SecurityContext()
+      ..useCertificateChain(certificate)
+      ..usePrivateKey(key);
   }
 
   /// The music folder to scan: [musicFolder] made absolute, or the user's music folder when none was given. A folder

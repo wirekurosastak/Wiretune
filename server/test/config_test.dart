@@ -54,4 +54,20 @@ void main() {
     expect(() => parse(['--log-level', 'loud']), throwsFormatException);
     expect(() => parse(['--colour']), throwsFormatException);
   });
+
+  test('the certificate and the key go together, and must exist', () {
+    expect(() => parse(['--tls-cert', '/etc/ssl/a.pem']), throwsA(isA<FormatException>()));
+    expect(() => parse([], {'WIRETUNE_TLS_KEY': '/etc/ssl/a.key'}), throwsA(isA<FormatException>()));
+    expect(
+      () => parse(['--tls-cert', '/nonexistent/a.pem', '--tls-key', '/nonexistent/a.key']),
+      throwsA(
+        isA<FormatException>().having(
+          (e) => e.message,
+          'message',
+          allOf(contains('--tls-cert'), contains('/nonexistent/a.pem')),
+        ),
+      ),
+    );
+    expect(parse([]).securityContext(), isNull);
+  });
 }
