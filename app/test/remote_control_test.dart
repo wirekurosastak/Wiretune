@@ -191,9 +191,10 @@ void main() {
     hub.command('desk', const RemoteCommand(RemoteAction.pause));
     await pumpEventQueue();
     expect(driver.state, PlaybackState.paused);
+    player.toggleMute();
     hub.command('desk', const RemoteCommand(RemoteAction.volume, volume: 40));
     await pumpEventQueue();
-    expect((player.volume, driver.volume), (40.0, 0.4));
+    expect((player.volume, player.isMuted, driver.volume), (40.0, false, 0.4), reason: 'a volume set unmutes');
     hub.command(
       'desk',
       const RemoteCommand(

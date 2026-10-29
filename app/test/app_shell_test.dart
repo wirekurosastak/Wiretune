@@ -2007,6 +2007,16 @@ void main() {
     await tester.pump();
     expect(player.isMuted, isFalse);
 
+    // Muted, the slider still moves, and unmutes.
+    await mouse.down(tester.getCenter(speaker));
+    await mouse.up();
+    await tester.pump();
+    expect(player.isMuted, isTrue);
+    await tester.tapAt(upright.center);
+    await tester.pump();
+    expect(player.isMuted, isFalse);
+    expect(player.volume, closeTo(50, 5));
+
     // The mouse away: the slider stays a moment, for the way between the two, then goes.
     await mouse.moveTo(away);
     await tester.pump();

@@ -367,7 +367,20 @@ void main() {
       player.toggleMute();
       expect(player.isVolumeDisabledOrMuted, isTrue);
       expect(driver.volume, 0);
+      player.setVolume(30); // the slider moved while muted unmutes
+      expect(player.isMuted, isFalse);
+      expect(driver.volume, closeTo(0.3, 0.001));
+      player.settleVolume();
+      player.setVolume(0); // the slider down to 0 is muted, and unmuting brings back where it rested
+      player.settleVolume();
+      expect(player.isMuted, isTrue);
       player.toggleMute();
+      expect((player.isMuted, player.volume), (false, 30.0));
+      player
+        ..stepVolume(-30)
+        ..toggleMute();
+      expect(player.volume, 30, reason: 'a step is a rest too, and 0 is none');
+      player.setVolume(40);
 
       await player.toggleBitPerfect();
       expect(player.isVolumeLocked, isTrue);

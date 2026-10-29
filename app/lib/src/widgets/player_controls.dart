@@ -442,7 +442,7 @@ class VolumeControl extends StatelessWidget {
   }
 }
 
-/// The speaker: muted, quiet or loud, in the accent while the volume can be changed.
+/// The speaker: muted, quiet or loud, in the accent unless muted or locked.
 Icon _volumeIcon(PlayerViewModel player, WiretuneColors colors, {String? semanticLabel}) => Icon(
   player.isMuted
       ? Icons.volume_off_rounded
@@ -451,12 +451,13 @@ Icon _volumeIcon(PlayerViewModel player, WiretuneColors colors, {String? semanti
   semanticLabel: semanticLabel,
 );
 
-/// The volume's slider: at 100 % and still while it is locked, at 0 and grey while muted.
+/// The volume's slider: at 100 % and still while it is locked, at 0 and grey while muted, which moving it ends.
 Slider _volumeSlider(PlayerViewModel player, WiretuneColors colors) => Slider(
   activeColor: player.isMuted ? colors.textMuted : null,
   value: player.isVolumeLocked ? 100 : (player.isMuted ? 0 : player.volume),
   max: 100,
-  onChanged: player.isVolumeDisabledOrMuted ? null : player.setVolume,
+  onChanged: player.isVolumeLocked ? null : player.setVolume,
+  onChangeEnd: (_) => player.settleVolume(),
 );
 
 /// A computer's volume, as in Tidal's player: the speaker, which mutes and unmutes on a click, and above it, while the
@@ -506,16 +507,11 @@ class _VolumeButtonState extends State<VolumeButton> {
     }
   }
 
-  void _nudge(double by) {
-    final player = context.vm.player;
-    if (!player.isVolumeDisabledOrMuted) player.setVolume(player.volume + by);
-  }
-
   void _scroll(PointerSignalEvent event) {
     if (event is! PointerScrollEvent || event.scrollDelta.dy == 0) return;
     GestureBinding.instance.pointerSignalResolver.register(
       event,
-      (event) => _nudge((event as PointerScrollEvent).scrollDelta.dy < 0 ? _step : -_step),
+      (event) => context.vm.player.stepVolume((event as PointerScrollEvent).scrollDelta.dy < 0 ? _step : -_step),
     );
   }
 
@@ -540,8 +536,8 @@ class _VolumeButtonState extends State<VolumeButton> {
           onExit: (_) => _update(hovered: false),
           child: CallbackShortcuts(
             bindings: {
-              const SingleActivator(LogicalKeyboardKey.arrowUp): () => _nudge(_step),
-              const SingleActivator(LogicalKeyboardKey.arrowDown): () => _nudge(-_step),
+              const SingleActivator(LogicalKeyboardKey.arrowUp): () => context.vm.player.stepVolume(_step),
+              const SingleActivator(LogicalKeyboardKey.arrowDown): () => context.vm.player.stepVolume(-_step),
             },
             child: Focus(
               canRequestFocus: false,

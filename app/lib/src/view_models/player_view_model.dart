@@ -90,6 +90,9 @@ class PlayerViewModel extends ChangeNotifier {
   Duration _startAt = Duration.zero;
   double _volume = 100;
   bool _muted = false;
+
+  /// The level the speaker unmutes 0 % to: the last one the volume came to rest at above 0.
+  double _restingVolume = 100;
   bool _shuffle = false;
   RepeatMode _repeat = RepeatMode.off;
   List<Track> _queueTracks = const [];
@@ -137,7 +140,9 @@ class PlayerViewModel extends ChangeNotifier {
   double get durationSeconds => duration.inMicroseconds / 1e6;
 
   double get volume => isRemote ? (_remoteVolume ?? _remoteState?.volume ?? 100) : _volume;
-  bool get isMuted => isRemote ? (_remoteState?.muted ?? false) : _muted;
+
+  /// Muted, or at 0 %.
+  bool get isMuted => (isRemote ? (_remoteState?.muted ?? false) : _muted) || (volume == 0 && !isVolumeLocked);
   bool get isShuffle => isRemote ? (_remoteState?.shuffle ?? false) : _shuffle;
   RepeatMode get repeatMode => isRemote ? (_remoteState?.repeat ?? RepeatMode.off) : _repeat;
 
@@ -728,13 +733,31 @@ class PlayerViewModel extends ChangeNotifier {
     _setVolumeLocal(level);
   }
 
+  /// A volume set, by the slider or another device, unmutes.
   void _setVolumeLocal(double value) {
     _volume = value.clamp(0, 100);
     if (!isBitPerfect) _engine.setVolume(_volume / 100.0);
+    _setMutedLocal(false);
     notifyListeners();
   }
 
+  /// Turns the volume by [by], as a key or the mouse's wheel does.
+  void stepVolume(double by) {
+    if (isVolumeLocked) return;
+    setVolume(volume + by);
+    settleVolume();
+  }
+
+  /// The volume at rest (the slider let go, a step taken): above 0, it is the level unmuting 0 % brings back.
+  void settleVolume() {
+    if (volume > 0) _restingVolume = volume;
+  }
+
   void toggleMute() {
+    if (volume == 0 && !isVolumeLocked) {
+      setVolume(_restingVolume);
+      return;
+    }
     if (isRemote) {
       if (!isVolumeLocked) _sendRemote(RemoteCommand(RemoteAction.mute, on: !isMuted));
       return;

@@ -499,8 +499,7 @@ class _PlayerAction extends Action<_PlayerIntent> {
         final target = player.position.value + step;
         player.seekTo(target > player.duration ? player.duration : target);
       case _PlayerKey.louder || _PlayerKey.quieter:
-        if (player.isVolumeLocked) return;
-        player.setVolume(player.volume + (intent.key == _PlayerKey.louder ? _volumeStep : -_volumeStep));
+        player.stepVolume(intent.key == _PlayerKey.louder ? _volumeStep : -_volumeStep);
     }
   }
 }
