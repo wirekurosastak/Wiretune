@@ -40,10 +40,11 @@ flutter:
   assets:
     - assets/
 
-# `dart run flutter_launcher_icons` regenerates the icons of every platform from the logo but Tizen's, which is the logo at
-# 512 px: `magick assets/wiretune.png -resize 512x512 -strip tizen/shared/res/ic_launcher.png`. On Android the whole logo
-# is the adaptive icon's background layer (its dark edge is what the launcher's mask trims; the W stays inside the safe
-# zone).
+# `dart run flutter_launcher_icons` regenerates the icons of every platform from the logo but two: Tizen's, the logo
+# at 512 px (`magick assets/wiretune.png -resize 512x512 -strip tizen/shared/res/ic_launcher.png`), and the Linux
+# menu's, at 256 px (`magick assets/wiretune.png -resize 256x256 -strip linux/packaging/com.wiretune.player.png`). On
+# Android the whole logo is the adaptive icon's background layer (its dark edge is what the launcher's mask trims; the W
+# stays inside the safe zone).
 flutter_launcher_icons:
   image_path: assets/wiretune.png
   android: true
