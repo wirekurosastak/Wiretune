@@ -9,4 +9,4 @@ dart pub get
 dart test        # tests that read audio files need ffmpeg; without it they're skipped
 ```
 
-Code layout: [docs/development.md](../../docs/development.md#where-is-what).
+Code layout: [docs/development.md](../../docs/development.md#the-code).

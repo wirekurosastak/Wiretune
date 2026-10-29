@@ -3,6 +3,18 @@
 Run `dart tool/build.dart <target>…` from the repository root. Each target's output goes to `dist/<target>/` and
 replaces the previous build. Copy output folders whole: the programs load their libraries from next to them.
 
+| Target | Builds | Build it on |
+|---|---|---|
+| [`server`](#server) | The server | Linux, Windows or macOS, for that system |
+| [`linux`, `linux-deb`, `linux-rpm`](#linux-player) | The Linux player: a folder, or a package | Linux |
+| [`windows`, `windows-installer`](#windows-player) | The Windows player: a folder, or an installer | Windows |
+| [`macos`](#macos-player) | The macOS player and its disk image | macOS |
+| [`android`](#android-player-phone-tablet-tv-car) | The Android player | Any |
+| [`ios`](#iphone-and-ipad-player) | The iPhone and iPad player | macOS |
+| [`tizen`](#samsung-tv-player-tizen) | The Samsung TV player | Any, with the Tizen SDK |
+
+Publishing a release: [releasing.md](releasing.md).
+
 ## Flutter
 
 All targets need Flutter 3.47 or newer (it includes Dart). On Linux and macOS (with zsh, use `~/.zshrc`):
@@ -159,38 +171,6 @@ Output: `dist/tizen/*.tpk`, for Tizen 6.0 and later (2021 TVs onward). To instal
    DUID).
 2. Turn on developer mode on the TV: open *Apps*, type 12345 on the remote, and enter your computer's IP address.
 3. Run `sdb connect <tv-ip>`, then `flutter-tizen install` in `app/`.
-
-The TV player has only been tried briefly, and remote navigation is still slow
-([details](development.md#what-has-actually-been-tried)).
-
-## Releases
-
-The release workflow hasn't run yet. Its Windows installer and macOS signing, disk image and notarization steps are
-untested (they need Windows and macOS runners).
-
-The version is kept in `WiretuneInfo.version` (`packages/wiretune_core/lib/src/about.dart`), in every `pubspec.yaml`
-(the build number is Android's version code) and in `app/tizen/tizen-manifest.xml`. A test fails if they differ.
-
-Pushing a tag `v<version>` (the pubspec version without the build number: `v1.0.2026` for `1.0.2026+1`) runs
-`.github/workflows/release.yml`. It checks that the tag, pubspec and Tizen manifest match, then builds:
-
-- the server for Linux (x64, arm64), Windows and macOS, plus a container image for both processors
-  (`ghcr.io/<owner>/wiretune-server`)
-- the players for Linux (`.deb`, `.rpm`, and a `.tar.gz` with `install.sh`), Windows (installer and portable zip),
-  macOS (disk image) and Android (APKs)
-
-The result is a draft release with a `SHA256SUMS.txt`, for you to review and publish. iOS and Tizen aren't included.
-
-The players update from the latest published release. They find their file by name and check it against
-`SHA256SUMS.txt` (`app/lib/src/update_installer.dart`), so renaming a release file breaks updates to it.
-
-The workflow needs these secrets:
-
-| Secret | For |
-|---|---|
-| `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` | Signing Android packages: the keystore in Base64 and the `key.properties` values. Required: a release is never signed with the debug key |
-| `MACOS_CERTIFICATE_P12_BASE64`, `MACOS_CERTIFICATE_PASSWORD` | A *Developer ID Application* certificate and key, exported as `.p12`, in Base64. Without it the app is ad-hoc signed |
-| `NOTARY_APPLE_ID`, `NOTARY_TEAM_ID`, `NOTARY_PASSWORD` | Notarizing the disk image, with an app-specific password for the Apple ID. Needs the certificate too |
 
 ## Starting clean
 

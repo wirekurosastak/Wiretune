@@ -11,7 +11,7 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
   and no other token type is accepted in a URL, because URLs end up in logs. Downloads use the sign-in token in the
   header.
 - Roles: **anonymous**, **user**, **admin**. Bodies are limited to 64 KiB (playlists 4 MiB), above that `413`. Password
-  rules, token lifetimes and the rate limit: [server.md](server.md#accounts).
+  rules: [server.md](server.md#accounts). Token lifetimes and the rate limit: [SECURITY.md](../SECURITY.md#server).
 
 ## Authentication
 

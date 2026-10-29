@@ -2,7 +2,7 @@ name: Release
 
 # A tag v<version> (the version: line of app/pubspec.yaml without its build number: v1.0.2026 for 1.0.2026+1) builds
 # everything that ships, signed where the secrets allow, and leaves it in a draft GitHub release to read over and
-# publish. docs/building.md#releases lists the secrets.
+# publish. docs/releasing.md lists the secrets.
 on:
   push:
     tags: ['v*']
@@ -164,7 +164,7 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      # Without the secrets the app keeps the build's ad-hoc signature (docs/building.md#macos).
+      # Without the secrets the app keeps the build's ad-hoc signature (docs/building.md#signing-and-notarization).
       - name: Signing certificate
         if: env.MACOS_CERTIFICATE != ''
         run: |
@@ -219,7 +219,7 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          [ -n "$ANDROID_KEYSTORE" ] || { echo "The ANDROID_KEYSTORE_BASE64 secret is missing (docs/building.md#releases)."; exit 1; }
+          [ -n "$ANDROID_KEYSTORE" ] || { echo "The ANDROID_KEYSTORE_BASE64 secret is missing (docs/releasing.md#secrets)."; exit 1; }
           echo "$ANDROID_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/upload.jks"
           printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$RUNNER_TEMP/upload.jks" "$STORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > app/android/key.properties

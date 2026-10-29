@@ -38,7 +38,7 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 | Spectrum analyzer | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | No | No | No | No | No |
 | System media controls | MPRIS | Media keys, while focused | Media keys, Now Playing | Notification, lock screen | Remote | The car | Lock screen, Control Center | Remote, in the app |
 | Run the server | Yes | Yes | Yes | — | — | — | — | — |
-| [Tried on real hardware](docs/development.md#what-has-actually-been-tried) | Yes | Yes | No | Phone | No | No | No | Briefly |
+| [Tried on real hardware](docs/development.md#what-has-been-tried) | Yes | Yes | No | Phone | No | No | No | Briefly |
 
 Bit-perfect sets up an untouched path to the DAC. It doesn't measure what arrives
 ([audio.md](docs/audio.md#bit-perfect)). Samsung TVs use their own decoder, so some formats may not play
@@ -60,12 +60,15 @@ In the player, connect to the server and create the first account with the setup
 
 ## Documentation
 
-- [User guide](docs/user-guide.md): using the player, the library, file locations, troubleshooting.
-- [Server](docs/server.md): Docker, systemd, remote access, accounts, backups, options.
-- [Audio](docs/audio.md): output modes and what's untested.
-- [Security](SECURITY.md): what's protected, what isn't, how to report a problem.
-- For contributors: [building](docs/building.md), [development](docs/development.md),
-  [contributing](CONTRIBUTING.md), [HTTP API](docs/api.md).
+| To | Read |
+|---|---|
+| Build the server and the players | [Building](docs/building.md) |
+| Run the server: Docker, systemd, access away from home, accounts, backups | [Server](docs/server.md) |
+| Use the player | [User guide](docs/user-guide.md) |
+| Set up exclusive or bit-perfect output | [Audio](docs/audio.md) |
+| See what leaves your network, or report a security problem | [Security](SECURITY.md) |
+| Change the code | [Development](docs/development.md), [Contributing](CONTRIBUTING.md), [HTTP API](docs/api.md) |
+| Publish a release | [Releasing](docs/releasing.md) |
 
 ## Credits
 

@@ -1,49 +1,56 @@
 # Development
 
-## Running from source
+For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](../CONTRIBUTING.md).
 
-```bash
-cd server && dart run bin/wiretune_server.dart --library /path/to/music --data-dir /tmp/wt-dev-server   # one terminal
-cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux       # another; or -d windows, -d macos, a phone
-```
+## The code
 
-`--data-dir` and `WIRETUNE_DATA_DIR` use throw-away data folders, so your real Wiretune data stays untouched.
+| Folder | What it is |
+|---|---|
+| `packages/wiretune_core/` | Pure Dart, shared by the server and every player |
+| `server/` | The server: the core library with HTTP routes, accounts and per-account data on top |
+| `app/` | The Flutter player for every platform |
+| `packages/wiretune_platform/` | The player's Android code, as a Flutter plugin |
+| `tool/build.dart` | Builds every target into `dist/` ([building.md](building.md)) |
 
-### On a phone, TV or car
+### `packages/wiretune_core/lib/src/`
 
-**Android:** run `flutter run -d <device>` in `app/`, for a phone with USB debugging, an emulator, or a TV after
-`adb connect <tv-ip>`.
+| | |
+|---|---|
+| `models/` | Formats (`audio_format.dart`), the library's records, the server's records and error codes (`protocol.dart`), remote-control messages (`remote.dart`) |
+| `data/` | SQLite: `DatabaseManager` (schema and upgrades), `LibraryRepository` |
+| `metadata/` | The tag reader (`tag_reader.dart`) for every format |
+| `services/` | `LibraryService` (the library and user data), the scanner, `server_client.dart` and `ServerSession` (connecting, signing in), remote control, downloads, online lyrics, artist pictures, the update check, the log |
+| `audio/` | `WiretuneAudioEngine` (the playback state), the spectrum analyzer |
+| `localization/strings.dart` | Every interface text ([how](#texts-and-languages)) |
 
-**Android Auto without a car:**
+`lib/testing.dart` has the test doubles every package's tests use.
 
-1. Install the *Android Auto Desktop Head Unit Emulator* (Android Studio → SDK Manager → *SDK Tools*).
-2. On the phone, tap the version number in Android Auto's settings ten times to enable developer mode, allow *Unknown
-   sources* and choose *Start head unit server*.
-3. Run `adb forward tcp:5277 tcp:5277` and `$ANDROID_HOME/extras/google/auto/desktop-head-unit`.
+### `server/lib/src/`
 
-**Samsung TV:** run `sdb connect <tv-ip>`, then `flutter-tizen run -d <tv-ip>:26101` in `app/`
-([preparing the TV](building.md#samsung-tv-player-tizen)).
+| | |
+|---|---|
+| `server.dart` | The route table |
+| `auth_service.dart`, `jwt.dart`, `setup_code.dart` | Accounts, tokens, the setup code |
+| `user_data_service.dart` | Favorites, play counts, playlists, hidden items |
+| `library_scan_service.dart` | Scanning and watching the music folder |
+| `remote_hub.dart` | Passing remote-control messages between the players of an account |
+| `config.dart` | The options |
 
-## Where is what
+### `app/lib/src/`
 
-- `packages/wiretune_core/`: pure Dart, shared by the server and every player. In `lib/src/`:
-  - `models/`: formats (`audio_format.dart`), the server's records and error codes (`protocol.dart`)
-  - `data/`: `DatabaseManager`, `LibraryRepository`
-  - `metadata/`: the tag reader (`tag_reader.dart`)
-  - `services/`: `LibraryService`, the scanner, `server_client.dart`, `ServerSession`, remote control, downloads, the
-    update check (`update_check.dart`)
-  - `audio/`: `WiretuneAudioEngine`, the spectrum analyzer
-  - `localization/strings.dart`, `util/`
+`app/lib/main.dart` starts the player.
 
-  `lib/testing.dart` has the test doubles shared by every package's tests.
-- `server/lib/src/`: `server.dart` (the route table), `auth_service.dart`, `user_data_service.dart`,
-  `library_scan_service.dart`, `remote_hub.dart`, `config.dart` (the options).
-- `app/lib/main.dart` starts the player. In `app/lib/src/`: `view_models/` (`MainViewModel` and one view model per
-  area), `layouts/` (wide and phone), `pages/`, `widgets/`, `theme/`, `audio/` (`MediaKitAudioDriver`,
-  `TizenAudioDriver`, the media session), `debug/` (UI automation), `update_installer.dart` (installing an update on
-  each platform).
-- `packages/wiretune_platform/`: the Android code, as a Flutter plugin.
-- `tool/build.dart`: release builds for every target.
+| | |
+|---|---|
+| `view_models/` | What the player shows and does: `MainViewModel` (navigation, settings), `PlayerViewModel` (the queue, playback, remote control), one view model per area |
+| `layouts/` | The wide and the phone layout |
+| `pages/` | The pages |
+| `widgets/` | Parts shared by the pages: cards and tiles, track lists, the ⋮ menus, page headers, player controls |
+| `audio/` | `MediaKitAudioDriver` (libmpv), `TizenAudioDriver`, the media session |
+| `theme/` | Colors |
+| `debug/` | [UI automation](#ui-automation) |
+| `update_installer.dart` | Installing an update on each platform |
+| `platform.dart` | The [platform channels](#platform-code) |
 
 ### How it fits together
 
@@ -60,12 +67,31 @@ cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux       # another; or
   `ChangeNotifier`s passed down by `AppScope` (`context.vm`).
 - **The database** is SQLite in WAL mode with one synchronous connection. The schema version is in
   `PRAGMA user_version`: older databases are upgraded in place, newer ones are refused.
+- **The player and the server** talk over the [HTTP API](api.md).
+
+## Running from source
+
+```bash
+cd server && dart run bin/wiretune_server.dart --library /path/to/music --data-dir /tmp/wt-dev-server   # one terminal
+cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux       # another; or -d windows, -d macos, a phone
+```
+
+`--data-dir` and `WIRETUNE_DATA_DIR` use throw-away data folders, so your real Wiretune data stays untouched.
+
+- **Android:** run `flutter run -d <device>` in `app/`, for a phone with USB debugging, an emulator, or a TV after
+  `adb connect <tv-ip>`.
+- **Samsung TV:** run `sdb connect <tv-ip>`, then `flutter-tizen run -d <tv-ip>:26101` in `app/`
+  ([preparing the TV](building.md#samsung-tv-player-tizen)).
+- **Android Auto without a car:**
+  1. Install the *Android Auto Desktop Head Unit Emulator* (Android Studio → SDK Manager → *SDK Tools*).
+  2. On the phone, tap the version number in Android Auto's settings ten times to enable developer mode, allow
+     *Unknown sources* and choose *Start head unit server*.
+  3. Run `adb forward tcp:5277 tcp:5277` and `$ANDROID_HOME/extras/google/auto/desktop-head-unit`.
 
 ## Tests
 
 Each package has its own tests: `dart test` in `packages/wiretune_core/` and `server/`, `flutter test` in `app/`. Run
-one file with `dart test test/remote_test.dart`, or filter by name with `--name <pattern>`. The full pre-push checks are
-in [CONTRIBUTING.md](../CONTRIBUTING.md#pull-requests).
+one file with `dart test test/remote_test.dart`, or filter by name with `--name <pattern>`.
 
 - Server tests start a real server per test, over a generated music folder.
 - Core tests use real SQLite and files encoded with `ffmpeg`.
@@ -114,7 +140,7 @@ development machine with a throw-away data folder ([SECURITY.md](../SECURITY.md#
   to report a TV. The TV can't load the SQLite library the sqlite3 package downloads for Linux on ARM, so
   `tool/build.dart` switches the Tizen build to the TV's own SQLite and restores `app/pubspec.yaml` afterwards.
 
-## Extending
+## Common changes
 
 ### An HTTP endpoint
 
@@ -148,7 +174,7 @@ All interface text is in `packages/wiretune_core/lib/src/localization/strings.da
 A fourth language is a code change: extend the record and fill in every key, add the constant, a `languages` entry and
 the case in `Localizer.lookup`, and update the tests.
 
-### A view or a setting
+### A section or a setting
 
 - A new section starts with an `AppSection` value. The compiler then points to the switches that need its page, icon,
   accent and place in `navVisualOrder`.
@@ -172,9 +198,9 @@ icons are made by hand; the commands are in `app/pubspec.yaml`.
 - builds the server, the APKs, the desktop players, the Linux packages and an unsigned iOS app through
   `tool/build.dart`, and keeps `dist/server` and the APKs as artifacts
 
-It doesn't build Tizen and runs nothing on a device.
+It doesn't build Tizen and runs nothing on a device. Releases: [releasing.md](releasing.md).
 
-## What has actually been tried
+## What has been tried
 
 | Area | What has been tried |
 |---|---|
