@@ -111,11 +111,13 @@ jobs:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
-      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev
-      - run: dart tool/build.dart linux
+      # rpm brings rpmbuild; dpkg-deb comes with the runner.
+      - run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev rpm
+      - run: dart tool/build.dart linux-deb linux-rpm
       - run: |
           name=wiretune-${{ needs.version.outputs.version }}-linux-x64
           mkdir -p out && mv dist/linux "dist/$name" && tar -czf "out/$name.tar.gz" -C dist "$name"
+          cp dist/linux-deb/*.deb dist/linux-rpm/*.rpm out/
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux

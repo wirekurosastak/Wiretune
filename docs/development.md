@@ -155,9 +155,9 @@ The app icons are generated from `app/assets/wiretune.png`: run `dart run flutte
 ## CI
 
 `.github/workflows/ci.yml` checks the formatting, analyzes every package and `tool/` with `--fatal-infos`, runs every
-test with `ffmpeg` installed, and builds the server, the APKs, the desktop players and an unsigned iOS app through
-`tool/build.dart`, keeping `dist/server` and the APKs as artifacts. It doesn't build Tizen, and it runs nothing on a
-device.
+test with `ffmpeg` installed, and builds the server, the APKs, the desktop players, the Linux packages and an unsigned
+iOS app through `tool/build.dart`, keeping `dist/server` and the APKs as artifacts. It doesn't build Tizen, and it runs
+nothing on a device.
 
 ## What has actually been tried
 

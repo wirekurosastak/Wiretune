@@ -31,16 +31,28 @@ machine that runs it doesn't need Dart. To build a container image instead, see 
 ## Linux player
 
 ```bash
-sudo dnf install git clang cmake ninja-build gtk3-devel xz-devel mpv-devel ffmpeg-free                # Fedora
-sudo apt install git clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev ffmpeg  # Debian, Ubuntu
-sudo pacman -S --needed git clang cmake ninja pkgconf gtk3 xz mpv ffmpeg                            # Arch
+sudo dnf install git clang cmake ninja-build gtk3-devel xz-devel mpv-devel ffmpeg-free rpm-build dpkg     # Fedora
+sudo apt install git clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libmpv-dev ffmpeg rpm   # Debian, Ubuntu
+sudo pacman -S --needed git clang cmake ninja pkgconf gtk3 xz mpv ffmpeg rpm-tools dpkg                   # Arch
 
-dart tool/build.dart linux
+dart tool/build.dart linux          # or linux-deb, linux-rpm
 ```
 
-The build produces `dist/linux/wiretune` with its `lib/` and `data/` folders, for x64, or arm64 when built on an ARM
-machine. A machine that only runs the player needs libmpv ([package names](user-guide.md#troubleshooting)), and
+`linux` builds `dist/linux/wiretune` with its `lib/` and `data/` folders, for x64, or arm64 when built on an ARM
+machine. Its `install.sh` puts it in your menu (`sudo PREFIX=/usr/local ./install.sh` for everyone, `--uninstall` to
+take it out). A machine that only runs the player needs libmpv ([package names](user-guide.md#troubleshooting)), and
 `ffmpeg` for the spectrum analyzer.
+
+`linux-deb` and `linux-rpm` build it as a package instead (rpm and dpkg are only needed for those), which installs
+libmpv and everything else it needs along with it:
+
+```bash
+sudo apt install ./dist/linux-deb/wiretune_*.deb      # Debian, Ubuntu
+sudo dnf install ./dist/linux-rpm/wiretune-*.rpm      # Fedora
+```
+
+A package installs on systems with at least the GLib of the machine that built it. The release's packages, built on
+Ubuntu 24.04, need Ubuntu 24.04, Debian 13 or Fedora 40 or later.
 
 If you move or rename the repository, CMake stops with *The current CMakeCache.txt directory … is different*. Delete
 `app/build/linux` and build again.
@@ -166,7 +178,8 @@ then builds:
 
 - the server for Linux (x64 and arm64), Windows and macOS, and its container image for both processors
   (`ghcr.io/<owner>/wiretune-server`);
-- the players for Linux, Windows (installer and portable zip), macOS (disk image) and Android (APKs and App Bundle).
+- the players for Linux (`.deb`, `.rpm` and a `.tar.gz` with `install.sh`), Windows (installer and portable zip),
+  macOS (disk image) and Android (APKs and App Bundle).
 
 It leaves them, with a `SHA256SUMS.txt`, in a draft release for you to review and publish. iOS and Tizen aren't part of
 it. The workflow needs these secrets:
