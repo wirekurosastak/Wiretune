@@ -275,9 +275,9 @@ void main() {
     expect(downloads.stateOf(track('t2')), DownloadState.done);
 
     downloads.removeAll();
-    await until(() => filesIn(downloads.directory).isEmpty);
+    // The copies go first and the covers after them.
+    await until(() => filesIn(downloads.directory).isEmpty && downloads.bytesOnDisk == 0);
     expect(filesIn(work('covers')), isEmpty);
-    expect(downloads.bytesOnDisk, 0);
     expect((downloads.isTrackDownloaded('t2'), downloads.areFavoritesDownloaded), (false, false));
   });
 
@@ -301,10 +301,9 @@ void main() {
     expect(mine.readAsStringSync(), 'my own recording');
 
     downloads.removeAll();
-    await until(() => !File(copy).existsSync());
+    await until(() => !File(copy).existsSync() && downloads.bytesOnDisk == 0);
     expect(mine.readAsStringSync(), 'my own recording');
     expect(notes.readAsStringSync(), 'keep me');
-    expect(downloads.bytesOnDisk, 0);
   });
 
   test('a copy follows the server file: a changed file is fetched again and then replaces the old copy', () async {

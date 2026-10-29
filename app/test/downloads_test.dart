@@ -70,7 +70,8 @@ void main() {
 
     await vm.logout();
     expect(vm.downloads.isTrackDownloaded(track), isFalse);
-    await until(() => !File(copy).existsSync());
-    expect(downloads.bytesOnDisk, 0);
+    // The copy goes first and its cover after it, each taking its size off the count once it's gone.
+    await until(() => !File(copy).existsSync() && downloads.bytesOnDisk == 0, reason: 'the copy and its cover deleted');
+    expect(downloads.localCover(track.coverArtPath!), isNull);
   });
 }
