@@ -30,6 +30,7 @@ import 'package:wiretune/src/widgets/devices.dart';
 import 'package:wiretune/src/widgets/page_parts.dart';
 import 'package:wiretune/src/widgets/player_controls.dart';
 import 'package:wiretune/src/widgets/player_sheet.dart';
+import 'package:wiretune/src/widgets/spectrum_visualizer.dart';
 import 'package:wiretune/src/widgets/track_list.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -1951,6 +1952,53 @@ void main() {
       tester.widget<Tooltip>(find.descendant(of: tag, matching: find.byType(Tooltip))).message,
       '${Localizer.format('BitrateKbps', [912])} · 136 BPM\n${QualityTier.silver.hint}',
     );
+  });
+
+  testWidgets("the player bar's track comes as near the middle as the spectrum does on the other side", (tester) async {
+    const longAlbum = 'Random Access Memories (10th Anniversary Edition) [Deluxe Remastered Collector Box Set]';
+    final vm = await pumpApp(tester, const Size(1920, 1000), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack(
+          '1',
+          "Doin' It Right (feat. Panda Bear) [Extended Remastered Version]",
+          artist: 'Daft Punk, Panda Bear, Julian Casablancas, Todd Edwards',
+          album: longAlbum,
+        ),
+        TestSupport.makeTrack('2', 'Get Lucky', artist: 'Daft Punk', album: longAlbum),
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    final player = vm.player;
+    Track named(String title) => vm.library.tracks.firstWhere((track) => track.title == title);
+    player.playQueue([named("Doin' It Right (feat. Panda Bear) [Extended Remastered Version]")]);
+    await settle(tester);
+    Rect rectOf(String text) => tester.getRect(find.text(text).last);
+    final seekBar = tester.getRect(find.byType(SeekBar));
+    final spectrum = tester.getRect(find.byType(SpectrumVisualizer));
+    void expectAtMost() {
+      final heart = tester.getRect(find.byType(FavoriteCurrentButton).last);
+      final menu = tester.getRect(find.byType(TrackMenu).last);
+      expect(seekBar.left - menu.right, moreOrLessEquals(spectrum.left - seekBar.right));
+      expect(
+        rectOf(longAlbum).right,
+        moreOrLessEquals(heart.left - 8),
+        reason: 'the line under the title up to the heart',
+      );
+    }
+
+    // A long title and a long line under it: both as far as the heart, which comes as near as the spectrum does.
+    final title = rectOf(player.nowPlayingTitle);
+    expect(title.width, greaterThan(320), reason: 'a long title has more than the 320 px it once had');
+    expectAtMost();
+    expect(rectOf(longAlbum).right, moreOrLessEquals(title.right));
+
+    // A short title over a long line: the line still reaches as far, the short artist whole and the album the rest.
+    player.playQueue([named('Get Lucky')]);
+    await settle(tester);
+    expectAtMost();
+    final artist = rectOf('Daft Punk');
+    expect(rectOf(longAlbum).width, greaterThan(2 * artist.width));
   });
 
   testWidgets("a computer's volume stands upright over its speaker while the mouse is there, as in Tidal", (

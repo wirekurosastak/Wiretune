@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:wiretune_core/wiretune_core.dart';
@@ -1023,100 +1024,86 @@ class _PlayerBar extends StatelessWidget {
         listenable: player,
         builder: (context, _) {
           final track = player.currentTrack;
-          return Row(
+          Widget artist(Track track) => Tooltip(
+            message: track.artist,
+            child: ArtistLinks(
+              track.artistNames,
+              hoverColor: colors.palette.coral,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.textMuted),
+              onOpen: vm.openArtistByName,
+            ),
+          );
+          return CustomMultiChildLayout(
+            delegate: _PlayerBarLayout(),
             children: [
-              Expanded(
+              LayoutId(
+                id: _PlayerBarSlot.track,
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const _QueueCover(),
                     const SizedBox(width: 14),
                     Flexible(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 320),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Tooltip(
+                            message: track?.title ?? '',
+                            child: Text(
+                              player.nowPlayingTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: -0.1,
+                                color: colors.textMain,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          if (player.hasError)
                             Tooltip(
-                              message: track?.title ?? '',
+                              message: player.errorMessage!,
                               child: Text(
-                                player.nowPlayingTitle,
+                                player.errorMessage!,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -0.1,
-                                  color: colors.textMain,
+                                style: TextStyle(fontSize: 12, color: colors.danger),
+                              ),
+                            )
+                          else if (track == null)
+                            Text(
+                              player.nowPlayingArtist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 12, color: colors.textMuted),
+                            )
+                          else if (track.album.trim().isEmpty)
+                            artist(track)
+                          else
+                            _SharedLine(
+                              first: artist(track),
+                              separator: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(
+                                  '•',
+                                  style: TextStyle(fontSize: 11, color: colors.textMuted.withValues(alpha: 0.6)),
+                                ),
+                              ),
+                              second: Tooltip(
+                                message: track.album,
+                                child: LinkText(
+                                  track.album,
+                                  hoverColor: colors.palette.purple,
+                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.textMuted),
+                                  onTap: () => vm.openAlbumOfTrack(track),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 3),
-                            if (player.hasError)
-                              Tooltip(
-                                message: player.errorMessage!,
-                                child: Text(
-                                  player.errorMessage!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 12, color: colors.danger),
-                                ),
-                              )
-                            else if (track == null)
-                              Text(
-                                player.nowPlayingArtist,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: colors.textMuted),
-                              )
-                            else
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Flexible(
-                                    child: Tooltip(
-                                      message: track.artist,
-                                      child: ArtistLinks(
-                                        track.artistNames,
-                                        hoverColor: colors.palette.coral,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                          color: colors.textMuted,
-                                        ),
-                                        onOpen: vm.openArtistByName,
-                                      ),
-                                    ),
-                                  ),
-                                  if (track.album.trim().isNotEmpty) ...[
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                                      child: Text(
-                                        '•',
-                                        style: TextStyle(fontSize: 11, color: colors.textMuted.withValues(alpha: 0.6)),
-                                      ),
-                                    ),
-                                    Flexible(
-                                      child: Tooltip(
-                                        message: track.album,
-                                        child: LinkText(
-                                          track.album,
-                                          hoverColor: colors.palette.purple,
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                            color: colors.textMuted,
-                                          ),
-                                          onTap: () => vm.openAlbumOfTrack(track),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            if (player.isRemote) ...[const SizedBox(height: 3), const PlayingOnLabel(fontSize: 11)],
-                          ],
-                        ),
+                          if (player.isRemote) ...[const SizedBox(height: 3), const PlayingOnLabel(fontSize: 11)],
+                        ],
                       ),
                     ),
                     // The heart and the track's menu with the rest, as on its row and in the phone's player.
@@ -1128,17 +1115,21 @@ class _PlayerBar extends StatelessWidget {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: SizedBox(
-                  width: centerWidth,
-                  child: const Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [TransportControls(), SizedBox(height: 2), SeekBar()],
+              LayoutId(
+                id: _PlayerBarSlot.middle,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: SizedBox(
+                    width: centerWidth,
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [TransportControls(), SizedBox(height: 2), SeekBar()],
+                    ),
                   ),
                 ),
               ),
-              Expanded(
+              LayoutId(
+                id: _PlayerBarSlot.right,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     // Spectrum, quality and volume, as many as fit: the volume first, then the quality tag, then the
@@ -1162,7 +1153,7 @@ class _PlayerBar extends StatelessWidget {
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           if (!compact && platform.isDesktop)
                             Flexible(
@@ -1217,6 +1208,82 @@ class _PlayerBar extends StatelessWidget {
       ),
     );
   }
+}
+
+enum _PlayerBarSlot { track, middle, right }
+
+/// The player bar's layout: the transport and the seek bar in the middle of the bar, the spectrum, the quality and the
+/// volume against its end, and the track from its start, as near the middle as the spectrum comes on the other side.
+/// Never nearer than that, but always with the room of a 320 px title, and never past the middle.
+class _PlayerBarLayout extends MultiChildLayoutDelegate {
+  /// The cover, a 320 px title, the heart and the menu.
+  static const double _trackWidth = 58 + 14 + 320 + 8 + 40 + 40;
+
+  @override
+  void performLayout(Size size) {
+    final middle = layoutChild(_PlayerBarSlot.middle, BoxConstraints.loose(size));
+    final side = math.max(0.0, (size.width - middle.width) / 2);
+    final right = layoutChild(_PlayerBarSlot.right, BoxConstraints(maxWidth: side, maxHeight: size.height));
+    final room = math.min(side, math.max(right.width, _trackWidth));
+    final track = layoutChild(_PlayerBarSlot.track, BoxConstraints(maxWidth: room, maxHeight: size.height));
+    positionChild(_PlayerBarSlot.track, Offset(0, (size.height - track.height) / 2));
+    positionChild(_PlayerBarSlot.middle, Offset(side, (size.height - middle.height) / 2));
+    positionChild(_PlayerBarSlot.right, Offset(size.width - right.width, (size.height - right.height) / 2));
+  }
+
+  @override
+  bool shouldRelayout(_PlayerBarLayout oldDelegate) => false;
+}
+
+/// Two texts on a line with [separator] between them, as the artist and the album under the player bar's title: each
+/// whole while both fit; else the shorter one whole when it needs less than half the line, the other cut to the rest;
+/// else half each.
+class _SharedLine extends MultiChildRenderObjectWidget {
+  _SharedLine({required Widget first, required Widget separator, required Widget second})
+    : super(children: [first, separator, second]);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderSharedLine();
+}
+
+class _SharedLineParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderSharedLine extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _SharedLineParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _SharedLineParentData> {
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _SharedLineParentData) child.parentData = _SharedLineParentData();
+  }
+
+  @override
+  void performLayout() {
+    final first = firstChild!, separator = childAfter(first)!, second = childAfter(separator)!;
+    double width(RenderBox child) => child.getDryLayout(const BoxConstraints()).width;
+    separator.layout(BoxConstraints(maxWidth: constraints.maxWidth), parentUsesSize: true);
+    final room = math.max(0.0, constraints.maxWidth - separator.size.width);
+    final (wanted, other) = (width(first), width(second));
+    final half = room / 2;
+    final firstWidth = wanted + other <= room || wanted <= half ? wanted : (other <= half ? room - other : half);
+    first.layout(BoxConstraints(maxWidth: math.min(firstWidth, room)), parentUsesSize: true);
+    second.layout(BoxConstraints(maxWidth: room - first.size.width), parentUsesSize: true);
+    final children = [first, separator, second];
+    final height = children.map((child) => child.size.height).reduce(math.max);
+    var x = 0.0;
+    for (final child in children) {
+      (child.parentData! as _SharedLineParentData).offset = Offset(x, (height - child.size.height) / 2);
+      x += child.size.width;
+    }
+    size = constraints.constrain(Size(x, height));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      defaultHitTestChildren(result, position: position);
 }
 
 /// The cover of the current track, which opens and closes the queue: a dark veil with a chevron under the mouse or the
