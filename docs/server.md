@@ -33,13 +33,29 @@ docker run -d --name wiretune -p 5200:5200 -v /srv/music:/music:ro -v wiretune-d
 docker logs wiretune        # the setup code, on the first start
 ```
 
-Once a release is published, the image is also at `ghcr.io/wirekurosastak/wiretune-server`. Set other options as
-`WIRETUNE_*` variables (`-e WIRETUNE_SCAN_INTERVAL=0`). Keep `/data` on a volume, or every new container starts with an
+Once a release is published, the image is also at `ghcr.io/wirekurosastak/wiretune-server`, and as `…:ffmpeg` with
+[ffmpeg](#streaming-on-a-slow-connection) in it. Set other options as `WIRETUNE_*` variables
+(`-e WIRETUNE_SCAN_INTERVAL=0`). Keep `/data` on a volume, or every new container starts with an
 empty database.
 
 With Docker Compose, [`docker-compose.yml`](../docker-compose.yml) in the repository root does the same, with a restart
 policy and a health check. Change the music folder in it, then `docker compose up -d` (add `--build` to build the image
 from the checkout instead of pulling it) and `docker compose logs` for the setup code.
+
+### Streaming on a slow connection
+
+With `ffmpeg` on the machine (or the `:ffmpeg` image; build one with `--build-arg WITH_FFMPEG=true`, 450 MB bigger), the
+server can convert a track to Opus or MP3 when a player asks, for example `/api/stream/{id}?format=opus&bitrate=96`. The
+players ask for it with their *Streaming quality* setting ([audio.md](audio.md#streaming-quality)); other apps with
+`maxBitRate` and `format` ([other apps](subsonic.md)).
+
+- **First play waits.** A track is converted whole, then sent like any file (with seeking). A song takes a second or two
+  on a desktop CPU, longer on a NAS. The next play of it is instant.
+- **Kept on disk.** Converted files live in `Transcodes/` in the [data directory](#data-directory), at most 2 GB: the
+  ones played longest ago go first. They are made again if the music file changes. Delete the folder whenever you like.
+- **A few at a time.** Two conversions run at once; the rest wait.
+- **Never a hard failure.** Without `ffmpeg`, with a file it can't read, or when the file is lossy and already at or
+  below the bitrate, the server sends the file itself. The log says which.
 
 ## Running it as a service
 

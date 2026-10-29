@@ -18,6 +18,7 @@ import 'library_scan_service.dart';
 import 'remote_hub.dart';
 import 'setup_code.dart';
 import 'subsonic/subsonic_api.dart';
+import 'transcoder.dart';
 import 'user_data_service.dart';
 
 /// Who may call a route.
@@ -137,6 +138,9 @@ class WiretuneServer {
   final SetupCode setupCode;
   final LibraryScanService scanner;
   final RemoteHub remote = RemoteHub();
+
+  /// Converts tracks for players that asked for less than the original (`?format=opus&bitrate=96`).
+  late final Transcoder transcoder = Transcoder(p.join(paths.dataDirectory, 'Transcodes'));
 
   /// The Subsonic API under `/rest`, which apps other than Wiretune's players speak.
   late final SubsonicApi subsonic = SubsonicApi(
@@ -605,14 +609,27 @@ class WiretuneServer {
     return null;
   }
 
-  Future<Response> _stream(_Call call) async => _sendTrack(call.request, library.getTrack(call.params['trackId']!));
+  Future<Response> _stream(_Call call) async {
+    final query = call.request.url.queryParameters;
+    return _sendTrack(
+      call.request,
+      library.getTrack(call.params['trackId']!),
+      TranscodeRequest.parse(query['format'], query['bitrate']),
+    );
+  }
 
-  /// The audio file of [track], with range support; 404 when there is no such track or its file is gone.
-  Future<Response> _sendTrack(Request request, Track? track) async {
+  /// The audio file of [track], with range support; 404 when there is no such track or its file is gone. With
+  /// [convert], the track as that asks, when the server can make it and it would be lighter than the file: else the
+  /// file itself, so a player always gets something to play.
+  Future<Response> _sendTrack(Request request, Track? track, [TranscodeRequest? convert]) async {
     if (track == null ||
         !AppPaths.isPathUnderRoot(track.filePath, paths.musicFolder) ||
         !File(track.filePath).existsSync()) {
       return errorResponse(404, ErrorCodes.notFound, 'Track not found.');
+    }
+    if (convert != null && !convert.isPointlessFor(track)) {
+      final converted = await transcoder.convert(track, convert);
+      if (converted != null) return fileResponse(request, converted, convert.format.mimeType);
     }
     return fileResponse(request, File(track.filePath), AudioFileTypes.mimeType(track.filePath));
   }

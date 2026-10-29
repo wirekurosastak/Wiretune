@@ -77,10 +77,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Two images: the small one, and one with ffmpeg that converts music for slow connections.
       - run: |
-          image=ghcr.io/${GITHUB_REPOSITORY,,}-server:${{ needs.version.outputs.version }}-${{ matrix.arch }}
-          docker build -f server/Dockerfile --build-arg DART_VERSION="$DART_VERSION" -t "$image" .
-          docker push "$image"
+          image=ghcr.io/${GITHUB_REPOSITORY,,}-server:${{ needs.version.outputs.version }}
+          docker build -f server/Dockerfile --build-arg DART_VERSION="$DART_VERSION" -t "$image-${{ matrix.arch }}" .
+          docker push "$image-${{ matrix.arch }}"
+          docker build -f server/Dockerfile --build-arg DART_VERSION="$DART_VERSION" --build-arg WITH_FFMPEG=true -t "$image-ffmpeg-${{ matrix.arch }}" .
+          docker push "$image-ffmpeg-${{ matrix.arch }}"
 
   docker-manifest:
     name: Server image (both processors)
@@ -99,6 +102,7 @@ jobs:
           image=ghcr.io/${GITHUB_REPOSITORY,,}-server
           version=${{ needs.version.outputs.version }}
           docker buildx imagetools create -t "$image:$version" -t "$image:latest" "$image:$version-amd64" "$image:$version-arm64"
+          docker buildx imagetools create -t "$image:$version-ffmpeg" -t "$image:ffmpeg" "$image:$version-ffmpeg-amd64" "$image:$version-ffmpeg-arm64"
 
   linux:
     name: Linux player

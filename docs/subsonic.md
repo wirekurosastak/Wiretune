@@ -19,14 +19,16 @@ If an app asks for "legacy authentication", either works: both send the app pass
 
 ## What works
 
-Browsing (`getArtists`, `getIndexes`, `getArtist`, `getAlbum`, `getAlbumList2` (the type *highest* is always empty: there are no ratings),
-`getMusicDirectory`, `getSong`, `getGenres`, `getRandomSongs`, `getSongsByGenre`, `search2`, `search3`), playing
+Browsing (`getArtists`, `getIndexes`, `getArtist`, `getAlbum`, `getAlbumList2` (the type *highest* is always empty:
+there are no ratings), `getMusicDirectory`, `getSong`, `getGenres`, `getRandomSongs`, `getSongsByGenre`, `search2`, `search3`), playing
 (`stream`, `download`, `getCoverArt`, `getLyricsBySongId`), favorites (`star`, `unstar`, `getStarred`, `getStarred2`),
 `scrobble`, playlists (`getPlaylists`, `getPlaylist`, `createPlaylist`, `updatePlaylist`, `deletePlaylist`), and
 `getUser`, `getMusicFolders`, `getScanStatus`, `startScan` (administrators). Answers are JSON with `f=json`, XML
 otherwise.
 
-- **`stream`** sends the original file, never a converted one, so `maxBitRate` and `format` are ignored.
+- **`stream`** sends the original file, unless the app asks for `format=mp3` or `opus`, or for a `maxBitRate` below the
+  file's (then MP3, which every app plays). The server converts it with `ffmpeg`
+  ([how](server.md#streaming-on-a-slow-connection)) and sends the file when it can't. `format=raw` and `download` are always the file.
 - **Songs only.** Wiretune has favorites for songs. Starring an album or an artist is refused with an error, not
   pretended. There are no ratings, podcasts, radio stations, shares or bookmarks: those calls answer with an empty list.
 - **Search** ignores case and accents. An empty query returns everything, a page at a time.

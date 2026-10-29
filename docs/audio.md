@@ -1,8 +1,17 @@
 # Audio
 
 Wiretune plays through libmpv (FFmpeg decodes) everywhere except Samsung Tizen TVs, which use their own player. Server
-tracks stream as the original files, never transcoded. Local tracks play straight from disk. No crossfade, no
-equalizer.
+tracks stream as the original files, unless you choose a lower [streaming quality](#streaming-quality). Local tracks
+play straight from disk. No crossfade, no equalizer.
+
+## Streaming quality
+
+*Settings → Audio → Streaming quality* is for a slow connection, away from home. **Original** (the default) sends the
+file. The other choices (**High**, **Normal**, **Data saver**: Opus at 160, 96 and 48 kbit/s) have the server convert
+the track first ([how the server does it](server.md#streaming-on-a-slow-connection)). The setting belongs to this
+device, and counts from the next track. Downloads, local files and bit-perfect output always play the file; the choices
+are greyed out in bit-perfect mode. A server without `ffmpeg` sends the file whatever you chose. The signal path says
+when a track is converted.
 
 ## Output modes
 
@@ -30,7 +39,8 @@ rate isn't the file's, and *less bit depth than the file* when the format holds 
 - For lossy files, bit-perfect only describes the output stage.
 
 Tried on Linux and Windows with an SMSL SU-1 USB DAC. Never measured with bit-exact test streams, never tried with a DAC
-on macOS. The actual-output line was checked against libmpv with the `null` output, not on a DAC. Reports from other setups are welcome.
+on macOS. The actual-output line was checked against libmpv with the `null` output, not on a DAC. Reports from other
+setups are welcome.
 
 ## Choosing a device
 

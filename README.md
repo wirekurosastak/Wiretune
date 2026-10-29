@@ -25,8 +25,10 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 - Quality badge on every album and track: hi-res, CD or lossy.
 - One account per listener. Favorites, playlists and play counts are the same on every device.
 - Offline downloads that stay in sync with the server.
+- Streaming quality for a slow connection: the server converts to Opus when you ask (with `ffmpeg`).
 - Remote control: control one device from another.
-- The server also speaks the Subsonic API, so Feishin, Symfonium, Amperfy and others can play from it ([other apps](docs/subsonic.md)).
+- The server also speaks the Subsonic API, so Feishin, Symfonium and others can play from it
+  ([other apps](docs/subsonic.md)).
 - English, Hungarian, German.
 
 ## Platform support
@@ -41,8 +43,8 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 | Run the server | Yes | Yes | Yes | — | — | — | — | — |
 | [Tried on real hardware](docs/development.md#what-has-been-tried) | Yes | Yes | No | Phone | No | No | No | Briefly |
 
-Bit-perfect sets up an untouched path to the DAC. It doesn't measure what arrives
-([audio.md](docs/audio.md#bit-perfect)). Samsung TVs use their own decoder, so some formats may not play
+Bit-perfect sets up an untouched path to the DAC and shows the format the player opened, but doesn't measure what the
+DAC receives ([audio.md](docs/audio.md#bit-perfect)). Samsung TVs use their own decoder, so some formats may not play
 ([audio.md](docs/audio.md#tizen)).
 
 ## Quick start

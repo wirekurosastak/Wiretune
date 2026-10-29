@@ -92,6 +92,12 @@ jobs:
           done
           docker logs wiretune
           exit 1
+      # The image that converts music: ffmpeg is in it and has the two encoders.
+      - name: Image with ffmpeg
+        run: |
+          docker build -f server/Dockerfile --build-arg WITH_FFMPEG=true -t wiretune-server:ffmpeg .
+          docker run --rm --entrypoint ffmpeg wiretune-server:ffmpeg -hide_banner -encoders | grep -E 'libopus|libmp3lame'
+          docker run --rm --entrypoint sh wiretune-server "-c" 'command -v ffmpeg' && exit 1 || true
 
   android:
     name: Android APK

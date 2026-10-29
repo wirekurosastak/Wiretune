@@ -6,6 +6,7 @@
 # Change /srv/music to your music folder. The data volume holds the accounts, favorites and playlists: keep it.
 services:
   wiretune:
+    # ":ffmpeg" instead of ":latest" can also convert music for slow connections (docs/server.md).
     image: ghcr.io/wirekurosastak/wiretune-server:latest
     build:
       context: .

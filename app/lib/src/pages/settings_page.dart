@@ -1065,6 +1065,28 @@ class _AudioCard extends StatelessWidget {
                       ),
                   ],
                 ),
+                const SizedBox(height: 14),
+                Text(context.tr('SettingsStreamingQuality'), style: heading()),
+                Text(context.tr('SettingsStreamingQualityHint'), style: hint()),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final (quality, key) in const [
+                      (StreamingQuality.original, 'StreamingOriginal'),
+                      (StreamingQuality.high, 'StreamingHigh'),
+                      (StreamingQuality.normal, 'StreamingNormal'),
+                      (StreamingQuality.dataSaver, 'StreamingDataSaver'),
+                    ])
+                      _choice(
+                        context.tr(key),
+                        selected: quality == vm.streamingQuality,
+                        // Bit-perfect output plays the file.
+                        onPressed: audio.isBitPerfect ? null : () => vm.streamingQuality = quality,
+                      ),
+                  ],
+                ),
               ],
               if (audio.hasDeviceChoice) ...[
                 if (!tizen) ...[

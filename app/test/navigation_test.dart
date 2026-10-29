@@ -322,4 +322,24 @@ void main() {
     expect(repo.getSetting('preference.show_performance_stats'), '1');
     Localizer.instance.setLanguage('en');
   });
+
+  test('the streaming quality is remembered, and applied at the next start', () async {
+    final repo = testRepository();
+    final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    final engine = TestSupport.createEngine();
+    final vm = MainViewModel(engine, library, ServerSession(library, repo));
+    await vm.start();
+    expect(vm.streamingQuality, StreamingQuality.original);
+
+    vm.streamingQuality = StreamingQuality.normal;
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.streamingQuality, StreamingQuality.normal);
+    expect(repo.getSetting('preference.streaming_quality'), 'normal');
+
+    final again = TestSupport.createEngine();
+    final restarted = MainViewModel(again, library, ServerSession(library, repo));
+    await restarted.start();
+    expect(again.streamingQuality, StreamingQuality.normal);
+    expect(restarted.streamingQuality, StreamingQuality.normal);
+  });
 }

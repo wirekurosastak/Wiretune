@@ -90,6 +90,16 @@ const Map<String, (String, String, String)> allStrings = {
     'The next track starts the moment the current one ends (for live and continuous albums).',
     'Der nächste Titel beginnt, sobald der aktuelle endet (für Live- und durchgehende Alben).',
   ),
+  'SettingsStreamingQuality': ('Stream minősége', 'Streaming quality', 'Streaming-Qualität'),
+  'SettingsStreamingQualityHint': (
+    'Lassú kapcsolaton a szerver kisebb adatra alakítja a zenét. A letöltések és a bit-perfect az eredeti marad. A szerveren ffmpeg kell hozzá.',
+    'On a slow connection the server converts music to use less data. Downloads and bit-perfect stay original. Needs ffmpeg on the server.',
+    'Bei langsamer Verbindung wandelt der Server die Musik um, damit sie weniger Daten braucht. Downloads und Bit-Perfect bleiben im Original. Der Server braucht dafür ffmpeg.',
+  ),
+  'StreamingOriginal': ('Eredeti', 'Original', 'Original'),
+  'StreamingHigh': ('Magas · 160 kbps', 'High · 160 kbps', 'Hoch · 160 kbit/s'),
+  'StreamingNormal': ('Normál · 96 kbps', 'Normal · 96 kbps', 'Normal · 96 kbit/s'),
+  'StreamingDataSaver': ('Adatspórolás · 48 kbps', 'Data saver · 48 kbps', 'Datensparen · 48 kbit/s'),
   'NormalizationOff': ('Ki', 'Off', 'Aus'),
   'NormalizationTrack': ('Számonként', 'Per track', 'Pro Titel'),
   'NormalizationAlbum': ('Albumonként', 'Per album', 'Pro Album'),
@@ -794,6 +804,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Szerver stream (veszteségmentes, átkódolás nélkül)',
     'Server stream (lossless, no transcoding)',
     'Server-Stream (verlustfrei, ohne Transcodierung)',
+  ),
+  'SignalTransportServerConverted': (
+    'Szerver stream (a szerver Opus {0} kbps-re alakítja)',
+    'Server stream (converted by the server to Opus, {0} kbps)',
+    'Server-Stream (vom Server in Opus umgewandelt, {0} kbit/s)',
   ),
   'SignalTransportServerLossy': (
     'Szerver stream (közvetlen, átkódolás nélkül)',

@@ -1224,6 +1224,29 @@ void main() {
     signedIn.dispose();
   });
 
+  testWidgets('Audio settings has the streaming quality, which a choice sets and bit-perfect locks', (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    final saver = find.text(Localizer.get('StreamingDataSaver'));
+    await tester.ensureVisible(saver);
+    await settle(tester);
+    expect(vm.streamingQuality, StreamingQuality.original);
+    expect(find.text(Localizer.get('SettingsStreamingQuality')), findsOneWidget);
+
+    await tester.tap(saver);
+    await settle(tester);
+    expect(vm.streamingQuality, StreamingQuality.dataSaver);
+
+    final original = find.text(Localizer.get('StreamingOriginal'));
+    expect(original, findsOneWidget);
+    await tester.ensureVisible(original);
+    await settle(tester);
+    await tester.tap(original);
+    await settle(tester);
+    expect(vm.streamingQuality, StreamingQuality.original);
+  });
+
   testWidgets('the password dialog starts in its first field; Enter goes on to the second, and there saves', (
     tester,
   ) async {

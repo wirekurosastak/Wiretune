@@ -335,6 +335,99 @@ void main() {
     expect(driver.lastSource, 'http://server/api/stream/s1?token=fresh-2');
   });
 
+  group('streaming quality', () {
+    Track lossy(String id, int kbps) => Track(
+      id: id,
+      title: id,
+      streamUrl: 'http://server/api/stream/$id',
+      format: AudioFormat(codec: 'MP3', bitrateKbps: kbps, isLossless: false),
+    );
+
+    (FakeAudioDriver, WiretuneAudioEngine) engineWithToken() {
+      final driver = FakeAudioDriver();
+      final engine = TestSupport.createEngine(driver)..setStreamTokenProvider(() async => 'tok');
+      return (driver, engine);
+    }
+
+    test('is the original file unless the listener asked for less', () async {
+      final (driver, engine) = engineWithToken();
+      expect(engine.streamingQuality, StreamingQuality.original);
+      await engine.playTrack(TestSupport.makeServerTrack('s', 'Server'));
+      expect(driver.lastSource, 'http://server/api/stream/s?token=tok');
+      expect(engine.signalPathDescription, contains('Server stream (lossless, no transcoding)'));
+    });
+
+    test('asks the server for Opus at the bitrate of the choice, token and all', () async {
+      final (driver, engine) = engineWithToken();
+      for (final (quality, kbps) in [
+        (StreamingQuality.high, 160),
+        (StreamingQuality.normal, 96),
+        (StreamingQuality.dataSaver, 48),
+      ]) {
+        await engine.setStreamingQuality(quality);
+        await engine.playTrack(TestSupport.makeServerTrack('s', 'Server'));
+        expect(driver.lastSource, 'http://server/api/stream/s?format=opus&bitrate=$kbps&token=tok');
+        expect(engine.signalPathDescription, contains('converted by the server to Opus, $kbps kbps'));
+      }
+      await engine.setStreamingQuality(StreamingQuality.original);
+      await engine.playTrack(TestSupport.makeServerTrack('s', 'Server'));
+      expect(driver.lastSource, 'http://server/api/stream/s?token=tok');
+    });
+
+    test('asks without a token when there is none', () async {
+      final driver = FakeAudioDriver();
+      final engine = TestSupport.createEngine(driver);
+      await engine.setStreamingQuality(StreamingQuality.normal);
+      await engine.playTrack(TestSupport.makeServerTrack('s', 'Server'));
+      expect(driver.lastSource, 'http://server/api/stream/s?format=opus&bitrate=96');
+    });
+
+    test('leaves local files, downloaded copies and bit-perfect output alone', () async {
+      final (driver, engine) = engineWithToken();
+      await engine.setStreamingQuality(StreamingQuality.dataSaver);
+
+      await engine.playTrack(TestSupport.makeTrack('l', 'Local'));
+      expect(driver.lastSource, '/music/l.flac');
+
+      final remote = TestSupport.makeServerTrack('s', 'Server');
+      engine.setOfflineCopyProvider((_) => '/copies/s.flac');
+      await engine.playTrack(remote);
+      expect(driver.lastSource, '/copies/s.flac');
+      engine.setOfflineCopyProvider(null);
+
+      await engine.setBitPerfectMode(true);
+      await engine.playTrack(remote);
+      expect(driver.lastSource, 'http://server/api/stream/s?token=tok');
+      expect(engine.isConverted(remote), isFalse);
+      await engine.setBitPerfectMode(false);
+      await engine.playTrack(remote);
+      expect(driver.lastSource, contains('format=opus&bitrate=48'));
+    });
+
+    test('is not asked of a lossy file that is at or below the bitrate: the server would send it as it is', () async {
+      final (driver, engine) = engineWithToken();
+      await engine.setStreamingQuality(StreamingQuality.normal);
+
+      await engine.playTrack(lossy('small', 96));
+      expect(driver.lastSource, 'http://server/api/stream/small?token=tok');
+      expect(engine.signalPathDescription, contains('Server stream (direct, no transcoding)'));
+      await engine.playTrack(lossy('big', 320));
+      expect(driver.lastSource, 'http://server/api/stream/big?format=opus&bitrate=96&token=tok');
+    });
+
+    test('changes the next track at once, and not the one that plays', () async {
+      final (driver, engine) = engineWithToken();
+      await engine.playTrack(TestSupport.makeServerTrack('a', 'A'));
+      await engine.setNextTrack(TestSupport.makeServerTrack('b', 'B'));
+      expect(driver.nextSource, 'http://server/api/stream/b?token=tok');
+      final plays = driver.playCalls;
+
+      await engine.setStreamingQuality(StreamingQuality.dataSaver);
+      expect(driver.nextSource, 'http://server/api/stream/b?format=opus&bitrate=48&token=tok');
+      expect(driver.playCalls, plays, reason: 'the track that plays is not restarted');
+    });
+  });
+
   test('a track without a source is reported, not played', () async {
     final driver = FakeAudioDriver();
     final engine = TestSupport.createEngine(driver);

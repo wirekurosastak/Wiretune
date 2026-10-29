@@ -88,7 +88,7 @@ finds a moved or renamed file moves the data to the new ID and sends `dataChange
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` if the track is unknown, outside the music folder, or gone |
+| `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` if the track is unknown, outside the music folder, or gone. With `?format=opus` or `mp3` and `&bitrate=<kbit/s>` (Opus 24–256, default 128; MP3 64–320, default 192), the track converted by `ffmpeg` and kept on disk ([how](server.md#streaming-on-a-slow-connection)); the file itself when the server can't convert it, or when it is lossy and at or below the bitrate |
 | `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` if there's none. `?v=` is ignored |
 | `GET /api/cover/artist/{artistId}` | user | The artist's own picture, like an album cover. `404` if there's none |
 | `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` if there are none. The server never looks online; the players ask LRCLIB themselves |

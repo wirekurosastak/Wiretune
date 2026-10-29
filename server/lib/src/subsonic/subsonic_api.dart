@@ -12,11 +12,12 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../auth_service.dart';
 import '../library_scan_service.dart';
 import '../user_data_service.dart';
+import '../transcoder.dart';
 import 'subsonic_format.dart';
 
 /// What [SubsonicApi] needs from the server beyond the library and the accounts: the files it serves are the server's
 /// to send, with its range support and its checks that a path lies inside the music folder.
-typedef SendTrack = Future<Response> Function(Request request, Track track);
+typedef SendTrack = Future<Response> Function(Request request, Track track, [TranscodeRequest? convert]);
 
 /// Sends the picture of an album, a track or an artist by [id]; a 404 when there is none.
 typedef SendPicture = Future<Response> Function(Request request, String id);
@@ -228,6 +229,7 @@ class SubsonicApi {
         return await _getLyricsBySongId(params);
 
       case 'stream':
+        return sendStream(request, _track(params), _conversion(params, _track(params)));
       case 'download':
         return sendStream(request, _track(params));
       case 'getCoverArt':
@@ -264,6 +266,18 @@ class SubsonicApi {
       default:
         throw SubsonicFailure(SubsonicError.generic, 'Wiretune does not have "$method".');
     }
+  }
+
+  /// What `stream` asks to be converted to, or null for the file itself: a `format` of `mp3` or `opus` (`raw` is the
+  /// file), or a `maxBitRate` below the file's, converted to the `format`, else MP3, which every app plays.
+  static TranscodeRequest? _conversion(_Params params, Track track) {
+    final format = params.text('format');
+    if (format == 'raw') return null;
+    final limit = params.integer('maxBitRate');
+    final bitrate = limit != null && limit > 0 ? '$limit' : null;
+    if (TranscodeFormat.named(format) != null) return TranscodeRequest.parse(format, bitrate);
+    if (bitrate != null && track.format.bitrateKbps > limit!) return TranscodeRequest.parse('mp3', bitrate);
+    return null;
   }
 
   String _folderName() {

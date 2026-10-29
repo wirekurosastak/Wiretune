@@ -11,6 +11,20 @@ import '../util/event.dart';
 /// differences between its tracks). A file without the tags plays unchanged.
 enum VolumeNormalization { off, track, album }
 
+/// How much of a server track is sent: the original file, or the server's conversion to Opus at a bitrate (which needs
+/// `ffmpeg` on the server; without it the file is sent as it is). Downloads and bit-perfect output are always the file.
+enum StreamingQuality {
+  original(0),
+  high(160),
+  normal(96),
+  dataSaver(48);
+
+  const StreamingQuality(this.kbps);
+
+  /// The Opus bitrate asked of the server; 0 for the file itself.
+  final int kbps;
+}
+
 /// Plays audio on one platform. The engine ([WiretuneAudioEngine]) keeps the track, mode and volume and gives this
 /// the commands; a driver reports back through its events.
 abstract class AudioDriver {

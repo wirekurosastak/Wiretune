@@ -713,6 +713,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _remoteNamePreference = 'remote_device_name';
   static const String _remoteEnabledPreference = 'remote_enabled';
   static const String _normalizationPreference = 'volume_normalization';
+  static const String _streamingQualityPreference = 'streaming_quality';
   static const String _gaplessPreference = 'gapless';
   static const String _playerSwipePreference = 'player_swipe';
   static const String _updateCheckPreference = 'update_check';
@@ -759,6 +760,15 @@ class MainViewModel extends ChangeNotifier {
     audioEngine.setNormalization(value);
     audioSettings.refreshDeviceList(); // the signal path mentions it
     _remember(_normalizationPreference, value.name);
+    notifyListeners();
+  }
+
+  /// How much of a server track is asked for: the file (the default), or the server's Opus conversion for a slow link.
+  StreamingQuality get streamingQuality => audioEngine.streamingQuality;
+  set streamingQuality(StreamingQuality value) {
+    unawaited(audioEngine.setStreamingQuality(value));
+    audioSettings.refreshDeviceList(); // the signal path mentions it
+    _remember(_streamingQualityPreference, value.name);
     notifyListeners();
   }
 
@@ -858,6 +868,8 @@ class MainViewModel extends ChangeNotifier {
     updates.isEnabled = library.getPreference(_updateCheckPreference) != '0'; // on unless turned off
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
     if (normalization != null) audioEngine.setNormalization(normalization);
+    final quality = StreamingQuality.values.asNameMap()[library.getPreference(_streamingQualityPreference)];
+    if (quality != null) unawaited(audioEngine.setStreamingQuality(quality));
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
     _playerSwipe = PlayerSwipe.values.asNameMap()[library.getPreference(_playerSwipePreference)];
 

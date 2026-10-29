@@ -81,6 +81,26 @@ class WiretuneAudioEngine {
   bool get isExclusiveMode => _isExclusiveMode;
   bool get isBitPerfect => _isBitPerfect;
 
+  /// How much of a server track is asked for; bit-perfect output always plays the file.
+  StreamingQuality get streamingQuality => _streamingQuality;
+  StreamingQuality _streamingQuality = StreamingQuality.original;
+
+  /// From the next track on: the one playing goes on as it is.
+  Future<void> setStreamingQuality(StreamingQuality quality) async {
+    if (quality == _streamingQuality) return;
+    _streamingQuality = quality;
+    _nextSource = null;
+    await _offerNext(); // the next track is handed over again, as the new quality
+  }
+
+  /// Whether the server is asked to convert [track]: not for a download, a local file, bit-perfect output or a lossy
+  /// file that is at or below the bitrate already (the server sends such a file as it is).
+  bool isConverted(Track track) {
+    final kbps = _streamingQuality.kbps;
+    if (kbps == 0 || _isBitPerfect || !streams(track)) return false;
+    return track.format.isLossless || track.format.bitrateKbps > kbps;
+  }
+
   /// The chosen volume normalization; bit-perfect output skips it.
   VolumeNormalization get normalization => _normalization;
   AudioOutputDevice? get currentDevice => _currentDevice;
@@ -163,13 +183,15 @@ class WiretuneAudioEngine {
       ]);
     }
     final access = Localizer.get(_isExclusiveMode ? 'SignalAccessExclusive' : 'SignalAccessShared');
-    final transport = Localizer.get(
-      track.isLocal
-          ? 'SignalTransportLocal'
-          : (!streams(track)
-                ? 'SignalTransportDownloaded'
-                : (isLossless ? 'SignalTransportServer' : 'SignalTransportServerLossy')),
-    );
+    final transport = isConverted(track)
+        ? Localizer.format('SignalTransportServerConverted', [_streamingQuality.kbps])
+        : Localizer.get(
+            track.isLocal
+                ? 'SignalTransportLocal'
+                : (!streams(track)
+                      ? 'SignalTransportDownloaded'
+                      : (isLossless ? 'SignalTransportServer' : 'SignalTransportServerLossy')),
+          );
 
     return [
       Localizer.format('SignalSource', [track.format.tagSpec]),
@@ -461,8 +483,10 @@ class WiretuneAudioEngine {
     final copy = _offlineCopy?.call(track);
     if (copy != null) return copy;
     final token = _streamToken;
-    if (token == null) return url;
-    return '$url${url.contains('?') ? '&' : '?'}token=${Uri.encodeQueryComponent(token)}';
+    final convert = isConverted(track) ? 'format=opus&bitrate=${_streamingQuality.kbps}' : null;
+    final query = [?convert, if (token != null) 'token=${Uri.encodeQueryComponent(token)}'];
+    if (query.isEmpty) return url;
+    return '$url${url.contains('?') ? '&' : '?'}${query.join('&')}';
   }
 
   Future<void> dispose() async {
