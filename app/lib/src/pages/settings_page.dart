@@ -12,6 +12,7 @@ import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 import '../view_models/app_section.dart';
+import '../view_models/main_view_model.dart';
 import '../view_models/settings_view_models.dart';
 import '../widgets/devices.dart';
 import '../widgets/dialogs.dart';
@@ -1066,6 +1067,44 @@ class _AudioCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(context.tr('SettingsEqualizer'), style: heading()),
+                          Text(context.tr('SettingsEqualizerHint'), style: hint()),
+                        ],
+                      ),
+                    ),
+                    // Bit-perfect output never filters.
+                    Switch(value: vm.isEqualizerOn, onChanged: audio.isBitPerfect ? null : (v) => vm.isEqualizerOn = v),
+                  ],
+                ),
+                if (vm.isEqualizerOn && !audio.isBitPerfect) ...[
+                  const SizedBox(height: 10),
+                  _EqualizerSliders(vm: vm),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final (preset, key) in const [
+                        ('flat', 'EqualizerFlat'),
+                        ('bass', 'EqualizerBass'),
+                        ('treble', 'EqualizerTreble'),
+                        ('vocal', 'EqualizerVocal'),
+                      ])
+                        _choice(
+                          context.tr(key),
+                          selected: vm.equalizer == Equalizer.fromGains(Equalizer.presets[preset]!),
+                          onPressed: () => vm.setEqualizerPreset(preset),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 14),
                 Text(context.tr('SettingsStreamingQuality'), style: heading()),
                 Text(context.tr('SettingsStreamingQualityHint'), style: hint()),
                 const SizedBox(height: 10),
@@ -1673,6 +1712,60 @@ class _AppPasswordDialogState extends State<_AppPasswordDialog> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// The ten bands of the equalizer, a slider each, low frequencies on the left.
+class _EqualizerSliders extends StatelessWidget {
+  const _EqualizerSliders({required this.vm});
+
+  final MainViewModel vm;
+
+  static String _label(int hertz) => hertz >= 1000 ? '${hertz ~/ 1000}k' : '$hertz';
+
+  static String _gain(double db) =>
+      db.abs() < 0.05 ? '0' : '${db > 0 ? '+' : ''}${db.toStringAsFixed(db % 1 == 0 ? 0 : 1)}';
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final gains = vm.equalizer.gains;
+    const small = 10.0;
+    return Row(
+      children: [
+        for (var i = 0; i < Equalizer.frequencies.length; i++)
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _gain(gains[i]),
+                  style: TextStyle(fontSize: small, color: colors.textMuted),
+                ),
+                SizedBox(
+                  height: 130,
+                  child: RotatedBox(
+                    quarterTurns: 3,
+                    child: Slider(
+                      min: -Equalizer.maxGainDb,
+                      max: Equalizer.maxGainDb,
+                      divisions: (Equalizer.maxGainDb * 4).round(),
+                      value: gains[i].clamp(-Equalizer.maxGainDb, Equalizer.maxGainDb),
+                      semanticFormatterCallback: (v) => '${_label(Equalizer.frequencies[i])} Hz ${_gain(v)} dB',
+                      onChanged: (v) => vm.setEqualizerBand(i, v, save: false),
+                      onChangeEnd: (v) => vm.setEqualizerBand(i, v),
+                    ),
+                  ),
+                ),
+                Text(
+                  _label(Equalizer.frequencies[i]),
+                  style: TextStyle(fontSize: small, color: colors.textMuted),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

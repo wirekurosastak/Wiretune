@@ -7,6 +7,7 @@ library;
 export 'src/about.dart';
 export 'src/audio/audio_driver.dart';
 export 'src/audio/audio_engine.dart';
+export 'src/audio/equalizer.dart';
 export 'src/audio/pcm_cache.dart';
 export 'src/audio/spectrum_analyzer.dart';
 export 'src/data/database_manager.dart';

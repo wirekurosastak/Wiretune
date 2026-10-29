@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import '../localization/localizer.dart';
 import '../models/audio_format.dart';
 import '../util/event.dart';
+import 'equalizer.dart';
 
 /// Volume normalization from the files' ReplayGain tags: each track at the same loudness, or each album (keeping the
 /// differences between its tracks). A file without the tags plays unchanged.
@@ -63,6 +64,10 @@ abstract class AudioDriver {
   /// Applies [mode] from now on; a driver that cannot normalize ignores it, and bit-perfect output never normalizes.
   void setNormalization(VolumeNormalization mode);
 
+  /// Applies [equalizer] from now on (flat for none); a driver that cannot filter ignores it. The engine gives a flat one
+  /// to bit-perfect output.
+  void setEqualizer(Equalizer equalizer);
+
   /// Whether [readOutput] can ever tell; a driver that can't is not asked.
   bool get reportsOutput;
 
@@ -111,6 +116,10 @@ mixin AudioDriverEvents implements AudioDriver {
   final Event<void> advanced = Event<void>();
   @override
   final Event<String> playbackFailed = Event<String>();
+
+  /// A driver that can't filter.
+  @override
+  void setEqualizer(Equalizer equalizer) {}
 
   /// A driver that can't tell what its output was opened with.
   @override

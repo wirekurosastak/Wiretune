@@ -10,6 +10,7 @@ import '../services/wiretune_log.dart';
 import '../util/event.dart';
 import '../util/text.dart';
 import 'audio_driver.dart';
+import 'equalizer.dart';
 
 /// Holds the current track, the output device, the mode switches (exclusive, bit-perfect) and the volume, and gives a
 /// platform [AudioDriver] the commands.
@@ -182,6 +183,9 @@ class WiretuneAudioEngine {
         Localizer.get(_normalization == VolumeNormalization.album ? 'NormalizationAlbum' : 'NormalizationTrack'),
       ]);
     }
+    if (!_isBitPerfect && !_equalizer.isFlat) {
+      processing = Localizer.format('SignalProcessingEqualizer', [processing]);
+    }
     final access = Localizer.get(_isExclusiveMode ? 'SignalAccessExclusive' : 'SignalAccessShared');
     final transport = isConverted(track)
         ? Localizer.format('SignalTransportServerConverted', [_streamingQuality.kbps])
@@ -327,6 +331,15 @@ class WiretuneAudioEngine {
   void setNormalization(VolumeNormalization mode) {
     _normalization = mode;
     _driver.setNormalization(mode);
+  }
+
+  /// The equalizer; bit-perfect output never uses it (the driver plays flat then).
+  Equalizer get equalizer => _equalizer;
+  Equalizer _equalizer = Equalizer.flat();
+
+  void setEqualizer(Equalizer equalizer) {
+    _equalizer = equalizer;
+    _driver.setEqualizer(equalizer);
   }
 
   void setMuted(bool muted) {

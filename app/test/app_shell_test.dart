@@ -1224,6 +1224,43 @@ void main() {
     signedIn.dispose();
   });
 
+  testWidgets('the equalizer shows ten sliders and the presets once it is on, and fits a phone', (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    final heading = find.text(Localizer.get('SettingsEqualizer'));
+    await tester.ensureVisible(heading);
+    await settle(tester);
+    expect(find.byType(Slider), findsNothing, reason: 'off to begin with');
+
+    final toggle = find.descendant(
+      of: find.ancestor(of: heading, matching: find.byType(Row)).first,
+      matching: find.byType(Switch),
+    );
+    await tester.tap(toggle);
+    await settle(tester);
+    expect(vm.isEqualizerOn, isTrue);
+    expect(find.byType(Slider), findsNWidgets(10));
+    expect(tester.takeException(), isNull, reason: 'ten columns fit the width');
+
+    final bass = find.text(Localizer.get('EqualizerBass'));
+    await tester.ensureVisible(bass);
+    await settle(tester);
+    await tester.tap(bass);
+    await settle(tester);
+    expect(vm.equalizer.gains, Equalizer.presets['bass']);
+    expect(tester.widgetList<Slider>(find.byType(Slider)).first.value, 6);
+
+    // A drag on a slider moves its band.
+    final slider = find.byType(Slider).at(5);
+    await tester.ensureVisible(slider);
+    await settle(tester);
+    final before = vm.equalizer.gains[5];
+    await tester.drag(slider, const Offset(0, -40)); // up, on a slider turned a quarter
+    await settle(tester);
+    expect(vm.equalizer.gains[5], greaterThan(before));
+  });
+
   testWidgets('Audio settings has the streaming quality, which a choice sets and bit-perfect locks', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.navigateTo(AppSection.settings);

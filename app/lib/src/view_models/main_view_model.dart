@@ -714,6 +714,8 @@ class MainViewModel extends ChangeNotifier {
   static const String _remoteEnabledPreference = 'remote_enabled';
   static const String _normalizationPreference = 'volume_normalization';
   static const String _streamingQualityPreference = 'streaming_quality';
+  static const String _equalizerPreference = 'equalizer';
+  static const String _equalizerOnPreference = 'equalizer_on';
   static const String _gaplessPreference = 'gapless';
   static const String _playerSwipePreference = 'player_swipe';
   static const String _updateCheckPreference = 'update_check';
@@ -760,6 +762,48 @@ class MainViewModel extends ChangeNotifier {
     audioEngine.setNormalization(value);
     audioSettings.refreshDeviceList(); // the signal path mentions it
     _remember(_normalizationPreference, value.name);
+    notifyListeners();
+  }
+
+  Equalizer _equalizer = Equalizer.flat();
+  bool _isEqualizerOn = false;
+
+  /// The equalizer's bands, as the listener set them (they stay when it is switched off).
+  Equalizer get equalizer => _equalizer;
+
+  /// Whether the equalizer filters the sound; off by default. Bit-perfect output never uses it.
+  bool get isEqualizerOn => _isEqualizerOn;
+  set isEqualizerOn(bool value) {
+    _isEqualizerOn = value;
+    _remember(_equalizerOnPreference, value ? '1' : '0');
+    _applyEqualizer();
+  }
+
+  /// Sets the band at [index] to [gainDb]; [save] is false while a slider is still being dragged.
+  void setEqualizerBand(int index, double gainDb, {bool save = true}) {
+    final gains = _equalizer.gains;
+    if (index < 0 || index >= gains.length) return;
+    gains[index] = gainDb;
+    _setEqualizer(Equalizer.fromGains(gains), save: save);
+  }
+
+  /// Puts one of [Equalizer.presets] in, and switches the equalizer on for it.
+  void setEqualizerPreset(String name) {
+    final gains = Equalizer.presets[name];
+    if (gains == null) return;
+    _setEqualizer(Equalizer.fromGains(gains), save: true);
+    if (!_isEqualizerOn && name != 'flat') isEqualizerOn = true;
+  }
+
+  void _setEqualizer(Equalizer value, {required bool save}) {
+    _equalizer = value;
+    if (save) _remember(_equalizerPreference, value.toJson());
+    _applyEqualizer();
+  }
+
+  void _applyEqualizer() {
+    audioEngine.setEqualizer(_isEqualizerOn ? _equalizer : Equalizer.flat());
+    audioSettings.refreshDeviceList(); // the signal path mentions it
     notifyListeners();
   }
 
@@ -868,6 +912,9 @@ class MainViewModel extends ChangeNotifier {
     updates.isEnabled = library.getPreference(_updateCheckPreference) != '0'; // on unless turned off
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
     if (normalization != null) audioEngine.setNormalization(normalization);
+    _equalizer = Equalizer.fromJson(library.getPreference(_equalizerPreference));
+    _isEqualizerOn = library.getPreference(_equalizerOnPreference) == '1';
+    audioEngine.setEqualizer(_isEqualizerOn ? _equalizer : Equalizer.flat());
     final quality = StreamingQuality.values.asNameMap()[library.getPreference(_streamingQualityPreference)];
     if (quality != null) unawaited(audioEngine.setStreamingQuality(quality));
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off

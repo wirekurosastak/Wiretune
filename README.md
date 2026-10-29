@@ -25,6 +25,7 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 - Quality badge on every album and track: hi-res, CD or lossy.
 - One account per listener. Favorites, playlists and play counts are the same on every device.
 - Offline downloads that stay in sync with the server.
+- A ten-band equalizer (not in bit-perfect mode).
 - Streaming quality for a slow connection: the server converts to Opus when you ask (with `ffmpeg`).
 - Remote control: control one device from another.
 - The server also speaks the Subsonic API, so Feishin, Symfonium and others can play from it

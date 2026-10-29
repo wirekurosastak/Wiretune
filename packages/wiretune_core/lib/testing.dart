@@ -70,6 +70,11 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   bool isExclusive = false;
   bool isBitPerfect = false;
 
+  Equalizer equalizer = Equalizer.flat();
+
+  @override
+  void setEqualizer(Equalizer equalizer) => this.equalizer = equalizer;
+
   /// What [readOutput] reports; null: the output isn't open (yet). Only a test that looks at the output sets
   /// [reportsOutput], as asking for it keeps a timer waiting.
   AudioOutputInfo? output;

@@ -243,7 +243,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
 
         // Bit-perfect: no gain, no filters, no replay gain, no resampling requested (mpv's `audio-format` is left
         // unset, which keeps the decoder's sample format).
-        await native.setProperty('af', '');
+        await _applyFilters(native);
         await _applyNormalization();
         // The next track is opened before the current one ends, and plays on the output as it is when its format is the
         // same (otherwise the output is set up again, with a short gap).
@@ -414,6 +414,22 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     final mode = _bitPerfect ? VolumeNormalization.off : _normalization;
     await native.setProperty('replaygain', mode == VolumeNormalization.off ? 'no' : mode.name);
   }
+
+  Equalizer _equalizer = Equalizer.flat();
+
+  @override
+  void setEqualizer(Equalizer equalizer) {
+    _equalizer = equalizer;
+    unawaited(
+      _output.synchronized(() async {
+        final native = _player.platform;
+        if (native is NativePlayer) await _applyFilters(native);
+      }),
+    );
+  }
+
+  /// The filters of the chain: the equalizer, and none for bit-perfect output.
+  Future<void> _applyFilters(NativePlayer native) => native.setProperty('af', _bitPerfect ? '' : _equalizer.filter);
 
   @override
   bool get reportsOutput => true;

@@ -342,4 +342,43 @@ void main() {
     expect(again.streamingQuality, StreamingQuality.normal);
     expect(restarted.streamingQuality, StreamingQuality.normal);
   });
+
+  test('the equalizer is remembered, filters only while it is on, and a preset switches it on', () async {
+    final repo = testRepository();
+    final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    final engine = TestSupport.createEngine();
+    final vm = MainViewModel(engine, library, ServerSession(library, repo));
+    await vm.start();
+    expect((vm.isEqualizerOn, vm.equalizer.isFlat, engine.equalizer.isFlat), (false, true, true));
+
+    vm.setEqualizerBand(5, 4);
+    expect(vm.equalizer.gains[5], 4);
+    expect(engine.equalizer.isFlat, isTrue, reason: 'set, but off: the sound is not filtered');
+
+    vm.isEqualizerOn = true;
+    expect(engine.equalizer.gains[5], 4);
+    vm.setEqualizerBand(0, 2.5, save: false); // a slider still being dragged is not saved
+    expect(engine.equalizer.gains[0], 2.5);
+    expect(Equalizer.fromJson(repo.getSetting('preference.equalizer')).gains[0], 0);
+    vm.setEqualizerBand(0, 2.5);
+    expect(Equalizer.fromJson(repo.getSetting('preference.equalizer')).gains[0], 2.5);
+    vm.setEqualizerBand(99, 1); // no such band
+    expect(vm.equalizer.gains, hasLength(10));
+
+    vm.isEqualizerOn = false;
+    vm.setEqualizerPreset('bass');
+    expect(vm.isEqualizerOn, isTrue, reason: 'a preset is chosen to be heard');
+    expect(engine.equalizer.gains, Equalizer.presets['bass']);
+    vm.setEqualizerPreset('flat');
+    expect(vm.equalizer.isFlat, isTrue);
+    vm.setEqualizerPreset('no such preset');
+    expect(vm.equalizer.isFlat, isTrue);
+
+    vm.setEqualizerBand(2, -3);
+    final again = TestSupport.createEngine();
+    final restarted = MainViewModel(again, library, ServerSession(library, repo));
+    await restarted.start();
+    expect(restarted.isEqualizerOn, isTrue);
+    expect(again.equalizer.gains[2], -3);
+  });
 }
