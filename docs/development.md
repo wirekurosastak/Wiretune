@@ -204,7 +204,7 @@ It doesn't build Tizen and runs nothing on a device. Releases: [releasing.md](re
 
 | Area | What has been tried |
 |---|---|
-| Core, server | The tests, on Linux. The server binary has run against a real folder: scanning, sign-in, ranges, covers and live folder changes |
+| Core, server | The tests, on Linux. The server binary has run against a real folder: scanning, sign-in, ranges, covers and live folder changes. Big libraries: [below](#big-libraries) |
 | App logic and layouts | The view-model and widget tests ([above](#tests)), including a small phone at 150 % font size and a 1080p TV |
 | Downloads, remote control | Against the real server in the tests; remote control also between real devices |
 | Linux desktop | Built and run against a real library (1,320 tracks) at several window sizes, with playback, the queue, the spectrum, MPRIS and the device list driven through UI automation |
@@ -215,3 +215,17 @@ It doesn't build Tizen and runs nothing on a device. Releases: [releasing.md](re
 | Tizen | Built on Fedora and tried briefly on a 2024 Samsung TV (Tizen 8.0): signs in, plays, the remote reaches everything, but navigation is slow and **needs more work** |
 | Updates | In the tests: the check, the download and its checksum, and replacing a Linux folder. No release exists yet, so no copy has updated itself for real. The package, Windows, macOS and Android steps are untried |
 | Exclusive, bit-perfect | Tried on Linux and Windows with an SMSL SU-1 DAC; not measured ([audio.md](audio.md#bit-perfect)) |
+
+## Big libraries
+
+`dart tool/make_library.dart <folder> <tracks>` makes a made-up library: tagged MP3 files with empty audio (sparse, so 100,000 tracks take 400 MB of disk, mostly folders). Point the server at it and time `GET /api/tracks` with `curl`. The same tracks and seed make the same library.
+
+Measured on the Linux desktop (server built with `dart build cli`; the player side run from source), 2026-10-29. The files are in the disk cache and empty, so the scan time is the best case; a phone was **not** measured.
+
+| Tracks | Scan | `/api/tracks` (plain, gzip) | Answering 304 | Fetch and decode | Snapshot | Merge (SQLite and snapshot) |
+|---|---|---|---|---|---|---|
+| 10,000 | 0.5 s | 4.9 MB, 0.5 MB | 26 ms | 0.12 s | 93 ms | 0.19 s |
+| 50,000 | 2.3 s | 24 MB, 2.6 MB | 118 ms | 0.6 s | 236 ms | 0.55 s |
+| 100,000 | 4.8 s | 49 MB, 5.3 MB | 241 ms | 1.3 s | 396 ms | 1.1 s |
+
+Decoding, the snapshot and the merge run on the UI isolate, and the server hashes the whole list again for every request, even one that ends in a 304. The player process grew by about 5 KB per track in this run (resident memory, before garbage collection).
