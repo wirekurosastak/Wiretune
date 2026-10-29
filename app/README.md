@@ -1,6 +1,6 @@
 # Wiretune player
 
-The Flutter player for Linux, Windows, macOS, Android (phones, tablets, TV, Auto), iOS and Samsung's Tizen TVs.
+The Flutter player for Linux, Windows, macOS, Android (phone, tablet, TV, Auto), iOS and Samsung Tizen TVs.
 
-Building it for each system, with what to install first: [docs/building.md](../docs/building.md). Where the code is,
-testing, debugging and what has been tried where: [docs/development.md](../docs/development.md).
+- Building: [docs/building.md](../docs/building.md)
+- Code layout, tests, debugging, what's been tried: [docs/development.md](../docs/development.md)

@@ -1,32 +1,32 @@
 # HTTP API
 
-The JSON API under `/api` that the players speak. It isn't versioned: if you build on it, pin a server version.
+The JSON API under `/api` used by the players. It isn't versioned: if you build on it, pin a server version.
 
-- camelCase JSON, dates in ISO 8601 (UTC), durations in milliseconds.
-- Errors look like `{ "error": "message", "code": "code" }`, plus the one number or path the message names (`limit`,
-  `max`, `min`, `path` or `retryAfter`). `error` is English, for people; a player shows its own text for the `code`
-  ([below](#error-codes)) and falls back to `error` for one it doesn't know.
-- Send `Authorization: Bearer <token>`. Players that can't send headers may put a **stream token**
-  (`POST /api/auth/stream-token`) into the URL as `?token=` on `/api/stream/…` and `/api/cover/…`. That's the only
-  place a token is read from a URL, and the only kind of token accepted there: URLs end up in logs. The players
-  download with the sign-in token in the header.
-- Roles are **anonymous**, **user** and **admin**. Bodies are capped at 64 KiB (a playlist 4 MiB), then `413`.
-  Password rules, token lifetimes and the rate limit are in [server.md](server.md#accounts).
+- camelCase JSON, ISO 8601 dates (UTC), durations in milliseconds.
+- Errors: `{ "error": "message", "code": "code" }`, plus the number or path the message refers to (`limit`, `max`,
+  `min`, `path` or `retryAfter`). `error` is English, for people. Players show their own text for the `code`
+  ([codes](#error-codes)) and fall back to `error` for unknown codes.
+- Auth: `Authorization: Bearer <token>`. Players that can't send headers may put a **stream token**
+  (`POST /api/auth/stream-token`) in the URL as `?token=`, only on `/api/stream/…` and `/api/cover/…`. No other route
+  and no other token type is accepted in a URL, because URLs end up in logs. Downloads use the sign-in token in the
+  header.
+- Roles: **anonymous**, **user**, **admin**. Bodies are limited to 64 KiB (playlists 4 MiB), above that `413`. Password
+  rules, token lifetimes and the rate limit: [server.md](server.md#accounts).
 
 ## Authentication
 
 | Route | Role | |
 |---|---|---|
 | `GET /api/auth/setup-required` | anonymous | `{ "setupRequired": true }` while the server has no accounts |
-| `POST /api/auth/setup` | anonymous | Creates the first account, the administrator. Body `{ "username", "password", "setupCode" }`, the code being the one in the server's log. `200` with an `AuthResponse`, `400` for a rule violation, `403` for a missing or wrong code, `409` once set up. Rate limited |
-| `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` for a missing field, `401` for wrong credentials. Rate limited |
-| `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't get another one |
-| `POST /api/auth/change-password` | user | Body `{ "newPassword" }`; the current password isn't asked for. `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, which expires when the old one would have. `400` for a password that breaks the rules. Rate limited. Every token issued before (the caller's, other devices', stream tokens) stops working, and the account's remote-control connections close with `4401` |
+| `POST /api/auth/setup` | anonymous | Creates the first account (administrator). Body `{ "username", "password", "setupCode" }`, with the code from the server log. `200` with an `AuthResponse`, `400` rule violation, `403` missing or wrong code, `409` already set up. Rate limited |
+| `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` missing field, `401` wrong credentials. Rate limited |
+| `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't request another |
+| `POST /api/auth/change-password` | user | Body `{ "newPassword" }` (the current password isn't required). `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, expiring when the old one would have. `400` invalid password. Rate limited. All earlier tokens (the caller's, other devices', stream tokens) stop working, and the account's remote-control connections close with `4401` |
 | `GET /api/auth/me` | user | The caller's `UserInfo` |
-| `GET /api/users` | admin | Every account |
-| `POST /api/users` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` when the name is taken |
-| `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions, as a change does. `200` `{ "changed": true }`, `400` for a password that breaks the rules or for your own account (change that with `change-password`), `404` for an unknown one |
-| `DELETE /api/users/{userId}` | admin | Deletes an account and its data. `400` for your own account, `404` for an unknown one |
+| `GET /api/users` | admin | All accounts |
+| `POST /api/users` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` name taken |
+| `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions. `200` `{ "changed": true }`, `400` invalid password or your own account (use `change-password`), `404` unknown account |
+| `DELETE /api/users/{userId}` | admin | Deletes an account and its data. `400` your own account, `404` unknown account |
 
 `AuthResponse`: `{ "token", "user": UserInfo, "expiresAt" }`.
 `UserInfo`: `{ "id", "username", "isAdmin", "createdAt", "lastLoginAt" }`.
@@ -36,95 +36,113 @@ The JSON API under `/api` that the players speak. It isn't versioned: if you bui
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanAt", "lastScanError", "lastScanProblem" }`. Why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`); both `null` when it went well, and for anyone but an administrator, since they name the server's folders |
-| `POST /api/library/scan` | admin | Asks for a scan: `202 { "message": "Scan requested." }`. Poll the status route |
-| `GET /api/tracks` | user | Every track, with an `ETag`. Send it back as `If-None-Match` and an unchanged list is `304` with no body |
-| `GET /api/artists/pictures` | user | The artists that have a picture of their own in the music folder (`artist.jpg`, see the [user guide](user-guide.md#the-library)): `{ artistId: version }`, the version changing with the file. With an `ETag`, as on `/api/tracks` |
+| `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanAt", "lastScanError", "lastScanProblem" }`. The last two say why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`). Both are `null` when it went well, and for non-administrators (they name server folders) |
+| `POST /api/library/scan` | admin | Requests a scan: `202 { "message": "Scan requested." }`. Poll the status route |
+| `GET /api/tracks` | user | All tracks, with an `ETag`. Send it as `If-None-Match`: an unchanged list returns `304` with no body |
+| `GET /api/artists/pictures` | user | Artists with their own picture in the music folder (`artist.jpg`, see the [user guide](user-guide.md#the-library)): `{ artistId: version }`; the version changes with the file. `ETag` as on `/api/tracks` |
 | `GET /api/config` | admin | `{ "musicFolder" }` |
-| `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (kept in the database, and kept after a restart even while it's missing) and asks for a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that holds or lies inside the server's data directory, judged where symbolic links lead |
+| `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (saved in the database, kept after a restart even while missing) and requests a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that contains or is inside the server's data folder (following symbolic links) |
 
-A **track** has `id`, `title`, `artist` (several artists joined by ", "), `artists` (each of them, only when there are
-several), `album`, `albumArtist` (the first when there are several), `albumArtists` (each of them, only when there are
-several), `trackNumber`, `trackCount`, `discNumber`, `releaseYear`, `bpm`, `genre`,
-`durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt` and `format` (`codec`, `sampleRate`,
-`bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`). A track with a cover also has `coverVersion`,
-which changes when the album's cover does: the players put it in the cover's address (`?v=`), so a new cover is never
-mistaken for a cached one. Files stay on the server, and so do their paths. Favorites and play counts are per account
-and come from `/api/me/data`. The players group albums and artists themselves; `album`, `albumArtist`, `trackNumber` and
-`discNumber` already say how the server filed a folder of one artist's songs ([user guide](user-guide.md#the-library)).
+A **track** has:
+
+- `id`, `title`
+- `artist` (several artists joined by ", "), `artists` (the list, only when there are several)
+- `album`, `albumArtist` (the first one when there are several), `albumArtists` (the list, only when there are several)
+- `trackNumber`, `trackCount`, `discNumber`, `releaseYear`, `bpm`, `genre`
+- `durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt`
+- `format`: `codec`, `sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`
+- `coverVersion`, if it has a cover. It changes when the album's cover changes. Players add it to the cover URL
+  (`?v=`), so a new cover is never mistaken for a cached one.
+
+File paths never leave the server. Favorites and play counts are per account and come from `/api/me/data`. Players group
+albums and artists themselves; `album`, `albumArtist`, `trackNumber` and `discNumber` already reflect how the server
+filed a folder of one artist's songs ([user guide](user-guide.md#the-library)).
 
 ## Your data
 
-The signed-in account's favorites, play counts, playlists and hidden content preferences. Every route here touches only
-the account in the token, and none takes a stream token. Limits: 100,000 favorites, 100,000 tracks with play counts, 500
-playlists of up to 20,000 tracks, 50,000 hidden items, IDs up to 128 characters, playlist names up to 200 and
-descriptions up to 1,000. Over a limit you get `409`.
+The signed-in account's favorites, play counts, playlists and hidden items. These routes only touch the account in the
+token, and none accepts a stream token.
+
+Limits: 100,000 favorites, 100,000 tracks with play counts, 500 playlists of up to 20,000 tracks, 50,000 hidden items,
+IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000. Over a limit: `409`.
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/me/data` | user | All of it: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. The favorites come in the order they were marked; marking one again keeps its time. With an `ETag`, as on `/api/tracks` |
-| `PUT /api/me/favorites/{trackId}` | user | Marks a favorite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` for an invalid ID, `409` at the limit |
+| `GET /api/me/data` | user | Everything: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. Favorites are in the order they were marked; marking one again keeps its time. `ETag` as on `/api/tracks` |
+| `PUT /api/me/favorites/{trackId}` | user | Marks a favorite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
-| `POST /api/me/plays/{trackId}` | user | One more play, and the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
-| `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` for a rule violation, `409` at the limit |
-| `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` for an unknown ID |
-| `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album, or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` for an invalid type or ID, `409` at the limit |
-| `DELETE /api/me/hidden/{type}/{itemId}` | user | Unhides an item. `200 { "itemType", "itemId", "hidden": false }` |
+| `POST /api/me/plays/{trackId}` | user | Adds a play and sets the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
+| `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` rule violation, `409` at the limit |
+| `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` unknown ID |
+| `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` invalid type or ID, `409` at the limit |
+| `DELETE /api/me/hidden/{type}/{itemId}` | user | Unhides it. `200 { "itemType", "itemId", "hidden": false }` |
 
-The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs stay.
+The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept.
 
 ## Media
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` when the track is unknown, outside the music folder, or gone |
-| `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` when there is none. A `?v=` is ignored |
-| `GET /api/cover/artist/{artistId}` | user | The artist's own picture, as for an album's cover. `404` when there is none |
-| `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` when there are none. The server never looks online; the players ask LRCLIB themselves |
+| `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` if the track is unknown, outside the music folder, or gone |
+| `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` if there's none. `?v=` is ignored |
+| `GET /api/cover/artist/{artistId}` | user | The artist's own picture, like an album cover. `404` if there's none |
+| `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` if there are none. The server never looks online; the players ask LRCLIB themselves |
 
 ## Remote control
 
-`GET /api/remote` (user, with the sign-in token in the header: never a stream token, never `?token=`) upgrades to a
-WebSocket. Through it the players of one account see each other and send each other commands. The server passes the
-messages on between the players of that account and nowhere else, and keeps none of them. A plain `GET` gets `426`, a
-request from a web page (one with an `Origin` header) `403`, and an account that already holds 40 connections `429`.
+`GET /api/remote` upgrades to a WebSocket (user role, sign-in token in the header only: no stream token, no `?token=`).
+Through it the players of one account see each other and send each other commands. The server only relays messages
+between players of the same account and stores none.
 
-Every message is a JSON object with a `type`, sent as text, at most 64 K characters.
+- A plain `GET`: `426`.
+- A request from a web page (with an `Origin` header): `403`.
+- An account that already has 40 connections: `429`.
+
+Every message is a JSON text object with a `type`, at most 64 K characters.
 
 | Message | Sent by | |
 |---|---|---|
-| `{ "type": "hello", "device": { "id", "name", "kind" } }` | player | First, within 10 seconds. `id` is the player's own lasting ID (up to 128 characters), `name` up to 64 (empty is fine), `kind` one of `desktop`, `phone`, `tablet`, `tv`. Saying hello again renames the device |
-| `{ "type": "state", "state" }` | player | What it plays (below). The others get it, and so do players that connect later |
-| `{ "type": "command", "to", "command" }` | player | For another player of the account, by its ID; one that isn't online is ignored |
-| `{ "type": "devices", "devices": [{ "id", "name", "kind" }] }` | server | The account's other players that are online, every time that changes |
+| `{ "type": "hello", "device": { "id", "name", "kind" } }` | player | First, within 10 seconds. `id`: the player's permanent ID (up to 128 characters). `name`: up to 64, may be empty. `kind`: `desktop`, `phone`, `tablet` or `tv`. Sending hello again renames the device |
+| `{ "type": "state", "state" }` | player | What it's playing (below). Sent to the others, including players that connect later |
+| `{ "type": "command", "to", "command" }` | player | For another player of the account, by ID. Ignored if that player is offline |
+| `{ "type": "devices", "devices": [{ "id", "name", "kind" }] }` | server | The account's other online players, whenever that changes |
 | `{ "type": "state", "device", "state" }` | server | Another player's state |
 | `{ "type": "command", "from", "command" }` | server | A command for this player |
-| `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change when it named itself in an `X-Wiretune-Device` header (its device ID) on that request |
-| `{ "type": "libraryChanged" }` | server | A scan changed what `/api/tracks` or `/api/artists/pictures` lists (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
+| `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change, if it sent its device ID in an `X-Wiretune-Device` header with that request |
+| `{ "type": "libraryChanged" }` | server | A scan changed `/api/tracks` or `/api/artists/pictures` (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
-"queueIndex" }`: the track as `/api/tracks` lists it (or `null`), the position when the state was sent (the others
-count on from there while it plays), the volume from 0 to 100, `repeat` as `off`, `all` or `one`, and up to 1,000
-track IDs of the queue with the current one's index (or -1). Tracks from the server go by the server's IDs, so the other
-players find them in their own library.
+"queueIndex" }`:
 
-A **command** has an `action`: `play`, `pause`, `toggle`, `stop`, `next`, `previous`, `seek` (with `positionMs`),
-`volume` (`volume`), `mute` and `shuffle` (`on`), `repeat` (`repeat`), `playTracks` (`trackIds`, the `index` to start at
-or -1 for the player's own choice, and `positionMs` there), `playIndex` (`index` in its queue), `moveTrack` (from
-`index` to `toIndex` in its queue), `removeTrack` (`index`), `clearQueue`, `playNext` (`trackIds` right after the
-current track) or `addToQueue` (`trackIds` at the end; with nothing queued both start playing). A player checks what it
-gets and ignores a command it doesn't understand.
+- `track`: as `/api/tracks` lists it, or `null`
+- `positionMs`: the position when the state was sent (the others count on from there while it plays)
+- `volume`: 0 to 100
+- `repeat`: `off`, `all` or `one`
+- `queue`: up to 1,000 track IDs, with `queueIndex` for the current one (or -1)
 
-The server closes a connection with `4000` when the same device connects again, `4001` beyond 20 devices on one
-account, `4401` when the token expires or the account is deleted, `1008` for a message it doesn't accept (or more than
-200 in 10 seconds), and `1009` for one that is too long. Both sides ping every 25 seconds.
+Server tracks use the server's IDs, so the other players find them in their own library.
+
+A **command** has an `action`:
+
+- `play`, `pause`, `toggle`, `stop`, `next`, `previous`, `clearQueue`
+- `seek` (`positionMs`), `volume` (`volume`), `mute` and `shuffle` (`on`), `repeat` (`repeat`)
+- `playTracks`: `trackIds`, `index` to start at (-1: the player chooses), `positionMs` there
+- `playIndex` (`index` in the queue), `moveTrack` (`index` to `toIndex`), `removeTrack` (`index`)
+- `playNext` (`trackIds` right after the current track), `addToQueue` (`trackIds` at the end). With an empty queue,
+  both start playing.
+
+Players validate what they receive and ignore commands they don't understand.
+
+Close codes: `4000` the same device connected again, `4001` more than 20 devices on one account, `4401` the token
+expired or the account was deleted, `1008` an invalid message (or more than 200 in 10 seconds), `1009` a message too
+long. Both sides ping every 25 seconds.
 
 ## Error codes
 
 | Code | Status | |
 |---|---|---|
-| `signInRequired`, `tokenInvalid`, `sessionExpired`, `passwordChanged`, `accountRemoved` | 401 | No token; one this server didn't sign or that doesn't belong here; expired; issued before the password changed; of a deleted account |
-| `wrongCredentials` | 401 | The sign-in's user name or password |
+| `signInRequired`, `tokenInvalid`, `sessionExpired`, `passwordChanged`, `accountRemoved` | 401 | No token; a token this server didn't sign or that doesn't belong here; expired; issued before the password changed; a deleted account |
+| `wrongCredentials` | 401 | Wrong user name or password |
 | `adminOnly` | 403 | An administrator's route |
 | `rateLimited` | 429 | With `retryAfter` (seconds), also as the `Retry-After` header |
 | `credentialsRequired`, `usernameInvalid` (`max`), `passwordTooShort` (`min`), `passwordTooLong` (`max`, in bytes) | 400 | Account rules |
@@ -136,8 +154,8 @@ account, `4401` when the token expires or the account is deleted, `1008` for a m
 | `invalidJson` (400), `bodyTooLarge` (413), `internalError` (500) | | Any route |
 | `notWebSocket` (400, 426), `originRefused` (403), `tooManyConnections` (429) | | `/api/remote` |
 
-The list lives in `ErrorCodes` (`packages/wiretune_core/lib/src/models/protocol.dart`), shared by the server and the
-players; a new code gets its text in `strings.dart` as `Error<Code>`.
+The list is `ErrorCodes` in `packages/wiretune_core/lib/src/models/protocol.dart`, shared by server and players. A new
+code needs its text in `strings.dart` as `Error<Code>`.
 
 ## Example
 
