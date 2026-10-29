@@ -499,6 +499,7 @@ class AudioSettingsViewModel extends ChangeNotifier {
       _engine.bitPerfectChanged.listen((_) => _syncWithEngine()),
       _engine.devicesChanged.listen((_) => refreshDeviceList()),
       _engine.trackChanged.listen((_) => _updateSignalPath()),
+      _engine.outputMeasured.listen((_) => _updateSignalPath()),
     ]);
     refreshDeviceList();
   }

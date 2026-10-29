@@ -69,6 +69,9 @@ class WiretuneAudioEngine {
   final Event<void> devicesChanged = Event<void>();
   final Event<String> playbackFailed = Event<String>();
 
+  /// The output of the track playing now was read ([measuredOutput] has it).
+  final Event<void> outputMeasured = Event<void>();
+
   AudioDriver get driver => _driver;
   Track? get currentTrack => _currentTrack;
   PlaybackState get state => _driver.state;
@@ -86,7 +89,62 @@ class WiretuneAudioEngine {
   /// Waits for the device scan started by the constructor.
   Future<void> get ready => _initialDeviceScan;
 
-  /// The signal path of the current track as the player describes it: what Wiretune requested, not what it measured.
+  /// What the output was opened with for the current track, read from the player once it plays; null before that, or
+  /// when the driver can't tell.
+  AudioOutputInfo? get measuredOutput => _measuredOutput;
+  AudioOutputInfo? _measuredOutput;
+
+  /// Reads what the driver opened for [request]'s track, once it has: the output opens a moment after playing starts.
+  Future<void> _measureOutput(int request) async {
+    _measuredOutput = null;
+    if (!_driver.reportsOutput) return;
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (request != _request || _disposed) return;
+      if (_driver.state == PlaybackState.playing) {
+        final info = await _driver.readOutput();
+        if (request != _request || _disposed) return;
+        if (info != null) {
+          _measuredOutput = info;
+          outputMeasured.emit(null);
+          return;
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+  }
+
+  /// The line that says what the output really is, and whether that is what the file holds: a rate or a bit depth
+  /// that changed on the way is said, so "bit-perfect" is not taken on trust.
+  String? _outputLine(Track track) {
+    final output = _measuredOutput;
+    if (output == null) return null;
+    final bits = output.bitsPerSample;
+    final channels = output.channels;
+    final parts = [
+      '${_kilohertz(output.sampleRate)} kHz',
+      output.sampleFormat,
+      if (channels != null) Localizer.format('SignalChannels', [channels]),
+      if (output.backend != null) output.backend!,
+    ];
+    final format = track.format;
+    final notes = <String>[];
+    if (format.isLossless) {
+      if (format.sampleRate > 0 && format.sampleRate != output.sampleRate) {
+        notes.add(Localizer.format('SignalOutputResampled', [_kilohertz(format.sampleRate)]));
+      }
+      if (bits != null && format.bitsPerSample > bits) notes.add(Localizer.get('SignalOutputShallower'));
+    }
+    final line = Localizer.format('SignalOutput', [parts.join(', ')]);
+    return notes.isEmpty ? line : '$line – ${notes.join(', ')}';
+  }
+
+  static String _kilohertz(int rate) {
+    final text = (rate / 1000.0).toStringAsFixed(1);
+    return text.endsWith('.0') ? text.substring(0, text.length - 2) : text;
+  }
+
+  /// The signal path of the current track as the player describes it: what Wiretune requested, and below it, once the
+  /// output is open, what the player says it opened.
   String get signalPathDescription {
     final track = _currentTrack;
     if (track == null) return Localizer.get('SignalNone');
@@ -119,6 +177,7 @@ class WiretuneAudioEngine {
       Localizer.format('SignalProcessing', [processing]),
       Localizer.format('SignalAccess', [access]),
       Localizer.format('SignalTarget', [device]),
+      ?_outputLine(track),
     ].join('\n');
   }
 
@@ -184,6 +243,7 @@ class WiretuneAudioEngine {
     await _driver.play(source, track.format, start);
     // The driver forgot the next track: it is given again for this one.
     _nextSource = null;
+    if (request == _request) unawaited(_measureOutput(request));
     if (request == _request) await _offerNext();
   }
 
@@ -214,6 +274,7 @@ class WiretuneAudioEngine {
     _nextTrack = null;
     _nextSource = null;
     WiretuneLog.info('AudioEngine', "Gapless: '${track.artist} - ${track.title}' (${track.format.tagSpec})");
+    unawaited(_measureOutput(_request));
     trackChanged.emit(track);
     advanced.emit(track);
   }
@@ -225,6 +286,7 @@ class WiretuneAudioEngine {
   Future<void> stop() {
     _request++;
     _currentTrack = null;
+    _measuredOutput = null;
     trackChanged.emit(null);
     return _driver.stop();
   }
@@ -375,6 +437,7 @@ class WiretuneAudioEngine {
       if (source != null) {
         await _driver.play(source, track.format, currentPosition);
         _nextSource = null;
+        unawaited(_measureOutput(_request));
         await _offerNext();
       }
     }

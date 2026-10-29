@@ -18,16 +18,19 @@ shows why. Changing the mode or device mid-track restarts the track at the same 
 ## Bit-perfect
 
 Wiretune requests lossless decoding with no gain, no filters, no resampling and no format change, on a device it has
-to itself. It doesn't measure what reaches the DAC: the signal-path readout shows what was requested, not what arrived.
+to itself. *Settings → Audio → Signal path* shows that request, and once a track plays, a line **Actual output** with
+what the player opened: the rate, the sample format, the channels and the output driver. It adds *resampled* when that
+rate isn't the file's, and *less bit depth than the file* when the format holds fewer bits. A 24-bit file comes out as
+`s32`, which is fine: the extra bits are padding.
 
-- If an ALSA device can't take the file's sample rate or format, mpv converts it anyway and the readout still says
-  bit-perfect. `WIRETUNE_LOG_LEVEL=debug` logs the format mpv chose.
+- That line is the player's own report of the format it handed to the output. It can't see what the driver or the DAC
+  does after that, so Wiretune still hasn't been measured with bit-exact test streams.
 - Wiretune doesn't touch the sound card's hardware mixer. Set it to 100 % yourself (for example with `alsamixer`).
 - DSD files (`.dsf`) are decoded to PCM: there's no native DSD or DoP output.
 - For lossy files, bit-perfect only describes the output stage.
 
 Tried on Linux and Windows with an SMSL SU-1 USB DAC. Never measured with bit-exact test streams, never tried with a DAC
-on macOS. Reports from other setups are welcome.
+on macOS. The actual-output line was checked against libmpv with the `null` output, not on a DAC. Reports from other setups are welcome.
 
 ## Choosing a device
 

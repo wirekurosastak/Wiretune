@@ -48,7 +48,39 @@ abstract class AudioDriver {
 
   /// Applies [mode] from now on; a driver that cannot normalize ignores it, and bit-perfect output never normalizes.
   void setNormalization(VolumeNormalization mode);
+
+  /// Whether [readOutput] can ever tell; a driver that can't is not asked.
+  bool get reportsOutput;
+
+  /// What the output was actually opened with for the track playing now, as the player reports it (not as was asked
+  /// for); null when the output isn't open yet.
+  Future<AudioOutputInfo?> readOutput();
   Future<void> dispose();
+}
+
+/// The format the output was opened with.
+class AudioOutputInfo {
+  const AudioOutputInfo({required this.sampleRate, required this.sampleFormat, this.channels, this.backend});
+
+  final int sampleRate;
+
+  /// The sample format as the player names it: `s16`, `s32`, `float`, …
+  final String sampleFormat;
+  final int? channels;
+
+  /// The output driver: `alsa`, `pipewire`, `wasapi`, `coreaudio`, …
+  final String? backend;
+
+  /// The bits one sample of [sampleFormat] holds; null for a format this doesn't know.
+  int? get bitsPerSample {
+    final match = RegExp(r'^(?:s|u)(\d+)p?$').firstMatch(sampleFormat);
+    if (match != null) return int.parse(match.group(1)!);
+    return switch (sampleFormat.replaceAll('p', '')) {
+      'float' => 32,
+      'double' => 64,
+      _ => null,
+    };
+  }
 }
 
 /// The events every driver raises, so an implementation only has to fire them.
@@ -65,6 +97,13 @@ mixin AudioDriverEvents implements AudioDriver {
   final Event<void> advanced = Event<void>();
   @override
   final Event<String> playbackFailed = Event<String>();
+
+  /// A driver that can't tell what its output was opened with.
+  @override
+  bool get reportsOutput => false;
+
+  @override
+  Future<AudioOutputInfo?> readOutput() async => null;
 }
 
 enum PlaybackState { stopped, playing, paused, error }

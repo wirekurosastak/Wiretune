@@ -415,6 +415,30 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     await native.setProperty('replaygain', mode == VolumeNormalization.off ? 'no' : mode.name);
   }
 
+  @override
+  bool get reportsOutput => true;
+
+  @override
+  Future<AudioOutputInfo?> readOutput() async {
+    final native = _player.platform;
+    if (native is! NativePlayer) return null;
+    try {
+      final rate = int.tryParse(await native.getProperty('audio-out-params/samplerate'));
+      final format = await native.getProperty('audio-out-params/format');
+      if (rate == null || rate <= 0 || format.isEmpty) return null;
+      final backend = await native.getProperty('current-ao');
+      return AudioOutputInfo(
+        sampleRate: rate,
+        sampleFormat: format,
+        channels: int.tryParse(await native.getProperty('audio-out-params/channel-count')),
+        backend: backend.isEmpty ? null : backend,
+      );
+    } on Object catch (e) {
+      WiretuneLog.debug('MediaKitDriver', 'Could not read the output format: $e');
+      return null;
+    }
+  }
+
   Future<void> _applyVolume() => _player.setVolume(_bitPerfect ? 100 : _volume * 100);
 
   // ── mpv's reports ──────────────────────────────────────────────────────────────────────────────

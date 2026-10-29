@@ -167,6 +167,93 @@ void main() {
     expect(engine.signalPathDescription, contains('Local file'));
   });
 
+  group('the signal path says what the output really is', () {
+    Track track({int rate = 96000, int bits = 24, bool lossless = true}) => Track(
+      title: 'Test Track',
+      artist: 'Test Artist',
+      format: AudioFormat(
+        sampleRate: rate,
+        bitsPerSample: bits,
+        isLossless: lossless,
+        codec: lossless ? 'FLAC' : 'MP3',
+      ),
+      filePath: '/path/to/test.flac',
+    );
+
+    Future<(WiretuneAudioEngine, FakeAudioDriver)> start(Track playing, AudioOutputInfo? output) async {
+      final driver = FakeAudioDriver()
+        ..reportsOutput = true
+        ..output = output;
+      final engine = WiretuneAudioEngine(driver);
+      addTearDown(engine.dispose);
+      await engine.ready;
+      await engine.playTrack(playing);
+      return (engine, driver);
+    }
+
+    test('only once the player has opened it, and then in the description', () async {
+      final (engine, driver) = await start(track(), null);
+      expect(engine.measuredOutput, isNull);
+      expect(engine.signalPathDescription, isNot(contains('Actual output')));
+
+      driver.output = const AudioOutputInfo(sampleRate: 96000, sampleFormat: 's32', channels: 2, backend: 'alsa');
+      await until(() => engine.measuredOutput != null, within: const Duration(seconds: 3));
+      expect(engine.signalPathDescription, contains('Actual output: 96 kHz, s32, 2 ch, alsa'));
+      expect(engine.signalPathDescription, isNot(contains('resampled')));
+      expect(engine.signalPathDescription, isNot(contains('less bit depth')));
+    });
+
+    test('and says so when the rate or the bit depth is not the file\'s', () async {
+      final (engine, _) = await start(
+        track(rate: 96000, bits: 24),
+        const AudioOutputInfo(sampleRate: 48000, sampleFormat: 's16', channels: 2),
+      );
+      await until(() => engine.measuredOutput != null);
+      expect(
+        engine.signalPathDescription,
+        contains('Actual output: 48 kHz, s16, 2 ch – resampled, the source is 96 kHz'),
+      );
+      expect(engine.signalPathDescription, contains('less bit depth than the file'));
+    });
+
+    test('says nothing against a lossy file, which has no bit depth to keep', () async {
+      final (engine, _) = await start(
+        track(rate: 44100, bits: 16, lossless: false),
+        const AudioOutputInfo(sampleRate: 48000, sampleFormat: 'float'),
+      );
+      await until(() => engine.measuredOutput != null);
+      expect(engine.signalPathDescription, contains('Actual output: 48 kHz, float'));
+      expect(engine.signalPathDescription, isNot(contains('resampled')));
+    });
+
+    test('is read again for the next track, and forgotten when playback stops', () async {
+      final (engine, driver) = await start(
+        track(rate: 44100, bits: 16),
+        const AudioOutputInfo(sampleRate: 44100, sampleFormat: 's16'),
+      );
+      await until(() => engine.measuredOutput != null);
+
+      driver.output = const AudioOutputInfo(sampleRate: 96000, sampleFormat: 's32');
+      var measured = 0;
+      engine.outputMeasured.listen((_) => measured++);
+      await engine.playTrack(track());
+      await until(() => measured == 1);
+      expect(engine.measuredOutput?.sampleRate, 96000);
+
+      await engine.stop();
+      expect(engine.measuredOutput, isNull);
+    });
+
+    test('knows the bits of the formats the player names', () {
+      int? bits(String format) => AudioOutputInfo(sampleRate: 44100, sampleFormat: format).bitsPerSample;
+      expect(
+        [bits('s16'), bits('s24'), bits('s32'), bits('s32p'), bits('u8'), bits('float'), bits('floatp')],
+        [16, 24, 32, 32, 8, 32, 32],
+      );
+      expect([bits('double'), bits('mystery')], [64, null]);
+    });
+  });
+
   test('the next track is handed to the driver ahead, again after a new start, and takes over gaplessly', () async {
     final driver = FakeAudioDriver();
     final engine = TestSupport.createEngine(driver);

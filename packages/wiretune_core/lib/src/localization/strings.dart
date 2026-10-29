@@ -752,6 +752,18 @@ const Map<String, (String, String, String)> allStrings = {
   'SignalProcessing': ('Feldolgozás: {0}', 'Processing: {0}', 'Verarbeitung: {0}'),
   'SignalAccess': ('Hozzáférés: {0}', 'Access: {0}', 'Zugriff: {0}'),
   'SignalTarget': ('Cél eszköz: {0}', 'Target device: {0}', 'Zielgerät: {0}'),
+  'SignalOutput': ('Valódi kimenet: {0}', 'Actual output: {0}', 'Tatsächliche Ausgabe: {0}'),
+  'SignalChannels': ('{0} csatorna', '{0} ch', '{0} Kanäle'),
+  'SignalOutputResampled': (
+    'átmintavételezve, a forrás {0} kHz',
+    'resampled, the source is {0} kHz',
+    'umgerechnet, die Quelle hat {0} kHz',
+  ),
+  'SignalOutputShallower': (
+    'kisebb bitmélység, mint a fájlé',
+    'less bit depth than the file',
+    'weniger Bittiefe als die Datei',
+  ),
   'SignalProcessingBitPerfect': (
     'Bit-perfect kérve (PCM, erősítés nélkül, kizárólagos eszközhozzáférés)',
     'Bit-perfect requested (PCM, no gain, exclusive device access)',
