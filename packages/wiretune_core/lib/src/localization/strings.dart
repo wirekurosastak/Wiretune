@@ -1223,6 +1223,32 @@ const Map<String, (String, String, String)> allStrings = {
     "The server didn't accept the change: {0}",
     'Der Server hat die Änderung nicht angenommen: {0}',
   ),
+  'OtherApps': ('Más alkalmazások', 'Other apps', 'Andere Apps'),
+  'OtherAppsHint': (
+    'A Feishin, a Symfonium és a többi Subsonic-alkalmazás ezzel a jelszóval lép be a te jelszavad helyett. Fiókot nem módosíthat vele.',
+    "Apps like Feishin and Symfonium sign in with this password instead of yours. It can't change your account.",
+    'Apps wie Feishin und Symfonium melden sich mit diesem Passwort an, nicht mit deinem. Das Konto lässt sich damit nicht ändern.',
+  ),
+  'OtherAppsAddress': ('Szerver: {0}   Felhasználó: {1}', 'Server: {0}   User: {1}', 'Server: {0}   Benutzer: {1}'),
+  'AppPasswordNone': (
+    'Még nincs alkalmazásjelszavad.',
+    'You have no app password yet.',
+    'Du hast noch kein App-Passwort.',
+  ),
+  'AppPasswordExists': (
+    'Van alkalmazásjelszavad. Egy újjal a régi megszűnik.',
+    'You have an app password. A new one replaces it.',
+    'Du hast ein App-Passwort. Ein neues ersetzt es.',
+  ),
+  'AppPasswordMake': ('Új jelszó készítése', 'Make a new password', 'Neues Passwort erstellen'),
+  'AppPasswordShownOnce': (
+    'Csak most látszik. Másold ki.',
+    'Shown only now. Copy it.',
+    'Wird nur jetzt angezeigt. Kopiere es.',
+  ),
+  'AppPasswordRemoved': ('Az alkalmazásjelszó törölve.', 'App password removed.', 'App-Passwort entfernt.'),
+  'Copy': ('Másolás', 'Copy', 'Kopieren'),
+  'Copied': ('Kimásolva.', 'Copied.', 'Kopiert.'),
   'PasswordChangedOthersSignedOut': (
     'A jelszó megváltozott. A többi eszközöd kijelentkezett.',
     'Password changed. Your other devices were signed out.',

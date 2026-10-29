@@ -81,6 +81,11 @@ Away from the server, turn on *Settings → Account & connection → Offline mod
 and local music, and the player stops looking for the server (no banner, no reconnecting). Turn it off, or connect to
 a server, to get everything back.
 
+## Other apps
+
+Apps such as Feishin and Symfonium can play from your server too. They sign in with an app password, which you make in
+*Settings → Account & connection → Other apps* ([how to connect an app](subsonic.md)).
+
 ## Remote control
 
 Players signed in to the same account see each other. Pick a device with the cast button to control it. *This device*

@@ -8,16 +8,10 @@ Tempo can play from it. They see the same library, favorites, play counts and pl
 
 1. Make an **app password**. These apps send their secret with every request, so they get a password of their own
    instead of your account password. It opens this API and nothing else, and anyone holding it can't change your
-   account. A Wiretune player will do this for you once its settings have a place for it; until then, with your
-   sign-in token from `POST /api/auth/login`:
-
-   ```bash
-   curl -X POST -H "Authorization: Bearer $TOKEN" http://nas:5200/api/me/app-password
-   # {"password":"abcd-efgh-jkmn-pqrs"}
-   ```
-
-   It is shown once. Making another replaces the first; `DELETE /api/me/app-password` removes it. Changing or
-   resetting your account password removes it too.
+   account. In the player, open **Settings → Account & connection → Other apps** and choose **Make a new password**.
+   It is shown once: copy it there. Making another replaces the first, and **Delete** removes it. Changing or
+   resetting your account password removes it too. Without a player at hand, the API does the same
+   (`POST /api/me/app-password` with your sign-in token, [api.md](api.md)).
 2. In the app, add a Subsonic or OpenSubsonic server with the server's address (`http://nas:5200`, or `https://…`),
    your user name and the app password as the password. An app that offers an API key takes the app password as the key.
 

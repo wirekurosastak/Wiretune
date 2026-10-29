@@ -3,6 +3,7 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
@@ -486,6 +487,14 @@ class _AccountCardState extends State<_AccountCard> {
                       ),
                       icon: const Icon(Icons.key_rounded, size: 16),
                       label: Text(context.tr('ChangePassword')),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (_) => _AppPasswordDialog(server: server, notice: context.vm.showNotice),
+                      ),
+                      icon: const Icon(Icons.apps_rounded, size: 16),
+                      label: Text(context.tr('OtherApps')),
                     ),
                     OutlinedButton.icon(
                       onPressed: () => confirmAndSignOut(context),
@@ -1497,6 +1506,149 @@ class _HiddenContentCard extends StatelessWidget {
             onPressed: onUnhide,
             child: Text(context.tr('Unhide'), style: TextStyle(color: colors.accent, fontSize: 13)),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The password the apps that speak the Subsonic API sign in with ([docs/subsonic.md]): whether there is one, making a
+/// new one (shown once, to copy) and removing it.
+class _AppPasswordDialog extends StatefulWidget {
+  const _AppPasswordDialog({required this.server, required this.notice});
+
+  final ServerSettingsViewModel server;
+  final void Function(String text) notice;
+
+  @override
+  State<_AppPasswordDialog> createState() => _AppPasswordDialogState();
+}
+
+class _AppPasswordDialogState extends State<_AppPasswordDialog> {
+  bool? _exists; // null while it loads
+  String? _password; // the new one, while it is shown
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.server.loadAppPassword().then((answer) {
+      if (!mounted) return;
+      final (exists, error) = answer;
+      setState(() {
+        _exists = exists;
+        _error = error;
+      });
+    });
+  }
+
+  Future<void> _make() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final (password, error) = await widget.server.makeAppPassword();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = error;
+      if (password != null) {
+        _password = password;
+        _exists = true;
+      }
+    });
+  }
+
+  Future<void> _remove() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final error = await widget.server.removeAppPassword();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = error;
+      if (error == null) {
+        _password = null;
+        _exists = false;
+      }
+    });
+    if (error == null) widget.notice(Localizer.get('AppPasswordRemoved'));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final server = widget.server;
+    final exists = _exists;
+    return PopScope(
+      canPop: !_busy,
+      child: AppDialog(
+        title: context.tr('OtherApps'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(context.tr('OtherAppsHint'), style: TextStyle(fontSize: 13, color: colors.textMuted)),
+              const SizedBox(height: 10),
+              SelectableText(
+                context.trf('OtherAppsAddress', [server.connectedServerUrl, server.currentUserName]),
+                style: TextStyle(fontSize: 13, color: colors.textMain),
+              ),
+              const SizedBox(height: 14),
+              if (_password != null) ...[
+                Text(context.tr('AppPasswordShownOnce'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        _password!,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: colors.textMain,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: context.tr('Copy'),
+                      icon: const Icon(Icons.copy_rounded, size: 18),
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: _password!));
+                        widget.notice(Localizer.get('Copied'));
+                      },
+                    ),
+                  ],
+                ),
+              ] else if (exists != null)
+                Text(
+                  context.tr(exists ? 'AppPasswordExists' : 'AppPasswordNone'),
+                  style: TextStyle(fontSize: 13, color: colors.textMain),
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          if (exists == true)
+            TextButton(
+              onPressed: _busy ? null : _remove,
+              child: Text(context.tr('Delete'), style: TextStyle(color: colors.danger)),
+            ),
+          TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(), child: Text(context.tr('Close'))),
+          if (exists != null)
+            PressShrink(
+              child: FilledButton(onPressed: _busy ? null : _make, child: Text(context.tr('AppPasswordMake'))),
+            ),
         ],
       ),
     );

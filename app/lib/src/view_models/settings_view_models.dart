@@ -427,6 +427,36 @@ class ServerSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  /// What the "Other apps" dialog works with: whether the account has an app password, a new one, and removing it.
+  /// Each returns the error to show, or null.
+  Future<(bool?, String?)> loadAppPassword() async {
+    if (!isLoggedIn) return (null, Localizer.get('NotSignedIn'));
+    try {
+      return (await _session.hasAppPassword(), null);
+    } catch (e) {
+      return (null, '$e');
+    }
+  }
+
+  Future<(String?, String?)> makeAppPassword() async {
+    if (!isLoggedIn) return (null, Localizer.get('NotSignedIn'));
+    try {
+      return (await _session.createAppPassword(), null);
+    } catch (e) {
+      return (null, '$e');
+    }
+  }
+
+  Future<String?> removeAppPassword() async {
+    if (!isLoggedIn) return Localizer.get('NotSignedIn');
+    try {
+      await _session.removeAppPassword();
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
   Future<String?> adminResetPassword(String userId, String newPassword, String confirmPassword) async {
     if (!isLoggedIn || !isAdmin) return Localizer.get('SessionRejected');
     if (_newPasswordProblem(newPassword, confirmPassword) case final problem?) return problem;
