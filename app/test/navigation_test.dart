@@ -109,6 +109,18 @@ void main() {
     expect(vm.searchQuery, '');
   });
 
+  test('search finds names whether or not they are typed with their accents', () async {
+    final vm = await create();
+    vm.openSearch();
+
+    vm.searchQuery = 'MÎLES';
+    expect(vm.search.matchingArtists.map((a) => a.name), ['Miles Davis']);
+    expect(vm.search.bestMatch?.title, 'Miles Davis');
+
+    vm.searchQuery = 'kínd of blüe';
+    expect(vm.search.matchingAlbums.map((a) => a.title), ['Kind of Blue']);
+  });
+
   test('opening a result shows it, and back returns to the results', () async {
     final vm = await create();
     vm.openSearch();

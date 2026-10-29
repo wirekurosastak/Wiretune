@@ -96,19 +96,19 @@ class SearchViewModel extends ChangeNotifier {
   }
 
   void _execute(String q) {
-    final lower = q.toLowerCase();
+    final lower = foldForSearch(q);
     matchingTracks = _library.search(q).take(maxTracks).toList();
     matchingAlbums = _library.albums
-        .where((a) => a.title.toLowerCase().contains(lower) || a.artist.toLowerCase().contains(lower))
+        .where((a) => foldForSearch(a.title).contains(lower) || foldForSearch(a.artist).contains(lower))
         .take(maxCards)
         .toList();
-    matchingArtists = _library.artists.where((a) => a.name.toLowerCase().contains(lower)).take(maxCards).toList();
+    matchingArtists = _library.artists.where((a) => foldForSearch(a.name).contains(lower)).take(maxCards).toList();
     // An artist only featured on other people's songs has no place in the artist list, but is found by name.
-    if (!matchingArtists.any((a) => a.name.toLowerCase() == lower)) {
+    if (!matchingArtists.any((a) => foldForSearch(a.name) == lower)) {
       final guest = _library.getArtistByName(q);
       if (guest != null) matchingArtists = [guest, ...matchingArtists.take(maxCards - 1)];
     }
-    matchingPlaylists = _allPlaylists().where((p) => p.name.toLowerCase().contains(lower)).take(maxCards).toList();
+    matchingPlaylists = _allPlaylists().where((p) => foldForSearch(p.name).contains(lower)).take(maxCards).toList();
     bestMatch = _computeBestMatch(lower);
     notifyListeners();
   }
@@ -117,18 +117,18 @@ class SearchViewModel extends ChangeNotifier {
     T? firstWhere<T>(List<T> items, bool Function(T) test) => items.where(test).firstOrNull;
 
     final artist =
-        firstWhere(matchingArtists, (a) => a.name.toLowerCase() == q) ??
-        firstWhere(matchingArtists, (a) => a.name.toLowerCase().startsWith(q));
+        firstWhere(matchingArtists, (a) => foldForSearch(a.name) == q) ??
+        firstWhere(matchingArtists, (a) => foldForSearch(a.name).startsWith(q));
     if (artist != null) return _artistMatch(artist);
 
     final album =
-        firstWhere(matchingAlbums, (a) => a.title.toLowerCase() == q) ??
-        firstWhere(matchingAlbums, (a) => a.title.toLowerCase().startsWith(q));
+        firstWhere(matchingAlbums, (a) => foldForSearch(a.title) == q) ??
+        firstWhere(matchingAlbums, (a) => foldForSearch(a.title).startsWith(q));
     if (album != null) return _albumMatch(album);
 
     final track =
-        firstWhere(matchingTracks, (t) => t.title.toLowerCase() == q) ??
-        firstWhere(matchingTracks, (t) => t.title.toLowerCase().startsWith(q)) ??
+        firstWhere(matchingTracks, (t) => foldForSearch(t.title) == q) ??
+        firstWhere(matchingTracks, (t) => foldForSearch(t.title).startsWith(q)) ??
         matchingTracks.firstOrNull;
     if (track != null) return _trackMatch(track);
 

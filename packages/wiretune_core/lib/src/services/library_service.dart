@@ -679,12 +679,12 @@ class LibraryService {
     if (removed.isServer) playlistRemoved.emit(playlistId);
   }
 
-  /// Tracks whose title, artist, album, album artist or genre contain [query] (ignoring case).
+  /// Tracks whose title, artist, album, album artist or genre contain [query] (ignoring case and accents).
   Iterable<Track> search(String query) {
     final all = _snapshot.tracks;
     if (isBlank(query)) return all;
-    final q = query.trim().toLowerCase();
-    bool has(String? text) => text != null && text.toLowerCase().contains(q);
+    final q = foldForSearch(query.trim());
+    bool has(String? text) => text != null && foldForSearch(text).contains(q);
     return all.where(
       (t) => has(t.title) || has(t.artist) || has(t.album) || t.albumArtistNames.any(has) || has(t.genre),
     );

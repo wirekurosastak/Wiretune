@@ -567,6 +567,24 @@ void main() {
     expect((service.isFavorite(id), service.playCount(id), track.addedAt), (true, 1, added));
   });
 
+  test('search ignores case and accents, in what is typed and in the names', () {
+    final repo = testRepository();
+    repo.replaceAllTracks([
+      Track(id: '1', title: 'Árvíztűrő tükörfúrógép', artist: 'Ábel', album: 'Mélyvíz'),
+      Track(id: '2', title: 'Sunrise', artist: 'Zoë', album: 'Dawn'),
+    ]);
+    final service = _service(repo)..initialize();
+
+    List<String> found(String query) => [for (final t in service.search(query)) t.id];
+    expect(found('abel'), ['1']);
+    expect(found('ÁBEL'), ['1']);
+    expect(found('arvizturo'), ['1']);
+    expect(found('melyviz'), ['1']);
+    expect(found('zoe'), ['2']);
+    expect(found('zoë'), ['2']);
+    expect(found('nothing'), isEmpty);
+  });
+
   test('a file that was moved or renamed keeps its favourite, play count and playlists', () async {
     final folder = Directory.systemTemp.createTempSync('wiretune_moved_');
     addTearDown(() => folder.deleteSync(recursive: true));
