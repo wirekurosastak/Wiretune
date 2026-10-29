@@ -42,6 +42,9 @@ Pictures and lyrics are cached in the player's data folder.
 - **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. Every request checks the token
   against the account: a deleted user is locked out at once. A password change or an administrator's reset ends every
   earlier session, stream tokens included.
+- **The app password** is for the apps that speak the Subsonic API (`/rest`, [other apps](docs/subsonic.md)), which send
+  their secret with every request. It is random, kept in the database as it is (that API's sign-in needs it), opens
+  `/rest` and nothing else, and ends when the account's password changes. The account's own password never opens `/rest`.
 - **Tokens in URLs.** libmpv and the TV player can't send headers, so audio and cover URLs carry `?token=`. Only a
   **stream token** is accepted there: valid 8 hours, audio and covers only, never logged. These URLs can still end up in
   a proxy's access log. The spectrum analyzer's `ffmpeg` doesn't get the URL: the player downloads the track and hands

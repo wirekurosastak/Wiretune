@@ -175,6 +175,16 @@ int compareText(String a, String b) {
   return secondary != 0 ? secondary : a.compareTo(b);
 }
 
+/// [text] in lower case and without accents (`Ábel` becomes `abel`), to compare what someone typed with a name the way
+/// people mean it.
+String foldForSearch(String text) {
+  final buffer = StringBuffer();
+  for (final char in text.toLowerCase().split('')) {
+    buffer.write(_foldMap[char] ?? char);
+  }
+  return buffer.toString();
+}
+
 /// Whether [a] and [b] are equal, ignoring case.
 bool equalsIgnoreCase(String? a, String? b) {
   if (a == null || b == null) return a == b;

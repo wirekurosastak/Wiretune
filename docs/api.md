@@ -1,6 +1,7 @@
 # HTTP API
 
-The JSON API under `/api` used by the players. It isn't versioned: if you build on it, pin a server version.
+The JSON API under `/api` used by the players. It isn't versioned: if you build on it, pin a server version. Other apps
+use the Subsonic API under `/rest` ([other apps](subsonic.md)).
 
 - camelCase JSON, ISO 8601 dates (UTC), durations in milliseconds.
 - Errors: `{ "error": "message", "code": "code" }`, plus the number or path the message refers to (`limit`, `max`,
@@ -76,6 +77,9 @@ IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000. Ov
 | `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` unknown ID |
 | `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` invalid type or ID, `409` at the limit |
 | `DELETE /api/me/hidden/{type}/{itemId}` | user | Unhides it. `200 { "itemType", "itemId", "hidden": false }` |
+| `GET /api/me/app-password` | user | `200 { "exists": true }` when the account has an app password ([other apps](subsonic.md)) |
+| `POST /api/me/app-password` | user | Makes an app password for the Subsonic API, replacing the old one. `200 { "password": "abcd-efgh-jkmn-pqrs" }`, shown once |
+| `DELETE /api/me/app-password` | user | Removes it. `200 { "exists": false }` |
 
 The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept. A scan that
 finds a moved or renamed file moves the data to the new ID and sends `dataChanged`.

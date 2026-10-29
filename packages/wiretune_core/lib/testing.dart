@@ -225,8 +225,18 @@ abstract final class TestSupport {
 }
 
 /// Writes a 16-bit stereo PCM WAV file with a 440 Hz tone; with [picture], that as its embedded cover, and with
-/// [artist] that as its artist (an ID3 tag).
-void writeWav(String path, int sampleRate, {double seconds = 1.0, List<int>? picture, String? artist}) {
+/// [artist], [title], [album], [genre] and [trackNumber] those as its tags (an ID3 tag).
+void writeWav(
+  String path,
+  int sampleRate, {
+  double seconds = 1.0,
+  List<int>? picture,
+  String? artist,
+  String? title,
+  String? album,
+  String? genre,
+  int? trackNumber,
+}) {
   File(path).parent.createSync(recursive: true);
   final frames = (sampleRate * seconds).toInt();
   const channels = 2, bits = 16;
@@ -256,7 +266,10 @@ void writeWav(String path, int sampleRate, {double seconds = 1.0, List<int>? pic
     data.setInt16(44 + i * 4, sample, Endian.little);
     data.setInt16(46 + i * 4, sample, Endian.little);
   }
-  if (picture == null && artist == null) return File(path).writeAsBytesSync(data.buffer.asUint8List());
+  final texts = {'TPE1': artist, 'TIT2': title, 'TALB': album, 'TCON': genre, 'TRCK': trackNumber?.toString()};
+  if (picture == null && texts.values.every((text) => text == null)) {
+    return File(path).writeAsBytesSync(data.buffer.asUint8List());
+  }
 
   // An `id3 ` chunk holding an ID3v2.3 tag: an APIC frame with the front cover, a TPE1 frame with the artist.
   List<int> frame(String id, List<int> body) => [
@@ -269,7 +282,8 @@ void writeWav(String path, int sampleRate, {double seconds = 1.0, List<int>? pic
   ];
   final tag = [
     if (picture != null) ...frame('APIC', [...latin1.encode('image/png'), 0, 3, 0, ...picture]),
-    if (artist != null) ...frame('TPE1', latin1.encode(artist)),
+    for (final MapEntry(:key, :value) in texts.entries)
+      if (value != null) ...frame(key, latin1.encode(value)),
   ];
   final id3 = [...latin1.encode('ID3'), 3, 0, 0, ..._syncSafe(tag.length), ...tag];
   final chunk = [...latin1.encode('id3 '), ..._littleEndian(id3.length), ...id3, if (id3.length.isOdd) 0];

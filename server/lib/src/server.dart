@@ -17,6 +17,7 @@ import 'http_utils.dart';
 import 'library_scan_service.dart';
 import 'remote_hub.dart';
 import 'setup_code.dart';
+import 'subsonic/subsonic_api.dart';
 import 'user_data_service.dart';
 
 /// Who may call a route.
@@ -136,6 +137,19 @@ class WiretuneServer {
   final SetupCode setupCode;
   final LibraryScanService scanner;
   final RemoteHub remote = RemoteHub();
+
+  /// The Subsonic API under `/rest`, which apps other than Wiretune's players speak.
+  late final SubsonicApi subsonic = SubsonicApi(
+    library: library,
+    auth: auth,
+    userData: userData,
+    scanner: scanner,
+    musicFolder: () => paths.musicFolder,
+    sendStream: _sendTrack,
+    sendPicture: _sendPicture,
+    readLyrics: _readLyrics,
+    dataChanged: remote.dataChanged,
+  );
   final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
   HttpServer? _http;
   late final List<_Route> _routes = _buildRoutes();
@@ -233,7 +247,9 @@ class WiretuneServer {
   /// The whole HTTP API as a shelf handler.
   Future<Response> handler(Request request) async {
     try {
-      final response = await _dispatch(request);
+      final response = request.url.pathSegments.firstOrNull == 'rest'
+          ? await subsonic.handle(request)
+          : await _dispatch(request);
       return await compressJson(request, response);
     } on HijackException {
       rethrow; // a WebSocket took the connection over (remote control)
@@ -410,6 +426,18 @@ class WiretuneServer {
       Access.user,
       (call) => versionedJson(call.request, JsonDocument(utf8.encode(jsonEncode(userData.get(call.userId).toJson())))),
     ),
+    // The account's password for the apps that speak the Subsonic API
+    _Route('GET', '/api/me/app-password', Access.user, (call) {
+      return jsonResponse({'exists': auth.hasAppPassword(call.userId)});
+    }),
+    _Route('POST', '/api/me/app-password', Access.user, (call) {
+      final password = auth.createAppPassword(call.userId);
+      return password == null ? notFound() : jsonResponse({'password': password});
+    }),
+    _Route('DELETE', '/api/me/app-password', Access.user, (call) {
+      auth.removeAppPassword(call.userId);
+      return jsonResponse({'exists': false});
+    }),
     _Route('PUT', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, true)),
     _Route('DELETE', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, false)),
     _Route('PUT', '/api/me/hidden/{type}/{itemId}', Access.user, (call) => _setHidden(call, true)),
@@ -577,15 +605,28 @@ class WiretuneServer {
     return null;
   }
 
-  Future<Response> _stream(_Call call) async {
-    final track = library.getTrack(call.params['trackId']!);
+  Future<Response> _stream(_Call call) async => _sendTrack(call.request, library.getTrack(call.params['trackId']!));
+
+  /// The audio file of [track], with range support; 404 when there is no such track or its file is gone.
+  Future<Response> _sendTrack(Request request, Track? track) async {
     if (track == null ||
         !AppPaths.isPathUnderRoot(track.filePath, paths.musicFolder) ||
         !File(track.filePath).existsSync()) {
       return errorResponse(404, ErrorCodes.notFound, 'Track not found.');
     }
-    return fileResponse(call.request, File(track.filePath), AudioFileTypes.mimeType(track.filePath));
+    return fileResponse(request, File(track.filePath), AudioFileTypes.mimeType(track.filePath));
   }
+
+  /// The picture an ID names: an album's cover, the cover of a track, or an artist's own picture.
+  Future<Response> _sendPicture(Request request, String id) {
+    if (library.getAlbum(id) != null) return _cover(request, _coverTrack(id));
+    final track = library.getTrack(id);
+    if (track != null) return _cover(request, track);
+    return _sendArtistPicture(request, id);
+  }
+
+  Future<String?> _readLyrics(Track track) async =>
+      AppPaths.isPathUnderRoot(track.filePath, paths.musicFolder) ? MetadataScanner.readLyrics(track.filePath) : null;
 
   JsonDocument get _tracks => _trackList ??= _listTracks();
 
@@ -678,13 +719,15 @@ class WiretuneServer {
   }
 
   /// An artist's own picture (`artist.jpg` in the music folder).
-  Future<Response> _artistPicture(_Call call) async {
-    final path = library.artistPictureFiles[call.params['artistId']!];
+  Future<Response> _artistPicture(_Call call) => _sendArtistPicture(call.request, call.params['artistId']!);
+
+  Future<Response> _sendArtistPicture(Request request, String artistId) async {
+    final path = library.artistPictureFiles[artistId];
     if (path == null || !AppPaths.isPathUnderRoot(path, paths.musicFolder) || !File(path).existsSync()) {
       return notFound();
     }
     return fileResponse(
-      call.request,
+      request,
       File(path),
       ImageFormat.mimeTypeFromPath(path),
       headers: {'cache-control': 'private, max-age=86400'},

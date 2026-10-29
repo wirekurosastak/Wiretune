@@ -26,6 +26,7 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 - One account per listener. Favorites, playlists and play counts are the same on every device.
 - Offline downloads that stay in sync with the server.
 - Remote control: control one device from another.
+- The server also speaks the Subsonic API, so Feishin, Symfonium, Amperfy and others can play from it ([other apps](docs/subsonic.md)).
 - English, Hungarian, German.
 
 ## Platform support
@@ -65,6 +66,7 @@ In the player, connect to the server and create the first account with the setup
 | Build the server and the players | [Building](docs/building.md) |
 | Run the server: Docker, systemd, access away from home, accounts, backups | [Server](docs/server.md) |
 | Use the player | [User guide](docs/user-guide.md) |
+| Use the server from other apps (Feishin, Symfonium, …) | [Other apps](docs/subsonic.md) |
 | Set up exclusive or bit-perfect output | [Audio](docs/audio.md) |
 | See what leaves your network, or report a security problem | [Security](SECURITY.md) |
 | Change the code | [Development](docs/development.md), [Contributing](CONTRIBUTING.md), [HTTP API](docs/api.md) |

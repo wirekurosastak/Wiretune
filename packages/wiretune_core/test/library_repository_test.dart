@@ -31,6 +31,7 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 9) c.execute('ALTER TABLE users DROP COLUMN app_password');
     if (version < 8) c.execute('ALTER TABLE tracks DROP COLUMN album_artists');
     if (version < 7) {
       c.execute('''
@@ -255,6 +256,19 @@ void main() {
     expect(hidden[HiddenKind.track], isEmpty);
     expect(hidden[HiddenKind.album], isEmpty);
     expect(hidden[HiddenKind.artist], isEmpty);
+  });
+
+  test('a database of schema 8 is upgraded, and its accounts get a place for an app password', () async {
+    final (_, db) = await open();
+    db.connection.execute(
+      "INSERT INTO users (id, username, password_hash, is_admin, created_at, token_version) VALUES ('u1', 'owner', 'hash', 1, 1000, 3)",
+    );
+    downgrade(db, 8);
+
+    final (_, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    final row = again.connection.select('SELECT username, token_version, app_password FROM users').single;
+    expect((row['username'], row['token_version'], row['app_password']), ('owner', 3, null));
   });
 
   test('a database of schema 5 is upgraded, and its files are read again for their artists', () async {

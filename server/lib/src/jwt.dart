@@ -27,7 +27,7 @@ class Jwt {
     try {
       final header = jsonDecode(utf8.decode(_decode(parts[0])));
       if (header is! Map || header['alg'] != 'HS256') return null;
-      if (!_constantTimeEquals(_signature('${parts[0]}.${parts[1]}'), _decode(parts[2]))) return null;
+      if (!constantTimeEquals(_signature('${parts[0]}.${parts[1]}'), _decode(parts[2]))) return null;
 
       final claims = jsonDecode(utf8.decode(_decode(parts[1])));
       if (claims is! Map<String, Object?> || !audiences.contains(claims['aud']) || claims['exp'] is! int) return null;
@@ -47,7 +47,8 @@ class Jwt {
 
   static List<int> _decode(String text) => base64Url.decode(base64Url.normalize(text));
 
-  static bool _constantTimeEquals(List<int> a, List<int> b) {
+  /// Whether [a] and [b] are equal, in a time that does not depend on where they differ.
+  static bool constantTimeEquals(List<int> a, List<int> b) {
     if (a.length != b.length) return false;
     var difference = 0;
     for (var i = 0; i < a.length; i++) {
