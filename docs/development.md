@@ -228,4 +228,4 @@ Measured on the Linux desktop (server built with `dart build cli`; the player si
 | 50,000 | 2.2 s | 24 MB, 2.6 MB | 1 ms | 0.4 s | 232 ms | 0.55 s |
 | 100,000 | 4.6 s | 49 MB, 5.3 MB | 1 ms | 0.8 s | 373 ms | 1.1 s |
 
-The server hashes and compresses each list once after a scan, not for every request (before, a 304 for 100,000 tracks took 241 ms, and a fetch with decoding 1.3 s). Decoding, the snapshot and the merge still run on the UI isolate: about two seconds at 100,000 tracks here, more on a phone. The player process grew by about 5 KB per track in this run (resident memory, before garbage collection).
+The server hashes and compresses each list once after a scan, not for every request (before, a 304 for 100,000 tracks took 241 ms, and a fetch with decoding 1.3 s). The player decodes a big list in another isolate (the longest stall of its event loop during a fetch of 100,000 tracks fell from 870 ms to 200 ms). The snapshot and the merge still run on the UI isolate: about 1.5 s at 100,000 tracks here, more on a phone. The player process grew by about 5 KB per track in this run (resident memory, before garbage collection).

@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:http/http.dart' as http;
 
@@ -202,11 +203,34 @@ class ServerClient {
   /// and cover URLs are token-free; authorisation is added at playback time. The tracks of an album point to the
   /// album's cover, so each cover is downloaded and cached once, not once per track.
   Future<({List<Track> tracks, String? version})?> fetchTracks(String baseUrl, [String? version]) async {
-    final answer = await _exchange('GET', baseUrl, '/api/tracks', timeout: _libraryTimeout, ifNoneMatch: version);
+    final answer = await _exchange(
+      'GET',
+      baseUrl,
+      '/api/tracks',
+      timeout: _libraryTimeout,
+      ifNoneMatch: version,
+      decode: (bytes) => _decodeTracks(baseUrl, bytes),
+    );
     if (answer.status == 304) return null;
-    final list = answer.json;
-    if (list is! List) throw ServerRequestException(_notWiretune(), 200);
-    return (tracks: [for (final item in list) _serverTrack(baseUrl, item)], version: answer.etag);
+    final tracks = answer.json;
+    if (tracks is! List<Track>) throw ServerRequestException(_notWiretune(), 200);
+    return (tracks: tracks, version: answer.etag);
+  }
+
+  /// From this size on, the library is decoded in another isolate: 100,000 tracks are 49 MB of JSON, which takes the
+  /// player a second or more (a phone several), and the interface would stand still for that long.
+  static const int _isolateDecodeFrom = 256 * 1024;
+
+  static Future<List<Track>> _decodeTracks(String baseUrl, List<int> bytes) => bytes.length < _isolateDecodeFrom
+      ? Future.value(_buildTracks(baseUrl, bytes))
+      : Isolate.run(() => _buildTracks(baseUrl, bytes));
+
+  /// The tracks of a `/api/tracks` body; a [FormatException] when it isn't one. Runs where [_decodeTracks] puts it, so
+  /// it uses nothing but its arguments.
+  static List<Track> _buildTracks(String baseUrl, List<int> bytes) {
+    final list = jsonDecode(utf8.decode(bytes));
+    if (list is! List) throw const FormatException('The answer is not a list of tracks.');
+    return [for (final item in list) _serverTrack(baseUrl, item)];
   }
 
   /// The addresses of the artists' own pictures on the server, by artist ID, with the list's version (its ETag); null
@@ -230,8 +254,9 @@ class ServerClient {
 
   /// A track of the server's listing ([Track.toJson]'s form, and its album cover's `coverVersion`), with its stream and
   /// cover URLs.
-  Track _serverTrack(String baseUrl, Object? json) {
-    final track = _parse(Track.fromJson, json);
+  static Track _serverTrack(String baseUrl, Object? json) {
+    if (json == null) throw const FormatException('A track is missing.');
+    final track = Track.fromJson(json);
     final coverVersion = json is Map ? json['coverVersion'] : null;
     track.streamUrl = _buildStreamUrl(baseUrl, track.id);
     track.coverArtPath = track.hasCoverArt
@@ -260,7 +285,9 @@ class ServerClient {
     Duration timeout = _defaultTimeout,
   }) async => (await _exchange(method, baseUrl, path, body: body, authorize: authorize, timeout: timeout)).json;
 
-  /// [_send], with the answer's status and ETag; with [ifNoneMatch], "not modified" (304) is an answer too.
+  /// [_send], with the answer's status and ETag; with [ifNoneMatch], "not modified" (304) is an answer too. [decode]
+  /// turns the body into the answer's `json` where the plain JSON decoding is not enough (the list of tracks); it
+  /// throws a [FormatException] for a body that is not what the server sends.
   Future<({int status, String? etag, Object? json})> _exchange(
     String method,
     String baseUrl,
@@ -269,6 +296,7 @@ class ServerClient {
     bool authorize = true,
     Duration timeout = _defaultTimeout,
     String? ifNoneMatch,
+    Future<Object?> Function(List<int> bytes)? decode,
   }) async {
     final Uri uri;
     try {
@@ -330,7 +358,7 @@ class ServerClient {
 
     if (bytes.isEmpty) return (status: status, etag: etag, json: null);
     try {
-      return (status: status, etag: etag, json: jsonDecode(utf8.decode(bytes)));
+      return (status: status, etag: etag, json: decode == null ? jsonDecode(utf8.decode(bytes)) : await decode(bytes));
     } on FormatException {
       throw ServerRequestException(_notWiretune(), status);
     }
