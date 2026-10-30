@@ -9,7 +9,8 @@ Wiretune has two parts:
   Auto), iOS and Samsung Tizen TVs. On a computer it can play bit-perfect to your DAC.
 
 No cloud, no third-party account, no telemetry. The only internet requests are artist pictures, missing lyrics and the
-update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-network)).
+update check, and, only if you connect it, ListenBrainz. Each can be turned off
+([details](SECURITY.md#what-leaves-your-network)).
 
 ![The albums on a computer](docs/images/albums.png)
 
@@ -25,6 +26,7 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 - Quality badge on every album and track: hi-res, CD or lossy.
 - One account per listener. Favorites, playlists and play counts are the same on every device.
 - Offline downloads that stay in sync with the server.
+- Scrobbling to ListenBrainz (or a server with its API), if you connect it. Off by default.
 - A ten-band equalizer (not in bit-perfect mode).
 - Streaming quality for a slow connection: the server converts to Opus when you ask (with `ffmpeg`).
 - Remote control: control one device from another.

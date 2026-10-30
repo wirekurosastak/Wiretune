@@ -31,7 +31,7 @@ class ServerFixture {
   String get baseUrl => 'http://127.0.0.1:${server.port}';
 
   /// [existingRoot] reuses the folders of an earlier fixture (a restart); null creates fresh ones.
-  static Future<ServerFixture> start({String? existingRoot, bool trustProxy = false}) async {
+  static Future<ServerFixture> start({String? existingRoot, bool trustProxy = false, String? listenBrainzUrl}) async {
     WiretuneLog.writeToConsole = false;
     final root = existingRoot ?? Directory.systemTemp.createTempSync('wiretune_server_').path;
     if (existingRoot == null) {
@@ -50,6 +50,7 @@ class ServerFixture {
         host: '127.0.0.1',
         port: 0,
         trustProxy: trustProxy,
+        listenBrainzUrl: listenBrainzUrl,
       ),
     );
     return ServerFixture._(root, server, existingRoot == null);
@@ -163,4 +164,79 @@ Future<(Api, UserInfo)> registerGuest(ServerFixture server, Api admin, [String u
   final user = UserInfo.fromJson(json(created));
   final (client, _) = await login(server, username, guestPassword);
   return (client, user);
+}
+
+/// A server that speaks ListenBrainz's API, to scrobble to: it knows some tokens, keeps what it is sent, and can be told
+/// to answer with a failure.
+class FakeListenBrainz {
+  FakeListenBrainz._(this._http);
+
+  final HttpServer _http;
+
+  /// The tokens it accepts, by the name they belong to.
+  final Map<String, String> tokens = {'good-token': 'listener'};
+
+  /// Every submission it was sent, as the JSON objects of the bodies.
+  final List<Map<String, dynamic>> submissions = [];
+
+  /// How many requests of each kind came, and the last token each used.
+  int validations = 0;
+  String? lastToken;
+
+  /// The status to answer submissions with; 200 when it works.
+  int submitStatus = 200;
+
+  /// How many submissions came with a token it knows, whatever it answered.
+  int attempts = 0;
+
+  String get url => 'http://127.0.0.1:${_http.port}';
+
+  static Future<FakeListenBrainz> start() async {
+    final fake = FakeListenBrainz._(await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    fake._http.listen(fake._handle);
+    return fake;
+  }
+
+  Future<void> _handle(HttpRequest request) async {
+    final auth = request.headers.value('authorization') ?? '';
+    lastToken = auth.startsWith('Token ') ? auth.substring(6) : null;
+    final body = await utf8.decoder.bind(request).join();
+    request.response.headers.contentType = ContentType.json;
+    if (request.uri.path == '/1/validate-token') {
+      validations++;
+      final name = tokens[lastToken];
+      request.response.statusCode = 200;
+      request.response.write(
+        jsonEncode(
+          name == null
+              ? {'code': 200, 'message': 'Token invalid.', 'valid': false}
+              : {'valid': true, 'user_name': name},
+        ),
+      );
+    } else if (request.uri.path == '/1/submit-listens') {
+      if (!tokens.containsKey(lastToken)) {
+        request.response.statusCode = 401;
+        request.response.write(jsonEncode({'code': 401, 'error': 'Invalid authorization token.'}));
+      } else {
+        attempts++;
+        request.response.statusCode = submitStatus;
+        if (submitStatus == 200) {
+          submissions.add(jsonDecode(body) as Map<String, dynamic>);
+          request.response.write(jsonEncode({'status': 'ok'}));
+        } else {
+          request.response.write(jsonEncode({'code': submitStatus, 'error': 'nope'}));
+        }
+      }
+    } else {
+      request.response.statusCode = 404;
+    }
+    await request.response.close();
+  }
+
+  /// The listens sent so far, in order.
+  List<Map<String, dynamic>> get listens => [
+    for (final submission in submissions) ...(submission['payload'] as List).cast<Map<String, dynamic>>(),
+  ];
+
+  Future<void> close() => _http.close(force: true);
 }

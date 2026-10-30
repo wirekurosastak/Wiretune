@@ -13,7 +13,8 @@ made public. Fixes go to the latest release, or to the default branch until ther
 
 ## What leaves your network
 
-The players make three kinds of internet requests. Nothing else leaves your network.
+The players make three kinds of internet requests, and the server a fourth if you ask for it. Nothing else leaves your
+network.
 
 - **Artist pictures** from Deezer's public API. Deezer sees the artist names and up to two album titles per artist
   (to tell apart artists with the same name). Artists with their own `artist.jpg` aren't looked up.
@@ -25,6 +26,12 @@ The players make three kinds of internet requests. Nothing else leaves your netw
   `SHA256SUMS.txt`. A file with a wrong checksum isn't installed. This catches a damaged download, not a release
   replaced by someone who took over the GitHub account. Android also requires the same signature.
   Off: *Settings → About*, or `WIRETUNE_NO_UPDATE_CHECK=1`.
+
+- **Scrobbling** (the server, only for an account that connected [ListenBrainz](https://listenbrainz.org) in *Settings →
+  Account & connection*). The server sends each play to ListenBrainz: artist, title, album, track number, length and
+  when it was played, with the account's ListenBrainz token. It keeps the token in its database, readable by whoever
+  can read the database. Plays from before you connected are never sent, and *Disconnect* stops it and drops what
+  was waiting. `--listenbrainz-url` points it at another server with the same API instead.
 
 Pictures and lyrics are cached in the player's data folder.
 

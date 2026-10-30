@@ -498,6 +498,14 @@ class _AccountCardState extends State<_AccountCard> {
                       label: Text(context.tr('OtherApps')),
                     ),
                     OutlinedButton.icon(
+                      onPressed: () => showDialog<void>(
+                        context: context,
+                        builder: (_) => _ListenBrainzDialog(server: server),
+                      ),
+                      icon: const Icon(Icons.podcasts_rounded, size: 16),
+                      label: Text(context.tr('ListenBrainz')),
+                    ),
+                    OutlinedButton.icon(
                       onPressed: () => confirmAndSignOut(context),
                       icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
                       label: Text(context.tr('SignOut')),
@@ -1766,6 +1774,130 @@ class _EqualizerSliders extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Connects the account to ListenBrainz: the server then sends what the account plays there. Not connected: a token to
+/// paste; connected: who it is, and a way to end it.
+class _ListenBrainzDialog extends StatefulWidget {
+  const _ListenBrainzDialog({required this.server});
+
+  final ServerSettingsViewModel server;
+
+  @override
+  State<_ListenBrainzDialog> createState() => _ListenBrainzDialogState();
+}
+
+class _ListenBrainzDialogState extends State<_ListenBrainzDialog> {
+  final _token = TextEditingController();
+  bool _loaded = false;
+  String? _name; // the name on ListenBrainz, while connected
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.server.loadListenBrainz().then((answer) {
+      if (!mounted) return;
+      final (name, error) = answer;
+      setState(() {
+        _loaded = true;
+        _name = name;
+        _error = error;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _token.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connect() async {
+    if (_token.text.trim().isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final (name, error) = await widget.server.connectListenBrainz(_token.text);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = error;
+      if (name != null) {
+        _name = name;
+        _token.clear();
+      }
+    });
+  }
+
+  Future<void> _disconnect() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final error = await widget.server.disconnectListenBrainz();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _error = error;
+      if (error == null) _name = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final connected = _name != null;
+    return PopScope(
+      canPop: !_busy,
+      child: AppDialog(
+        title: context.tr('ListenBrainz'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 380),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(context.tr('ListenBrainzHint'), style: TextStyle(fontSize: 13, color: colors.textMuted)),
+              const SizedBox(height: 14),
+              if (_loaded && connected)
+                Text(
+                  context.trf('ListenBrainzConnectedAs', [_name!]),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textMain),
+                )
+              else if (_loaded)
+                TextField(
+                  controller: _token,
+                  autofocus: true,
+                  obscureText: true,
+                  enabled: !_busy,
+                  decoration: InputDecoration(labelText: context.tr('ListenBrainzToken')),
+                  onSubmitted: (_) => _busy ? null : _connect(),
+                ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(_error!, style: TextStyle(color: colors.danger, fontSize: 13)),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: _busy ? null : () => Navigator.of(context).pop(), child: Text(context.tr('Close'))),
+          if (_loaded && connected)
+            TextButton(
+              onPressed: _busy ? null : _disconnect,
+              child: Text(context.tr('ListenBrainzDisconnect'), style: TextStyle(color: colors.danger)),
+            )
+          else if (_loaded)
+            PressShrink(
+              child: FilledButton(onPressed: _busy ? null : _connect, child: Text(context.tr('ListenBrainzConnect'))),
+            ),
+        ],
+      ),
     );
   }
 }

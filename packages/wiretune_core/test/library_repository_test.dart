@@ -31,6 +31,7 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 10) c.execute('DROP TABLE user_listens; DROP TABLE user_listenbrainz');
     if (version < 9) c.execute('ALTER TABLE users DROP COLUMN app_password');
     if (version < 8) c.execute('ALTER TABLE tracks DROP COLUMN album_artists');
     if (version < 7) {

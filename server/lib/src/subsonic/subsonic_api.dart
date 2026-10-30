@@ -40,6 +40,7 @@ class SubsonicApi {
     required this.sendPicture,
     required this.readLyrics,
     required this.dataChanged,
+    required this.played,
   });
 
   final LibraryService library;
@@ -51,6 +52,9 @@ class SubsonicApi {
   final SendPicture sendPicture;
   final Future<String?> Function(Track track) readLyrics;
   final void Function(String userId) dataChanged;
+
+  /// An account played a track (an app said so): the server keeps it, and sends it on where the account wants that.
+  final void Function(String userId, String trackId, DateTime? at) played;
 
   static const int _maxBody = 1024 * 1024;
   static const int _maxPage = 500;
@@ -596,8 +600,16 @@ class SubsonicApi {
     if (ids.isEmpty) throw const SubsonicFailure(SubsonicError.missingParameter, 'Required parameter is missing: id.');
     // "Now playing" (submission=false) is not a play.
     if (params.text('submission') != 'false') {
-      for (final id in ids) {
-        if (library.getTrack(id) != null) userData.recordPlay(who.userId, id);
+      // `time` is when it was played, in milliseconds since 1970, one for each id.
+      final times = params.all('time');
+      for (var i = 0; i < ids.length; i++) {
+        final id = ids[i];
+        if (library.getTrack(id) == null || userData.recordPlay(who.userId, id) == null) continue;
+        final millis = i < times.length ? int.tryParse(times[i]) : null;
+        final at = millis == null ? null : DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+        // An app's clock may be anywhere: only a time that was not too long ago, and is not in the future, counts.
+        final plausible = at != null && at.isBefore(DateTime.now().toUtc().add(const Duration(minutes: 5)));
+        played(who.userId, id, plausible ? at : null);
       }
     }
     return {};

@@ -20,6 +20,7 @@ class ServerOptions {
     this.trustProxy = false,
     this.tlsCertificate,
     this.tlsKey,
+    this.listenBrainzUrl,
     this.logLevel = LogLevel.info,
   });
 
@@ -49,6 +50,10 @@ class ServerOptions {
   final String? tlsCertificate;
   final String? tlsKey;
 
+  /// Where accounts that connected ListenBrainz send what they listen to: ListenBrainz itself when null, or a server that
+  /// speaks its API (Maloja, for one).
+  final String? listenBrainzUrl;
+
   final LogLevel logLevel;
 
   static final ArgParser parser = ArgParser(usageLineLength: 120)
@@ -73,6 +78,11 @@ class ServerOptions {
       help: 'The certificate (PEM, with its chain): serve HTTPS. Needs --tls-key.',
     )
     ..addOption('tls-key', valueHelp: 'file', help: 'The private key (PEM) of the certificate.')
+    ..addOption(
+      'listenbrainz-url',
+      valueHelp: 'address',
+      help: 'A server with ListenBrainz\'s API to scrobble to, instead of listenbrainz.org.',
+    )
     ..addOption('log-level', valueHelp: 'level', defaultsTo: 'info', help: 'debug, info, warn or error.')
     ..addFlag('version', negatable: false, help: 'Show the version.')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.');
@@ -108,6 +118,16 @@ class ServerOptions {
       }
     }
 
+    final listenBrainz = text('listenbrainz-url');
+    if (listenBrainz != null) {
+      final uri = Uri.tryParse(listenBrainz);
+      if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https') || uri.host.isEmpty) {
+        throw FormatException(
+          '--listenbrainz-url (${variable('listenbrainz-url')}) must be an http:// or https:// address, not "$listenBrainz".',
+        );
+      }
+    }
+
     final level = text('log-level')!;
     return ServerOptions(
       musicFolder: text('library'),
@@ -119,6 +139,7 @@ class ServerOptions {
       trustProxy: results.flag('trust-proxy') || const {'1', 'true', 'yes'}.contains(fromEnv('trust-proxy')),
       tlsCertificate: certificate,
       tlsKey: key,
+      listenBrainzUrl: listenBrainz,
       logLevel:
           LogLevel.values.asNameMap()[level.toLowerCase()] ??
           (throw FormatException('--log-level (WIRETUNE_LOG_LEVEL) must be debug, info, warn or error, not "$level".')),

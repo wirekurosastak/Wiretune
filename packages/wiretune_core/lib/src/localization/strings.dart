@@ -1164,6 +1164,16 @@ const Map<String, (String, String, String)> allStrings = {
     "The server doesn't know this kind of item.",
     'Der Server kennt diese Art von Element nicht.',
   ),
+  'ErrorListenBrainzTokenInvalid': (
+    'A ListenBrainz nem fogadta el ezt a tokent.',
+    'ListenBrainz did not accept this token.',
+    'ListenBrainz hat diesen Token nicht akzeptiert.',
+  ),
+  'ErrorListenBrainzUnreachable': (
+    'A szerver most nem éri el a ListenBrainzet. Próbáld újra később.',
+    'The server cannot reach ListenBrainz right now. Try again later.',
+    'Der Server erreicht ListenBrainz gerade nicht. Versuche es später noch einmal.',
+  ),
   'ErrorFavoritesLimit': (
     'Egy fióknak legfeljebb {0} kedvence lehet.',
     'An account can have at most {0} favorites.',
@@ -1262,6 +1272,16 @@ const Map<String, (String, String, String)> allStrings = {
     "The server didn't accept the change: {0}",
     'Der Server hat die Änderung nicht angenommen: {0}',
   ),
+  'ListenBrainz': ('ListenBrainz', 'ListenBrainz', 'ListenBrainz'),
+  'ListenBrainzHint': (
+    'A szerver elküldi a ListenBrainznek, amit ezen a fiókon hallgatsz: az előadót, a címet és az albumot. A tokened a listenbrainz.org/settings oldalon van.',
+    'The server sends what you play on this account to ListenBrainz: the artist, the title and the album. Your token is on listenbrainz.org/settings.',
+    'Der Server schickt, was du mit diesem Konto hörst, an ListenBrainz: Interpret, Titel und Album. Dein Token steht auf listenbrainz.org/settings.',
+  ),
+  'ListenBrainzToken': ('Felhasználói token', 'User token', 'Benutzer-Token'),
+  'ListenBrainzConnect': ('Összekapcsolás', 'Connect', 'Verbinden'),
+  'ListenBrainzDisconnect': ('Leválasztás', 'Disconnect', 'Trennen'),
+  'ListenBrainzConnectedAs': ('Összekapcsolva: {0}', 'Connected as {0}', 'Verbunden als {0}'),
   'OtherApps': ('Más alkalmazások', 'Other apps', 'Andere Apps'),
   'OtherAppsHint': (
     'A Feishin, a Symfonium és a többi Subsonic-alkalmazás ezzel a jelszóval lép be a te jelszavad helyett. Fiókot nem módosíthat vele.',

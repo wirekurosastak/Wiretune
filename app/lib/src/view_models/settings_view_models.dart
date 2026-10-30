@@ -427,6 +427,36 @@ class ServerSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  /// What the ListenBrainz dialog works with: the name the account has there (null: not connected), connecting it with a
+  /// token and ending it. Each returns the error to show, or null.
+  Future<(String?, String?)> loadListenBrainz() async {
+    if (!isLoggedIn) return (null, Localizer.get('NotSignedIn'));
+    try {
+      return (await _session.getListenBrainz(), null);
+    } catch (e) {
+      return (null, '$e');
+    }
+  }
+
+  Future<(String?, String?)> connectListenBrainz(String token) async {
+    if (!isLoggedIn) return (null, Localizer.get('NotSignedIn'));
+    try {
+      return (await _session.connectListenBrainz(token), null);
+    } catch (e) {
+      return (null, '$e');
+    }
+  }
+
+  Future<String?> disconnectListenBrainz() async {
+    if (!isLoggedIn) return Localizer.get('NotSignedIn');
+    try {
+      await _session.disconnectListenBrainz();
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
   /// What the "Other apps" dialog works with: whether the account has an app password, a new one, and removing it.
   /// Each returns the error to show, or null.
   Future<(bool?, String?)> loadAppPassword() async {

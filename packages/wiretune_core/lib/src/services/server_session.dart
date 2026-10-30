@@ -403,6 +403,13 @@ class ServerSession {
     });
   }
 
+  /// The account's ListenBrainz connection (its name there, or null), connecting it with a token, and ending it.
+  Future<String?> getListenBrainz() => _client.getListenBrainz(serverUrl);
+
+  Future<String?> connectListenBrainz(String token) => _client.connectListenBrainz(serverUrl, token);
+
+  Future<void> disconnectListenBrainz() => _client.disconnectListenBrainz(serverUrl);
+
   /// The account's app password for other apps ([docs/subsonic.md]): whether it has one, a new one (shown once), and
   /// removing it.
   Future<bool> hasAppPassword() => _client.hasAppPassword(serverUrl);

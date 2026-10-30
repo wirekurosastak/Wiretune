@@ -16,6 +16,7 @@ import 'config.dart';
 import 'http_utils.dart';
 import 'library_scan_service.dart';
 import 'remote_hub.dart';
+import 'scrobbler.dart';
 import 'setup_code.dart';
 import 'subsonic/subsonic_api.dart';
 import 'transcoder.dart';
@@ -139,6 +140,13 @@ class WiretuneServer {
   final LibraryScanService scanner;
   final RemoteHub remote = RemoteHub();
 
+  /// Sends what the accounts listen to on to ListenBrainz, for those that connected it.
+  late final Scrobbler scrobbler = Scrobbler(
+    database,
+    library.getTrack,
+    endpoint: options.listenBrainzUrl == null ? null : Uri.parse(options.listenBrainzUrl!),
+  );
+
   /// Converts tracks for players that asked for less than the original (`?format=opus&bitrate=96`).
   late final Transcoder transcoder = Transcoder(p.join(paths.dataDirectory, 'Transcodes'));
 
@@ -153,6 +161,7 @@ class WiretuneServer {
     sendPicture: _sendPicture,
     readLyrics: _readLyrics,
     dataChanged: remote.dataChanged,
+    played: (userId, trackId, at) => scrobbler.listened(userId, trackId, at: at),
   );
   final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
   HttpServer? _http;
@@ -241,6 +250,7 @@ class WiretuneServer {
   }
 
   Future<void> close() async {
+    scrobbler.close();
     await scanner.stop();
     await remote.close(); // their sockets left the HTTP server when they were upgraded
     await _http?.close(force: true);
@@ -430,6 +440,16 @@ class WiretuneServer {
       Access.user,
       (call) => versionedJson(call.request, JsonDocument(utf8.encode(jsonEncode(userData.get(call.userId).toJson())))),
     ),
+    // The account's ListenBrainz connection, which has what it listens to sent there
+    _Route('GET', '/api/me/listenbrainz', Access.user, (call) {
+      final name = scrobbler.connectedName(call.userId);
+      return jsonResponse({'connected': name != null, 'userName': name});
+    }),
+    _Route('PUT', '/api/me/listenbrainz', Access.user, _connectListenBrainz),
+    _Route('DELETE', '/api/me/listenbrainz', Access.user, (call) {
+      scrobbler.disconnect(call.userId);
+      return jsonResponse({'connected': false, 'userName': null});
+    }),
     // The account's password for the apps that speak the Subsonic API
     _Route('GET', '/api/me/app-password', Access.user, (call) {
       return jsonResponse({'exists': auth.hasAppPassword(call.userId)});
@@ -451,6 +471,7 @@ class WiretuneServer {
       final error = UserDataRules.validateId(trackId);
       if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
       final stats = userData.recordPlay(call.userId, trackId);
+      if (stats != null) scrobbler.listened(call.userId, trackId);
       return stats == null
           ? errorResponse(
               409,
@@ -736,6 +757,26 @@ class WiretuneServer {
   }
 
   /// An artist's own picture (`artist.jpg` in the music folder).
+  Future<Response> _connectListenBrainz(_Call call) async {
+    final body = await call.jsonObject();
+    final token = _text(body, 'token');
+    if (token == null) {
+      return errorResponse(400, ErrorCodes.listenBrainzTokenInvalid, 'The ListenBrainz token is missing.');
+    }
+    try {
+      final name = await scrobbler.connect(call.userId, token);
+      return jsonResponse({'connected': true, 'userName': name});
+    } on ScrobbleTokenInvalidException {
+      return errorResponse(400, ErrorCodes.listenBrainzTokenInvalid, 'ListenBrainz did not accept this token.');
+    } on ScrobbleUnreachableException catch (e) {
+      return errorResponse(
+        502,
+        ErrorCodes.listenBrainzUnreachable,
+        'The server cannot reach ListenBrainz: ${e.message}',
+      );
+    }
+  }
+
   Future<Response> _artistPicture(_Call call) => _sendArtistPicture(call.request, call.params['artistId']!);
 
   Future<Response> _sendArtistPicture(Request request, String artistId) async {

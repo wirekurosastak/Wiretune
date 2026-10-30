@@ -203,6 +203,8 @@ class AuthService {
     db.execute('DELETE FROM user_plays WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_playlists WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
+    db.execute('DELETE FROM user_listens WHERE user_id = ?', [userId]);
+    db.execute('DELETE FROM user_listenbrainz WHERE user_id = ?', [userId]);
     return count > 0;
   });
 
