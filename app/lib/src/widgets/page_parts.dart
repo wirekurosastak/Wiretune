@@ -730,21 +730,21 @@ List<Widget> _topButtons(BuildContext context, {ValueListenable<double>? pullIn}
   final vm = context.vm;
   final colors = context.colors;
   const devices = DevicesButton(dimension: PinnedTitleBar.buttonSize, iconSize: 23);
-  return [
-    if (vm.selectedSection != AppSection.settings)
-      const FriendsButton(dimension: PinnedTitleBar.buttonSize, iconSize: 24),
-    if (pullIn == null)
-      devices
-    else
-      // While the page is pulled towards the search, the cast button moves into the search's place.
-      ValueListenableBuilder<double>(
-        valueListenable: pullIn,
-        builder: (context, t, child) => Transform.translate(
-          offset: Offset(PinnedTitleBar.buttonSize * Curves.easeOut.transform(t), 0),
+  const bell = FriendsButton(dimension: PinnedTitleBar.buttonSize, iconSize: 24);
+  // While the page is pulled towards the search, the bell and the cast button move along into the search's place.
+  Widget along(Widget child) => pullIn == null
+      ? child
+      : ValueListenableBuilder<double>(
+          valueListenable: pullIn,
+          builder: (context, t, child) => Transform.translate(
+            offset: Offset(PinnedTitleBar.buttonSize * Curves.easeOut.transform(t), 0),
+            child: child,
+          ),
           child: child,
-        ),
-        child: devices,
-      ),
+        );
+  return [
+    if (vm.selectedSection != AppSection.settings) along(bell),
+    along(devices),
     if (vm.selectedSection != AppSection.settings) ...[
       if (pullIn == null)
         _searchButton(context)

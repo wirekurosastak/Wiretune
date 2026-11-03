@@ -1123,8 +1123,10 @@ class PlayerViewModel extends ChangeNotifier {
     final together = _together!;
     if (together.isMember) {
       if (_followTimer == null) {
-        // Joined: what played here gives way to the host's music, which comes with its first state.
+        // Joined: what played here gives way to the host's music, which comes with its first state. Joining is
+        // playing along, so a pause from before doesn't hold.
         _pausedHere = false;
+        _pausedForHost = true;
         if (_hostState == null) _pauseForHost();
         _followTimer = Timer.periodic(followCheckInterval, (_) => _followHost());
       }

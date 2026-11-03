@@ -194,6 +194,25 @@ void main() {
     expect(player.isFollowingHost, isFalse);
   });
 
+  test('a member that was paused before it joined plays along at once', () async {
+    // Its own music, paused: how a phone is when an invite comes.
+    player.playQueue([tracks[3]], tracks[3]);
+    await pumpEventQueue();
+    await player.pause();
+    await pumpEventQueue();
+    expect(player.playbackState, PlaybackState.paused);
+
+    vm.together.join('g1');
+    group(host: 'desk', members: ['phone-id']);
+    await pumpEventQueue();
+    hostPlays(1, const Duration(seconds: 30));
+    await pumpEventQueue();
+    expect(player.currentTrack, same(tracks[1]));
+    expect(player.isPlaying, isTrue);
+    await Future<void>.delayed(const Duration(milliseconds: 120));
+    expect(player.isPlaying, isTrue, reason: 'and stays so');
+  });
+
   test('a member that plays music of its own leaves the group', () async {
     vm.together.join('g1');
     group(host: 'desk', members: ['phone-id']);
