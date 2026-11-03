@@ -34,7 +34,6 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 | `user_data_service.dart` | Favorites, play counts, playlists, hidden items |
 | `library_scan_service.dart` | Scanning and watching the music folder |
 | `remote_hub.dart` | Passing remote-control messages between the players of an account |
-| `subsonic/` | The Subsonic API under `/rest` ([other apps](subsonic.md)): the calls, and the JSON and XML answers |
 | `config.dart` | The options |
 
 ### `app/lib/src/`

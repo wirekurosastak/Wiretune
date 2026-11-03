@@ -154,22 +154,6 @@ class ServerClient {
     return answer['connected'] == true && answer['userName'] is String ? answer['userName'] as String : null;
   }
 
-  /// Whether the account has an app password (for the apps that speak the Subsonic API).
-  Future<bool> hasAppPassword(String baseUrl) async {
-    final answer = await _send('GET', baseUrl, '/api/me/app-password');
-    if (answer is! Map || answer['exists'] is! bool) throw ServerRequestException(_notWiretune(), 200);
-    return answer['exists'] as bool;
-  }
-
-  /// Makes an app password, replacing the one the account had. The server shows it only in this answer.
-  Future<String> createAppPassword(String baseUrl) async {
-    final answer = await _send('POST', baseUrl, '/api/me/app-password');
-    if (answer is! Map || answer['password'] is! String) throw ServerRequestException(_notWiretune(), 200);
-    return answer['password'] as String;
-  }
-
-  Future<void> removeAppPassword(String baseUrl) => _send('DELETE', baseUrl, '/api/me/app-password');
-
   Future<void> adminResetPassword(String baseUrl, String userId, String newPassword) =>
       _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/password', body: {'newPassword': newPassword});
 

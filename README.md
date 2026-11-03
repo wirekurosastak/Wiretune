@@ -30,8 +30,6 @@ update check, and, only if you connect it, ListenBrainz. Each can be turned off
 - A ten-band equalizer (not in bit-perfect mode).
 - Streaming quality for a slow connection: the server converts to Opus when you ask (with `ffmpeg`).
 - Remote control: control one device from another.
-- The server also speaks the Subsonic API, so Feishin, Symfonium and others can play from it
-  ([other apps](docs/subsonic.md)).
 - English, Hungarian, German.
 
 ## Platform support
@@ -71,7 +69,6 @@ In the player, connect to the server and create the first account with the setup
 | Build the server and the players | [Building](docs/building.md) |
 | Run the server: Docker, systemd, access away from home, accounts, backups | [Server](docs/server.md) |
 | Use the player | [User guide](docs/user-guide.md) |
-| Use the server from other apps (Feishin, Symfonium, …) | [Other apps](docs/subsonic.md) |
 | Set up exclusive or bit-perfect output | [Audio](docs/audio.md) |
 | See what leaves your network, or report a security problem | [Security](SECURITY.md) |
 | Change the code | [Development](docs/development.md), [Contributing](CONTRIBUTING.md), [HTTP API](docs/api.md) |

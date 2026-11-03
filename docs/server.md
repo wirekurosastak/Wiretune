@@ -46,8 +46,7 @@ from the checkout instead of pulling it) and `docker compose logs` for the setup
 
 With `ffmpeg` on the machine (or the `:ffmpeg` image; build one with `--build-arg WITH_FFMPEG=true`, 450 MB bigger), the
 server can convert a track to Opus or MP3 when a player asks, for example `/api/stream/{id}?format=opus&bitrate=96`. The
-players ask for it with their *Streaming quality* setting ([audio.md](audio.md#streaming-quality)); other apps with
-`maxBitRate` and `format` ([other apps](subsonic.md)).
+players ask for it with their *Streaming quality* setting ([audio.md](audio.md#streaming-quality)).
 
 - **First play waits.** A track is converted whole, then sent like any file (with seeking). A song takes a second or two
   on a desktop CPU, longer on a NAS. The next play of it is instant.

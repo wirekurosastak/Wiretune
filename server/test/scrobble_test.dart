@@ -1,10 +1,6 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
-import 'package:http/http.dart' as http;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 import 'package:wiretune_server/wiretune_server.dart';
@@ -190,42 +186,6 @@ void main() {
       await server.server.scrobbler.flush();
       expect(server.server.scrobbler.waiting, 0);
       expect(listenBrainz.listens, isEmpty);
-    });
-
-    test('takes a play an app reports over the Subsonic API, at the time it gives', () async {
-      await admin.put('/api/me/listenbrainz', {'token': 'good-token'});
-      final password = json(await admin.post('/api/me/app-password'))['password'] as String;
-      const salt = 'abc';
-      final token = md5.convert(utf8.encode('$password$salt'));
-      final when = DateTime.now().toUtc().subtract(const Duration(hours: 2)).millisecondsSinceEpoch;
-      final response = await http.get(
-        Uri.parse(
-          '${server.baseUrl}/rest/scrobble?u=owner&t=$token&s=$salt&v=1.16.1&c=t&f=json&id=${id('01 First')}&time=$when',
-        ),
-      );
-      expect(json(response)['subsonic-response']['status'], 'ok');
-      await waitForListens(1);
-      expect(listenBrainz.listens.single['listened_at'], when ~/ 1000);
-
-      // A "now playing" is not a listen, and a time in the future is ignored.
-      await http.get(
-        Uri.parse(
-          '${server.baseUrl}/rest/scrobble?u=owner&t=$token&s=$salt&v=1.16.1&c=t&id=${id('02 Second')}&submission=false',
-        ),
-      );
-      final future = DateTime.now().toUtc().add(const Duration(days: 3)).millisecondsSinceEpoch;
-      await http.get(
-        Uri.parse(
-          '${server.baseUrl}/rest/scrobble?u=owner&t=$token&s=$salt&v=1.16.1&c=t&id=${id('01 Third')}&time=$future',
-        ),
-      );
-      await waitForListens(2);
-      expect(listenBrainz.listens, hasLength(2));
-      expect(
-        listenBrainz.listens.last['listened_at'],
-        lessThan(DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000 + 10),
-        reason: 'the future time was not believed',
-      );
     });
   });
 

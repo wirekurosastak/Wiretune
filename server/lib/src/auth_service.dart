@@ -6,7 +6,6 @@ import 'dart:isolate';
 import 'dart:math';
 
 import 'package:bcrypt/bcrypt.dart';
-import 'package:crypto/crypto.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'jwt.dart';
@@ -118,11 +117,7 @@ class AuthService {
 
   /// Stores [hash] and moves the account to a new token version; returns that version, or null without the account.
   int? _setPasswordHash(String userId, String hash) => _db.transaction((db) {
-    // The app password goes too: a reset is for someone who may have lost track of where their access went.
-    db.execute(
-      'UPDATE users SET password_hash = ?, token_version = token_version + 1, app_password = NULL WHERE id = ?',
-      [hash, userId],
-    );
+    db.execute('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?', [hash, userId]);
     if (db.updatedRows == 0) return null;
     return db.select('SELECT token_version FROM users WHERE id = ?', [userId]).first['token_version'] as int;
   });
@@ -207,79 +202,6 @@ class AuthService {
     db.execute('DELETE FROM user_listenbrainz WHERE user_id = ?', [userId]);
     return count > 0;
   });
-
-  /// What an app password is made of: no 0, 1, l, o or i, which are easy to mistake for each other when typed.
-  static const String _appPasswordAlphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
-
-  /// A new app password for [userId], replacing the one it had; null without the account. It is shown once, in groups
-  /// of four (`abcd-efgh-jkmn-pqrs`, 79 bits).
-  String? createAppPassword(String userId) {
-    final random = Random.secure();
-    final password = [
-      for (var group = 0; group < 4; group++)
-        String.fromCharCodes([
-          for (var i = 0; i < 4; i++) _appPasswordAlphabet.codeUnitAt(random.nextInt(_appPasswordAlphabet.length)),
-        ]),
-    ].join('-');
-    _db.connection.execute('UPDATE users SET app_password = ? WHERE id = ?', [password, userId]);
-    return _db.connection.updatedRows == 0 ? null : password;
-  }
-
-  /// Takes the app password of [userId] away; the apps using it can't sign in any more.
-  void removeAppPassword(String userId) =>
-      _db.connection.execute('UPDATE users SET app_password = NULL WHERE id = ?', [userId]);
-
-  bool hasAppPassword(String userId) =>
-      _db.connection.select('SELECT 1 FROM users WHERE id = ? AND app_password IS NOT NULL', [userId]).isNotEmpty;
-
-  /// The account an app signed in as, with one of the three ways the Subsonic API knows: the account's [username] and
-  /// the app password (the [password] itself, or as `enc:` and its bytes in hex), the [username] and the [token]
-  /// (`md5(app password + salt)`, hex) with its [salt], or the app password alone as the [apiKey]. Null when none of
-  /// them fits. Only the app password opens this: the account's own password never does, so an app that keeps it
-  /// can't change the account.
-  Principal? authenticateApp({String? username, String? password, String? token, String? salt, String? apiKey}) {
-    final String sql;
-    final List<Object?> arguments;
-    if (apiKey != null && apiKey.isNotEmpty) {
-      sql = 'SELECT id, username, is_admin, app_password FROM users WHERE app_password = ?';
-      arguments = [apiKey];
-    } else if (username != null && username.isNotEmpty) {
-      sql = 'SELECT id, username, is_admin, app_password FROM users WHERE username = ? COLLATE NOCASE';
-      arguments = [username.trim()];
-    } else {
-      return null;
-    }
-    final row = _db.connection.select(sql, arguments).firstOrNull;
-    final secret = row?['app_password'] as String?;
-    if (row == null || secret == null) return null;
-
-    final bool fits;
-    if (apiKey != null && apiKey.isNotEmpty) {
-      fits = true; // found by it
-    } else if (token != null && salt != null) {
-      fits = Jwt.constantTimeEquals(
-        utf8.encode(md5.convert(utf8.encode('$secret$salt')).toString()),
-        utf8.encode(token.toLowerCase()),
-      );
-    } else if (password != null) {
-      final given = password.startsWith('enc:') ? _fromHex(password.substring(4)) : password;
-      fits = given != null && Jwt.constantTimeEquals(utf8.encode(secret), utf8.encode(given));
-    } else {
-      fits = false;
-    }
-    return fits
-        ? Principal(row['id'] as String, row['username'] as String, isAdmin: (row['is_admin'] as int) != 0)
-        : null;
-  }
-
-  static String? _fromHex(String hex) {
-    if (hex.length.isOdd) return null;
-    try {
-      return utf8.decode([for (var i = 0; i < hex.length; i += 2) int.parse(hex.substring(i, i + 2), radix: 16)]);
-    } on FormatException {
-      return null;
-    }
-  }
 
   /// A token for stream and cover URLs for the signed-in [caller]. The server refuses it on every route but those, so a
   /// URL that leaks (process list, proxy log) cannot manage accounts or the library; and like every token it stops

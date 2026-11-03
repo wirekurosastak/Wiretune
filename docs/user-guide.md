@@ -84,14 +84,9 @@ a server, to get everything back.
 ## Scrobbling
 
 *Settings → Account & connection → ListenBrainz* connects your account to [ListenBrainz](https://listenbrainz.org): paste
-your user token from listenbrainz.org/settings, and the server sends every play there, whichever of your players or apps
-it came from. Plays from before you connected are not sent. If ListenBrainz can't be reached, plays wait and go later. It
+your user token from listenbrainz.org/settings, and the server sends every play there, whichever of your players it
+came from. Plays from before you connected are not sent. If ListenBrainz can't be reached, plays wait and go later. It
 is off until you connect it, and *Disconnect* turns it off again.
-
-## Other apps
-
-Apps such as Feishin and Symfonium can play from your server too. They sign in with an app password, which you make in
-*Settings → Account & connection → Other apps* ([how to connect an app](subsonic.md)).
 
 ## Remote control
 

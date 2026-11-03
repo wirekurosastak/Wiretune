@@ -129,37 +129,6 @@ void main() {
       expect((await guest.get(stream('?format=opus'))).statusCode, 200);
       expect((await client.get('/api/stream/nonsense?format=opus')).statusCode, 404);
     });
-
-    test('the Subsonic stream converts for a format or a lower maxBitRate, and not for raw', () async {
-      final password = json(await client.post('/api/me/app-password'))['password'] as String;
-      Future<List<int>> subsonic(String query) async {
-        final salt = 'abc123';
-        final token = md5.convert(utf8.encode('$password$salt'));
-        final response = await client.get(
-          '/rest/stream?u=owner&t=$token&s=$salt&v=1.16.1&c=test&id=${first['id']}$query',
-          headers: {},
-        );
-        expect(response.statusCode, 200, reason: query);
-        return response.bodyBytes;
-      }
-
-      final original = await subsonic('');
-      expect(await subsonic('&maxBitRate=0'), original);
-      expect(await subsonic('&format=raw&maxBitRate=64'), original);
-      expect(ascii.decode((await subsonic('&format=opus')).sublist(0, 4)), 'OggS');
-      expect(
-        ascii.decode((await subsonic('&maxBitRate=96')).sublist(0, 3)),
-        'ID3',
-        reason: 'MP3, which every app plays',
-      );
-      expect(ascii.decode((await subsonic('&format=opus&maxBitRate=64')).sublist(0, 4)), 'OggS');
-      expect(await subsonic('&maxBitRate=5000'), original, reason: 'above the file: nothing to save');
-      // The download is the file.
-      final salt = 's';
-      final token = md5.convert(utf8.encode('$password$salt'));
-      final download = await client.get('/rest/download?u=owner&t=$token&s=$salt&id=${first['id']}&format=opus');
-      expect(download.bodyBytes, original);
-    });
   });
 
   group('the converted files kept', skip: skip, () {

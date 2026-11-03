@@ -31,6 +31,7 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 11) c.execute('ALTER TABLE users ADD COLUMN app_password TEXT');
     if (version < 10) c.execute('DROP TABLE user_listens; DROP TABLE user_listenbrainz');
     if (version < 9) c.execute('ALTER TABLE users DROP COLUMN app_password');
     if (version < 8) c.execute('ALTER TABLE tracks DROP COLUMN album_artists');
@@ -259,17 +260,27 @@ void main() {
     expect(hidden[HiddenKind.artist], isEmpty);
   });
 
-  test('a database of schema 8 is upgraded, and its accounts get a place for an app password', () async {
-    final (_, db) = await open();
-    db.connection.execute(
-      "INSERT INTO users (id, username, password_hash, is_admin, created_at, token_version) VALUES ('u1', 'owner', 'hash', 1, 1000, 3)",
-    );
-    downgrade(db, 8);
+  test('a database of schema 8 or 10 is upgraded, and its accounts keep everything but the app password', () async {
+    for (final version in [8, 10]) {
+      final (_, db) = await open();
+      db.connection.execute('DELETE FROM users');
+      db.connection.execute(
+        "INSERT INTO users (id, username, password_hash, is_admin, created_at, token_version) VALUES ('u1', 'owner', 'hash', 1, 1000, 3)",
+      );
+      downgrade(db, version);
+      if (version > 8) {
+        final old = DatabaseManager(dbPath());
+        old.connection.execute("UPDATE users SET app_password = 'abcd-efgh-jkmn-pqrs'");
+        old.close();
+      }
 
-    final (_, again) = await open();
-    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
-    final row = again.connection.select('SELECT username, token_version, app_password FROM users').single;
-    expect((row['username'], row['token_version'], row['app_password']), ('owner', 3, null));
+      final (_, again) = await open();
+      expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+      final row = again.connection.select('SELECT * FROM users').single;
+      expect(row.containsKey('app_password'), isFalse, reason: 'from schema $version');
+      expect((row['username'], row['token_version']), ('owner', 3));
+      again.close();
+    }
   });
 
   test('a database of schema 5 is upgraded, and its files are read again for their artists', () async {

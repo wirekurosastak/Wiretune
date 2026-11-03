@@ -1379,64 +1379,6 @@ void main() {
     signedIn.dispose();
   });
 
-  testWidgets('Other apps shows whether there is an app password, makes one to copy, and removes it', (tester) async {
-    // The phone layout: the desktop's title bar asks the window manager, which a test has none of.
-    final vm = await pumpApp(tester, const Size(400, 860));
-    await tester.pumpWidget(const SizedBox());
-    var exists = false;
-    final session = (await tester.runAsync(
-      () => signedInSession(
-        vm.library,
-        respond: (request) {
-          if (request.url.path != '/api/me/app-password') return null;
-          http.Response answer(Object body) =>
-              http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json; charset=utf-8'});
-          switch (request.method) {
-            case 'POST':
-              exists = true;
-              return answer({'password': 'abcd-efgh-jkmn-pqrs'});
-            case 'DELETE':
-              exists = false;
-              return answer({'exists': false});
-            default:
-              return answer({'exists': exists});
-          }
-        },
-      ),
-    ))!;
-    final signedIn = createMainViewModel(vm.library, null, session)..navigateTo(AppSection.settings);
-    addTearDown(signedIn.dispose);
-    await tester.pumpWidget(WiretuneApp(vm: signedIn));
-    await settle(tester);
-
-    final open = find.text(Localizer.get('OtherApps'));
-    await tester.ensureVisible(open);
-    await settle(tester);
-    await tester.tap(open);
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await settle(tester);
-    expect(find.text(Localizer.get('AppPasswordNone')), findsOneWidget);
-    expect(
-      find.descendant(of: find.byType(AppDialog), matching: find.textContaining('http://server:5200')),
-      findsOneWidget,
-    );
-    expect(find.text(Localizer.get('Delete')), findsNothing);
-
-    await tester.tap(find.text(Localizer.get('AppPasswordMake')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await settle(tester);
-    expect(find.text('abcd-efgh-jkmn-pqrs'), findsOneWidget);
-    expect(find.text(Localizer.get('AppPasswordShownOnce')), findsOneWidget);
-    expect(exists, isTrue);
-
-    await tester.tap(find.text(Localizer.get('Delete')));
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-    await settle(tester);
-    expect(exists, isFalse);
-    expect(find.text('abcd-efgh-jkmn-pqrs'), findsNothing);
-    expect(find.text(Localizer.get('AppPasswordNone')), findsOneWidget);
-  });
-
   testWidgets('a sortable column takes a click anywhere it lights up, not just on the letters', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
 

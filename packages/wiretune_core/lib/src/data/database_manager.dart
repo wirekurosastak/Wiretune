@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 10;
+  static const int schemaVersion = 11;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -72,6 +72,8 @@ class DatabaseManager {
     'ALTER TABLE users ADD COLUMN app_password TEXT;',
     // 9 -> 10: what each account listened to, and its ListenBrainz connection.
     _listensTables,
+    // 10 -> 11: the app passwords go, with the Subsonic API they were for.
+    'ALTER TABLE users DROP COLUMN app_password;',
   ];
 
   final String databasePath;
@@ -220,10 +222,7 @@ const String _schema =
       created_at INTEGER NOT NULL,
       last_login_at INTEGER,
       -- Raised by a password change; a token signed for an older value is refused.
-      token_version INTEGER NOT NULL DEFAULT 0,
-      -- A password for the apps that speak the Subsonic API (/rest): random, kept as it is because that API's sign-in
-      -- hashes it with a salt of the app's choosing. It opens that API and nothing else; null: the account has none.
-      app_password TEXT
+      token_version INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE user_favorites (

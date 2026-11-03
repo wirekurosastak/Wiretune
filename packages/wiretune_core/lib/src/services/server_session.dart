@@ -410,14 +410,6 @@ class ServerSession {
 
   Future<void> disconnectListenBrainz() => _client.disconnectListenBrainz(serverUrl);
 
-  /// The account's app password for other apps ([docs/subsonic.md]): whether it has one, a new one (shown once), and
-  /// removing it.
-  Future<bool> hasAppPassword() => _client.hasAppPassword(serverUrl);
-
-  Future<String> createAppPassword() => _client.createAppPassword(serverUrl);
-
-  Future<void> removeAppPassword() => _client.removeAppPassword(serverUrl);
-
   Future<void> adminResetPassword(String userId, String newPassword) =>
       _client.adminResetPassword(serverUrl, userId, newPassword);
 

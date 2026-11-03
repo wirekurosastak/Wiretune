@@ -92,14 +92,14 @@ class Scrobbler {
 
   // ── The listens ────────────────────────────────────────────────────────────────────────────────
 
-  /// [userId] listened to [trackId] (at [at], now when not given): it is kept, and sent when the account is connected.
-  void listened(String userId, String trackId, {DateTime? at}) {
+  /// [userId] listened to [trackId] just now: it is kept, and sent when the account is connected.
+  void listened(String userId, String trackId) {
     if (_closed) return;
     final connected = connectedName(userId) != null;
     _db.connection.execute('INSERT INTO user_listens (user_id, track_id, listened_at, sent) VALUES (?, ?, ?, ?)', [
       userId,
       trackId,
-      toDbTime((at ?? DateTime.now()).toUtc()),
+      toDbTime(DateTime.now().toUtc()),
       connected ? 0 : 2,
     ]);
     if (connected) unawaited(flush());
