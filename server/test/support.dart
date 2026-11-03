@@ -7,6 +7,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'package:test/test.dart';
 import 'package:wiretune_core/testing.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 import 'package:wiretune_server/wiretune_server.dart';
@@ -198,3 +199,13 @@ class Peer {
 
 Future<WebSocket> openSocket(ServerFixture server, String token) =>
     WebSocket.connect('ws://127.0.0.1:${server.server.port}/api/remote', headers: {'Authorization': 'Bearer $token'});
+
+/// Waits for the server's close (the socket's stream must be listened to); its code. Watches the state rather than
+/// `done`, which never completes for a socket that sent nothing.
+Future<int?> closedWith(WebSocket socket) async {
+  for (var i = 0; i < 250 && socket.readyState != WebSocket.closed; i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+  expect(socket.readyState, WebSocket.closed, reason: 'the server closes the connection');
+  return socket.closeCode;
+}

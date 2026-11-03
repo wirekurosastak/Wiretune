@@ -6,12 +6,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// What the bell holds ("From friends"): the music the other accounts of the server recommended, and recommending
-/// music to them.
+/// What the bell holds ("From friends"): invites to listen together and the music the other accounts of the server
+/// recommended; and recommending music to them.
 class FriendsViewModel extends ChangeNotifier {
-  FriendsViewModel(this._session, this._library, this.recommendations, {required this.notify}) {
+  FriendsViewModel(this._session, this._library, this.recommendations, this.together, {required this.notify}) {
     _unsubscribers.addAll([
       recommendations.changed.listen((_) => notifyListeners()),
+      together.changed.listen((_) => notifyListeners()),
       _session.stateChanged.listen((_) => notifyListeners()),
     ]);
   }
@@ -19,6 +20,7 @@ class FriendsViewModel extends ChangeNotifier {
   final ServerSession _session;
   final LibraryService _library;
   final Recommendations recommendations;
+  final ListenTogether together;
 
   /// Shows a notice, with its Undo when given.
   final void Function(String message, {bool isError, VoidCallback? undo}) notify;
@@ -27,10 +29,25 @@ class FriendsViewModel extends ChangeNotifier {
   /// The bell is there while signed in to a server: the friends are its other accounts.
   bool get isAvailable => _session.isLoggedIn;
 
-  /// What the bell's count says.
-  int get unseenCount => recommendations.unseenCount;
+  /// What the bell's count says: the recommendations that came since it was opened, and the open invites.
+  int get unseenCount => recommendations.unseenCount + invites.length;
 
   List<Recommendation> get items => recommendations.items;
+
+  /// The invites to listen together, but to the group this player is in already, and the ones dismissed here.
+  List<ListeningInvite> get invites => [
+    for (final invite in together.invites)
+      if (invite.groupId != together.group?.id && !_dismissedInvites.contains(invite.groupId)) invite,
+  ];
+  final Set<String> _dismissedInvites = {};
+
+  void join(ListeningInvite invite) => together.join(invite.groupId);
+
+  /// Not joining: the invite leaves the bell (on this player).
+  void dismissInvite(ListeningInvite invite) {
+    _dismissedInvites.add(invite.groupId);
+    notifyListeners();
+  }
 
   /// The bell was opened.
   void opened() => unawaited(recommendations.markSeen());

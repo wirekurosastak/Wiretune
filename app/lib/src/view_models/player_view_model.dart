@@ -24,6 +24,9 @@ class QueueItem {
 
 /// The player: the queue, shuffle and repeat, the transport, volume and modes.
 ///
+/// With [attachListenTogether] it can listen together with players of other accounts: as the host, it tells them what
+/// it plays; as a member, it plays what the host plays, where the host is, and asks the host to skip, seek and queue.
+///
 /// With [attachRemote] it also takes part in remote control: the account's other players see what plays here and can
 /// control it, and [selectDevice] turns this one into the remote control of another. While it is, the state the
 /// interface reads (track, position, queue, volume, shuffle, repeat) is the other device's, and the commands go there;
@@ -48,8 +51,10 @@ class PlayerViewModel extends ChangeNotifier {
       _engine.advanced.listen(_onAdvanced),
       _engine.positionChanged.listen((position) {
         _localPosition = position;
+        _localPositionAt = DateTime.now();
         if (!_isUserSeeking && !isRemote) _setPosition(position);
         _publishIfDrifted(position);
+        _publishGroupIfDrifted(position);
         if (_sessionRestored &&
             _state == PlaybackState.playing &&
             DateTime.now().difference(_placeSavedAt) > _placeSaveInterval) {
@@ -87,6 +92,9 @@ class PlayerViewModel extends ChangeNotifier {
   /// This device's own position (the one shown is another device's while it controls one), and where the track being
   /// started begins.
   Duration _localPosition = Duration.zero;
+
+  /// When the engine last told [_localPosition].
+  DateTime _localPositionAt = DateTime.now();
   Duration _startAt = Duration.zero;
   double _volume = 100;
   bool _muted = false;
@@ -203,7 +211,9 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// Plays [item], the entry itself: the same track may be queued more than once.
   void playQueueItem(QueueItem item) {
-    if (isRemote) {
+    if (isFollowingHost) {
+      if (_isEntry(item)) _askHost(RemoteCommand(RemoteAction.playIndex, index: _hostIndices[item.index]));
+    } else if (isRemote) {
       _sendRemote(RemoteCommand(RemoteAction.playIndex, index: item.index));
     } else if (_isEntry(item)) {
       _playAt(item.index);
@@ -226,9 +236,12 @@ class PlayerViewModel extends ChangeNotifier {
       return;
     }
     final index = _playbackQueue.indexOf(track);
-    if (index >= 0) {
+    if (index >= 0 && isFollowingHost) {
+      _askHost(RemoteCommand(RemoteAction.playIndex, index: _hostIndices[index]));
+    } else if (index >= 0) {
       _playAt(index);
     } else {
+      _leaveForOwnMusic();
       _playQueueInternal(_library.tracks.isNotEmpty ? _library.tracks : [track], track);
     }
   }
@@ -237,6 +250,12 @@ class PlayerViewModel extends ChangeNotifier {
   void moveQueueTrack(int oldIndex, int newIndex) {
     if (oldIndex < 0 || newIndex < 0) return;
     if (oldIndex == newIndex) return;
+    if (isFollowingHost) {
+      if (oldIndex < _hostIndices.length && newIndex < _hostIndices.length) {
+        _askHost(RemoteCommand(RemoteAction.moveTrack, index: _hostIndices[oldIndex], toIndex: _hostIndices[newIndex]));
+      }
+      return;
+    }
 
     if (isRemote) {
       if (oldIndex >= _remoteQueue.length || newIndex >= _remoteQueue.length) return;
@@ -289,7 +308,9 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// Takes [item], the entry itself, out of the queue.
   void removeQueueItem(QueueItem item) {
-    if (isRemote) {
+    if (isFollowingHost) {
+      if (_isEntry(item)) _askHost(RemoteCommand(RemoteAction.removeTrack, index: _hostIndices[item.index]));
+    } else if (isRemote) {
       if (!_remoteQueue.remove(item)) return;
       _shiftRemoteIndices(removed: item.index);
       notifyListeners();
@@ -337,6 +358,7 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   void clearQueue() {
+    if (isFollowingHost) return; // the host's queue, which plays for everyone
     if (isRemote) {
       final current = _remoteQueue.where((item) => item.isCurrent).firstOrNull;
       _remoteQueue = current != null ? [current] : [];
@@ -415,6 +437,7 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// Replaces the queue with [tracks] and starts [startTrack] (the first track, or a random one when shuffling).
   void playQueue(Iterable<Track> tracks, [Track? startTrack]) {
+    _leaveForOwnMusic();
     if (isRemote) {
       final list = tracks.toList();
       if (list.isEmpty) return;
@@ -445,9 +468,10 @@ class PlayerViewModel extends ChangeNotifier {
 
   VoidCallback? _addToQueue(List<Track> tracks, {required bool next}) {
     if (tracks.isEmpty) return null;
-    if (isRemote) {
+    if (isRemote || isFollowingHost) {
       final ids = [for (final track in tracks.take(RemoteRules.maxQueueLength)) _library.sharedId(track)];
-      _sendRemote(RemoteCommand(next ? RemoteAction.playNext : RemoteAction.addToQueue, trackIds: ids));
+      final command = RemoteCommand(next ? RemoteAction.playNext : RemoteAction.addToQueue, trackIds: ids);
+      isFollowingHost ? _askHost(command) : _sendRemote(command);
       return null;
     }
     return _queueLocal(tracks, next: next);
@@ -552,27 +576,48 @@ class PlayerViewModel extends ChangeNotifier {
   // ── Transport ──────────────────────────────────────────────────────────────────────────────────
   // Each command goes to the device being controlled, or runs here; what another device asks of this one runs here.
 
-  Future<void> togglePlayPause() =>
-      isRemote ? _sendRemote(const RemoteCommand(RemoteAction.toggle)) : _togglePlayPauseLocal();
+  Future<void> togglePlayPause() => isRemote
+      ? _sendRemote(const RemoteCommand(RemoteAction.toggle))
+      : isFollowingHost
+      ? _setPausedHere(!_pausedHere)
+      : _togglePlayPauseLocal();
 
-  Future<void> play() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.play)) : _playLocal();
+  Future<void> play() => isRemote
+      ? _sendRemote(const RemoteCommand(RemoteAction.play))
+      : isFollowingHost
+      ? _setPausedHere(false)
+      : _playLocal();
 
-  Future<void> pause() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.pause)) : _pauseLocal();
+  Future<void> pause() => isRemote
+      ? _sendRemote(const RemoteCommand(RemoteAction.pause))
+      : isFollowingHost
+      ? _setPausedHere(true)
+      : _pauseLocal();
 
   Future<void> stop() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.stop)) : _runSafe(_engine.stop);
 
-  void nextTrack() => isRemote ? _sendRemote(const RemoteCommand(RemoteAction.next)) : _nextTrackLocal();
+  void nextTrack() => isRemote
+      ? _sendRemote(const RemoteCommand(RemoteAction.next))
+      : isFollowingHost
+      ? _askHost(const RemoteCommand(RemoteAction.next))
+      : _nextTrackLocal();
 
   /// Restarts the current track when more than three seconds have played, otherwise goes to the previous one; with
   /// [restart] false (a swipe, which shows the track before coming in) it always goes to the previous one.
-  void previousTrack({bool restart = true}) =>
-      isRemote ? _sendRemote(const RemoteCommand(RemoteAction.previous)) : _previousTrackLocal(restart: restart);
+  void previousTrack({bool restart = true}) => isRemote
+      ? _sendRemote(const RemoteCommand(RemoteAction.previous))
+      : isFollowingHost
+      ? _askHost(const RemoteCommand(RemoteAction.previous))
+      : _previousTrackLocal(restart: restart);
 
   void toggleShuffle() => setShuffle(!isShuffle);
 
   /// Reorders the rest of the running queue without interrupting the current track.
-  void setShuffle(bool value) =>
-      isRemote ? _sendRemote(RemoteCommand(RemoteAction.shuffle, on: value)) : _setShuffleLocal(value);
+  void setShuffle(bool value) => isRemote
+      ? _sendRemote(RemoteCommand(RemoteAction.shuffle, on: value))
+      : isFollowingHost
+      ? _askHost(RemoteCommand(RemoteAction.shuffle, on: value))
+      : _setShuffleLocal(value);
 
   void toggleRepeat() => setRepeatMode(switch (repeatMode) {
     RepeatMode.off => RepeatMode.all,
@@ -580,8 +625,11 @@ class PlayerViewModel extends ChangeNotifier {
     RepeatMode.one => RepeatMode.off,
   });
 
-  void setRepeatMode(RepeatMode mode) =>
-      isRemote ? _sendRemote(RemoteCommand(RemoteAction.repeat, repeat: mode)) : _setRepeatLocal(mode);
+  void setRepeatMode(RepeatMode mode) => isRemote
+      ? _sendRemote(RemoteCommand(RemoteAction.repeat, repeat: mode))
+      : isFollowingHost
+      ? _askHost(RemoteCommand(RemoteAction.repeat, repeat: mode))
+      : _setRepeatLocal(mode);
 
   /// The entry offered ahead depends on the mode (repeat one: the same track again), so it is offered anew.
   void _setRepeatLocal(RepeatMode mode) {
@@ -704,6 +752,12 @@ class PlayerViewModel extends ChangeNotifier {
         // Shown at once; the device's own state confirms it a moment later.
         _remoteBase = (target, DateTime.now());
         await _sendRemote(RemoteCommand(RemoteAction.seek, position: target));
+        return;
+      }
+      if (isFollowingHost) {
+        // The host seeks, and everyone follows it there.
+        _isUserSeeking = false;
+        _askHost(RemoteCommand(RemoteAction.seek, position: target));
         return;
       }
       try {
@@ -954,6 +1008,7 @@ class PlayerViewModel extends ChangeNotifier {
     }
 
     _localPosition = track == null ? Duration.zero : _startAt;
+    _localPositionAt = DateTime.now();
     _startAt = Duration.zero;
     currentTrack = track;
     if (!isRemote) _setPosition(_localPosition);
@@ -998,6 +1053,297 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// Whether [track] is the one playing (on the device being controlled): the lists highlight it.
   bool isCurrent(Track track) => currentTrack?.id == track.id;
+
+  // ── Listening together ─────────────────────────────────────────────────────────────────────────
+
+  /// How far a member may be from the host before it seeks to it, how often it looks, and how often a host that plays
+  /// tells its position anyway. Tests change them.
+  static Duration followTolerance = const Duration(milliseconds: 150);
+  static Duration followCheckInterval = const Duration(seconds: 2);
+  static Duration hostBeatInterval = const Duration(seconds: 5);
+
+  ListenTogether? _together;
+
+  /// A member: what the host last told, and the host's place of each entry of the queue here (the host's queue as far
+  /// as this library has its tracks).
+  ListeningState? _hostState;
+  List<int> _hostIndices = const [];
+
+  /// A member paused here while the host plays on: play catches up with it.
+  bool _pausedHere = false;
+
+  /// Following paused it (the host paused): following plays on by itself, unlike after any other pause.
+  bool _pausedForHost = false;
+  Timer? _followTimer;
+
+  /// How far ahead of the host a member seeks, for the moment the seek takes; learnt from how far behind it still was.
+  Duration _seekLead = Duration.zero;
+  DateTime? _caughtUpAt;
+
+  // A host: what it last told, and its heartbeat.
+  Object? _groupSignature;
+  (Duration, DateTime, bool)? _groupAnchor;
+  Timer? _hostBeat;
+
+  /// A member asked the host for tracks (with the member's name and the tracks), for a notice.
+  final Event<(String from, List<Track> tracks)> listenerQueued = Event();
+
+  /// The player left listening together to play music of its own.
+  final Event<void> leftForOwnMusic = Event<void>();
+
+  /// Takes part in listening together through [together].
+  void attachListenTogether(ListenTogether together) {
+    _together = together;
+    _subscriptions.addAll([
+      together.changed.listen((_) => _onGroupChanged()),
+      together.stateReceived.listen((state) {
+        _hostState = state;
+        _followHost();
+      }),
+      together.requestReceived.listen((request) => _onListenerRequest(request.$1, request.$2)),
+    ]);
+  }
+
+  /// The group this player hosts or listens in.
+  ListeningGroup? get listeningGroup => _together?.group;
+
+  /// This player plays what another one hosts.
+  bool get isFollowingHost => _together?.isMember ?? false;
+  bool get isHostingGroup => _together?.isHost ?? false;
+
+  /// The position of this device now: the engine's last, counted on while it plays (by at most a second: an engine
+  /// that stopped telling is not playing on).
+  Duration _positionNow() {
+    if (_state != PlaybackState.playing) return _localPosition;
+    final since = DateTime.now().difference(_localPositionAt);
+    return _localPosition + (since > const Duration(seconds: 1) ? const Duration(seconds: 1) : since);
+  }
+
+  void _onGroupChanged() {
+    final together = _together!;
+    if (together.isMember) {
+      if (_followTimer == null) {
+        // Joined: what played here gives way to the host's music, which comes with its first state.
+        _pausedHere = false;
+        if (_hostState == null) _pauseForHost();
+        _followTimer = Timer.periodic(followCheckInterval, (_) => _followHost());
+      }
+    } else {
+      _followTimer?.cancel();
+      _followTimer = null;
+      _hostState = null;
+      _hostIndices = const [];
+      _pausedHere = false;
+      _pausedForHost = false;
+    }
+    if (together.isHost) {
+      _groupSignature = null; // told again: someone may have joined
+      _publishGroup();
+      _hostBeat ??= Timer.periodic(hostBeatInterval, (_) {
+        if (_state == PlaybackState.playing) _publishGroupNow();
+      });
+    } else {
+      _hostBeat?.cancel();
+      _hostBeat = null;
+      _groupAnchor = null;
+    }
+    notifyListeners();
+  }
+
+  /// A member plays music of its own: it leaves the group first.
+  void _leaveForOwnMusic() {
+    final together = _together;
+    if (together == null || !together.isMember) return;
+    together.leave();
+    leftForOwnMusic.emit(null);
+  }
+
+  void _askHost(RemoteCommand command) => _together?.request(command);
+
+  // The host.
+
+  void _publishGroup() {
+    final together = _together;
+    if (together == null || !together.isHost) return;
+    final track = _currentTrack;
+    final signature = (
+      track == null ? null : _library.sharedId(track),
+      _state == PlaybackState.playing,
+      _queueVersion,
+      _queueIndex,
+    );
+    if (signature == _groupSignature) return;
+    _groupSignature = signature;
+    _publishGroupNow();
+  }
+
+  void _publishGroupNow() {
+    final together = _together;
+    if (together == null || !together.isHost) return;
+    final (queue, index) = _queueIndex >= 0 && _queueIndex < _playbackQueue.length
+        ? _window(_playbackQueue, _queueIndex)
+        : (<String>[], -1);
+    final playing = _state == PlaybackState.playing;
+    final at = _positionNow();
+    _groupAnchor = (at, DateTime.now(), playing);
+    together.publish(
+      ListeningState(queue: queue, queueIndex: index, playing: playing, position: at, at: together.serverNow()),
+    );
+  }
+
+  /// A seek (or a stall) moves the host off where the members count it to be: they are told.
+  void _publishGroupIfDrifted(Duration at) {
+    final anchor = _groupAnchor;
+    if (anchor == null || !isHostingGroup) return;
+    final (told, toldAt, playing) = anchor;
+    final expected = playing ? told + DateTime.now().difference(toldAt) : told;
+    if ((at - expected).abs() > const Duration(milliseconds: 400)) _publishGroupNow();
+  }
+
+  /// What a member asked of the host: skipping, seeking and the queue, which everyone hears. Playing, pausing and the
+  /// volume are each player's own.
+  void _onListenerRequest(String from, RemoteCommand command) {
+    switch (command.action) {
+      case RemoteAction.next ||
+          RemoteAction.previous ||
+          RemoteAction.seek ||
+          RemoteAction.playIndex ||
+          RemoteAction.moveTrack ||
+          RemoteAction.removeTrack ||
+          RemoteAction.shuffle ||
+          RemoteAction.repeat:
+        _execute(command);
+      case RemoteAction.playNext || RemoteAction.addToQueue:
+        final tracks = _library.resolveTracks(command.trackIds);
+        if (tracks.isEmpty) return;
+        _execute(command);
+        listenerQueued.emit((from, tracks));
+      default:
+        break;
+    }
+  }
+
+  // A member.
+
+  Future<void> _setPausedHere(bool paused) async {
+    _pausedHere = paused;
+    if (paused) {
+      _pausedForHost = false;
+      await _pauseLocal();
+    } else {
+      _pausedForHost = true; // to be played on, as following would
+      _followHost(); // catches up with the host
+    }
+    notifyListeners();
+  }
+
+  /// Plays here what the host plays, where the host is: its queue, its entry, playing or paused, and its position,
+  /// seeking when this one is more than [followTolerance] off.
+  void _followHost() {
+    final state = _hostState;
+    final together = _together;
+    if (state == null || together == null || !together.isMember) return;
+    // Paused by something else than following (a call, headphones unplugged): it stays so until play.
+    if (_state == PlaybackState.paused && !_pausedForHost) _pausedHere = true;
+
+    final tracks = <Track>[];
+    final hostIndices = <int>[];
+    var current = -1;
+    for (var i = 0; i < state.queue.length; i++) {
+      final track = _library.resolveTracks([state.queue[i]]).firstOrNull;
+      if (track == null) continue;
+      if (i == state.queueIndex) current = tracks.length;
+      tracks.add(track);
+      hostIndices.add(i);
+    }
+    _hostIndices = hostIndices;
+    if (current < 0) {
+      // The host plays nothing, or a track this library doesn't have: quiet here meanwhile.
+      _pauseForHost();
+      return;
+    }
+
+    final same =
+        tracks.length == _playbackQueue.length &&
+        [for (var i = 0; i < tracks.length; i++) identical(tracks[i], _playbackQueue[i])].every((same) => same);
+    if (!same) {
+      // The host's order is the order: not shuffled again here.
+      _originalQueue
+        ..clear()
+        ..addAll(tracks);
+      _playbackQueue
+        ..clear()
+        ..addAll(tracks);
+      _queueIndex = -1;
+      _updateQueueState();
+    }
+
+    final target = state.positionAt(together.serverNow());
+    final playing = state.playing && !_pausedHere;
+    // Gone on to the next entry a moment before the host, which follows any moment: not taken back.
+    if (playing && _queueIndex == current + 1 && tracks[current].duration - target < const Duration(seconds: 2)) return;
+    if (_queueIndex != current || (playing && _state == PlaybackState.stopped)) {
+      if (playing) {
+        _pausedForHost = false;
+        _caughtUpAt = DateTime.now();
+        _playAt(current, start: target + _seekLead);
+      } else {
+        // Shown paused where the host is, as a queue picked up after a restart is.
+        if (_state != PlaybackState.stopped) unawaited(_runSafe(_engine.stop));
+        _queueIndex = current;
+        _updateQueueState();
+        _resumeAt = target;
+        _localPosition = target;
+        _setPosition(target);
+        currentTrack = tracks[current];
+        notifyListeners();
+      }
+      return;
+    }
+
+    if (!playing) {
+      _pauseForHost();
+      // Paused by the host somewhere else: there, ready for when it plays on.
+      if (!state.playing && (_positionNow() - target).abs() > followTolerance) {
+        unawaited(_runSafe(() => _engine.seek(target)));
+      }
+      return;
+    }
+    if (_state == PlaybackState.paused) {
+      _pausedForHost = false;
+      _caughtUpAt = DateTime.now();
+      unawaited(
+        _runSafe(() async {
+          await _engine.seek(target + _seekLead);
+          await _engine.resume();
+        }),
+      );
+      return;
+    }
+    if (_state != PlaybackState.playing || !together.hasClock || _isUserSeeking) return;
+
+    final off = _positionNow() - target; // ahead of the host, or behind it (negative)
+    if (off.abs() <= followTolerance) return;
+    final last = _caughtUpAt;
+    final now = DateTime.now();
+    if (last != null && now.difference(last) < followCheckInterval) return; // the last seek may still be settling
+    if (last != null && now.difference(last) < followCheckInterval * 3 && off.abs() < const Duration(seconds: 1)) {
+      // A little off right after a seek: the seek itself takes that long, so the next one aims that much further.
+      final lead = _seekLead - off;
+      _seekLead = lead.isNegative
+          ? Duration.zero
+          : (lead > const Duration(seconds: 1) ? const Duration(seconds: 1) : lead);
+    }
+    _caughtUpAt = now;
+    unawaited(_runSafe(() => _engine.seek(target + _seekLead)));
+  }
+
+  /// Pauses because the host did (or plays what this library lacks): following plays on by itself later.
+  void _pauseForHost() {
+    if (_state != PlaybackState.playing) return;
+    _pausedForHost = true;
+    unawaited(_engine.pause());
+  }
 
   // ── Other devices (remote control) ─────────────────────────────────────────────────────────────
 
@@ -1352,6 +1698,7 @@ class PlayerViewModel extends ChangeNotifier {
   @override
   void notifyListeners() {
     _publish();
+    _publishGroup();
     _saveChanges();
     nowPlaying.value = (track: currentTrack?.id, playing: isPlaying, queue: isRemote ? _remoteQueue : _queueTracks);
     super.notifyListeners();
@@ -1379,6 +1726,8 @@ class PlayerViewModel extends ChangeNotifier {
     _remoteTicker?.cancel();
     _remoteLost?.cancel();
     _remoteVolumeTimer?.cancel();
+    _followTimer?.cancel();
+    _hostBeat?.cancel();
     _sleepTimer?.cancel();
     position.dispose();
     elapsedSeconds.dispose();

@@ -29,6 +29,13 @@ abstract final class RemoteRules {
   static const int maxQueueLength = 1000;
   static const int maxDevicesPerAccount = 20;
 
+  /// Listening together: the most players that follow one, and the most accounts it invites.
+  static const int maxListeners = 20;
+  static const int maxListenInvites = 50;
+
+  /// How long listening together waits for its host to come back after its connection dropped.
+  static const Duration listenHostGrace = Duration(seconds: 20);
+
   /// How often each side pings the other, so that a connection that died is noticed.
   static const Duration pingInterval = Duration(seconds: 25);
 
@@ -271,4 +278,104 @@ List<String>? _ids(Object? value) {
     ids.add(id);
   }
   return ids;
+}
+
+// ── Listening together ──────────────────────────────────────────────────────────────────────────
+
+/// A player in a group listening together: whose it is and what it is called.
+class ListeningDevice {
+  const ListeningDevice(this.accountId, this.username, this.deviceId, this.deviceName);
+
+  final String accountId;
+  final String username;
+  final String deviceId;
+  final String deviceName;
+
+  static ListeningDevice fromJson(Object? json) {
+    if (json is! Map) throw const FormatException('Expected a player.');
+    final (accountId, username, deviceId) = (json['accountId'], json['username'], json['deviceId']);
+    if (accountId is! String || username is! String || deviceId is! String) {
+      throw const FormatException('A player needs its account and device.');
+    }
+    return ListeningDevice(accountId, username, deviceId, RemoteRules.cleanName(json['deviceName']));
+  }
+}
+
+/// Players listening together: the [host]'s music plays on the [members]' players too.
+class ListeningGroup {
+  const ListeningGroup(this.id, this.host, this.members);
+
+  final String id;
+  final ListeningDevice host;
+  final List<ListeningDevice> members;
+
+  /// Null for null (no group) and for anything that is not a group.
+  static ListeningGroup? fromJson(Object? json) {
+    if (json is! Map || json['id'] is! String || json['members'] is! List) return null;
+    try {
+      return ListeningGroup(json['id'] as String, ListeningDevice.fromJson(json['host']), [
+        for (final member in json['members'] as List) ListeningDevice.fromJson(member),
+      ]);
+    } on FormatException {
+      return null;
+    }
+  }
+}
+
+/// An open invite to listen together: the group, and the account that hosts it.
+class ListeningInvite {
+  const ListeningInvite(this.groupId, this.host);
+
+  final String groupId;
+  final AccountInfo host;
+}
+
+/// What the host of a group plays, as its members follow it: the queue (at most [RemoteRules.maxQueueLength] IDs around
+/// the current entry, -1 for none), whether it plays, and where it was at [at], by the server's clock.
+class ListeningState {
+  const ListeningState({
+    required this.queue,
+    required this.queueIndex,
+    required this.playing,
+    required this.position,
+    required this.at,
+  });
+
+  final List<String> queue;
+  final int queueIndex;
+  final bool playing;
+  final Duration position;
+  final DateTime at;
+
+  String? get trackId => queueIndex >= 0 && queueIndex < queue.length ? queue[queueIndex] : null;
+
+  /// Where the host is at [now] (by the server's clock): counted on from [at] while it plays.
+  Duration positionAt(DateTime now) {
+    if (!playing) return position;
+    final since = now.difference(at);
+    return since.isNegative ? position : position + since;
+  }
+
+  Map<String, Object?> toJson() => {
+    'queue': queue,
+    'queueIndex': queueIndex,
+    'playing': playing,
+    'positionMs': position.inMilliseconds,
+    'at': at.millisecondsSinceEpoch,
+  };
+
+  /// Null when [json] is not a state.
+  static ListeningState? fromJson(Object? json) {
+    if (json is! Map) return null;
+    final queue = _ids(json['queue']);
+    final (index, position, at) = (json['queueIndex'], json['positionMs'], json['at']);
+    if (queue == null || index is! int || position is! int || position < 0 || at is! int) return null;
+    return ListeningState(
+      queue: queue,
+      queueIndex: index >= 0 && index < queue.length ? index : -1,
+      playing: json['playing'] == true,
+      position: Duration(milliseconds: position.clamp(0, 1 << 40)),
+      at: DateTime.fromMillisecondsSinceEpoch(at, isUtc: true),
+    );
+  }
 }

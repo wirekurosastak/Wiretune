@@ -1013,6 +1013,29 @@ const Map<String, (String, String, String)> allStrings = {
   'PeopleCount': ('{0} fő', '{0} people', '{0} Personen'),
   'RecommendFailed': ('Nem sikerült ajánlani: {0}', "Couldn't recommend: {0}", 'Empfehlen fehlgeschlagen: {0}'),
   'Remove': ('Eltávolítás', 'Remove', 'Entfernen'),
+  'ListenTogether': ('Közös hallgatás…', 'Listen together…', 'Zusammen hören…'),
+  'ListenTogetherTitle': ('Közös hallgatás', 'Listen together', 'Zusammen hören'),
+  'ListenInvite': ('Meghívás', 'Invite', 'Einladen'),
+  'ListenInviteMore': ('Meghívás…', 'Invite…', 'Einladen…'),
+  'ListenEnd': ('Közös hallgatás befejezése', 'End listening together', 'Zusammen hören beenden'),
+  'ListenLeave': ('Kilépés', 'Leave', 'Verlassen'),
+  'ListenWaiting': ('Még senki nem csatlakozott', 'No one has joined yet', 'Noch ist niemand dabei'),
+  'ListeningWith': ('Közös hallgatás: {0}', 'Listening with {0}', 'Du hörst mit {0}'),
+  'ListeningTogether': ('Közös hallgatás', 'Listening together', 'Gemeinsam hören'),
+  'ListenInvitedYou': (
+    '{0} közös hallgatásra hív',
+    '{0} invites you to listen together',
+    '{0} lädt dich zum Zusammenhören ein',
+  ),
+  'ListenJoin': ('Csatlakozás', 'Join', 'Beitreten'),
+  'ListenJoined': ('{0} csatlakozott', '{0} joined', '{0} ist dabei'),
+  'ListenEnded': ('A közös hallgatás véget ért.', 'Listening together ended.', 'Das Zusammenhören ist zu Ende.'),
+  'ListenLeft': (
+    'Kiléptél a közös hallgatásból.',
+    'You left listening together.',
+    'Du hast das Zusammenhören verlassen.',
+  ),
+  'ListenQueued': ('{0} hozzáadta: {1}', '{0} added {1}', '{0} hat {1} hinzugefügt'),
 
   // ── What the server answered (ErrorCodes), in the user's language ───────────────────────────────────
   'ErrorInvalidJson': (

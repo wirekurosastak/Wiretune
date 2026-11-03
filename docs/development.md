@@ -19,7 +19,7 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 | `models/` | Formats (`audio_format.dart`), the library's records, the server's records and error codes (`protocol.dart`), remote-control messages (`remote.dart`) |
 | `data/` | SQLite: `DatabaseManager` (schema and upgrades), `LibraryRepository` |
 | `metadata/` | The tag reader (`tag_reader.dart`) for every format |
-| `services/` | `LibraryService` (the library and user data), the scanner, `server_client.dart` and `ServerSession` (connecting, signing in), remote control, recommendations, downloads, online lyrics, artist pictures, the update check, the log |
+| `services/` | `LibraryService` (the library and user data), the scanner, `server_client.dart` and `ServerSession` (connecting, signing in), remote control, listening together, recommendations, downloads, online lyrics, artist pictures, the update check, the log |
 | `audio/` | `WiretuneAudioEngine` (the playback state), the spectrum analyzer |
 | `localization/strings.dart` | Every interface text ([how](#texts-and-languages)) |
 
@@ -34,7 +34,7 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 | `user_data_service.dart` | Favorites, play counts, playlists, hidden items |
 | `recommendation_service.dart` | What the accounts recommend to each other |
 | `library_scan_service.dart` | Scanning and watching the music folder |
-| `remote_hub.dart` | Passing remote-control messages between the players of an account |
+| `remote_hub.dart` | Passing remote-control messages between the players of an account, and of a group listening together |
 | `config.dart` | The options |
 
 ### `app/lib/src/`

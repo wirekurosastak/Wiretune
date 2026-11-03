@@ -107,8 +107,9 @@ Each change sends `recommendationsChanged` to the recipient's players.
 ## Remote control
 
 `GET /api/remote` upgrades to a WebSocket (user role, sign-in token in the header only: no stream token, no `?token=`).
-Through it the players of one account see each other and send each other commands. The server only relays messages
-between players of the same account and stores none.
+Through it the players of one account see each other and send each other commands, and players of different accounts
+[listen together](#listen-together). The server only relays messages, between the players of one account or of one
+group, and stores none.
 
 - A plain `GET`: `426`.
 - A request from a web page (with an `Origin` header): `403`.
@@ -153,6 +154,30 @@ Players validate what they receive and ignore commands they don't understand.
 Close codes: `4000` the same device connected again, `4001` more than 20 devices on one account, `4401` the token
 expired or the account was deleted, `1008` an invalid message (or more than 200 in 10 seconds), `1009` a message too
 long. Both sides ping every 25 seconds.
+
+## Listen together
+
+Over the same WebSocket, players of different accounts listen together: a host's music plays on its members' players,
+each streaming the files itself. A group ends when its host leaves, or when its host's connection dropped and didn't
+come back within 20 seconds.
+
+| Message | Sent by | |
+|---|---|---|
+| `{ "type": "time", "t" }` | player | Asks the server's clock; `t` is the player's own. The answer: `{ "type": "time", "t", "server" }` (milliseconds since 1970) |
+| `{ "type": "listenStart", "invite": [accountId] }` | player | Starts a group with this player as its host, inviting up to 50 accounts. A host that sends it again only invites |
+| `{ "type": "listenInvite", "invite": [accountId] }` | host | Invites more |
+| `{ "type": "listenJoin", "group" }` | player | Joins a group its account was invited to (up to 20 members), leaving any other |
+| `{ "type": "listenLeave" }` | player | Leaves; the host's leaving ends the group |
+| `{ "type": "listenState", "state" }` | host | What it plays (below). The server keeps the latest for members that join later |
+| `{ "type": "listenCommand", "command" }` | member | A request for the host, a command as in remote control. Hosts carry out `next`, `previous`, `seek`, `playIndex`, `moveTrack`, `removeTrack`, `shuffle`, `repeat`, `playNext` and `addToQueue` |
+| `{ "type": "listen", "group" }` | server | The player's group, whenever it changes: `{ "id", "host", "members": [...] }`, each `{ "accountId", "username", "deviceId", "deviceName" }`. `null` for none, also right after hello |
+| `{ "type": "listenInvites", "invites": [{ "group", "host": { "id", "username" } }] }` | server | The groups that invite the player's account, after hello and whenever that changes |
+| `{ "type": "listenState", "state" }` | server | The host's state, for a member |
+| `{ "type": "listenCommand", "from", "command" }` | server | A member's request, with its username, for the host |
+
+A **listen state** is `{ "queue", "queueIndex", "playing", "positionMs", "at" }`: up to 1,000 track IDs and the current
+one's index, and the position at `at` (the server's clock, milliseconds since 1970). Members count on from there while
+the host plays, and seek when they are more than 150 ms off.
 
 ## Error codes
 

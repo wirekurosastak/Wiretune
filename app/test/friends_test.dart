@@ -73,7 +73,11 @@ void main() {
     await showApp(tester, vm, const Size(400, 860));
 
     final bell = find.byTooltip(Localizer.get('FromFriends'));
-    expect(find.descendant(of: bell, matching: find.text('1')), findsOneWidget, reason: 'one came');
+    expect(
+      find.descendant(of: bell, matching: find.text('1')),
+      findsOneWidget,
+      reason: 'one came',
+    );
     await tester.tap(bell);
     await settle(tester);
     await serverAnswers();
@@ -117,6 +121,73 @@ void main() {
     await settle(tester);
     await serverAnswers();
     expect(requests.last, 'DELETE /api/me/recommendations/new-1');
+    await tester.pump(const Duration(seconds: 5)); // the notices go
+  });
+
+  testWidgets('the devices menu starts listening together with the friends picked, and ends it', (tester) async {
+    http.Response answer(Object body) =>
+        http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json; charset=utf-8'});
+    final library = createLibrary();
+    library.initialize();
+    final session = (await tester.runAsync(
+      () => signedInSession(
+        library,
+        tracks: [TestSupport.makeServerTrack('s1', 'Giant Steps', artist: 'John Coltrane', album: 'Giant Steps')],
+        respond: (request) => switch (request.url.path) {
+          '/api/accounts' => answer([
+            const AccountInfo('user-1', 'owner').toJson(),
+            const AccountInfo('user-2', 'anna').toJson(),
+          ]),
+          '/api/me/recommendations' => answer(const <Object>[]),
+          _ => null,
+        },
+      ),
+    ))!;
+    final hub = FakeRemoteHub();
+    final remote = RemoteClient(session, connector: hub.connect);
+    final vm = createMainViewModel(library, null, session, remote);
+    addTearDown(vm.dispose);
+    remote.configure(id: 'phone-id', name: 'Phone', kind: DeviceKind.phone, enabled: true);
+    await tester.runAsync(() => until(() => remote.isConnected));
+    hub.devices(const []);
+    await tester.runAsync(pumpEventQueue);
+    await showApp(tester, vm, const Size(400, 860));
+
+    await tester.tap(find.byTooltip(Localizer.get('TipDevices')).first);
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('ListenTogether')));
+    await settle(tester);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await settle(tester);
+    await tester.tap(find.text('anna'));
+    await tester.pump();
+    await tester.tap(find.text(Localizer.get('ListenInvite')));
+    await settle(tester);
+    expect(hub.ofType('listenStart').single['invite'], ['user-2']);
+
+    hub.deliver({
+      'type': 'listen',
+      'group': {
+        'id': 'g1',
+        'host': {'accountId': 'user-1', 'username': 'owner', 'deviceId': 'phone-id', 'deviceName': 'Phone'},
+        'members': [
+          {'accountId': 'user-2', 'username': 'anna', 'deviceId': 'anna-phone', 'deviceName': ''},
+        ],
+      },
+    });
+    await tester.runAsync(pumpEventQueue);
+    await settle(tester);
+    final lit = find.byTooltip(Localizer.format('ListeningWith', ['anna']));
+    expect(lit, findsWidgets, reason: 'the button says who listens');
+    expect(find.text(Localizer.format('ListenJoined', ['anna'])), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5)); // the notice, over the top bar, goes
+    await settle(tester);
+    await tester.tap(lit.first);
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('ListenEnd')));
+    await settle(tester);
+    expect(hub.ofType('listenLeave'), hasLength(1));
+    expect(vm.player.listeningGroup, isNull);
     await tester.pump(const Duration(seconds: 5)); // the notices go
   });
 }

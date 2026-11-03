@@ -114,6 +114,10 @@ class RemoteClient {
   /// What the account was recommended may have changed: one came or went, the bell was opened on another of its
   /// players, or the connection was lost for a while.
   final Event<void> recommendationsChanged = Event<void>();
+
+  /// A message of listening together ([ListenTogether]): the server's clock, the group, its invites, the host's playback
+  /// and the members' requests.
+  final Event<Map<Object?, Object?>> listenMessage = Event();
   bool _connectedBefore = false;
 
   String get deviceId => _deviceId;
@@ -162,6 +166,13 @@ class RemoteClient {
         if (latest != null && _channel != null) _sendState(latest);
       });
     }
+  }
+
+  /// Sends a message of listening together; false while not connected.
+  bool sendListen(Map<String, Object?> message) {
+    if (_channel == null) return false;
+    _send(message);
+    return true;
   }
 
   /// Sends [command] to the player [deviceId]; false when it is not online.
@@ -357,6 +368,8 @@ class RemoteClient {
         libraryChanged.emit(null);
       case 'recommendationsChanged':
         recommendationsChanged.emit(null);
+      case 'time' || 'listen' || 'listenInvites' || 'listenState' || 'listenCommand':
+        listenMessage.emit(message);
     }
   }
 

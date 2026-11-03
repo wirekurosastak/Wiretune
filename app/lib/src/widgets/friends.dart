@@ -82,7 +82,8 @@ Future<void> showFromFriends(BuildContext context) async {
   );
 }
 
-/// The recommendations, the newest first; a tap plays the track or opens the album or the artist.
+/// The invites to listen together, then the recommendations, the newest first; a tap on one plays the track or
+/// opens the album or the artist.
 class _FromFriendsList extends StatelessWidget {
   const _FromFriendsList({required this.close, required this.padding});
 
@@ -97,7 +98,8 @@ class _FromFriendsList extends StatelessWidget {
       listenable: friends,
       builder: (context, _) {
         final items = friends.items;
-        if (items.isEmpty) {
+        final invites = friends.invites;
+        if (items.isEmpty && invites.isEmpty) {
           return Padding(
             padding: EdgeInsets.fromLTRB(padding, 8, padding, 8),
             child: Text(context.tr('FromFriendsNone'), style: TextStyle(fontSize: 13, color: colors.textMuted)),
@@ -105,9 +107,44 @@ class _FromFriendsList extends StatelessWidget {
         }
         return Column(
           mainAxisSize: MainAxisSize.min,
-          children: [for (final item in items) _recommendationRow(context, item)],
+          children: [
+            for (final invite in invites) _inviteRow(context, invite),
+            for (final item in items) _recommendationRow(context, item),
+          ],
         );
       },
+    );
+  }
+
+  Widget _inviteRow(BuildContext context, ListeningInvite invite) {
+    final friends = context.vm.friends;
+    final colors = context.colors;
+    return ListTile(
+      contentPadding: EdgeInsets.only(left: padding, right: padding),
+      leading: CircleAvatar(
+        radius: 22,
+        backgroundColor: colors.accent.withValues(alpha: 0.18),
+        child: Icon(Icons.groups_rounded, color: colors.accent),
+      ),
+      title: Text(context.trf('ListenInvitedYou', [invite.host.username]), maxLines: 2),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton(
+            onPressed: () {
+              close();
+              friends.join(invite);
+            },
+            child: Text(context.tr('ListenJoin')),
+          ),
+          IconButton(
+            tooltip: context.tr('Remove'),
+            iconSize: 18,
+            icon: Icon(Icons.close_rounded, color: colors.textMuted),
+            onPressed: () => friends.dismissInvite(invite),
+          ),
+        ],
+      ),
     );
   }
 

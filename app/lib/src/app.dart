@@ -373,6 +373,14 @@ class _NoticeHostState extends State<_NoticeHost> {
                                             _dismiss();
                                           },
                                           child: Text(context.tr('Undo')),
+                                        )
+                                      else if (notice.action case (final label, final run))
+                                        TextButton(
+                                          onPressed: () {
+                                            run();
+                                            _dismiss();
+                                          },
+                                          child: Text(label),
                                         ),
                                       IconButton(
                                         tooltip: context.tr('TipDismissNotice'),

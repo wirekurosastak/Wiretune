@@ -13,16 +13,6 @@ import 'package:wiretune_server/wiretune_server.dart';
 
 import 'support.dart';
 
-/// Waits for the server's close (the socket's stream must be listened to); its code. Watches the state rather than
-/// `done`, which never completes for a socket that sent nothing.
-Future<int?> closedWith(WebSocket socket) async {
-  for (var i = 0; i < 250 && socket.readyState != WebSocket.closed; i++) {
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-  }
-  expect(socket.readyState, WebSocket.closed, reason: 'the server closes the connection');
-  return socket.closeCode;
-}
-
 void main() {
   setUpAll(useTempDataDirectory);
   setUp(() => Localizer.instance.setLanguage('en'));

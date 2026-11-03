@@ -10,8 +10,9 @@ import 'package:wiretune_core/wiretune_core.dart';
 import 'auth_service.dart';
 
 /// The players of each account that are online, so that each sees what the others play and can control them
-/// (docs/api.md#remote-control). The hub only passes messages on, between the players of one account; nothing is
-/// stored, and a player is forgotten the moment its connection closes.
+/// (docs/api.md#remote-control), and the players listening together, across accounts (docs/api.md#listen-together).
+/// The hub only passes messages on; nothing is stored, and a player is forgotten the moment its connection closes (a
+/// group's host gets a little while to come back).
 class RemoteHub {
   /// A player has this long to introduce itself.
   static const Duration _helloTimeout = Duration(seconds: 10);
@@ -22,6 +23,10 @@ class RemoteHub {
 
   final Map<String, Map<String, _Peer>> _accounts = {};
   final Set<_Peer> _peers = {};
+  final Map<String, _Group> _groups = {};
+
+  /// How long a group waits for its host to come back; tests shorten it.
+  Duration hostGrace = RemoteRules.listenHostGrace;
 
   /// The players of [userId] that are online.
   int devicesOf(String userId) => _accounts[userId]?.length ?? 0;
@@ -33,7 +38,7 @@ class RemoteHub {
   /// Takes over the WebSocket of a signed-in player; [principal]'s token decides the account, and how long it may stay.
   void join(WebSocket socket, Principal principal) {
     socket.pingInterval = RemoteRules.pingInterval;
-    final peer = _Peer(socket, principal.userId);
+    final peer = _Peer(socket, principal.userId, principal.username);
     _peers.add(peer);
     peer.helloTimer = Timer(_helloTimeout, () => _close(peer, 1008, 'No hello.'));
     final expires = principal.expiresAt;
@@ -90,6 +95,10 @@ class RemoteHub {
     for (final peer in peers) {
       _close(peer, WebSocketStatus.goingAway, 'The server is stopping.');
     }
+    for (final group in _groups.values) {
+      group.hostAway?.cancel();
+    }
+    _groups.clear();
     // A connection that ends in an error has ended too: that is all the server waits for.
     await Future.wait([for (final peer in peers) peer.socket.done.catchError((Object _) => null)]);
   }
@@ -126,6 +135,38 @@ class RemoteHub {
         if (target != null && target != peer) {
           _send(target, {'type': 'command', 'from': peer.id, 'command': command});
         }
+      case 'time':
+        // The server's clock, for the players listening together to count on one.
+        final sent = message['t'];
+        if (sent is! num) return _close(peer, 1008, 'A time needs "t".');
+        _send(peer, {'type': 'time', 't': sent, 'server': DateTime.now().millisecondsSinceEpoch});
+      case 'listenStart' || 'listenInvite':
+        final invite = _accountIds(message['invite']);
+        if (invite == null) return _close(peer, 1008, 'An invite is a list of account IDs.');
+        type == 'listenStart' ? _startGroup(peer, invite) : _invite(peer, invite);
+      case 'listenJoin':
+        final id = message['group'];
+        if (id is! String) return _close(peer, 1008, 'A join needs "group".');
+        _joinGroup(peer, id);
+      case 'listenLeave':
+        _leaveGroup(peer);
+      case 'listenState':
+        final state = message['state'];
+        if (state is! Map) return _close(peer, 1008, 'A state must be a JSON object.');
+        final group = peer.group;
+        if (group == null || group.host != peer) return; // only the host tells what plays; a late one is no error
+        group.state = state;
+        final text = jsonEncode({'type': 'listenState', 'state': state});
+        for (final member in group.members) {
+          _sendText(member, text);
+        }
+      case 'listenCommand':
+        final command = message['command'];
+        if (command is! Map) return _close(peer, 1008, 'A command must be a JSON object.');
+        final group = peer.group;
+        final host = group?.host;
+        if (group == null || host == null || host == peer) return;
+        _send(host, {'type': 'listenCommand', 'from': peer.username, 'command': command});
       default:
         return _close(peer, 1008, 'Unknown message type.');
     }
@@ -161,12 +202,37 @@ class RemoteHub {
       final state = other.state;
       if (other != peer && state != null) _send(peer, {'type': 'state', 'device': other.id, 'state': state});
     }
+    // A host that dropped off takes its group back; anyone invited hears of the open invites.
+    final hosted = _groups.values.where((g) => g.host == null && g.hostKey == (peer.userId, id)).firstOrNull;
+    if (hosted != null && peer.group == null) {
+      hosted
+        ..hostAway?.cancel()
+        ..hostAway = null
+        ..host = peer;
+      peer.group = hosted;
+      _announceGroup(hosted);
+    } else if (peer.group == null) {
+      // A player that was in a group before its connection dropped learns that it no longer is.
+      _send(peer, const {'type': 'listen', 'group': null});
+    }
+    _sendInvites(peer);
   }
 
   void _leave(_Peer peer) {
     if (!_peers.remove(peer)) return;
     peer.helloTimer?.cancel();
     peer.expiryTimer?.cancel();
+    final group = peer.group;
+    if (group != null && group.host == peer) {
+      // The host's connection may only have dropped (a phone between networks): its group waits for it a while, the
+      // others playing on meanwhile.
+      peer.group = null;
+      group
+        ..host = null
+        ..hostAway = Timer(hostGrace, () => _endGroup(group));
+    } else if (group != null) {
+      _leaveGroup(peer);
+    }
     final devices = _accounts[peer.userId];
     if (devices == null || devices[peer.id] != peer) return; // never registered, or replaced
     devices.remove(peer.id);
@@ -189,6 +255,125 @@ class RemoteHub {
         ],
       });
     }
+  }
+
+  // ── Listening together ───────────────────────────────────────────────────────────────────────────
+
+  /// [value] as the account IDs of an invite, or null when it is not one.
+  static Set<String>? _accountIds(Object? value) {
+    if (value is! List || value.length > RemoteRules.maxListenInvites) return null;
+    final ids = <String>{};
+    for (final id in value) {
+      if (id is! String || UserDataRules.validateId(id) != null) return null;
+      ids.add(id);
+    }
+    return ids;
+  }
+
+  /// [host] starts a group and invites the accounts [invite]; it leaves the group it was in. A host that starts again
+  /// only invites.
+  void _startGroup(_Peer host, Set<String> invite) {
+    if (host.id == null) return;
+    final current = host.group;
+    if (current != null && current.host == host) return _invite(host, invite);
+    if (current != null) _leaveGroup(host);
+    final group = _Group(newId(), host, (host.userId, host.id!));
+    _groups[group.id] = group;
+    host.group = group;
+    _announceGroup(group);
+    _invite(host, invite);
+  }
+
+  void _invite(_Peer host, Set<String> invite) {
+    final group = host.group;
+    if (group == null || group.host != host) return;
+    final added = invite.where((id) => id != host.userId && !group.invited.contains(id)).toList();
+    final room = RemoteRules.maxListenInvites - group.invited.length;
+    if (room <= 0) return;
+    group.invited.addAll(added.take(room));
+    added.take(room).forEach(_announceInvites);
+  }
+
+  /// [peer] joins the group [id] when its account was invited; it leaves the one it was in. A group that is gone (or
+  /// full) says so.
+  void _joinGroup(_Peer peer, String id) {
+    final group = _groups[id];
+    if (group != null && group.members.contains(peer)) return;
+    if (group == null ||
+        !group.invited.contains(peer.userId) ||
+        group.host == peer ||
+        group.members.length >= RemoteRules.maxListeners) {
+      return _send(peer, const {'type': 'listen', 'group': null});
+    }
+    if (peer.group != null) _leaveGroup(peer);
+    group.members.add(peer);
+    peer.group = group;
+    _announceGroup(group);
+    final state = group.state;
+    if (state != null) _send(peer, {'type': 'listenState', 'state': state});
+  }
+
+  /// [peer] leaves its group; when it is the host, the group ends.
+  void _leaveGroup(_Peer peer) {
+    final group = peer.group;
+    if (group == null) return;
+    if (group.host == peer) return _endGroup(group);
+    group.members.remove(peer);
+    peer.group = null;
+    _send(peer, const {'type': 'listen', 'group': null});
+    _announceGroup(group);
+  }
+
+  void _endGroup(_Group group) {
+    if (_groups.remove(group.id) == null) return;
+    group.hostAway?.cancel();
+    for (final peer in [?group.host, ...group.members]) {
+      peer.group = null;
+      _send(peer, const {'type': 'listen', 'group': null});
+    }
+    group.invited.forEach(_announceInvites);
+  }
+
+  /// Tells everyone in [group] who is in it.
+  void _announceGroup(_Group group) {
+    final host = group.host;
+    if (host == null) return;
+    Map<String, Object?> who(_Peer peer) => {
+      'accountId': peer.userId,
+      'username': peer.username,
+      'deviceId': peer.id,
+      'deviceName': peer.name,
+    };
+    final text = jsonEncode({
+      'type': 'listen',
+      'group': {
+        'id': group.id,
+        'host': who(host),
+        'members': [for (final member in group.members) who(member)],
+      },
+    });
+    for (final peer in [host, ...group.members]) {
+      _sendText(peer, text);
+    }
+  }
+
+  /// Tells the players of [accountId] which groups invite it.
+  void _announceInvites(String accountId) {
+    for (final peer in _accounts[accountId]?.values ?? const <_Peer>[]) {
+      _sendInvites(peer);
+    }
+  }
+
+  void _sendInvites(_Peer peer) {
+    final invites = [
+      for (final group in _groups.values)
+        if (group.invited.contains(peer.userId) && group.host != null)
+          {
+            'group': group.id,
+            'host': {'id': group.host!.userId, 'username': group.host!.username},
+          },
+    ];
+    _send(peer, {'type': 'listenInvites', 'invites': invites});
   }
 
   void _sendToOthers(_Peer from, Map<String, Object?> message) {
@@ -216,11 +401,34 @@ class RemoteHub {
   }
 }
 
+/// Players listening together: the host's music plays on the members' players too.
+class _Group {
+  _Group(this.id, this.host, this.hostKey);
+
+  final String id;
+
+  /// Null while its connection is gone, for [hostAway].
+  _Peer? host;
+
+  /// The host's account and device, by which it takes the group back.
+  final (String, String) hostKey;
+  Timer? hostAway;
+  final Set<_Peer> members = {};
+  final Set<String> invited = {};
+
+  /// What the host last said it plays, for a member that joins later.
+  Map<Object?, Object?>? state;
+}
+
 class _Peer {
-  _Peer(this.socket, this.userId);
+  _Peer(this.socket, this.userId, this.username);
 
   final WebSocket socket;
   final String userId;
+  final String username;
+
+  /// The group it hosts or listens in.
+  _Group? group;
 
   /// Set by its hello.
   String? id;

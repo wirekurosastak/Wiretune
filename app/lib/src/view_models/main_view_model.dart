@@ -41,13 +41,16 @@ class DeviceCapabilities {
 /// A short message that needs no answer: a change that wasn't made, one the server turned down, something that went
 /// through. The app shows the latest for a few seconds.
 class AppNotice {
-  const AppNotice(this.message, {this.isError = false, this.undo});
+  const AppNotice(this.message, {this.isError = false, this.undo, this.action});
 
   final String message;
   final bool isError;
 
   /// Takes back what the notice tells of: its Undo button is there when this is.
   final VoidCallback? undo;
+
+  /// A button of its own instead (Join): its label, and what it does.
+  final (String, VoidCallback)? action;
 }
 
 /// An artist, album or track the user hid, and the name the settings list it by.
@@ -86,7 +89,10 @@ class MainViewModel extends ChangeNotifier {
     // Downloads may land in the local folder (Music/Wiretune); they are server tracks, not local music.
     library.downloadFolder = this.downloadService.directory;
 
-    player = PlayerViewModel(audioEngine, library)..attachRemote(this.remote);
+    together = ListenTogether(this.remote);
+    player = PlayerViewModel(audioEngine, library)
+      ..attachRemote(this.remote)
+      ..attachListenTogether(together);
     lyrics = LyricsViewModel(player, own: _ownLyrics, online: onlineLyrics?.find);
 
     tracks = TrackListViewModel.allTracks(library, player);
@@ -107,6 +113,7 @@ class MainViewModel extends ChangeNotifier {
       session,
       library,
       Recommendations(session, library, this.remote),
+      together,
       notify: (message, {isError = false, undo}) => showNotice(message, isError: isError, undo: undo),
     );
     updates = UpdateViewModel(
@@ -153,6 +160,15 @@ class MainViewModel extends ChangeNotifier {
       this.remote.accountDataChanged.listen((_) => unawaited(session.refreshUserData())),
       // The server found new music: it shows here without a restart.
       this.remote.libraryChanged.listen((_) => unawaited(session.refreshLibrary())),
+      // Listening together: who joined, an invite, the end, and what the others asked for.
+      together.changed.listen((_) => _onListeningChanged()),
+      together.ended.listen((_) => showNotice(Localizer.get('ListenEnded'))),
+      player.leftForOwnMusic.listen((_) => showNotice(Localizer.get('ListenLeft'))),
+      player.listenerQueued.listen((queued) {
+        final (from, tracks) = queued;
+        final what = tracks.length == 1 ? tracks.single.title : Localizer.format('TrackCount', [tracks.length]);
+        showNotice(Localizer.format('ListenQueued', [from, what]));
+      }),
     ]);
 
     _updateStatusText();
@@ -163,6 +179,9 @@ class MainViewModel extends ChangeNotifier {
   final ServerSession session;
   final DownloadService downloadService;
   final RemoteClient remote;
+
+  /// Listening together with players of other accounts.
+  late final ListenTogether together;
   final DeviceCapabilities capabilities;
   final OnlineLyrics? _onlineLyrics;
   final ArtistPictureService? _artistPictures;
@@ -186,8 +205,33 @@ class MainViewModel extends ChangeNotifier {
   /// What the app shows the user for a few seconds ([showNotice]).
   final Event<AppNotice> notices = Event<AppNotice>();
 
-  void showNotice(String message, {bool isError = false, VoidCallback? undo}) =>
-      notices.emit(AppNotice(message, isError: isError, undo: undo));
+  void showNotice(String message, {bool isError = false, VoidCallback? undo, (String, VoidCallback)? action}) =>
+      notices.emit(AppNotice(message, isError: isError, undo: undo, action: action));
+
+  // ── Listening together ─────────────────────────────────────────────────────────────────────────
+
+  Set<String> _listeners = const {};
+  Set<String> _invitedTo = const {};
+
+  void _onListeningChanged() {
+    final group = together.group;
+    final listeners = {for (final member in group?.members ?? const <ListeningDevice>[]) member.deviceId};
+    if (together.isHost) {
+      for (final member in group!.members) {
+        if (!_listeners.contains(member.deviceId)) showNotice(Localizer.format('ListenJoined', [member.username]));
+      }
+    }
+    _listeners = listeners;
+    final invites = together.invites;
+    for (final invite in invites) {
+      if (_invitedTo.contains(invite.groupId) || invite.groupId == group?.id) continue;
+      showNotice(
+        Localizer.format('ListenInvitedYou', [invite.host.username]),
+        action: (Localizer.get('ListenJoin'), () => together.join(invite.groupId)),
+      );
+    }
+    _invitedTo = {for (final invite in invites) invite.groupId};
+  }
 
   // ── Navigation ─────────────────────────────────────────────────────────────────────────────────
 
@@ -1074,6 +1118,7 @@ class MainViewModel extends ChangeNotifier {
     updates.dispose();
     friends.dispose();
     unawaited(audioEngine.dispose());
+    together.dispose();
     remote.dispose();
     downloadService.dispose();
     session.dispose();

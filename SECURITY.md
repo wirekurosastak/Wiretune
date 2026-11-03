@@ -51,11 +51,13 @@ Pictures and lyrics are cached in the player's data folder.
   only.
 - **Roles**: administrator and user. Every user can read the whole library. Favorites, play counts and playlists are
   per account. No route, not even an administrator's, reads another account's data.
-- **Friends.** Every account sees the others' usernames, to recommend music to them. A recommendation is seen only by
-  the account it was sent to.
-- **Remote control** (`/api/remote`) connects only the players of one account. It accepts only the sign-in token in the
-  header, refuses requests from web pages, and closes when the sign-in stops being valid. Whoever has an account's
-  token can control its players. A signed-in account can also make the server hold one oversized message in memory.
+- **Friends.** Every account sees the others' usernames, to recommend music to them and listen together. A
+  recommendation is seen only by the account it was sent to. Only invited accounts can join a group listening
+  together, which hears the host's queue and position and can skip, seek and queue.
+- **Remote control** (`/api/remote`) connects only the players of one account (and of one group listening together).
+  It accepts only the sign-in token in the header, refuses requests from web pages, and closes when the sign-in stops
+  being valid. Whoever has an account's token can control its players. A signed-in account can also make the server
+  hold one oversized message in memory.
 - **Files.** The server reads only the music folder and serves only files inside it or its cover cache. Clients never
   see server paths, except that an administrator sees the music folder and scan errors. An administrator can switch
   folders, but not to a whole disk, a system folder such as `/proc` or `/dev`, or a folder overlapping the server's
