@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 12;
+  static const int schemaVersion = 13;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -76,6 +76,8 @@ class DatabaseManager {
     'ALTER TABLE users DROP COLUMN app_password;',
     // 11 -> 12: the listens go, with ListenBrainz (a database from before 10 never had them).
     'DROP TABLE IF EXISTS user_listens; DROP TABLE IF EXISTS user_listenbrainz;',
+    // 12 -> 13: what the accounts recommend to each other.
+    _recommendationsTable,
   ];
 
   final String databasePath;
@@ -255,6 +257,7 @@ const String _schema =
 
   $_userHiddenTable
   $_downloadsTable
+  $_recommendationsTable
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
@@ -277,4 +280,20 @@ const String _userHiddenTable = '''
       hidden_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, item_type, item_id)
   );
+''';
+
+/// What the accounts recommended to each other: an artist, an album or a track (`item_type`, `item_id`), with a note.
+/// `seen`: the recipient opened the bell after it came.
+const String _recommendationsTable = '''
+  CREATE TABLE recommendations (
+      id TEXT PRIMARY KEY,
+      from_user_id TEXT NOT NULL,
+      to_user_id TEXT NOT NULL,
+      item_type TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      sent_at INTEGER NOT NULL,
+      seen INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX recommendations_to ON recommendations (to_user_id, sent_at);
 ''';

@@ -27,6 +27,7 @@ import '../widgets/buttons.dart';
 import '../widgets/cover_flight.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
+import '../widgets/friends.dart';
 import '../widgets/links.dart';
 import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
@@ -303,6 +304,8 @@ class _Header extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                const FriendsButton(iconSize: 21, dimension: 40),
+                const SizedBox(width: 8),
                 _HeaderModes(compact: compact),
                 if (frameless) const _WindowButtons(),
               ],

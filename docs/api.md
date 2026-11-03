@@ -23,6 +23,7 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
 | `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't request another |
 | `POST /api/auth/change-password` | user | Body `{ "newPassword" }` (the current password isn't required). `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, expiring when the old one would have. `400` invalid password. Rate limited. All earlier tokens (the caller's, other devices', stream tokens) stop working, and the account's remote-control connections close with `4401` |
 | `GET /api/auth/me` | user | The caller's `UserInfo` |
+| `GET /api/accounts` | user | Every account as `{ "id", "username" }`, by name: the friends to recommend to |
 | `GET /api/users` | admin | All accounts |
 | `POST /api/users` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` name taken |
 | `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions. `200` `{ "changed": true }`, `400` invalid password or your own account (use `change-password`), `404` unknown account |
@@ -80,6 +81,20 @@ IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000. Ov
 The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept. A scan that
 finds a moved or renamed file moves the data to the new ID and sends `dataChanged`.
 
+## Recommendations
+
+What the accounts recommend to each other: an artist, an album or a track (`kind`: `artist`, `album`, `track`). An
+account keeps its newest 200; one more pushes out the oldest.
+
+| Route | Role | |
+|---|---|---|
+| `GET /api/me/recommendations` | user | What others recommended to this account, newest first: `[{ "id", "from": { "id", "username" }, "kind", "itemId", "note", "sentAt", "seen" }]` |
+| `POST /api/me/recommendations` | user | Body `{ "kind", "itemId", "to": [accountId], "note" }`: an item of the library, 1 to 50 other accounts, a note of up to 200 characters (may be empty). `200 { "ids" }`, one per recipient. `400` rule violation, `404` not in the library |
+| `POST /api/me/recommendations/seen` | user | Marks them all seen (the bell was opened). `200 { "seen": true }` |
+| `DELETE /api/me/recommendations/{id}` | user | Its recipient dismisses it, or its sender takes it back. `200 { "deleted": true }`, `404` if it is neither's |
+
+Each change sends `recommendationsChanged` to the recipient's players.
+
 ## Media
 
 | Route | Role | |
@@ -111,6 +126,7 @@ Every message is a JSON text object with a `type`, at most 64 K characters.
 | `{ "type": "command", "from", "command" }` | server | A command for this player |
 | `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change, if it sent its device ID in an `X-Wiretune-Device` header with that request |
 | `{ "type": "libraryChanged" }` | server | A scan changed `/api/tracks` or `/api/artists/pictures` (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
+| `{ "type": "recommendationsChanged" }` | server | What the account was recommended changed: one came or was taken back, or the bell was opened on another of its players: download `/api/me/recommendations` again. Not sent to the player that made the change, as for `dataChanged` |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
 "queueIndex" }`:
@@ -151,7 +167,8 @@ long. Both sides ping every 25 seconds.
 | `folderRequired`, `folderInvalid`, `folderMissing` (`path`), `folderUnreadable` (`path`), `folderWholeDisk`, `folderSystem`, `folderServerData` | 400 | The music folder |
 | `invalidId`, `invalidItemType`, `playlistInvalid`, `playlistNameRequired`, `playlistNameTooLong` (`max`), `playlistDescriptionTooLong` (`max`), `playlistTooManyTracks` (`max`) | 400 | The account's data |
 | `favoritesLimit`, `playCountsLimit`, `playlistsLimit`, `hiddenLimit` (all with `limit`) | 409 | The account's limits |
-| `playlistNotFound`, `notFound` | 404 | |
+| `recommendationNoteTooLong` (`max`), `recommendationRecipientsInvalid` (`max`) | 400 | Recommendations |
+| `playlistNotFound`, `recommendationNotFound`, `notFound` | 404 | |
 | `invalidJson` (400), `bodyTooLarge` (413), `internalError` (500) | | Any route |
 | `notWebSocket` (400, 426), `originRefused` (403), `tooManyConnections` (429) | | `/api/remote` |
 

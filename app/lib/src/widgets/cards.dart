@@ -21,6 +21,7 @@ import 'buttons.dart';
 import 'cover_flight.dart';
 import 'cover_image.dart';
 import 'dialogs.dart';
+import 'friends.dart';
 import 'page_parts.dart';
 import 'player_controls.dart';
 
@@ -130,7 +131,7 @@ String artistCounts(BuildContext context, Artist artist) =>
 
 /// In the order they show, in the menu and as a page's header buttons ([PlayShuffleButtons]); a track's ([TrackAction])
 /// are in the same.
-enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, openArtist, remove }
+enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, openArtist, recommend, remove }
 
 /// The menu of an album, an artist or a playlist: on its tile (the ⋮ on the cover, or a right click), its phone row (the
 /// ⋮), a long press's preview ([preview]) and a phone page's top bar (which leaves out the header's buttons; a wide
@@ -151,6 +152,7 @@ class ListMenu {
     required this.subtitle,
     this.round = false,
     this.artist,
+    this.recommend,
     this.removeKey,
     this.removeIcon = Icons.delete_outline_rounded,
     this.onRemove,
@@ -177,6 +179,7 @@ class ListMenu {
           ),
     subtitle: (context) => album.artist,
     artist: withArtist ? album.artistNames.first : null,
+    recommend: (RecommendationKind.album, album.id),
     removeKey: 'HideAlbum',
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
@@ -214,6 +217,7 @@ class ListMenu {
           ),
     subtitle: (context) => artistCounts(context, artist),
     round: true,
+    recommend: (RecommendationKind.artist, artist.id),
     removeKey: 'HideArtist',
     removeIcon: Icons.visibility_off_outlined,
     onRemove: (context) {
@@ -288,6 +292,9 @@ class ListMenu {
 
   /// The artist "Go to artist" opens; null leaves it out.
   final String? artist;
+
+  /// What "Recommend…" sends (an album, an artist); null leaves it out.
+  final (RecommendationKind, String)? recommend;
   final String? removeKey;
   final IconData removeIcon;
   final bool removeIsDanger;
@@ -332,6 +339,8 @@ class ListMenu {
         ),
       // The page's header has the artist's name as a link.
       if (!header && artist != null) item(_ListAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
+      if (recommend != null && vm.friends.canRecommend(tracks))
+        item(_ListAction.recommend, Icons.send_rounded, context.tr('Recommend')),
       // Hiding or deleting comes last.
       if (removeKey case final key?)
         item(_ListAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
@@ -364,6 +373,9 @@ class ListMenu {
         toggleListDownload(context, name, downloaded: isDownloaded(vm), toggle: () => onDownload(vm));
       case _ListAction.openArtist:
         vm.openArtistByName(artist);
+      case _ListAction.recommend:
+        final (kind, itemId) = recommend!;
+        showRecommendDialog(context, kind: kind, itemId: itemId, label: label);
       case _ListAction.remove:
         onRemove?.call(context);
     }

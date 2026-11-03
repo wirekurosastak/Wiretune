@@ -38,6 +38,75 @@ class UserInfo {
   }
 }
 
+/// An account as the other accounts of the server see it: the name to recommend to and to listen together with.
+class AccountInfo {
+  const AccountInfo(this.id, this.username);
+
+  final String id;
+  final String username;
+
+  Map<String, Object?> toJson() => {'id': id, 'username': username};
+
+  static AccountInfo fromJson(Object? json) {
+    final map = _object(json);
+    return AccountInfo(_string(map, 'id'), _string(map, 'username'));
+  }
+}
+
+/// What can be recommended.
+enum RecommendationKind {
+  artist,
+  album,
+  track;
+
+  /// The kind called [name]; null for anything else.
+  static RecommendationKind? parse(Object? name) => values.asNameMap()[name];
+}
+
+/// An artist, an album or a track another account of the server recommended, with what they wrote ([note], may be
+/// empty). [seen] once the bell was opened after it came.
+class Recommendation {
+  const Recommendation(this.id, this.from, this.kind, this.itemId, this.note, this.sentAt, {this.seen = false});
+
+  final String id;
+  final AccountInfo from;
+  final RecommendationKind kind;
+
+  /// The track's, album's or artist's ID, as the library knows it.
+  final String itemId;
+  final String note;
+  final DateTime sentAt;
+  final bool seen;
+
+  Recommendation copyWith({bool? seen}) =>
+      Recommendation(id, from, kind, itemId, note, sentAt, seen: seen ?? this.seen);
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'from': from.toJson(),
+    'kind': kind.name,
+    'itemId': itemId,
+    'note': note,
+    'sentAt': formatIsoUtc(sentAt),
+    'seen': seen,
+  };
+
+  static Recommendation fromJson(Object? json) {
+    final map = _object(json);
+    final kind = RecommendationKind.parse(map['kind']);
+    if (kind == null) throw const FormatException('Unknown kind of recommendation.');
+    return Recommendation(
+      _string(map, 'id'),
+      AccountInfo.fromJson(map['from']),
+      kind,
+      _string(map, 'itemId'),
+      jsonField<String>(map, 'note') ?? '',
+      parseIsoUtc(map['sentAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      seen: jsonField<bool>(map, 'seen') ?? false,
+    );
+  }
+}
+
 class AuthResponse {
   const AuthResponse(this.token, this.user, this.expiresAt);
 
@@ -334,6 +403,11 @@ abstract final class ErrorCodes {
   static const String playlistTooManyTracks = 'playlistTooManyTracks'; // with max
   static const String playlistNotFound = 'playlistNotFound';
 
+  // Recommendations
+  static const String recommendationNoteTooLong = 'recommendationNoteTooLong'; // with max
+  static const String recommendationRecipientsInvalid = 'recommendationRecipientsInvalid'; // with max
+  static const String recommendationNotFound = 'recommendationNotFound';
+
   // Remote control
   static const String notWebSocket = 'notWebSocket';
   static const String originRefused = 'originRefused';
@@ -366,6 +440,20 @@ abstract final class UserDataRules {
     if (id!.length > maxIdLength) return 'The ID must be at most $maxIdLength characters.';
     return hasControlCharacters(id) ? 'The ID must not contain control characters.' : null;
   }
+}
+
+/// Limits the server enforces on recommendations.
+abstract final class RecommendationRules {
+  static const int maxNoteLength = 200;
+
+  /// The most accounts one recommendation goes to.
+  static const int maxRecipients = 50;
+
+  /// The most an account keeps: a new one beyond it pushes out the oldest.
+  static const int maxKept = 200;
+
+  /// [note] as it is kept: without control characters, trimmed.
+  static String cleanNote(String note) => withoutControlCharacters(note).trim();
 }
 
 abstract final class AuthRules {

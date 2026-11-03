@@ -15,6 +15,7 @@ import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import 'buttons.dart';
 import 'devices.dart';
+import 'friends.dart';
 
 /// A page's title block: a big title, a line of details, and the page's actions.
 class PageHeader extends StatelessWidget {
@@ -722,14 +723,16 @@ Widget _fading(BuildContext context, String text) {
   );
 }
 
-/// A phone tab page's buttons at the top right: the way to another device (also while nothing plays here, with no mini
-/// player then), the search and the account (not on the Settings page: nothing to search there, and the account
-/// button leads to it).
+/// A phone tab page's buttons at the top right: what friends sent, the way to another device (also while nothing plays
+/// here, with no mini player then), the search and the account (not on the Settings page: nothing to search there, and
+/// the account button leads to it).
 List<Widget> _topButtons(BuildContext context, {ValueListenable<double>? pullIn}) {
   final vm = context.vm;
   final colors = context.colors;
   const devices = DevicesButton(dimension: PinnedTitleBar.buttonSize, iconSize: 23);
   return [
+    if (vm.selectedSection != AppSection.settings)
+      const FriendsButton(dimension: PinnedTitleBar.buttonSize, iconSize: 24),
     if (pullIn == null)
       devices
     else
@@ -771,7 +774,7 @@ List<Widget> _topButtons(BuildContext context, {ValueListenable<double>? pullIn}
   ];
 }
 
-int _topButtonCount(BuildContext context) => context.vm.selectedSection == AppSection.settings ? 1 : 3;
+int _topButtonCount(BuildContext context) => context.vm.selectedSection == AppSection.settings ? 1 : 4;
 
 Widget _searchButton(BuildContext context) => SizedBox.square(
   dimension: PinnedTitleBar.buttonSize,

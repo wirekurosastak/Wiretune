@@ -15,6 +15,7 @@ import 'auth_service.dart';
 import 'config.dart';
 import 'http_utils.dart';
 import 'library_scan_service.dart';
+import 'recommendation_service.dart';
 import 'remote_hub.dart';
 import 'setup_code.dart';
 import 'transcoder.dart';
@@ -140,6 +141,9 @@ class WiretuneServer {
 
   /// Converts tracks for players that asked for less than the original (`?format=opus&bitrate=96`).
   late final Transcoder transcoder = Transcoder(p.join(paths.dataDirectory, 'Transcodes'));
+
+  /// What the accounts recommend to each other.
+  late final RecommendationService recommendations = RecommendationService(database);
   final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
   HttpServer? _http;
   late final List<_Route> _routes = _buildRoutes();
@@ -365,6 +369,8 @@ class WiretuneServer {
       remote.disconnectAccount(userId, 'The account was removed.');
       return Response.ok(null);
     }),
+    // Every account by its name, for the others to recommend to and listen together with
+    _Route('GET', '/api/accounts', Access.user, (_) => jsonResponse([for (final a in auth.getAccounts()) a.toJson()])),
     _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(ServerConfigInfo(paths.musicFolder).toJson())),
     _Route('POST', '/api/config/music-folder', Access.admin, _setMusicFolder),
 
@@ -432,6 +438,29 @@ class WiretuneServer {
             )
           : jsonResponse(stats.toJson());
     }),
+    // What the other accounts recommended to this one, and recommending
+    _Route(
+      'GET',
+      '/api/me/recommendations',
+      Access.user,
+      (call) => jsonResponse([for (final r in recommendations.received(call.userId)) r.toJson()]),
+    ),
+    _Route('POST', '/api/me/recommendations', Access.user, _recommend),
+    _Route('POST', '/api/me/recommendations/seen', Access.user, (call) {
+      recommendations.markSeen(call.userId);
+      remote.recommendationsChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
+      return jsonResponse({'seen': true});
+    }),
+    _Route('DELETE', '/api/me/recommendations/{id}', Access.user, (call) {
+      final to = recommendations.remove(call.userId, call.params['id']!);
+      if (to == null) return errorResponse(404, ErrorCodes.recommendationNotFound, 'Recommendation not found.');
+      // Dismissed by its recipient (whose other players follow), or taken back by its sender.
+      remote.recommendationsChanged(
+        to,
+        except: to == call.userId ? call.request.headers[RemoteRules.deviceHeader] : null,
+      );
+      return jsonResponse({'deleted': true});
+    }),
     _Route('PUT', '/api/me/playlists/{playlistId}', Access.user, _savePlaylist, bodyLimit: _playlistBodyLimit),
     _Route('DELETE', '/api/me/playlists/{playlistId}', Access.user, (call) {
       if (!userData.deletePlaylist(call.userId, call.params['playlistId']!)) {
@@ -441,6 +470,52 @@ class WiretuneServer {
       return jsonResponse({'deleted': true});
     }),
   ];
+
+  /// Recommends an artist, an album or a track of the library to other accounts: `{ "kind", "itemId", "to": [account
+  /// IDs], "note" }`. Each of them is told at once.
+  Future<Response> _recommend(_Call call) async {
+    final body = await call.jsonObject();
+    final kind = RecommendationKind.parse(body?['kind']);
+    if (kind == null) {
+      return errorResponse(400, ErrorCodes.invalidItemType, 'The kind must be artist, album or track.');
+    }
+    final itemId = _text(body, 'itemId');
+    final idError = UserDataRules.validateId(itemId);
+    if (idError != null) return errorResponse(400, ErrorCodes.invalidId, idError);
+    final inLibrary = switch (kind) {
+      RecommendationKind.track => library.getTrack(itemId!) != null,
+      RecommendationKind.album => library.getAlbum(itemId!) != null,
+      RecommendationKind.artist => library.getArtist(itemId!) != null,
+    };
+    if (!inLibrary) return errorResponse(404, ErrorCodes.notFound, 'It is not in the library.');
+    final note = RecommendationRules.cleanNote(_text(body, 'note') ?? '');
+    if (note.length > RecommendationRules.maxNoteLength) {
+      return errorResponse(
+        400,
+        ErrorCodes.recommendationNoteTooLong,
+        'A note can be at most ${RecommendationRules.maxNoteLength} characters.',
+        {'max': RecommendationRules.maxNoteLength},
+      );
+    }
+    final to = body?['to'];
+    final accounts = {for (final account in auth.getAccounts()) account.id};
+    final recipients = to is List ? {...to.whereType<String>()} : const <String>{};
+    if (to is! List ||
+        recipients.length != to.length ||
+        recipients.isEmpty ||
+        recipients.length > RecommendationRules.maxRecipients ||
+        recipients.any((id) => id == call.userId || !accounts.contains(id))) {
+      return errorResponse(
+        400,
+        ErrorCodes.recommendationRecipientsInvalid,
+        'Choose 1 to ${RecommendationRules.maxRecipients} other accounts of this server.',
+        {'max': RecommendationRules.maxRecipients},
+      );
+    }
+    final ids = recommendations.send(call.userId, recipients.toList(), kind, itemId, note);
+    recipients.forEach(remote.recommendationsChanged);
+    return jsonResponse({'ids': ids});
+  }
 
   /// The text field [key] of a request body; null when it is missing or not text.
   static String? _text(Map<Object?, Object?>? body, String key) => switch (body?[key]) {

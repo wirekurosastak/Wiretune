@@ -13,40 +13,6 @@ import 'package:wiretune_server/wiretune_server.dart';
 
 import 'support.dart';
 
-/// A player's remote-control connection at the protocol level: what it sends, and everything it was sent.
-class Peer {
-  Peer._(this.socket) {
-    socket.listen((message) => messages.add(jsonDecode(message as String) as Map<String, Object?>));
-  }
-
-  final WebSocket socket;
-  final List<Map<String, Object?>> messages = [];
-
-  static Future<Peer> connect(ServerFixture server, String token, String id, {String name = ''}) async {
-    final peer = Peer._(await openSocket(server, token));
-    peer.send({
-      'type': 'hello',
-      'device': {'id': id, 'name': name, 'kind': 'phone'},
-    });
-    return peer;
-  }
-
-  void send(Object message) => socket.add(message is String ? message : jsonEncode(message));
-
-  /// The latest list of the other devices the server sent.
-  List<String> get devices => [
-    for (final d in (messages.lastWhere((m) => m['type'] == 'devices')['devices'] as List).cast<Map>())
-      d['id'] as String,
-  ];
-
-  Iterable<Map<String, Object?>> ofType(String type) => messages.where((m) => m['type'] == type);
-
-  Future<void> close() => socket.close();
-}
-
-Future<WebSocket> openSocket(ServerFixture server, String token) =>
-    WebSocket.connect('ws://127.0.0.1:${server.server.port}/api/remote', headers: {'Authorization': 'Bearer $token'});
-
 /// Waits for the server's close (the socket's stream must be listened to); its code. Watches the state rather than
 /// `done`, which never completes for a socket that sent nothing.
 Future<int?> closedWith(WebSocket socket) async {

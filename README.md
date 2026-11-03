@@ -28,6 +28,7 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 - A ten-band equalizer (not in bit-perfect mode).
 - Streaming quality for a slow connection: the server converts to Opus when you ask (with `ffmpeg`).
 - Remote control: control one device from another.
+- Friends on your server: recommend music to each other.
 - English, Hungarian, German.
 
 ## Platform support

@@ -81,6 +81,12 @@ Away from the server, turn on *Settings → Account & connection → Offline mod
 and local music, and the player stops looking for the server (no banner, no reconnecting). Turn it off, or connect to
 a server, to get everything back.
 
+## Friends
+
+Everyone else with an account on your server is a friend. *Recommend…* in the ⋮ menu of a track, an album or an artist
+sends it to the friends you pick, with a note if you like. What friends send you waits under the bell at the top, with
+a count of what's new: tap one to play or open it, or × to remove it.
+
 ## Remote control
 
 Players signed in to the same account see each other. Pick a device with the cast button to control it. *This device*

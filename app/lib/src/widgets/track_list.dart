@@ -15,6 +15,7 @@ import 'cover_image.dart';
 import 'dialogs.dart';
 import 'downloads.dart';
 import 'equalizer_bars.dart';
+import 'friends.dart';
 import 'links.dart';
 import 'page_parts.dart';
 import 'player_controls.dart';
@@ -579,6 +580,7 @@ enum TrackAction {
   download,
   openAlbum,
   openArtist,
+  recommend,
   hideTrack,
 }
 
@@ -736,6 +738,7 @@ class TrackMenu extends StatelessWidget {
           ),
       if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
       if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
+      if (vm.friends.canRecommend([track])) item(TrackAction.recommend, Icons.send_rounded, context.tr('Recommend')),
       // What takes the track away comes last, away from Add to playlist: a slip of one row can't remove instead of add.
       if (kind == TrackTableKind.playlist && playlists.selectedPlaylist?.isAutomatic == false)
         item(
@@ -778,6 +781,13 @@ class TrackMenu extends StatelessWidget {
         vm.openAlbumOfTrack(track);
       case TrackAction.openArtist:
         vm.openArtistByName(track.primaryArtist);
+      case TrackAction.recommend:
+        showRecommendDialog(
+          context,
+          kind: RecommendationKind.track,
+          itemId: vm.friends.serverIdOf(track)!,
+          label: '${track.title} • ${track.artist}',
+        );
       case TrackAction.hideTrack:
         if (vm.library.isTrackExplicitlyHidden(track.id)) {
           vm.library.setHidden(HiddenKind.track, track.id, false);

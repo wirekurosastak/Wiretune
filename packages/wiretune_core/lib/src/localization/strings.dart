@@ -997,6 +997,23 @@ const Map<String, (String, String, String)> allStrings = {
     '{0} ist gerade nicht erreichbar.',
   ),
 
+  // ── Friends: the server's other accounts ──────────────────────────────────────────────────────────────
+  'FromFriends': ('Barátoktól', 'From friends', 'Von Freunden'),
+  'FromFriendsNone': ('Még semmi a barátaidtól.', 'Nothing from friends yet.', 'Noch nichts von Freunden.'),
+  'FriendsNone': (
+    'Ezen a szerveren nincs más fiók.',
+    'No one else has an account on this server.',
+    'Sonst hat niemand ein Konto auf diesem Server.',
+  ),
+  'Recommend': ('Ajánlás…', 'Recommend…', 'Empfehlen…'),
+  'RecommendTo': ('Kinek ajánlod?', 'Recommend to', 'Empfehlen an'),
+  'RecommendNote': ('Üzenet (nem kötelező)', 'Add a note', 'Notiz hinzufügen'),
+  'Send': ('Küldés', 'Send', 'Senden'),
+  'RecommendedTo': ('Ajánlva neki: {0}', 'Recommended to {0}', 'Empfohlen an {0}'),
+  'PeopleCount': ('{0} fő', '{0} people', '{0} Personen'),
+  'RecommendFailed': ('Nem sikerült ajánlani: {0}', "Couldn't recommend: {0}", 'Empfehlen fehlgeschlagen: {0}'),
+  'Remove': ('Eltávolítás', 'Remove', 'Entfernen'),
+
   // ── What the server answered (ErrorCodes), in the user's language ───────────────────────────────────
   'ErrorInvalidJson': (
     'A szerver nem értette a kérést.',
@@ -1158,6 +1175,21 @@ const Map<String, (String, String, String)> allStrings = {
     'A szerver érvénytelen azonosítót kapott.',
     'The server received an invalid ID.',
     'Der Server hat eine ungültige ID erhalten.',
+  ),
+  'ErrorRecommendationNoteTooLong': (
+    'Az üzenet legfeljebb {0} karakter lehet.',
+    'A note can be at most {0} characters.',
+    'Eine Notiz darf höchstens {0} Zeichen haben.',
+  ),
+  'ErrorRecommendationRecipientsInvalid': (
+    'Válassz 1–{0} másik fiókot ezen a szerveren.',
+    'Choose 1 to {0} other accounts of this server.',
+    'Wähle 1 bis {0} andere Konten dieses Servers.',
+  ),
+  'ErrorRecommendationNotFound': (
+    'Ez az ajánlás már nincs meg.',
+    'That recommendation is gone.',
+    'Diese Empfehlung gibt es nicht mehr.',
   ),
   'ErrorInvalidItemType': (
     'A szerver nem ismeri ezt a fajta elemet.',

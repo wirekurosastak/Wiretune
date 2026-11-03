@@ -31,6 +31,7 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 13) c.execute('DROP TABLE recommendations');
     // Schemas 10 and 11 had ListenBrainz's tables, 9 and 10 the app password.
     if (version == 10 || version == 11) {
       c.execute('CREATE TABLE user_listens (id INTEGER PRIMARY KEY); CREATE TABLE user_listenbrainz (user_id TEXT)');

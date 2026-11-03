@@ -110,6 +110,10 @@ class RemoteClient {
   /// The server's library may have changed: a scan found music added, changed or removed, or the connection was lost
   /// for a while.
   final Event<void> libraryChanged = Event<void>();
+
+  /// What the account was recommended may have changed: one came or went, the bell was opened on another of its
+  /// players, or the connection was lost for a while.
+  final Event<void> recommendationsChanged = Event<void>();
   bool _connectedBefore = false;
 
   String get deviceId => _deviceId;
@@ -226,6 +230,7 @@ class RemoteClient {
     if (_connectedBefore) {
       accountDataChanged.emit(null);
       libraryChanged.emit(null);
+      recommendationsChanged.emit(null);
     }
     _connectedBefore = true;
   }
@@ -350,6 +355,8 @@ class RemoteClient {
         accountDataChanged.emit(null);
       case 'libraryChanged':
         libraryChanged.emit(null);
+      case 'recommendationsChanged':
+        recommendationsChanged.emit(null);
     }
   }
 

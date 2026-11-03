@@ -51,6 +51,8 @@ Pictures and lyrics are cached in the player's data folder.
   only.
 - **Roles**: administrator and user. Every user can read the whole library. Favorites, play counts and playlists are
   per account. No route, not even an administrator's, reads another account's data.
+- **Friends.** Every account sees the others' usernames, to recommend music to them. A recommendation is seen only by
+  the account it was sent to.
 - **Remote control** (`/api/remote`) connects only the players of one account. It accepts only the sign-in token in the
   header, refuses requests from web pages, and closes when the sign-in stops being valid. Whoever has an account's
   token can control its players. A signed-in account can also make the server hold one oversized message in memory.

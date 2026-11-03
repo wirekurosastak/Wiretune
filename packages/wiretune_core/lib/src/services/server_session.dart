@@ -383,6 +383,17 @@ class ServerSession {
 
   Future<UserInfo> addUser(String username, String password) => _client.addUser(serverUrl, username, password);
 
+  Future<List<AccountInfo>> getAccounts() => _client.getAccounts(serverUrl);
+
+  Future<List<Recommendation>> getRecommendations() => _client.getRecommendations(serverUrl);
+
+  Future<List<String>> recommend(RecommendationKind kind, String itemId, List<String> to, String note) =>
+      _client.recommend(serverUrl, kind, itemId, to, note);
+
+  Future<void> markRecommendationsSeen() => _client.markRecommendationsSeen(serverUrl);
+
+  Future<void> removeRecommendation(String id) => _client.removeRecommendation(serverUrl, id);
+
   Future<void> deleteUser(String userId) => _client.deleteUser(serverUrl, userId);
 
   /// Changes the account's password. The server signs out every other session of the account and hands this one a new

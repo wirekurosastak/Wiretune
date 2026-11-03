@@ -190,7 +190,14 @@ class AuthService {
       .map(_toUserInfo)
       .toList();
 
-  /// Deletes the account together with its favourites, play statistics, playlists and hidden items.
+  /// Every account by its name, as the other accounts see it (to recommend to, to listen together with).
+  List<AccountInfo> getAccounts() => [
+    for (final row in _db.connection.select('SELECT id, username FROM users ORDER BY username COLLATE NOCASE'))
+      AccountInfo(row['id'] as String, row['username'] as String),
+  ];
+
+  /// Deletes the account together with its favourites, play statistics, playlists, hidden items and the
+  /// recommendations it sent and got.
   bool deleteUser(String userId) => _db.transaction((db) {
     db.execute('DELETE FROM users WHERE id = ?', [userId]);
     final count = db.updatedRows;
@@ -198,6 +205,7 @@ class AuthService {
     db.execute('DELETE FROM user_plays WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_playlists WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
+    db.execute('DELETE FROM recommendations WHERE from_user_id = ?1 OR to_user_id = ?1', [userId]);
     return count > 0;
   });
 

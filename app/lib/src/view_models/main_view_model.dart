@@ -9,6 +9,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'app_section.dart';
 import 'downloads_view_model.dart';
+import 'friends_view_model.dart';
 import 'library_view_models.dart';
 import 'lyrics_view_model.dart';
 import 'player_view_model.dart';
@@ -102,6 +103,12 @@ class MainViewModel extends ChangeNotifier {
       requestFolderAccess: capabilities.requestFolderAccess,
     );
     search = SearchViewModel(library, player, () => playlists.allPlaylists);
+    friends = FriendsViewModel(
+      session,
+      library,
+      Recommendations(session, library, this.remote),
+      notify: (message, {isError = false, undo}) => showNotice(message, isError: isError, undo: undo),
+    );
     updates = UpdateViewModel(
       updateCheck,
       updateInstaller,
@@ -174,6 +181,7 @@ class MainViewModel extends ChangeNotifier {
   late final ServerSettingsViewModel serverSettings;
   late final SearchViewModel search;
   late final UpdateViewModel updates;
+  late final FriendsViewModel friends;
 
   /// What the app shows the user for a few seconds ([showNotice]).
   final Event<AppNotice> notices = Event<AppNotice>();
@@ -1064,6 +1072,7 @@ class MainViewModel extends ChangeNotifier {
     serverSettings.dispose();
     search.dispose();
     updates.dispose();
+    friends.dispose();
     unawaited(audioEngine.dispose());
     remote.dispose();
     downloadService.dispose();

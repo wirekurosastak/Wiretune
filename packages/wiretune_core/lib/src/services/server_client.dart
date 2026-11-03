@@ -124,6 +124,44 @@ class ServerClient {
     return list.map((u) => _parse(UserInfo.fromJson, u)).toList();
   }
 
+  /// Every account of the server by its name, as each sees the others.
+  Future<List<AccountInfo>> getAccounts(String baseUrl) async {
+    final list = await _send('GET', baseUrl, '/api/accounts');
+    if (list is! List) throw ServerRequestException(_notWiretune(), 200);
+    return list.map((a) => _parse(AccountInfo.fromJson, a)).toList();
+  }
+
+  /// What the other accounts recommended to this one, the newest first.
+  Future<List<Recommendation>> getRecommendations(String baseUrl) async {
+    final list = await _send('GET', baseUrl, '/api/me/recommendations');
+    if (list is! List) throw ServerRequestException(_notWiretune(), 200);
+    return list.map((r) => _parse(Recommendation.fromJson, r)).toList();
+  }
+
+  /// Recommends [itemId] to the accounts [to], with [note]; the IDs of what was sent, to take it back.
+  Future<List<String>> recommend(
+    String baseUrl,
+    RecommendationKind kind,
+    String itemId,
+    List<String> to,
+    String note,
+  ) async {
+    final answer = await _send(
+      'POST',
+      baseUrl,
+      '/api/me/recommendations',
+      body: {'kind': kind.name, 'itemId': itemId, 'to': to, 'note': note},
+    );
+    if (answer is! Map || answer['ids'] is! List) throw ServerRequestException(_notWiretune(), 200);
+    return (answer['ids'] as List).whereType<String>().toList();
+  }
+
+  Future<void> markRecommendationsSeen(String baseUrl) => _send('POST', baseUrl, '/api/me/recommendations/seen');
+
+  /// Dismisses one this account got, or takes back one it sent.
+  Future<void> removeRecommendation(String baseUrl, String id) =>
+      _send('DELETE', baseUrl, '/api/me/recommendations/${Uri.encodeComponent(id)}');
+
   Future<UserInfo> addUser(String baseUrl, String username, String password) async => _parse(
     UserInfo.fromJson,
     await _send('POST', baseUrl, '/api/users', body: {'username': username, 'password': password}),
