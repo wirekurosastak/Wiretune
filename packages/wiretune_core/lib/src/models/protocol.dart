@@ -333,8 +333,6 @@ abstract final class ErrorCodes {
   static const String playlistDescriptionTooLong = 'playlistDescriptionTooLong'; // with max
   static const String playlistTooManyTracks = 'playlistTooManyTracks'; // with max
   static const String playlistNotFound = 'playlistNotFound';
-  static const String listenBrainzTokenInvalid = 'listenBrainzTokenInvalid';
-  static const String listenBrainzUnreachable = 'listenBrainzUnreachable';
 
   // Remote control
   static const String notWebSocket = 'notWebSocket';

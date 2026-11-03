@@ -76,9 +76,6 @@ IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000. Ov
 | `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` unknown ID |
 | `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` invalid type or ID, `409` at the limit |
 | `DELETE /api/me/hidden/{type}/{itemId}` | user | Unhides it. `200 { "itemType", "itemId", "hidden": false }` |
-| `GET /api/me/listenbrainz` | user | `200 { "connected": true, "userName": "name" }`; `connected` is false (and `userName` null) when the account has none |
-| `PUT /api/me/listenbrainz` | user | Connects the account to ListenBrainz. Body `{ "token" }`, its user token; the server checks it there. `200` as above, `400` with `listenBrainzTokenInvalid`, `502` with `listenBrainzUnreachable`. From then on every play the account records (`POST /api/me/plays/…`) is sent there |
-| `DELETE /api/me/listenbrainz` | user | Disconnects; what was waiting to be sent is dropped |
 
 The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept. A scan that
 finds a moved or renamed file moves the data to the new ID and sends `dataChanged`.

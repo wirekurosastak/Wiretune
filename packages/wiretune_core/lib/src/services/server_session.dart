@@ -403,13 +403,6 @@ class ServerSession {
     });
   }
 
-  /// The account's ListenBrainz connection (its name there, or null), connecting it with a token, and ending it.
-  Future<String?> getListenBrainz() => _client.getListenBrainz(serverUrl);
-
-  Future<String?> connectListenBrainz(String token) => _client.connectListenBrainz(serverUrl, token);
-
-  Future<void> disconnectListenBrainz() => _client.disconnectListenBrainz(serverUrl);
-
   Future<void> adminResetPassword(String userId, String newPassword) =>
       _client.adminResetPassword(serverUrl, userId, newPassword);
 

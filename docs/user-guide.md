@@ -81,13 +81,6 @@ Away from the server, turn on *Settings → Account & connection → Offline mod
 and local music, and the player stops looking for the server (no banner, no reconnecting). Turn it off, or connect to
 a server, to get everything back.
 
-## Scrobbling
-
-*Settings → Account & connection → ListenBrainz* connects your account to [ListenBrainz](https://listenbrainz.org): paste
-your user token from listenbrainz.org/settings, and the server sends every play there, whichever of your players it
-came from. Plays from before you connected are not sent. If ListenBrainz can't be reached, plays wait and go later. It
-is off until you connect it, and *Disconnect* turns it off again.
-
 ## Remote control
 
 Players signed in to the same account see each other. Pick a device with the cast button to control it. *This device*

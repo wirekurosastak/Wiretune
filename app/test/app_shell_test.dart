@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -10,7 +9,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:http/http.dart' as http;
 import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/layouts/phone_layout.dart';
 import 'package:wiretune/src/layouts/wide_layout.dart';
@@ -1222,75 +1220,6 @@ void main() {
     await settle(tester);
     expect(signedIn.isRemoteEnabled, isTrue);
     signedIn.dispose();
-  });
-
-  testWidgets('ListenBrainz asks for a token, shows who is connected, and disconnects', (tester) async {
-    final vm = await pumpApp(tester, const Size(400, 860)); // the phone layout has no window manager to ask
-    await tester.pumpWidget(const SizedBox());
-    String? name;
-    String? tokenSent;
-    var refuse = false;
-    final session = (await tester.runAsync(
-      () => signedInSession(
-        vm.library,
-        respond: (request) {
-          if (request.url.path != '/api/me/listenbrainz') return null;
-          http.Response answer(int status, Object body) =>
-              http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json; charset=utf-8'});
-          switch (request.method) {
-            case 'PUT':
-              if (refuse) return answer(400, {'error': 'no', 'code': 'listenBrainzTokenInvalid'});
-              tokenSent = (jsonDecode(request.body) as Map)['token'] as String;
-              name = 'listener';
-              return answer(200, {'connected': true, 'userName': name});
-            case 'DELETE':
-              name = null;
-              return answer(200, {'connected': false, 'userName': null});
-            default:
-              return answer(200, {'connected': name != null, 'userName': name});
-          }
-        },
-      ),
-    ))!;
-    final signedIn = createMainViewModel(vm.library, null, session)..navigateTo(AppSection.settings);
-    addTearDown(signedIn.dispose);
-    await tester.pumpWidget(WiretuneApp(vm: signedIn));
-    await settle(tester);
-    Future<void> pause() async {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await settle(tester);
-    }
-
-    Finder inDialog(String text) => find.descendant(of: find.byType(AppDialog), matching: find.text(text));
-    final field = find.descendant(of: find.byType(AppDialog), matching: find.byType(TextField));
-    final open = find.text(Localizer.get('ListenBrainz'));
-    await tester.ensureVisible(open);
-    await settle(tester);
-    await tester.tap(open);
-    await pause();
-    expect(inDialog(Localizer.get('ListenBrainzToken')), findsOneWidget);
-    expect(inDialog(Localizer.get('ListenBrainzDisconnect')), findsNothing);
-
-    // The server does not like the token: its reason is shown, in the player's language.
-    refuse = true;
-    await tester.enterText(field, 'bad');
-    await tester.tap(inDialog(Localizer.get('ListenBrainzConnect')));
-    await pause();
-    expect(inDialog(Localizer.get('ErrorListenBrainzTokenInvalid')), findsOneWidget);
-    expect(inDialog(Localizer.get('ListenBrainzConnect')), findsOneWidget, reason: 'still to be connected');
-
-    refuse = false;
-    await tester.enterText(field, 'good-token');
-    await tester.tap(inDialog(Localizer.get('ListenBrainzConnect')));
-    await pause();
-    expect(tokenSent, 'good-token');
-    expect(inDialog(Localizer.format('ListenBrainzConnectedAs', ['listener'])), findsOneWidget);
-    expect(field, findsNothing);
-
-    await tester.tap(inDialog(Localizer.get('ListenBrainzDisconnect')));
-    await pause();
-    expect(name, isNull);
-    expect(inDialog(Localizer.get('ListenBrainzToken')), findsOneWidget);
   });
 
   testWidgets('the equalizer shows ten sliders and the presets once it is on, and fits a phone', (tester) async {

@@ -31,9 +31,11 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
-    if (version < 11) c.execute('ALTER TABLE users ADD COLUMN app_password TEXT');
-    if (version < 10) c.execute('DROP TABLE user_listens; DROP TABLE user_listenbrainz');
-    if (version < 9) c.execute('ALTER TABLE users DROP COLUMN app_password');
+    // Schemas 10 and 11 had ListenBrainz's tables, 9 and 10 the app password.
+    if (version == 10 || version == 11) {
+      c.execute('CREATE TABLE user_listens (id INTEGER PRIMARY KEY); CREATE TABLE user_listenbrainz (user_id TEXT)');
+    }
+    if (version == 9 || version == 10) c.execute('ALTER TABLE users ADD COLUMN app_password TEXT');
     if (version < 8) c.execute('ALTER TABLE tracks DROP COLUMN album_artists');
     if (version < 7) {
       c.execute('''
@@ -260,15 +262,15 @@ void main() {
     expect(hidden[HiddenKind.artist], isEmpty);
   });
 
-  test('a database of schema 8 or 10 is upgraded, and its accounts keep everything but the app password', () async {
-    for (final version in [8, 10]) {
+  test('a database of schema 8 to 11 is upgraded: its accounts stay, the app passwords and the listens go', () async {
+    for (final version in [8, 9, 10, 11]) {
       final (_, db) = await open();
       db.connection.execute('DELETE FROM users');
       db.connection.execute(
         "INSERT INTO users (id, username, password_hash, is_admin, created_at, token_version) VALUES ('u1', 'owner', 'hash', 1, 1000, 3)",
       );
       downgrade(db, version);
-      if (version > 8) {
+      if (version == 9 || version == 10) {
         final old = DatabaseManager(dbPath());
         old.connection.execute("UPDATE users SET app_password = 'abcd-efgh-jkmn-pqrs'");
         old.close();
@@ -279,6 +281,7 @@ void main() {
       final row = again.connection.select('SELECT * FROM users').single;
       expect(row.containsKey('app_password'), isFalse, reason: 'from schema $version');
       expect((row['username'], row['token_version']), ('owner', 3));
+      expect(count(again, "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'user_listen%'"), 0);
       again.close();
     }
   });

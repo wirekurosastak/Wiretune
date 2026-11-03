@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 11;
+  static const int schemaVersion = 12;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -68,12 +68,14 @@ class DatabaseManager {
     ''',
     // 7 -> 8: every album artist of a track (an album of two acts). As for 5 -> 6, the next scan reads each file again.
     'ALTER TABLE tracks ADD COLUMN album_artists TEXT; UPDATE tracks SET file_modified_at = NULL;',
-    // 8 -> 9: the app password of an account, for the apps that speak the Subsonic API.
+    // 8 -> 9: the app password of an account, for the apps that spoke the Subsonic API.
     'ALTER TABLE users ADD COLUMN app_password TEXT;',
-    // 9 -> 10: what each account listened to, and its ListenBrainz connection.
-    _listensTables,
+    // 9 -> 10: what each account listened to, for ListenBrainz: dropped again in 11 -> 12, so nothing to make here.
+    '',
     // 10 -> 11: the app passwords go, with the Subsonic API they were for.
     'ALTER TABLE users DROP COLUMN app_password;',
+    // 11 -> 12: the listens go, with ListenBrainz (a database from before 10 never had them).
+    'DROP TABLE IF EXISTS user_listens; DROP TABLE IF EXISTS user_listenbrainz;',
   ];
 
   final String databasePath;
@@ -253,28 +255,6 @@ const String _schema =
 
   $_userHiddenTable
   $_downloadsTable
-  $_listensTables
-''';
-
-/// Each play of each account, one row a time (what the statistics and the scrobbling are made of), and the accounts that
-/// send theirs to ListenBrainz: the token it gave them, and their name there. `sent`: 0 waiting to be sent, 1 sent, 2 not
-/// to be sent (no connection then, or ListenBrainz refused it).
-const String _listensTables = '''
-  CREATE TABLE user_listens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id TEXT NOT NULL,
-      track_id TEXT NOT NULL,
-      listened_at INTEGER NOT NULL,
-      sent INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE INDEX user_listens_waiting ON user_listens (sent, user_id);
-  CREATE INDEX user_listens_account ON user_listens (user_id, listened_at);
-
-  CREATE TABLE user_listenbrainz (
-      user_id TEXT PRIMARY KEY,
-      token TEXT NOT NULL,
-      user_name TEXT NOT NULL
-  );
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which

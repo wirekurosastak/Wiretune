@@ -216,7 +216,6 @@ be told apart aren't guessed: their data stays with the old IDs, which no longer
 | `--scan-interval <minutes>` | `30` | Background rescans. `0` turns them off. |
 | `--setup-code <code>` | random | The code for creating the first account. Without it, a new one each start. Case, spaces and dashes are ignored. |
 | `--trust-proxy` | off | Take the client address from `X-Forwarded-For`. Only behind a reverse proxy ([above](#https-with-no-ip-and-caddy)). |
-| `--listenbrainz-url <address>` | listenbrainz.org | Where [scrobbles](user-guide.md#scrobbling) go: another server with ListenBrainz's API (Maloja, for one). |
 | `--tls-cert <file>`, `--tls-key <file>` | off | Serve HTTPS with this certificate chain and private key (PEM). Both or neither ([HTTPS](#https-without-a-proxy)). |
 | `--log-level <level>` | `info` | `debug`, `info`, `warn` or `error`. |
 

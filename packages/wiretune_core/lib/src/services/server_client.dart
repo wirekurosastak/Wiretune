@@ -139,21 +139,6 @@ class ServerClient {
     await _send('POST', baseUrl, '/api/auth/change-password', body: {'newPassword': newPassword}),
   );
 
-  /// The account's ListenBrainz connection: the name it has there, or null when it has none.
-  Future<String?> getListenBrainz(String baseUrl) async =>
-      _listenBrainzName(await _send('GET', baseUrl, '/api/me/listenbrainz'));
-
-  /// Connects the account to ListenBrainz with its user [token]; the server checks it there. Returns the name.
-  Future<String?> connectListenBrainz(String baseUrl, String token) async =>
-      _listenBrainzName(await _send('PUT', baseUrl, '/api/me/listenbrainz', body: {'token': token}));
-
-  Future<void> disconnectListenBrainz(String baseUrl) => _send('DELETE', baseUrl, '/api/me/listenbrainz');
-
-  static String? _listenBrainzName(Object? answer) {
-    if (answer is! Map || answer['connected'] is! bool) throw ServerRequestException(_notWiretune(), 200);
-    return answer['connected'] == true && answer['userName'] is String ? answer['userName'] as String : null;
-  }
-
   Future<void> adminResetPassword(String baseUrl, String userId, String newPassword) =>
       _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/password', body: {'newPassword': newPassword});
 
