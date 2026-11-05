@@ -346,12 +346,15 @@ Future<T?> showPhoneSheet<T>(BuildContext context, {required List<Widget> Functi
 /// One entry of a [showChoiceSheet]: what choosing it gives back, its [label], and an [icon] and a [subtitle] if it has
 /// them.
 class SheetChoice<T extends Object> {
-  const SheetChoice(this.value, this.label, {this.selected = false, this.icon, this.subtitle});
+  const SheetChoice(this.value, this.label, {this.selected = false, this.icon, this.picture, this.subtitle});
 
   final T value;
   final String label;
   final bool selected;
   final IconData? icon;
+
+  /// A picture in place of the [icon] (an artist's).
+  final Widget? picture;
   final String? subtitle;
 }
 
@@ -378,9 +381,11 @@ Future<T?> showChoiceSheet<T extends Object>(
       for (final choice in choices)
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: choice.icon == null
-              ? null
-              : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted),
+          leading:
+              choice.picture ??
+              (choice.icon == null
+                  ? null
+                  : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted)),
           title: Text(
             choice.label,
             maxLines: 1,

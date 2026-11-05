@@ -922,6 +922,7 @@ const Map<String, (String, String, String)> allStrings = {
   'TipMore': ('További lehetőségek', 'More options', 'Weitere Optionen'),
   'GoToAlbum': ('Ugrás az albumra', 'Go to album', 'Zum Album'),
   'GoToArtist': ('Ugrás az előadóra', 'Go to artist', 'Zum Künstler'),
+  'ChooseArtist': ('Válassz előadót', 'Choose artist', 'Künstler wählen'),
   'HideTrack': ('Szám elrejtése', 'Hide track', 'Titel ausblenden'),
   'HideAlbum': ('Album elrejtése', 'Hide album', 'Album ausblenden'),
   'HideArtist': ('Előadó elrejtése', 'Hide artist', 'Künstler ausblenden'),
