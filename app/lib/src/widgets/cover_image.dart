@@ -160,7 +160,7 @@ class CoverImage extends StatelessWidget {
   final bool circle;
   final int? decodeWidth;
 
-  /// The placeholder icon's colour; the muted text's when not given.
+  /// The placeholder icon's colour; the section's accent when not given.
   final Color? placeholderColor;
 
   /// [child] with its covers drawing nothing in place of the placeholder: a sharp cover laid over a smaller one (a
@@ -183,7 +183,7 @@ class CoverImage extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) => Icon(
                 placeholderIcon,
-                color: placeholderColor ?? colors.textMuted,
+                color: placeholderColor ?? colors.accent.withValues(alpha: 0.8),
                 size: (constraints.biggest.shortestSide.isFinite ? constraints.biggest.shortestSide : 48) * 0.42,
               ),
             ),

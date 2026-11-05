@@ -102,11 +102,11 @@ class _CardTitle extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: colors.neutral.withValues(alpha: 0.12),
+              color: colors.accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(Radii.medium),
-              border: Border.all(color: colors.neutral.withValues(alpha: 0.25)),
+              border: Border.all(color: colors.accent.withValues(alpha: 0.25)),
             ),
-            child: Icon(icon, color: colors.neutral, size: 20),
+            child: Icon(icon, color: colors.accent, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1405,7 +1405,7 @@ class _AboutCard extends StatelessWidget {
                 TextSpan(text: '${context.tr('AboutSource')}: '),
                 TextSpan(
                   text: WiretuneInfo.sourceUrl,
-                  style: TextStyle(color: colors.neutral),
+                  style: TextStyle(color: colors.accent),
                 ),
               ],
             ),
@@ -1445,7 +1445,7 @@ class _AboutCard extends StatelessWidget {
                   '${WiretuneInfo.copyright}\n${context.tr('AboutLicense')}\n'
                   '${context.tr('AboutSource')}: ${WiretuneInfo.sourceUrl}',
             ),
-            icon: Icon(Icons.description_outlined, size: 18, color: colors.neutral),
+            icon: Icon(Icons.description_outlined, size: 18, color: colors.accent),
             label: Text(context.tr('AboutLicenses')),
           ),
         ],
@@ -1556,7 +1556,7 @@ class _HiddenContentCard extends StatelessWidget {
           const SizedBox(width: 8),
           TextButton(
             onPressed: onUnhide,
-            child: Text(context.tr('Unhide'), style: TextStyle(color: colors.neutral, fontSize: 13)),
+            child: Text(context.tr('Unhide'), style: TextStyle(color: colors.accent, fontSize: 13)),
           ),
         ],
       ),

@@ -1717,7 +1717,7 @@ void main() {
     expect(dot(), findsOneWidget);
     expect(
       tester.widget<Icon>(find.descendant(of: shuffle, matching: find.byType(Icon))).color,
-      tester.element(shuffle).colors.neutral,
+      tester.element(shuffle).colors.accent,
     );
     expect(find.descendant(of: header, matching: find.byTooltip(Localizer.get('TipShuffleOff'))), findsOneWidget);
 
@@ -2146,24 +2146,33 @@ void main() {
     expect(slider, findsNothing);
   });
 
-  testWidgets("the players' Play takes the colour of the cover's wash; what lies on the wash, the neutral", (
+  testWidgets("the accent is the colour of the song that plays, also over another album's page; a favourite is red", (
     tester,
   ) async {
     AppPlatform.forTesting(system: 'android');
     final vm = await pumpApp(tester, const Size(400, 860), () async {
-      // A red cover, and a track of it.
-      final recorder = ui.PictureRecorder();
-      Canvas(recorder).drawColor(const Color(0xFFFF0000), BlendMode.src);
-      final image = await recorder.endRecording().toImage(8, 8);
-      final png = await image.toByteData(format: ui.ImageByteFormat.png);
-      final cover = File('${Directory.systemTemp.createTempSync('wiretune_wash_').path}/red.png')
-        ..writeAsBytesSync(png!.buffer.asUint8List());
-      final library = createLibrary([TestSupport.makeTrack('1', 'So What')..coverArtPath = cover.path]);
+      // A red cover for the song that plays, a blue one for another album.
+      Future<String> cover(String name, Color colour) async {
+        final recorder = ui.PictureRecorder();
+        Canvas(recorder).drawColor(colour, BlendMode.src);
+        final image = await recorder.endRecording().toImage(8, 8);
+        final png = await image.toByteData(format: ui.ImageByteFormat.png);
+        return (File(
+          '${Directory.systemTemp.createTempSync('wiretune_accent_').path}/$name.png',
+        )..writeAsBytesSync(png!.buffer.asUint8List())).path;
+      }
+
+      final red = await cover('red', const Color(0xFFFF0000));
+      final blue = await cover('blue', const Color(0xFF0000FF));
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', album: 'Red')..coverArtPath = red,
+        TestSupport.makeTrack('2', 'Naima', album: 'Blue')..coverArtPath = blue,
+      ]);
       library.initialize();
       return createMainViewModel(library);
     });
-    vm.navigateTo(AppSection.tracks);
-    final colors = tester.element(find.byType(PhoneLayout)).colors;
+    final palette = tester.element(find.byType(PhoneLayout)).colors.palette;
+    expect(tester.element(find.byType(PhoneLayout)).colors.accent, palette.neutral, reason: 'nothing plays');
     Color playColor(Finder player) =>
         (tester
                     .widget<AnimatedContainer>(
@@ -2177,20 +2186,25 @@ void main() {
             .gradient!
             .colors
             .last;
-    final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
-    Color? pagePlayColor() =>
-        tester.widget<FilledButton>(pagePlay).style?.backgroundColor?.resolve({}) ??
-        Theme.of(tester.element(pagePlay)).filledButtonTheme.style!.backgroundColor!.resolve({});
 
-    vm.player.playQueue(vm.library.tracks);
+    vm.player.playQueue([vm.library.getTrack('1')!]);
     await loadCovers(tester, washOf(find.byType(PhoneLayout)));
-    final red = colors.palette.washOf(const Color(0xFFFF0000));
+    final red = palette.accentOf(const Color(0xFFFF0000));
     expect(playColor(find.byType(PhoneLayout)), red, reason: "the mini player's");
-    expect(pagePlayColor(), colors.neutral, reason: "the page's, on the wash");
+
+    vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
+    await loadCovers(tester, find.byType(ListPlayButton));
+    final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
+    expect(tester.element(pagePlay).colors.accent, red, reason: "the blue album's Play");
+    expect(playColor(find.byType(PhoneLayout)), red, reason: 'the mini player, over the blue album');
 
     vm.openNowPlaying();
     await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
     expect(playColor(find.byType(NowPlayingPage)), red, reason: "the full-screen player's");
+    vm.library.toggleFavorite('1');
+    await settle(tester);
+    final heart = find.descendant(of: find.byType(NowPlayingPage), matching: find.byType(HeartIcon));
+    expect(tester.widget<HeartIcon>(heart).color, palette.favorite);
   });
 
   test("a cover's colour is the hue most of its colourful pixels share; a grey one or a speck of colour has none", () {
@@ -2208,16 +2222,18 @@ void main() {
     }
 
     // Mostly red with some blue: red, not the purple of the average.
-    final mostlyRed = WashColor.sourceOf(cover({(220, 20, 30): 60, (20, 40, 200): 30, (128, 128, 128): 10}))!;
+    final mostlyRed = CoverColor.of(cover({(220, 20, 30): 60, (20, 40, 200): 30, (128, 128, 128): 10}))!;
     expect(HSLColor.fromColor(mostlyRed).hue, anyOf(lessThan(10), greaterThan(350)));
-    expect(WashColor.sourceOf(cover({(120, 120, 124): 90, (40, 40, 40): 10})), isNull);
-    expect(WashColor.sourceOf(cover({(128, 128, 128): 99, (255, 0, 0): 1})), isNull);
+    expect(CoverColor.of(cover({(120, 120, 124): 90, (40, 40, 40): 10})), isNull);
+    expect(CoverColor.of(cover({(128, 128, 128): 99, (255, 0, 0): 1})), isNull);
 
+    // None (nothing plays, or its cover is grey): the neutral.
+    expect(Palette.dark.accentOf(null), Palette.dark.neutral);
     // Every hue readable: light enough on the dark theme, deep enough on the light one (to the 8-bit channels).
     for (final hue in [0.0, 60, 120, 180, 240, 300]) {
       final source = HSLColor.fromAHSL(1, hue.toDouble(), 0.8, 0.5).toColor();
-      expect(Palette.dark.washOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: 'dark, $hue');
-      expect(Palette.light.washOf(source).computeLuminance(), inInclusiveRange(0.06, 0.19), reason: 'light, $hue');
+      expect(Palette.dark.accentOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: 'dark, $hue');
+      expect(Palette.light.accentOf(source).computeLuminance(), inInclusiveRange(0.06, 0.19), reason: 'light, $hue');
     }
   });
 

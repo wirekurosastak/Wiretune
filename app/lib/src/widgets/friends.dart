@@ -7,7 +7,6 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
-import 'ambient.dart';
 import 'buttons.dart';
 import 'cover_image.dart';
 import 'dialogs.dart';
@@ -38,8 +37,8 @@ class FriendsButton extends StatelessWidget {
             onPressed: () => showFromFriends(context),
             icon: Badge(
               isLabelVisible: count > 0,
-              backgroundColor: colors.neutral,
-              textColor: colors.onAccent,
+              backgroundColor: colors.accent,
+              textColor: colors.palette.onAccent,
               label: Text(count > 99 ? '99+' : '$count'),
               child: Icon(Icons.notifications_none_rounded, color: colors.textMain),
             ),
@@ -124,8 +123,8 @@ class _FromFriendsList extends StatelessWidget {
       contentPadding: EdgeInsets.only(left: padding, right: padding),
       leading: CircleAvatar(
         radius: 22,
-        backgroundColor: context.wash.withValues(alpha: 0.18),
-        child: Icon(Icons.groups_rounded, color: context.wash),
+        backgroundColor: colors.accent.withValues(alpha: 0.18),
+        child: Icon(Icons.groups_rounded, color: colors.accent),
       ),
       title: Text(context.trf('ListenInvitedYou', [invite.host.username]), maxLines: 2),
       trailing: Row(

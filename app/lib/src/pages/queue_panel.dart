@@ -62,7 +62,7 @@ class QueueList extends StatelessWidget {
 
 /// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, or the bouncing bars of the
 /// current track), title and artist, format, length, the arrows and the remove button. The current entry is washed in
-/// the neutral. It moves by its handle or a long press anywhere on it (as a playlist's rows); on a computer its menu
+/// the accent. It moves by its handle or a long press anywhere on it (as a playlist's rows); on a computer its menu
 /// opens on a right click. On a phone it is as large as the phone's other track rows, without the length, its × a
 /// finger's target.
 class _QueueRow extends StatefulWidget {
@@ -124,11 +124,11 @@ class _QueueRowState extends State<_QueueRow> {
         onExit: (_) => setState(() => _hover = false),
         child: Material(
           color: current
-              ? colors.neutral.withValues(alpha: _hover ? 0.2 : 0.14)
+              ? colors.accent.withValues(alpha: _hover ? 0.2 : 0.14)
               : (_hover ? colors.surface1 : Colors.transparent),
           shape: RoundedRectangleBorder(
             borderRadius: radius,
-            side: BorderSide(color: current ? colors.neutral.withValues(alpha: 0.45) : Colors.transparent),
+            side: BorderSide(color: current ? colors.accent.withValues(alpha: 0.45) : Colors.transparent),
           ),
           child: InkWell(
             borderRadius: radius,
@@ -206,7 +206,7 @@ class _QueueRowState extends State<_QueueRow> {
                             style: TextStyle(
                               fontSize: phone ? 16 : 13.5,
                               fontWeight: phone ? FontWeight.w600 : FontWeight.w700,
-                              color: current ? colors.neutral : colors.textMain,
+                              color: current ? colors.hover : colors.textMain,
                             ),
                           ),
                           SizedBox(height: phone ? 3 : 2),
@@ -503,9 +503,9 @@ class _LyricLineState extends State<_LyricLine> {
                     letterSpacing: -0.3,
                     height: 27 / 20,
                     color: context.colors.textMain,
-                    // The line being sung glows softly.
+                    // The line being sung glows softly in the accent.
                     shadows: widget.active
-                        ? [Shadow(color: context.colors.neutral.withValues(alpha: 0.6), blurRadius: 18)]
+                        ? [Shadow(color: context.colors.accent.withValues(alpha: 0.6), blurRadius: 18)]
                         : null,
                   ),
                 ),
@@ -563,7 +563,7 @@ class QueueLyricsPanel extends StatelessWidget {
                               const SizedBox(width: 8),
                               Text('•', style: TextStyle(color: colors.textMuted)),
                               const SizedBox(width: 8),
-                              TagBadge(context.tr('NowPlaying'), color: colors.neutral),
+                              TagBadge(context.tr('NowPlaying'), color: colors.accent),
                             ],
                           ],
                         ),
@@ -590,7 +590,7 @@ class QueueLyricsPanel extends StatelessWidget {
               Expanded(
                 child: GlassCard(
                   padding: EdgeInsets.zero,
-                  hoverColor: colors.neutral,
+                  hoverColor: colors.accent,
                   child: count == 0
                       ? const QueueList()
                       : Row(

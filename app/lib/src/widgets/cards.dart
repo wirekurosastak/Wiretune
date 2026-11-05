@@ -16,7 +16,6 @@ import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
 import '../view_models/main_view_model.dart';
 import '../view_models/player_view_model.dart';
-import 'ambient.dart';
 import 'badges.dart';
 import 'buttons.dart';
 import 'cover_flight.dart';
@@ -47,6 +46,7 @@ class AlbumCard extends StatelessWidget {
     ].join('  •  ');
     final menu = ListMenu.album(album, onPlay: onPlay, withArtist: withArtist);
     return _DesktopTile(
+      accent: colors.accent,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
       onLongPress: () => menu.preview(context, onOpen: onOpen),
@@ -59,7 +59,7 @@ class AlbumCard extends StatelessWidget {
         _line(details, 11, FontWeight.w500, colors.textMuted),
       ],
       badge: QualityTag(tier: album.quality.tier, spec: album.quality.spec),
-      play: TilePlayButton(onPressed: onPlay, tracks: album.tracks),
+      play: TilePlayButton(color: colors.accent, onPressed: onPlay, tracks: album.tracks),
     );
   }
 }
@@ -78,6 +78,7 @@ class ArtistCard extends StatelessWidget {
     final picture = CoverImage(path: artist.picturePath, circle: true, placeholderIcon: Icons.person);
     final menu = ListMenu.artist(artist, onPlay: onPlay);
     return _DesktopTile(
+      accent: colors.accent,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
       onLongPress: () => menu.preview(context, onOpen: onOpen),
@@ -89,7 +90,7 @@ class ArtistCard extends StatelessWidget {
         _line(artist.name, 14, FontWeight.w700, colors.textMain, center: true),
         _line(artistCounts(context, artist), 12.5, FontWeight.w500, colors.textMuted, center: true),
       ],
-      play: TilePlayButton(onPressed: onPlay, tracks: artist.tracks),
+      play: TilePlayButton(color: colors.accent, onPressed: onPlay, tracks: artist.tracks),
     );
   }
 }
@@ -712,13 +713,14 @@ class _PressSlide {
   List<Widget> entries(BuildContext context, List<PopupMenuEntry<_ListAction>> items) {
     if (_items.length != items.length) _keys = [for (final _ in items) GlobalKey()];
     _items = items;
+    final colors = context.colors;
     return [
       for (final (i, item) in items.indexed)
         ValueListenableBuilder<int?>(
           key: _keys[i],
           valueListenable: _over,
           builder: (context, over, child) =>
-              ColoredBox(color: over == i ? context.wash.withValues(alpha: 0.16) : Colors.transparent, child: child),
+              ColoredBox(color: over == i ? colors.accent.withValues(alpha: 0.16) : Colors.transparent, child: child),
           child: item,
         ),
     ];
@@ -1099,6 +1101,7 @@ class PlaylistCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     return _DesktopTile(
+      accent: colors.accent,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
       onLongPress: () => menu.preview(context, onOpen: onOpen),
@@ -1110,7 +1113,11 @@ class PlaylistCard extends StatelessWidget {
         _line(context.trf('TrackCount', [playlist.trackCount]), 12.5, FontWeight.w500, colors.textMuted),
       ],
       badge: quality == null ? null : QualityTag(tier: quality!.tier, spec: quality!.spec),
-      play: TilePlayButton(onPressed: playlist.trackCount > 0 ? onPlay : null, tracks: menu.tracks),
+      play: TilePlayButton(
+        color: colors.accent,
+        onPressed: playlist.trackCount > 0 ? onPlay : null,
+        tracks: menu.tracks,
+      ),
     );
   }
 }
@@ -1125,9 +1132,10 @@ Widget _line(String text, double size, FontWeight weight, Color color, {bool cen
 
 /// A wide screen's tile: a square cover with a soft shadow and the caption lines under it. Under the mouse, or while
 /// the remote's focus is on it or its play button, the tile lifts, its background lights up, the cover's shadow takes
-/// the neutral and the play button rises onto the cover, its ⋮ with it. On a touch screen both are always there.
+/// the [accent] and the play button rises onto the cover, its ⋮ with it. On a touch screen both are always there.
 class _DesktopTile extends StatefulWidget {
   const _DesktopTile({
+    required this.accent,
     required this.onTap,
     this.onSecondaryTap,
     this.onLongPress,
@@ -1146,6 +1154,7 @@ class _DesktopTile extends StatefulWidget {
   /// The space between the cover and the caption.
   static const double captionGap = 12;
 
+  final Color accent;
   final VoidCallback onTap;
   final void Function(Offset position)? onSecondaryTap;
 
@@ -1210,7 +1219,7 @@ class _DesktopTileState extends State<_DesktopTile> {
             decoration: shape.copyWith(
               boxShadow: [
                 BoxShadow(
-                  color: active ? colors.neutral.withValues(alpha: 0.38) : colors.palette.shadow,
+                  color: active ? widget.accent.withValues(alpha: 0.38) : colors.palette.shadow,
                   blurRadius: active ? 26 : 16,
                   spreadRadius: -6,
                   offset: const Offset(0, 10),
@@ -1374,11 +1383,18 @@ class TileGridSliver extends StatelessWidget {
   }
 }
 
-/// The round play button of a tile: filled with a gradient of the neutral (it lies on the wash), over a glow of it. While the queue is [tracks]
+/// The round play button of a tile: filled with a gradient of [color], over a glow of it. While the queue is [tracks]
 /// (the tile's album, artist, playlist or track), it pauses and resumes it instead, as a list's Play does.
 class TilePlayButton extends StatelessWidget {
-  const TilePlayButton({super.key, required this.onPressed, this.tracks = const [], this.size = 44});
+  const TilePlayButton({
+    super.key,
+    required this.color,
+    required this.onPressed,
+    this.tracks = const [],
+    this.size = 44,
+  });
 
+  final Color color;
   final VoidCallback? onPressed;
   final List<Track> tracks;
   final double size;
@@ -1391,7 +1407,6 @@ class TilePlayButton extends StatelessWidget {
 
   Widget _build(BuildContext context, PlayerViewModel player) {
     final colors = context.colors;
-    final color = colors.neutral;
     final current = onPressed != null && player.isQueueOf(tracks);
     final playing = current && player.isPlaying;
     final onTap = current ? player.togglePlayPause : onPressed;

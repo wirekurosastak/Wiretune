@@ -4,8 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// The colours of one theme (dark or light): neutral ones, as in TIDAL. The one colour of a screen comes from its
-/// cover: the wash colour ([washOf], `WashColor`).
+/// The colours of one theme (dark or light): neutral ones, as in TIDAL, but for the accent, which is the colour of the
+/// song that plays ([accentOf]), and the favourites' red.
 class Palette {
   const Palette({
     required this.isDark,
@@ -24,6 +24,7 @@ class Palette {
     required this.danger,
     required this.modal,
     required this.panelBorder,
+    required this.favorite,
     required this.neutral,
     required this.onAccent,
     required this.shadow,
@@ -53,12 +54,14 @@ class Palette {
   /// The hairline edge of the floating panels, the bars and the opaque cards.
   final Color panelBorder;
 
-  /// The accent of what lies on the wash itself (a page's Play, a selected tab, the playing row), where the wash
-  /// colour would not stand out, and of everything while there is no wash colour: a soft white on the dark theme, a
-  /// slate on the light one.
+  /// The favourites' red: a favourite's heart, whatever the accent.
+  final Color favorite;
+
+  /// The accent while nothing plays, or what plays has a grey cover or none: a soft white on the dark theme, a slate
+  /// on the light one.
   final Color neutral;
 
-  /// Text and icons on an accent-filled surface (the wash colour's or the neutral's).
+  /// Text and icons on an accent-filled surface.
   final Color onAccent;
 
   /// The drop shadow under floating panels and covers.
@@ -81,6 +84,7 @@ class Palette {
     danger: Color(0xFFFF3B6B),
     modal: Color(0xFF000000),
     panelBorder: Color(0x2EFFFFFF),
+    favorite: Color(0xFFFB7185),
     neutral: Color(0xFFE2E8F0),
     onAccent: Color(0xFF07070B),
     shadow: Color(0x99000000),
@@ -103,16 +107,19 @@ class Palette {
     danger: Color(0xFFE11D48),
     modal: Color(0xFFFFFFFF),
     panelBorder: Color(0x22000000),
+    favorite: Color(0xFFE11D48),
     neutral: Color(0xFF1E293B),
     onAccent: Color(0xFFFFFFFF),
     shadow: Color(0x2E1A1A33),
   );
 
-  /// A cover's colour (`WashColor.sourceOf`) as this theme's wash colour: vivid, as the wash is, light on the dark
-  /// theme and deep on the light one, and kept within the luminance at which text in it and [onAccent] on it read,
-  /// whatever its hue. Within that a hue keeps its own brightness: a red stays red rather than pink, a yellow yellow.
-  Color washOf(Color source) {
-    final hsl = HSLColor.fromColor(source);
+  /// The accent for the colour of the cover of what plays (`CoverColor.of`; null for none, or a grey one: the
+  /// [neutral]): vivid, light on the dark theme and deep on the light one, and kept within the luminance at which text
+  /// in it and [onAccent] on it read, whatever its hue. Within that a hue keeps its own brightness: a red stays red
+  /// rather than pink, a yellow yellow.
+  Color accentOf(Color? cover) {
+    if (cover == null) return neutral;
+    final hsl = HSLColor.fromColor(cover);
     final colour = hsl.withSaturation((hsl.saturation * 1.3).clamp(0.5, 0.9)).withLightness(isDark ? 0.6 : 0.42);
     final (least, most) = isDark ? (0.28, 0.6) : (0.07, 0.18);
     final luminance = colour.toColor().computeLuminance();

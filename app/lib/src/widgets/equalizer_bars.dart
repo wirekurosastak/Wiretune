@@ -9,7 +9,7 @@ import 'package:flutter/scheduler.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 
-/// The four bars that mark the track the player is on (14 px tall, in the neutral colour). While it plays ([playing])
+/// The four bars that mark the track the player is on (14 px tall, in the accent colour). While it plays ([playing])
 /// they bounce, each bar on its own period, so together they never repeat in step. Paused, and always on a phone or
 /// tablet, they stand still: nothing animates on its own there, as every frame costs battery.
 class EqualizerBars extends StatefulWidget {
@@ -66,7 +66,7 @@ class _EqualizerBarsState extends State<EqualizerBars> with SingleTickerProvider
         EqualizerBars._barCount * EqualizerBars._barWidth + (EqualizerBars._barCount - 1) * EqualizerBars._barGap,
         EqualizerBars._height,
       ),
-      painter: _BarsPainter(_time, widget.color ?? context.colors.neutral),
+      painter: _BarsPainter(_time, widget.color ?? context.colors.accent),
     ),
   );
 }

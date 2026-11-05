@@ -185,8 +185,8 @@ class _BottomBars extends StatelessWidget {
   }
 }
 
-/// The five sections at the bottom, on a floating pill bar; the active one takes the wash colour, and its glow glides
-/// over from the one that was.
+/// The five sections at the bottom, on a floating pill bar; the active one takes the accent, and its glow glides over
+/// from the one that was.
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation();
 
@@ -197,7 +197,7 @@ class _BottomNavigation extends StatelessWidget {
 
   Widget _build(BuildContext context) {
     final vm = context.vm;
-    final wash = context.wash;
+    final accent = context.colors.accent;
     const items = [
       (AppSection.artists, 'NavArtists'),
       (AppSection.albums, 'NavAlbums'),
@@ -216,8 +216,8 @@ class _BottomNavigation extends StatelessWidget {
             final width = constraints.maxWidth / items.length;
             return Stack(
               children: [
-                // The glow behind the active icon, in the wash colour, moving from tab to tab; gone while none is
-                // active (the search, Settings).
+                // The glow behind the active icon, moving from tab to tab; gone while none is active (the search,
+                // Settings).
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 320),
                   curve: Curves.easeOutCubic,
@@ -227,7 +227,7 @@ class _BottomNavigation extends StatelessWidget {
                   height: _NavItem.glowSize,
                   child: IgnorePointer(
                     child: TweenAnimationBuilder<Color?>(
-                      tween: ColorTween(end: active < 0 ? wash.withValues(alpha: 0) : wash),
+                      tween: ColorTween(end: active < 0 ? accent.withValues(alpha: 0) : accent),
                       duration: const Duration(milliseconds: 320),
                       curve: Curves.easeOutCubic,
                       builder: (context, color, _) => DecoratedBox(
@@ -251,7 +251,7 @@ class _BottomNavigation extends StatelessWidget {
                         child: _NavItem(
                           icon: sectionIcon(section),
                           label: context.tr(label),
-                          color: wash,
+                          color: accent,
                           active: i == active,
                           onTap: () => vm.navigateTo(section),
                         ),
@@ -489,7 +489,7 @@ class _SearchBarState extends State<_SearchBar> {
                 isDense: true,
                 filled: true,
                 fillColor: colors.surface2,
-                prefixIcon: Icon(Icons.search_rounded, size: 20, color: context.wash),
+                prefixIcon: Icon(Icons.search_rounded, size: 20, color: colors.accent),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Radii.pill),
@@ -501,7 +501,7 @@ class _SearchBarState extends State<_SearchBar> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Radii.pill),
-                  borderSide: BorderSide(color: context.wash, width: 1.5),
+                  borderSide: BorderSide(color: colors.accent, width: 1.5),
                 ),
                 suffixIcon: _controller.text.isEmpty
                     ? null

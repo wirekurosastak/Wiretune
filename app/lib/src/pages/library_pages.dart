@@ -12,7 +12,6 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../view_models/library_view_models.dart';
-import '../widgets/ambient.dart';
 import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
@@ -52,7 +51,7 @@ class EmptyLibrary extends StatelessWidget {
             actions: [
               OutlinedButton.icon(
                 onPressed: () => vm.navigateTo(AppSection.settings),
-                icon: Icon(Icons.settings_outlined, size: 18, color: colors.neutral),
+                icon: Icon(Icons.settings_outlined, size: 18, color: colors.accent),
                 label: Text(context.tr('NavSettings')),
               ),
             ],
@@ -73,7 +72,7 @@ class EmptyLibrary extends StatelessWidget {
             if (vm.capabilities.supportsLocalFolder)
               OutlinedButton.icon(
                 onPressed: () => vm.navigateTo(AppSection.settings),
-                icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.neutral),
+                icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.accent),
                 label: Text(context.tr('LocalFolder')),
               ),
           ],
@@ -309,8 +308,6 @@ class DetailHeader extends StatelessWidget {
     final dot = Text('•', style: TextStyle(color: colors.textMuted));
     final shadow = [
       BoxShadow(color: colors.palette.shadow, blurRadius: 40, spreadRadius: -8, offset: const Offset(0, 20)),
-      // The artwork's light, in the colour of the wash (an album's or an artist's own).
-      BoxShadow(color: context.wash.withValues(alpha: 0.18), blurRadius: 60, spreadRadius: -10),
     ];
     final frame = roundArtwork
         ? BoxDecoration(shape: BoxShape.circle, boxShadow: shadow)
@@ -534,7 +531,7 @@ class DetailText extends StatelessWidget {
 }
 
 /// The sort buttons of a list page ("Sort by: ABC ↑ | Released") as one segmented pill; the active segment is filled with
-/// the neutral.
+/// the accent.
 class SortButtons extends StatelessWidget {
   const SortButtons({super.key, required this.buttons});
 
@@ -576,7 +573,7 @@ class SortButtons extends StatelessWidget {
                 Flexible(
                   child: SortLabel(
                     active.$1,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.neutral),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.accent),
                   ),
                 ),
               ],
@@ -612,9 +609,9 @@ class SortButtons extends StatelessWidget {
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
                       decoration: BoxDecoration(
-                        color: selected ? colors.neutral : Colors.transparent,
+                        color: selected ? colors.accent : Colors.transparent,
                         borderRadius: BorderRadius.circular(Radii.pill),
-                        boxShadow: selected ? colors.accentGlow(colors.neutral, 0.5) : const [],
+                        boxShadow: selected ? colors.accentGlow(0.5) : const [],
                       ),
                       child: Material(
                         type: MaterialType.transparency,
@@ -676,15 +673,15 @@ class _GenreFilter extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final active = selected != null;
-    final color = active ? colors.neutral : colors.textMuted;
+    final color = active ? colors.accent : colors.textMuted;
     final phone = PhoneChrome.isPhone(context);
     final pill = Container(
       height: phone ? PhoneChrome.controlHeight : 38,
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: active ? colors.neutral.withValues(alpha: 0.16) : colors.surface1,
+        color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
         borderRadius: BorderRadius.circular(Radii.pill),
-        border: Border.all(color: active ? colors.neutral.withValues(alpha: 0.6) : colors.glassBorder),
+        border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -702,7 +699,7 @@ class _GenreFilter extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: active ? colors.neutral : colors.textMain,
+                  color: active ? colors.accent : colors.textMain,
                 ),
               ),
             ),
@@ -829,13 +826,13 @@ class AlbumDetail extends StatelessWidget {
               ),
               artworkFlight: 'album:${album.id}',
               artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
-              tags: [TagBadge(context.tr('ColAlbum'), color: colors.neutral)],
+              tags: [TagBadge(context.tr('ColAlbum'), color: colors.accent)],
               title: album.title,
               details: [
                 ArtistLinks(
                   album.artistNames,
                   onOpen: vm.openArtistByName,
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.neutral),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.accent),
                 ),
               ],
               secondaryDetails: [
@@ -941,7 +938,7 @@ class ArtistDetail extends StatelessWidget {
               artwork: CoverImage(path: artist.picturePath, circle: true, placeholderIcon: Icons.person),
               artworkFlight: 'artist:${artist.id}',
               roundArtwork: true,
-              tags: [TagBadge(context.tr('ColArtist'), color: colors.neutral)],
+              tags: [TagBadge(context.tr('ColArtist'), color: colors.accent)],
               title: artist.name,
               details: [
                 DetailText(context.trf('AlbumCount', [artist.albumCount])),

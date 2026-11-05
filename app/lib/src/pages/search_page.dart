@@ -185,6 +185,7 @@ class _BestMatchCard extends StatelessWidget {
     return SizedBox(
       width: 320,
       child: _MetricCard(
+        accent: colors.accent,
         padding: 20,
         // An artist or an album opens, like the cards under it; a track plays.
         onTap: switch (match.item) {
@@ -207,7 +208,7 @@ class _BestMatchCard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 14),
-            TagBadge(match.typeLabel, color: colors.neutral),
+            TagBadge(match.typeLabel, color: colors.accent),
             const SizedBox(height: 4),
             Text(
               match.title,
@@ -232,7 +233,7 @@ class _BestMatchCard extends StatelessWidget {
             const SizedBox(height: 18),
             Row(
               children: [
-                TilePlayButton(onPressed: match.play, tracks: match.tracks, size: 48),
+                TilePlayButton(color: colors.accent, onPressed: match.play, tracks: match.tracks, size: 48),
                 const Spacer(),
                 // The same menu as its row's or tile's.
                 switch (match.item) {
@@ -256,11 +257,12 @@ class _BestMatchCard extends StatelessWidget {
   }
 }
 
-/// A framed glass card that rises a little, takes the neutral edge and glows in it under the mouse.
+/// A framed glass card that rises a little, takes the [accent] edge and glows in it under the mouse.
 class _MetricCard extends StatefulWidget {
-  const _MetricCard({required this.child, required this.onTap, this.padding = 16});
+  const _MetricCard({required this.child, required this.accent, required this.onTap, this.padding = 16});
 
   final Widget child;
+  final Color accent;
   final VoidCallback onTap;
   final double padding;
 
@@ -284,11 +286,11 @@ class _MetricCardState extends State<_MetricCard> {
         decoration: BoxDecoration(
           color: _hover ? colors.surface2 : colors.surface1,
           borderRadius: BorderRadius.circular(Radii.card),
-          border: Border.all(color: _hover ? colors.neutral.withValues(alpha: 0.7) : colors.glassBorder),
+          border: Border.all(color: _hover ? widget.accent.withValues(alpha: 0.7) : colors.glassBorder),
           boxShadow: _hover
               ? [
                   BoxShadow(
-                    color: colors.neutral.withValues(alpha: 0.28),
+                    color: widget.accent.withValues(alpha: 0.28),
                     blurRadius: 36,
                     spreadRadius: -10,
                     offset: const Offset(0, 16),

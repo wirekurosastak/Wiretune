@@ -40,13 +40,13 @@ class UpdateBanner extends StatelessWidget {
           margin: margin,
           padding: phone ? const EdgeInsets.fromLTRB(12, 8, 4, 8) : const EdgeInsets.fromLTRB(18, 8, 8, 8),
           decoration: BoxDecoration(
-            color: colors.neutral.withValues(alpha: 0.14),
+            color: colors.accent.withValues(alpha: 0.14),
             borderRadius: BorderRadius.circular(Radii.card),
-            border: Border.all(color: colors.neutral.withValues(alpha: phone ? 0.45 : 0.55)),
+            border: Border.all(color: colors.accent.withValues(alpha: phone ? 0.45 : 0.55)),
           ),
           child: Row(
             children: [
-              Icon(Icons.system_update_alt_rounded, color: colors.neutral, size: 20),
+              Icon(Icons.system_update_alt_rounded, color: colors.accent, size: 20),
               SizedBox(width: phone ? 10 : 12),
               Expanded(
                 child: Text(

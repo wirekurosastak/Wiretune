@@ -1259,7 +1259,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   }
 
   /// The search, out of the bar's right into its middle as a tab page is pulled down past its top (the bar's own
-  /// fading as it comes): whole, and in the neutral, where letting go opens it.
+  /// fading as it comes): whole, and in the accent, where letting go opens it.
   Widget _pullHint(BuildContext context) {
     final colors = context.colors;
     const size = _pullHintSize;
@@ -1286,8 +1286,8 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
                     height: size,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: ready ? colors.neutral : colors.surface2,
-                      boxShadow: ready ? colors.accentGlow(colors.neutral, 0.6) : null,
+                      color: ready ? colors.accent : colors.surface2,
+                      boxShadow: ready ? colors.accentGlow(0.6) : null,
                     ),
                     child: Icon(Icons.search_rounded, size: 22, color: ready ? colors.onAccent : colors.textMain),
                   ),
@@ -1537,14 +1537,14 @@ class EmptyState extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // The icon in an orb of the neutral: a soft halo, a glass disc and a thin ring.
+                  // The icon in an orb of the accent: a soft halo, a glass disc and a thin ring.
                   Container(
                     width: 112,
                     height: 112,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: RadialGradient(
-                        colors: [colors.neutral.withValues(alpha: 0.28), colors.neutral.withValues(alpha: 0)],
+                        colors: [colors.accent.withValues(alpha: 0.28), colors.accent.withValues(alpha: 0)],
                       ),
                     ),
                     alignment: Alignment.center,
@@ -1554,10 +1554,10 @@ class EmptyState extends StatelessWidget {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: colors.palette.panel,
-                        border: Border.all(color: colors.neutral.withValues(alpha: 0.45)),
-                        boxShadow: colors.accentGlow(colors.neutral, 0.8),
+                        border: Border.all(color: colors.accent.withValues(alpha: 0.45)),
+                        boxShadow: colors.accentGlow(0.8),
                       ),
-                      child: Icon(icon, size: 34, color: colors.neutral),
+                      child: Icon(icon, size: 34, color: colors.accent),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -1611,7 +1611,7 @@ class GlassCard extends StatelessWidget {
   /// The space inside the card: 24 px, 18 on a phone, unless given.
   final EdgeInsets? padding;
 
-  /// The border's colour under the mouse; none keeps it unchanged.
+  /// The border's colour under the mouse (the section's accent); none keeps it unchanged.
   final Color? hoverColor;
 
   /// A solid card with the panels' edge (the settings), rather than translucent glass.

@@ -10,7 +10,6 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
-import 'ambient.dart';
 import 'buttons.dart';
 
 /// Asks before an action that can't easily be taken back. True when the user confirmed it. Cancel has the focus, so a
@@ -123,7 +122,7 @@ Future<void> showAddToPlaylistDialog(
                 subtitle: Text(dialog.trf('TrackCount', [playlist.trackCount])),
                 // Ticked when everything is in it already: seen before it is chosen, not told after.
                 trailing: tracks.every((t) => playlist.trackIds.contains(t.id))
-                    ? Icon(Icons.check_rounded, color: dialog.wash)
+                    ? Icon(Icons.check_rounded, color: dialog.colors.accent)
                     : null,
                 onTap: () {
                   final vm = context.vm;
@@ -136,8 +135,8 @@ Future<void> showAddToPlaylistDialog(
                 },
               ),
             ListTile(
-              leading: Icon(Icons.add_rounded, color: dialog.wash),
-              title: Text(dialog.tr('PlaylistNew'), style: TextStyle(color: dialog.wash)),
+              leading: Icon(Icons.add_rounded, color: dialog.colors.accent),
+              title: Text(dialog.tr('PlaylistNew'), style: TextStyle(color: dialog.colors.accent)),
               onTap: () => Navigator.pop(dialog, true),
             ),
           ],
@@ -357,7 +356,7 @@ class SheetChoice<T extends Object> {
 }
 
 /// A phone's menu of [choices] as a sheet ([showPhoneSheet]), under [title], with [note] under them if given: the
-/// chosen one in the wash colour, ticked. What a popup does on a wide screen (the sort, the genre, the device, the sleep
+/// chosen one in the accent, ticked. What a popup does on a wide screen (the sort, the genre, the device, the sleep
 /// timer), within the thumb's reach. Returns the value of the one tapped; null when the sheet was closed without.
 Future<T?> showChoiceSheet<T extends Object>(
   BuildContext context, {
@@ -381,7 +380,7 @@ Future<T?> showChoiceSheet<T extends Object>(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24),
           leading: choice.icon == null
               ? null
-              : Icon(choice.icon, color: choice.selected ? sheet.wash : colors.textMuted),
+              : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted),
           title: Text(
             choice.label,
             maxLines: 1,
@@ -389,7 +388,7 @@ Future<T?> showChoiceSheet<T extends Object>(
             style: TextStyle(
               fontSize: 15,
               fontWeight: choice.selected ? FontWeight.w700 : FontWeight.w500,
-              color: choice.selected ? sheet.wash : colors.textMain,
+              color: choice.selected ? colors.accent : colors.textMain,
             ),
           ),
           subtitle: choice.subtitle == null
@@ -400,7 +399,7 @@ Future<T?> showChoiceSheet<T extends Object>(
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(fontSize: 12.5, color: colors.textMuted),
                 ),
-          trailing: choice.selected ? Icon(Icons.check_rounded, color: sheet.wash) : null,
+          trailing: choice.selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
           onTap: () => Navigator.pop(sheet, choice.value),
         ),
       if (note != null)

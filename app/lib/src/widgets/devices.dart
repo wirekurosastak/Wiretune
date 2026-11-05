@@ -9,7 +9,6 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
-import 'ambient.dart';
 import 'dialogs.dart';
 import 'friends.dart';
 import 'page_parts.dart';
@@ -90,7 +89,7 @@ class DevicesButton extends StatelessWidget {
               : remote
               ? Icons.cast_connected_rounded
               : Icons.cast_rounded,
-          color: remote || group != null ? context.wash : colors.textMain,
+          color: remote || group != null ? colors.accent : colors.textMain,
         );
         // Listening together: with a server account and the connection.
         final canListen = vm.friends.isAvailable && vm.together.isAvailable;
@@ -268,6 +267,7 @@ class PlayingOnLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
+    final colors = context.colors;
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
@@ -279,7 +279,7 @@ class PlayingOnLabel extends StatelessWidget {
             Icon(
               player.isRemote ? Icons.cast_connected_rounded : Icons.groups_rounded,
               size: fontSize + 3,
-              color: context.wash,
+              color: colors.accent,
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -289,7 +289,7 @@ class PlayingOnLabel extends StatelessWidget {
                     : listeningLabel(context),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w700, color: context.wash),
+                style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w700, color: colors.accent),
               ),
             ),
           ],
