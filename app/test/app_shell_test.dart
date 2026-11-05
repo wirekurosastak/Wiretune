@@ -1874,6 +1874,46 @@ void main() {
     expect(tester.getCenter(shrinking).dy, moreOrLessEquals(PinnedTitleBar.height / 2, epsilon: 0.5));
   });
 
+  testWidgets("a phone page back at its place has the bar's shade and title from its first frame, a new one none", (
+    tester,
+  ) async {
+    final vm = await pumpLongAlbum(tester);
+    final tracks = Localizer.get('NavTracks');
+    final shrinking = find.descendant(of: find.byType(OverflowBox), matching: find.text(tracks));
+    // The bar's shade: a gradient under an Opacity.
+    double shade() => tester
+        .widget<Opacity>(
+          find.descendant(
+            of: find.byType(PinnedTitleBar),
+            matching: find.byWidgetPredicate(
+              (w) =>
+                  w is Opacity &&
+                  w.child is Container &&
+                  ((w.child! as Container).decoration as BoxDecoration?)?.gradient is LinearGradient,
+            ),
+          ),
+        )
+        .opacity;
+
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1200));
+    await settle(tester);
+    expect(shade(), 1);
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    vm.navigateTo(AppSection.tracks);
+    await tester.pump();
+    expect(shade(), 1, reason: 'the first frame back');
+    expect(tester.getCenter(shrinking).dy, moreOrLessEquals(PinnedTitleBar.height / 2, epsilon: 0.5));
+    await settle(tester);
+
+    // An album opened anew starts at its top: no shade there, from its first frame either.
+    vm.openAlbum(vm.library.albums.first);
+    await tester.pump();
+    expect(shade(), 0, reason: 'a new page');
+  });
+
   testWidgets("a phone playlist's name, which renames it, fades as it reaches the top bar rather than shrinking", (
     tester,
   ) async {

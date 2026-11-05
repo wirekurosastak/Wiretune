@@ -182,6 +182,7 @@ class _TopFade extends StatefulWidget {
 
   /// What stands over the list's top (a row of its own): what scrolls under it goes, and the fade is below it.
   final double top;
+
   final Widget child;
 
   static const double height = 24;
@@ -816,7 +817,8 @@ class PinnedTitleBar extends StatefulWidget {
   /// A detail page's ⋮: the rest of its menu, where a tab page has its account button.
   final Widget? menu;
 
-  /// The page's scroll view.
+  /// The page's scroll view, keyed with a [PageStorageKey]: the bar keeps what it measured under that key, as the list
+  /// keeps its place, so that a page back at its place has its shade and its title from its first frame.
   final Widget child;
 
   static const double height = 56;
@@ -899,6 +901,18 @@ class PinnedTitleBar extends StatefulWidget {
 /// and the style it has there.
 typedef _TitleRest = ({double middle, double left, double width, double height, TextStyle style});
 
+/// What the bar measured, kept for its page's return ([PinnedTitleBar.child]).
+typedef _BarMeasures = ({
+  double progress,
+  _TitleRest? rest,
+  bool shrinks,
+  double? shadeDistance,
+  double? fadingTitleTop,
+  double titleIn,
+  bool taken,
+  double scrolled,
+});
+
 class _PinnedTitleBarState extends State<PinnedTitleBar> {
   final GlobalKey _anchor = GlobalKey();
   final GlobalKey _title = GlobalKey();
@@ -950,9 +964,48 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   @override
   void initState() {
     super.initState();
-    // A page that comes back scrolled (its place is kept) shows the shade and its title at once.
+    // A page that comes back scrolled (its place is kept) shows the shade and its title at once: as they were when it
+    // was left, then as measured after its first frame.
+    _restore();
     WidgetsBinding.instance.addPostFrameCallback((_) => _update());
     _unsubscribe = context.vm.scrollToTopRequested.listen((_) => _scrollToTop());
+  }
+
+  /// Where what the bar measured is kept: beside the place of its page's list, under the same key.
+  Object? get _storageId => switch (widget.child.key) {
+    PageStorageKey(:final value) => (PinnedTitleBar, value),
+    _ => null,
+  };
+
+  void _restore() {
+    final id = _storageId;
+    if (id == null) return;
+    if (PageStorage.maybeOf(context)?.readState(context, identifier: id) case final _BarMeasures kept) {
+      _progress = kept.progress;
+      _rest = kept.rest;
+      _shrinks = kept.shrinks;
+      _shadeDistance = kept.shadeDistance;
+      _fadingTitleTop = kept.fadingTitleTop;
+      _titleIn.value = kept.titleIn;
+      _taken.value = kept.taken;
+      _scrolled.value = kept.scrolled;
+    }
+  }
+
+  void _keep() {
+    final id = _storageId;
+    if (id == null) return;
+    final _BarMeasures measures = (
+      progress: _progress,
+      rest: _rest,
+      shrinks: _shrinks,
+      shadeDistance: _shadeDistance,
+      fadingTitleTop: _fadingTitleTop,
+      titleIn: _titleIn.value,
+      taken: _taken.value,
+      scrolled: _scrolled.value,
+    );
+    PageStorage.maybeOf(context)?.writeState(context, measures, identifier: id);
   }
 
   @override
@@ -1165,6 +1218,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
         _shrinks = shrinks;
       });
     }
+    _keep();
   }
 
   @override
