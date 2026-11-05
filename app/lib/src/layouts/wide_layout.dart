@@ -257,7 +257,7 @@ class _Header extends StatelessWidget {
                   builder: (context, _) => NavVisualizer(
                     waveTrigger: vm.waveTrigger,
                     direction: vm.lastWaveDirection,
-                    color: context.colors.accent,
+                    color: context.wash,
                     isPlaying: vm.player.isPlaying,
                   ),
                 ),
@@ -267,27 +267,24 @@ class _Header extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // The wordmark fades into the section's colour towards its end.
-                      ShaderMask(
-                        blendMode: BlendMode.srcIn,
-                        shaderCallback: (rect) => LinearGradient(
-                          colors: [colors.textMain, colors.textMain, colors.hover],
-                          stops: const [0, 0.45, 1],
-                        ).createShader(rect),
-                        child: const Text(
-                          'WIRETUNE',
-                          style: TextStyle(fontSize: 17, letterSpacing: 3.2, fontWeight: FontWeight.w900, height: 1.1),
+                      Text(
+                        'WIRETUNE',
+                        style: TextStyle(
+                          fontSize: 17,
+                          letterSpacing: 3.2,
+                          fontWeight: FontWeight.w900,
+                          height: 1.1,
+                          color: colors.textMain,
                         ),
                       ),
-                      AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 350),
+                      Text(
+                        'STREAMER & PLAYER',
                         style: TextStyle(
                           fontSize: 8.5,
                           letterSpacing: 1.9,
                           fontWeight: FontWeight.w800,
-                          color: colors.accent,
+                          color: colors.neutral,
                         ),
-                        child: const Text('STREAMER & PLAYER'),
                       ),
                     ],
                   ),
@@ -430,7 +427,10 @@ class _SearchFieldState extends State<_SearchField> {
           minHeight: 40,
           maxHeight: 40,
         ),
-        decoration: BoxDecoration(borderRadius: radius, boxShadow: focused ? colors.accentGlow(0.8) : const []),
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: focused ? colors.accentGlow(context.wash, 0.8) : const [],
+        ),
         child: TextField(
           controller: _controller,
           focusNode: _focus,
@@ -450,7 +450,7 @@ class _SearchFieldState extends State<_SearchField> {
             fillColor: colors.palette.modal,
             prefixIcon: Padding(
               padding: const EdgeInsets.only(left: 16, right: 8),
-              child: Icon(Icons.search_rounded, size: 19, color: focused ? colors.accent : colors.textMuted),
+              child: Icon(Icons.search_rounded, size: 19, color: focused ? context.wash : colors.textMuted),
             ),
             prefixIconConstraints: const BoxConstraints(minWidth: 42),
             suffixIcon: vm.isSearchActive
@@ -464,7 +464,7 @@ class _SearchFieldState extends State<_SearchField> {
             contentPadding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
             border: border(colors.palette.panelBorder, 1),
             enabledBorder: border(_hover ? colors.palette.glassHighlight : colors.palette.panelBorder, 1),
-            focusedBorder: border(colors.accent, 1.5),
+            focusedBorder: border(context.wash, 1.5),
           ),
         ),
       ),
@@ -797,8 +797,6 @@ class _Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
-    final colors = context.colors;
-    final palette = colors.palette;
     final compact = MediaQuery.sizeOf(context).width < WideLayout.compactWidth;
     return SizedBox(
       width: compact ? 68 : 232,
@@ -811,8 +809,6 @@ class _Sidebar extends StatelessWidget {
             Widget item(AppSection section, String label, int? count, {bool autofocus = false}) => _SidebarItem(
               selected: vm.selectedSection == section && !vm.isSearchActive && !vm.player.isQueueOpen,
               icon: sectionIcon(section),
-              // Settings, apart from the music, in the text's colour.
-              color: section == AppSection.settings ? colors.textMain : palette.accentFor(section),
               label: label,
               count: count,
               compact: compact,
@@ -869,13 +865,12 @@ class _GroupTitle extends StatelessWidget {
   );
 }
 
-/// A sidebar entry: the section's icon on a tile of its colour, its name and a counter. The selected one is washed
-/// in its colour, and its tile lights up and glows.
+/// A sidebar entry: the section's icon on a tile, its name and a counter. The selected one is washed in the wash colour,
+/// and its tile lights up in it and glows; the others are neutral.
 class _SidebarItem extends StatefulWidget {
   const _SidebarItem({
     required this.selected,
     required this.icon,
-    required this.color,
     required this.label,
     required this.count,
     required this.compact,
@@ -885,7 +880,6 @@ class _SidebarItem extends StatefulWidget {
 
   final bool selected;
   final IconData icon;
-  final Color color;
   final String label;
   final int? count;
   final bool compact;
@@ -903,7 +897,7 @@ class _SidebarItemState extends State<_SidebarItem> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final selected = widget.selected;
-    final color = widget.color;
+    final color = selected ? context.wash : colors.neutral;
     const duration = Duration(milliseconds: 260);
     // The tile pops under the mouse: quick, with a small overshoot, rather than the slower fade of the rest.
     final tile = AnimatedScale(
@@ -1036,7 +1030,7 @@ class _PlayerBar extends StatelessWidget {
             message: track.artist,
             child: ArtistLinks(
               track.artistNames,
-              hoverColor: colors.palette.coral,
+              hoverColor: context.wash,
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.textMuted),
               onOpen: vm.openArtistByName,
             ),
@@ -1104,7 +1098,7 @@ class _PlayerBar extends StatelessWidget {
                                 message: track.album,
                                 child: LinkText(
                                   track.album,
-                                  hoverColor: colors.palette.purple,
+                                  hoverColor: context.wash,
                                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.textMuted),
                                   onTap: () => vm.openAlbumOfTrack(track),
                                 ),
@@ -1174,8 +1168,8 @@ class _PlayerBar extends StatelessWidget {
                                     children: [
                                       SpectrumVisualizer(
                                         bands: player.spectrum,
-                                        color: colors.accent,
-                                        highlight: colors.hover,
+                                        color: context.wash,
+                                        highlight: colors.palette.hoverOf(context.wash),
                                         width: width,
                                       ),
                                       const SizedBox(width: 14),
@@ -1296,7 +1290,7 @@ class _RenderSharedLine extends RenderBox
 
 /// The cover of the current track, which opens and closes the queue: a dark veil with a chevron under the mouse or the
 /// keyboard's focus (and while the queue is open), a small chevron at its foot on a touch screen, and a glow of the
-/// accent while a track plays. It holds still.
+/// wash colour while a track plays. It holds still.
 class _QueueCover extends StatelessWidget {
   const _QueueCover();
 
@@ -1326,7 +1320,7 @@ class _QueueCover extends StatelessWidget {
               borderRadius: BorderRadius.circular(Radii.medium),
               boxShadow: [
                 BoxShadow(
-                  color: player.isPlaying ? colors.accent.withValues(alpha: 0.4) : colors.palette.shadow,
+                  color: player.isPlaying ? context.wash.withValues(alpha: 0.4) : colors.palette.shadow,
                   blurRadius: 18,
                   spreadRadius: -4,
                   offset: const Offset(0, 6),
@@ -1337,7 +1331,7 @@ class _QueueCover extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                CoverImage(path: player.currentTrack?.coverArtPath, radius: 0, placeholderColor: colors.palette.cyan),
+                CoverImage(path: player.currentTrack?.coverArtPath, radius: 0),
                 // A touch screen has no mouse to bring the veil: there a small chevron stays at the cover's foot.
                 if (AppPlatform.current.isMobile)
                   AnimatedOpacity(

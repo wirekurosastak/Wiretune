@@ -1,14 +1,17 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
+import '../theme/palette.dart';
 import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
 import 'cover_image.dart';
@@ -281,4 +284,181 @@ class AmbientBackdrop extends StatelessWidget {
       },
     );
   }
+}
+
+/// The wash colour: the one colour of a screen otherwise neutral, that of the cover the backdrop washes in
+/// ([AmbientBackdrop.activeCoverPath]) as [Palette.washOf] makes it readable. What is drawn in it reads it as
+/// `context.wash`: the players' Play and controls, the spectrum and the logo, and the selected section, ticks and
+/// fields of the solid bars, panels and menus. What lies on the wash itself (a page's Play, a selected tab, the playing
+/// row) keeps to the neutral, as the colour would not stand out there; so does everything while there is no cover, or
+/// a grey one. A new colour fades in as a new wash does.
+class WashColor extends StatefulWidget {
+  const WashColor({super.key, this.nowPlaying = false, required this.child});
+
+  /// The full-screen player's: the colour of the track that plays, as its backdrop's ([AmbientBackdrop.nowPlaying]).
+  final bool nowPlaying;
+  final Widget child;
+
+  static Color of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_WashColorScope>()?.color ?? context.colors.neutral;
+
+  /// The colour of a cover from its pixels ([rgba], four bytes each): the hue most of its colourful pixels share
+  /// (each counting by how colourful it is), as their average, rather than the average of all (a brown or a grey). Null
+  /// for a grey cover, or one whose colour is only a speck.
+  static Color? sourceOf(ByteData rgba) {
+    const bins = 36;
+    // Per hue: how much colour there is, and how much the vivid pixels count (the square of it).
+    final amount = List<double>.filled(bins, 0), weight = List<double>.filled(bins, 0);
+    final red = List<double>.filled(bins, 0), green = List<double>.filled(bins, 0), blue = List<double>.filled(bins, 0);
+    var pixels = 0;
+    for (var i = 0; i + 3 < rgba.lengthInBytes; i += 4) {
+      if (rgba.getUint8(i + 3) < 128) continue;
+      pixels++;
+      final r = rgba.getUint8(i) / 255, g = rgba.getUint8(i + 1) / 255, b = rgba.getUint8(i + 2) / 255;
+      final high = math.max(r, math.max(g, b));
+      final chroma = high - math.min(r, math.min(g, b));
+      if (chroma < 0.1) continue;
+      // The hue, 0 to 6 round the colour wheel.
+      final hue = high == r ? ((g - b) / chroma) % 6 : (high == g ? (b - r) / chroma + 2 : (r - g) / chroma + 4);
+      final bin = (hue / 6 * bins).floor() % bins;
+      final w = chroma * chroma;
+      amount[bin] += chroma;
+      weight[bin] += w;
+      red[bin] += r * w;
+      green[bin] += g * w;
+      blue[bin] += b * w;
+    }
+    double around(List<double> of, int bin) => of[(bin + bins - 1) % bins] + of[bin] + of[(bin + 1) % bins];
+    var best = 0;
+    for (var bin = 1; bin < bins; bin++) {
+      if (around(weight, bin) > around(weight, best)) best = bin;
+    }
+    // Less colour than a tenth of the cover at a middling chroma, or a thirtieth of it in full colour: a grey cover.
+    if (pixels == 0 || around(amount, best) / pixels < 0.03) return null;
+    final total = around(weight, best);
+    return Color.from(
+      alpha: 1,
+      red: around(red, best) / total,
+      green: around(green, best) / total,
+      blue: around(blue, best) / total,
+    );
+  }
+
+  @override
+  State<WashColor> createState() => _WashColorState();
+}
+
+class _WashColorState extends State<WashColor> with SingleTickerProviderStateMixin {
+  /// The colours of the covers read last, by path (null for a grey cover), and of those being read.
+  static final Map<String, Color?> _sources = {};
+  static final Map<String, Future<void>> _reading = {};
+
+  late final MainViewModel _vm;
+  late final Listenable _changes;
+  late final AnimationController _fade = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))
+    ..addListener(() => setState(() {}));
+  Color? _from;
+  Color? _to;
+  bool _started = false;
+
+  Color? get _shown => _from == null ? _to : Color.lerp(_from, _to, Curves.easeInOut.transform(_fade.value));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    _vm = context.vm;
+    _changes = Listenable.merge([_vm, _vm.player, _vm.albums, _vm.artists])..addListener(_update);
+    // Until its own cover is read, the full-screen player shows the colour of the screen it rises over.
+    if (widget.nowPlaying) _to = context.getInheritedWidgetOfExactType<_WashColorScope>()?.color;
+    _update();
+  }
+
+  @override
+  void dispose() {
+    _changes.removeListener(_update);
+    _fade.dispose();
+    super.dispose();
+  }
+
+  void _update() {
+    final palette = _vm.isLight ? Palette.light : Palette.dark;
+    final path = AmbientBackdrop.activeCoverPath(_vm, nowPlaying: widget.nowPlaying);
+    // The full-screen player's colour, read ahead so that it has it as it rises.
+    if (!widget.nowPlaying) _read(AmbientBackdrop.activeCoverPath(_vm, nowPlaying: true));
+    if (path == null) return _show(palette.neutral);
+    if (!_sources.containsKey(path)) {
+      _read(path)?.then((_) {
+        if (mounted) _update();
+      });
+      return;
+    }
+    final source = _sources.remove(path);
+    _sources[path] = source; // the latest again
+    _show(source == null ? palette.neutral : palette.washOf(source));
+  }
+
+  void _show(Color target) {
+    if (target == _to) return;
+    final shown = _shown;
+    _to = target;
+    _from = shown;
+    if (shown == null || (MediaQuery.maybeDisableAnimationsOf(context) ?? false)) {
+      _from = null;
+      _fade.value = 1;
+      setState(() {});
+    } else {
+      _fade.forward(from: 0);
+    }
+  }
+
+  /// Reads the colour of the cover at [path] into [_sources], from the same small decoding as its wash.
+  static Future<void>? _read(String? path) {
+    if (path == null || _sources.containsKey(path)) return null;
+    final provider = CoverArt.provider(path, decodeWidth: 64);
+    if (provider == null) return null;
+    return _reading[path] ??= () async {
+      final done = Completer<Color?>();
+      final stream = provider.resolve(ImageConfiguration.empty);
+      final listener = ImageStreamListener(
+        (info, _) {
+          if (done.isCompleted) return info.dispose();
+          info.image
+              .toByteData()
+              .then((rgba) => done.complete(rgba == null ? null : WashColor.sourceOf(rgba)))
+              .catchError((Object _) => done.complete(null))
+              .whenComplete(info.dispose);
+        },
+        // A cover that cannot be read leaves the neutral, as it leaves the wash out.
+        onError: (error, stack) {
+          if (!done.isCompleted) done.complete(null);
+        },
+      );
+      stream.addListener(listener);
+      final source = await done.future;
+      stream.removeListener(listener);
+      _reading.remove(path);
+      _sources[path] = source;
+      if (_sources.length > 48) _sources.remove(_sources.keys.first);
+    }();
+  }
+
+  @override
+  Widget build(BuildContext context) => _WashColorScope(color: _shown, child: widget.child);
+}
+
+class _WashColorScope extends InheritedWidget {
+  const _WashColorScope({required this.color, required super.child});
+
+  /// Null until the first colour is known: the neutral meanwhile.
+  final Color? color;
+
+  @override
+  bool updateShouldNotify(_WashColorScope oldWidget) => color != oldWidget.color;
+}
+
+extension WashColorContext on BuildContext {
+  /// The wash colour ([WashColor]); what reads it is drawn again when it changes.
+  Color get wash => WashColor.of(this);
 }

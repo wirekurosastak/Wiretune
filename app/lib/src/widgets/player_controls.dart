@@ -13,6 +13,7 @@ import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/player_view_model.dart';
+import 'ambient.dart';
 import 'dialogs.dart';
 import 'page_parts.dart';
 
@@ -38,8 +39,8 @@ String withShortcut(String tip, String keys) {
 IconData repeatIcon(PlayerViewModel player) =>
     player.repeatMode == RepeatMode.one ? Icons.repeat_one_rounded : Icons.repeat_rounded;
 
-/// A mode of the player (shuffle, repeat) as its button, alike in every player: the icon in the accent with a dot under
-/// it while the mode is on, muted while it is off. No glow: that is the switch beside a list's Play ([ShuffleSwitch]).
+/// A mode of the player (shuffle, repeat) as its button, alike in every player: the icon in the wash colour with a dot
+/// under it while the mode is on, muted while it is off. No glow: that is the switch beside a list's Play ([ShuffleSwitch]).
 class PlayerModeButton extends StatelessWidget {
   const PlayerModeButton({
     super.key,
@@ -60,7 +61,7 @@ class PlayerModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
+    final wash = context.wash;
     return IconButton(
       tooltip: context.tr(tooltip),
       iconSize: iconSize,
@@ -69,7 +70,7 @@ class PlayerModeButton extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          Icon(icon, color: on ? colors.accent : colors.textMuted),
+          Icon(icon, color: on ? wash : context.colors.textMuted),
           // Under the icon by 3/8 of its size: 7 px under the bar's 19 px icons, 9 under the phone player's 24.
           Positioned(
             bottom: -(iconSize * 3 / 8).roundToDouble(),
@@ -79,7 +80,7 @@ class PlayerModeButton extends StatelessWidget {
               child: Container(
                 width: 4,
                 height: 4,
-                decoration: BoxDecoration(color: colors.accent, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: wash, shape: BoxShape.circle),
               ),
             ),
           ),
@@ -89,7 +90,7 @@ class PlayerModeButton extends StatelessWidget {
   }
 }
 
-/// Shuffle, previous, play/pause, next, repeat. Shuffle and repeat take the accent and a dot under them while on.
+/// Shuffle, previous, play/pause, next, repeat. Shuffle and repeat take the wash colour and a dot under them while on.
 class TransportControls extends StatelessWidget {
   const TransportControls({super.key});
 
@@ -140,8 +141,9 @@ class TransportControls extends StatelessWidget {
   }
 }
 
-/// The round play/pause button, filled with the accent's gradient: it glows (brighter while playing), grows a little
-/// under the mouse and gives under the finger, and its icon morphs between play and pause.
+/// The players' round play/pause button, filled with the wash colour's gradient, as if the bar were open to the wash
+/// there: it glows (brighter while playing), grows a little under the mouse and gives under the finger, and its icon
+/// morphs between play and pause.
 class PlayButton extends StatefulWidget {
   const PlayButton({super.key, this.size = 42});
 
@@ -159,6 +161,7 @@ class _PlayButtonState extends State<PlayButton> {
   Widget build(BuildContext context) {
     final player = context.vm.player;
     final colors = context.colors;
+    final wash = context.wash;
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) => Tooltip(
@@ -171,8 +174,8 @@ class _PlayButtonState extends State<PlayButton> {
             duration: const Duration(milliseconds: 300),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: colors.accentGradient,
-              boxShadow: colors.accentGlow(player.isPlaying || _hover ? 1 : 0.5),
+              gradient: colors.accentGradient(wash),
+              boxShadow: colors.accentGlow(wash, player.isPlaying || _hover ? 1 : 0.5),
             ),
             child: Material(
               type: MaterialType.transparency,
@@ -334,6 +337,7 @@ class _SeekBarState extends State<SeekBar> {
                 children: [
                   Positioned.fill(
                     child: Slider(
+                      activeColor: context.wash,
                       value: value,
                       max: max,
                       onChanged: player.currentTrack == null ? null : (v) => setState(() => _dragValue = v),
@@ -420,11 +424,10 @@ class VolumeControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
-    final colors = context.colors;
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        final slider = _volumeSlider(player, colors);
+        final slider = _volumeSlider(player, context);
         return Row(
           mainAxisSize: sliderWidth == null ? MainAxisSize.max : MainAxisSize.min,
           children: [
@@ -432,7 +435,7 @@ class VolumeControl extends StatelessWidget {
               tooltip: player.volumeToolTip,
               iconSize: 20,
               onPressed: player.isVolumeLocked ? null : player.toggleMute,
-              icon: _volumeIcon(player, colors),
+              icon: _volumeIcon(player, context),
             ),
             if (sliderWidth case final width?) SizedBox(width: width, child: slider) else Expanded(child: slider),
           ],
@@ -442,18 +445,19 @@ class VolumeControl extends StatelessWidget {
   }
 }
 
-/// The speaker: muted, quiet or loud, in the accent unless muted or locked.
-Icon _volumeIcon(PlayerViewModel player, WiretuneColors colors, {String? semanticLabel}) => Icon(
+/// The speaker: muted, quiet or loud, in the wash colour unless muted or locked.
+Icon _volumeIcon(PlayerViewModel player, BuildContext context, {String? semanticLabel}) => Icon(
   player.isMuted
       ? Icons.volume_off_rounded
       : (player.volume < 50 && !player.isVolumeLocked ? Icons.volume_down_rounded : Icons.volume_up_rounded),
-  color: player.isVolumeDisabledOrMuted ? colors.textMuted : colors.accent,
+  color: player.isVolumeDisabledOrMuted ? context.colors.textMuted : context.wash,
   semanticLabel: semanticLabel,
 );
 
-/// The volume's slider: at 100 % and still while it is locked, at 0 and grey while muted, which moving it ends.
-Slider _volumeSlider(PlayerViewModel player, WiretuneColors colors) => Slider(
-  activeColor: player.isMuted ? colors.textMuted : null,
+/// The volume's slider, in the wash colour: at 100 % and still while it is locked, at 0 and grey while muted, which
+/// moving it ends.
+Slider _volumeSlider(PlayerViewModel player, BuildContext context) => Slider(
+  activeColor: player.isMuted ? context.colors.textMuted : context.wash,
   value: player.isVolumeLocked ? 100 : (player.isMuted ? 0 : player.volume),
   max: 100,
   onChanged: player.isVolumeLocked ? null : player.setVolume,
@@ -524,7 +528,6 @@ class _VolumeButtonState extends State<VolumeButton> {
   @override
   Widget build(BuildContext context) {
     final player = context.vm.player;
-    final colors = context.colors;
     return TapRegion(
       groupId: this,
       onTapOutside: (_) => _update(touched: false),
@@ -561,7 +564,7 @@ class _VolumeButtonState extends State<VolumeButton> {
                           onPressed: locked
                               ? null
                               : () => _touch ? _update(touched: !_slider.isShowing) : player.toggleMute(),
-                          icon: _volumeIcon(player, colors, semanticLabel: locked ? null : player.volumeToolTip),
+                          icon: _volumeIcon(player, context, semanticLabel: locked ? null : player.volumeToolTip),
                         ),
                       );
                     },
@@ -621,7 +624,7 @@ class _VolumeButtonState extends State<VolumeButton> {
                             ),
                           ),
                           // Turned a quarter: louder upwards.
-                          Expanded(child: RotatedBox(quarterTurns: 3, child: _volumeSlider(player, colors))),
+                          Expanded(child: RotatedBox(quarterTurns: 3, child: _volumeSlider(player, context))),
                         ],
                       ),
                     ),
@@ -668,7 +671,7 @@ class SleepTimerButton extends StatelessWidget {
             : (player.sleepsAtTrackEnd ? context.tr('SleepTimerAtTrackEnd') : null);
         final icon = Icon(
           status != null ? Icons.bedtime_rounded : Icons.bedtime_outlined,
-          color: status != null ? colors.accent : colors.textMain,
+          color: status != null ? context.wash : colors.textMain,
         );
         void choose(int? value) {
           switch (value) {
@@ -762,7 +765,7 @@ class FavoriteCurrentButton extends StatelessWidget {
           tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
           iconSize: size,
           onPressed: player.currentTrack == null ? null : player.toggleFavoriteCurrent,
-          icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted),
+          icon: HeartIcon(filled: favorite, color: favorite ? context.wash : colors.textMuted),
         );
       },
     );

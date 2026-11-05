@@ -7,6 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
+import 'ambient.dart';
 import 'buttons.dart';
 import 'cover_image.dart';
 import 'dialogs.dart';
@@ -37,8 +38,8 @@ class FriendsButton extends StatelessWidget {
             onPressed: () => showFromFriends(context),
             icon: Badge(
               isLabelVisible: count > 0,
-              backgroundColor: colors.accent,
-              textColor: colors.palette.onAccent,
+              backgroundColor: colors.neutral,
+              textColor: colors.onAccent,
               label: Text(count > 99 ? '99+' : '$count'),
               child: Icon(Icons.notifications_none_rounded, color: colors.textMain),
             ),
@@ -123,8 +124,8 @@ class _FromFriendsList extends StatelessWidget {
       contentPadding: EdgeInsets.only(left: padding, right: padding),
       leading: CircleAvatar(
         radius: 22,
-        backgroundColor: colors.accent.withValues(alpha: 0.18),
-        child: Icon(Icons.groups_rounded, color: colors.accent),
+        backgroundColor: context.wash.withValues(alpha: 0.18),
+        child: Icon(Icons.groups_rounded, color: context.wash),
       ),
       title: Text(context.trf('ListenInvitedYou', [invite.host.username]), maxLines: 2),
       trailing: Row(
@@ -162,22 +163,11 @@ class _FromFriendsList extends StatelessWidget {
         '${track.title} • ${track.artist}',
       ),
       (_, final album?, _) => (
-        CoverImage(
-          path: album.coverArtPath,
-          size: size,
-          placeholderIcon: Icons.album,
-          placeholderColor: colors.palette.purple,
-        ),
+        CoverImage(path: album.coverArtPath, size: size, placeholderIcon: Icons.album),
         '${album.title} • ${album.artist}',
       ),
       (_, _, final artist?) => (
-        CoverImage(
-          path: artist.picturePath,
-          size: size,
-          circle: true,
-          placeholderIcon: Icons.person,
-          placeholderColor: colors.palette.coral,
-        ),
+        CoverImage(path: artist.picturePath, size: size, circle: true, placeholderIcon: Icons.person),
         artist.name,
       ),
       _ => (const SizedBox.square(dimension: size), ''),

@@ -146,7 +146,7 @@ class _PopEffectState extends State<PopEffect> {
   }
 }
 
-/// A list's accent-filled, glowing "Play" and the player's shuffle switch beside it ([ShuffleSwitch]: Play starts
+/// A list's filled, glowing "Play" (neutral, as it lies on the wash) and the player's shuffle switch beside it ([ShuffleSwitch]: Play starts
 /// the list from its first track, or from any while shuffle is on), then the queue's two ([playNext], [addToQueue]), its
 /// way into a playlist ([addToPlaylist]), the list's [download] and its hide or delete ([remove]): the order of its menu
 /// (`ListMenu`). On a phone Play is round, the largest, at the right edge, and the rest follow it leftwards in that
@@ -222,7 +222,7 @@ class PlayShuffleButtons extends StatelessWidget {
 }
 
 /// The player's shuffle, as a switch beside a list's Play (the same one as in the player): the icon alone, glowing in
-/// the accent with a dot under it while it is on; muted while off, until the mouse is over it.
+/// the neutral with a dot under it while it is on; muted while off, until the mouse is over it.
 class ShuffleSwitch extends StatefulWidget {
   const ShuffleSwitch({super.key, this.enabled = true});
 
@@ -247,7 +247,7 @@ class _ShuffleSwitchState extends State<ShuffleSwitch> {
     final on = player.isShuffle && enabled;
     final color = !enabled
         ? colors.palette.textDisabled
-        : (on ? colors.accent : (_hover ? colors.textMain : colors.textMuted));
+        : (on ? colors.neutral : (_hover ? colors.textMain : colors.textMuted));
     final glow = on || (_hover && enabled) ? [Shadow(color: color.withValues(alpha: 0.8), blurRadius: 14)] : null;
     // As tall as Play and the icons beside it.
     final dimension = PhoneChrome.isPhone(context) ? PhoneChrome.controlHeight : 46.0;
@@ -283,7 +283,7 @@ class _ShuffleSwitchState extends State<ShuffleSwitch> {
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: color,
-                        boxShadow: colors.accentGlow(0.6),
+                        boxShadow: colors.accentGlow(color, 0.6),
                       ),
                     ),
                   ),
@@ -296,7 +296,8 @@ class _ShuffleSwitchState extends State<ShuffleSwitch> {
   }
 }
 
-/// A list's accent-filled, glowing Play button (round and [PhoneChrome.playSize] on a phone): plays the list with
+/// A list's filled, glowing Play button, in the neutral as it lies on the wash (round and [PhoneChrome.playSize] on a
+/// phone): plays the list with
 /// [onPlay], or, while the queue is [tracks] (see `PlayerViewModel.isQueueOf`), pauses and resumes it, showing which it
 /// will do.
 class ListPlayButton extends StatelessWidget {
@@ -334,7 +335,7 @@ class ListPlayButton extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(Radii.pill),
-          boxShadow: onPressed == null ? const [] : colors.accentGlow(),
+          boxShadow: onPressed == null ? const [] : colors.accentGlow(colors.neutral),
         ),
         child: phone
             ? Tooltip(
@@ -353,7 +354,7 @@ class ListPlayButton extends StatelessWidget {
 }
 
 /// A round icon button beside a detail page's play and shuffle (download, hide, delete), named by its tooltip; [color]
-/// tints it (the accent for a kept download, the danger colour for a deletion), else it is muted until the mouse is
+/// tints it (the neutral for a kept download, the danger colour for a deletion), else it is muted until the mouse is
 /// over it. With a [progress] (0 to 1) a ring around it fills up.
 class HeaderIconButton extends StatefulWidget {
   const HeaderIconButton({
@@ -425,7 +426,7 @@ class _HeaderIconButtonState extends State<HeaderIconButton> {
                       child: CircularProgressIndicator(
                         value: progress,
                         strokeWidth: 2.5,
-                        color: colors.accent,
+                        color: colors.neutral,
                         backgroundColor: colors.glassBorder,
                       ),
                     ),

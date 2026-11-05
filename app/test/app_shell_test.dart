@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -17,6 +18,7 @@ import 'package:wiretune/src/pages/now_playing_page.dart';
 import 'package:wiretune/src/pages/queue_panel.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/theme/app_theme.dart';
+import 'package:wiretune/src/theme/palette.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
@@ -78,13 +80,15 @@ void main() {
   }
 
   // Covers are read from disk and decoded for real, in steps that each need the real event loop: until [shown] finds
-  // the result. Then the transitions run out.
+  // the result. Then the transitions run out, and those their ends set off (a control easing into the wash colour as
+  // its fade ends).
   Future<void> loadCovers(WidgetTester tester, Finder shown) async {
     for (var i = 0; i < 40 && shown.evaluate().isEmpty; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump();
     }
     await tester.pump(const Duration(seconds: 2));
+    await tester.pump(const Duration(seconds: 1));
     await tester.pump(); // what the ends of the transitions set off
   }
 
@@ -1713,7 +1717,7 @@ void main() {
     expect(dot(), findsOneWidget);
     expect(
       tester.widget<Icon>(find.descendant(of: shuffle, matching: find.byType(Icon))).color,
-      tester.element(shuffle).colors.accent,
+      tester.element(shuffle).colors.neutral,
     );
     expect(find.descendant(of: header, matching: find.byTooltip(Localizer.get('TipShuffleOff'))), findsOneWidget);
 
@@ -2142,18 +2146,79 @@ void main() {
     expect(slider, findsNothing);
   });
 
-  testWidgets("the full-screen player's artist is in the artists' red, whatever the section's colour", (tester) async {
+  testWidgets("the players' Play takes the colour of the cover's wash; what lies on the wash, the neutral", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'android');
     final vm = await pumpApp(tester, const Size(400, 860), () async {
-      final library = createLibrary([TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis')]);
+      // A red cover, and a track of it.
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawColor(const Color(0xFFFF0000), BlendMode.src);
+      final image = await recorder.endRecording().toImage(8, 8);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      final cover = File('${Directory.systemTemp.createTempSync('wiretune_wash_').path}/red.png')
+        ..writeAsBytesSync(png!.buffer.asUint8List());
+      final library = createLibrary([TestSupport.makeTrack('1', 'So What')..coverArtPath = cover.path]);
       library.initialize();
       return createMainViewModel(library);
     });
-    vm.navigateTo(AppSection.albums); // the albums' purple is the accent
+    vm.navigateTo(AppSection.tracks);
+    final colors = tester.element(find.byType(PhoneLayout)).colors;
+    Color playColor(Finder player) =>
+        (tester
+                    .widget<AnimatedContainer>(
+                      find.descendant(
+                        of: find.descendant(of: player, matching: find.byType(PlayButton)),
+                        matching: find.byType(AnimatedContainer),
+                      ),
+                    )
+                    .decoration!
+                as BoxDecoration)
+            .gradient!
+            .colors
+            .last;
+    final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
+    Color? pagePlayColor() =>
+        tester.widget<FilledButton>(pagePlay).style?.backgroundColor?.resolve({}) ??
+        Theme.of(tester.element(pagePlay)).filledButtonTheme.style!.backgroundColor!.resolve({});
+
     vm.player.playQueue(vm.library.tracks);
+    await loadCovers(tester, washOf(find.byType(PhoneLayout)));
+    final red = colors.palette.washOf(const Color(0xFFFF0000));
+    expect(playColor(find.byType(PhoneLayout)), red, reason: "the mini player's");
+    expect(pagePlayColor(), colors.neutral, reason: "the page's, on the wash");
+
     vm.openNowPlaying();
-    await settle(tester);
-    final artist = find.descendant(of: find.byType(NowPlayingPage), matching: find.text('Miles Davis'));
-    expect(tester.widget<Text>(artist).style?.color, tester.element(artist).colors.palette.coral);
+    await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
+    expect(playColor(find.byType(NowPlayingPage)), red, reason: "the full-screen player's");
+  });
+
+  test("a cover's colour is the hue most of its colourful pixels share; a grey one or a speck of colour has none", () {
+    // [counts] pixels of each colour, as a decoded cover's.
+    ByteData cover(Map<(int, int, int), int> counts) {
+      final colours = [
+        for (final MapEntry(key: (r, g, b), :value) in counts.entries)
+          for (var i = 0; i < value; i++) (r << 24) | (g << 16) | (b << 8) | 0xFF,
+      ];
+      final bytes = ByteData(colours.length * 4);
+      for (final (i, rgba) in colours.indexed) {
+        bytes.setUint32(i * 4, rgba);
+      }
+      return bytes;
+    }
+
+    // Mostly red with some blue: red, not the purple of the average.
+    final mostlyRed = WashColor.sourceOf(cover({(220, 20, 30): 60, (20, 40, 200): 30, (128, 128, 128): 10}))!;
+    expect(HSLColor.fromColor(mostlyRed).hue, anyOf(lessThan(10), greaterThan(350)));
+    expect(WashColor.sourceOf(cover({(120, 120, 124): 90, (40, 40, 40): 10})), isNull);
+    expect(WashColor.sourceOf(cover({(128, 128, 128): 99, (255, 0, 0): 1})), isNull);
+
+    // Every hue readable: light enough on the dark theme, deep enough on the light one (to the 8-bit channels).
+    for (final hue in [0.0, 60, 120, 180, 240, 300]) {
+      final source = HSLColor.fromAHSL(1, hue.toDouble(), 0.8, 0.5).toColor();
+      expect(Palette.dark.washOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: 'dark, $hue');
+      expect(Palette.light.washOf(source).computeLuminance(), inInclusiveRange(0.06, 0.19), reason: 'light, $hue');
+    }
   });
 
   testWidgets("dragging the player's seek bar seeks, and is no swipe", (tester) async {

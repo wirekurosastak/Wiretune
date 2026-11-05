@@ -3,31 +3,30 @@
 
 import 'package:flutter/material.dart';
 
-import '../view_models/app_section.dart';
 import 'palette.dart';
 
-/// The palette and the active section's accent, reachable from any widget through `context.colors`.
+/// The palette, reachable from any widget through `context.colors`. The wash colour, which changes with the cover, is
+/// `context.wash` (`WashColor`).
 class WiretuneColors extends ThemeExtension<WiretuneColors> {
-  const WiretuneColors(this.palette, this.accent);
+  const WiretuneColors(this.palette);
 
   final Palette palette;
-  final Color accent;
 
-  Color get hover => palette.hoverOf(accent);
   Color get textMain => palette.textMain;
   Color get textMuted => palette.textMuted;
   Color get surface1 => palette.surface1;
   Color get surface2 => palette.surface2;
   Color get glassBorder => palette.glassBorder;
   Color get danger => palette.danger;
+  Color get neutral => palette.neutral;
   Color get onAccent => palette.onAccent;
 
-  /// The accent as a gradient, from its lighter hover shade to the accent itself (filled buttons, the active slider).
-  Gradient get accentGradient =>
-      LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [hover, accent]);
+  /// [accent] as a gradient, from its lighter hover shade to the accent itself (filled buttons, the active slider).
+  Gradient accentGradient(Color accent) =>
+      LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [palette.hoverOf(accent), accent]);
 
-  /// The coloured glow under an accent-filled control.
-  List<BoxShadow> accentGlow([double strength = 1]) => [
+  /// The coloured glow under a control filled with [accent].
+  List<BoxShadow> accentGlow(Color accent, [double strength = 1]) => [
     BoxShadow(
       color: accent.withValues(alpha: (palette.isDark ? 0.45 : 0.35) * strength),
       blurRadius: 18 * strength,
@@ -37,13 +36,12 @@ class WiretuneColors extends ThemeExtension<WiretuneColors> {
   ];
 
   @override
-  WiretuneColors copyWith({Palette? palette, Color? accent}) =>
-      WiretuneColors(palette ?? this.palette, accent ?? this.accent);
+  WiretuneColors copyWith({Palette? palette}) => WiretuneColors(palette ?? this.palette);
 
   @override
   WiretuneColors lerp(WiretuneColors? other, double t) {
     if (other == null) return this;
-    return WiretuneColors(t < 0.5 ? palette : other.palette, Color.lerp(accent, other.accent, t)!);
+    return WiretuneColors(t < 0.5 ? palette : other.palette);
   }
 }
 
@@ -72,15 +70,12 @@ abstract final class Radii {
   static const double pill = 999;
 }
 
-ThemeData buildTheme({
-  required bool light,
-  required AppSection section,
-  required bool isTv,
-  bool desktopFonts = false,
-}) {
+ThemeData buildTheme({required bool light, required bool isTv, bool desktopFonts = false}) {
   final palette = light ? Palette.light : Palette.dark;
-  final accent = palette.accentFor(section);
-  // Text and icons on an accent-filled button: near-black on the dark theme's bright accents, white on the light one's.
+  // Material's own controls (buttons, switches, fields) lie on the wash or on the cards over it: neutral, as TIDAL's.
+  // What takes the wash colour asks for it (`context.wash`).
+  final accent = palette.neutral;
+  // Text and icons on an accent-filled button: near-black on the dark theme's light accent, white on the light one's.
   final onAccent = palette.onAccent;
   final scheme = ColorScheme.fromSeed(seedColor: accent, brightness: light ? Brightness.light : Brightness.dark)
       .copyWith(
@@ -238,7 +233,7 @@ ThemeData buildTheme({
         side: BorderSide(color: palette.glassBorder),
       ),
     ),
-    extensions: [WiretuneColors(palette, accent)],
+    extensions: [WiretuneColors(palette)],
   );
 }
 

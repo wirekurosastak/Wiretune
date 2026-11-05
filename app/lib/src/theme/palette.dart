@@ -4,9 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
-import '../view_models/app_section.dart';
-
-/// The colours of one theme (dark or light). Each section has an accent family.
+/// The colours of one theme (dark or light): neutral ones, as in TIDAL. The one colour of a screen comes from its
+/// cover: the wash colour ([washOf], `WashColor`).
 class Palette {
   const Palette({
     required this.isDark,
@@ -25,12 +24,7 @@ class Palette {
     required this.danger,
     required this.modal,
     required this.panelBorder,
-    required this.coral,
-    required this.purple,
-    required this.cyan,
-    required this.lime,
-    required this.hover,
-    required this.pressed,
+    required this.neutral,
     required this.onAccent,
     required this.shadow,
   });
@@ -58,16 +52,13 @@ class Palette {
 
   /// The hairline edge of the floating panels, the bars and the opaque cards.
   final Color panelBorder;
-  final Color coral;
-  final Color purple;
-  final Color cyan;
-  final Color lime;
 
-  /// Hover and pressed shades of each accent family, by the accent's ARGB value.
-  final Map<int, Color> hover;
-  final Map<int, Color> pressed;
+  /// The accent of what lies on the wash itself (a page's Play, a selected tab, the playing row), where the wash
+  /// colour would not stand out, and of everything while there is no wash colour: a soft white on the dark theme, a
+  /// slate on the light one.
+  final Color neutral;
 
-  /// Text and icons on an accent-filled surface.
+  /// Text and icons on an accent-filled surface (the wash colour's or the neutral's).
   final Color onAccent;
 
   /// The drop shadow under floating panels and covers.
@@ -90,22 +81,7 @@ class Palette {
     danger: Color(0xFFFF3B6B),
     modal: Color(0xFF000000),
     panelBorder: Color(0x2EFFFFFF),
-    coral: Color(0xFFFB7185),
-    purple: Color(0xFFC084FC),
-    cyan: Color(0xFF22D3EE),
-    lime: Color(0xFFA3E635),
-    hover: {
-      0xFF22D3EE: Color(0xFF67E8F9),
-      0xFFC084FC: Color(0xFFD8B4FE),
-      0xFFFB7185: Color(0xFFFDA4AF),
-      0xFFA3E635: Color(0xFFBEF264),
-    },
-    pressed: {
-      0xFF22D3EE: Color(0xFF06B6D4),
-      0xFFC084FC: Color(0xFFA855F7),
-      0xFFFB7185: Color(0xFFF43F5E),
-      0xFFA3E635: Color(0xFF84CC16),
-    },
+    neutral: Color(0xFFE2E8F0),
     onAccent: Color(0xFF07070B),
     shadow: Color(0x99000000),
   );
@@ -127,37 +103,43 @@ class Palette {
     danger: Color(0xFFE11D48),
     modal: Color(0xFFFFFFFF),
     panelBorder: Color(0x22000000),
-    coral: Color(0xFFE11D48),
-    purple: Color(0xFF9333EA),
-    cyan: Color(0xFF0891B2),
-    lime: Color(0xFF16A34A),
-    hover: {
-      0xFF0891B2: Color(0xFF06A3C8),
-      0xFF9333EA: Color(0xFFA855F7),
-      0xFFE11D48: Color(0xFFF43F5E),
-      0xFF16A34A: Color(0xFF22C55E),
-    },
-    pressed: {
-      0xFF0891B2: Color(0xFF0E7490),
-      0xFF9333EA: Color(0xFF7E22CE),
-      0xFFE11D48: Color(0xFFBE123C),
-      0xFF16A34A: Color(0xFF15803D),
-    },
+    neutral: Color(0xFF1E293B),
     onAccent: Color(0xFFFFFFFF),
     shadow: Color(0x2E1A1A33),
   );
 
-  /// The accent family a section is drawn in.
-  Color accentFor(AppSection section) => switch (section) {
-    AppSection.tracks => cyan,
-    AppSection.albums => purple,
-    AppSection.artists || AppSection.favorites => coral,
-    AppSection.playlists => lime,
-    AppSection.settings => isDark ? const Color(0xFFE2E8F0) : const Color(0xFF1E293B),
-  };
+  /// A cover's colour (`WashColor.sourceOf`) as this theme's wash colour: vivid, as the wash is, light on the dark
+  /// theme and deep on the light one, and kept within the luminance at which text in it and [onAccent] on it read,
+  /// whatever its hue. Within that a hue keeps its own brightness: a red stays red rather than pink, a yellow yellow.
+  Color washOf(Color source) {
+    final hsl = HSLColor.fromColor(source);
+    final colour = hsl.withSaturation((hsl.saturation * 1.3).clamp(0.5, 0.9)).withLightness(isDark ? 0.6 : 0.42);
+    final (least, most) = isDark ? (0.28, 0.6) : (0.07, 0.18);
+    final luminance = colour.toColor().computeLuminance();
+    if (luminance >= least && luminance <= most) return colour.toColor();
+    final target = luminance < least ? least : most;
+    var low = 0.0, high = 1.0;
+    for (var i = 0; i < 14; i++) {
+      final mid = (low + high) / 2;
+      if (colour.withLightness(mid).toColor().computeLuminance() < target) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return colour.withLightness((low + high) / 2).toColor();
+  }
 
-  Color hoverOf(Color accent) => hover[accent.toARGB32()] ?? accent;
-  Color pressedOf(Color accent) => pressed[accent.toARGB32()] ?? accent;
+  /// [accent] under the mouse: a little lighter.
+  Color hoverOf(Color accent) => _lighter(accent, isDark ? 0.1 : 0.06);
+
+  /// [accent] pressed: a little deeper.
+  Color pressedOf(Color accent) => _lighter(accent, isDark ? -0.1 : -0.08);
+
+  static Color _lighter(Color color, double by) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl.withLightness((hsl.lightness + by).clamp(0.0, 1.0)).toColor();
+  }
 }
 
 /// The quality tag's own colours, the same in both themes so the medals keep their contrast.

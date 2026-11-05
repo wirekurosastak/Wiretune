@@ -136,7 +136,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               const SizedBox(width: 8),
               IconButton(
                 tooltip: context.tr('Save'),
-                icon: Icon(Icons.check_rounded, color: colors.accent),
+                icon: Icon(Icons.check_rounded, color: colors.neutral),
                 onPressed: () => playlists.confirmRenamePlaylist(_name.text),
               ),
               IconButton(
@@ -201,7 +201,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               tags: [
                 TagBadge(
                   context.tr(playlist.isAutomatic ? 'LabelAutoPlaylist' : 'LabelPlaylist'),
-                  color: colors.palette.lime,
+                  color: colors.neutral,
                 ),
               ],
               title: playlist.name,

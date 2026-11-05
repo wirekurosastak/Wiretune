@@ -109,7 +109,7 @@ class _LoginPageState extends State<LoginPage> {
                         ],
                       ),
                       child: GlassCard(
-                        hoverColor: colors.accent,
+                        hoverColor: colors.neutral,
                         padding: const EdgeInsets.fromLTRB(32, 28, 32, 30),
                         child: AutofillGroup(
                           child: Column(
@@ -147,27 +147,20 @@ class _LoginPageState extends State<LoginPage> {
               NavVisualizer(
                 waveTrigger: vm.waveTrigger,
                 direction: vm.lastWaveDirection,
-                color: colors.accent,
+                color: context.wash,
                 isPlaying: vm.player.isPlaying,
                 width: 52,
                 height: 38,
               ),
               const SizedBox(height: 12),
-              ShaderMask(
-                blendMode: BlendMode.srcIn,
-                shaderCallback: (rect) => LinearGradient(
-                  colors: [colors.textMain, colors.hover, colors.accent],
-                  stops: const [0.3, 0.75, 1],
-                ).createShader(rect),
-                child: const Text(
-                  'WIRETUNE',
-                  style: TextStyle(fontSize: 30, letterSpacing: 5, fontWeight: FontWeight.w900),
-                ),
+              Text(
+                'WIRETUNE',
+                style: TextStyle(fontSize: 30, letterSpacing: 5, fontWeight: FontWeight.w900, color: colors.textMain),
               ),
               const SizedBox(height: 6),
               Text(
                 'STREAMER & PLAYER',
-                style: TextStyle(fontSize: 10, letterSpacing: 2.4, fontWeight: FontWeight.w800, color: colors.accent),
+                style: TextStyle(fontSize: 10, letterSpacing: 2.4, fontWeight: FontWeight.w800, color: colors.neutral),
               ),
             ],
           ),
@@ -198,7 +191,7 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.how_to_reg_rounded, size: 40, color: colors.palette.lime),
+                Icon(Icons.how_to_reg_rounded, size: 40, color: colors.neutral),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -210,7 +203,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       Text(
                         server.currentUserRole,
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.palette.lime),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.neutral),
                       ),
                     ],
                   ),
@@ -296,15 +289,12 @@ class _LoginPageState extends State<LoginPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
             ),
             onPressed: server.isConnecting ? null : _connect,
-            icon: Icon(Icons.dns_outlined, size: 16, color: colors.palette.cyan),
+            icon: Icon(Icons.dns_outlined, size: 16, color: colors.neutral),
             label: Text(context.tr('Connect'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
-      if (server.isBusy) ...[
-        const SizedBox(height: 8),
-        LinearProgressIndicator(minHeight: 3, color: colors.palette.cyan),
-      ],
+      if (server.isBusy) ...[const SizedBox(height: 8), const LinearProgressIndicator(minHeight: 3)],
       if (server.statusMessage.isNotEmpty) ...[
         const SizedBox(height: 6),
         Text(server.statusMessage, style: TextStyle(fontSize: 11, color: colors.textMuted)),
@@ -419,7 +409,7 @@ class _LoginPageState extends State<LoginPage> {
             vm.continueOffline();
             if (vm.library.tracks.isEmpty) vm.navigateTo(AppSection.settings);
           },
-          icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.palette.lime),
+          icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.neutral),
           label: Text(context.tr('ContinueWithoutServer'), style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
       ],

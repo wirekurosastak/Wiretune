@@ -42,7 +42,7 @@ enum TrackTableKind {
 
 /// A list of tracks as slivers: on a wide screen a table (a header row with sortable columns, which stays at the list's
 /// top while the rows scroll, over rounded rows that light up under the mouse), on a phone rows of cover, title, the
-/// favourite and a menu. The track that is playing is washed in the accent and marked by bouncing bars; a downloaded one
+/// favourite and a menu. The track that is playing is lit in the neutral and marked by bouncing bars; a downloaded one
 /// carries a tick. Playing a track makes the list the queue, in the order it is shown.
 class TrackSliver extends StatefulWidget {
   const TrackSliver({
@@ -363,7 +363,7 @@ class _ColumnHeaders extends StatelessWidget {
 }
 
 /// A table row: rounded, lit under the mouse (where the number or the cover turns into a play button) and washed in
-/// the accent while its track plays.
+/// the neutral while its track plays.
 class _TableRow extends StatefulWidget {
   const _TableRow({required this.track, required this.index, required this.state});
 
@@ -418,7 +418,7 @@ class _TableRowState extends State<_TableRow> {
             borderRadius: radius,
             // The playing track's soft wash, as on a phone's row.
             color: playing
-                ? colors.accent.withValues(alpha: 0.12)
+                ? colors.neutral.withValues(alpha: 0.12)
                 : (_hover ? colors.surface1 : colors.surface1.withValues(alpha: 0)),
           ),
           child: Material(
@@ -459,12 +459,12 @@ class _TableRowState extends State<_TableRow> {
                     child: Row(
                       children: [
                         Flexible(
-                          child: _CellLink(track.title, color: playing ? colors.accent : colors.textMain, bold: true),
+                          child: _CellLink(track.title, color: playing ? colors.neutral : colors.textMain, bold: true),
                         ),
                         if (downloadIcon(vm.downloads.stateOf(track)) case final icon?)
                           Padding(
                             padding: const EdgeInsets.only(right: 10),
-                            child: Icon(icon, size: 14, color: colors.accent),
+                            child: Icon(icon, size: 14, color: colors.neutral),
                           ),
                       ],
                     ),
@@ -478,7 +478,7 @@ class _TableRowState extends State<_TableRow> {
                           alignment: Alignment.centerLeft,
                           child: ArtistLinks(
                             track.artistNames,
-                            hoverColor: colors.palette.coral,
+                            hoverColor: colors.textMain,
                             style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
                             onOpen: vm.openArtistByName,
                           ),
@@ -490,7 +490,7 @@ class _TableRowState extends State<_TableRow> {
                       flex: state._columns.albumFlex,
                       child: _CellLink(
                         track.album,
-                        hoverColor: colors.palette.purple,
+                        hoverColor: colors.textMain,
                         color: colors.textMuted,
                         onTap: () => vm.openAlbumOfTrack(track),
                       ),
@@ -561,7 +561,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
     _IconCell(
       width: 44,
       tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
-      icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted, size: 18),
+      icon: HeartIcon(filled: favorite, color: favorite ? colors.neutral : colors.textMuted, size: 18),
       onPressed: () => context.vm.library.toggleFavorite(track.id),
     ),
     TrackMenu(track: track, kind: kind, width: 44),
@@ -962,7 +962,7 @@ class _PhoneRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Material(
-        color: playing ? colors.accent.withValues(alpha: 0.12) : Colors.transparent,
+        color: playing ? colors.neutral.withValues(alpha: 0.12) : Colors.transparent,
         borderRadius: BorderRadius.circular(Radii.medium),
         child: InkWell(
           borderRadius: BorderRadius.circular(Radii.medium),
@@ -1002,14 +1002,14 @@ class _PhoneRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: playing ? colors.accent : colors.textMain,
+                        color: playing ? colors.neutral : colors.textMain,
                       ),
                     ),
                     const SizedBox(height: 3),
                     Row(
                       children: [
                         if (downloadIcon(context.vm.downloads.stateOf(track)) case final icon?) ...[
-                          Icon(icon, size: 14, color: colors.accent),
+                          Icon(icon, size: 14, color: colors.neutral),
                           const SizedBox(width: 4),
                         ],
                         Expanded(
@@ -1077,7 +1077,7 @@ class _HeaderCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final color = active ? colors.accent : colors.textMain;
+    final color = active ? colors.neutral : colors.textMain;
     return Pressable(
       onPressed: onTap,
       builder: (context, lit) => AnimatedScale(
@@ -1108,8 +1108,8 @@ class _HeaderCell extends StatelessWidget {
                 SortArrow(
                   descending: descending,
                   size: 12,
-                  color: colors.accent,
-                  shadows: lit ? [BoxShadow(color: colors.accent.withValues(alpha: 0.7), blurRadius: 10)] : null,
+                  color: color,
+                  shadows: lit ? [BoxShadow(color: color.withValues(alpha: 0.7), blurRadius: 10)] : null,
                 ),
               ],
             ],

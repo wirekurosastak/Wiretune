@@ -14,8 +14,8 @@ import 'layouts/wide_layout.dart';
 import 'localization.dart';
 import 'platform.dart';
 import 'theme/app_theme.dart';
-import 'view_models/app_section.dart';
 import 'view_models/main_view_model.dart';
+import 'widgets/ambient.dart';
 import 'widgets/tv_focus.dart';
 
 /// The root widget: theme, language, the keyboard and remote shortcuts, the back button, and the layout for the screen.
@@ -35,7 +35,7 @@ class WiretuneApp extends StatefulWidget {
 }
 
 class _WiretuneAppState extends State<WiretuneApp> {
-  final Map<(bool, AppSection, bool), ThemeData> _themes = {};
+  final Map<(bool, bool), ThemeData> _themes = {};
   late final AppLifecycleListener _lifecycle;
 
   /// What back can close: the main view model's layers and tabs, the queue, and the open detail pages.
@@ -59,12 +59,10 @@ class _WiretuneAppState extends State<WiretuneApp> {
     super.dispose();
   }
 
-  // The accent follows the section, so a theme is built once per (light, section) and reused.
-  ThemeData _theme(bool light, AppSection section, bool isTv) => _themes.putIfAbsent((
+  ThemeData _theme(bool light, bool isTv) => _themes.putIfAbsent((
     light,
-    section,
     isTv,
-  ), () => buildTheme(light: light, section: section, isTv: isTv, desktopFonts: AppPlatform.current.isDesktop));
+  ), () => buildTheme(light: light, isTv: isTv, desktopFonts: AppPlatform.current.isDesktop));
 
   @override
   Widget build(BuildContext context) {
@@ -80,69 +78,72 @@ class _WiretuneAppState extends State<WiretuneApp> {
             vm: vm,
             child: RepaintBoundary(
               key: UiAutomationServer.screenshotKey,
-              child: MaterialApp(
-                navigatorKey: AppScope.navigatorKey,
-                title: 'Wiretune',
-                debugShowCheckedModeBanner: false,
-                showPerformanceOverlay: vm.showPerformanceStats,
-                theme: _theme(light, vm.selectedSection, platform.isTv),
-                themeAnimationDuration: const Duration(milliseconds: 350),
-                // A remote's arrows move between controls: a slider keeps Left and Right, not Up and Down too; a text
-                // field lets them go (TvTextFieldKeys).
-                builder: platform.isTv
-                    ? (context, child) => MediaQuery(
-                        data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
-                        child: TvTextFieldKeys(child: child!),
-                      )
-                    : null,
-                shortcuts: {
-                  ..._defaultShortcuts(platform),
-                  // TV remotes: the centre button and the media keys.
-                  const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
-                  const SingleActivator(LogicalKeyboardKey.gameButtonA): const ActivateIntent(),
-                  const SingleActivator(LogicalKeyboardKey.mediaPlayPause): const _PlayerIntent(_PlayerKey.toggle),
-                  const SingleActivator(LogicalKeyboardKey.mediaPlay): const _PlayerIntent(_PlayerKey.play),
-                  const SingleActivator(LogicalKeyboardKey.mediaPause): const _PlayerIntent(_PlayerKey.pause),
-                  const SingleActivator(LogicalKeyboardKey.mediaStop): const _PlayerIntent(_PlayerKey.stop),
-                  const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const _PlayerIntent(_PlayerKey.next),
-                  const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): const _PlayerIntent(
-                    _PlayerKey.previous,
-                  ),
-                  const SingleActivator(LogicalKeyboardKey.escape): const _BackIntent(),
-                  if (platform.isDesktop) ..._desktopShortcuts(platform),
-                },
-                actions: {
-                  ...WidgetsApp.defaultActions,
-                  _BackIntent: CallbackAction<_BackIntent>(onInvoke: (_) => _goBack()),
-                  _SearchIntent: CallbackAction<_SearchIntent>(onInvoke: (_) => vm.focusSearch()),
-                  _PlayerIntent: _PlayerAction(vm),
-                },
-                home: AnnotatedRegion<SystemUiOverlayStyle>(
-                  value: (light ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
-                    statusBarColor: Colors.transparent,
-                    systemNavigationBarColor: Colors.transparent,
-                    systemNavigationBarContrastEnforced: false,
-                  ),
-                  // The system's back comes here only while the app has somewhere to go back to; else the system
-                  // takes it and leaves the app, with its own animation. (Android 16 sends a back gesture to the app
-                  // only if told beforehand that the app wants it, which the canPop here does.)
-                  child: ListenableBuilder(
-                    listenable: _backState,
-                    builder: (context, child) => PopScope(
-                      canPop: !vm.canNavigateBack,
-                      onPopInvokedWithResult: (didPop, _) {
-                        if (!didPop) _goBack();
-                      },
-                      child: child!,
+              // Above the navigator, so that the dialogs and menus have the wash colour too.
+              child: WashColor(
+                child: MaterialApp(
+                  navigatorKey: AppScope.navigatorKey,
+                  title: 'Wiretune',
+                  debugShowCheckedModeBanner: false,
+                  showPerformanceOverlay: vm.showPerformanceStats,
+                  theme: _theme(light, platform.isTv),
+                  themeAnimationDuration: const Duration(milliseconds: 350),
+                  // A remote's arrows move between controls: a slider keeps Left and Right, not Up and Down too; a text
+                  // field lets them go (TvTextFieldKeys).
+                  builder: platform.isTv
+                      ? (context, child) => MediaQuery(
+                          data: MediaQuery.of(context).copyWith(navigationMode: NavigationMode.directional),
+                          child: TvTextFieldKeys(child: child!),
+                        )
+                      : null,
+                  shortcuts: {
+                    ..._defaultShortcuts(platform),
+                    // TV remotes: the centre button and the media keys.
+                    const SingleActivator(LogicalKeyboardKey.select): const ActivateIntent(),
+                    const SingleActivator(LogicalKeyboardKey.gameButtonA): const ActivateIntent(),
+                    const SingleActivator(LogicalKeyboardKey.mediaPlayPause): const _PlayerIntent(_PlayerKey.toggle),
+                    const SingleActivator(LogicalKeyboardKey.mediaPlay): const _PlayerIntent(_PlayerKey.play),
+                    const SingleActivator(LogicalKeyboardKey.mediaPause): const _PlayerIntent(_PlayerKey.pause),
+                    const SingleActivator(LogicalKeyboardKey.mediaStop): const _PlayerIntent(_PlayerKey.stop),
+                    const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const _PlayerIntent(_PlayerKey.next),
+                    const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): const _PlayerIntent(
+                      _PlayerKey.previous,
                     ),
-                    child: vm.startupError != null
-                        ? _StartupErrorPage(message: vm.startupError!)
-                        : Stack(
-                            children: [
-                              const Positioned.fill(child: _PhoneUpright(child: _LayoutSwitch())),
-                              _NoticeHost(vm: vm),
-                            ],
-                          ),
+                    const SingleActivator(LogicalKeyboardKey.escape): const _BackIntent(),
+                    if (platform.isDesktop) ..._desktopShortcuts(platform),
+                  },
+                  actions: {
+                    ...WidgetsApp.defaultActions,
+                    _BackIntent: CallbackAction<_BackIntent>(onInvoke: (_) => _goBack()),
+                    _SearchIntent: CallbackAction<_SearchIntent>(onInvoke: (_) => vm.focusSearch()),
+                    _PlayerIntent: _PlayerAction(vm),
+                  },
+                  home: AnnotatedRegion<SystemUiOverlayStyle>(
+                    value: (light ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
+                      statusBarColor: Colors.transparent,
+                      systemNavigationBarColor: Colors.transparent,
+                      systemNavigationBarContrastEnforced: false,
+                    ),
+                    // The system's back comes here only while the app has somewhere to go back to; else the system
+                    // takes it and leaves the app, with its own animation. (Android 16 sends a back gesture to the app
+                    // only if told beforehand that the app wants it, which the canPop here does.)
+                    child: ListenableBuilder(
+                      listenable: _backState,
+                      builder: (context, child) => PopScope(
+                        canPop: !vm.canNavigateBack,
+                        onPopInvokedWithResult: (didPop, _) {
+                          if (!didPop) _goBack();
+                        },
+                        child: child!,
+                      ),
+                      child: vm.startupError != null
+                          ? _StartupErrorPage(message: vm.startupError!)
+                          : Stack(
+                              children: [
+                                const Positioned.fill(child: _PhoneUpright(child: _LayoutSwitch())),
+                                _NoticeHost(vm: vm),
+                              ],
+                            ),
+                    ),
                   ),
                 ),
               ),
@@ -357,7 +358,7 @@ class _NoticeHostState extends State<_NoticeHost> {
                                             ? Icons.error_outline_rounded
                                             : Icons.check_circle_outline_rounded,
                                         size: 20,
-                                        color: notice.isError ? colors.danger : colors.palette.lime,
+                                        color: notice.isError ? colors.danger : context.wash,
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(

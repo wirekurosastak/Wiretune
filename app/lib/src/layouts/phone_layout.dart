@@ -185,24 +185,25 @@ class _BottomBars extends StatelessWidget {
   }
 }
 
-/// The five sections at the bottom, on a floating pill bar; the active one takes the colour of its section, and its
-/// glow glides over from the one that was.
+/// The five sections at the bottom, on a floating pill bar; the active one takes the wash colour, and its glow glides
+/// over from the one that was.
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation();
 
+  // It follows the section itself: as a const child it isn't rebuilt with the layout around it.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final vm = context.vm;
-    final palette = context.colors.palette;
-    final items = [
-      for (final (section, label) in const [
-        (AppSection.artists, 'NavArtists'),
-        (AppSection.albums, 'NavAlbums'),
-        (AppSection.tracks, 'NavTracks'),
-        (AppSection.favorites, 'NavFavorites'),
-        (AppSection.playlists, 'NavPlaylistsShort'),
-      ])
-        (section, sectionIcon(section), palette.accentFor(section), label),
+    final wash = context.wash;
+    const items = [
+      (AppSection.artists, 'NavArtists'),
+      (AppSection.albums, 'NavAlbums'),
+      (AppSection.tracks, 'NavTracks'),
+      (AppSection.favorites, 'NavFavorites'),
+      (AppSection.playlists, 'NavPlaylistsShort'),
     ];
     final active = vm.isSearchOpen ? -1 : items.indexWhere((item) => item.$1 == vm.selectedSection);
     // Room under it, as in TIDAL's pill, so the labels clear the pill's rounded bottom.
@@ -215,8 +216,8 @@ class _BottomNavigation extends StatelessWidget {
             final width = constraints.maxWidth / items.length;
             return Stack(
               children: [
-                // The glow behind the active icon, moving from tab to tab in the colour of the one it goes to; gone
-                // while none is (the search, Settings).
+                // The glow behind the active icon, in the wash colour, moving from tab to tab; gone while none is
+                // active (the search, Settings).
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 320),
                   curve: Curves.easeOutCubic,
@@ -226,7 +227,7 @@ class _BottomNavigation extends StatelessWidget {
                   height: _NavItem.glowSize,
                   child: IgnorePointer(
                     child: TweenAnimationBuilder<Color?>(
-                      tween: ColorTween(end: active < 0 ? items.first.$3.withValues(alpha: 0) : items[active].$3),
+                      tween: ColorTween(end: active < 0 ? wash.withValues(alpha: 0) : wash),
                       duration: const Duration(milliseconds: 320),
                       curve: Curves.easeOutCubic,
                       builder: (context, color, _) => DecoratedBox(
@@ -245,12 +246,12 @@ class _BottomNavigation extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    for (final (i, (section, icon, color, label)) in items.indexed)
+                    for (final (i, (section, label)) in items.indexed)
                       Expanded(
                         child: _NavItem(
-                          icon: icon,
+                          icon: sectionIcon(section),
                           label: context.tr(label),
-                          color: color,
+                          color: wash,
                           active: i == active,
                           onTap: () => vm.navigateTo(section),
                         ),
@@ -293,7 +294,7 @@ class _NavItem extends StatelessWidget {
       button: true,
       child: Material(
         type: MaterialType.transparency,
-        // No ripple: the section's colour and glow say which is active, as elsewhere.
+        // No ripple: the colour and the glow say which is active, as elsewhere.
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(Radii.card),
@@ -488,7 +489,7 @@ class _SearchBarState extends State<_SearchBar> {
                 isDense: true,
                 filled: true,
                 fillColor: colors.surface2,
-                prefixIcon: Icon(Icons.search_rounded, size: 20, color: colors.accent),
+                prefixIcon: Icon(Icons.search_rounded, size: 20, color: context.wash),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Radii.pill),
@@ -500,7 +501,7 @@ class _SearchBarState extends State<_SearchBar> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(Radii.pill),
-                  borderSide: BorderSide(color: colors.accent, width: 1.5),
+                  borderSide: BorderSide(color: context.wash, width: 1.5),
                 ),
                 suffixIcon: _controller.text.isEmpty
                     ? null

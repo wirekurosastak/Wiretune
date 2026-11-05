@@ -37,145 +37,150 @@ class NowPlayingPage extends StatelessWidget {
     final vm = context.vm;
     final colors = context.colors;
     // Only the tab: the parts below are const, so a rebuild here passes them by, and each follows the player itself.
-    return ListenableBuilder(
-      listenable: vm,
-      builder: (context, _) {
-        final tab = vm.nowPlayingTab;
-        // The three tabs as one segmented glass pill; the selected segment is filled with the accent.
-        Widget segment(NowPlayingTab value, String key) {
-          final selected = tab == value;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              color: selected ? colors.accent : colors.accent.withValues(alpha: 0),
-              borderRadius: BorderRadius.circular(Radii.pill),
-              boxShadow: selected ? colors.accentGlow(0.6) : const [],
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                customBorder: const StadiumBorder(),
-                onTap: () => vm.nowPlayingTab = value,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-                  child: Text(
-                    context.tr(key),
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? colors.onAccent : colors.textMain,
+    // Its Play and controls take the colour of its own wash, the playing track's, whatever page it rose over.
+    return WashColor(
+      nowPlaying: true,
+      child: ListenableBuilder(
+        listenable: vm,
+        builder: (context, _) {
+          final tab = vm.nowPlayingTab;
+          // The three tabs as one segmented glass pill; the selected segment is filled with the neutral, as it lies on
+          // the wash.
+          Widget segment(NowPlayingTab value, String key) {
+            final selected = tab == value;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                color: selected ? colors.neutral : colors.neutral.withValues(alpha: 0),
+                borderRadius: BorderRadius.circular(Radii.pill),
+                boxShadow: selected ? colors.accentGlow(colors.neutral, 0.6) : const [],
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: () => vm.nowPlayingTab = value,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                    child: Text(
+                      context.tr(key),
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: selected ? colors.onAccent : colors.textMain,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-        }
+            );
+          }
 
-        return Material(
-          color: colors.palette.background,
-          child: Stack(
-            children: [
-              const Positioned.fill(child: AmbientBackdrop(colour: 1, nowPlaying: true)),
-              // The queue and the lyrics are read on a layer of the background's colour, so their grey text holds on a
-              // bright cover; the track's tab keeps the cover's colours at full strength.
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedOpacity(
-                    opacity: tab == NowPlayingTab.track ? 0 : 1,
-                    duration: const Duration(milliseconds: 240),
-                    curve: Curves.easeOutCubic,
-                    child: ColoredBox(color: colors.palette.background.withValues(alpha: 0.55)),
+          return Material(
+            color: colors.palette.background,
+            child: Stack(
+              children: [
+                const Positioned.fill(child: AmbientBackdrop(colour: 1, nowPlaying: true)),
+                // The queue and the lyrics are read on a layer of the background's colour, so their grey text holds on a
+                // bright cover; the track's tab keeps the cover's colours at full strength.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: tab == NowPlayingTab.track ? 0 : 1,
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutCubic,
+                      child: ColoredBox(color: colors.palette.background.withValues(alpha: 0.55)),
+                    ),
                   ),
                 ),
-              ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    PlayerSheetDrag(
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            height: 60,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 10),
-                              child: Row(
-                                children: [
-                                  SizedBox.square(
-                                    dimension: 44,
-                                    child: IconButton(
-                                      tooltip: context.tr('Close'),
-                                      style: IconButton.styleFrom(backgroundColor: colors.surface1),
-                                      onPressed: vm.closeNowPlaying,
-                                      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
-                                    ),
-                                  ),
-                                  // As wide as the sleep timer on the other side, so the title stays centred.
-                                  const SizedBox(width: 44),
-                                  Expanded(
-                                    child: ListenableBuilder(
-                                      listenable: vm.player,
-                                      builder: (context, _) => vm.player.isRemote
-                                          ? const Center(child: PlayingOnLabel(fontSize: 12))
-                                          : Text(
-                                              context.tr('NowPlaying').toUpperCase(),
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                fontSize: 11.5,
-                                                letterSpacing: 2,
-                                                fontWeight: FontWeight.w800,
-                                                color: colors.textMain.withValues(alpha: 0.75),
-                                              ),
-                                            ),
-                                    ),
-                                  ),
-                                  const SleepTimerButton(),
-                                  const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
-                                ],
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            // Scaled down rather than cut off on a narrow screen with a large font.
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: colors.surface1,
-                                  borderRadius: BorderRadius.circular(Radii.pill),
-                                  border: Border.all(color: colors.glassBorder),
-                                ),
+                SafeArea(
+                  child: Column(
+                    children: [
+                      PlayerSheetDrag(
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: 60,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10),
                                 child: Row(
-                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    segment(NowPlayingTab.track, 'TabTrack'),
-                                    segment(NowPlayingTab.queue, 'Queue'),
-                                    segment(NowPlayingTab.lyrics, 'TabLyrics'),
+                                    SizedBox.square(
+                                      dimension: 44,
+                                      child: IconButton(
+                                        tooltip: context.tr('Close'),
+                                        style: IconButton.styleFrom(backgroundColor: colors.surface1),
+                                        onPressed: vm.closeNowPlaying,
+                                        icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
+                                      ),
+                                    ),
+                                    // As wide as the sleep timer on the other side, so the title stays centred.
+                                    const SizedBox(width: 44),
+                                    Expanded(
+                                      child: ListenableBuilder(
+                                        listenable: vm.player,
+                                        builder: (context, _) => vm.player.isRemote
+                                            ? const Center(child: PlayingOnLabel(fontSize: 12))
+                                            : Text(
+                                                context.tr('NowPlaying').toUpperCase(),
+                                                textAlign: TextAlign.center,
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  letterSpacing: 2,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: colors.textMain.withValues(alpha: 0.75),
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+                                    const SleepTimerButton(),
+                                    const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
                                   ],
                                 ),
                               ),
                             ),
-                          ),
-                        ],
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                              // Scaled down rather than cut off on a narrow screen with a large font.
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: colors.surface1,
+                                    borderRadius: BorderRadius.circular(Radii.pill),
+                                    border: Border.all(color: colors.glassBorder),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      segment(NowPlayingTab.track, 'TabTrack'),
+                                      segment(NowPlayingTab.queue, 'Queue'),
+                                      segment(NowPlayingTab.lyrics, 'TabLyrics'),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: HorizontalSwipe(
-                        onSwipe: ({required forward}) => _swipe(context, forward: forward),
-                        child: _Tabs(tab: tab),
+                      Expanded(
+                        child: HorizontalSwipe(
+                          onSwipe: ({required forward}) => _swipe(context, forward: forward),
+                          child: _Tabs(tab: tab),
+                        ),
                       ),
-                    ),
-                    const _Transport(),
-                  ],
+                      const _Transport(),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -339,13 +344,13 @@ class _TrackTab extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      // The artist in the artists' red, as on an album's page, whatever the section's colour.
+                      // The artist in the neutral, as on an album's page.
                       if (track != null && track.artists.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
                           child: ArtistLinks(
                             track.artistNames,
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.palette.coral),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.neutral),
                             onOpen: vm.openArtistByName,
                           ),
                         )
@@ -359,7 +364,7 @@ class _TrackTab extends StatelessWidget {
                               player.nowPlayingArtist,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.palette.coral),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.neutral),
                             ),
                           ),
                         ),
@@ -486,7 +491,7 @@ class _Transport extends StatelessWidget {
         icon: Icon(data, color: colors.textMain),
       ),
     );
-    // Shuffle and repeat as in every player: the accent and a dot while on.
+    // Shuffle and repeat as in every player: the wash colour and a dot while on.
     Widget mode(IconData data, String tip, bool on, VoidCallback onPressed) => SizedBox.square(
       dimension: 52,
       child: PlayerModeButton(icon: data, tooltip: tip, on: on, onPressed: onPressed, iconSize: 24),
