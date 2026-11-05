@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
@@ -41,38 +42,6 @@ class NowPlayingPage extends StatelessWidget {
       listenable: vm,
       builder: (context, _) {
         final tab = vm.nowPlayingTab;
-        // The three tabs as one segmented glass pill; the selected segment is filled with the accent.
-        Widget segment(NowPlayingTab value, String key) {
-          final selected = tab == value;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              color: selected ? colors.accent : colors.accent.withValues(alpha: 0),
-              borderRadius: BorderRadius.circular(Radii.pill),
-              boxShadow: selected ? colors.accentGlow(0.6) : const [],
-            ),
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                customBorder: const StadiumBorder(),
-                onTap: () => vm.nowPlayingTab = value,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-                  child: Text(
-                    context.tr(key),
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      color: selected ? colors.onAccent : colors.textMain,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-
         return Material(
           color: colors.palette.background,
           child: Stack(
@@ -148,14 +117,7 @@ class NowPlayingPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(Radii.pill),
                                   border: Border.all(color: colors.glassBorder),
                                 ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    segment(NowPlayingTab.track, 'TabTrack'),
-                                    segment(NowPlayingTab.queue, 'Queue'),
-                                    segment(NowPlayingTab.lyrics, 'TabLyrics'),
-                                  ],
-                                ),
+                                child: _TabSwitch(tab: tab, onSelected: (value) => vm.nowPlayingTab = value),
                               ),
                             ),
                           ),
@@ -176,6 +138,173 @@ class NowPlayingPage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// The three tabs as one segmented glass pill, the chosen one under a drop of the accent that flows to the next one
+/// chosen: its front goes ahead, a little past, while its back follows, so that it stretches and thins on the way and
+/// settles into its place. The labels turn dark exactly where it is. It moves only when the tab changes.
+class _TabSwitch extends StatefulWidget {
+  const _TabSwitch({required this.tab, required this.onSelected});
+
+  final NowPlayingTab tab;
+  final ValueChanged<NowPlayingTab> onSelected;
+
+  @override
+  State<_TabSwitch> createState() => _TabSwitchState();
+}
+
+class _TabSwitchState extends State<_TabSwitch> with SingleTickerProviderStateMixin {
+  static const Map<NowPlayingTab, String> _labels = {
+    NowPlayingTab.track: 'TabTrack',
+    NowPlayingTab.queue: 'Queue',
+    NowPlayingTab.lyrics: 'TabLyrics',
+  };
+
+  static const TextStyle _style = TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700);
+
+  /// The front edge: quick, a little past the place, back into it.
+  static const Curve _front = Interval(0, 0.7, curve: Cubic(0.3, 1.4, 0.55, 1));
+
+  /// The back edge: a moment later, catching up.
+  static const Curve _back = Interval(0.14, 1, curve: Curves.easeInOutCubic);
+
+  late final AnimationController _flow = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 460),
+    value: 1,
+  );
+
+  /// Where the drop's edges were as it set off, in tabs from the first one's left edge.
+  late double _fromLeft = widget.tab.index.toDouble();
+  late double _fromRight = _fromLeft + 1;
+
+  /// The drop's edges at this point of its flow towards [target].
+  ({double left, double right}) _edges(int target) {
+    final t = _flow.value;
+    final forward = target >= _fromLeft;
+    final left = lerpDouble(_fromLeft, target.toDouble(), (forward ? _back : _front).transform(t))!;
+    final right = lerpDouble(_fromRight, target + 1.0, (forward ? _front : _back).transform(t))!;
+    return (left: left, right: right);
+  }
+
+  @override
+  void didUpdateWidget(_TabSwitch oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tab == oldWidget.tab) return;
+    // From wherever it is, even still flowing to the tab before.
+    final now = _edges(oldWidget.tab.index);
+    _fromLeft = now.left;
+    _fromRight = now.right;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _flow.value = 1;
+    } else {
+      _flow.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _flow.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final labels = [for (final tab in NowPlayingTab.values) context.tr(_labels[tab]!)];
+    // The segments as wide as the widest label, so the drop is one size in each.
+    final scaler = MediaQuery.textScalerOf(context);
+    final measured = DefaultTextStyle.of(context).style.merge(_style);
+    var widest = 0.0, line = 0.0;
+    for (final label in labels) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: measured),
+        maxLines: 1,
+        textDirection: Directionality.of(context),
+        textScaler: scaler,
+      )..layout();
+      widest = math.max(widest, painter.width);
+      line = math.max(line, painter.height);
+      painter.dispose();
+    }
+    final segment = widest + 36;
+    final height = line + 18;
+    final count = labels.length;
+    final width = segment * count;
+    return AnimatedBuilder(
+      animation: _flow,
+      builder: (context, child) {
+        final edges = _edges(widget.tab.index);
+        final left = edges.left.clamp(0.0, count.toDouble()) * segment;
+        final right = edges.right.clamp(0.0, count.toDouble()) * segment;
+        // Thinner as it stretches, as a drop does.
+        final stretch = ((right - left) / segment - 1).clamp(0.0, 1.0);
+        final inset = height * 0.08 * stretch;
+        final drop = Rect.fromLTRB(left, inset, right, height - inset);
+        return SizedBox(
+          width: width,
+          height: height,
+          child: Stack(
+            children: [
+              Positioned.fromRect(
+                rect: drop,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: colors.accentGradient,
+                    borderRadius: BorderRadius.circular(Radii.pill),
+                    boxShadow: colors.accentGlow(0.6),
+                  ),
+                ),
+              ),
+              ShaderMask(
+                blendMode: BlendMode.srcIn,
+                shaderCallback: (rect) {
+                  final from = left / width, to = right / width;
+                  return LinearGradient(
+                    colors: [
+                      colors.textMain,
+                      colors.textMain,
+                      colors.onAccent,
+                      colors.onAccent,
+                      colors.textMain,
+                      colors.textMain,
+                    ],
+                    stops: [0, from, from, to, to, 1],
+                  ).createShader(rect);
+                },
+                child: child,
+              ),
+            ],
+          ),
+        );
+      },
+      child: Material(
+        type: MaterialType.transparency,
+        child: Row(
+          children: [
+            for (final (i, tab) in NowPlayingTab.values.indexed)
+              Semantics(
+                selected: tab == widget.tab,
+                button: true,
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  splashFactory: NoSplash.splashFactory,
+                  highlightColor: Colors.transparent,
+                  onTap: () => widget.onSelected(tab),
+                  child: SizedBox(
+                    width: segment,
+                    height: height,
+                    child: Center(
+                      child: Text(labels[i], maxLines: 1, style: _style.copyWith(color: colors.textMain)),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
