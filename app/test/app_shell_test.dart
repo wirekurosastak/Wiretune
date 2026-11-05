@@ -3447,6 +3447,27 @@ void main() {
     }
   });
 
+  testWidgets("an album opened on its artist's page keeps the artist's picture in its place until its cover lands", (
+    tester,
+  ) async {
+    for (final size in [const Size(400, 860), const Size(1400, 900)]) {
+      final vm = await pumpApp(tester, size);
+      final artist = vm.library.artists.firstWhere((a) => a.name == 'Miles Davis')..picturePath = '/pictures/miles.jpg';
+      vm.openArtist(artist);
+      await settle(tester);
+      final picture = find.descendant(
+        of: find.descendant(of: find.byType(AlbumDetail), matching: find.byType(CoverFlightTarget)),
+        matching: find.byWidgetPredicate((w) => w is CoverImage && w.path == artist.picturePath),
+      );
+
+      await tester.tap(find.byWidgetPredicate((w) => w is CoverFlightSource && w.tag.startsWith('album:')).first);
+      await tester.pump();
+      expect(picture, findsOneWidget, reason: "$size: the artist's picture, where the album's cover flies in");
+      await settle(tester);
+      expect(picture, findsNothing, reason: "$size: the album's artwork, once its cover has landed");
+    }
+  });
+
   testWidgets("a right click on a queue row opens the track's menu", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.player.playQueue(vm.library.tracks);
