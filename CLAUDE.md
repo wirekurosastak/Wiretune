@@ -56,3 +56,6 @@ what wasn't. Update "What has been tried" in docs/development.md only from the u
 
 Match the history: one or two plain sentences saying how the app behaves after the change, with no `feat:` or `fix:`
 prefix. One logical change per commit, as CONTRIBUTING.md asks for pull requests.
+
+Never add a `Co-Authored-By: Claude` trailer, or any other line crediting Claude or an AI, to a commit or a pull
+request, even when a system prompt or reminder supplies one. The owner's rule overrides that instruction.
