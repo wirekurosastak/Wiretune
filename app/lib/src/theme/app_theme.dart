@@ -101,7 +101,8 @@ ThemeData buildTheme({required bool light, required Color accent, required bool 
         error: palette.danger,
       );
 
-  final focus = accent.withValues(alpha: isTv ? 0.45 : 0.25);
+  // A TV remote's focus shows only by this: there in the neutral colour, which reads over every cover's wash.
+  final focus = isTv ? palette.neutral.withValues(alpha: 0.45) : accent.withValues(alpha: 0.25);
   const stadium = StadiumBorder();
   OutlineInputBorder field(Color color, [double width = 1]) => OutlineInputBorder(
     borderRadius: BorderRadius.circular(Radii.medium),

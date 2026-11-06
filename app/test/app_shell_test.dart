@@ -2487,6 +2487,15 @@ void main() {
     expect(Palette.light.accentOf(orange), isNot(Palette.light.neutral), reason: 'an orange stays');
   });
 
+  test("a TV's focus is in the neutral colour whatever plays; a computer's keyboard focus is in the accent", () {
+    const red = Color(0xFFE53935);
+    for (final light in [false, true]) {
+      final palette = light ? Palette.light : Palette.dark;
+      expect(buildTheme(light: light, accent: red, isTv: true).focusColor, palette.neutral.withValues(alpha: 0.45));
+      expect(buildTheme(light: light, accent: red, isTv: false).focusColor, red.withValues(alpha: 0.25));
+    }
+  });
+
   testWidgets("dragging the player's seek bar seeks, and is no swipe", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([
