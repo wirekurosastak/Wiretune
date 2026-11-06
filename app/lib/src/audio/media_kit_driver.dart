@@ -429,7 +429,14 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   /// The filters of the chain: the equalizer, and none for bit-perfect output.
-  Future<void> _applyFilters(NativePlayer native) => native.setProperty('af', _bitPerfect ? '' : _equalizer.filter);
+  Future<void> _applyFilters(NativePlayer native) =>
+      native.setProperty('af', _bitPerfect ? '' : _equalizer.filter(limiter: _hasLimiter));
+
+  /// Whether this system's mpv has `ffmpeg`'s limiter: Linux's uses the system's `ffmpeg`, which has it; the one built
+  /// into the Android player lacks it (and mpv drops a chain naming a filter it lacks, the equalizer with it), and the
+  /// others' are unchecked. Without it the peaks a boost takes past full scale go on to the system in its float
+  /// output, which turns them down with its own volume: they can only clip at full volume on a loud recording.
+  static final bool _hasLimiter = Platform.isLinux;
 
   @override
   bool get reportsOutput => true;

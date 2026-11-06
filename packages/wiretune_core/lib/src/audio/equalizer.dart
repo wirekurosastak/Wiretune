@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:convert';
-import 'dart:math' as math;
 
 /// One band of the equalizer: a gain at a frequency, with the width ([q]) of its bump.
 class EqualizerBand {
@@ -16,8 +15,8 @@ class EqualizerBand {
 }
 
 /// A graphic equalizer: a gain at each of ten frequencies, an octave apart. The player turns it into a filter chain for
-/// the player (`ffmpeg`'s `equalizer`), with a preamp that takes the loudest boost back off, so that a boost does not
-/// clip. Bit-perfect output never uses it.
+/// the player (`ffmpeg`'s `equalizer`): a boost raises its band and leaves the rest as it was. Where the player has a
+/// limiter, it holds the peaks a boost would take past full scale ([filter]). Bit-perfect output never uses it.
 class Equalizer {
   const Equalizer(this.bands);
 
@@ -50,18 +49,21 @@ class Equalizer {
 
   bool get isFlat => bands.every((band) => band.gainDb.abs() < 0.05);
 
-  /// What the loudest boost needs taken off the whole signal so that it stays below full scale: the largest gain above 0
-  /// dB, or 0.
-  double get headroomDb => bands.fold(0.0, (most, band) => math.max(most, band.gainDb));
+  /// Whether a band is raised, which can take the loudest parts past full scale.
+  bool get boosts => bands.any((band) => band.gainDb >= 0.05);
 
-  /// The filter chain for the player (mpv's `af` property), or an empty text when the equalizer is flat.
-  String get filter {
+  /// The filter chain for the player (mpv's `af` property), or an empty text when the equalizer is flat. With a
+  /// [limiter] (`ffmpeg`'s `alimiter`, which the player must have: mpv leaves out a whole chain naming a filter it
+  /// lacks), the peaks a boost would take past full scale are held just below it, and nothing else changes: no
+  /// preamp turning the whole sound down, as that would leave the boosted band where it was and lower the rest.
+  String filter({bool limiter = false}) {
     if (isFlat) return '';
     final parts = [
       for (final band in bands)
         if (band.gainDb.abs() >= 0.05)
           'equalizer=f=${_number(band.frequency)}:t=q:w=${_number(band.q)}:g=${_number(band.gainDb)}',
-      if (headroomDb >= 0.05) 'volume=-${_number(headroomDb)}dB',
+      // Its own levelling off, which would raise the whole sound to the limit.
+      if (limiter && boosts) 'alimiter=limit=0.98:level=disabled',
     ];
     return 'lavfi=[${parts.join(',')}]';
   }

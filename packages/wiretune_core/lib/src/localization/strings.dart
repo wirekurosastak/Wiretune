@@ -92,9 +92,9 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'SettingsEqualizer': ('Hangszínszabályzó', 'Equalizer', 'Equalizer'),
   'SettingsEqualizerHint': (
-    'Tíz sáv, ±12 dB. A legnagyobb emelést az előerősítés visszaveszi, hogy ne torzítson. Bit-perfect módban nem működik.',
-    'Ten bands, ±12 dB. The preamp takes the biggest boost back off so it does not clip. Off in bit-perfect mode.',
-    'Zehn Bänder, ±12 dB. Die Vorstufe nimmt die größte Anhebung zurück, damit nichts übersteuert. Im Bit-Perfect-Modus aus.',
+    'Tíz sáv, ±12 dB. Bit-perfect módban nem működik.',
+    'Ten bands, ±12 dB. Off in bit-perfect mode.',
+    'Zehn Bänder, ±12 dB. Im Bit-Perfect-Modus aus.',
   ),
   'EqualizerFlat': ('Lapos', 'Flat', 'Flach'),
   'EqualizerBass': ('Mély', 'Bass', 'Bass'),

@@ -7,9 +7,11 @@ play straight from disk. No crossfade.
 ## Equalizer
 
 *Settings → Audio → Equalizer*: ten bands from 31 Hz to 16 kHz, ±12 dB each, with presets (Flat, Bass, Treble, Vocal).
-Off by default; the bands you set stay when you switch it off. The preamp takes the loudest boost back off the whole
-signal so that a boost doesn't clip, so a boosted curve sounds a little quieter overall. It filters through mpv, so it
-also applies to local files and downloads. **It never applies in bit-perfect mode** (the switch is greyed out), and
+Off by default; the bands you set stay when you switch it off. A boost raises its band and leaves the rest as it was:
+there is no preamp turning the whole sound down. On Linux a limiter (`ffmpeg`'s `alimiter`) holds the peaks a boost
+would take past full scale. The Android player's mpv has no limiter: its float output hands those peaks to the
+phone, whose volume turns them down, so a boost can only clip at full volume on a loud recording. It filters through mpv, so it also applies to local
+files and downloads. **It never applies in bit-perfect mode** (the switch is greyed out), and
 Samsung TVs have none. The spectrum analyzer decodes the file on its own and shows the sound before the equalizer.
 
 ## Streaming quality
