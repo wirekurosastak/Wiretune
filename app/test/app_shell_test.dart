@@ -1346,6 +1346,13 @@ void main() {
 
     vm.player.selectDevice('desk');
     await settle(tester);
+    // Between Lyrics and Queue, where the spectrum is while the phone plays.
+    final page = find.byType(NowPlayingPage);
+    final volume = tester.getRect(find.byType(VolumeControl));
+    final lyrics = tester.getRect(find.descendant(of: page, matching: find.byTooltip(Localizer.get('TabLyrics'))));
+    final queue = tester.getRect(find.descendant(of: page, matching: find.byTooltip(Localizer.get('Queue'))));
+    expect((volume.left >= lyrics.right, volume.right <= queue.left), (true, true));
+    expect(find.byType(SpectrumVisualizer), findsNothing);
     final slider = find.descendant(of: find.byType(VolumeControl), matching: find.byType(Slider));
     expect(tester.widget<Slider>(slider).value, 80);
     await tester.tap(slider); // its middle

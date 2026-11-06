@@ -973,13 +973,12 @@ class _Transport extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Another device's volume, which the phone's own buttons don't reach.
-                if (player.isRemote) const VolumeControl.fill(),
               ],
             ),
           ),
           // The two under shuffle and repeat (the transport's row shares its room out evenly around its five buttons), and
-          // between them the spectrum, as the computer's player bar has it.
+          // between them the spectrum, as the computer's player bar has it; while another device plays, whose music isn't
+          // analysed here, that device's volume, which the phone's own buttons don't reach.
           LayoutBuilder(
             builder: (context, box) {
               final side = math.max(0.0, (box.maxWidth - 52 * 4 - 70) / 6);
@@ -987,8 +986,7 @@ class _Transport extends StatelessWidget {
                 children: [
                   SizedBox(width: side),
                   list(Icons.lyrics_outlined, 'TabLyrics', NowPlayingTab.lyrics),
-                  // Another device's music isn't analysed here.
-                  Expanded(child: player.isRemote ? const SizedBox.shrink() : const _PlayerSpectrum()),
+                  Expanded(child: player.isRemote ? const VolumeControl.fill() : const _PlayerSpectrum()),
                   list(Icons.playlist_play_rounded, 'Queue', NowPlayingTab.queue),
                   SizedBox(width: side),
                 ],
