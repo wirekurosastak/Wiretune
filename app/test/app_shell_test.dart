@@ -339,34 +339,106 @@ void main() {
   });
 
   testWidgets(
-    "the full-screen player's tabs: the drop slides to the chosen one, a little longer while fast, and settles",
+    "the full-screen player's lyrics and queue buttons open them over the track, the cover flying to its row",
     (tester) async {
       final vm = await pumpApp(tester, const Size(400, 860));
-      vm.player.currentTrack = vm.library.tracks.first;
+      vm.player.playQueue(vm.library.tracks);
       vm.openNowPlaying();
       await settle(tester);
       final page = find.byType(NowPlayingPage);
-      final drop = find.descendant(
-        of: page,
-        matching: find.byWidgetPredicate((w) => w is Positioned && w.child is DecoratedBox),
-      );
-      Finder label(String key) => find.descendant(of: page, matching: find.text(Localizer.get(key)));
-      final one = tester.getSize(drop).width;
-      expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabTrack')).dx, epsilon: 0.5));
+      Finder button(String key) => find.descendant(of: page, matching: find.byTooltip(Localizer.get(key)));
+      final flying = find.descendant(of: page, matching: find.byType(CoverFlightBetween));
+      expect(find.byType(QueueList), findsNothing);
 
-      await tester.tap(label('TabLyrics'));
+      await tester.tap(button('Queue'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 66));
-      expect(
-        tester.getCenter(drop).dx,
-        inExclusiveRange(tester.getCenter(label('TabTrack')).dx, tester.getCenter(label('TabLyrics')).dx),
-        reason: 'on its way',
-      );
-      expect(tester.getSize(drop).width, inExclusiveRange(one * 1.1, one * 1.4), reason: 'a little longer, not a worm');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(flying, findsOneWidget, reason: 'the cover on its way to the row over the queue');
+      await settle(tester);
+      expect(flying, findsNothing);
+      expect(vm.nowPlayingTab, NowPlayingTab.queue);
+      expect(find.byType(QueueList), findsOneWidget);
+
+      // From the queue to the lyrics the row stays: no flight.
+      await tester.tap(button('TabLyrics'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(flying, findsNothing);
       await settle(tester);
       expect(vm.nowPlayingTab, NowPlayingTab.lyrics);
-      expect(tester.getSize(drop).width, moreOrLessEquals(one, epsilon: 0.5));
-      expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabLyrics')).dx, epsilon: 0.5));
+      expect(find.byType(LyricsView), findsOneWidget);
+
+      // Pressed again, back to the track, the cover flying back out.
+      await tester.tap(button('TabLyrics'));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(flying, findsOneWidget);
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.track);
+      expect(find.byType(LyricsView), findsNothing);
+
+      // The row over a list leads back too.
+      await tester.tap(button('Queue'));
+      await settle(tester);
+      await settle(tester); // the cover's flight
+      await tester.tap(find.descendant(of: page, matching: find.text(vm.player.nowPlayingTitle)).first);
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.track);
+    },
+  );
+
+  testWidgets(
+    "a drag up over the player's track brings the queue up with the finger, one down over its row the track",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(400, 860));
+      vm.player.playQueue(vm.library.tracks);
+      vm.openNowPlaying();
+      await settle(tester);
+      final page = find.byType(NowPlayingPage);
+      final flying = find.descendant(of: page, matching: find.byType(CoverFlightBetween));
+      final cover = tester.getCenter(find.descendant(of: page, matching: find.byType(CoverImage)).first);
+
+      // A little way: the cover follows the finger, and goes back when let go.
+      var gesture = await tester.startGesture(cover);
+      await gesture.moveBy(const Offset(0, -20));
+      await gesture.moveBy(const Offset(0, -60));
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -20));
+      await tester.pump();
+      expect(flying, findsOneWidget, reason: 'on its way with the finger');
+      await gesture.up();
+      await settle(tester);
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.track);
+      expect(flying, findsNothing);
+      expect(find.byType(QueueList), findsNothing);
+
+      // Past half the way: the queue.
+      gesture = await tester.startGesture(cover);
+      await gesture.moveBy(const Offset(0, -20));
+      await gesture.moveBy(const Offset(0, -300));
+      await tester.pump();
+      await gesture.up();
+      await settle(tester);
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.queue);
+      expect(flying, findsNothing, reason: 'landed');
+      expect(vm.isNowPlayingOpen, isTrue, reason: 'the player stays up');
+
+      // Down over the row: the track again, the player still up.
+      final row = tester.getCenter(find.descendant(of: page, matching: find.text(vm.player.nowPlayingTitle)).first);
+      gesture = await tester.startGesture(row);
+      await gesture.moveBy(const Offset(0, 20));
+      await gesture.moveBy(const Offset(0, 300));
+      await tester.pump();
+      await gesture.up();
+      await settle(tester);
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.track);
+      expect(vm.isNowPlayingOpen, isTrue);
     },
   );
 
@@ -384,7 +456,7 @@ void main() {
     expect(vm.isNowPlayingOpen, isTrue);
     expect(find.byType(NowPlayingPage), findsOneWidget);
 
-    await tester.tap(find.text(Localizer.get('Queue')));
+    await tester.tap(find.byTooltip(Localizer.get('Queue')));
     await settle(tester);
     expect(vm.nowPlayingTab, NowPlayingTab.queue);
 
@@ -2319,7 +2391,6 @@ void main() {
       library.initialize();
       return createMainViewModel(library);
     });
-    vm.playerSwipe = PlayerSwipe.tracks;
     vm.player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
     await settle(tester);
@@ -2333,89 +2404,57 @@ void main() {
     expect(vm.player.position.value, greaterThan(Duration.zero), reason: 'it seeked');
   });
 
-  testWidgets("a swipe in the player follows the finger: what it leads to comes in beside, and a short one goes back", (
-    tester,
-  ) async {
-    final vm = await pumpApp(tester, const Size(400, 860), () async {
-      final library = createLibrary([
-        TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue', trackNumber: 1),
-        TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
-      ]);
-      library.initialize();
-      return createMainViewModel(library);
-    });
-    final player = vm.player;
-    player.playQueue(vm.library.tracks);
-    vm.playerSwipe = PlayerSwipe.tabs;
-    vm.openNowPlaying();
-    await settle(tester);
-    final page = find.byType(NowPlayingPage);
-    final drop = find.descendant(
-      of: page,
-      matching: find.byWidgetPredicate((w) => w is Positioned && w.child is DecoratedBox),
-    );
-    Finder label(String key) => find.descendant(of: page, matching: find.text(Localizer.get(key)));
-    final start = tester.getCenter(find.descendant(of: page, matching: find.text('So What')).last);
+  testWidgets(
+    "a swipe over the player's track follows the finger: the next one comes in beside, a short swipe goes back",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(400, 860), () async {
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue', trackNumber: 1),
+          TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
+        ]);
+        library.initialize();
+        return createMainViewModel(library);
+      });
+      final player = vm.player;
+      player.playQueue(vm.library.tracks);
+      vm.openNowPlaying();
+      await settle(tester);
+      final page = find.byType(NowPlayingPage);
+      final start = tester.getCenter(find.descendant(of: page, matching: find.text('So What')).last);
 
-    // Between the tabs: the queue comes in with the finger, and the drop goes towards it.
-    var gesture = await tester.startGesture(start);
-    await gesture.moveBy(const Offset(-20, 0));
-    await gesture.moveBy(const Offset(-80, 0));
-    await tester.pump();
-    expect(find.byType(QueueList), findsOneWidget, reason: 'the queue beside, before letting go');
-    final dropX = tester.getCenter(drop).dx;
-    expect(dropX, greaterThan(tester.getCenter(label('TabTrack')).dx));
-    expect(dropX, lessThan(tester.getCenter(label('Queue')).dx));
-    await gesture.up();
-    await settle(tester);
-    expect(vm.nowPlayingTab, NowPlayingTab.track, reason: 'a short swipe goes back');
-    expect(find.byType(QueueList), findsNothing);
-    expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabTrack')).dx, epsilon: 0.5));
+      // The next track's page comes in, its title already readable, its cover a paused one's size and growing as it
+      // comes, the playing one's shrinking as it goes.
+      expect(player.isPlaying, isTrue);
+      final covers = find.descendant(of: page, matching: find.byType(CoverImage));
+      final playing = tester.getRect(covers).width;
+      var gesture = await tester.startGesture(start);
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-80, 0));
+      await tester.pump();
+      expect(find.descendant(of: page, matching: find.text('Blue in Green')), findsOneWidget);
+      final [coming, going] = [for (final e in covers.evaluate()) tester.getRect(find.byWidget(e.widget)).width];
+      expect(going, inExclusiveRange(playing * 0.86, playing), reason: 'the playing cover shrinks as it goes');
+      expect(coming, inExclusiveRange(playing * 0.86, going), reason: "the next one's grows from a paused one's size");
+      await gesture.moveBy(const Offset(-200, 0));
+      await tester.pump();
+      final [nearly, _] = [for (final e in covers.evaluate()) tester.getRect(find.byWidget(e.widget)).width];
+      expect(nearly, greaterThan(coming), reason: 'nearer, larger');
+      await gesture.moveBy(const Offset(200, 0));
+      await tester.pump();
+      await gesture.up();
+      await settle(tester);
+      expect(player.currentTrack?.title, 'So What', reason: 'a short swipe goes back');
 
-    gesture = await tester.startGesture(start);
-    await gesture.moveBy(const Offset(-20, 0));
-    await gesture.moveBy(const Offset(-200, 0));
-    await tester.pump();
-    await gesture.up();
-    await settle(tester);
-    expect(vm.nowPlayingTab, NowPlayingTab.queue, reason: 'past a third of the way');
-    expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('Queue')).dx, epsilon: 0.5));
-
-    // Between the tracks: the next one's page comes in, its title already readable, its cover a paused one's size and
-    // growing as it comes, the playing one's shrinking as it goes.
-    vm.nowPlayingTab = NowPlayingTab.track;
-    vm.playerSwipe = PlayerSwipe.tracks;
-    await settle(tester);
-    expect(player.isPlaying, isTrue);
-    final covers = find.descendant(of: page, matching: find.byType(CoverImage));
-    final playing = tester.getRect(covers).width;
-    gesture = await tester.startGesture(start);
-    await gesture.moveBy(const Offset(-20, 0));
-    await gesture.moveBy(const Offset(-80, 0));
-    await tester.pump();
-    expect(find.descendant(of: page, matching: find.text('Blue in Green')), findsOneWidget);
-    final [coming, going] = [for (final e in covers.evaluate()) tester.getRect(find.byWidget(e.widget)).width];
-    expect(going, inExclusiveRange(playing * 0.86, playing), reason: 'the playing cover shrinks as it goes');
-    expect(coming, inExclusiveRange(playing * 0.86, going), reason: "the next one's grows from a paused one's size");
-    await gesture.moveBy(const Offset(-200, 0));
-    await tester.pump();
-    final [nearly, _] = [for (final e in covers.evaluate()) tester.getRect(find.byWidget(e.widget)).width];
-    expect(nearly, greaterThan(coming), reason: 'nearer, larger');
-    await gesture.moveBy(const Offset(200, 0));
-    await tester.pump();
-    await gesture.up();
-    await settle(tester);
-    expect(player.currentTrack?.title, 'So What', reason: 'a short swipe goes back');
-
-    gesture = await tester.startGesture(start);
-    await gesture.moveBy(const Offset(-20, 0));
-    await gesture.moveBy(const Offset(-200, 0));
-    await tester.pump();
-    await gesture.up();
-    await settle(tester);
-    expect(player.currentTrack?.title, 'Blue in Green');
-    expect(tester.getRect(covers).width, moreOrLessEquals(playing, epsilon: 0.5), reason: 'in place, its own size');
-  });
+      gesture = await tester.startGesture(start);
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-200, 0));
+      await tester.pump();
+      await gesture.up();
+      await settle(tester);
+      expect(player.currentTrack?.title, 'Blue in Green');
+      expect(tester.getRect(covers).width, moreOrLessEquals(playing, epsilon: 0.5), reason: 'in place, its own size');
+    },
+  );
 
   testWidgets("the full-screen player's queue fades towards an edge only where more of it goes on past it", (
     tester,
@@ -2441,11 +2480,14 @@ void main() {
     expect(fade(), (1.0, 0.0), reason: 'at its end: the last row whole');
   });
 
-  testWidgets("a swipe in the player asks once what it does, then does it; the settings change it", (tester) async {
+  testWidgets("a swipe over the player's cover skips at once, and one over a queue's row to the left takes it out", (
+    tester,
+  ) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([
         TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue', trackNumber: 1),
         TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
+        TestSupport.makeTrack('3', 'Freddie Freeloader', album: 'Kind of Blue', trackNumber: 3),
       ]);
       library.initialize();
       return createMainViewModel(library);
@@ -2454,42 +2496,23 @@ void main() {
     player.playQueue(vm.library.tracks);
     vm.openNowPlaying();
     await settle(tester);
-    Future<void> swipeLeft() async {
-      await tester.fling(find.byType(NowPlayingPage), const Offset(-200, 0), 1000, warnIfMissed: false);
-      await settle(tester);
-    }
-
-    await swipeLeft();
-    expect(find.text(Localizer.get('PlayerSwipeQuestion')), findsOneWidget);
-    expect(player.currentTrack?.title, 'So What', reason: 'nothing happens before the answer');
-    await tester.tap(find.text(Localizer.get('PlayerSwipeTracks')));
+    final page = find.byType(NowPlayingPage);
+    await tester.fling(find.descendant(of: page, matching: find.text('So What')).last, const Offset(-200, 0), 1000);
     await settle(tester);
-    expect(vm.playerSwipe, PlayerSwipe.tracks);
+    expect(find.byType(AlertDialog), findsNothing, reason: 'nothing to choose first');
     expect(player.currentTrack?.title, 'Blue in Green');
 
-    await tester.fling(find.byType(NowPlayingPage), const Offset(200, 0), 1000, warnIfMissed: false);
+    await tester.tap(find.descendant(of: page, matching: find.byTooltip(Localizer.get('Queue'))));
     await settle(tester);
-    expect(find.text(Localizer.get('PlayerSwipeQuestion')), findsNothing, reason: 'asked once');
-    expect(player.currentTrack?.title, 'So What');
-
-    vm.closeNowPlaying();
-    vm.navigateTo(AppSection.settings);
+    await settle(tester); // the cover's flight
+    final row = find.descendant(of: find.byType(QueueList), matching: find.text('Freddie Freeloader'));
+    await tester.fling(row, const Offset(-300, 0), 1000);
+    // It slides away, then the rows below close the gap.
     await settle(tester);
-    // Mid-screen: clear of the title bar above and the floating bars below.
-    unawaited(Scrollable.ensureVisible(tester.element(find.text(Localizer.get('PlayerSwipeTabs'))), alignment: 0.5));
     await settle(tester);
-    await tester.tap(find.text(Localizer.get('PlayerSwipeTabs')));
-    await settle(tester);
-    expect(vm.playerSwipe, PlayerSwipe.tabs);
-    expect(vm.library.getPreference('player_swipe'), 'tabs');
-
-    vm.openNowPlaying();
-    await settle(tester);
-    await swipeLeft();
-    expect((vm.nowPlayingTab, player.currentTrack?.title), (NowPlayingTab.queue, 'So What'));
-    await swipeLeft();
-    await swipeLeft();
-    expect(vm.nowPlayingTab, NowPlayingTab.lyrics, reason: 'the last tab stays');
+    expect(player.queueTracks.map((t) => t.title), ['So What', 'Blue in Green']);
+    expect(row, findsNothing);
+    expect(vm.nowPlayingTab, NowPlayingTab.queue, reason: 'the swipe took the row, not the tab');
   });
 
   testWidgets("a phone held sideways shows a detail page's header beside its artwork, clear of the status bar", (
@@ -2959,11 +2982,12 @@ void main() {
     vm.player.playQueue(vm.library.tracks);
     vm.player.toggleShuffle();
     await settle(tester);
+    // Shuffle's and repeat's (the phone's player has the lyrics' and the queue's beside them).
     List<bool> modes(Finder within) => [
       for (final b in tester.widgetList<PlayerModeButton>(
         find.descendant(of: within, matching: find.byType(PlayerModeButton)),
       ))
-        b.on,
+        if (b.icon != Icons.lyrics_outlined && b.icon != Icons.playlist_play_rounded) b.on,
     ];
     expect(modes(find.byType(WideLayout)), [true, false]);
 
@@ -2977,10 +3001,12 @@ void main() {
     await settle(tester);
     expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [3]))), findsOneWidget);
     expect(find.descendant(of: player, matching: find.byIcon(Icons.clear_all_rounded)), findsOneWidget);
-    // A phone's queue rows are its track rows' size, their red × a finger's target.
-    final remove = find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipRemoveFromQueue')));
-    expect(remove, findsNWidgets(3));
-    expect(tester.getSize(remove.first), const Size(44, 44));
+    // A phone's queue rows have no × and no handle (a swipe takes one out, a long press moves it); the playing track is
+    // above the list, not in it, the next one says so, and the transport gives the list its room.
+    expect(find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipRemoveFromQueue'))), findsNothing);
+    expect(find.descendant(of: player, matching: find.byIcon(Icons.drag_indicator_rounded)), findsNothing);
+    expect(find.descendant(of: player, matching: find.text(Localizer.get('QueueNextTag'))), findsOneWidget);
+    expect(find.descendant(of: player, matching: find.byType(SeekBar)), findsNothing);
   });
 
   testWidgets(

@@ -1715,8 +1715,9 @@ class EdgeFade extends StatefulWidget {
 }
 
 class _EdgeFadeState extends State<EdgeFade> {
-  /// How far each fade has come in, 0 to 1: the top's and the bottom's.
-  final ValueNotifier<(double, double)> _shown = ValueNotifier((0, 0));
+  /// How far each fade has come in, 0 to 1: the top's and the bottom's. The list's measures come a frame after it is
+  /// first shown, so until then it is as a list at its top with more below: no frame without the bottom's fade.
+  final ValueNotifier<(double, double)> _shown = ValueNotifier((0, 1));
 
   @override
   void dispose() {

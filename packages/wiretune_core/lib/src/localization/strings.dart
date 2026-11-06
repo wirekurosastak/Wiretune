@@ -57,12 +57,6 @@ const Map<String, (String, String, String)> allStrings = {
     'Exklusivmodus (direkter DAC-Zugriff am System-Mixer vorbei)',
   ),
   'AccountAndConnection': ('Fiók és kapcsolat', 'Account & connection', 'Konto & Verbindung'),
-  'SettingsPlayerSwipe': ('Húzás a lejátszóban', 'Swiping in the player', 'Wischen im Player'),
-  'SettingsPlayerSwipeHint': (
-    'Mit tegyen a balra vagy jobbra húzás a teljes képernyős lejátszóban.',
-    'What swiping left or right does in the full-screen player.',
-    'Was Wischen nach links oder rechts im Vollbild-Player tut.',
-  ),
   'SettingsOnlineLyrics': ('Dalszöveg az internetről', 'Lyrics from the internet', 'Liedtexte aus dem Internet'),
   'SettingsOnlineLyricsHint': (
     'Hiányzó dalszövegek keresése az lrclib.net-en.',
@@ -279,6 +273,7 @@ const Map<String, (String, String, String)> allStrings = {
   'ChooseMusic': ('Válassz zenét', 'Choose some music', 'Wähle Musik'),
   'Queue': ('Következik', 'Queue', 'Warteschlange'),
   'NowPlaying': ('MOST SZÓL', 'NOW PLAYING', 'WIRD GESPIELT'),
+  'QueueNextTag': ('Következő', 'Next', 'Nächster'),
   'ClearQueue': ('Sor kiürítése', 'Clear queue', 'Warteschlange leeren'),
   'ClearQueueConfirm': ('Kiüríted a sort?', 'Clear the queue?', 'Die Warteschlange leeren?'),
   'TracksStayInLibrary': (
@@ -305,20 +300,7 @@ const Map<String, (String, String, String)> allStrings = {
   'QueuedNext': ('Következik: {0}', 'Plays next: {0}', 'Als Nächstes: {0}'),
   'QueuedLast': ('A sorba került: {0}', 'Added to the queue: {0}', 'In der Warteschlange: {0}'),
   'Lyrics': ('DALSZÖVEG', 'LYRICS', 'LIEDTEXT'),
-  'TabTrack': ('Szám', 'Track', 'Titel'),
   'TabLyrics': ('Dalszöveg', 'Lyrics', 'Liedtext'),
-  'PlayerSwipeQuestion': (
-    'Mit tegyen a balra vagy jobbra húzás a lejátszóban?',
-    'What should swiping left or right do in the player?',
-    'Was soll Wischen nach links oder rechts im Player tun?',
-  ),
-  'PlayerSwipeLater': (
-    'Később a Beállításokban módosíthatod.',
-    'You can change this later in Settings.',
-    'Du kannst das später in den Einstellungen ändern.',
-  ),
-  'PlayerSwipeTracks': ('Előző / következő szám', 'Previous / next track', 'Vorheriger / nächster Titel'),
-  'PlayerSwipeTabs': ('Szám, következők, dalszöveg', 'Track, queue, lyrics', 'Titel, Warteschlange, Liedtext'),
   'NoLyricsTitle': ('Nincs dalszöveg', 'No lyrics', 'Kein Liedtext'),
   'NoLyrics': (
     'Sem a fájlban, sem online nem találtunk hozzá.',

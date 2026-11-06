@@ -397,32 +397,6 @@ class MainViewModel extends ChangeNotifier {
     if (player.currentTrack != null) isNowPlayingOpen = true;
   }
 
-  PlayerSwipe? _playerSwipe;
-
-  /// What a swipe left or right does in the full-screen player; null until the user picks it (at the first swipe).
-  PlayerSwipe? get playerSwipe => _playerSwipe;
-  set playerSwipe(PlayerSwipe? value) {
-    if (value == null || value == _playerSwipe) return;
-    _playerSwipe = value;
-    _remember(_playerSwipePreference, value.name);
-    notifyListeners();
-  }
-
-  /// A swipe in the full-screen player, to the left ([forward], towards what comes next) or to the right, doing what
-  /// [playerSwipe] says. The tabs stop at either end.
-  void swipeNowPlaying({required bool forward}) {
-    switch (_playerSwipe) {
-      case PlayerSwipe.tracks:
-        forward ? player.nextTrack() : player.previousTrack(restart: false);
-      case PlayerSwipe.tabs:
-        const tabs = NowPlayingTab.values;
-        final index = tabs.indexOf(_nowPlayingTab) + (forward ? 1 : -1);
-        if (index >= 0 && index < tabs.length) nowPlayingTab = tabs[index];
-      case null:
-        break;
-    }
-  }
-
   void closeNowPlaying() => isNowPlayingOpen = false;
 
   // ── Back ───────────────────────────────────────────────────────────────────────────────────────
@@ -769,7 +743,6 @@ class MainViewModel extends ChangeNotifier {
   static const String _equalizerPreference = 'equalizer';
   static const String _equalizerOnPreference = 'equalizer_on';
   static const String _gaplessPreference = 'gapless';
-  static const String _playerSwipePreference = 'player_swipe';
   static const String _updateCheckPreference = 'update_check';
 
   bool _isLight = false;
@@ -970,7 +943,6 @@ class MainViewModel extends ChangeNotifier {
     final quality = StreamingQuality.values.asNameMap()[library.getPreference(_streamingQualityPreference)];
     if (quality != null) unawaited(audioEngine.setStreamingQuality(quality));
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
-    _playerSwipe = PlayerSwipe.values.asNameMap()[library.getPreference(_playerSwipePreference)];
 
     // A lasting ID of its own, so the others know it again after a restart; it connects once signed in.
     var id = library.getPreference(_remoteIdPreference);

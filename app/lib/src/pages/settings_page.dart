@@ -10,7 +10,6 @@ import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
-import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
 import '../view_models/settings_view_models.dart';
 import '../widgets/devices.dart';
@@ -1321,31 +1320,6 @@ class _AppearanceCard extends StatelessWidget {
                 Switch(value: vm.useOnlineLyrics, onChanged: (v) => vm.useOnlineLyrics = v),
               ],
             ),
-            // The full-screen player is the phone's.
-            if (PhoneChrome.isPhone(context)) ...[
-              const SizedBox(height: 14),
-              Text(
-                context.tr('SettingsPlayerSwipe'),
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-              ),
-              Text(context.tr('SettingsPlayerSwipeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final (choice, key) in [
-                    (PlayerSwipe.tracks, 'PlayerSwipeTracks'),
-                    (PlayerSwipe.tabs, 'PlayerSwipeTabs'),
-                  ])
-                    _choice(
-                      context.tr(key),
-                      selected: vm.playerSwipe == choice,
-                      onPressed: () => vm.playerSwipe = choice,
-                    ),
-                ],
-              ),
-            ],
             const SizedBox(height: 14),
             Row(
               children: [

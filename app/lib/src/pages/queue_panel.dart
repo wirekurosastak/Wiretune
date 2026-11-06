@@ -22,9 +22,12 @@ import '../widgets/track_list.dart';
 /// The queue: jump to an entry, drag entries (or use the arrows) to reorder them, remove them. Another device's queue
 /// (remote control) shows as far as this library knows its tracks, and its changes go to that device.
 class QueueList extends StatelessWidget {
-  const QueueList({super.key, this.padding = const EdgeInsets.all(16)});
+  const QueueList({super.key, this.padding = const EdgeInsets.all(16), this.hidesCurrent = false});
 
   final EdgeInsets padding;
+
+  /// Leaves the playing track's row out, where the track is shown above the list (the phone's full-screen player).
+  final bool hidesCurrent;
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +43,7 @@ class QueueList extends StatelessWidget {
             hint: context.tr('QueueEmptyHint'),
           );
         }
+        final current = items.indexWhere((item) => item.isCurrent);
         // Its rows fade towards the edges as the lyrics' lines do, where more of the queue goes on past them.
         return EdgeFade(
           child: ReorderableListView.builder(
@@ -48,14 +52,18 @@ class QueueList extends StatelessWidget {
             itemCount: items.length,
             onReorderItem: player.moveQueueTrack,
             proxyDecorator: liftedRow(context, const EdgeInsets.only(bottom: 4)),
-            itemBuilder: (context, index) => _QueueRow(
-              key: ValueKey(items[index]),
-              item: items[index],
-              index: index,
-              itemCount: items.length,
-              // A remote or a keyboard cannot drag: they get buttons. A phone drags by the handle.
-              showMoveButtons: !AppPlatform.current.isMobile,
-            ),
+            // A left-out row is there with no height, so the rows keep the queue's places as they are moved.
+            itemBuilder: (context, index) => hidesCurrent && items[index].isCurrent
+                ? SizedBox.shrink(key: ValueKey(items[index]))
+                : _QueueRow(
+                    key: ValueKey(items[index]),
+                    item: items[index],
+                    index: index,
+                    itemCount: items.length,
+                    isNext: current >= 0 && index == current + 1,
+                    // A remote or a keyboard cannot drag: they get buttons. A phone's row moves under a long press.
+                    showMoveButtons: !AppPlatform.current.isMobile,
+                  ),
           ),
         );
       },
@@ -63,11 +71,11 @@ class QueueList extends StatelessWidget {
   }
 }
 
-/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, or the bouncing bars of the
-/// current track), title and artist, format, length, the arrows and the remove button. The current entry is washed in
-/// the accent. It moves by its handle or a long press anywhere on it (as a playlist's rows); on a computer its menu
-/// opens on a right click. On a phone it is as large as the phone's other track rows, without the length, its × a
-/// finger's target.
+/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, "Next" on the one after the
+/// current track, or the current one's bouncing bars), title and artist, format, length, the arrows and the remove
+/// button. The current entry is washed in the accent. It moves by its handle or a long press anywhere on it (as a
+/// playlist's rows); on a computer its menu opens on a right click. On a phone it is as large as the phone's other track
+/// rows, with neither the handle nor the length nor the ×: a long press moves it and a swipe to the left takes it away.
 class _QueueRow extends StatefulWidget {
   const _QueueRow({
     super.key,
@@ -75,12 +83,16 @@ class _QueueRow extends StatefulWidget {
     required this.index,
     required this.itemCount,
     required this.showMoveButtons,
+    this.isNext = false,
   });
 
   final QueueItem item;
   final int index;
   final int itemCount;
   final bool showMoveButtons;
+
+  /// The entry after the playing one.
+  final bool isNext;
 
   @override
   State<_QueueRow> createState() => _QueueRowState();
@@ -144,17 +156,20 @@ class _QueueRowState extends State<_QueueRow> {
                 padding: EdgeInsets.fromLTRB(10, phone ? 6 : 7, phone ? 0 : 10, phone ? 6 : 7),
                 child: Row(
                   children: [
-                    ReorderableDragStartListener(
-                      index: widget.index,
-                      child: Tooltip(
-                        message: context.tr('TipDragToReorder'),
-                        child: SizedBox(
-                          width: 20,
-                          child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
+                    // A phone's row moves under a long press anywhere on it: no handle, too small for a finger.
+                    if (!phone) ...[
+                      ReorderableDragStartListener(
+                        index: widget.index,
+                        child: Tooltip(
+                          message: context.tr('TipDragToReorder'),
+                          child: SizedBox(
+                            width: 20,
+                            child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
+                      const SizedBox(width: 6),
+                    ],
                     SizedBox(
                       width: cover,
                       height: cover,
@@ -184,12 +199,19 @@ class _QueueRowState extends State<_QueueRow> {
                                     bottomRight: Radius.circular(Radii.tag),
                                   ),
                                 ),
-                                child: Text(
-                                  '${item.displayIndex}',
-                                  style: TextStyle(
-                                    fontSize: phone ? 10 : 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
+                                // The one after the playing track says so, rather than its number.
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: cover - 6),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      widget.isNext ? context.tr('QueueNextTag') : '${item.displayIndex}',
+                                      style: TextStyle(
+                                        fontSize: phone ? 10 : 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -255,14 +277,14 @@ class _QueueRowState extends State<_QueueRow> {
                       ),
                       const SizedBox(width: 8),
                     ],
-                    small(
-                      Icons.close_rounded,
-                      'TipRemoveFromQueue',
-                      () => player.removeQueueItem(item),
-                      color: colors.danger,
-                      size: phone ? 44 : 28,
-                      iconSize: phone ? 22 : 16,
-                    ),
+                    // A phone's row goes with a swipe to the left.
+                    if (!phone)
+                      small(
+                        Icons.close_rounded,
+                        'TipRemoveFromQueue',
+                        () => player.removeQueueItem(item),
+                        color: colors.danger,
+                      ),
                   ],
                 ),
               ),
@@ -271,7 +293,35 @@ class _QueueRowState extends State<_QueueRow> {
         ),
       ),
     );
-    return ReorderableDelayedDragStartListener(index: widget.index, child: row);
+    return ReorderableDelayedDragStartListener(
+      index: widget.index,
+      child: !phone
+          ? row
+          : Dismissible(
+              key: ObjectKey(item),
+              // Listening together the host takes it out, after the swipe: the row would stay where it went.
+              direction: player.isFollowingHost ? DismissDirection.none : DismissDirection.endToStart,
+              onDismissed: (_) {
+                unawaited(HapticFeedback.lightImpact());
+                player.removeQueueItem(item);
+              },
+              // What the swipe does, uncovered as the row goes: the × in the danger colour, on a wash of it.
+              background: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: colors.danger.withValues(alpha: 0.18), borderRadius: radius),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 22),
+                      child: Icon(Icons.close_rounded, color: colors.danger, size: 24),
+                    ),
+                  ),
+                ),
+              ),
+              child: row,
+            ),
+    );
   }
 }
 
