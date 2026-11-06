@@ -92,4 +92,9 @@ Off by default. Untagged files are unchanged. Ignored in bit-perfect mode.
 
 ## Spectrum analyzer
 
-Desktop only: 64 bands from 20 Hz to 20 kHz. Needs `ffmpeg` on the `PATH`. Never affects playback. A server track is downloaded a second time for it.
+64 bands from 20 Hz to 20 kHz. Never affects playback. A server track is downloaded a second time for it.
+
+- Desktop: in the player bar. Needs `ffmpeg` on the `PATH`.
+- Android phone: in the full-screen player, between Lyrics and Queue. Android's own decoder reads the track
+  (`PcmDecoder.kt` in `packages/wiretune_platform`), and only while the spectrum is on screen: it stops with the
+  player down or the screen off, to spare the battery. A format the phone can't decode leaves the bars flat.

@@ -140,8 +140,9 @@ class PlayerViewModel extends ChangeNotifier {
     queue: const <Track>[],
   ));
 
-  /// The spectrum bands (0..1), about 30 times a second while playing.
-  final ValueNotifier<Float32List> spectrum = ValueNotifier(Float32List(SpectrumAnalyzer.numBands));
+  /// The spectrum bands (0..1), about 30 times a second while playing. While something listens (a spectrum on screen),
+  /// the engine is told so: a phone analyses only then.
+  late final ValueNotifier<Float32List> spectrum = _Spectrum((shown) => _engine.spectrumShown = shown);
 
   double get positionSeconds => position.value.inMicroseconds / 1e6;
   Duration get duration => currentTrack?.duration ?? Duration.zero;
@@ -1744,5 +1745,25 @@ class PlayerViewModel extends ChangeNotifier {
     nowPlaying.dispose();
     spectrum.dispose();
     super.dispose();
+  }
+}
+
+/// The spectrum's bands, which tell [onShown] when the first listener comes and when the last one goes.
+class _Spectrum extends ValueNotifier<Float32List> {
+  _Spectrum(this.onShown) : super(Float32List(SpectrumAnalyzer.numBands));
+
+  final void Function(bool shown) onShown;
+  int _listeners = 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    if (_listeners++ == 0) onShown(true);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    super.removeListener(listener);
+    if (_listeners > 0 && --_listeners == 0) onShown(false);
   }
 }

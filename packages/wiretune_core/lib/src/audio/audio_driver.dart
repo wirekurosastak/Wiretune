@@ -68,6 +68,10 @@ abstract class AudioDriver {
   /// to bit-perfect output.
   void setEqualizer(Equalizer equalizer);
 
+  /// Whether a spectrum is on screen. A driver that analyses only while one is (a phone's, for the battery) starts and
+  /// stops with it; the others ignore it.
+  set spectrumShown(bool shown);
+
   /// Whether [readOutput] can ever tell; a driver that can't is not asked.
   bool get reportsOutput;
 
@@ -120,6 +124,10 @@ mixin AudioDriverEvents implements AudioDriver {
   /// A driver that can't filter.
   @override
   void setEqualizer(Equalizer equalizer) {}
+
+  /// A driver that analyses always, or never.
+  @override
+  set spectrumShown(bool shown) {}
 
   /// A driver that can't tell what its output was opened with.
   @override

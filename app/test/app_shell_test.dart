@@ -958,6 +958,42 @@ void main() {
         expect(tester.binding.hasScheduledFrame, isFalse, reason: 'full-screen player, $ms ms');
       }
     });
+
+    testWidgets("the full-screen player shows the spectrum between Lyrics and Queue, analysed only while it's seen", (
+      tester,
+    ) async {
+      final (vm, driver) = await playWithCover(tester);
+      expect(driver.spectrumShown, isFalse, reason: 'the mini player has none');
+      vm.openNowPlaying();
+      await settle(tester);
+      final page = find.byType(NowPlayingPage);
+      final spectrum = find.descendant(of: page, matching: find.byType(SpectrumVisualizer));
+      expect(spectrum, findsOneWidget);
+      expect(driver.spectrumShown, isTrue);
+      final lyrics = tester.getRect(find.descendant(of: page, matching: find.byTooltip(Localizer.get('TabLyrics'))));
+      final queue = tester.getRect(find.descendant(of: page, matching: find.byTooltip(Localizer.get('Queue'))));
+      final bars = tester.getRect(spectrum);
+      expect(bars.left, greaterThan(lyrics.right));
+      expect(bars.right, lessThan(queue.left));
+      expect(bars.center.dx, moreOrLessEquals(tester.getCenter(page).dx, epsilon: 1), reason: 'centred');
+
+      // The screen off: nothing analysed; on again, it goes on.
+      for (final state in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pump();
+      expect(driver.spectrumShown, isFalse);
+      for (final state in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+        tester.binding.handleAppLifecycleStateChanged(state);
+      }
+      await tester.pump();
+      expect(driver.spectrumShown, isTrue);
+
+      vm.closeNowPlaying();
+      await settle(tester);
+      await settle(tester);
+      expect(driver.spectrumShown, isFalse, reason: 'the player down');
+    });
   });
 
   testWidgets('a server album, a server track and the favourites download; a local album has nothing to', (

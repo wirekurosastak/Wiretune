@@ -63,15 +63,20 @@ class _SpectrumPainter extends CustomPainter {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
     final radius = Radius.circular(barWidth / 2);
 
+    final bars = Path();
+    final glowing = Path();
     for (var i = 0; i < count; i++) {
       final value = i < values.length ? values[i].clamp(0.0, 1.0) : 0.0;
       // At least a bead of 2.5 px, so the centre line glows while it is quiet.
       final h = math.max(2.5, value * available);
       final x = padding + i * slot + (slot - barWidth) / 2;
       final bar = RRect.fromRectAndRadius(Rect.fromLTWH(x, centerY - h / 2, barWidth, h), radius);
-      if (value > 0.2) canvas.drawRRect(bar, glow);
-      canvas.drawRRect(bar, paint);
+      bars.addRRect(bar);
+      if (value > 0.2) glowing.addRRect(bar);
     }
+    // The glow in one blur: a blur per bar, 30 times a second, took a phone's whole core.
+    canvas.drawPath(glowing, glow);
+    canvas.drawPath(bars, paint);
   }
 
   @override

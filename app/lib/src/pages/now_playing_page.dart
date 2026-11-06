@@ -23,6 +23,7 @@ import '../widgets/dialogs.dart';
 import '../widgets/links.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/player_sheet.dart';
+import '../widgets/spectrum_visualizer.dart';
 import '../widgets/track_list.dart';
 import 'queue_panel.dart';
 
@@ -930,8 +931,6 @@ class _Transport extends StatelessWidget {
       return mode(data, tip, open, () => vm.nowPlayingTab = open ? NowPlayingTab.track : tab);
     }
 
-    // The row's other places, as wide as the buttons above them, so the two stand under shuffle and repeat.
-    const gap = SizedBox(width: 52), playGap = SizedBox(width: 70);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
       child: Column(
@@ -979,18 +978,72 @@ class _Transport extends StatelessWidget {
               ],
             ),
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              list(Icons.lyrics_outlined, 'TabLyrics', NowPlayingTab.lyrics),
-              gap,
-              playGap,
-              gap,
-              list(Icons.playlist_play_rounded, 'Queue', NowPlayingTab.queue),
-            ],
+          // The two under shuffle and repeat (the transport's row shares its room out evenly around its five buttons), and
+          // between them the spectrum, as the computer's player bar has it.
+          LayoutBuilder(
+            builder: (context, box) {
+              final side = math.max(0.0, (box.maxWidth - 52 * 4 - 70) / 6);
+              return Row(
+                children: [
+                  SizedBox(width: side),
+                  list(Icons.lyrics_outlined, 'TabLyrics', NowPlayingTab.lyrics),
+                  // Another device's music isn't analysed here.
+                  Expanded(child: player.isRemote ? const SizedBox.shrink() : const _PlayerSpectrum()),
+                  list(Icons.playlist_play_rounded, 'Queue', NowPlayingTab.queue),
+                  SizedBox(width: side),
+                ],
+              );
+            },
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The spectrum between the lyrics' and the queue's buttons. It is there only while the app is on screen: as long as it
+/// is, the phone decodes the track a second time and analyses it ([PlayerViewModel.spectrum]), which costs battery.
+class _PlayerSpectrum extends StatefulWidget {
+  const _PlayerSpectrum();
+
+  @override
+  State<_PlayerSpectrum> createState() => _PlayerSpectrumState();
+}
+
+class _PlayerSpectrumState extends State<_PlayerSpectrum> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onStateChange: (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final state = WidgetsBinding.instance.lifecycleState;
+    return SizedBox(
+      height: SpectrumVisualizer.height,
+      // The screen off or another app in front: nothing listens, so nothing is analysed.
+      child: state != null && state != AppLifecycleState.resumed
+          ? null
+          : LayoutBuilder(
+              builder: (context, box) => Center(
+                child: SpectrumVisualizer(
+                  bands: context.vm.player.spectrum,
+                  color: colors.accent,
+                  highlight: colors.hover,
+                  width: math.max(0, box.maxWidth - 16),
+                ),
+              ),
+            ),
     );
   }
 }
