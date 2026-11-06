@@ -1405,7 +1405,11 @@ class _AboutCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Switch(value: vm.checkForUpdates, onChanged: (v) => vm.checkForUpdates = v),
+                // The card is const and its page doesn't follow this setting: the switch listens itself.
+                ListenableBuilder(
+                  listenable: vm.updates,
+                  builder: (context, _) => Switch(value: vm.checkForUpdates, onChanged: (v) => vm.checkForUpdates = v),
+                ),
               ],
             ),
           ],
