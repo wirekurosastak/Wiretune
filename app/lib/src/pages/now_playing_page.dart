@@ -75,7 +75,6 @@ class NowPlayingPage extends StatelessWidget {
                                     dimension: 44,
                                     child: IconButton(
                                       tooltip: context.tr('Close'),
-                                      style: IconButton.styleFrom(backgroundColor: colors.surface1),
                                       onPressed: vm.closeNowPlaying,
                                       icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
                                     ),
