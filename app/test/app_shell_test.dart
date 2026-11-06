@@ -3098,7 +3098,7 @@ void main() {
     expect(find.descendant(of: player, matching: find.byType(SeekBar)), findsNothing);
   });
 
-  testWidgets("the phone's queue lists what comes after the playing track, numbered from it: Next, 2, 3", (
+  testWidgets("the phone's queue opens at what comes after the playing track (Next, 2, 3), the played ones above it", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
@@ -3117,18 +3117,38 @@ void main() {
     await settle(tester);
     final list = find.byType(QueueList);
     String? numberOf(String title) {
+      // Scrolled back to, the played ones are built just above the list's top.
       final row = find.ancestor(
-        of: find.descendant(of: list, matching: find.text(title)),
-        matching: find.byType(InkWell),
+        of: find.descendant(of: list, matching: find.text(title, skipOffstage: false), skipOffstage: false),
+        matching: find.byType(InkWell, skipOffstage: false),
       );
       if (row.evaluate().isEmpty) return null;
       final tags = [Localizer.get('QueueNextTag'), '2', '3'];
-      return tags.firstWhere((tag) => find.descendant(of: row.first, matching: find.text(tag)).evaluate().isNotEmpty);
+      return tags.firstWhere(
+        (tag) => find
+            .descendant(of: row.first, matching: find.text(tag, skipOffstage: false), skipOffstage: false)
+            .evaluate()
+            .isNotEmpty,
+        orElse: () => '',
+      );
     }
 
-    expect([for (var i = 1; i <= 5; i++) numberOf('Song $i')], [null, null, Localizer.get('QueueNextTag'), '2', '3']);
+    // The playing one is above the list, not in it; the one played before has no number.
+    expect([for (var i = 1; i <= 5; i++) numberOf('Song $i')], ['', null, Localizer.get('QueueNextTag'), '2', '3']);
     final player = find.byType(NowPlayingPage);
     expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [3]))), findsOneWidget);
+    // It opens at Next: the played one is above, scrolled back to, and dimmed.
+    final top = tester.getRect(list).top;
+    final played = find.descendant(of: list, matching: find.text('Song 1', skipOffstage: false), skipOffstage: false);
+    expect(tester.getRect(played).bottom, lessThanOrEqualTo(top));
+    expect(tester.getRect(find.descendant(of: list, matching: find.text('Song 3'))).top, greaterThan(top));
+    final dimmed = find.ancestor(of: played, matching: find.byType(Opacity, skipOffstage: false)).first;
+    expect(tester.widget<Opacity>(dimmed).opacity, 0.5);
+    await tester.drag(list, const Offset(0, 200));
+    await settle(tester);
+    expect(tester.getRect(played).top, greaterThanOrEqualTo(top));
+    await tester.drag(list, const Offset(0, -200));
+    await settle(tester);
 
     // Moved within what is to come, it moves in the queue, the tracks before it staying in place.
     final finger = await tester.startGesture(

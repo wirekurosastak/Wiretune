@@ -859,7 +859,7 @@ class _QueueTab extends StatelessWidget {
             ],
           ),
         ),
-        const Expanded(child: QueueList(padding: EdgeInsets.fromLTRB(8, 0, 8, 12), upcomingOnly: true)),
+        const Expanded(child: QueueList(padding: EdgeInsets.fromLTRB(8, 0, 8, 12), opensAtNext: true)),
       ],
     );
   }

@@ -196,8 +196,8 @@ class PlayerViewModel extends ChangeNotifier {
   List<QueueItem> get queueItems => isRemote ? _remoteQueue : _queueItems;
   int get currentQueueIndex => isRemote ? _remoteQueue.indexWhere((item) => item.isCurrent) : _queueIndex;
 
-  /// Where [queueItems] go on after the playing track: the phone's queue lists them from there ("Next", 2, 3 …), as
-  /// Spotify's and TIDAL's do. 0, the whole queue, while none plays.
+  /// Where [queueItems] go on after the playing track: the phone's queue opens there ("Next", 2, 3 …), as Spotify's and
+  /// TIDAL's do, and counts what is from there. 0, the whole queue, while none plays.
   int get upcomingQueueStart => queueItems.indexWhere((item) => item.isCurrent) + 1;
 
   /// Whether the queue is [tracks] (an album, an artist, a playlist, a list page) in any order, as their Play, their
