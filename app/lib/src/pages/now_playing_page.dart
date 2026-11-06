@@ -93,12 +93,11 @@ class NowPlayingPage extends StatelessWidget {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          context.tr(from == null ? 'NowPlaying' : 'PlayingFrom').toUpperCase(),
+                                          context.tr(from == null ? 'NowPlaying' : 'PlayingFrom'),
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
-                                            fontSize: 11.5,
-                                            letterSpacing: 2,
-                                            fontWeight: FontWeight.w800,
+                                            fontSize: 12.5,
+                                            fontWeight: FontWeight.w600,
                                             color: colors.textMain.withValues(alpha: 0.75),
                                           ),
                                         ),

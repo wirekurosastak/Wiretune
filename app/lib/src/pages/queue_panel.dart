@@ -616,7 +616,7 @@ class QueueLyricsPanel extends StatelessWidget {
                               const SizedBox(width: 8),
                               Text('•', style: TextStyle(color: colors.textMuted)),
                               const SizedBox(width: 8),
-                              TagBadge(context.tr('NowPlaying'), color: colors.accent),
+                              TagBadge(context.tr('NowPlaying').toUpperCase(), color: colors.accent),
                             ],
                           ],
                         ),

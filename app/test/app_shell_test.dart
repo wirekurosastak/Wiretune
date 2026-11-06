@@ -451,13 +451,13 @@ void main() {
     vm.openNowPlaying();
     await settle(tester);
     final page = find.byType(NowPlayingPage);
-    expect(find.descendant(of: page, matching: find.text(Localizer.get('PlayingFrom').toUpperCase())), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text(Localizer.get('PlayingFrom'))), findsOneWidget);
     expect(find.descendant(of: page, matching: find.text('Kind of Blue')), findsWidgets);
 
     // A single track from the search's best match: from nothing in particular.
     vm.player.playQueue([album.tracks.last], album.tracks.last);
     await settle(tester);
-    expect(find.descendant(of: page, matching: find.text(Localizer.get('NowPlaying').toUpperCase())), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text(Localizer.get('NowPlaying'))), findsOneWidget);
   });
 
   testWidgets('the mini player opens the full-screen player, and back closes it', (tester) async {

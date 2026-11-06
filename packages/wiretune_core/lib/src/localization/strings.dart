@@ -272,7 +272,7 @@ const Map<String, (String, String, String)> allStrings = {
   'NothingPlaying': ('Nincs lejátszás', 'Nothing playing', 'Keine Wiedergabe'),
   'ChooseMusic': ('Válassz zenét', 'Choose some music', 'Wähle Musik'),
   'Queue': ('Következik', 'Queue', 'Warteschlange'),
-  'NowPlaying': ('MOST SZÓL', 'NOW PLAYING', 'WIRD GESPIELT'),
+  'NowPlaying': ('Most szól', 'Now playing', 'Wird gespielt'),
   'PlayingFrom': ('Lejátszás innen', 'Playing from', 'Wiedergabe aus'),
   'QueueNextTag': ('Következő', 'Next', 'Nächster'),
   'ClearQueue': ('Sor kiürítése', 'Clear queue', 'Warteschlange leeren'),
