@@ -1712,7 +1712,9 @@ void main() {
     for (final (system, keys) in [('windows', ' (Ctrl+→)'), ('macos', ' (⌘→)'), ('android', '')]) {
       AppPlatform.forTesting(system: system);
       await tester.pumpWidget(const SizedBox()); // the last one's buttons are built anew, for this platform
-      await pumpApp(tester, const Size(1400, 900));
+      final vm = await pumpApp(tester, const Size(1400, 900));
+      vm.player.playQueue(vm.library.tracks); // a computer's player bar is there while something is
+      await settle(tester);
       expect(find.byTooltip('${Localizer.get('TipNext')}$keys'), findsWidgets, reason: system);
     }
   });
@@ -2851,6 +2853,8 @@ void main() {
 
   testWidgets('tooltips say what a press does next, and a button that says it already has none', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.player.playQueue(vm.library.tracks); // a computer's player bar is there while something is
+    await settle(tester);
     expect(find.byTooltip(Localizer.get('TipShuffleOn')), findsOneWidget);
     expect(find.byTooltip(Localizer.get('TipRepeatAll')), findsOneWidget);
     vm.player.toggleShuffle();
@@ -3724,8 +3728,14 @@ void main() {
       return layers == 0 ? 1 : layers - 1; // the copies' own layers, in the one that holds them
     }
 
-    // The tile furthest from the page's artwork, at the top left.
-    final tiles = find.byType(CoverFlightSource).evaluate().toList()
+    // The tile furthest from the page's artwork, at the top left, of those wholly on show.
+    final page = tester.getRect(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_Content'));
+    bool shown(Element element) {
+      final box = element.renderObject as RenderBox;
+      return page.contains((box.localToGlobal(Offset.zero) & box.size).bottomRight);
+    }
+
+    final tiles = find.byType(CoverFlightSource).evaluate().where(shown).toList()
       ..sort(
         (a, b) => (b.renderObject as RenderBox)
             .localToGlobal(Offset.zero)
@@ -3956,6 +3966,64 @@ void main() {
     expect(sidebar.left, WideLayout.gap);
     expect(find.byTooltip(Localizer.get('PinSidebar')), findsNothing);
     expect(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_EdgeHint'), findsNothing);
+  });
+
+  testWidgets("a computer's player bar is out of sight until something plays, and rises then", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
+    final bar = named('_PlayerBar');
+    double pageBottom() => tester.getRect(named('_Content')).bottom;
+    expect(bar, findsNothing);
+    final tall = pageBottom();
+
+    vm.player.playQueue(vm.library.tracks);
+    await tester.pump();
+    // Its room opens at once, and the bar rises into it from below.
+    final short = pageBottom();
+    expect(short, lessThan(tall));
+    final rising = tester.getRect(bar).top;
+    await settle(tester);
+    expect(pageBottom(), short, reason: 'the page laid out once, not as the bar rises');
+    expect(tester.getRect(bar).top, lessThan(rising));
+    expect(tester.getRect(bar).top, short + WideLayout.gap);
+  });
+
+  testWidgets("a computer's player bar stays while it controls another device, where the way back to this one is, and "
+      'goes after', (tester) async {
+    final hub = FakeRemoteHub();
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final vm = (await tester.runAsync(() async {
+      final vm = await createWithServer();
+      final session = await signedInSession(vm.library);
+      final remote = RemoteClient(session, connector: hub.connect);
+      final withRemote = createMainViewModel(vm.library, null, session, remote);
+      remote.configure(id: 'pc', name: '', kind: DeviceKind.desktop, enabled: true);
+      await until(() => remote.isConnected);
+      hub.devices([('tv', 'TV', DeviceKind.tv)]);
+      hub.state('tv', const RemotePlayback());
+      await pumpEventQueue();
+      return withRemote;
+    }))!;
+    await tester.pumpWidget(WiretuneApp(vm: vm));
+    await settle(tester);
+    final bar = find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_PlayerBar');
+    expect(bar, findsNothing);
+
+    vm.player.selectDevice('tv');
+    await settle(tester);
+    expect(vm.player.isRemote, isTrue);
+    expect(vm.player.queueItems, isEmpty, reason: 'nothing plays there');
+    expect(bar, findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.byType(DevicesButton)), findsOneWidget);
+
+    // Back to this device, where nothing plays: the bar goes down out of sight.
+    vm.player.selectDevice(null);
+    await tester.pump();
+    expect(bar, findsOneWidget, reason: 'going down');
+    await settle(tester);
+    expect(bar, findsNothing);
   });
 
   testWidgets("a width that changes lays a page's tiles and rows out again, without building them again", (
