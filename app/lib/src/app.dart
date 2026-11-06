@@ -36,7 +36,6 @@ class WiretuneApp extends StatefulWidget {
 }
 
 class _WiretuneAppState extends State<WiretuneApp> {
-  final Map<(bool, int, bool), ThemeData> _themes = {};
   late final AppLifecycleListener _lifecycle;
 
   /// The colour of the cover of the song that plays, which the accent is made of (`Palette.accentOf`): null for none,
@@ -83,16 +82,12 @@ class _WiretuneAppState extends State<WiretuneApp> {
     if (colour != _cover) setState(() => _cover = colour);
   }
 
-  // A theme per accent, built once and reused while it comes back (the same album's songs, a theme switched back).
-  ThemeData _theme(bool light, bool isTv) {
-    final accent = (light ? Palette.light : Palette.dark).accentOf(_cover);
-    if (_themes.length > 16) _themes.clear();
-    return _themes.putIfAbsent((
-      light,
-      accent.toARGB32(),
-      isTv,
-    ), () => buildTheme(light: light, accent: accent, isTv: isTv, desktopFonts: AppPlatform.current.isDesktop));
-  }
+  ThemeData _theme(bool light, bool isTv) => cachedTheme(
+    light: light,
+    accent: (light ? Palette.light : Palette.dark).accentOf(_cover),
+    isTv: isTv,
+    desktopFonts: AppPlatform.current.isDesktop,
+  );
 
   @override
   Widget build(BuildContext context) {

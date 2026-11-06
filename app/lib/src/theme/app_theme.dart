@@ -73,6 +73,19 @@ abstract final class Radii {
   static const double pill = 999;
 }
 
+final Map<(bool, int, bool, bool), ThemeData> _themes = {};
+
+/// [buildTheme], built once per accent and reused while it comes back (the same album's songs, its page opened again).
+ThemeData cachedTheme({required bool light, required Color accent, required bool isTv, bool desktopFonts = false}) {
+  if (_themes.length > 16) _themes.clear();
+  return _themes.putIfAbsent((
+    light,
+    accent.toARGB32(),
+    isTv,
+    desktopFonts,
+  ), () => buildTheme(light: light, accent: accent, isTv: isTv, desktopFonts: desktopFonts));
+}
+
 /// The theme, in [accent] (`Palette.accentOf`).
 ThemeData buildTheme({required bool light, required Color accent, required bool isTv, bool desktopFonts = false}) {
   final palette = light ? Palette.light : Palette.dark;

@@ -2355,7 +2355,7 @@ void main() {
     expect(slider, findsNothing);
   });
 
-  testWidgets("the accent is the colour of the song that plays, also over another album's page; a favourite is red", (
+  testWidgets("the accent is the colour of the song that plays; an open album's page has its own; a favourite is red", (
     tester,
   ) async {
     AppPlatform.forTesting(system: 'android');
@@ -2401,11 +2401,29 @@ void main() {
     final red = palette.accentOf(const Color(0xFFFF0000));
     expect(playColor(find.byType(PhoneLayout)), red, reason: "the mini player's");
 
+    final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
+    // Until the page's accent is [colour]: its cover read, then the blend into it.
+    Future<void> pageTurns(Color colour) async {
+      for (var i = 0; i < 40 && tester.element(pagePlay).colors.accent != colour; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
     vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
     await loadCovers(tester, find.byType(ListPlayButton));
-    final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
-    expect(tester.element(pagePlay).colors.accent, red, reason: "the blue album's Play");
+    final blue = palette.accentOf(const Color(0xFF0000FF));
+    await pageTurns(blue);
+    expect(tester.element(pagePlay).colors.accent, blue, reason: "the blue album's Play");
     expect(playColor(find.byType(PhoneLayout)), red, reason: 'the mini player, over the blue album');
+
+    vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Red'));
+    await pageTurns(red);
+    expect(tester.element(pagePlay).colors.accent, red, reason: "the red album's Play");
+    vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
+    await tester.pump(); // the blend's first frame
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.element(pagePlay).colors.accent, blue, reason: 'its colour known, the blue album has it again');
 
     vm.openNowPlaying();
     await loadCovers(tester, washOf(find.byType(NowPlayingPage)));

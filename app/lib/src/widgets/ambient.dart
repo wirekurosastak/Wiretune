@@ -250,20 +250,22 @@ class AmbientBackdrop extends StatelessWidget {
 
   /// The cover whose colours wash the backdrop: the album's or the artist's whose page is open (unless [nowPlaying]),
   /// else the cover of the track that plays, the one the player shows (none when it has none).
-  static String? activeCoverPath(MainViewModel vm, {bool nowPlaying = false}) {
-    String? cover(String? path) => path == null || path.isEmpty ? null : path;
+  static String? activeCoverPath(MainViewModel vm, {bool nowPlaying = false}) =>
+      (nowPlaying ? null : viewedCoverPath(vm)) ?? _cover(vm.player.currentTrack?.coverArtPath);
+
+  /// The cover of the album or the artist whose page is open; null on any other page, or for one without a cover.
+  static String? viewedCoverPath(MainViewModel vm) {
     final artist = vm.artists.selectedArtist;
-    final viewed = nowPlaying
-        ? null
-        : switch (vm.selectedSection) {
-            AppSection.albums when vm.albums.isAlbumDetailOpen => cover(vm.albums.selectedAlbum?.coverArtPath),
-            AppSection.artists when vm.artists.isArtistDetailOpen => cover(
-              artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath,
-            ),
-            _ => null,
-          };
-    return viewed ?? cover(vm.player.currentTrack?.coverArtPath);
+    return switch (vm.selectedSection) {
+      AppSection.albums when vm.albums.isAlbumDetailOpen => _cover(vm.albums.selectedAlbum?.coverArtPath),
+      AppSection.artists when vm.artists.isArtistDetailOpen => _cover(
+        artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath,
+      ),
+      _ => null,
+    };
   }
+
+  static String? _cover(String? path) => path == null || path.isEmpty ? null : path;
 
   @override
   Widget build(BuildContext context) {
@@ -301,6 +303,95 @@ class AmbientBackdrop extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+/// The Albums or the Artists page, in the accent of the album or the artist it has open (the cover its backdrop shows):
+/// its Play button, its slider, the song that plays in its list. The players around it keep the colour of the song that
+/// plays, and the page takes it back when the album or the artist closes.
+class ViewedAccent extends StatefulWidget {
+  const ViewedAccent({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<ViewedAccent> createState() => _ViewedAccentState();
+}
+
+class _ViewedAccentState extends State<ViewedAccent> with SingleTickerProviderStateMixin {
+  /// As the app's own theme blends (`MaterialApp.themeAnimationDuration`).
+  late final AnimationController _blend = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 350),
+    value: 1,
+  )..addListener(() => setState(() {}));
+
+  late final Listenable _views;
+  String? _path;
+
+  /// The open album's or artist's cover colour; null: the page has the app's accent (the song's).
+  ({Color? colour})? _viewed;
+
+  /// The theme shown when the accent changed, which the new one blends from.
+  ThemeData? _from;
+  ThemeData? _shown;
+
+  @override
+  void initState() {
+    super.initState();
+    final vm = context.vm;
+    _views = Listenable.merge([vm, vm.albums, vm.artists])..addListener(_follow);
+    _follow();
+  }
+
+  @override
+  void dispose() {
+    _views.removeListener(_follow);
+    _blend.dispose();
+    super.dispose();
+  }
+
+  void _follow() {
+    final path = AmbientBackdrop.viewedCoverPath(context.vm);
+    if (path == _path) return;
+    _path = path;
+    if (path == null) return _show(null);
+    if (CoverColor.isKnown(path)) return _show((colour: CoverColor.known(path)));
+    CoverColor.read(path).then((colour) {
+      if (mounted && _path == path) _show((colour: colour));
+    });
+  }
+
+  void _show(({Color? colour})? viewed) {
+    if (viewed == _viewed) return;
+    _from = _shown;
+    _viewed = viewed;
+    // The first build shows it at once (no theme yet to blend from).
+    if (_from == null) return;
+    _blend.forward(from: 0);
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context); // rebuilt with the app's theme
+    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
+    final inherited = context.findAncestorWidgetOfExactType<Theme>()!.data;
+    final viewed = _viewed;
+    final platform = AppPlatform.current;
+    final palette = context.colors.palette;
+    final target = viewed == null
+        ? inherited
+        : cachedTheme(
+            light: !palette.isDark,
+            accent: palette.accentOf(viewed.colour),
+            isTv: platform.isTv,
+            desktopFonts: platform.isDesktop,
+          );
+    final from = _from;
+    final data = from == null || _blend.isCompleted ? target : ThemeData.lerp(from, target, _blend.value);
+    _shown = data;
+    return Theme(data: data, child: widget.child);
   }
 }
 
