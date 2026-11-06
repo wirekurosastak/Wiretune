@@ -32,6 +32,7 @@ import 'package:wiretune/src/widgets/cover_image.dart';
 import 'package:wiretune/src/widgets/devices.dart';
 import 'package:wiretune/src/widgets/dialogs.dart';
 import 'package:wiretune/src/widgets/page_parts.dart';
+import 'package:wiretune/src/widgets/links.dart';
 import 'package:wiretune/src/widgets/player_controls.dart';
 import 'package:wiretune/src/widgets/player_sheet.dart';
 import 'package:wiretune/src/widgets/spectrum_visualizer.dart';
@@ -3814,6 +3815,30 @@ void main() {
     expect(frame.bottom, sidebar.bottom);
     // Its sides' space is inside the scrolling, so the scrollbar is at the frame's edge, as the queue's at the divider.
     expect(tester.getRect(find.byType(LyricsView)).right, frame.right);
+  });
+
+  testWidgets("as in a computer's own apps, the mouse is an arrow over buttons and a hand only over links", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    // The cursor the mouse takes there: the innermost region's that says one.
+    MouseCursor cursorAt(Finder finder) {
+      final result = HitTestResult();
+      RendererBinding.instance.hitTestInView(result, tester.getCenter(finder.first), tester.view.viewId);
+      for (final entry in result.path) {
+        if (entry.target case final RenderMouseRegion region when region.cursor != MouseCursor.defer) {
+          return region.cursor;
+        }
+      }
+      return SystemMouseCursors.basic;
+    }
+
+    for (final control in [find.byType(PlayButton), find.byIcon(Icons.skip_next_rounded), find.byType(SeekBar)]) {
+      expect(cursorAt(control), SystemMouseCursors.basic, reason: '$control');
+    }
+    expect(cursorAt(find.byType(LinkText)), SystemMouseCursors.click);
   });
 
   testWidgets("a right click on a queue row opens the track's menu", (tester) async {

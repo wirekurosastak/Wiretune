@@ -602,7 +602,6 @@ class _LyricLineState extends State<_LyricLine> {
   Widget build(BuildContext context) {
     final opacity = widget.active ? 1.0 : (_hover ? 0.85 : (widget.past ? 0.35 : 0.55));
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(

@@ -28,6 +28,7 @@ class LinkText extends StatelessWidget {
     Text label(TextStyle style) => Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
     if (onTap == null) return label(base);
     return Pressable(
+      link: true,
       onPressed: onTap,
       builder: (context, lit) => label(
         !lit
@@ -121,6 +122,7 @@ class _ArtistLinksState extends State<ArtistLinks> {
         : base.copyWith(decoration: TextDecoration.underline, decorationColor: base.color);
     if (PhoneChrome.isPhone(context)) {
       return Pressable(
+        link: true,
         onPressed: () => _choose(context),
         builder: (context, active) =>
             Text(names.join(', '), maxLines: 1, overflow: TextOverflow.ellipsis, style: active ? lit : base),
@@ -128,6 +130,7 @@ class _ArtistLinksState extends State<ArtistLinks> {
     }
     final taps = _recognizers();
     return Pressable(
+      link: true,
       onPressed: () => widget.onOpen(names.first),
       builder: (context, active) => Text.rich(
         TextSpan(

@@ -141,6 +141,8 @@ ThemeData buildTheme({required bool light, required Color accent, required bool 
     ),
     // Sliders: a 4 px rail, the played part a glowing accent gradient, and a small white knob that grows while dragged.
     sliderTheme: SliderThemeData(
+      // An arrow over it, as over the buttons (Flutter's turns the mouse into a hand only on the web).
+      mouseCursor: WidgetStateMouseCursor.adaptiveClickable,
       trackHeight: 4,
       activeTrackColor: accent,
       inactiveTrackColor: palette.glassHighlight,

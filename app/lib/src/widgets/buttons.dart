@@ -14,13 +14,17 @@ import 'player_controls.dart';
 
 /// Something to press that isn't a Material button (a link, a column header, a back link, the player's cover): the
 /// whole area [builder] draws takes the click, Tab or a TV remote's arrows reach it and Enter or select presses it,
-/// and the keyboard's focus lights it up as the mouse does ([builder]'s `lit`).
+/// and the keyboard's focus lights it up as the mouse does ([builder]'s `lit`). As on the desktops' own, the mouse stays
+/// an arrow over it, but over a [link], which it turns into a hand.
 class Pressable extends StatefulWidget {
-  const Pressable({super.key, required this.onPressed, required this.builder});
+  const Pressable({super.key, required this.onPressed, required this.builder, this.link = false});
 
   /// Null leaves it inert: no click, no focus.
   final VoidCallback? onPressed;
   final Widget Function(BuildContext context, bool lit) builder;
+
+  /// A text link (an artist's or an album's name).
+  final bool link;
 
   @override
   State<Pressable> createState() => _PressableState();
@@ -35,7 +39,7 @@ class _PressableState extends State<Pressable> {
     final onPressed = widget.onPressed;
     return FocusableActionDetector(
       enabled: onPressed != null,
-      mouseCursor: onPressed != null ? SystemMouseCursors.click : MouseCursor.defer,
+      mouseCursor: onPressed != null && widget.link ? SystemMouseCursors.click : MouseCursor.defer,
       onShowHoverHighlight: (value) => setState(() => _hover = value),
       onShowFocusHighlight: (value) => setState(() => _focus = value),
       actions: {
@@ -254,7 +258,6 @@ class _ShuffleSwitchState extends State<ShuffleSwitch> {
     return PopEffect(
       enabled: enabled,
       child: MouseRegion(
-        cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: SizedBox.square(
@@ -410,7 +413,6 @@ class _HeaderIconButtonState extends State<HeaderIconButton> {
     );
     return PopEffect(
       child: MouseRegion(
-        cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: SizedBox.square(
