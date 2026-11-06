@@ -1,7 +1,10 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
@@ -21,6 +24,13 @@ class SearchResults extends StatelessWidget {
   /// The content width from which the best match and the tracks sit side by side.
   static const double _sideBySideWidth = 900;
 
+  /// The tracks' height beside the best match: they scroll inside past it, unless what is under the card leaves them
+  /// more.
+  static const double _tracksHeight = 380;
+
+  /// Between the best match's column and the tracks, as between tiles.
+  static const double _gap = 14;
+
   @override
   Widget build(BuildContext context) {
     final search = context.vm.search;
@@ -38,144 +48,195 @@ class SearchResults extends StatelessWidget {
           );
         }
         return LayoutBuilder(
-          builder: (context, constraints) {
-            final narrow = constraints.maxWidth < 600;
-            final sideBySide = constraints.maxWidth >= _sideBySideWidth;
-            final pad = EdgeInsets.symmetric(horizontal: narrow ? 16 : 30);
-            final best = search.bestMatch;
-            // No title: the search field above shows what was searched for. The results start where a page's title
-            // would.
-            return CustomScrollView(
-              slivers: [
-                SliverToBoxAdapter(child: SizedBox(height: narrow ? 8 : 28)),
-                if (best != null && sideBySide)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(pad.left, 0, pad.right, 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SizedBox(
-                            width: 320,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                SectionLabel(context.tr('BestMatch'), padding: const EdgeInsets.only(bottom: 14)),
-                                _BestMatchCard(match: best),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 24),
-                          if (search.hasTracks)
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.only(bottom: 14)),
-                                  // The table is capped at 380 px; it scrolls inside.
-                                  SizedBox(
-                                    height:
-                                        (TrackSliver.tableHeaderHeight +
-                                                6 +
-                                                TrackSliver.tableRowHeight * search.matchingTracks.length +
-                                                2)
-                                            .clamp(0, 380),
-                                    child: CustomScrollView(
-                                      slivers: [
-                                        TrackSliver(
-                                          tracks: search.matchingTracks,
-                                          kind: TrackTableKind.search,
-                                          horizontalPadding: 0,
-                                          playingFrom: () => '"${search.query}"',
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (best != null && !sideBySide)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: pad,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          SectionLabel(context.tr('BestMatch'), padding: const EdgeInsets.only(bottom: 14)),
-                          // A phone's is as wide as the rows under it.
-                          _BestMatchCard(match: best, fill: narrow),
-                        ],
-                      ),
-                    ),
-                  ),
-                if (search.hasTracks && (best == null || !sideBySide)) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: pad,
-                      child: SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.fromLTRB(0, 24, 0, 14)),
-                    ),
-                  ),
-                  TrackSliver(
-                    tracks: search.matchingTracks,
-                    kind: TrackTableKind.search,
-                    playingFrom: () => '"${search.query}"',
-                  ),
-                ],
-                if (search.hasArtists) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: pad,
-                      child: SectionLabel(context.tr('LabelArtists'), padding: const EdgeInsets.fromLTRB(4, 28, 4, 12)),
-                    ),
-                  ),
-                  ArtistsSliver(
-                    artists: search.matchingArtists,
-                    onOpen: context.vm.openArtist,
-                    onPlay: context.vm.artists.playArtist,
-                  ),
-                ],
-                if (search.hasAlbums) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: pad,
-                      child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 28, 4, 12)),
-                    ),
-                  ),
-                  AlbumsSliver(
-                    albums: search.matchingAlbums,
-                    onOpen: context.vm.openAlbum,
-                    onPlay: context.vm.albums.playAlbum,
-                  ),
-                ],
-                if (search.hasPlaylists) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: pad,
-                      child: SectionLabel(
-                        context.tr('LabelPlaylists'),
-                        padding: const EdgeInsets.fromLTRB(4, 28, 4, 12),
-                      ),
-                    ),
-                  ),
-                  PlaylistsSliver(
-                    playlists: search.matchingPlaylists,
-                    tracksOf: context.vm.playlists.tracksOf,
-                    onOpen: context.vm.openPlaylist,
-                    onPlay: context.vm.playlists.playPlaylist,
-                  ),
-                ],
-                const PageEndSpace(),
-              ],
-            );
-          },
+          builder: (context, constraints) => ValueListenableBuilder(
+            // The tiles that go under the best match are as large as the grids'.
+            valueListenable: context.vm.tileSize,
+            builder: (context, _, _) => _results(context, search, constraints.maxWidth),
+          ),
         );
       },
     );
   }
+
+  Widget _results(BuildContext context, SearchViewModel search, double width) {
+    final narrow = width < 600;
+    final sideBySide = width >= _sideBySideWidth;
+    final pad = EdgeInsets.symmetric(horizontal: narrow ? 16 : 30);
+    final best = search.bestMatch;
+    const inset = TileGridSliver.tileInset;
+    const column = _BestMatchCard.width + 2 * inset;
+    final tracksHeight =
+        TrackSliver.tableHeaderHeight + 6 + TrackSliver.tableRowHeight * search.matchingTracks.length + 2;
+    // Under the best match, beside tracks too many for their usual height: the artists, and then the albums, while a row
+    // of their tiles fits under the card. The tracks then go on down beside them.
+    var artistsUnder = false;
+    var albumsUnder = false;
+    if (best != null && sideBySide && tracksHeight > _tracksHeight) {
+      final tileWidth = TileGridSliver.layoutIn(context, width, TileKind.album).tileWidth;
+      final fitting = TileRow.fitting(column, tileWidth);
+      artistsUnder = search.hasArtists && search.matchingArtists.length <= fitting;
+      albumsUnder = (artistsUnder || !search.hasArtists) && search.hasAlbums && search.matchingAlbums.length <= fitting;
+    }
+    TileRow tiles(TileKind kind, List<Widget> children) {
+      final layout = TileGridSliver.layoutIn(context, width, kind);
+      return TileRow(tileWidth: layout.tileWidth, extent: layout.extent, children: children);
+    }
+
+    // No title: the search field above shows what was searched for. The results start where a page's title would.
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(child: SizedBox(height: narrow ? 8 : 28)),
+        if (best != null && sideBySide)
+          SliverToBoxAdapter(
+            child: Padding(
+              // From the tiles' edge, so that those under the card line up as in the grids (their covers with the card).
+              padding: EdgeInsets.fromLTRB(TileGridSliver.padding, 0, pad.right, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: column,
+                        child: SectionLabel(
+                          context.tr('BestMatch'),
+                          padding: const EdgeInsets.fromLTRB(inset, 0, 0, 14),
+                        ),
+                      ),
+                      const SizedBox(width: _gap),
+                      if (search.hasTracks)
+                        SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.only(bottom: 14)),
+                    ],
+                  ),
+                  _Beside(
+                    leftWidth: column,
+                    gap: _gap,
+                    rightHeights: (math.min(tracksHeight, _tracksHeight), tracksHeight),
+                    left: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: inset),
+                          child: _BestMatchCard(match: best),
+                        ),
+                        if (artistsUnder) ...[
+                          _label(context, 'LabelArtists', inset),
+                          tiles(TileKind.twoLines, [
+                            for (final artist in search.matchingArtists)
+                              ArtistCard(
+                                artist: artist,
+                                onOpen: () => context.vm.openArtist(artist),
+                                onPlay: () => context.vm.artists.playArtist(artist),
+                              ),
+                          ]),
+                        ],
+                        if (albumsUnder) ...[
+                          _label(context, 'LabelAlbums', inset),
+                          tiles(TileKind.album, [
+                            for (final album in search.matchingAlbums)
+                              AlbumCard(
+                                album: album,
+                                onOpen: () => context.vm.openAlbum(album),
+                                onPlay: () => context.vm.albums.playAlbum(album),
+                              ),
+                          ]),
+                        ],
+                      ],
+                    ),
+                    // It scrolls inside, and fades where more of it goes on.
+                    right: search.hasTracks
+                        ? EdgeFade(
+                            child: CustomScrollView(
+                              slivers: [
+                                TrackSliver(
+                                  tracks: search.matchingTracks,
+                                  kind: TrackTableKind.search,
+                                  horizontalPadding: 0,
+                                  playingFrom: () => '"${search.query}"',
+                                ),
+                              ],
+                            ),
+                          )
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (best != null && !sideBySide)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: pad,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionLabel(context.tr('BestMatch'), padding: const EdgeInsets.only(bottom: 14)),
+                  // A phone's is as wide as the rows under it.
+                  _BestMatchCard(match: best, fill: narrow),
+                ],
+              ),
+            ),
+          ),
+        if (search.hasTracks && (best == null || !sideBySide)) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: pad,
+              child: SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.fromLTRB(0, 24, 0, 14)),
+            ),
+          ),
+          TrackSliver(
+            tracks: search.matchingTracks,
+            kind: TrackTableKind.search,
+            playingFrom: () => '"${search.query}"',
+          ),
+        ],
+        if (search.hasArtists && !artistsUnder) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: pad,
+              child: SectionLabel(context.tr('LabelArtists'), padding: const EdgeInsets.fromLTRB(4, 28, 4, 12)),
+            ),
+          ),
+          ArtistsSliver(
+            artists: search.matchingArtists,
+            onOpen: context.vm.openArtist,
+            onPlay: context.vm.artists.playArtist,
+          ),
+        ],
+        if (search.hasAlbums && !albumsUnder) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: pad,
+              child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 28, 4, 12)),
+            ),
+          ),
+          AlbumsSliver(
+            albums: search.matchingAlbums,
+            onOpen: context.vm.openAlbum,
+            onPlay: context.vm.albums.playAlbum,
+          ),
+        ],
+        if (search.hasPlaylists) ...[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: pad,
+              child: SectionLabel(context.tr('LabelPlaylists'), padding: const EdgeInsets.fromLTRB(4, 28, 4, 12)),
+            ),
+          ),
+          PlaylistsSliver(
+            playlists: search.matchingPlaylists,
+            tracksOf: context.vm.playlists.tracksOf,
+            onOpen: context.vm.openPlaylist,
+            onPlay: context.vm.playlists.playPlaylist,
+          ),
+        ],
+        const PageEndSpace(),
+      ],
+    );
+  }
+
+  static Widget _label(BuildContext context, String key, double inset) =>
+      SectionLabel(context.tr(key), padding: EdgeInsets.fromLTRB(inset + 4, 28, 4, 12));
 }
 
 /// The best match: a 116 px cover, its type, title and details, a play button and its ⋮, on a card 320 px wide; the
@@ -319,5 +380,106 @@ class _MetricCardState extends State<_MetricCard> {
         ),
       ),
     );
+  }
+}
+
+enum _Side { left, right }
+
+/// The best match's column and, beside it, the tracks: as tall as the column, so that they go on beside what it holds
+/// under the card, between [rightHeights] (at least the lower one: their usual height, while there are that many).
+class _Beside extends SlottedMultiChildRenderObjectWidget<_Side, RenderBox> {
+  const _Beside({
+    required this.left,
+    this.right,
+    required this.leftWidth,
+    required this.gap,
+    required this.rightHeights,
+  });
+
+  final Widget left;
+  final Widget? right;
+  final double leftWidth;
+  final double gap;
+  final (double, double) rightHeights;
+
+  @override
+  Iterable<_Side> get slots => _Side.values;
+
+  @override
+  Widget? childForSlot(_Side slot) => switch (slot) {
+    _Side.left => left,
+    _Side.right => right,
+  };
+
+  @override
+  _RenderBeside createRenderObject(BuildContext context) => _RenderBeside(leftWidth, gap, rightHeights);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderBeside renderObject) => renderObject
+    ..leftWidth = leftWidth
+    ..gap = gap
+    ..rightHeights = rightHeights;
+}
+
+class _RenderBeside extends RenderBox with SlottedContainerRenderObjectMixin<_Side, RenderBox> {
+  _RenderBeside(this._leftWidth, this._gap, this._rightHeights);
+
+  double _leftWidth;
+  set leftWidth(double value) {
+    if (value == _leftWidth) return;
+    _leftWidth = value;
+    markNeedsLayout();
+  }
+
+  double _gap;
+  set gap(double value) {
+    if (value == _gap) return;
+    _gap = value;
+    markNeedsLayout();
+  }
+
+  (double, double) _rightHeights;
+  set rightHeights((double, double) value) {
+    if (value == _rightHeights) return;
+    _rightHeights = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final left = childForSlot(_Side.left)!;
+    left.layout(BoxConstraints.tightFor(width: _leftWidth), parentUsesSize: true);
+    var height = left.size.height;
+    final right = childForSlot(_Side.right);
+    if (right != null) {
+      final (low, high) = _rightHeights;
+      final rightHeight = height.clamp(low, high);
+      right.layout(
+        BoxConstraints.tightFor(width: math.max(0, constraints.maxWidth - _leftWidth - _gap), height: rightHeight),
+      );
+      (right.parentData! as BoxParentData).offset = Offset(_leftWidth + _gap, 0);
+      height = math.max(height, rightHeight);
+    }
+    size = constraints.constrain(Size(constraints.maxWidth, height));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    for (final child in children) {
+      context.paintChild(child, offset + (child.parentData! as BoxParentData).offset);
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    for (final child in children) {
+      final hit = result.addWithPaintOffset(
+        offset: (child.parentData! as BoxParentData).offset,
+        position: position,
+        hitTest: (result, transformed) => child.hitTest(result, position: transformed),
+      );
+      if (hit) return true;
+    }
+    return false;
   }
 }

@@ -4128,6 +4128,49 @@ void main() {
     expect((rect.left, 400 - rect.right), (16, 16));
   });
 
+  testWidgets(
+    "a computer's search puts a row of artists or albums under the best match, and its tracks go on down beside them",
+    (tester) async {
+      // One album of 13 tracks, and three: those no longer fit under the card, where the artist still goes.
+      for (final albums in [1, 3]) {
+        final vm = await pumpApp(tester, const Size(1400, 900), () async {
+          final library = createLibrary([
+            for (var a = 1; a <= albums; a++)
+              for (var i = 1; i <= 13; i++)
+                TestSupport.makeTrack('$a-$i', 'Take $i', artist: 'Nova Reyes', album: 'Mint $a', trackNumber: i),
+            TestSupport.makeTrack('x', 'Other', artist: 'Kite Theory', album: 'Green Signal'),
+          ]);
+          library.initialize();
+          return createMainViewModel(library);
+        });
+        vm.searchQuery = 'nova';
+        await settle(tester);
+        final tracks = find.ancestor(of: find.text('Take 1').first, matching: find.byType(CustomScrollView)).first;
+        final list = tester.getRect(tracks);
+        expect(list.height, greaterThan(380), reason: '$albums: past their usual height');
+        expect(
+          find.ancestor(of: tracks, matching: find.byType(EdgeFade)),
+          findsOneWidget,
+          reason: 'fading at its ends',
+        );
+        final artist = tester.getRect(find.byType(ArtistCard));
+        expect(
+          (artist.right < list.left, artist.top < list.bottom),
+          (true, true),
+          reason: '$albums: the artist beside',
+        );
+        final album = tester.getRect(find.byType(AlbumCard).first);
+        if (albums == 1) {
+          expect((album.left, album.top > artist.bottom), (artist.left, true), reason: 'the album under the artist');
+          final last = tester.getRect(find.text('Take 13'));
+          expect(last.bottom, lessThanOrEqualTo(list.bottom), reason: 'the column tall enough for all the tracks');
+        } else {
+          expect(album.top, greaterThan(list.bottom), reason: 'the albums in their row across the page');
+        }
+      }
+    },
+  );
+
   testWidgets("the table's dates stay on one line, written the language's way", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     for (final t in vm.library.tracks) {

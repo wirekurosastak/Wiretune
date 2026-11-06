@@ -1339,6 +1339,12 @@ class TileGridSliver extends StatelessWidget {
 
   static const double _gap = 14;
 
+  /// The space at the grid's sides; a tile's cover is [tileInset] further in.
+  static const double padding = 20;
+
+  /// How far a tile's cover is in from the tile's edge.
+  static const double tileInset = _DesktopTile.padding;
+
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
   final TileKind kind;
@@ -1359,28 +1365,39 @@ class TileGridSliver extends StatelessWidget {
     return height;
   }
 
-  @override
-  Widget build(BuildContext context) {
+  /// How the grid lays [kind]'s tiles out across [width] (the scroll view's), at the tile size the user set: how many
+  /// to a row, how wide each, and how tall.
+  static ({int columns, double tileWidth, double extent}) layoutIn(BuildContext context, double width, TileKind kind) {
+    final available = width - 2 * padding;
+    final minTileWidth = context.vm.tileSize.value;
+    final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
+    final tileWidth = (available - _gap * (columns - 1)) / columns;
+    // The square cover, then the caption at the user's font size.
     final title = _lineHeight(context, 14, FontWeight.w700);
     final second = _lineHeight(context, 12.5, FontWeight.w500);
-    final third = _lineHeight(context, 11, FontWeight.w500);
+    final lines = kind == TileKind.album
+        ? title + second + _lineHeight(context, 11, FontWeight.w500) + 4
+        : title + second + 2;
+    return (
+      columns: columns,
+      tileWidth: tileWidth,
+      extent: 2 * tileInset + (tileWidth - 2 * tileInset) + _DesktopTile.captionGap + lines + 2,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return ValueListenableBuilder<double>(
       valueListenable: context.vm.tileSize,
-      builder: (context, minTileWidth, _) => SliverWidthBuilder(
+      builder: (context, _, _) => SliverWidthBuilder(
         builder: (context, width) {
-          const padding = 20.0;
-          final available = width - 2 * padding;
-          final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
-          final tileWidth = (available - _gap * (columns - 1)) / columns;
-          // The square cover, then the caption at the user's font size.
-          final lines = kind == TileKind.album ? title + second + third + 4 : title + second + 2;
-          const inset = 2 * _DesktopTile.padding;
+          final (:columns, :tileWidth, :extent) = layoutIn(context, width, kind);
           return SliverPadding(
             padding: const EdgeInsets.fromLTRB(padding, 4, padding, 4),
             sliver: SliverGrid(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columns,
-                mainAxisExtent: inset + (tileWidth - inset) + _DesktopTile.captionGap + lines + 2,
+                mainAxisExtent: extent,
                 crossAxisSpacing: _gap,
                 mainAxisSpacing: _gap,
               ),
@@ -1391,6 +1408,34 @@ class TileGridSliver extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A few tiles in a row, as [TileGridSliver] lays them out (the same size, gap and caption), where they go beside
+/// something else rather than in a grid of their own: the search's artists or albums under its best match.
+class TileRow extends StatelessWidget {
+  const TileRow({super.key, required this.tileWidth, required this.extent, required this.children});
+
+  final double tileWidth;
+  final double extent;
+  final List<Widget> children;
+
+  /// How many tiles [tileWidth] wide fit in [width].
+  static int fitting(double width, double tileWidth) =>
+      ((width + TileGridSliver._gap) / (tileWidth + TileGridSliver._gap)).floor();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (i, child) in children.indexed) ...[
+          if (i > 0) const SizedBox(width: TileGridSliver._gap),
+          SizedBox(width: tileWidth, height: extent, child: child),
+        ],
+      ],
+    ),
+  );
 }
 
 /// The round play button of a tile: filled with a gradient of [color], over a glow of it. While the queue is [tracks]
