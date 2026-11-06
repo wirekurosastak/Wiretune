@@ -53,9 +53,13 @@ class TrackSliver extends StatefulWidget {
     this.horizontalPadding,
     this.onReorder,
     this.columnHeaders = true,
+    this.playingFrom,
   });
 
   final List<Track> tracks;
+
+  /// The list's name, which the player shows as what it plays from when a row is played.
+  final String Function()? playingFrom;
 
   /// The page's sort (Tracks, Favourites), which [tracks] are already in: the column headers change it, as the sort
   /// buttons do. Without one the list keeps its own order (an album's, a playlist's, the best match first) until a
@@ -149,7 +153,7 @@ class _TrackSliverState extends State<TrackSliver> {
     return sorting != null ? sorting.addedAt(track) : track.addedAt;
   }
 
-  void _play(Track track) => context.vm.player.playQueue(_tracks, track);
+  void _play(Track track) => context.vm.player.playQueue(_tracks, track, widget.playingFrom);
 
   TrackTableKind get kind => widget.kind;
   _Columns get _columns => _Columns(kind, _tableWidth);

@@ -84,10 +84,16 @@ class NowPlayingPage extends StatelessWidget {
                               Expanded(
                                 child: ListenableBuilder(
                                   listenable: vm.player,
-                                  builder: (context, _) => vm.player.isRemote
-                                      ? const Center(child: PlayingOnLabel(fontSize: 12))
-                                      : Text(
-                                          context.tr('NowPlaying').toUpperCase(),
+                                  builder: (context, _) {
+                                    if (vm.player.isRemote) return const Center(child: PlayingOnLabel(fontSize: 12));
+                                    // What the queue was played from, as Spotify and TIDAL say it; else only that it
+                                    // plays.
+                                    final from = vm.player.playingFrom;
+                                    return Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          context.tr(from == null ? 'NowPlaying' : 'PlayingFrom').toUpperCase(),
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             fontSize: 11.5,
@@ -96,6 +102,23 @@ class NowPlayingPage extends StatelessWidget {
                                             color: colors.textMain.withValues(alpha: 0.75),
                                           ),
                                         ),
+                                        if (from != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            from,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontWeight: FontWeight.w700,
+                                              color: colors.textMain,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
                               const SleepTimerButton(),

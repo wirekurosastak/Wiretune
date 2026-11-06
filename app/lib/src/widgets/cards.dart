@@ -327,7 +327,7 @@ class ListMenu {
       case _ListAction.play:
         onPlay();
       case _ListAction.shuffle:
-        vm.player.shuffleQueue(tracks);
+        vm.player.shuffleQueue(tracks, () => name);
       case _ListAction.playNext:
         vm.queue(tracks, next: true, name: name);
         CoverFlight.toPlayer(flightTag);

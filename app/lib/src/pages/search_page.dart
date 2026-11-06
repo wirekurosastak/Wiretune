@@ -86,6 +86,7 @@ class SearchResults extends StatelessWidget {
                                           tracks: search.matchingTracks,
                                           kind: TrackTableKind.search,
                                           horizontalPadding: 0,
+                                          playingFrom: () => '"${search.query}"',
                                         ),
                                       ],
                                     ),
@@ -117,7 +118,11 @@ class SearchResults extends StatelessWidget {
                       child: SectionLabel(context.tr('LabelTracks'), padding: const EdgeInsets.fromLTRB(0, 24, 0, 14)),
                     ),
                   ),
-                  TrackSliver(tracks: search.matchingTracks, kind: TrackTableKind.search),
+                  TrackSliver(
+                    tracks: search.matchingTracks,
+                    kind: TrackTableKind.search,
+                    playingFrom: () => '"${search.query}"',
+                  ),
                 ],
                 if (search.hasArtists) ...[
                   SliverToBoxAdapter(

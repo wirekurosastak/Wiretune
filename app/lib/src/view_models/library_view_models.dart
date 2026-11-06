@@ -139,6 +139,7 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
   /// The Tracks section: the whole library, A to Z.
   TrackListViewModel.allTracks(LibraryService library, this._player)
     : _source = (() => library.tracks),
+      _from = (() => Localizer.get('NavTracks')),
       _favoritedAt = null,
       _order = SortOrder(TrackSortField.title, startsDescending: startsDescending) {
     _unsubscribers.add(library.libraryChanged.listen((_) => refresh()));
@@ -148,6 +149,7 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
   /// The Favorites section; the newest favourites first unless the user sorts otherwise.
   TrackListViewModel.favorites(LibraryService library, this._player)
     : _source = (() => library.favorites),
+      _from = (() => Localizer.get('NavFavorites')),
       _favoritedAt = library.favoritedAt,
       _order = SortOrder(TrackSortField.added, startsDescending: startsDescending) {
     _unsubscribers.addAll([
@@ -158,6 +160,12 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
   }
 
   final List<Track> Function() _source;
+
+  /// The page's name, as the player says what it plays from.
+  final String Function() _from;
+
+  /// What the player says it plays from when it plays this page.
+  String Function() get playingFrom => _from;
   final DateTime? Function(String trackId)? _favoritedAt;
   final PlayerViewModel _player;
   final List<void Function()> _unsubscribers = [];
@@ -188,7 +196,7 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
 
   /// Plays the page from its first track, or from any while shuffle is on (the header's shuffle switch shows which).
   void playAll() {
-    if (tracks.isNotEmpty) _player.playQueue(tracks);
+    if (tracks.isNotEmpty) _player.playQueue(tracks, null, _from);
   }
 
   @override
@@ -411,7 +419,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   void playAlbum([Album? album]) {
     final target = album ?? selectedAlbum;
     if (target == null || target.tracks.isEmpty) return;
-    _player.playQueue(target.tracks);
+    _player.playQueue(target.tracks, null, () => target.title);
   }
 
   @override
@@ -546,7 +554,7 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
   void playArtist([Artist? artist]) {
     final target = artist ?? selectedArtist;
     if (target == null || target.tracks.isEmpty) return;
-    _player.playQueue(target.tracks);
+    _player.playQueue(target.tracks, null, () => target.name);
   }
 
   @override
@@ -828,7 +836,8 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   /// Plays [playlist] in its own order, or the open one in the order shown.
   void playPlaylist([Playlist? playlist]) {
     final tracks = playlist == null ? selectedPlaylistTracks : _library.getPlaylistTracks(playlist);
-    if (tracks.isNotEmpty) _player.playQueue(tracks);
+    final name = (playlist ?? selectedPlaylist)?.name;
+    if (tracks.isNotEmpty) _player.playQueue(tracks, null, name == null ? null : () => name);
   }
 
   /// Takes [track] out of the open playlist; returns what puts it back in its place (null: it wasn't taken out).

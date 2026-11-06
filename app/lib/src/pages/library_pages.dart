@@ -105,7 +105,7 @@ class TracksPage extends StatelessWidget {
           ),
           columnHeaders: TrackColumnHeaders(sorting: page),
           slivers: [
-            TrackSliver(tracks: page.tracks, sorting: page, columnHeaders: false),
+            TrackSliver(tracks: page.tracks, sorting: page, columnHeaders: false, playingFrom: page.playingFrom),
             const PageEndSpace(),
           ],
         );
@@ -161,7 +161,12 @@ class FavoritesPage extends StatelessWidget {
           ),
           columnHeaders: TrackColumnHeaders(sorting: favorites),
           slivers: [
-            TrackSliver(tracks: favorites.tracks, sorting: favorites, columnHeaders: false),
+            TrackSliver(
+              tracks: favorites.tracks,
+              sorting: favorites,
+              columnHeaders: false,
+              playingFrom: favorites.playingFrom,
+            ),
             const PageEndSpace(),
           ],
         );
@@ -859,7 +864,7 @@ class AlbumDetail extends StatelessWidget {
               ],
             ),
           ),
-          TrackSliver(tracks: album.tracks, kind: TrackTableKind.album),
+          TrackSliver(tracks: album.tracks, kind: TrackTableKind.album, playingFrom: () => album.title),
           const PageEndSpace(),
         ],
       ),
@@ -979,7 +984,7 @@ class ArtistDetail extends StatelessWidget {
               child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
             ),
           ),
-          TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist),
+          TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist, playingFrom: () => artist.name),
           const PageEndSpace(),
         ],
       ),

@@ -358,9 +358,9 @@ class WiretuneMediaSession extends BaseAudioHandler {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return _vm.player.shuffleQueue(library.tracks);
     final artist = library.artists.where((a) => a.name.toLowerCase() == q).firstOrNull;
-    if (artist != null) return _vm.player.playQueue(artist.tracks);
+    if (artist != null) return _vm.player.playQueue(artist.tracks, null, () => artist.name);
     final album = library.albums.where((a) => a.title.toLowerCase() == q).firstOrNull;
-    if (album != null) return _vm.player.playQueue(album.tracks);
+    if (album != null) return _vm.player.playQueue(album.tracks, null, () => album.title);
     final tracks = library.search(query).toList();
     if (tracks.isNotEmpty) _vm.player.playQueue(tracks);
   }

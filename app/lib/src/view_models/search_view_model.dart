@@ -147,7 +147,7 @@ class SearchViewModel extends ChangeNotifier {
     coverPath: artist.picturePath,
     tracks: artist.tracks,
     play: () {
-      if (artist.tracks.isNotEmpty) _player.playQueue(artist.tracks);
+      if (artist.tracks.isNotEmpty) _player.playQueue(artist.tracks, null, () => artist.name);
     },
   );
 
@@ -162,7 +162,7 @@ class SearchViewModel extends ChangeNotifier {
     coverPath: album.coverArtPath,
     tracks: album.tracks,
     play: () {
-      if (album.tracks.isNotEmpty) _player.playQueue(album.tracks);
+      if (album.tracks.isNotEmpty) _player.playQueue(album.tracks, null, () => album.title);
     },
   );
 
