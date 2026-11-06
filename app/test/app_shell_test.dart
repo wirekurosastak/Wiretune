@@ -8,6 +8,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/app.dart';
@@ -3589,6 +3590,60 @@ void main() {
     expect(find.byType(AlbumsPage), findsOneWidget);
     expect(find.byType(TracksPage), findsNothing);
     expect(tester.getTopLeft(find.byType(AlbumsPage)).dx, 0);
+  });
+
+  testWidgets("an album's name over several lines breaks only between words: before a tag that fits, never in a word", (
+    tester,
+  ) async {
+    const fits = 'Kind of Blue Remixed (Live 1959)';
+    const longTag = 'Blue (Live at the Plugged Nickel)';
+    const longWord = 'Weihnachtsoratoriumsfassungen';
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        for (final (i, title) in [fits, longTag, longWord].indexed)
+          TestSupport.makeTrack('$i', 'Take $i', album: title),
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+
+    // The name as the album's page shows it, and the line each of its characters is on (by how far down its caret is).
+    Future<(String, double Function(int))> show(String title) async {
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == title));
+      await settle(tester);
+      final shown = find.descendant(
+        of: find.byType(DetailHeader),
+        matching: find.byWidgetPredicate((w) => w is Text && w.data?.replaceAll(' ', ' ') == title),
+      );
+      final paragraph = tester.renderObject<RenderParagraph>(
+        find.descendant(of: shown, matching: find.byType(RichText)),
+      );
+      return (
+        tester.widget<Text>(shown).data!,
+        (int offset) => paragraph.getOffsetForCaret(TextPosition(offset: offset), Rect.zero).dy,
+      );
+    }
+
+    // Every break is after a space.
+    void wholeWords(String text, double Function(int) lineOf, String reason) {
+      for (var i = 0; i + 1 < text.length; i++) {
+        if (lineOf(i + 1) != lineOf(i)) {
+          expect(text[i], ' ', reason: '$reason: a break inside "${text.substring(0, i + 1)}"');
+        }
+      }
+    }
+
+    var (text, lineOf) = await show(fits);
+    expect(lineOf(0), isNot(lineOf(text.length - 1)), reason: 'over several lines');
+    expect(lineOf(text.indexOf('(')), lineOf(text.indexOf(')')), reason: 'the tag on one line');
+    wholeWords(text, lineOf, 'a tag that fits');
+
+    (text, lineOf) = await show(longTag);
+    expect(lineOf(text.indexOf('(')), isNot(lineOf(text.indexOf(')'))), reason: 'a tag longer than a line');
+    wholeWords(text, lineOf, 'a tag longer than a line');
+
+    (text, lineOf) = await show(longWord);
+    expect(lineOf(0), lineOf(text.length - 1), reason: 'a word longer than a line, made smaller');
   });
 
   testWidgets("an album's details on a phone: the artists on a line, the rest under them, unless all fit on one", (

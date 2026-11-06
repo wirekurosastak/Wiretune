@@ -1656,6 +1656,49 @@ class PageEndSpace extends StatelessWidget {
       SliverToBoxAdapter(child: SizedBox(height: 28 + MediaQuery.paddingOf(context).bottom));
 }
 
+/// [title] and [style] for a title over several lines in [width] that breaks only between words, never inside one: each
+/// of its bracketed tags ("(Legacy Edition)", "[Remastered]") that fits on a line kept whole (its spaces no-break
+/// spaces), so that it goes onto the next line rather than splitting; a longer one breaks between its words; and a word
+/// wider than the whole line makes the title just small enough for it.
+({String text, TextStyle style}) wrapByWords(BuildContext context, String title, TextStyle style, double width) {
+  if (!width.isFinite) return (text: title, style: style);
+  final around = DefaultTextStyle.of(context).style;
+  final direction = Directionality.of(context);
+  final scaler = MediaQuery.textScalerOf(context);
+  // Measured in the font it is drawn in (the app's, which a Text takes from around it).
+  double widthOf(String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: around.merge(style)),
+      maxLines: 1,
+      textDirection: direction,
+      textScaler: scaler,
+    )..layout();
+    final measured = painter.width;
+    painter.dispose();
+    return measured;
+  }
+
+  final words = title.split(RegExp(r'\s+'));
+  double widest(TextStyle style) => words.fold(0.0, (most, word) => math.max(most, widthOf(word, style)));
+  var fitted = style;
+  final wide = widest(style);
+  if (wide > width) {
+    // About as much smaller as the word is too wide, then a step at a time until it fits.
+    var size = ((around.merge(style).fontSize ?? 14) * width / wide).floorToDouble();
+    fitted = style.copyWith(fontSize: size);
+    while (size > 8 && widest(fitted) > width) {
+      fitted = style.copyWith(fontSize: --size);
+    }
+  }
+  final text = title.replaceAllMapped(_bracketedTag, (match) {
+    final tag = match[0]!;
+    return widthOf(tag, fitted) <= width ? tag.replaceAll(' ', '\u00A0') : tag;
+  });
+  return (text: text, style: fitted);
+}
+
+final RegExp _bracketedTag = RegExp(r'\([^()]*\)|\[[^\[\]]*\]');
+
 /// A rounded card of glass: a faint sheen from its top-left corner and a hairline edge.
 class GlassCard extends StatelessWidget {
   const GlassCard({super.key, required this.child, this.padding, this.hoverColor, this.opaque = false});

@@ -635,12 +635,22 @@ class _Preview extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colors.textMain),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final (:text, :style) = wrapByWords(
+                          context,
+                          title,
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colors.textMain),
+                          constraints.maxWidth,
+                        );
+                        return Text(
+                          text,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: style,
+                        );
+                      },
                     ),
                     if (subtitle != null)
                       Padding(

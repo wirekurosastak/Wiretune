@@ -274,9 +274,10 @@ class DetailHeader extends StatelessWidget {
     if (titleWidget case final widget?) return PinnedTitleBar.pageTitle(context, widget);
     return LayoutBuilder(
       builder: (context, constraints) {
+        final (:text, style: fitted) = wrapByWords(context, title, style, constraints.maxWidth);
         // Measured in the font it is drawn in (the app's, which a Text takes from around it).
         final painter = TextPainter(
-          text: TextSpan(text: title, style: DefaultTextStyle.of(context).style.merge(style)),
+          text: TextSpan(text: text, style: DefaultTextStyle.of(context).style.merge(fitted)),
           maxLines: 1,
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
@@ -285,8 +286,8 @@ class DetailHeader extends StatelessWidget {
         painter.dispose();
         return PinnedTitleBar.pageTitle(
           context,
-          Text(title, textAlign: textAlign, maxLines: maxLines, overflow: TextOverflow.ellipsis, style: style),
-          shrinkStyle: oneLine ? style : null,
+          Text(text, textAlign: textAlign, maxLines: maxLines, overflow: TextOverflow.ellipsis, style: fitted),
+          shrinkStyle: oneLine ? fitted : null,
         );
       },
     );
