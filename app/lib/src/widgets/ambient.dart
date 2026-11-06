@@ -56,6 +56,21 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
   ImageStream? _stream;
   ImageStreamListener? _listener;
   ui.Image? _image;
+
+  static const Duration _fade = Duration(milliseconds: 900);
+
+  /// The images replaced, which the switcher still fades out (and lays out again when the area resizes); each goes once
+  /// its fade is over. Released at once, a rebuild of the fading one failed ("Cannot clone a disposed image").
+  final Set<ui.Image> _fading = {};
+
+  void _retire(ui.Image? image) {
+    if (image == null) return;
+    _fading.add(image);
+    Timer(_fade + const Duration(milliseconds: 100), () {
+      if (_fading.remove(image)) image.dispose();
+    });
+  }
+
   String? _requested;
   bool _resolved = false;
   int _generation = 0;
@@ -79,6 +94,10 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     _stopListening();
     _drift.dispose();
     _image?.dispose();
+    for (final image in _fading) {
+      image.dispose();
+    }
+    _fading.clear();
     super.dispose();
   }
 
@@ -107,7 +126,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     if (_softened.remove(path) case final softened?) {
       _softened[path!] = softened; // the latest again
       // Before this frame's build: no fade.
-      _image?.dispose();
+      _retire(_image);
       _image = softened.clone();
       return;
     }
@@ -144,7 +163,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     if (image == null && _image == null) return;
     // The widgets hold clones of the bitmap; this handle is ours to release.
     setState(() {
-      _image?.dispose();
+      _retire(_image);
       _image = image;
     });
     _updateDrift();
@@ -172,7 +191,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     final image = _image;
     return ClipRect(
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 900),
+        duration: _fade,
         child: image == null
             ? const SizedBox.expand()
             : RepaintBoundary(
