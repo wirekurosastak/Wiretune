@@ -3800,6 +3800,22 @@ void main() {
     }
   });
 
+  testWidgets("a computer's queue frame ends level with the sidebar's card; the lyrics scroll to its edge", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.player.playQueue(vm.library.tracks);
+    vm.player.isQueueOpen = true;
+    await settle(tester);
+    final frame = tester.getRect(
+      find.descendant(of: find.byType(QueueLyricsPanel), matching: find.byType(GlassCard)).first,
+    );
+    final sidebar = tester.getRect(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_Sidebar'));
+    expect(frame.bottom, sidebar.bottom);
+    // Its sides' space is inside the scrolling, so the scrollbar is at the frame's edge, as the queue's at the divider.
+    expect(tester.getRect(find.byType(LyricsView)).right, frame.right);
+  });
+
   testWidgets("a right click on a queue row opens the track's menu", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.player.playQueue(vm.library.tracks);

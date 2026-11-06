@@ -82,18 +82,9 @@ class WideLayout extends StatelessWidget {
                             Expanded(
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(Radii.panel),
-                                child: ShaderMask(
-                                  shaderCallback: (rect) => const LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
-                                    stops: [0.0, 0.035, 0.965, 1.0],
-                                  ).createShader(rect),
-                                  blendMode: BlendMode.dstIn,
-                                  child: TvFocusArea(
-                                    area: TvArea.content,
-                                    child: FocusTraversalGroup(child: _Content(vm: vm)),
-                                  ),
+                                child: TvFocusArea(
+                                  area: TvArea.content,
+                                  child: FocusTraversalGroup(child: _Content(vm: vm)),
                                 ),
                               ),
                             ),
@@ -150,11 +141,12 @@ class _Content extends StatelessWidget {
     builder: (context, _) {
       final Widget page;
       if (vm.player.isQueueOpen) {
+        // Framed, and not scrolling as a whole: down to the sidebar card's bottom, its edge not faded.
         page = const QueueLyricsPanel(key: ValueKey('queue'));
       } else if (vm.isSearchActive) {
-        page = const SearchResults(key: ValueKey('search'));
+        page = const _PageFade(key: ValueKey('search'), child: SearchResults());
       } else {
-        page = KeyedSubtree(key: ValueKey(vm.selectedSection), child: sectionPage(vm.selectedSection));
+        page = _PageFade(key: ValueKey(vm.selectedSection), child: sectionPage(vm.selectedSection));
       }
       return _TilePinch(
         child: AnimatedSwitcher(
@@ -174,6 +166,25 @@ class _Content extends StatelessWidget {
         ),
       );
     },
+  );
+}
+
+/// A page's top and bottom edges fade, where it scrolls past them.
+class _PageFade extends StatelessWidget {
+  const _PageFade({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ShaderMask(
+    shaderCallback: (rect) => const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [Colors.transparent, Colors.black, Colors.black, Colors.transparent],
+      stops: [0.0, 0.035, 0.965, 1.0],
+    ).createShader(rect),
+    blendMode: BlendMode.dstIn,
+    child: child,
   );
 }
 

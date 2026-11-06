@@ -401,10 +401,13 @@ class _QueueRowState extends State<_QueueRow> {
 /// The lyrics of the current track: synced lines that follow the song (tap one to jump there), plain text, or why
 /// there are none. With [showHeader] it is titled with the track, as beside the queue.
 class LyricsView extends StatefulWidget {
-  const LyricsView({super.key, this.showHeader = true, this.centered = false});
+  const LyricsView({super.key, this.showHeader = true, this.centered = false, this.sideInset = 0});
 
   final bool showHeader;
   final bool centered;
+
+  /// The space at the lines' sides, inside the scrolling: the scrollbar stays at the edge of the frame.
+  final double sideInset;
 
   @override
   State<LyricsView> createState() => _LyricsViewState();
@@ -447,9 +450,10 @@ class _LyricsViewState extends State<LyricsView> {
       listenable: Listenable.merge([player, lyrics]),
       builder: (context, _) {
         final track = player.currentTrack;
+        final side = widget.sideInset;
         final header = widget.showHeader
             ? Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: EdgeInsets.fromLTRB(side, 0, side, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -521,7 +525,7 @@ class _LyricsViewState extends State<LyricsView> {
                 final lines = lyrics.lines;
                 return ListView.builder(
                   controller: _scroll,
-                  padding: const EdgeInsets.only(top: 24, bottom: 120),
+                  padding: EdgeInsets.fromLTRB(side, 24, side, 120),
                   itemCount: lines.length,
                   itemBuilder: (context, i) {
                     final line = lines[i];
@@ -546,7 +550,7 @@ class _LyricsViewState extends State<LyricsView> {
           );
         } else {
           body = SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 80),
+            padding: EdgeInsets.fromLTRB(side, 0, side, 80),
             child: SelectableText(
               lyrics.plainText ?? '',
               textAlign: widget.centered ? TextAlign.center : TextAlign.start,
@@ -658,7 +662,8 @@ class QueueLyricsPanel extends StatelessWidget {
       builder: (context, _) {
         final count = player.queueItems.length;
         return Padding(
-          padding: const EdgeInsets.fromLTRB(30, 28, 30, 24),
+          // Down to the bottom of the sidebar's card, as the other pages go.
+          padding: const EdgeInsets.fromLTRB(30, 28, 30, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -725,7 +730,7 @@ class QueueLyricsPanel extends StatelessWidget {
                             const Expanded(child: QueueList()),
                             Container(width: 1, color: colors.glassBorder),
                             const Expanded(
-                              child: Padding(padding: EdgeInsets.fromLTRB(24, 20, 24, 0), child: LyricsView()),
+                              child: Padding(padding: EdgeInsets.only(top: 20), child: LyricsView(sideInset: 24)),
                             ),
                           ],
                         ),
