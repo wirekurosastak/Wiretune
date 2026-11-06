@@ -116,10 +116,12 @@ class Palette {
   /// The accent for the colour of the cover of what plays (`CoverColor.of`; null for none, or a grey one: the
   /// [neutral]): vivid, light on the dark theme and deep on the light one, and kept within the luminance at which text
   /// in it and [onAccent] on it read, whatever its hue. Within that a hue keeps its own brightness: a red stays red
-  /// rather than pink, a yellow yellow.
+  /// rather than pink, a yellow yellow. On the light theme a yellow (a gold, a khaki) deep enough to read on white is
+  /// olive, so there it is the [neutral].
   Color accentOf(Color? cover) {
     if (cover == null) return neutral;
     final hsl = HSLColor.fromColor(cover);
+    if (!isDark && hsl.hue >= 40 && hsl.hue < 70) return neutral;
     final colour = hsl.withSaturation((hsl.saturation * 1.3).clamp(0.5, 0.9)).withLightness(isDark ? 0.6 : 0.42);
     final (least, most) = isDark ? (0.28, 0.6) : (0.07, 0.18);
     final luminance = colour.toColor().computeLuminance();

@@ -2474,8 +2474,17 @@ void main() {
     for (final hue in [0.0, 60, 120, 180, 240, 300]) {
       final source = HSLColor.fromAHSL(1, hue.toDouble(), 0.8, 0.5).toColor();
       expect(Palette.dark.accentOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: 'dark, $hue');
+      if (hue == 60) continue; // a yellow: the light theme has the neutral, below
       expect(Palette.light.accentOf(source).computeLuminance(), inInclusiveRange(0.06, 0.19), reason: 'light, $hue');
     }
+    // A yellow deep enough to read on white is olive: the light theme has the neutral instead; the dark keeps it.
+    for (final hue in [40.0, 50.0, 60.0, 69.0]) {
+      final source = HSLColor.fromAHSL(1, hue, 0.8, 0.5).toColor();
+      expect(Palette.light.accentOf(source), Palette.light.neutral, reason: 'light, $hue');
+      expect(Palette.dark.accentOf(source), isNot(Palette.dark.neutral), reason: 'dark, $hue');
+    }
+    final orange = HSLColor.fromAHSL(1, 30, 0.8, 0.5).toColor();
+    expect(Palette.light.accentOf(orange), isNot(Palette.light.neutral), reason: 'an orange stays');
   });
 
   testWidgets("dragging the player's seek bar seeks, and is no swipe", (tester) async {
