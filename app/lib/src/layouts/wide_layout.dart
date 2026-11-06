@@ -141,7 +141,7 @@ class _Content extends StatelessWidget {
     builder: (context, _) {
       final Widget page;
       if (vm.player.isQueueOpen) {
-        // Framed, and not scrolling as a whole: down to the sidebar card's bottom, its edge not faded.
+        // A card in the page, not scrolling as a whole: its edge is not faded.
         page = const QueueLyricsPanel(key: ValueKey('queue'));
       } else if (vm.isSearchActive) {
         page = const _PageFade(key: ValueKey('search'), child: SearchResults());

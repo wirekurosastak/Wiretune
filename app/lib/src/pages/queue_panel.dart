@@ -663,8 +663,8 @@ class QueueLyricsPanel extends StatelessWidget {
       builder: (context, _) {
         final count = player.queueItems.length;
         return Padding(
-          // Down to the bottom of the sidebar's card, as the other pages go.
-          padding: const EdgeInsets.fromLTRB(30, 28, 30, 0),
+          // The card about as far in from the page's bottom as from its sides.
+          padding: const EdgeInsets.fromLTRB(30, 28, 30, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
