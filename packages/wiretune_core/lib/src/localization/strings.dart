@@ -90,7 +90,7 @@ const Map<String, (String, String, String)> allStrings = {
     'The next track starts the moment the current one ends (for live and continuous albums).',
     'Der nächste Titel beginnt, sobald der aktuelle endet (für Live- und durchgehende Alben).',
   ),
-  'SettingsEqualizer': ('Kiegyenlítő', 'Equalizer', 'Equalizer'),
+  'SettingsEqualizer': ('Hangszínszabályzó', 'Equalizer', 'Equalizer'),
   'SettingsEqualizerHint': (
     'Tíz sáv, ±12 dB. A legnagyobb emelést az előerősítés visszaveszi, hogy ne torzítson. Bit-perfect módban nem működik.',
     'Ten bands, ±12 dB. The preamp takes the biggest boost back off so it does not clip. Off in bit-perfect mode.',
@@ -771,7 +771,7 @@ const Map<String, (String, String, String)> allStrings = {
   'SignalTransport': ('Átvitel: {0}', 'Transport: {0}', 'Übertragung: {0}'),
   'SignalProcessing': ('Feldolgozás: {0}', 'Processing: {0}', 'Verarbeitung: {0}'),
   'SignalAccess': ('Hozzáférés: {0}', 'Access: {0}', 'Zugriff: {0}'),
-  'SignalProcessingEqualizer': ('{0}, kiegyenlítő', '{0}, equalizer', '{0}, Equalizer'),
+  'SignalProcessingEqualizer': ('{0}, hangszínszabályzó', '{0}, equalizer', '{0}, Equalizer'),
   'SignalTarget': ('Cél eszköz: {0}', 'Target device: {0}', 'Zielgerät: {0}'),
   'SignalOutput': ('Valódi kimenet: {0}', 'Actual output: {0}', 'Tatsächliche Ausgabe: {0}'),
   'SignalChannels': ('{0} csatorna', '{0} ch', '{0} Kanäle'),
