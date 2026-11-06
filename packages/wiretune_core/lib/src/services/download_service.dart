@@ -493,11 +493,22 @@ class DownloadService {
     if (track.fileSizeBytes <= 0) return false;
     final candidate = _freePath(track, adoptable: true);
     final file = File(_absolute(candidate));
-    if (!await file.exists() || await file.length() != track.fileSizeBytes) return false;
+    if (!await file.exists() || await file.length() != track.fileSizeBytes || !await _canChange(file)) return false;
     _record(track.id, _version(track), candidate);
     _bytesOnDisk += track.fileSizeBytes;
     if (_choices.pending.remove(track.id)) _saveChoices();
     return true;
+  }
+
+  /// Whether Wiretune may change [file]. On Android a file that an earlier install of Wiretune left (before it was
+  /// uninstalled) shows its size but can be neither read nor deleted: taken for a copy, it would never go.
+  static Future<bool> _canChange(File file) async {
+    try {
+      await (await file.open(mode: FileMode.append)).close();
+      return true;
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// Fetches one file. False when downloading has to stop for now (a failure that a retry may fix, or a refusal).

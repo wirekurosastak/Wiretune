@@ -583,6 +583,29 @@ void main() {
     expect(server.streamRequests, hasLength(1));
   });
 
+  test(
+    "a file in a copy's place that Wiretune may not change (an earlier install's, on Android) is downloaded beside",
+    () async {
+      server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
+      final repo = testRepository();
+      final first = await signedIn(repo: repo);
+      first.downloads.setTrackDownloaded('t1', true);
+      await until(() => first.downloads.doneCount == 1);
+      final copy = first.downloads.localCopy(first.library.getTrack('t1')!)!;
+      first.close();
+      players.remove(first);
+
+      repo.deleteDownload('t1');
+      Process.runSync('chmod', ['444', copy]); // as another install's file looks: there, but not ours
+      final again = await signedIn(repo: repo);
+      await until(() => again.downloads.doneCount == 1);
+      final beside = '${p.withoutExtension(copy)} (2)${p.extension(copy)}';
+      expect(again.downloads.localCopy(again.library.getTrack('t1')!), beside);
+      expect(server.streamRequests, hasLength(2));
+    },
+    skip: Platform.isWindows ? 'chmod' : null,
+  );
+
   test('a copy that was still being moved into place when the app stopped is fetched again', () async {
     server.add(serverTrack('t1', 'Song', 'Album'), audio(1));
     final repo = testRepository();
