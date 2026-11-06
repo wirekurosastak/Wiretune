@@ -2333,6 +2333,90 @@ void main() {
     expect(vm.player.position.value, greaterThan(Duration.zero), reason: 'it seeked');
   });
 
+  testWidgets("a swipe in the player follows the finger: what it leads to comes in beside, and a short one goes back", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        TestSupport.makeTrack('1', 'So What', album: 'Kind of Blue', trackNumber: 1),
+        TestSupport.makeTrack('2', 'Blue in Green', album: 'Kind of Blue', trackNumber: 2),
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    final player = vm.player;
+    player.playQueue(vm.library.tracks);
+    vm.playerSwipe = PlayerSwipe.tabs;
+    vm.openNowPlaying();
+    await settle(tester);
+    final page = find.byType(NowPlayingPage);
+    final drop = find.descendant(
+      of: page,
+      matching: find.byWidgetPredicate((w) => w is Positioned && w.child is DecoratedBox),
+    );
+    Finder label(String key) => find.descendant(of: page, matching: find.text(Localizer.get(key)));
+    final start = tester.getCenter(find.descendant(of: page, matching: find.text('So What')).last);
+
+    // Between the tabs: the queue comes in with the finger, and the drop goes towards it.
+    var gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-80, 0));
+    await tester.pump();
+    expect(find.byType(QueueList), findsOneWidget, reason: 'the queue beside, before letting go');
+    final dropX = tester.getCenter(drop).dx;
+    expect(dropX, greaterThan(tester.getCenter(label('TabTrack')).dx));
+    expect(dropX, lessThan(tester.getCenter(label('Queue')).dx));
+    await gesture.up();
+    await settle(tester);
+    expect(vm.nowPlayingTab, NowPlayingTab.track, reason: 'a short swipe goes back');
+    expect(find.byType(QueueList), findsNothing);
+    expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabTrack')).dx, epsilon: 0.5));
+
+    gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-200, 0));
+    await tester.pump();
+    await gesture.up();
+    await settle(tester);
+    expect(vm.nowPlayingTab, NowPlayingTab.queue, reason: 'past a third of the way');
+    expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('Queue')).dx, epsilon: 0.5));
+
+    // Between the tracks: the next one's page comes in, its title already readable, its cover a paused one's size and
+    // growing as it comes, the playing one's shrinking as it goes.
+    vm.nowPlayingTab = NowPlayingTab.track;
+    vm.playerSwipe = PlayerSwipe.tracks;
+    await settle(tester);
+    expect(player.isPlaying, isTrue);
+    final covers = find.descendant(of: page, matching: find.byType(CoverImage));
+    final playing = tester.getRect(covers).width;
+    gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-80, 0));
+    await tester.pump();
+    expect(find.descendant(of: page, matching: find.text('Blue in Green')), findsOneWidget);
+    final [coming, going] = [for (final e in covers.evaluate()) tester.getRect(find.byWidget(e.widget)).width];
+    expect(going, inExclusiveRange(playing * 0.86, playing), reason: 'the playing cover shrinks as it goes');
+    expect(coming, inExclusiveRange(playing * 0.86, going), reason: "the next one's grows from a paused one's size");
+    await gesture.moveBy(const Offset(-200, 0));
+    await tester.pump();
+    final [nearly, _] = [for (final e in covers.evaluate()) tester.getRect(find.byWidget(e.widget)).width];
+    expect(nearly, greaterThan(coming), reason: 'nearer, larger');
+    await gesture.moveBy(const Offset(200, 0));
+    await tester.pump();
+    await gesture.up();
+    await settle(tester);
+    expect(player.currentTrack?.title, 'So What', reason: 'a short swipe goes back');
+
+    gesture = await tester.startGesture(start);
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.moveBy(const Offset(-200, 0));
+    await tester.pump();
+    await gesture.up();
+    await settle(tester);
+    expect(player.currentTrack?.title, 'Blue in Green');
+    expect(tester.getRect(covers).width, moreOrLessEquals(playing, epsilon: 0.5), reason: 'in place, its own size');
+  });
+
   testWidgets("the full-screen player's queue fades towards an edge only where more of it goes on past it", (
     tester,
   ) async {
