@@ -3,9 +3,9 @@
 
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -142,9 +142,9 @@ class NowPlayingPage extends StatelessWidget {
   }
 }
 
-/// The three tabs as one segmented glass pill, the chosen one under a drop of the accent that flows to the next one
-/// chosen: its front goes ahead, a little past, while its back follows, so that it stretches and thins on the way and
-/// settles into its place. The labels turn dark exactly where it is. It moves only when the tab changes.
+/// The three tabs as one segmented glass pill, the chosen one under a drop of the accent that slides to the next one
+/// chosen, on a spring: it stretches a little with its speed (and thins a little), runs a touch past the tab and
+/// settles into it. The labels turn dark exactly where it is. It moves only when the tab changes.
 class _TabSwitch extends StatefulWidget {
   const _TabSwitch({required this.tab, required this.onSelected});
 
@@ -164,43 +164,25 @@ class _TabSwitchState extends State<_TabSwitch> with SingleTickerProviderStateMi
 
   static const TextStyle _style = TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700);
 
-  /// The front edge: quick, a little past the place, back into it.
-  static const Curve _front = Interval(0, 0.7, curve: Cubic(0.3, 1.4, 0.55, 1));
+  /// The drop's slide: quick, a touch past the tab, settling in about half a second.
+  static const SpringDescription _spring = SpringDescription(mass: 1, stiffness: 380, damping: 30);
 
-  /// The back edge: a moment later, catching up.
-  static const Curve _back = Interval(0.14, 1, curve: Curves.easeInOutCubic);
+  /// How much the drop stretches for its speed (in tabs a second), and the most it does.
+  static const double _stretchPerSpeed = 0.02, _maxStretch = 0.35;
 
-  late final AnimationController _flow = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 460),
-    value: 1,
-  );
-
-  /// Where the drop's edges were as it set off, in tabs from the first one's left edge.
-  late double _fromLeft = widget.tab.index.toDouble();
-  late double _fromRight = _fromLeft + 1;
-
-  /// The drop's edges at this point of its flow towards [target].
-  ({double left, double right}) _edges(int target) {
-    final t = _flow.value;
-    final forward = target >= _fromLeft;
-    final left = lerpDouble(_fromLeft, target.toDouble(), (forward ? _back : _front).transform(t))!;
-    final right = lerpDouble(_fromRight, target + 1.0, (forward ? _front : _back).transform(t))!;
-    return (left: left, right: right);
-  }
+  /// Where the drop is, in tabs (0 is the first one), and how fast it goes there.
+  late final AnimationController _flow = AnimationController.unbounded(vsync: this, value: widget.tab.index.toDouble());
 
   @override
   void didUpdateWidget(_TabSwitch oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.tab == oldWidget.tab) return;
-    // From wherever it is, even still flowing to the tab before.
-    final now = _edges(oldWidget.tab.index);
-    _fromLeft = now.left;
-    _fromRight = now.right;
+    final target = widget.tab.index.toDouble();
     if (MediaQuery.disableAnimationsOf(context)) {
-      _flow.value = 1;
+      _flow.value = target;
     } else {
-      _flow.forward(from: 0);
+      // From wherever it is and as fast as it goes, even still sliding to the tab before.
+      _flow.animateWith(SpringSimulation(_spring, _flow.value, target, _flow.velocity));
     }
   }
 
@@ -236,12 +218,13 @@ class _TabSwitchState extends State<_TabSwitch> with SingleTickerProviderStateMi
     return AnimatedBuilder(
       animation: _flow,
       builder: (context, child) {
-        final edges = _edges(widget.tab.index);
-        final left = edges.left.clamp(0.0, count.toDouble()) * segment;
-        final right = edges.right.clamp(0.0, count.toDouble()) * segment;
-        // Thinner as it stretches, as a drop does.
-        final stretch = ((right - left) / segment - 1).clamp(0.0, 1.0);
-        final inset = height * 0.08 * stretch;
+        // Longer the faster it goes, and thinner as it stretches, as a drop is; kept within the pill at its ends.
+        final stretch = (_flow.velocity.abs() * _stretchPerSpeed).clamp(0.0, _maxStretch);
+        final middle = (_flow.value + 0.5) * segment;
+        final half = segment * (1 + stretch) / 2;
+        final left = (middle - half).clamp(0.0, width);
+        final right = (middle + half).clamp(0.0, width);
+        final inset = height * 0.25 * stretch;
         final drop = Rect.fromLTRB(left, inset, right, height - inset);
         return SizedBox(
           width: width,

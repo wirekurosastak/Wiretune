@@ -338,31 +338,37 @@ void main() {
     expect(find.text('So What'), findsOneWidget);
   });
 
-  testWidgets("the full-screen player's tabs: the drop flows from the tab to the chosen one, stretching, and settles", (
-    tester,
-  ) async {
-    final vm = await pumpApp(tester, const Size(400, 860));
-    vm.player.currentTrack = vm.library.tracks.first;
-    vm.openNowPlaying();
-    await settle(tester);
-    final page = find.byType(NowPlayingPage);
-    final drop = find.descendant(
-      of: page,
-      matching: find.byWidgetPredicate((w) => w is Positioned && w.child is DecoratedBox),
-    );
-    Finder label(String key) => find.descendant(of: page, matching: find.text(Localizer.get(key)));
-    final one = tester.getSize(drop).width;
-    expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabTrack')).dx, epsilon: 0.5));
+  testWidgets(
+    "the full-screen player's tabs: the drop slides to the chosen one, a little longer while fast, and settles",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(400, 860));
+      vm.player.currentTrack = vm.library.tracks.first;
+      vm.openNowPlaying();
+      await settle(tester);
+      final page = find.byType(NowPlayingPage);
+      final drop = find.descendant(
+        of: page,
+        matching: find.byWidgetPredicate((w) => w is Positioned && w.child is DecoratedBox),
+      );
+      Finder label(String key) => find.descendant(of: page, matching: find.text(Localizer.get(key)));
+      final one = tester.getSize(drop).width;
+      expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabTrack')).dx, epsilon: 0.5));
 
-    await tester.tap(label('TabLyrics'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(tester.getSize(drop).width, greaterThan(one * 1.5), reason: 'stretched on its way');
-    await settle(tester);
-    expect(vm.nowPlayingTab, NowPlayingTab.lyrics);
-    expect(tester.getSize(drop).width, moreOrLessEquals(one, epsilon: 0.5));
-    expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabLyrics')).dx, epsilon: 0.5));
-  });
+      await tester.tap(label('TabLyrics'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 66));
+      expect(
+        tester.getCenter(drop).dx,
+        inExclusiveRange(tester.getCenter(label('TabTrack')).dx, tester.getCenter(label('TabLyrics')).dx),
+        reason: 'on its way',
+      );
+      expect(tester.getSize(drop).width, inExclusiveRange(one * 1.1, one * 1.4), reason: 'a little longer, not a worm');
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.lyrics);
+      expect(tester.getSize(drop).width, moreOrLessEquals(one, epsilon: 0.5));
+      expect(tester.getCenter(drop).dx, moreOrLessEquals(tester.getCenter(label('TabLyrics')).dx, epsilon: 0.5));
+    },
+  );
 
   testWidgets('the mini player opens the full-screen player, and back closes it', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
