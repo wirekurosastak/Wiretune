@@ -394,68 +394,117 @@ class _NowPlayingRow extends StatelessWidget {
     return PlayerSheetDrag(
       other: _BodyDrag.of(context),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 12, 12),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Semantics(
-                button: true,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => vm.nowPlayingTab = NowPlayingTab.track,
-                  child: Row(
-                    children: [
-                      Opacity(
-                        opacity: coverHidden ? 0 : 1,
-                        // Where the mini player's cover flies as the player opens or closes over the queue or the
-                        // lyrics.
-                        child: PlayerSheetCover(
-                          own: true,
-                          child: CoverImage(
-                            key: coverKey,
-                            path: track?.coverArtPath,
-                            size: coverSize,
-                            radius: Radii.small,
-                            decodeWidth: _TrackTab.coverDecodeWidth,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              player.nowPlayingTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 17,
-                                letterSpacing: -0.3,
-                                fontWeight: FontWeight.w800,
-                                color: colors.textMain,
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => vm.nowPlayingTab = NowPlayingTab.track,
+                      child: Row(
+                        children: [
+                          Opacity(
+                            opacity: coverHidden ? 0 : 1,
+                            // Where the mini player's cover flies as the player opens or closes over the queue or the
+                            // lyrics.
+                            child: PlayerSheetCover(
+                              own: true,
+                              child: CoverImage(
+                                key: coverKey,
+                                path: track?.coverArtPath,
+                                size: coverSize,
+                                radius: Radii.small,
+                                decodeWidth: _TrackTab.coverDecodeWidth,
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              player.nowPlayingArtist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.accent),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  player.nowPlayingTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    letterSpacing: -0.3,
+                                    fontWeight: FontWeight.w800,
+                                    color: colors.textMain,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  player.nowPlayingArtist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.accent),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox.square(dimension: 44, child: FavoriteCurrentButton(size: 24)),
+                if (track != null)
+                  TrackMenu(track: track, kind: TrackTableKind.tracks, width: 40, color: colors.textMain),
+                // Over the queue or the lyrics the controls are covered: Play stays here, where the mini player has it.
+                const SizedBox(width: 6),
+                const PlayButton(size: 40),
+              ],
             ),
-            const SizedBox.square(dimension: 44, child: FavoriteCurrentButton(size: 24)),
-            if (track != null) TrackMenu(track: track, kind: TrackTableKind.tracks, width: 40, color: colors.textMain),
+            const SizedBox(height: 12),
+            const _RowProgress(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// A thin line under the playing track's row, over the queue or the lyrics: how far the song has played. On a phone it
+/// is drawn once a second (`progressOf`).
+class _RowProgress extends StatelessWidget {
+  const _RowProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.vm.player;
+    final colors = context.colors;
+    return ExcludeSemantics(
+      child: ListenableBuilder(
+        listenable: progressOf(player),
+        builder: (context, _) {
+          final total = player.durationSeconds;
+          final done = total <= 0 ? 0.0 : (player.positionSeconds / total).clamp(0.0, 1.0);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(1),
+            child: SizedBox(
+              height: 2,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(color: colors.palette.surface2),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: done,
+                    child: ColoredBox(color: colors.accent),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

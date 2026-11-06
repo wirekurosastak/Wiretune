@@ -3826,6 +3826,37 @@ void main() {
     expect(tester.getRect(find.byType(LyricsView)).right, frame.right);
   });
 
+  testWidgets("over the queue or the lyrics the phone's player keeps Play and how far the song is in its top row", (
+    tester,
+  ) async {
+    AppPlatform.forTesting(system: 'android');
+    final vm = await pumpApp(tester, const Size(400, 860));
+    Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
+    final row = named('_NowPlayingRow');
+    final play = find.descendant(of: row, matching: find.byType(PlayButton));
+    await tester.runAsync(() async {
+      vm.player.playQueue(vm.library.tracks);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    vm.openNowPlaying();
+    await settle(tester);
+    for (final tab in [NowPlayingTab.queue, NowPlayingTab.lyrics]) {
+      vm.nowPlayingTab = tab;
+      await settle(tester);
+      expect(play, findsOneWidget, reason: '$tab');
+      expect(
+        find.descendant(of: row, matching: named('_RowProgress')),
+        findsOneWidget,
+        reason: '$tab',
+      );
+    }
+    expect(vm.player.isPlaying, isTrue);
+    await tester.tap(play);
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await settle(tester);
+    expect(vm.player.isPlaying, isFalse);
+  });
+
   testWidgets("as in a computer's own apps, the mouse is an arrow over buttons and a hand only over links", (
     tester,
   ) async {
