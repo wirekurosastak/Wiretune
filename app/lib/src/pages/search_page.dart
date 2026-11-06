@@ -106,7 +106,8 @@ class SearchResults extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           SectionLabel(context.tr('BestMatch'), padding: const EdgeInsets.only(bottom: 14)),
-                          _BestMatchCard(match: best),
+                          // A phone's is as wide as the rows under it.
+                          _BestMatchCard(match: best, fill: narrow),
                         ],
                       ),
                     ),
@@ -180,15 +181,20 @@ class SearchResults extends StatelessWidget {
 /// The best match: a 116 px cover, its type, title and details, a play button and its ⋮, on a card 320 px wide; the
 /// card opens it.
 class _BestMatchCard extends StatelessWidget {
-  const _BestMatchCard({required this.match});
+  const _BestMatchCard({required this.match, this.fill = false});
+
+  static const double width = 320;
 
   final BestMatch match;
+
+  /// As wide as there is room for (a phone's), rather than [width].
+  final bool fill;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return SizedBox(
-      width: 320,
+      width: fill ? double.infinity : width,
       child: _MetricCard(
         accent: colors.accent,
         padding: 20,

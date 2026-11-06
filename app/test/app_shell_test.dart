@@ -4116,6 +4116,18 @@ void main() {
     }
   });
 
+  testWidgets("a phone's best match is as wide as the rows under it, with the same space on its two sides", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm
+      ..openSearch()
+      ..searchQuery = 'kind';
+    await settle(tester);
+    final rect = tester.getRect(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_BestMatchCard'));
+    expect((rect.left, 400 - rect.right), (16, 16));
+  });
+
   testWidgets("the table's dates stay on one line, written the language's way", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     for (final t in vm.library.tracks) {
