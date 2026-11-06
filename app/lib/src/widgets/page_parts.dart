@@ -79,18 +79,21 @@ class PageHeader extends StatelessWidget {
 
 /// A sliver built for the width it is laid out in. A [SliverLayoutBuilder]'s constraints carry the scroll, so it builds
 /// again at every step of it (every row of a table, every tile of a grid, at every frame); this one only when the width
-/// changes, or when it is rebuilt itself.
+/// changes, or when it is rebuilt itself. With [keyOf], only when what that takes from the width changes (a table's
+/// columns): a width that changes by the frame (the sidebar sliding in, the window resized) lays it out again, but
+/// doesn't build it again; what it builds must then fit any width of the same key.
 class SliverWidthBuilder extends StatefulWidget {
-  const SliverWidthBuilder({super.key, required this.builder});
+  const SliverWidthBuilder({super.key, required this.builder, this.keyOf});
 
   final Widget Function(BuildContext context, double width) builder;
+  final Object? Function(double width)? keyOf;
 
   @override
   State<SliverWidthBuilder> createState() => _SliverWidthBuilderState();
 }
 
 class _SliverWidthBuilderState extends State<SliverWidthBuilder> {
-  double? _width;
+  Object? _key;
   Widget? _sliver;
 
   @override
@@ -103,12 +106,49 @@ class _SliverWidthBuilderState extends State<SliverWidthBuilder> {
   Widget build(BuildContext context) => SliverLayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.crossAxisExtent;
-      if (width != _width || _sliver == null) {
-        _width = width;
+      final key = widget.keyOf?.call(width) ?? width;
+      if (key != _key || _sliver == null) {
+        _key = key;
         // In a context of its own, which what it looks up (the theme, the phone's chrome) rebuilds when that changes.
         _sliver = Builder(builder: (context) => widget.builder(context, width));
       }
       return _sliver!;
+    },
+  );
+}
+
+/// A [LayoutBuilder] that builds again only when what [keyOf] takes from the constraints changes, or when it is rebuilt
+/// itself: in a page whose width changes by the frame (the sidebar sliding in, the window resized), what depends on the
+/// height alone, or on a width's threshold, is laid out again but not built again.
+class KeyedLayoutBuilder<K> extends StatefulWidget {
+  const KeyedLayoutBuilder({super.key, required this.keyOf, required this.builder});
+
+  final K Function(BoxConstraints constraints) keyOf;
+  final Widget Function(BuildContext context, K key) builder;
+
+  @override
+  State<KeyedLayoutBuilder<K>> createState() => _KeyedLayoutBuilderState<K>();
+}
+
+class _KeyedLayoutBuilderState<K> extends State<KeyedLayoutBuilder<K>> {
+  K? _key;
+  Widget? _child;
+
+  @override
+  void didUpdateWidget(KeyedLayoutBuilder<K> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _child = null;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final key = widget.keyOf(constraints);
+      if (key != _key || _child == null) {
+        _key = key;
+        _child = Builder(builder: (context) => widget.builder(context, key));
+      }
+      return _child!;
     },
   );
 }
@@ -141,9 +181,10 @@ class TabPageList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phone = PhoneChrome.isPhone(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final apart = !phone && constraints.maxHeight >= _headerStaysFrom;
+    // Built again only when the header comes apart or back: a width that changes lays the page out again.
+    return KeyedLayoutBuilder<bool>(
+      keyOf: (constraints) => !phone && constraints.maxHeight >= _headerStaysFrom,
+      builder: (context, apart) {
         final columnHeaders = phone ? null : this.columnHeaders;
         final list = CustomScrollView(
           key: PageStorageKey(storageKey),

@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -1367,17 +1368,20 @@ class TileGridSliver extends StatelessWidget {
 
   /// How the grid lays [kind]'s tiles out across [width] (the scroll view's), at the tile size the user set: how many
   /// to a row, how wide each, and how tall.
-  static ({int columns, double tileWidth, double extent}) layoutIn(BuildContext context, double width, TileKind kind) {
-    final available = width - 2 * padding;
-    final minTileWidth = context.vm.tileSize.value;
-    final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
-    final tileWidth = (available - _gap * (columns - 1)) / columns;
-    // The square cover, then the caption at the user's font size.
+  static ({int columns, double tileWidth, double extent}) layoutIn(BuildContext context, double width, TileKind kind) =>
+      _layout(width - 2 * padding, context.vm.tileSize.value, _captionHeight(context, kind));
+
+  /// The caption's lines under a [kind]'s cover, at the user's font size.
+  static double _captionHeight(BuildContext context, TileKind kind) {
     final title = _lineHeight(context, 14, FontWeight.w700);
     final second = _lineHeight(context, 12.5, FontWeight.w500);
-    final lines = kind == TileKind.album
-        ? title + second + _lineHeight(context, 11, FontWeight.w500) + 4
-        : title + second + 2;
+    return kind == TileKind.album ? title + second + _lineHeight(context, 11, FontWeight.w500) + 4 : title + second + 2;
+  }
+
+  static ({int columns, double tileWidth, double extent}) _layout(double available, double minTileWidth, double lines) {
+    final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
+    final tileWidth = (available - _gap * (columns - 1)) / columns;
+    // The square cover, then the caption.
     return (
       columns: columns,
       tileWidth: tileWidth,
@@ -1387,27 +1391,44 @@ class TileGridSliver extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lines = _captionHeight(context, kind);
     return ValueListenableBuilder<double>(
       valueListenable: context.vm.tileSize,
-      builder: (context, _, _) => SliverWidthBuilder(
-        builder: (context, width) {
-          final (:columns, :tileWidth, :extent) = layoutIn(context, width, kind);
-          return SliverPadding(
-            padding: const EdgeInsets.fromLTRB(padding, 4, padding, 4),
-            sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                mainAxisExtent: extent,
-                crossAxisSpacing: _gap,
-                mainAxisSpacing: _gap,
-              ),
-              delegate: SliverChildBuilderDelegate(itemBuilder, childCount: itemCount),
-            ),
-          );
-        },
+      builder: (context, minTileWidth, _) => SliverPadding(
+        padding: const EdgeInsets.fromLTRB(padding, 4, padding, 4),
+        sliver: SliverGrid(
+          gridDelegate: _TileGridDelegate(minTileWidth: minTileWidth, lines: lines),
+          delegate: SliverChildBuilderDelegate(itemBuilder, childCount: itemCount),
+        ),
       ),
     );
   }
+}
+
+/// [TileGridSliver]'s rows and columns, worked out when the grid is laid out, from the width it has then: a width that
+/// changes by the frame (the sidebar sliding in, the window resized) lays the tiles out again, but doesn't build them.
+class _TileGridDelegate extends SliverGridDelegate {
+  const _TileGridDelegate({required this.minTileWidth, required this.lines});
+
+  final double minTileWidth;
+  final double lines;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final (:columns, :tileWidth, :extent) = TileGridSliver._layout(constraints.crossAxisExtent, minTileWidth, lines);
+    return SliverGridRegularTileLayout(
+      crossAxisCount: columns,
+      mainAxisStride: extent + TileGridSliver._gap,
+      crossAxisStride: tileWidth + TileGridSliver._gap,
+      childMainAxisExtent: extent,
+      childCrossAxisExtent: tileWidth,
+      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_TileGridDelegate oldDelegate) =>
+      oldDelegate.minTileWidth != minTileWidth || oldDelegate.lines != lines;
 }
 
 /// A few tiles in a row, as [TileGridSliver] lays them out (the same size, gap and caption), where they go beside

@@ -104,6 +104,20 @@ class _Columns {
   bool get showQuality => kind != TrackTableKind.search && width >= 1060;
   bool get showBpm => showQuality && width >= 1130;
 
+  /// The same columns: a width between the same thresholds lays the rows out again, but needn't build them again.
+  @override
+  bool operator ==(Object other) =>
+      other is _Columns &&
+      other.kind == kind &&
+      other.showAlbum == showAlbum &&
+      other.showReleased == showReleased &&
+      other.showAdded == showAdded &&
+      other.showQuality == showQuality &&
+      other.showBpm == showBpm;
+
+  @override
+  int get hashCode => Object.hash(kind, showAlbum, showReleased, showAdded, showQuality, showBpm);
+
   int get titleFlex {
     if (!showArtist && !showAlbum) return 8; // an album's table shows neither
     if (!showArtist || !showAlbum) return 7;
@@ -187,7 +201,11 @@ class _TrackSliverState extends State<TrackSliver> {
     // The rows follow what plays (the playing track's mark), the favourites (the hearts) and the downloads (their
     // states, not their every byte).
     final listenable = Listenable.merge([vm.player.nowPlaying, vm.favorites, vm.downloads.states]);
+    final phone = PhoneChrome.isPhone(context);
+    final sidePadding = widget.horizontalPadding ?? (phone ? 8.0 : TrackSliver.tablePadding);
     return SliverWidthBuilder(
+      // The rows are built again when a column comes or goes; between, a width that changes only lays them out.
+      keyOf: (width) => (phone, phone ? null : _Columns(kind, width - 2 * sidePadding)),
       builder: (context, width) {
         // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
@@ -280,11 +298,13 @@ class TrackColumnHeaders extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => Padding(
+    // Built again when a column comes or goes; between, a width that changes only lays the headers out.
+    return KeyedLayoutBuilder<_Columns>(
+      keyOf: (constraints) => _Columns(TrackTableKind.tracks, constraints.maxWidth - 2 * TrackSliver.tablePadding),
+      builder: (context, columns) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: TrackSliver.tablePadding),
         child: _ColumnHeaders(
-          columns: _Columns(TrackTableKind.tracks, constraints.maxWidth - 2 * TrackSliver.tablePadding),
+          columns: columns,
           reorderable: false,
           sortField: sorting.sortField,
           descending: sorting.isSortDescending,

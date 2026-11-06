@@ -3866,6 +3866,37 @@ void main() {
     expect(vm.player.isPlaying, isFalse);
   });
 
+  testWidgets("a width that changes lays a page's tiles and rows out again, without building them again", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.player.playQueue(vm.library.tracks);
+    final built = <String>[];
+    debugOnRebuildDirtyWidget = (element, _) => built.add('${element.widget.runtimeType}');
+    addTearDown(() => debugOnRebuildDirtyWidget = null);
+    Future<void> show(void Function() open) async {
+      open();
+      await settle(tester);
+    }
+
+    for (final (page, open) in <(String, void Function())>[
+      ('_DesktopTile', () => vm.navigateTo(AppSection.albums)),
+      ('_TableRow', () => vm.navigateTo(AppSection.tracks)),
+      ('_QueueRow', () => vm.player.isQueueOpen = true),
+    ]) {
+      await show(open);
+      final before = tester.getSize(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == page).first);
+      built.clear();
+      tester.view.physicalSize = const Size(1406, 900);
+      await tester.pump();
+      expect(built, isNot(contains(page)), reason: '$page: built again');
+      final after = tester.getSize(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == page).first);
+      expect(after.width, greaterThan(before.width), reason: '$page: laid out again');
+      tester.view.physicalSize = const Size(1400, 900);
+      await tester.pump();
+    }
+  });
+
   testWidgets("as in a computer's own apps, the mouse is an arrow over buttons and a hand only over links", (
     tester,
   ) async {

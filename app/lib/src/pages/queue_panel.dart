@@ -222,8 +222,10 @@ class _QueueRowState extends State<_QueueRow> {
             // A right click opens the track's menu, as on a table's row; a long press grabs the row.
             onSecondaryTapUp: (details) =>
                 showTrackContextMenu(context, details.globalPosition, item.track, TrackTableKind.tracks),
-            child: LayoutBuilder(
-              builder: (context, constraints) => Padding(
+            // Built again when the tags come or go; between, a width that changes only lays the row out.
+            child: KeyedLayoutBuilder<bool>(
+              keyOf: (constraints) => constraints.maxWidth >= _tagRowWidth,
+              builder: (context, tags) => Padding(
                 padding: EdgeInsets.fromLTRB(10, phone ? 6 : 7, phone ? 0 : 10, phone ? 6 : 7),
                 child: Row(
                   children: [
@@ -316,7 +318,7 @@ class _QueueRowState extends State<_QueueRow> {
                       ),
                     ),
                     // A narrow row (a phone's, a narrow window's) leaves the tag out: the title keeps the room.
-                    if (constraints.maxWidth >= _tagRowWidth) ...[
+                    if (tags) ...[
                       const SizedBox(width: 12),
                       QualityTag(tier: track.format.tier, spec: track.format.tagSpec),
                     ],
