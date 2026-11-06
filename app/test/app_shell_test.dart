@@ -2333,6 +2333,30 @@ void main() {
     expect(vm.player.position.value, greaterThan(Duration.zero), reason: 'it seeked');
   });
 
+  testWidgets("the full-screen player's queue fades towards an edge only where more of it goes on past it", (
+    tester,
+  ) async {
+    final vm = await pumpLongAlbum(tester);
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    vm.nowPlayingTab = NowPlayingTab.queue;
+    await settle(tester);
+    (double, double) fade() => tester
+        .widget<ValueListenableBuilder<(double, double)>>(
+          find.descendant(of: find.byType(QueueList), matching: find.byType(ValueListenableBuilder<(double, double)>)),
+        )
+        .valueListenable
+        .value;
+    expect(fade(), (0.0, 1.0), reason: 'at its top: the first row whole, the rest going on below');
+    final list = find.descendant(of: find.byType(QueueList), matching: find.byType(Scrollable)).first;
+    await tester.drag(list, const Offset(0, -400));
+    await settle(tester);
+    expect(fade(), (1.0, 1.0));
+    tester.state<ScrollableState>(list).position.jumpTo(tester.state<ScrollableState>(list).position.maxScrollExtent);
+    await settle(tester);
+    expect(fade(), (1.0, 0.0), reason: 'at its end: the last row whole');
+  });
+
   testWidgets("a swipe in the player asks once what it does, then does it; the settings change it", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([

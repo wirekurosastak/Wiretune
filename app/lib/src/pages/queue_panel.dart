@@ -40,19 +40,22 @@ class QueueList extends StatelessWidget {
             hint: context.tr('QueueEmptyHint'),
           );
         }
-        return ReorderableListView.builder(
-          buildDefaultDragHandles: false,
-          padding: padding,
-          itemCount: items.length,
-          onReorderItem: player.moveQueueTrack,
-          proxyDecorator: liftedRow(context, const EdgeInsets.only(bottom: 4)),
-          itemBuilder: (context, index) => _QueueRow(
-            key: ValueKey(items[index]),
-            item: items[index],
-            index: index,
+        // Its rows fade towards the edges as the lyrics' lines do, where more of the queue goes on past them.
+        return EdgeFade(
+          child: ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            padding: padding,
             itemCount: items.length,
-            // A remote or a keyboard cannot drag: they get buttons. A phone drags by the handle.
-            showMoveButtons: !AppPlatform.current.isMobile,
+            onReorderItem: player.moveQueueTrack,
+            proxyDecorator: liftedRow(context, const EdgeInsets.only(bottom: 4)),
+            itemBuilder: (context, index) => _QueueRow(
+              key: ValueKey(items[index]),
+              item: items[index],
+              index: index,
+              itemCount: items.length,
+              // A remote or a keyboard cannot drag: they get buttons. A phone drags by the handle.
+              showMoveButtons: !AppPlatform.current.isMobile,
+            ),
           ),
         );
       },

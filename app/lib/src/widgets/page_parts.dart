@@ -1699,6 +1699,75 @@ class PageEndSpace extends StatelessWidget {
 
 final RegExp _bracketedTag = RegExp(r'\([^()]*\)|\[[^\[\]]*\]');
 
+/// A list whose rows fade out towards its top and bottom edges, over a tenth of its height each, as the lyrics' lines
+/// do; an edge with nothing past it (the list at its top, or at its end) fades nothing, so the row there shows whole.
+class EdgeFade extends StatefulWidget {
+  const EdgeFade({super.key, required this.child});
+
+  /// The list (a vertical scroll view).
+  final Widget child;
+
+  /// How much of the height each fade takes.
+  static const double share = 0.1;
+
+  @override
+  State<EdgeFade> createState() => _EdgeFadeState();
+}
+
+class _EdgeFadeState extends State<EdgeFade> {
+  /// How far each fade has come in, 0 to 1: the top's and the bottom's.
+  final ValueNotifier<(double, double)> _shown = ValueNotifier((0, 0));
+
+  @override
+  void dispose() {
+    _shown.dispose();
+    super.dispose();
+  }
+
+  // The metrics' also come when the list is first laid out, and when it changes length.
+  bool _onScroll(Notification notification) {
+    final metrics = switch (notification) {
+      ScrollNotification(depth: 0, :final metrics) || ScrollMetricsNotification(depth: 0, :final metrics) => metrics,
+      _ => null,
+    };
+    if (metrics == null || metrics.axis != Axis.vertical || !metrics.hasContentDimensions) return false;
+    // Each fade comes in over as much scroll as it is tall.
+    final size = math.max(1.0, metrics.viewportDimension * EdgeFade.share);
+    _shown.value = (
+      ((metrics.pixels - metrics.minScrollExtent) / size).clamp(0.0, 1.0),
+      ((metrics.maxScrollExtent - metrics.pixels) / size).clamp(0.0, 1.0),
+    );
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener<Notification>(
+    onNotification: _onScroll,
+    child: ValueListenableBuilder<(double, double)>(
+      valueListenable: _shown,
+      builder: (context, shown, child) {
+        final (top, bottom) = shown;
+        return ShaderMask(
+          shaderCallback: (rect) => LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withValues(alpha: 1 - top),
+              Colors.black,
+              Colors.black,
+              Colors.black.withValues(alpha: 1 - bottom),
+            ],
+            stops: const [0, EdgeFade.share, 1 - EdgeFade.share, 1],
+          ).createShader(rect),
+          blendMode: BlendMode.dstIn,
+          child: child,
+        );
+      },
+      child: widget.child,
+    ),
+  );
+}
+
 /// A rounded card of glass: a faint sheen from its top-left corner and a hairline edge.
 class GlassCard extends StatelessWidget {
   const GlassCard({super.key, required this.child, this.padding, this.hoverColor, this.opaque = false});
