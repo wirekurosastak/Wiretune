@@ -1192,7 +1192,7 @@ void main() {
     expect(handlesBack.last, isFalse, reason: 'nothing is left: the system leaves the app');
   });
 
-  testWidgets("a track's menu puts it next in the queue, and says so", (tester) async {
+  testWidgets("a track's menu puts it next in the queue, and says so in green", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.tracks);
     vm.player.playQueue(vm.library.tracks.where((t) => t.title != 'Opening'));
@@ -1210,6 +1210,12 @@ void main() {
     await settle(tester);
     expect(vm.player.queueTracks[vm.player.currentQueueIndex + 1].title, 'Opening');
     expect(find.text(Localizer.format('QueuedNext', ['Opening'])), findsOneWidget);
+    final done = tester.widget<Icon>(find.byIcon(Icons.check_circle_outline_rounded));
+    expect(
+      done.color,
+      tester.element(find.byType(PhoneLayout)).colors.palette.success,
+      reason: 'green, not the accent',
+    );
     await tester.tap(find.text(Localizer.get('Undo')));
     await settle(tester);
     expect(vm.player.queueTracks.map((t) => t.title), isNot(contains('Opening')));

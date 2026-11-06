@@ -380,7 +380,8 @@ class _NoticeHostState extends State<_NoticeHost> {
                                             ? Icons.error_outline_rounded
                                             : Icons.check_circle_outline_rounded,
                                         size: 20,
-                                        color: notice.isError ? colors.danger : colors.accent,
+                                        // Done and failed in the colours that say so, not the song's.
+                                        color: notice.isError ? colors.danger : colors.palette.success,
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
