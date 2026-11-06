@@ -253,7 +253,9 @@ void main() {
         },
       ),
     ))!;
-    final vm = createMainViewModel(lib, null, session)..navigateTo(AppSection.settings);
+    final vm = createMainViewModel(lib, null, session)
+      ..navigateTo(AppSection.settings)
+      ..isSidebarPinned = true; // beside the page, as a tablet's
     await showApp(tester, vm, wide);
     await tester.runAsync(vm.serverSettings.loadServerFolder);
     await settle(tester);

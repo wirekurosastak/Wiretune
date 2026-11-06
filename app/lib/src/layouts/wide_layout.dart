@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -71,27 +72,7 @@ class WideLayout extends StatelessWidget {
                       phone: false,
                       margin: EdgeInsets.fromLTRB(WideLayout.gap, 0, WideLayout.gap, WideLayout.gap),
                     ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: gap),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const TvFocusArea(area: TvArea.sidebar, child: _Sidebar()),
-                            const SizedBox(width: gap),
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(Radii.panel),
-                                child: TvFocusArea(
-                                  area: TvArea.content,
-                                  child: FocusTraversalGroup(child: _Content(vm: vm)),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    Expanded(child: _Body(vm: vm)),
                     const SizedBox(height: gap),
                     const TvFocusArea(area: TvArea.player, child: _PlayerBar()),
                     const _Footer(),
@@ -100,6 +81,288 @@ class WideLayout extends StatelessWidget {
               ),
               if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The sidebar and the page. On a computer the sidebar is out of sight to the left, a chevron pulsing at the window's
+/// edge now and then ([_EdgeHint]): the mouse there, or the keyboard's focus, brings it out, the page following its
+/// edge, and it goes a moment after the mouse leaves it. Its pin ([MainViewModel.isSidebarPinned]) keeps it out. A
+/// tablet's and a TV's stays beside the page.
+class _Body extends StatefulWidget {
+  const _Body({required this.vm});
+
+  final MainViewModel vm;
+
+  @override
+  State<_Body> createState() => _BodyState();
+}
+
+class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
+  late final AnimationController _out = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+    reverseDuration: const Duration(milliseconds: 260),
+  );
+
+  // Gentle curves: at 60 frames a second a steep start shows as steps.
+  late final Animation<double> _curve = CurvedAnimation(
+    parent: _out,
+    curve: Curves.easeOut,
+    reverseCurve: Curves.easeIn,
+  );
+  late final Animation<Offset> _slide = Tween(begin: const Offset(-1, 0), end: Offset.zero).animate(_curve);
+  Timer? _closing;
+  bool _wasPinned = false;
+
+  // What holds the sidebar out: the mouse at the window's edge or over the sidebar, or the keyboard's focus in it.
+  bool _atEdge = false, _overSidebar = false, _focused = false;
+
+  /// Brings the sidebar out while anything holds it, and takes it away a moment after nothing does.
+  void _hold({bool? edge, bool? sidebar, bool? focus}) {
+    _atEdge = edge ?? _atEdge;
+    _overSidebar = sidebar ?? _overSidebar;
+    _focused = focus ?? _focused;
+    _closing?.cancel();
+    if (_atEdge || _overSidebar || _focused) {
+      _out.forward();
+    } else {
+      _closing = Timer(const Duration(milliseconds: 350), () {
+        if (mounted) _out.reverse();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _closing?.cancel();
+    _out.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const gap = WideLayout.gap;
+    final content = RepaintBoundary(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(Radii.panel),
+        child: TvFocusArea(
+          area: TvArea.content,
+          child: FocusTraversalGroup(child: _Content(vm: widget.vm)),
+        ),
+      ),
+    );
+    const sidebar = TvFocusArea(area: TvArea.sidebar, child: _Sidebar());
+    if (!AppPlatform.current.isDesktop) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: gap),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            sidebar,
+            const SizedBox(width: gap),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+    final compact = MediaQuery.sizeOf(context).width < WideLayout.compactWidth;
+    // The sidebar with the gaps at its sides: what the mouse may be over while it is out.
+    final region = (compact ? 68.0 : 232.0) + 2 * gap;
+    final pinned = widget.vm.isSidebarPinned;
+    // Unpinned under the mouse: it stays out until the mouse leaves.
+    if (_wasPinned && !pinned) _out.value = 1;
+    _wasPinned = pinned;
+    return Stack(
+      children: [
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: region,
+          child: SlideTransition(
+            position: pinned ? const AlwaysStoppedAnimation(Offset.zero) : _slide,
+            child: RepaintBoundary(
+              child: MouseRegion(
+                onEnter: (_) => _hold(sidebar: true),
+                onExit: (_) => _hold(sidebar: false),
+                child: Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onFocusChange: (focused) => _hold(focus: focused),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: gap),
+                    child: sidebar,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // The page follows the sidebar's edge, a gap from it, as the sidebar pushes it aside.
+        AnimatedBuilder(
+          animation: _curve,
+          child: content,
+          builder: (context, content) => Positioned(
+            left: pinned ? region : math.max(gap, _curve.value * region),
+            right: gap,
+            top: 0,
+            bottom: 0,
+            child: content!,
+          ),
+        ),
+        if (!pinned)
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 28,
+            child: IgnorePointer(
+              child: FadeTransition(opacity: ReverseAnimation(_out), child: const _EdgeHint()),
+            ),
+          ),
+        // The window's left edge: the mouse there brings the sidebar out. There pinned too: a region taken away under
+        // the mouse never hears it leave.
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: gap + 4,
+          child: MouseRegion(
+            opaque: false,
+            onEnter: (_) => _hold(edge: true),
+            onExit: (_) => _hold(edge: false),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A chevron at the window's left edge, where the hidden sidebar comes from. Every few seconds it pulses, and
+/// copies of it run out to the right, fading; between the pulses nothing moves, so no frame is drawn for it.
+class _EdgeHint extends StatefulWidget {
+  const _EdgeHint();
+
+  @override
+  State<_EdgeHint> createState() => _EdgeHintState();
+}
+
+class _EdgeHintState extends State<_EdgeHint> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  );
+  late final Timer _every = Timer.periodic(const Duration(seconds: 5), (_) => _pulse.forward(from: 0));
+  late final Timer _first = Timer(const Duration(milliseconds: 800), () => _pulse.forward(from: 0));
+
+  @override
+  void initState() {
+    super.initState();
+    _every;
+    _first;
+  }
+
+  @override
+  void dispose() {
+    _every.cancel();
+    _first.cancel();
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      RepaintBoundary(child: CustomPaint(painter: _ChevronPainter(_pulse, context.colors.textMuted)));
+}
+
+class _ChevronPainter extends CustomPainter {
+  _ChevronPainter(this.pulse, this.color) : super(repaint: pulse);
+
+  final Animation<double> pulse;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = pulse.value;
+    final y = size.height / 2;
+    void chevron(double x, double alpha) {
+      if (alpha <= 0) return;
+      final paint = Paint()
+        ..color = color.withValues(alpha: color.a * alpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round;
+      canvas.drawPath(
+        Path()
+          ..moveTo(x, y - 7)
+          ..lineTo(x + 5, y)
+          ..lineTo(x, y + 7),
+        paint,
+      );
+    }
+
+    // The chevron itself brightens and dims once; two copies of it run out to the right one after the other, fading.
+    chevron(3, 0.45 + 0.4 * math.sin(math.pi * t));
+    for (var copy = 0; copy < 2; copy++) {
+      final p = ((t - copy * 0.2) / 0.7).clamp(0.0, 1.0);
+      if (p > 0 && p < 1) chevron(3 + 14 * p, 0.7 * math.sin(math.pi * p));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ChevronPainter oldDelegate) => oldDelegate.color != color;
+}
+
+/// A computer's sidebar pin, at its top right: pinned, the sidebar stays out beside the page.
+class _PinButton extends StatefulWidget {
+  const _PinButton();
+
+  @override
+  State<_PinButton> createState() => _PinButtonState();
+}
+
+class _PinButtonState extends State<_PinButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    // The pin follows the setting, wherever it is changed from.
+    return ListenableBuilder(listenable: vm, builder: (context, _) => _build(context, vm));
+  }
+
+  Widget _build(BuildContext context, MainViewModel vm) {
+    final colors = context.colors;
+    final pinned = vm.isSidebarPinned;
+    final color = pinned ? colors.accent : (_hover ? colors.textMain : colors.textMuted);
+    return PopEffect(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: SizedBox.square(
+          dimension: 30,
+          child: IconButton(
+            tooltip: context.tr(pinned ? 'UnpinSidebar' : 'PinSidebar'),
+            padding: EdgeInsets.zero,
+            style: IconButton.styleFrom(overlayColor: Colors.transparent, splashFactory: NoSplash.splashFactory),
+            onPressed: () => vm.isSidebarPinned = !pinned,
+            icon: AnimatedRotation(
+              turns: pinned ? 0 : 0.125,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              child: Icon(
+                pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+                size: 17,
+                color: color,
+                shadows: _hover || pinned ? [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 12)] : null,
+              ),
+            ),
           ),
         ),
       ),
@@ -826,9 +1089,11 @@ class _Sidebar extends StatelessWidget {
               autofocus: autofocus,
               onTap: () => vm.navigateTo(section),
             );
-            return FocusTraversalGroup(
+            final pin = AppPlatform.current.isDesktop;
+            final list = FocusTraversalGroup(
               child: ListView(
-                padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: 18),
+                // Icons alone: the pin above them, in the middle.
+                padding: EdgeInsets.fromLTRB(compact ? 10 : 12, pin && compact ? 50 : 18, compact ? 10 : 12, 18),
                 children: [
                   if (!compact) _GroupTitle(context.tr('SectionLibrary')),
                   item(
@@ -848,6 +1113,18 @@ class _Sidebar extends StatelessWidget {
                   item(AppSection.settings, context.tr('NavSettings'), null),
                 ],
               ),
+            );
+            if (!pin) return list;
+            return Stack(
+              children: [
+                list,
+                Positioned(
+                  top: 10,
+                  right: compact ? 0 : 10,
+                  left: compact ? 0 : null,
+                  child: const Center(child: _PinButton()),
+                ),
+              ],
             );
           },
         ),

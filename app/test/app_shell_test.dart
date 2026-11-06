@@ -102,6 +102,8 @@ void main() {
 
   testWidgets('a desktop window gets the wide layout, and the sidebar navigates', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.isSidebarPinned = true; // beside the page, as a tablet's
+    await tester.pump();
     expect(find.byType(WideLayout), findsOneWidget);
     expect(find.text('WIRETUNE'), findsOneWidget);
 
@@ -296,6 +298,8 @@ void main() {
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.isSidebarPinned = true; // beside the page, as a tablet's
+    await tester.pump();
     Finder field() => find.byType(TextField).first;
     Future<void> openAlbum() async {
       vm.navigateTo(AppSection.albums);
@@ -3039,6 +3043,8 @@ void main() {
 
   testWidgets('the playlists page and the sidebar count the automatic playlists too', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.isSidebarPinned = true; // beside the page, as a tablet's
+    await tester.pump();
     await tester.runAsync(() async {
       vm.library.recordPlay('1');
       vm.library.createPlaylist('Mix');
@@ -3563,6 +3569,8 @@ void main() {
       library.initialize();
       return createMainViewModel(library);
     });
+    vm.isSidebarPinned = true; // beside the page, as a tablet's
+    await tester.pump();
     for (final (section, name) in [(AppSection.tracks, 'NavTracks'), (AppSection.settings, 'NavSettings')]) {
       vm.navigateTo(section);
       await settle(tester);
@@ -3699,6 +3707,8 @@ void main() {
       library.initialize();
       return createMainViewModel(library);
     });
+    vm.isSidebarPinned = true; // beside the page, as a tablet's
+    await tester.pump();
     vm.navigateTo(AppSection.albums);
     await settle(tester);
     final blur = find.byWidgetPredicate((widget) => widget.runtimeType.toString() == '_MotionBlur');
@@ -3864,6 +3874,88 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester);
     expect(vm.player.isPlaying, isFalse);
+  });
+
+  testWidgets(
+    "a computer's sidebar is out of sight until the mouse comes to the window's left edge; the page follows it "
+    'out and back',
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(1400, 900));
+      vm.navigateTo(AppSection.albums);
+      await settle(tester);
+      Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
+      Rect sidebar() => tester.getRect(named('_Sidebar'));
+      double page() => tester.getRect(named('_Content')).left;
+      expect(sidebar().right, lessThanOrEqualTo(0), reason: 'out of sight');
+      expect(page(), WideLayout.gap);
+      expect(named('_EdgeHint'), findsOneWidget);
+
+      // From over the player bar, where no tile is to light up.
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(700, 870));
+      addTearDown(mouse.removePointer);
+      final built = <String>[];
+      debugOnRebuildDirtyWidget = (element, _) => built.add('${element.widget.runtimeType}');
+      addTearDown(() => debugOnRebuildDirtyWidget = null);
+      await mouse.moveTo(const Offset(3, 400));
+      await settle(tester);
+      expect(sidebar().left, WideLayout.gap);
+      expect(page(), sidebar().right + WideLayout.gap, reason: 'the page follows its edge');
+      expect(built, isNot(contains('_DesktopTile')), reason: 'the tiles laid out again, not built');
+
+      // Over it, it stays; a moment after the mouse leaves it, it goes, and the page with it.
+      await mouse.moveTo(const Offset(100, 400));
+      await tester.pump(const Duration(seconds: 1));
+      expect(sidebar().left, WideLayout.gap);
+      await mouse.moveTo(const Offset(800, 400));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(sidebar().left, WideLayout.gap, reason: 'not at once');
+      await tester.pump(const Duration(seconds: 1));
+      await settle(tester);
+      expect(sidebar().right, lessThanOrEqualTo(0));
+      expect(page(), WideLayout.gap);
+    },
+  );
+
+  testWidgets("a computer's sidebar pin keeps it out beside the page", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
+    Rect sidebar() => tester.getRect(named('_Sidebar'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(700, 870));
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(const Offset(3, 400));
+    await settle(tester);
+
+    await tester.tap(find.byTooltip(Localizer.get('PinSidebar')));
+    await settle(tester);
+    expect(vm.isSidebarPinned, isTrue);
+    await mouse.moveTo(const Offset(800, 400));
+    await tester.pump(const Duration(seconds: 2));
+    expect(sidebar().left, WideLayout.gap, reason: 'pinned, it stays');
+    expect(tester.getRect(named('_Content')).left, sidebar().right + WideLayout.gap);
+    expect(named('_EdgeHint'), findsNothing);
+
+    // Unpinned under the mouse, it stays out until the mouse leaves it.
+    await mouse.moveTo(const Offset(100, 400));
+    await tester.tap(find.byTooltip(Localizer.get('UnpinSidebar')));
+    await tester.pump(const Duration(seconds: 1));
+    expect(vm.isSidebarPinned, isFalse);
+    expect(sidebar().left, WideLayout.gap);
+    await mouse.moveTo(const Offset(800, 400));
+    await tester.pump(const Duration(seconds: 1));
+    await settle(tester);
+    expect(sidebar().right, lessThanOrEqualTo(0));
+  });
+
+  testWidgets("a tablet's sidebar stays beside the page, with no pin", (tester) async {
+    AppPlatform.forTesting(system: 'android');
+    await pumpApp(tester, const Size(1400, 900));
+    expect(find.byType(WideLayout), findsOneWidget);
+    final sidebar = tester.getRect(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_Sidebar'));
+    expect(sidebar.left, WideLayout.gap);
+    expect(find.byTooltip(Localizer.get('PinSidebar')), findsNothing);
+    expect(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_EdgeHint'), findsNothing);
   });
 
   testWidgets("a width that changes lays a page's tiles and rows out again, without building them again", (
@@ -4297,6 +4389,8 @@ void main() {
           library.initialize();
           return createMainViewModel(library);
         });
+        vm.isSidebarPinned = true; // beside the page, as a tablet's
+        await tester.pump();
         vm.searchQuery = 'nova';
         await settle(tester);
         final tracks = find.ancestor(of: find.text('Take 1').first, matching: find.byType(CustomScrollView)).first;

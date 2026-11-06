@@ -37,6 +37,8 @@ const Map<String, (String, String, String)> allStrings = {
   'NavPlaylists': ('Listák', 'Playlists', 'Playlists'),
   'NavPlaylistsShort': ('Listák', 'Playlists', 'Playlists'),
   'NavSettings': ('Beállítások', 'Settings', 'Einstellungen'),
+  'PinSidebar': ('Oldalsáv rögzítése', 'Pin the sidebar', 'Seitenleiste anheften'),
+  'UnpinSidebar': ('Rögzítés feloldása', 'Unpin the sidebar', 'Seitenleiste lösen'),
   'SectionLibrary': ('KÖNYVTÁR', 'LIBRARY', 'BIBLIOTHEK'),
   'SectionCollection': ('GYŰJTEMÉNY', 'COLLECTION', 'SAMMLUNG'),
   'SearchPlaceholder': (

@@ -733,6 +733,7 @@ class MainViewModel extends ChangeNotifier {
 
   static const String _languagePreference = 'language';
   static const String _themePreference = 'theme';
+  static const String _sidebarPinnedPreference = 'sidebar_pinned';
   static const String _performanceStatsPreference = 'show_performance_stats';
   static const String _onlineLyricsPreference = 'online_lyrics';
   static const String _remoteIdPreference = 'remote_device_id';
@@ -753,6 +754,17 @@ class MainViewModel extends ChangeNotifier {
   void setTheme({required bool light, bool persist = true}) {
     _isLight = light;
     if (persist) _remember(_themePreference, light ? 'light' : 'dark');
+    notifyListeners();
+  }
+
+  bool _isSidebarPinned = false;
+
+  /// A computer's sidebar stays beside the page; unpinned (the default) it is out of sight until the mouse comes to the
+  /// window's left edge, and then over the page.
+  bool get isSidebarPinned => _isSidebarPinned;
+  set isSidebarPinned(bool value) {
+    _isSidebarPinned = value;
+    _remember(_sidebarPinnedPreference, value ? '1' : '0');
     notifyListeners();
   }
 
@@ -933,6 +945,7 @@ class MainViewModel extends ChangeNotifier {
     if (theme != null) _isLight = theme == 'light';
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
+    _isSidebarPinned = library.getPreference(_sidebarPinnedPreference) == '1';
     lyrics.isOnlineEnabled = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     updates.isEnabled = library.getPreference(_updateCheckPreference) != '0'; // on unless turned off
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
