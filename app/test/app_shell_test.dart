@@ -3057,7 +3057,7 @@ void main() {
     expect([for (final item in vm.player.queueItems) item.track.title], [before[0], before[2], before[1]]);
   });
 
-  testWidgets("both players show shuffle and repeat alike, and the phone's queue says how many tracks it holds", (
+  testWidgets("both players show shuffle and repeat alike, and the phone's queue says how many tracks are to come", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
@@ -3081,7 +3081,7 @@ void main() {
 
     vm.nowPlayingTab = NowPlayingTab.queue;
     await settle(tester);
-    expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [3]))), findsOneWidget);
+    expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [2]))), findsOneWidget);
     expect(find.descendant(of: player, matching: find.byIcon(Icons.clear_all_rounded)), findsOneWidget);
     // A phone's queue rows have no × and no handle (a swipe takes one out, a long press moves it); the playing track is
     // above the list, not in it, the next one says so, and the transport gives the list its room.
@@ -3089,6 +3089,56 @@ void main() {
     expect(find.descendant(of: player, matching: find.byIcon(Icons.drag_indicator_rounded)), findsNothing);
     expect(find.descendant(of: player, matching: find.text(Localizer.get('QueueNextTag'))), findsOneWidget);
     expect(find.descendant(of: player, matching: find.byType(SeekBar)), findsNothing);
+  });
+
+  testWidgets("the phone's queue lists what comes after the playing track, numbered from it: Next, 2, 3", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([
+        for (var i = 1; i <= 5; i++) TestSupport.makeTrack('$i', 'Song $i', album: 'Album', trackNumber: i),
+      ]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    final songs = [for (var i = 1; i <= 5; i++) vm.library.getTrack('$i')!];
+    // As from the Tracks page: the whole list, from a track in its middle.
+    vm.player.playQueue(songs, songs[1]);
+    vm.openNowPlaying();
+    vm.nowPlayingTab = NowPlayingTab.queue;
+    await settle(tester);
+    await settle(tester);
+    final list = find.byType(QueueList);
+    String? numberOf(String title) {
+      final row = find.ancestor(
+        of: find.descendant(of: list, matching: find.text(title)),
+        matching: find.byType(InkWell),
+      );
+      if (row.evaluate().isEmpty) return null;
+      final tags = [Localizer.get('QueueNextTag'), '2', '3'];
+      return tags.firstWhere((tag) => find.descendant(of: row.first, matching: find.text(tag)).evaluate().isNotEmpty);
+    }
+
+    expect([for (var i = 1; i <= 5; i++) numberOf('Song $i')], [null, null, Localizer.get('QueueNextTag'), '2', '3']);
+    final player = find.byType(NowPlayingPage);
+    expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [3]))), findsOneWidget);
+
+    // Moved within what is to come, it moves in the queue, the tracks before it staying in place.
+    final finger = await tester.startGesture(
+      tester.getCenter(find.descendant(of: list, matching: find.text('Song 4'))),
+    );
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+    for (var i = 0; i < 12; i++) {
+      await finger.moveBy(const Offset(0, -10));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await finger.up();
+    await settle(tester);
+    expect(
+      [for (final item in vm.player.queueItems) item.track.title],
+      ['Song 1', 'Song 2', 'Song 4', 'Song 3', 'Song 5'],
+    );
+    expect(numberOf('Song 4'), Localizer.get('QueueNextTag'));
   });
 
   testWidgets(

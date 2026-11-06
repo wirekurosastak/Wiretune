@@ -832,10 +832,10 @@ class _QueueTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
           child: Row(
             children: [
-              // How many: the tab above already says it is the queue (the wide layout's queue says it so too).
+              // How many are still to come, as the list below holds: the tab above already says it is the queue.
               Expanded(
                 child: Text(
-                  context.trf('TrackCount', [player.queueItems.length]),
+                  context.trf('TrackCount', [player.queueItems.length - player.upcomingQueueStart]),
                   style: TextStyle(fontSize: 13, color: colors.textMuted),
                 ),
               ),
@@ -859,7 +859,7 @@ class _QueueTab extends StatelessWidget {
             ],
           ),
         ),
-        const Expanded(child: QueueList(padding: EdgeInsets.fromLTRB(8, 0, 8, 12), hidesCurrent: true)),
+        const Expanded(child: QueueList(padding: EdgeInsets.fromLTRB(8, 0, 8, 12), upcomingOnly: true)),
       ],
     );
   }

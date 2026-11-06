@@ -22,12 +22,13 @@ import '../widgets/track_list.dart';
 /// The queue: jump to an entry, drag entries (or use the arrows) to reorder them, remove them. Another device's queue
 /// (remote control) shows as far as this library knows its tracks, and its changes go to that device.
 class QueueList extends StatelessWidget {
-  const QueueList({super.key, this.padding = const EdgeInsets.all(16), this.hidesCurrent = false});
+  const QueueList({super.key, this.padding = const EdgeInsets.all(16), this.upcomingOnly = false});
 
   final EdgeInsets padding;
 
-  /// Leaves the playing track's row out, where the track is shown above the list (the phone's full-screen player).
-  final bool hidesCurrent;
+  /// Lists only what comes after the playing track, numbered from it (Next, 2, 3 …), where the track is shown above the
+  /// list (the phone's full-screen player): the tracks played before it are left out, as in Spotify's and TIDAL's queue.
+  final bool upcomingOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +37,8 @@ class QueueList extends StatelessWidget {
       listenable: player,
       builder: (context, _) {
         final items = player.queueItems;
-        if (items.isEmpty) {
+        final first = upcomingOnly ? player.upcomingQueueStart : 0;
+        if (items.length <= first) {
           return EmptyState(
             icon: Icons.playlist_play_rounded,
             title: context.tr('QueueEmptyTitle'),
@@ -49,21 +51,19 @@ class QueueList extends StatelessWidget {
           child: ReorderableListView.builder(
             buildDefaultDragHandles: false,
             padding: padding,
-            itemCount: items.length,
-            onReorderItem: player.moveQueueTrack,
+            itemCount: items.length - first,
+            onReorderItem: (from, to) => player.moveQueueTrack(first + from, first + to),
             proxyDecorator: liftedRow(context, const EdgeInsets.only(bottom: 4)),
-            // A left-out row is there with no height, so the rows keep the queue's places as they are moved.
-            itemBuilder: (context, index) => hidesCurrent && items[index].isCurrent
-                ? SizedBox.shrink(key: ValueKey(items[index]))
-                : _QueueRow(
-                    key: ValueKey(items[index]),
-                    item: items[index],
-                    index: index,
-                    itemCount: items.length,
-                    isNext: current >= 0 && index == current + 1,
-                    // A remote or a keyboard cannot drag: they get buttons. A phone's row moves under a long press.
-                    showMoveButtons: !AppPlatform.current.isMobile,
-                  ),
+            itemBuilder: (context, index) => _QueueRow(
+              key: ValueKey(items[first + index]),
+              item: items[first + index],
+              number: upcomingOnly ? index + 1 : items[first + index].displayIndex,
+              index: index,
+              itemCount: items.length - first,
+              isNext: current >= 0 && first + index == current + 1,
+              // A remote or a keyboard cannot drag: they get buttons. A phone's row moves under a long press.
+              showMoveButtons: !AppPlatform.current.isMobile,
+            ),
           ),
         );
       },
@@ -80,6 +80,7 @@ class _QueueRow extends StatefulWidget {
   const _QueueRow({
     super.key,
     required this.item,
+    required this.number,
     required this.index,
     required this.itemCount,
     required this.showMoveButtons,
@@ -87,6 +88,9 @@ class _QueueRow extends StatefulWidget {
   });
 
   final QueueItem item;
+
+  /// The number on its cover: its place in the queue, or in what is still to come.
+  final int number;
   final int index;
   final int itemCount;
   final bool showMoveButtons;
@@ -205,7 +209,7 @@ class _QueueRowState extends State<_QueueRow> {
                                   child: FittedBox(
                                     fit: BoxFit.scaleDown,
                                     child: Text(
-                                      widget.isNext ? context.tr('QueueNextTag') : '${item.displayIndex}',
+                                      widget.isNext ? context.tr('QueueNextTag') : '${widget.number}',
                                       style: TextStyle(
                                         fontSize: phone ? 10 : 9,
                                         fontWeight: FontWeight.w800,

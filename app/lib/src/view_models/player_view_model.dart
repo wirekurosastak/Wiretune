@@ -196,6 +196,10 @@ class PlayerViewModel extends ChangeNotifier {
   List<QueueItem> get queueItems => isRemote ? _remoteQueue : _queueItems;
   int get currentQueueIndex => isRemote ? _remoteQueue.indexWhere((item) => item.isCurrent) : _queueIndex;
 
+  /// Where [queueItems] go on after the playing track: the phone's queue lists them from there ("Next", 2, 3 …), as
+  /// Spotify's and TIDAL's do. 0, the whole queue, while none plays.
+  int get upcomingQueueStart => queueItems.indexWhere((item) => item.isCurrent) + 1;
+
   /// Whether the queue is [tracks] (an album, an artist, a playlist, a list page) in any order, as their Play, their
   /// menu's Shuffle or one of their rows started it, with a track loaded: their Play button then pauses and resumes it.
   /// A single track is whenever it is the one loaded, whatever the queue. A device being controlled holds at most
