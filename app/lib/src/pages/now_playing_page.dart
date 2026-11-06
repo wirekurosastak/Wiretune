@@ -709,7 +709,17 @@ class _TrackTab extends StatelessWidget {
                               // Where the mini player's cover flies as the player opens, and back out of as it closes.
                               child: Opacity(
                                 opacity: coverHidden ? 0 : 1,
-                                child: preview != null ? cover : PlayerSheetCover(own: true, child: cover),
+                                child: preview != null
+                                    ? cover
+                                    // A tap on it brings the queue up, as a swipe up does.
+                                    : Semantics(
+                                        button: true,
+                                        label: context.tr('Queue'),
+                                        child: GestureDetector(
+                                          onTap: () => vm.nowPlayingTab = NowPlayingTab.queue,
+                                          child: PlayerSheetCover(own: true, child: cover),
+                                        ),
+                                      ),
                               ),
                             ),
                           );

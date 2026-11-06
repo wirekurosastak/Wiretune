@@ -416,6 +416,16 @@ void main() {
       expect(flying, findsNothing);
       expect(find.byType(QueueList), findsNothing);
 
+      // A tap on the cover brings it up too; the row's title leads back.
+      await tester.tapAt(cover);
+      await settle(tester);
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.queue);
+      await tester.tap(find.descendant(of: page, matching: find.text(vm.player.nowPlayingTitle)).first);
+      await settle(tester);
+      await settle(tester);
+      expect(vm.nowPlayingTab, NowPlayingTab.track);
+
       // Past half the way: the queue.
       gesture = await tester.startGesture(cover);
       await gesture.moveBy(const Offset(0, -20));
