@@ -9,7 +9,6 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
-import '../view_models/app_section.dart';
 import 'buttons.dart';
 
 /// Asks before an action that can't easily be taken back. True when the user confirmed it. Cancel has the focus, so a
@@ -45,20 +44,6 @@ Future<bool> confirmAction(
   );
   return confirmed == true;
 }
-
-/// Asks what a swipe left or right does in the full-screen player (at the first one); null when the question is
-/// dismissed.
-Future<PlayerSwipe?> askPlayerSwipe(BuildContext context) => showDialog<PlayerSwipe>(
-  context: context,
-  builder: (ctx) => AppDialog(
-    title: ctx.tr('PlayerSwipeQuestion'),
-    content: Text(ctx.tr('PlayerSwipeLater')),
-    actions: [
-      for (final (choice, key) in [(PlayerSwipe.tracks, 'PlayerSwipeTracks'), (PlayerSwipe.tabs, 'PlayerSwipeTabs')])
-        OutlinedButton(onPressed: () => Navigator.of(ctx).pop(choice), child: Text(ctx.tr(key))),
-    ],
-  ),
-);
 
 /// Signs out of the server, asked first: signing in again takes the address and the password (on a TV with a remote),
 /// and the downloads on this device are deleted.
@@ -346,12 +331,15 @@ Future<T?> showPhoneSheet<T>(BuildContext context, {required List<Widget> Functi
 /// One entry of a [showChoiceSheet]: what choosing it gives back, its [label], and an [icon] and a [subtitle] if it has
 /// them.
 class SheetChoice<T extends Object> {
-  const SheetChoice(this.value, this.label, {this.selected = false, this.icon, this.subtitle});
+  const SheetChoice(this.value, this.label, {this.selected = false, this.icon, this.picture, this.subtitle});
 
   final T value;
   final String label;
   final bool selected;
   final IconData? icon;
+
+  /// A picture in place of the [icon] (an artist's).
+  final Widget? picture;
   final String? subtitle;
 }
 
@@ -378,9 +366,11 @@ Future<T?> showChoiceSheet<T extends Object>(
       for (final choice in choices)
         ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading: choice.icon == null
-              ? null
-              : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted),
+          leading:
+              choice.picture ??
+              (choice.icon == null
+                  ? null
+                  : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted)),
           title: Text(
             choice.label,
             maxLines: 1,

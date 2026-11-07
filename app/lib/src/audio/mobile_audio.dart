@@ -15,7 +15,13 @@ import '../platform.dart';
 /// the sound this phone makes: music it plays on another device (remote control) goes on through a call.
 abstract final class MobileAudio {
   static const MethodChannel _power = MethodChannel('wiretune/power');
+  static const EventChannel _pcm = EventChannel('wiretune/pcm');
   static const double _duckLevel = 0.2;
+
+  /// A track ([source]: a file path or a stream URL) decoded by Android's own decoder for the spectrum, as [PcmCache]
+  /// takes it: 16-bit mono 44.1 kHz, little-endian, in chunks of about a second.
+  static Stream<List<int>> decodeForSpectrum(String source) =>
+      _pcm.receiveBroadcastStream(source).map((chunk) => chunk as Uint8List);
 
   static Future<void> attach(WiretuneAudioEngine engine) async {
     final session = await AudioSession.instance;

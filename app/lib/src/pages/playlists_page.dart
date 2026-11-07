@@ -201,7 +201,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               tags: [
                 TagBadge(
                   context.tr(playlist.isAutomatic ? 'LabelAutoPlaylist' : 'LabelPlaylist'),
-                  color: colors.palette.lime,
+                  color: colors.accent,
                 ),
               ],
               title: playlist.name,
@@ -245,6 +245,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               sorting: playlists,
               kind: TrackTableKind.playlist,
               onReorder: playlists.canReorder ? playlists.moveTrack : null,
+              playingFrom: () => playlist.name,
             ),
           const PageEndSpace(),
         ],

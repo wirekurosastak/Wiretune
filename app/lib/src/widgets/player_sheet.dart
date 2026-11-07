@@ -105,29 +105,66 @@ class PlayerSheetScope extends InheritedWidget {
   bool updateShouldNotify(PlayerSheetScope oldWidget) => sheet != oldWidget.sheet;
 }
 
+/// A drag that [PlayerSheetDrag] leaves to something else: one whose first move it [takes] (by `delta`, down when
+/// positive). Then it [move]s with the finger, and [end]s with the velocity it is let go at (down when positive).
+class OtherDrag {
+  const OtherDrag({required this.takes, required this.move, required this.end});
+
+  final bool Function(double delta) takes;
+  final void Function(double delta) move;
+  final void Function(double velocity) end;
+}
+
 /// A vertical drag over [child] moves the full-screen player with the finger: up from the mini player, down from the
-/// player itself. Let go, it opens or closes the rest of the way (and tells the view model), or goes back. Taps, and
+/// player itself; or, when its first move is one the [other] drag takes, that (the player's queue coming up over its
+/// track). Let go, the player opens or closes the rest of the way (and tells the view model), or goes back. Taps, and
 /// horizontal drags such as a slider's, still reach the child.
-class PlayerSheetDrag extends StatelessWidget {
-  const PlayerSheetDrag({super.key, required this.child});
+class PlayerSheetDrag extends StatefulWidget {
+  const PlayerSheetDrag({super.key, required this.child, this.other});
 
   final Widget child;
+  final OtherDrag? other;
+
+  @override
+  State<PlayerSheetDrag> createState() => _PlayerSheetDragState();
+}
+
+class _PlayerSheetDragState extends State<PlayerSheetDrag> {
+  /// Whose this drag is: the [PlayerSheetDrag.other]'s, the player's, or (before its first move) not known yet.
+  bool? _other;
 
   @override
   Widget build(BuildContext context) {
     final sheet = PlayerSheetScope.maybeOf(context);
-    if (sheet == null) return child;
+    final other = widget.other;
+    if (sheet == null && other == null) return widget.child;
     final height = MediaQuery.sizeOf(context).height;
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onVerticalDragStart: (_) => sheet._start(),
-      // The player's top goes the screen's whole height, so it keeps with the finger.
-      onVerticalDragUpdate: (details) => sheet._move(details.primaryDelta ?? 0, height),
-      onVerticalDragEnd: (details) {
-        final vm = context.vm;
-        sheet._release(details.primaryVelocity ?? 0) ? vm.openNowPlaying() : vm.closeNowPlaying();
+      onVerticalDragStart: (_) => _other = null,
+      onVerticalDragUpdate: (details) {
+        final delta = details.primaryDelta ?? 0;
+        if (_other == null) {
+          _other = other != null && other.takes(delta);
+          if (_other == false) sheet?._start();
+        }
+        // The player's top goes the screen's whole height, so it keeps with the finger.
+        _other! ? other!.move(delta) : sheet?._move(delta, height);
       },
-      child: child,
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (_other == true) other!.end(velocity);
+        if (_other == false && sheet != null) {
+          final vm = context.vm;
+          sheet._release(velocity) ? vm.openNowPlaying() : vm.closeNowPlaying();
+        }
+        _other = null;
+      },
+      onVerticalDragCancel: () {
+        if (_other == true) other!.end(0);
+        _other = null;
+      },
+      child: widget.child,
     );
   }
 }

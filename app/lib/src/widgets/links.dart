@@ -4,8 +4,13 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../app_scope.dart';
+import '../localization.dart';
 import '../theme/app_theme.dart';
 import 'buttons.dart';
+import 'cover_image.dart';
+import 'dialogs.dart';
+import 'page_parts.dart';
 
 /// A text that acts as a link (artist and album names): [hoverColor] under the mouse or the keyboard's focus, else
 /// underlined.
@@ -23,6 +28,7 @@ class LinkText extends StatelessWidget {
     Text label(TextStyle style) => Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
     if (onTap == null) return label(base);
     return Pressable(
+      link: true,
       onPressed: onTap,
       builder: (context, lit) => label(
         !lit
@@ -36,7 +42,9 @@ class LinkText extends StatelessWidget {
 }
 
 /// A track's artists as links, one per name ("Future, Lil Durk"): the one under the mouse opens. Focused by the
-/// keyboard or a remote, it opens the main artist, which it then shows lit. One artist is a plain [LinkText].
+/// keyboard or a remote, it opens the main artist, which it then shows lit. One artist is a plain [LinkText]. On a
+/// phone, where a finger would hit the name beside the one it meant, a tap opens the artists to choose from, as in
+/// TIDAL.
 class ArtistLinks extends StatefulWidget {
   const ArtistLinks(this.names, {super.key, required this.onOpen, this.style, this.hoverColor});
 
@@ -74,6 +82,29 @@ class _ArtistLinksState extends State<ArtistLinks> {
     return _taps;
   }
 
+  /// The artists, each with their picture where the library has it, to choose the one to open.
+  Future<void> _choose(BuildContext context) async {
+    final library = context.getInheritedWidgetOfExactType<AppScope>()?.vm.library;
+    final chosen = await showChoiceSheet<String>(
+      context,
+      title: context.tr('ChooseArtist'),
+      choices: [
+        for (final name in widget.names)
+          SheetChoice(
+            name,
+            name,
+            picture: CoverImage(
+              path: library?.getArtistByName(name)?.picturePath,
+              size: 40,
+              circle: true,
+              placeholderIcon: Icons.person,
+            ),
+          ),
+      ],
+    );
+    if (chosen != null) widget.onOpen(chosen);
+  }
+
   @override
   Widget build(BuildContext context) {
     final names = widget.names;
@@ -89,8 +120,17 @@ class _ArtistLinksState extends State<ArtistLinks> {
     final lit = widget.hoverColor != null
         ? base.copyWith(color: widget.hoverColor)
         : base.copyWith(decoration: TextDecoration.underline, decorationColor: base.color);
+    if (PhoneChrome.isPhone(context)) {
+      return Pressable(
+        link: true,
+        onPressed: () => _choose(context),
+        builder: (context, active) =>
+            Text(names.join(', '), maxLines: 1, overflow: TextOverflow.ellipsis, style: active ? lit : base),
+      );
+    }
     final taps = _recognizers();
     return Pressable(
+      link: true,
       onPressed: () => widget.onOpen(names.first),
       builder: (context, active) => Text.rich(
         TextSpan(

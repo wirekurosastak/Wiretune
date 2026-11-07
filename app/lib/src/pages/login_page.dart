@@ -198,7 +198,7 @@ class _LoginPageState extends State<LoginPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.how_to_reg_rounded, size: 40, color: colors.palette.lime),
+                Icon(Icons.how_to_reg_rounded, size: 40, color: colors.accent),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -210,7 +210,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       Text(
                         server.currentUserRole,
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.palette.lime),
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.accent),
                       ),
                     ],
                   ),
@@ -296,15 +296,12 @@ class _LoginPageState extends State<LoginPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
             ),
             onPressed: server.isConnecting ? null : _connect,
-            icon: Icon(Icons.dns_outlined, size: 16, color: colors.palette.cyan),
+            icon: Icon(Icons.dns_outlined, size: 16, color: colors.accent),
             label: Text(context.tr('Connect'), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
-      if (server.isBusy) ...[
-        const SizedBox(height: 8),
-        LinearProgressIndicator(minHeight: 3, color: colors.palette.cyan),
-      ],
+      if (server.isBusy) ...[const SizedBox(height: 8), const LinearProgressIndicator(minHeight: 3)],
       if (server.statusMessage.isNotEmpty) ...[
         const SizedBox(height: 6),
         Text(server.statusMessage, style: TextStyle(fontSize: 11, color: colors.textMuted)),
@@ -419,7 +416,7 @@ class _LoginPageState extends State<LoginPage> {
             vm.continueOffline();
             if (vm.library.tracks.isEmpty) vm.navigateTo(AppSection.settings);
           },
-          icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.palette.lime),
+          icon: Icon(Icons.folder_open_outlined, size: 18, color: colors.accent),
           label: Text(context.tr('ContinueWithoutServer'), style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
       ],

@@ -397,32 +397,6 @@ class MainViewModel extends ChangeNotifier {
     if (player.currentTrack != null) isNowPlayingOpen = true;
   }
 
-  PlayerSwipe? _playerSwipe;
-
-  /// What a swipe left or right does in the full-screen player; null until the user picks it (at the first swipe).
-  PlayerSwipe? get playerSwipe => _playerSwipe;
-  set playerSwipe(PlayerSwipe? value) {
-    if (value == null || value == _playerSwipe) return;
-    _playerSwipe = value;
-    _remember(_playerSwipePreference, value.name);
-    notifyListeners();
-  }
-
-  /// A swipe in the full-screen player, to the left ([forward], towards what comes next) or to the right, doing what
-  /// [playerSwipe] says. The tabs stop at either end.
-  void swipeNowPlaying({required bool forward}) {
-    switch (_playerSwipe) {
-      case PlayerSwipe.tracks:
-        forward ? player.nextTrack() : player.previousTrack(restart: false);
-      case PlayerSwipe.tabs:
-        const tabs = NowPlayingTab.values;
-        final index = tabs.indexOf(_nowPlayingTab) + (forward ? 1 : -1);
-        if (index >= 0 && index < tabs.length) nowPlayingTab = tabs[index];
-      case null:
-        break;
-    }
-  }
-
   void closeNowPlaying() => isNowPlayingOpen = false;
 
   // ── Back ───────────────────────────────────────────────────────────────────────────────────────
@@ -759,6 +733,7 @@ class MainViewModel extends ChangeNotifier {
 
   static const String _languagePreference = 'language';
   static const String _themePreference = 'theme';
+  static const String _sidebarPinnedPreference = 'sidebar_pinned';
   static const String _performanceStatsPreference = 'show_performance_stats';
   static const String _onlineLyricsPreference = 'online_lyrics';
   static const String _remoteIdPreference = 'remote_device_id';
@@ -769,7 +744,6 @@ class MainViewModel extends ChangeNotifier {
   static const String _equalizerPreference = 'equalizer';
   static const String _equalizerOnPreference = 'equalizer_on';
   static const String _gaplessPreference = 'gapless';
-  static const String _playerSwipePreference = 'player_swipe';
   static const String _updateCheckPreference = 'update_check';
 
   bool _isLight = false;
@@ -780,6 +754,17 @@ class MainViewModel extends ChangeNotifier {
   void setTheme({required bool light, bool persist = true}) {
     _isLight = light;
     if (persist) _remember(_themePreference, light ? 'light' : 'dark');
+    notifyListeners();
+  }
+
+  bool _isSidebarPinned = false;
+
+  /// A computer's sidebar stays beside the page; unpinned (the default) it is out of sight until the mouse comes to the
+  /// window's left edge, and then over the page.
+  bool get isSidebarPinned => _isSidebarPinned;
+  set isSidebarPinned(bool value) {
+    _isSidebarPinned = value;
+    _remember(_sidebarPinnedPreference, value ? '1' : '0');
     notifyListeners();
   }
 
@@ -960,6 +945,7 @@ class MainViewModel extends ChangeNotifier {
     if (theme != null) _isLight = theme == 'light';
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
+    _isSidebarPinned = library.getPreference(_sidebarPinnedPreference) == '1';
     lyrics.isOnlineEnabled = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     updates.isEnabled = library.getPreference(_updateCheckPreference) != '0'; // on unless turned off
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];
@@ -970,7 +956,6 @@ class MainViewModel extends ChangeNotifier {
     final quality = StreamingQuality.values.asNameMap()[library.getPreference(_streamingQualityPreference)];
     if (quality != null) unawaited(audioEngine.setStreamingQuality(quality));
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
-    _playerSwipe = PlayerSwipe.values.asNameMap()[library.getPreference(_playerSwipePreference)];
 
     // A lasting ID of its own, so the others know it again after a restart; it connects once signed in.
     var id = library.getPreference(_remoteIdPreference);

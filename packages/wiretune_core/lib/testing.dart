@@ -59,6 +59,10 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   @override
   Duration currentPosition = Duration.zero;
 
+  /// What the player last said of its spectrum being on screen.
+  @override
+  bool spectrumShown = false;
+
   double volume = 1.0;
   VolumeNormalization normalization = VolumeNormalization.off;
   String? lastSource;

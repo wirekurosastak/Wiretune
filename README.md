@@ -38,7 +38,7 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 | Play a server library | Yes | Yes | Yes | Yes | Yes | Browse and play | Yes | Yes |
 | Play a local folder | Yes | Yes | Yes | Yes | No | No | No | No |
 | Exclusive / bit-perfect | Yes | Yes | Untested | No | No | No | No | No |
-| Spectrum analyzer | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | No | No | No | No | No |
+| Spectrum analyzer | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | Phone | No | No | No | No |
 | System media controls | MPRIS | Media keys, while focused | Media keys, Now Playing | Notification, lock screen | Remote | The car | Lock screen, Control Center | Remote, in the app |
 | Run the server | Yes | Yes | Yes | — | — | — | — | — |
 | [Tried on real hardware](docs/development.md#what-has-been-tried) | Yes | Yes | No | Phone | No | No | No | Briefly |

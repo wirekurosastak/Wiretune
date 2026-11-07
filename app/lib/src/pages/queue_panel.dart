@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,9 +23,16 @@ import '../widgets/track_list.dart';
 /// The queue: jump to an entry, drag entries (or use the arrows) to reorder them, remove them. Another device's queue
 /// (remote control) shows as far as this library knows its tracks, and its changes go to that device.
 class QueueList extends StatelessWidget {
-  const QueueList({super.key, this.padding = const EdgeInsets.all(16)});
+  const QueueList({super.key, this.padding = const EdgeInsets.all(16), this.opensAtNext = false});
 
   final EdgeInsets padding;
+
+  /// Opens at what comes after the playing track, numbered from it (Next, 2, 3 …), where the track is shown above the
+  /// list (the phone's full-screen player); the tracks played before it are above, dimmed, scrolled back to.
+  final bool opensAtNext;
+
+  /// Where the list opens: what is still to come starts there, what was played goes on above it.
+  static const Key _next = ValueKey('next');
 
   @override
   Widget build(BuildContext context) {
@@ -33,26 +41,80 @@ class QueueList extends StatelessWidget {
       listenable: player,
       builder: (context, _) {
         final items = player.queueItems;
-        if (items.isEmpty) {
-          return EmptyState(
-            icon: Icons.playlist_play_rounded,
-            title: context.tr('QueueEmptyTitle'),
-            hint: context.tr('QueueEmptyHint'),
+        final current = items.indexWhere((item) => item.isCurrent);
+        if (items.isEmpty || (opensAtNext && items.length == 1 && current == 0)) {
+          return const _QueueEmpty();
+        }
+        // A remote or a keyboard cannot drag: they get buttons. A phone's row moves under a long press.
+        final moveButtons = !AppPlatform.current.isMobile;
+        final proxy = liftedRow(context, const EdgeInsets.only(bottom: 4));
+        if (!opensAtNext) {
+          // Its rows fade towards the edges as the lyrics' lines do, where more of the queue goes on past them.
+          return EdgeFade(
+            child: ReorderableListView.builder(
+              buildDefaultDragHandles: false,
+              padding: padding,
+              itemCount: items.length,
+              onReorderItem: player.moveQueueTrack,
+              proxyDecorator: proxy,
+              itemBuilder: (context, index) => _QueueRow(
+                key: ValueKey(items[index]),
+                item: items[index],
+                number: items[index].displayIndex,
+                index: index,
+                itemCount: items.length,
+                isNext: current >= 0 && index == current + 1,
+                showMoveButtons: moveButtons,
+              ),
+            ),
           );
         }
-        return ReorderableListView.builder(
-          buildDefaultDragHandles: false,
-          padding: padding,
-          itemCount: items.length,
-          onReorderItem: player.moveQueueTrack,
-          proxyDecorator: liftedRow(context, const EdgeInsets.only(bottom: 4)),
-          itemBuilder: (context, index) => _QueueRow(
-            key: ValueKey(items[index]),
-            item: items[index],
-            index: index,
-            itemCount: items.length,
-            // A remote or a keyboard cannot drag: they get buttons. A phone drags by the handle.
-            showMoveButtons: !AppPlatform.current.isMobile,
+        final first = current + 1;
+        final upcoming = items.length - first;
+        return EdgeFade(
+          child: CustomScrollView(
+            center: _next,
+            slivers: [
+              // Above where it opens, the last played nearest.
+              SliverPadding(
+                padding: EdgeInsets.only(left: padding.left, right: padding.right),
+                sliver: SliverList.builder(
+                  itemCount: math.max(0, current),
+                  itemBuilder: (context, index) {
+                    final item = items[current - 1 - index];
+                    return _QueueRow(
+                      key: ValueKey(item),
+                      item: item,
+                      number: item.displayIndex,
+                      index: index,
+                      itemCount: current,
+                      played: true,
+                      showMoveButtons: false,
+                    );
+                  },
+                ),
+              ),
+              SliverPadding(
+                key: _next,
+                padding: padding,
+                sliver: upcoming == 0
+                    ? const SliverFillRemaining(child: _QueueEmpty())
+                    : SliverReorderableList(
+                        itemCount: upcoming,
+                        onReorderItem: (from, to) => player.moveQueueTrack(first + from, first + to),
+                        proxyDecorator: proxy,
+                        itemBuilder: (context, index) => _QueueRow(
+                          key: ValueKey(items[first + index]),
+                          item: items[first + index],
+                          number: index + 1,
+                          index: index,
+                          itemCount: upcoming,
+                          isNext: current >= 0 && index == 0,
+                          showMoveButtons: moveButtons,
+                        ),
+                      ),
+              ),
+            ],
           ),
         );
       },
@@ -60,24 +122,48 @@ class QueueList extends StatelessWidget {
   }
 }
 
-/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, or the bouncing bars of the
-/// current track), title and artist, format, length, the arrows and the remove button. The current entry is washed in
-/// the accent. It moves by its handle or a long press anywhere on it (as a playlist's rows); on a computer its menu
-/// opens on a right click. On a phone it is as large as the phone's other track rows, without the length, its × a
-/// finger's target.
+class _QueueEmpty extends StatelessWidget {
+  const _QueueEmpty();
+
+  @override
+  Widget build(BuildContext context) => EmptyState(
+    icon: Icons.playlist_play_rounded,
+    title: context.tr('QueueEmptyTitle'),
+    hint: context.tr('QueueEmptyHint'),
+  );
+}
+
+/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, "Next" on the one after the
+/// current track, or the current one's bouncing bars), title and artist, format, length, the arrows and the remove
+/// button. The current entry is washed in the accent. It moves by its handle or a long press anywhere on it (as a
+/// playlist's rows); on a computer its menu opens on a right click. On a phone it is as large as the phone's other track
+/// rows, with neither the handle nor the length nor the ×: a long press moves it and a swipe to the left takes it away.
 class _QueueRow extends StatefulWidget {
   const _QueueRow({
     super.key,
     required this.item,
+    required this.number,
     required this.index,
     required this.itemCount,
     required this.showMoveButtons,
+    this.isNext = false,
+    this.played = false,
   });
 
   final QueueItem item;
+
+  /// The number on its cover: its place in the queue, or in what is still to come.
+  final int number;
   final int index;
   final int itemCount;
   final bool showMoveButtons;
+
+  /// The entry after the playing one.
+  final bool isNext;
+
+  /// Played before the playing one, above where the phone's queue opens: dimmed, without its number, and it stays in
+  /// place (a tap plays it again, a swipe takes it out).
+  final bool played;
 
   @override
   State<_QueueRow> createState() => _QueueRowState();
@@ -136,22 +222,27 @@ class _QueueRowState extends State<_QueueRow> {
             // A right click opens the track's menu, as on a table's row; a long press grabs the row.
             onSecondaryTapUp: (details) =>
                 showTrackContextMenu(context, details.globalPosition, item.track, TrackTableKind.tracks),
-            child: LayoutBuilder(
-              builder: (context, constraints) => Padding(
+            // Built again when the tags come or go; between, a width that changes only lays the row out.
+            child: KeyedLayoutBuilder<bool>(
+              keyOf: (constraints) => constraints.maxWidth >= _tagRowWidth,
+              builder: (context, tags) => Padding(
                 padding: EdgeInsets.fromLTRB(10, phone ? 6 : 7, phone ? 0 : 10, phone ? 6 : 7),
                 child: Row(
                   children: [
-                    ReorderableDragStartListener(
-                      index: widget.index,
-                      child: Tooltip(
-                        message: context.tr('TipDragToReorder'),
-                        child: SizedBox(
-                          width: 20,
-                          child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
+                    // A phone's row moves under a long press anywhere on it: no handle, too small for a finger.
+                    if (!phone) ...[
+                      ReorderableDragStartListener(
+                        index: widget.index,
+                        child: Tooltip(
+                          message: context.tr('TipDragToReorder'),
+                          child: SizedBox(
+                            width: 20,
+                            child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
+                      const SizedBox(width: 6),
+                    ],
                     SizedBox(
                       width: cover,
                       height: cover,
@@ -169,7 +260,7 @@ class _QueueRowState extends State<_QueueRow> {
                                 child: EqualizerBars(playing: player.isPlaying, color: Colors.white),
                               ),
                             )
-                          else
+                          else if (!widget.played)
                             Align(
                               alignment: Alignment.topLeft,
                               child: Container(
@@ -181,12 +272,19 @@ class _QueueRowState extends State<_QueueRow> {
                                     bottomRight: Radius.circular(Radii.tag),
                                   ),
                                 ),
-                                child: Text(
-                                  '${item.displayIndex}',
-                                  style: TextStyle(
-                                    fontSize: phone ? 10 : 9,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
+                                // The one after the playing track says so, rather than its number.
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(maxWidth: cover - 6),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      widget.isNext ? context.tr('QueueNextTag') : '${widget.number}',
+                                      style: TextStyle(
+                                        fontSize: phone ? 10 : 9,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -214,13 +312,13 @@ class _QueueRowState extends State<_QueueRow> {
                             track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: phone ? 13 : 11.5, color: colors.textMuted),
+                            style: TextStyle(fontSize: phone ? 13.5 : 11.5, color: colors.textMuted),
                           ),
                         ],
                       ),
                     ),
                     // A narrow row (a phone's, a narrow window's) leaves the tag out: the title keeps the room.
-                    if (constraints.maxWidth >= _tagRowWidth) ...[
+                    if (tags) ...[
                       const SizedBox(width: 12),
                       QualityTag(tier: track.format.tier, spec: track.format.tagSpec),
                     ],
@@ -252,14 +350,14 @@ class _QueueRowState extends State<_QueueRow> {
                       ),
                       const SizedBox(width: 8),
                     ],
-                    small(
-                      Icons.close_rounded,
-                      'TipRemoveFromQueue',
-                      () => player.removeQueueItem(item),
-                      color: colors.danger,
-                      size: phone ? 44 : 28,
-                      iconSize: phone ? 22 : 16,
-                    ),
+                    // A phone's row goes with a swipe to the left.
+                    if (!phone)
+                      small(
+                        Icons.close_rounded,
+                        'TipRemoveFromQueue',
+                        () => player.removeQueueItem(item),
+                        color: colors.danger,
+                      ),
                   ],
                 ),
               ),
@@ -268,17 +366,50 @@ class _QueueRowState extends State<_QueueRow> {
         ),
       ),
     );
-    return ReorderableDelayedDragStartListener(index: widget.index, child: row);
+    final shown = widget.played ? Opacity(opacity: 0.5, child: row) : row;
+    return ReorderableDelayedDragStartListener(
+      index: widget.index,
+      enabled: !widget.played,
+      child: !phone
+          ? shown
+          : Dismissible(
+              key: ObjectKey(item),
+              // Listening together the host takes it out, after the swipe: the row would stay where it went.
+              direction: player.isFollowingHost ? DismissDirection.none : DismissDirection.endToStart,
+              onDismissed: (_) {
+                unawaited(HapticFeedback.lightImpact());
+                player.removeQueueItem(item);
+              },
+              // What the swipe does, uncovered as the row goes: the × in the danger colour, on a wash of it.
+              background: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(color: colors.danger.withValues(alpha: 0.18), borderRadius: radius),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 22),
+                      child: Icon(Icons.close_rounded, color: colors.danger, size: 24),
+                    ),
+                  ),
+                ),
+              ),
+              child: shown,
+            ),
+    );
   }
 }
 
 /// The lyrics of the current track: synced lines that follow the song (tap one to jump there), plain text, or why
 /// there are none. With [showHeader] it is titled with the track, as beside the queue.
 class LyricsView extends StatefulWidget {
-  const LyricsView({super.key, this.showHeader = true, this.centered = false});
+  const LyricsView({super.key, this.showHeader = true, this.centered = false, this.sideInset = 0});
 
   final bool showHeader;
   final bool centered;
+
+  /// The space at the lines' sides, inside the scrolling: the scrollbar stays at the edge of the frame.
+  final double sideInset;
 
   @override
   State<LyricsView> createState() => _LyricsViewState();
@@ -321,9 +452,10 @@ class _LyricsViewState extends State<LyricsView> {
       listenable: Listenable.merge([player, lyrics]),
       builder: (context, _) {
         final track = player.currentTrack;
+        final side = widget.sideInset;
         final header = widget.showHeader
             ? Padding(
-                padding: const EdgeInsets.only(bottom: 14),
+                padding: EdgeInsets.fromLTRB(side, 0, side, 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -365,11 +497,7 @@ class _LyricsViewState extends State<LyricsView> {
               children: [
                 SizedBox(
                   width: 120,
-                  child: LinearProgressIndicator(
-                    minHeight: 3,
-                    color: colors.palette.cyan,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+                  child: LinearProgressIndicator(minHeight: 3, borderRadius: BorderRadius.circular(2)),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -399,7 +527,7 @@ class _LyricsViewState extends State<LyricsView> {
                 final lines = lyrics.lines;
                 return ListView.builder(
                   controller: _scroll,
-                  padding: const EdgeInsets.only(top: 24, bottom: 120),
+                  padding: EdgeInsets.fromLTRB(side, 24, side, 120),
                   itemCount: lines.length,
                   itemBuilder: (context, i) {
                     final line = lines[i];
@@ -424,7 +552,7 @@ class _LyricsViewState extends State<LyricsView> {
           );
         } else {
           body = SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 80),
+            padding: EdgeInsets.fromLTRB(side, 0, side, 80),
             child: SelectableText(
               lyrics.plainText ?? '',
               textAlign: widget.centered ? TextAlign.center : TextAlign.start,
@@ -476,7 +604,6 @@ class _LyricLineState extends State<_LyricLine> {
   Widget build(BuildContext context) {
     final opacity = widget.active ? 1.0 : (_hover ? 0.85 : (widget.past ? 0.35 : 0.55));
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
@@ -536,6 +663,7 @@ class QueueLyricsPanel extends StatelessWidget {
       builder: (context, _) {
         final count = player.queueItems.length;
         return Padding(
+          // The card about as far in from the page's bottom as from its sides.
           padding: const EdgeInsets.fromLTRB(30, 28, 30, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -567,7 +695,7 @@ class QueueLyricsPanel extends StatelessWidget {
                               const SizedBox(width: 8),
                               Text('•', style: TextStyle(color: colors.textMuted)),
                               const SizedBox(width: 8),
-                              TagBadge(context.tr('NowPlaying'), color: colors.accent),
+                              TagBadge(context.tr('NowPlaying').toUpperCase(), color: colors.accent),
                             ],
                           ],
                         ),
@@ -603,7 +731,7 @@ class QueueLyricsPanel extends StatelessWidget {
                             const Expanded(child: QueueList()),
                             Container(width: 1, color: colors.glassBorder),
                             const Expanded(
-                              child: Padding(padding: EdgeInsets.fromLTRB(24, 20, 24, 0), child: LyricsView()),
+                              child: Padding(padding: EdgeInsets.only(top: 20), child: LyricsView(sideInset: 24)),
                             ),
                           ],
                         ),

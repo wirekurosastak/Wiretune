@@ -290,8 +290,11 @@ Listenable progressOf(PlayerViewModel player) => AppPlatform.current.isMobile ? 
 class SeekBar extends StatefulWidget {
   const SeekBar({super.key, this.timesBelow = false});
 
-  /// Phone layout: the times under the slider instead of beside it.
+  /// Phone layout: the times under the slider instead of beside it, under the track's ends.
   final bool timesBelow;
+
+  /// How far the track's ends are in from the slider's sides: the slider keeps its knob's overlay room free there.
+  static const double inset = 14;
 
   @override
   State<SeekBar> createState() => _SeekBarState();
@@ -299,9 +302,6 @@ class SeekBar extends StatefulWidget {
 
 class _SeekBarState extends State<SeekBar> {
   double? _dragValue;
-
-  /// Where the finger last held the knob (0 to 1 of the way), for the time over it to fade out there.
-  double _heldAt = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -319,63 +319,18 @@ class _SeekBarState extends State<SeekBar> {
         final total = player.durationSeconds;
         final value = (_dragValue ?? player.positionSeconds).clamp(0.0, total > 0 ? total : 1.0);
         final max = total > 0 ? total : 1.0;
-        if (_dragValue != null) _heldAt = value / max;
-        final held = _dragValue != null;
+        // While the knob is held, the time it is at shows over it (the slider's own bubble), where the finger
+        // doesn't cover it.
         final slider = SizedBox(
           height: 28,
-          // While the knob is held, the time it is at floats over it, where the finger doesn't cover it.
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              // The track's ends: the slider keeps the overlay's radius free at each side.
-              const inset = 14.0;
-              final x = inset + (constraints.maxWidth - 2 * inset) * _heldAt;
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Positioned.fill(
-                    child: Slider(
-                      value: value,
-                      max: max,
-                      onChanged: player.currentTrack == null ? null : (v) => setState(() => _dragValue = v),
-                      onChangeEnd: (v) {
-                        player.seekTo(Duration(milliseconds: (v * 1000).round()));
-                        setState(() => _dragValue = null);
-                      },
-                    ),
-                  ),
-                  Positioned(
-                    left: x - 40,
-                    width: 80,
-                    bottom: 30,
-                    child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: held ? 1 : 0,
-                        duration: const Duration(milliseconds: 160),
-                        child: AnimatedSlide(
-                          offset: held ? Offset.zero : const Offset(0, 0.3),
-                          duration: const Duration(milliseconds: 160),
-                          curve: Curves.easeOutCubic,
-                          child: Center(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: colors.palette.modal,
-                                borderRadius: BorderRadius.circular(Radii.pill),
-                                border: Border.all(color: colors.glassBorder),
-                                boxShadow: [BoxShadow(color: colors.palette.shadow, blurRadius: 12)],
-                              ),
-                              child: Text(
-                                formatClock(Duration(milliseconds: (_heldAt * max * 1000).round())),
-                                style: timeStyle.copyWith(fontSize: 13, color: colors.textMain),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
+          child: Slider(
+            value: value,
+            max: max,
+            label: formatClock(Duration(milliseconds: (value * 1000).round())),
+            onChanged: player.currentTrack == null ? null : (v) => setState(() => _dragValue = v),
+            onChangeEnd: (v) {
+              player.seekTo(Duration(milliseconds: (v * 1000).round()));
+              setState(() => _dragValue = null);
             },
           ),
         );
@@ -386,7 +341,7 @@ class _SeekBarState extends State<SeekBar> {
             children: [
               slider,
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: SeekBar.inset),
                 child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [elapsed, length]),
               ),
             ],
@@ -762,42 +717,9 @@ class FavoriteCurrentButton extends StatelessWidget {
           tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
           iconSize: size,
           onPressed: player.currentTrack == null ? null : player.toggleFavoriteCurrent,
-          icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted),
+          icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.favorite : colors.textMuted),
         );
       },
     );
   }
-}
-
-/// Calls [onSwipe] when a horizontal swipe over [child] goes far or fast enough: `forward` for one to the left (towards
-/// what comes next), else to the right. Taps, and vertical drags such as a list's, still reach the child.
-class HorizontalSwipe extends StatefulWidget {
-  const HorizontalSwipe({super.key, required this.onSwipe, required this.child});
-
-  final void Function({required bool forward}) onSwipe;
-  final Widget child;
-
-  @override
-  State<HorizontalSwipe> createState() => _HorizontalSwipeState();
-}
-
-class _HorizontalSwipeState extends State<HorizontalSwipe> {
-  double _distance = 0;
-
-  void _onDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? 0;
-    if (_distance.abs() > 60 || velocity.abs() > 400) {
-      widget.onSwipe(forward: (velocity.abs() > 400 ? velocity : _distance) < 0);
-    }
-    _distance = 0;
-  }
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-    behavior: HitTestBehavior.translucent,
-    onHorizontalDragStart: (_) => _distance = 0,
-    onHorizontalDragUpdate: (details) => _distance += details.delta.dx,
-    onHorizontalDragEnd: _onDragEnd,
-    child: widget.child,
-  );
 }

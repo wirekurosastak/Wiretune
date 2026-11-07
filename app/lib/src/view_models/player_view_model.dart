@@ -140,8 +140,9 @@ class PlayerViewModel extends ChangeNotifier {
     queue: const <Track>[],
   ));
 
-  /// The spectrum bands (0..1), about 30 times a second while playing.
-  final ValueNotifier<Float32List> spectrum = ValueNotifier(Float32List(SpectrumAnalyzer.numBands));
+  /// The spectrum bands (0..1), about 30 times a second while playing. While something listens (a spectrum on screen),
+  /// the engine is told so: a phone analyses only then.
+  late final ValueNotifier<Float32List> spectrum = _Spectrum((shown) => _engine.spectrumShown = shown);
 
   double get positionSeconds => position.value.inMicroseconds / 1e6;
   Duration get duration => currentTrack?.duration ?? Duration.zero;
@@ -170,6 +171,11 @@ class PlayerViewModel extends ChangeNotifier {
   /// Title of the current track, or a hint when nothing is loaded.
   String get nowPlayingTitle => currentTrack?.title ?? Localizer.get('NothingPlaying');
 
+  /// The name of what the queue was played from (an album, an artist, a playlist, a page), in the language shown; null
+  /// when that isn't known (queued a track at a time, from another device, or before a restart).
+  String? get playingFrom => _playingFrom?.call();
+  String Function()? _playingFrom;
+
   /// Artist of the current track, or a hint when nothing is loaded.
   String get nowPlayingArtist => currentTrack?.artist ?? Localizer.get('ChooseMusic');
 
@@ -189,6 +195,10 @@ class PlayerViewModel extends ChangeNotifier {
   List<Track> get queueTracks => isRemote ? [for (final item in _remoteQueue) item.track] : _queueTracks;
   List<QueueItem> get queueItems => isRemote ? _remoteQueue : _queueItems;
   int get currentQueueIndex => isRemote ? _remoteQueue.indexWhere((item) => item.isCurrent) : _queueIndex;
+
+  /// Where [queueItems] go on after the playing track: the phone's queue opens there ("Next", 2, 3 …), as Spotify's and
+  /// TIDAL's do, and counts what is from there. 0, the whole queue, while none plays.
+  int get upcomingQueueStart => queueItems.indexWhere((item) => item.isCurrent) + 1;
 
   /// Whether the queue is [tracks] (an album, an artist, a playlist, a list page) in any order, as their Play, their
   /// menu's Shuffle or one of their rows started it, with a track loaded: their Play button then pauses and resumes it.
@@ -435,8 +445,9 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Replaces the queue with [tracks] and starts [startTrack] (the first track, or a random one when shuffling).
-  void playQueue(Iterable<Track> tracks, [Track? startTrack]) {
+  /// Replaces the queue with [tracks] and starts [startTrack] (the first track, or a random one when shuffling). [from]
+  /// names what they are ([playingFrom]).
+  void playQueue(Iterable<Track> tracks, [Track? startTrack, String Function()? from]) {
     _leaveForOwnMusic();
     if (isRemote) {
       final list = tracks.toList();
@@ -448,14 +459,15 @@ class PlayerViewModel extends ChangeNotifier {
       return;
     }
     _playQueueInternal(tracks, startTrack);
+    _playingFrom = from;
     notifyListeners();
   }
 
   /// Switches shuffle on and plays [tracks] from a random one: the "Shuffle" button of a list.
-  void shuffleQueue(List<Track> tracks) {
+  void shuffleQueue(List<Track> tracks, [String Function()? from]) {
     if (tracks.isEmpty) return;
     setShuffle(true);
-    playQueue(tracks);
+    playQueue(tracks, null, from);
   }
 
   /// Puts [tracks] right after the current track, also while shuffling; with nothing queued they simply play. Returns
@@ -542,6 +554,7 @@ class PlayerViewModel extends ChangeNotifier {
   void _playQueueInternal(Iterable<Track> tracks, Track? startTrack, {Duration start = Duration.zero}) {
     final list = tracks.toList();
     if (list.isEmpty) return;
+    _playingFrom = null;
     _originalQueue
       ..clear()
       ..addAll(list);
@@ -1736,5 +1749,25 @@ class PlayerViewModel extends ChangeNotifier {
     nowPlaying.dispose();
     spectrum.dispose();
     super.dispose();
+  }
+}
+
+/// The spectrum's bands, which tell [onShown] when the first listener comes and when the last one goes.
+class _Spectrum extends ValueNotifier<Float32List> {
+  _Spectrum(this.onShown) : super(Float32List(SpectrumAnalyzer.numBands));
+
+  final void Function(bool shown) onShown;
+  int _listeners = 0;
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    if (_listeners++ == 0) onShown(true);
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    super.removeListener(listener);
+    if (_listeners > 0 && --_listeners == 0) onShown(false);
   }
 }

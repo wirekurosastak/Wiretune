@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -39,20 +40,14 @@ class AlbumCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final purple = colors.palette.purple;
-    final cover = CoverImage(
-      path: album.coverArtPath,
-      radius: Radii.medium,
-      placeholderIcon: Icons.album,
-      placeholderColor: purple,
-    );
+    final cover = CoverImage(path: album.coverArtPath, radius: Radii.medium, placeholderIcon: Icons.album);
     final details = [
       context.trf('TrackCount', [album.trackCount]),
       if (album.releaseYear != null) '${album.releaseYear}',
     ].join('  •  ');
     final menu = ListMenu.album(album, onPlay: onPlay, withArtist: withArtist);
     return _DesktopTile(
-      accent: purple,
+      accent: colors.accent,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
       onLongPress: () => menu.preview(context, onOpen: onOpen),
@@ -65,7 +60,7 @@ class AlbumCard extends StatelessWidget {
         _line(details, 11, FontWeight.w500, colors.textMuted),
       ],
       badge: QualityTag(tier: album.quality.tier, spec: album.quality.spec),
-      play: TilePlayButton(color: purple, onPressed: onPlay, tracks: album.tracks),
+      play: TilePlayButton(color: colors.accent, onPressed: onPlay, tracks: album.tracks),
     );
   }
 }
@@ -81,16 +76,10 @@ class ArtistCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final coral = colors.palette.coral;
-    final picture = CoverImage(
-      path: artist.picturePath,
-      circle: true,
-      placeholderIcon: Icons.person,
-      placeholderColor: coral,
-    );
+    final picture = CoverImage(path: artist.picturePath, circle: true, placeholderIcon: Icons.person);
     final menu = ListMenu.artist(artist, onPlay: onPlay);
     return _DesktopTile(
-      accent: coral,
+      accent: colors.accent,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
       onLongPress: () => menu.preview(context, onOpen: onOpen),
@@ -102,28 +91,18 @@ class ArtistCard extends StatelessWidget {
         _line(artist.name, 14, FontWeight.w700, colors.textMain, center: true),
         _line(artistCounts(context, artist), 12.5, FontWeight.w500, colors.textMuted, center: true),
       ],
-      play: TilePlayButton(color: coral, onPressed: onPlay, tracks: artist.tracks),
+      play: TilePlayButton(color: colors.accent, onPressed: onPlay, tracks: artist.tracks),
     );
   }
 }
 
 /// An album's cover as large as a preview shows it.
-Widget albumPreviewCover(BuildContext context, Album album) => CoverImage(
-  path: album.coverArtPath,
-  radius: Radii.card,
-  decodeWidth: 640,
-  placeholderIcon: Icons.album,
-  placeholderColor: context.colors.palette.purple,
-);
+Widget albumPreviewCover(BuildContext context, Album album) =>
+    CoverImage(path: album.coverArtPath, radius: Radii.card, decodeWidth: 640, placeholderIcon: Icons.album);
 
 /// An artist's picture as large as a preview shows it.
-Widget artistPreviewPicture(BuildContext context, Artist artist) => CoverImage(
-  path: artist.picturePath,
-  circle: true,
-  decodeWidth: 640,
-  placeholderIcon: Icons.person,
-  placeholderColor: context.colors.palette.coral,
-);
+Widget artistPreviewPicture(BuildContext context, Artist artist) =>
+    CoverImage(path: artist.picturePath, circle: true, decodeWidth: 640, placeholderIcon: Icons.person);
 
 /// How many albums and tracks an artist has, as its tile and its row say it.
 String artistCounts(BuildContext context, Artist artist) =>
@@ -171,12 +150,7 @@ class ListMenu {
     onDownload: (vm) => vm.downloads.toggleAlbum(album),
     cover: (context, {required large}) => large
         ? albumPreviewCover(context, album)
-        : CoverImage(
-            path: album.coverArtPath,
-            size: menuSheetCoverSize,
-            placeholderIcon: Icons.album,
-            placeholderColor: context.colors.palette.purple,
-          ),
+        : CoverImage(path: album.coverArtPath, size: menuSheetCoverSize, placeholderIcon: Icons.album),
     subtitle: (context) => album.artist,
     artist: withArtist ? album.artistNames.first : null,
     recommend: (RecommendationKind.album, album.id),
@@ -208,13 +182,7 @@ class ListMenu {
     onDownload: (vm) => vm.downloads.toggleArtist(artist),
     cover: (context, {required large}) => large
         ? artistPreviewPicture(context, artist)
-        : CoverImage(
-            path: artist.picturePath,
-            size: menuSheetCoverSize,
-            circle: true,
-            placeholderIcon: Icons.person,
-            placeholderColor: context.colors.palette.coral,
-          ),
+        : CoverImage(path: artist.picturePath, size: menuSheetCoverSize, circle: true, placeholderIcon: Icons.person),
     subtitle: (context) => artistCounts(context, artist),
     round: true,
     recommend: (RecommendationKind.artist, artist.id),
@@ -360,7 +328,7 @@ class ListMenu {
       case _ListAction.play:
         onPlay();
       case _ListAction.shuffle:
-        vm.player.shuffleQueue(tracks);
+        vm.player.shuffleQueue(tracks, () => name);
       case _ListAction.playNext:
         vm.queue(tracks, next: true, name: name);
         CoverFlight.toPlayer(flightTag);
@@ -668,12 +636,22 @@ class _Preview extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colors.textMain),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final (:text, :style) = wrapByWords(
+                          context,
+                          title,
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: colors.textMain),
+                          constraints.maxWidth,
+                        );
+                        return Text(
+                          text,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: style,
+                        );
+                      },
                     ),
                     if (subtitle != null)
                       Padding(
@@ -826,7 +804,6 @@ class AlbumsSliver extends StatelessWidget {
         ),
       );
     }
-    final purple = context.colors.palette.purple;
     return _rows(albums.length, (index) {
       final album = albums[index];
       final menu = ListMenu.album(album, onPlay: () => onPlay(album), withArtist: withArtist);
@@ -839,7 +816,6 @@ class AlbumsSliver extends StatelessWidget {
           size: _ListRow.pictureSize,
           radius: Radii.small,
           placeholderIcon: Icons.album,
-          placeholderColor: purple,
         ),
         title: album.title,
         subtitle: [album.artist, if (album.releaseYear != null) '${album.releaseYear}'].join('  •  '),
@@ -877,7 +853,6 @@ class ArtistsSliver extends StatelessWidget {
         ),
       );
     }
-    final coral = context.colors.palette.coral;
     return _rows(artists.length, (index) {
       final artist = artists[index];
       final menu = ListMenu.artist(artist, onPlay: () => onPlay(artist));
@@ -891,7 +866,6 @@ class ArtistsSliver extends StatelessWidget {
           size: _ListRow.pictureSize,
           circle: true,
           placeholderIcon: Icons.person,
-          placeholderColor: coral,
         ),
         title: artist.name,
         subtitle: artistCounts(context, artist),
@@ -1056,18 +1030,14 @@ class _ListRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // A phone list's row text, the same in every list (the tracks', the queue's).
                     Text(
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                        color: colors.textMain,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.textMain),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
                       maxLines: 1,
@@ -1095,12 +1065,11 @@ class PlaylistCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lime = context.colors.palette.lime;
     if (covers.isEmpty) {
-      return CoverImage(path: null, radius: radius, placeholderIcon: Icons.queue_music, placeholderColor: lime);
+      return CoverImage(path: null, radius: radius, placeholderIcon: Icons.queue_music);
     }
     if (covers.toSet().length == 1) {
-      return CoverImage(path: covers.first, radius: radius, placeholderIcon: Icons.queue_music, placeholderColor: lime);
+      return CoverImage(path: covers.first, radius: radius, placeholderIcon: Icons.queue_music);
     }
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -1138,9 +1107,8 @@ class PlaylistCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final lime = colors.palette.lime;
     return _DesktopTile(
-      accent: lime,
+      accent: colors.accent,
       onTap: onOpen,
       onSecondaryTap: (position) => menu.showAt(context, position),
       onLongPress: () => menu.preview(context, onOpen: onOpen),
@@ -1152,7 +1120,11 @@ class PlaylistCard extends StatelessWidget {
         _line(context.trf('TrackCount', [playlist.trackCount]), 12.5, FontWeight.w500, colors.textMuted),
       ],
       badge: quality == null ? null : QualityTag(tier: quality!.tier, spec: quality!.spec),
-      play: TilePlayButton(color: lime, onPressed: playlist.trackCount > 0 ? onPlay : null, tracks: menu.tracks),
+      play: TilePlayButton(
+        color: colors.accent,
+        onPressed: playlist.trackCount > 0 ? onPlay : null,
+        tracks: menu.tracks,
+      ),
     );
   }
 }
@@ -1364,6 +1336,12 @@ class TileGridSliver extends StatelessWidget {
 
   static const double _gap = 14;
 
+  /// The space at the grid's sides; a tile's cover is [tileInset] further in.
+  static const double padding = 20;
+
+  /// How far a tile's cover is in from the tile's edge.
+  static const double tileInset = _DesktopTile.padding;
+
   final int itemCount;
   final Widget Function(BuildContext context, int index) itemBuilder;
   final TileKind kind;
@@ -1384,38 +1362,97 @@ class TileGridSliver extends StatelessWidget {
     return height;
   }
 
-  @override
-  Widget build(BuildContext context) {
+  /// How the grid lays [kind]'s tiles out across [width] (the scroll view's), at the tile size the user set: how many
+  /// to a row, how wide each, and how tall.
+  static ({int columns, double tileWidth, double extent}) layoutIn(BuildContext context, double width, TileKind kind) =>
+      _layout(width - 2 * padding, context.vm.tileSize.value, _captionHeight(context, kind));
+
+  /// The caption's lines under a [kind]'s cover, at the user's font size.
+  static double _captionHeight(BuildContext context, TileKind kind) {
     final title = _lineHeight(context, 14, FontWeight.w700);
     final second = _lineHeight(context, 12.5, FontWeight.w500);
-    final third = _lineHeight(context, 11, FontWeight.w500);
+    return kind == TileKind.album ? title + second + _lineHeight(context, 11, FontWeight.w500) + 4 : title + second + 2;
+  }
+
+  static ({int columns, double tileWidth, double extent}) _layout(double available, double minTileWidth, double lines) {
+    final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
+    final tileWidth = (available - _gap * (columns - 1)) / columns;
+    // The square cover, then the caption.
+    return (
+      columns: columns,
+      tileWidth: tileWidth,
+      extent: 2 * tileInset + (tileWidth - 2 * tileInset) + _DesktopTile.captionGap + lines + 2,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = _captionHeight(context, kind);
     return ValueListenableBuilder<double>(
       valueListenable: context.vm.tileSize,
-      builder: (context, minTileWidth, _) => SliverWidthBuilder(
-        builder: (context, width) {
-          const padding = 20.0;
-          final available = width - 2 * padding;
-          final columns = ((available + _gap) / (minTileWidth + _gap)).floor().clamp(1, 1000);
-          final tileWidth = (available - _gap * (columns - 1)) / columns;
-          // The square cover, then the caption at the user's font size.
-          final lines = kind == TileKind.album ? title + second + third + 4 : title + second + 2;
-          const inset = 2 * _DesktopTile.padding;
-          return SliverPadding(
-            padding: const EdgeInsets.fromLTRB(padding, 4, padding, 4),
-            sliver: SliverGrid(
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: columns,
-                mainAxisExtent: inset + (tileWidth - inset) + _DesktopTile.captionGap + lines + 2,
-                crossAxisSpacing: _gap,
-                mainAxisSpacing: _gap,
-              ),
-              delegate: SliverChildBuilderDelegate(itemBuilder, childCount: itemCount),
-            ),
-          );
-        },
+      builder: (context, minTileWidth, _) => SliverPadding(
+        padding: const EdgeInsets.fromLTRB(padding, 4, padding, 4),
+        sliver: SliverGrid(
+          gridDelegate: _TileGridDelegate(minTileWidth: minTileWidth, lines: lines),
+          delegate: SliverChildBuilderDelegate(itemBuilder, childCount: itemCount),
+        ),
       ),
     );
   }
+}
+
+/// [TileGridSliver]'s rows and columns, worked out when the grid is laid out, from the width it has then: a width that
+/// changes by the frame (the sidebar sliding in, the window resized) lays the tiles out again, but doesn't build them.
+class _TileGridDelegate extends SliverGridDelegate {
+  const _TileGridDelegate({required this.minTileWidth, required this.lines});
+
+  final double minTileWidth;
+  final double lines;
+
+  @override
+  SliverGridLayout getLayout(SliverConstraints constraints) {
+    final (:columns, :tileWidth, :extent) = TileGridSliver._layout(constraints.crossAxisExtent, minTileWidth, lines);
+    return SliverGridRegularTileLayout(
+      crossAxisCount: columns,
+      mainAxisStride: extent + TileGridSliver._gap,
+      crossAxisStride: tileWidth + TileGridSliver._gap,
+      childMainAxisExtent: extent,
+      childCrossAxisExtent: tileWidth,
+      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_TileGridDelegate oldDelegate) =>
+      oldDelegate.minTileWidth != minTileWidth || oldDelegate.lines != lines;
+}
+
+/// A few tiles in a row, as [TileGridSliver] lays them out (the same size, gap and caption), where they go beside
+/// something else rather than in a grid of their own: the search's artists or albums under its best match.
+class TileRow extends StatelessWidget {
+  const TileRow({super.key, required this.tileWidth, required this.extent, required this.children});
+
+  final double tileWidth;
+  final double extent;
+  final List<Widget> children;
+
+  /// How many tiles [tileWidth] wide fit in [width].
+  static int fitting(double width, double tileWidth) =>
+      ((width + TileGridSliver._gap) / (tileWidth + TileGridSliver._gap)).floor();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (i, child) in children.indexed) ...[
+          if (i > 0) const SizedBox(width: TileGridSliver._gap),
+          SizedBox(width: tileWidth, height: extent, child: child),
+        ],
+      ],
+    ),
+  );
 }
 
 /// The round play button of a tile: filled with a gradient of [color], over a glow of it. While the queue is [tracks]

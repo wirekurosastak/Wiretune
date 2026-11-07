@@ -1,10 +1,13 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/material_color_utilities.dart' show Hct, QuantizerCelebi, Score;
 
 import '../app_scope.dart';
 import '../platform.dart';
@@ -54,6 +57,21 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
   ImageStream? _stream;
   ImageStreamListener? _listener;
   ui.Image? _image;
+
+  static const Duration _fade = Duration(milliseconds: 900);
+
+  /// The images replaced, which the switcher still fades out (and lays out again when the area resizes); each goes once
+  /// its fade is over. Released at once, a rebuild of the fading one failed ("Cannot clone a disposed image").
+  final Set<ui.Image> _fading = {};
+
+  void _retire(ui.Image? image) {
+    if (image == null) return;
+    _fading.add(image);
+    Timer(_fade + const Duration(milliseconds: 100), () {
+      if (_fading.remove(image)) image.dispose();
+    });
+  }
+
   String? _requested;
   bool _resolved = false;
   int _generation = 0;
@@ -77,6 +95,10 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     _stopListening();
     _drift.dispose();
     _image?.dispose();
+    for (final image in _fading) {
+      image.dispose();
+    }
+    _fading.clear();
     super.dispose();
   }
 
@@ -105,7 +127,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     if (_softened.remove(path) case final softened?) {
       _softened[path!] = softened; // the latest again
       // Before this frame's build: no fade.
-      _image?.dispose();
+      _retire(_image);
       _image = softened.clone();
       return;
     }
@@ -142,7 +164,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     if (image == null && _image == null) return;
     // The widgets hold clones of the bitmap; this handle is ours to release.
     setState(() {
-      _image?.dispose();
+      _retire(_image);
       _image = image;
     });
     _updateDrift();
@@ -170,7 +192,7 @@ class _AmbientArtworkState extends State<AmbientArtwork> with SingleTickerProvid
     final image = _image;
     return ClipRect(
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 900),
+        duration: _fade,
         child: image == null
             ? const SizedBox.expand()
             : RepaintBoundary(
@@ -229,20 +251,22 @@ class AmbientBackdrop extends StatelessWidget {
 
   /// The cover whose colours wash the backdrop: the album's or the artist's whose page is open (unless [nowPlaying]),
   /// else the cover of the track that plays, the one the player shows (none when it has none).
-  static String? activeCoverPath(MainViewModel vm, {bool nowPlaying = false}) {
-    String? cover(String? path) => path == null || path.isEmpty ? null : path;
+  static String? activeCoverPath(MainViewModel vm, {bool nowPlaying = false}) =>
+      (nowPlaying ? null : viewedCoverPath(vm)) ?? _cover(vm.player.currentTrack?.coverArtPath);
+
+  /// The cover of the album or the artist whose page is open; null on any other page, or for one without a cover.
+  static String? viewedCoverPath(MainViewModel vm) {
     final artist = vm.artists.selectedArtist;
-    final viewed = nowPlaying
-        ? null
-        : switch (vm.selectedSection) {
-            AppSection.albums when vm.albums.isAlbumDetailOpen => cover(vm.albums.selectedAlbum?.coverArtPath),
-            AppSection.artists when vm.artists.isArtistDetailOpen => cover(
-              artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath,
-            ),
-            _ => null,
-          };
-    return viewed ?? cover(vm.player.currentTrack?.coverArtPath);
+    return switch (vm.selectedSection) {
+      AppSection.albums when vm.albums.isAlbumDetailOpen => _cover(vm.albums.selectedAlbum?.coverArtPath),
+      AppSection.artists when vm.artists.isArtistDetailOpen => _cover(
+        artist?.picturePath ?? artist?.albums.firstOrNull?.coverArtPath,
+      ),
+      _ => null,
+    };
   }
+
+  static String? _cover(String? path) => path == null || path.isEmpty ? null : path;
 
   @override
   Widget build(BuildContext context) {
@@ -281,4 +305,84 @@ class AmbientBackdrop extends StatelessWidget {
       },
     );
   }
+}
+
+/// The colour of a cover, what the accent is made of (`Palette.accentOf`): read once, from the same small decoding as
+/// its wash, and kept for the covers seen last.
+abstract final class CoverColor {
+  static final Map<String, Color?> _known = {};
+  static final Map<String, Future<Color?>> _reading = {};
+
+  /// Whether the colour of the cover at [path] has been read: [known] then gives it.
+  static bool isKnown(String path) => _known.containsKey(path);
+
+  /// The colour of the cover at [path], as read; null for a grey one, one that couldn't be read, or one not read yet.
+  static Color? known(String path) => _known[path];
+
+  /// Reads the colour of the cover at [path] (see [of]).
+  static Future<Color?> read(String path) {
+    if (_known.containsKey(path)) return Future.value(_known[path]);
+    return _reading[path] ??= () async {
+      Color? colour;
+      final provider = CoverArt.provider(path, decodeWidth: 64);
+      if (provider != null) {
+        final done = Completer<Color?>();
+        final stream = provider.resolve(ImageConfiguration.empty);
+        final listener = ImageStreamListener(
+          (info, _) {
+            if (done.isCompleted) return info.dispose();
+            info.image
+                .toByteData()
+                .then((rgba) async => done.complete(rgba == null ? null : await of(rgba)))
+                .catchError((Object _) => done.complete(null))
+                .whenComplete(info.dispose);
+          },
+          // A cover that cannot be read leaves the accent neutral, as it leaves the wash out.
+          onError: (error, stack) {
+            if (!done.isCompleted) done.complete(null);
+          },
+        );
+        stream.addListener(listener);
+        colour = await done.future;
+        stream.removeListener(listener);
+      }
+      _reading.remove(path);
+      _known[path] = colour;
+      if (_known.length > 48) _known.remove(_known.keys.first);
+      return colour;
+    }();
+  }
+
+  /// The colour of a cover from its pixels ([rgba], four bytes each), as Android takes a wallpaper's (Material You):
+  /// its colours grouped, those near black left out (their tint is the file's noise or a vignette), and of the rest
+  /// the one scored first (the most of the cover, the more colourful the better) that is a colour rather than a tinted
+  /// grey. Null for a grey cover, or one whose colour is only a speck.
+  static Future<Color?> of(ByteData rgba) async {
+    final pixels = <int>[];
+    for (var i = 0; i + 3 < rgba.lengthInBytes; i += 4) {
+      if (rgba.getUint8(i + 3) < 128) continue;
+      pixels.add(0xFF000000 | rgba.getUint8(i) << 16 | rgba.getUint8(i + 1) << 8 | rgba.getUint8(i + 2));
+    }
+    if (pixels.isEmpty) return null;
+    final groups = await QuantizerCelebi().quantize(pixels, 128);
+    final lit = {
+      for (final MapEntry(:key, :value) in groups.colorToCount.entries)
+        if (Hct.fromInt(key).tone >= _leastTone) key: value,
+    };
+    if (lit.isEmpty) return null;
+    // The scorer's fallback when nothing passes, which no cover's colour is.
+    const none = 0x00000000;
+    final best = Score.score(
+      lit,
+      desired: 4,
+      fallbackColorARGB: none,
+    ).where((colour) => colour != none && Hct.fromInt(colour).chroma >= _leastChroma).firstOrNull;
+    return best == null ? null : Color(best);
+  }
+
+  /// Darker than this a colour group is near black (Material's tone, 0 black to 100 white).
+  static const double _leastTone = 20;
+
+  /// Less colourful than this a colour group is a tinted grey (Material's chroma).
+  static const double _leastChroma = 20;
 }

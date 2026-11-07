@@ -337,6 +337,9 @@ class WiretuneAudioEngine {
   Equalizer get equalizer => _equalizer;
   Equalizer _equalizer = Equalizer.flat();
 
+  /// Tells the driver whether a spectrum is on screen ([AudioDriver.spectrumShown]).
+  set spectrumShown(bool shown) => _driver.spectrumShown = shown;
+
   void setEqualizer(Equalizer equalizer) {
     _equalizer = equalizer;
     _driver.setEqualizer(equalizer);

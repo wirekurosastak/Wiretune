@@ -3,10 +3,10 @@
 
 import 'package:flutter/material.dart';
 
-import '../view_models/app_section.dart';
 import 'palette.dart';
 
-/// The palette and the active section's accent, reachable from any widget through `context.colors`.
+/// The palette and the accent (the colour of the song that plays, `Palette.accentOf`), reachable from any widget
+/// through `context.colors`.
 class WiretuneColors extends ThemeExtension<WiretuneColors> {
   const WiretuneColors(this.palette, this.accent);
 
@@ -20,6 +20,7 @@ class WiretuneColors extends ThemeExtension<WiretuneColors> {
   Color get surface2 => palette.surface2;
   Color get glassBorder => palette.glassBorder;
   Color get danger => palette.danger;
+  Color get neutral => palette.neutral;
   Color get onAccent => palette.onAccent;
 
   /// The accent as a gradient, from its lighter hover shade to the accent itself (filled buttons, the active slider).
@@ -72,14 +73,22 @@ abstract final class Radii {
   static const double pill = 999;
 }
 
-ThemeData buildTheme({
-  required bool light,
-  required AppSection section,
-  required bool isTv,
-  bool desktopFonts = false,
-}) {
+final Map<(bool, int, bool, bool), ThemeData> _themes = {};
+
+/// [buildTheme], built once per accent and reused while it comes back (the same album's songs, its page opened again).
+ThemeData cachedTheme({required bool light, required Color accent, required bool isTv, bool desktopFonts = false}) {
+  if (_themes.length > 16) _themes.clear();
+  return _themes.putIfAbsent((
+    light,
+    accent.toARGB32(),
+    isTv,
+    desktopFonts,
+  ), () => buildTheme(light: light, accent: accent, isTv: isTv, desktopFonts: desktopFonts));
+}
+
+/// The theme, in [accent] (`Palette.accentOf`).
+ThemeData buildTheme({required bool light, required Color accent, required bool isTv, bool desktopFonts = false}) {
   final palette = light ? Palette.light : Palette.dark;
-  final accent = palette.accentFor(section);
   // Text and icons on an accent-filled button: near-black on the dark theme's bright accents, white on the light one's.
   final onAccent = palette.onAccent;
   final scheme = ColorScheme.fromSeed(seedColor: accent, brightness: light ? Brightness.light : Brightness.dark)
@@ -92,7 +101,8 @@ ThemeData buildTheme({
         error: palette.danger,
       );
 
-  final focus = accent.withValues(alpha: isTv ? 0.45 : 0.25);
+  // A TV remote's focus shows only by this: there in the neutral colour, which reads over every cover's wash.
+  final focus = isTv ? palette.neutral.withValues(alpha: 0.45) : accent.withValues(alpha: 0.25);
   const stadium = StadiumBorder();
   OutlineInputBorder field(Color color, [double width = 1]) => OutlineInputBorder(
     borderRadius: BorderRadius.circular(Radii.medium),
@@ -132,6 +142,8 @@ ThemeData buildTheme({
     ),
     // Sliders: a 4 px rail, the played part a glowing accent gradient, and a small white knob that grows while dragged.
     sliderTheme: SliderThemeData(
+      // An arrow over it, as over the buttons (Flutter's turns the mouse into a hand only on the web).
+      mouseCursor: WidgetStateMouseCursor.adaptiveClickable,
       trackHeight: 4,
       activeTrackColor: accent,
       inactiveTrackColor: palette.glassHighlight,
@@ -143,6 +155,17 @@ ThemeData buildTheme({
       thumbShape: const KnobThumbShape(),
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
       trackShape: const GlowTrackShape(),
+      // A held slider's value (a seek bar's time) over its knob, solid and rounded as the popups are.
+      showValueIndicator: ShowValueIndicator.onDrag,
+      valueIndicatorShape: const RectangularSliderValueIndicatorShape(),
+      valueIndicatorColor: palette.modal,
+      valueIndicatorStrokeColor: palette.glassBorder,
+      valueIndicatorTextStyle: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: palette.textMain,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(

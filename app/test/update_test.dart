@@ -212,6 +212,16 @@ void main() {
       await settle(tester);
       await tester.scrollUntilVisible(find.text('Look for updates'), 300, scrollable: find.byType(Scrollable).last);
       expect(find.text('At start and once a day, on GitHub.'), findsOneWidget);
+      final toggle = find.descendant(
+        of: find.ancestor(of: find.text('Look for updates'), matching: find.byType(Row)).first,
+        matching: find.byType(Switch),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.pump();
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(tester.widget<Switch>(toggle).value, isFalse, reason: 'the switch follows the tap at once');
+      expect(find.text('Wiretune 99.0.0 is available'), findsNothing);
     });
 
     testWidgets("the phone's banner has the same offer", (tester) async {

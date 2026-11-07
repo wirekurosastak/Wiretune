@@ -79,18 +79,21 @@ class PageHeader extends StatelessWidget {
 
 /// A sliver built for the width it is laid out in. A [SliverLayoutBuilder]'s constraints carry the scroll, so it builds
 /// again at every step of it (every row of a table, every tile of a grid, at every frame); this one only when the width
-/// changes, or when it is rebuilt itself.
+/// changes, or when it is rebuilt itself. With [keyOf], only when what that takes from the width changes (a table's
+/// columns): a width that changes by the frame (the sidebar sliding in, the window resized) lays it out again, but
+/// doesn't build it again; what it builds must then fit any width of the same key.
 class SliverWidthBuilder extends StatefulWidget {
-  const SliverWidthBuilder({super.key, required this.builder});
+  const SliverWidthBuilder({super.key, required this.builder, this.keyOf});
 
   final Widget Function(BuildContext context, double width) builder;
+  final Object? Function(double width)? keyOf;
 
   @override
   State<SliverWidthBuilder> createState() => _SliverWidthBuilderState();
 }
 
 class _SliverWidthBuilderState extends State<SliverWidthBuilder> {
-  double? _width;
+  Object? _key;
   Widget? _sliver;
 
   @override
@@ -103,12 +106,49 @@ class _SliverWidthBuilderState extends State<SliverWidthBuilder> {
   Widget build(BuildContext context) => SliverLayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.crossAxisExtent;
-      if (width != _width || _sliver == null) {
-        _width = width;
+      final key = widget.keyOf?.call(width) ?? width;
+      if (key != _key || _sliver == null) {
+        _key = key;
         // In a context of its own, which what it looks up (the theme, the phone's chrome) rebuilds when that changes.
         _sliver = Builder(builder: (context) => widget.builder(context, width));
       }
       return _sliver!;
+    },
+  );
+}
+
+/// A [LayoutBuilder] that builds again only when what [keyOf] takes from the constraints changes, or when it is rebuilt
+/// itself: in a page whose width changes by the frame (the sidebar sliding in, the window resized), what depends on the
+/// height alone, or on a width's threshold, is laid out again but not built again.
+class KeyedLayoutBuilder<K> extends StatefulWidget {
+  const KeyedLayoutBuilder({super.key, required this.keyOf, required this.builder});
+
+  final K Function(BoxConstraints constraints) keyOf;
+  final Widget Function(BuildContext context, K key) builder;
+
+  @override
+  State<KeyedLayoutBuilder<K>> createState() => _KeyedLayoutBuilderState<K>();
+}
+
+class _KeyedLayoutBuilderState<K> extends State<KeyedLayoutBuilder<K>> {
+  K? _key;
+  Widget? _child;
+
+  @override
+  void didUpdateWidget(KeyedLayoutBuilder<K> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _child = null;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final key = widget.keyOf(constraints);
+      if (key != _key || _child == null) {
+        _key = key;
+        _child = Builder(builder: (context) => widget.builder(context, key));
+      }
+      return _child!;
     },
   );
 }
@@ -141,9 +181,10 @@ class TabPageList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final phone = PhoneChrome.isPhone(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final apart = !phone && constraints.maxHeight >= _headerStaysFrom;
+    // Built again only when the header comes apart or back: a width that changes lays the page out again.
+    return KeyedLayoutBuilder<bool>(
+      keyOf: (constraints) => !phone && constraints.maxHeight >= _headerStaysFrom,
+      builder: (context, apart) {
         final columnHeaders = phone ? null : this.columnHeaders;
         final list = CustomScrollView(
           key: PageStorageKey(storageKey),
@@ -645,7 +686,8 @@ class _PhonePageHeader extends StatelessWidget {
     final titleRow = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 68),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
+        // At the edge the sort and the rows under it keep.
+        padding: const EdgeInsets.fromLTRB(PhoneChrome.edge, 4, 8, 4),
         child: Row(
           children: [
             Expanded(
@@ -1110,7 +1152,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   }
 
   /// The left edge of the bar's title: beside the way back, else where the page's own edge is.
-  double get _barLeft => widget.onBack == null ? 20 : 4 + PinnedTitleBar.buttonSize;
+  double get _barLeft => widget.onBack == null ? PhoneChrome.edge : 4 + PinnedTitleBar.buttonSize;
 
   /// The middle of the bar, in its box.
   double _barMiddle(BuildContext context) => MediaQuery.paddingOf(context).top + PinnedTitleBar.height / 2;
@@ -1259,7 +1301,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
       child: SizedBox(
         height: PinnedTitleBar.height,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(onBack == null ? 20 : 4, 0, 8, 0),
+          padding: EdgeInsets.fromLTRB(onBack == null ? PhoneChrome.edge : 4, 0, 8, 0),
           child: Row(
             children: [
               if (onBack != null)
@@ -1520,6 +1562,9 @@ class PhoneChrome extends InheritedWidget {
   /// download, the menu), so a line of them is even.
   static const double controlHeight = 44;
 
+  /// The space at a phone page's sides: its title, its buttons' line and its rows' pictures stand this far in.
+  static const double edge = 16;
+
   /// A list's Play on a phone: a little larger than the buttons beside it, as in Spotify.
   static const double playSize = 48;
 
@@ -1654,6 +1699,119 @@ class PageEndSpace extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       SliverToBoxAdapter(child: SizedBox(height: 28 + MediaQuery.paddingOf(context).bottom));
+}
+
+/// [title] and [style] for a title over several lines in [width] that breaks only between words, never inside one: each
+/// of its bracketed tags ("(Legacy Edition)", "[Remastered]") that fits on a line kept whole (its spaces no-break
+/// spaces), so that it goes onto the next line rather than splitting; a longer one breaks between its words; and a word
+/// wider than the whole line makes the title just small enough for it.
+({String text, TextStyle style}) wrapByWords(BuildContext context, String title, TextStyle style, double width) {
+  if (!width.isFinite) return (text: title, style: style);
+  final around = DefaultTextStyle.of(context).style;
+  final direction = Directionality.of(context);
+  final scaler = MediaQuery.textScalerOf(context);
+  // Measured in the font it is drawn in (the app's, which a Text takes from around it).
+  double widthOf(String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: around.merge(style)),
+      maxLines: 1,
+      textDirection: direction,
+      textScaler: scaler,
+    )..layout();
+    final measured = painter.width;
+    painter.dispose();
+    return measured;
+  }
+
+  final words = title.split(RegExp(r'\s+'));
+  double widest(TextStyle style) => words.fold(0.0, (most, word) => math.max(most, widthOf(word, style)));
+  var fitted = style;
+  final wide = widest(style);
+  if (wide > width) {
+    // About as much smaller as the word is too wide, then a step at a time until it fits.
+    var size = ((around.merge(style).fontSize ?? 14) * width / wide).floorToDouble();
+    fitted = style.copyWith(fontSize: size);
+    while (size > 8 && widest(fitted) > width) {
+      fitted = style.copyWith(fontSize: --size);
+    }
+  }
+  final text = title.replaceAllMapped(_bracketedTag, (match) {
+    final tag = match[0]!;
+    return widthOf(tag, fitted) <= width ? tag.replaceAll(' ', '\u00A0') : tag;
+  });
+  return (text: text, style: fitted);
+}
+
+final RegExp _bracketedTag = RegExp(r'\([^()]*\)|\[[^\[\]]*\]');
+
+/// A list whose rows fade out towards its top and bottom edges, over a tenth of its height each, as the lyrics' lines
+/// do; an edge with nothing past it (the list at its top, or at its end) fades nothing, so the row there shows whole.
+class EdgeFade extends StatefulWidget {
+  const EdgeFade({super.key, required this.child});
+
+  /// The list (a vertical scroll view).
+  final Widget child;
+
+  /// How much of the height each fade takes.
+  static const double share = 0.1;
+
+  @override
+  State<EdgeFade> createState() => _EdgeFadeState();
+}
+
+class _EdgeFadeState extends State<EdgeFade> {
+  /// How far each fade has come in, 0 to 1: the top's and the bottom's. The list's measures come a frame after it is
+  /// first shown, so until then it is as a list at its top with more below: no frame without the bottom's fade.
+  final ValueNotifier<(double, double)> _shown = ValueNotifier((0, 1));
+
+  @override
+  void dispose() {
+    _shown.dispose();
+    super.dispose();
+  }
+
+  // The metrics' also come when the list is first laid out, and when it changes length.
+  bool _onScroll(Notification notification) {
+    final metrics = switch (notification) {
+      ScrollNotification(depth: 0, :final metrics) || ScrollMetricsNotification(depth: 0, :final metrics) => metrics,
+      _ => null,
+    };
+    if (metrics == null || metrics.axis != Axis.vertical || !metrics.hasContentDimensions) return false;
+    // Each fade comes in over as much scroll as it is tall.
+    final size = math.max(1.0, metrics.viewportDimension * EdgeFade.share);
+    _shown.value = (
+      ((metrics.pixels - metrics.minScrollExtent) / size).clamp(0.0, 1.0),
+      ((metrics.maxScrollExtent - metrics.pixels) / size).clamp(0.0, 1.0),
+    );
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener<Notification>(
+    onNotification: _onScroll,
+    child: ValueListenableBuilder<(double, double)>(
+      valueListenable: _shown,
+      builder: (context, shown, child) {
+        final (top, bottom) = shown;
+        return ShaderMask(
+          shaderCallback: (rect) => LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.black.withValues(alpha: 1 - top),
+              Colors.black,
+              Colors.black,
+              Colors.black.withValues(alpha: 1 - bottom),
+            ],
+            stops: const [0, EdgeFade.share, 1 - EdgeFade.share, 1],
+          ).createShader(rect),
+          blendMode: BlendMode.dstIn,
+          child: child,
+        );
+      },
+      child: widget.child,
+    ),
+  );
 }
 
 /// A rounded card of glass: a faint sheen from its top-left corner and a hairline edge.

@@ -13,21 +13,26 @@ void main() {
       expect(flat.bands, hasLength(10));
       expect(flat.bands.map((b) => b.frequency.toInt()), Equalizer.frequencies);
       expect(flat.isFlat, isTrue);
-      expect(flat.filter, '');
-      expect(flat.headroomDb, 0);
+      expect(flat.filter(), '');
+      expect(flat.filter(limiter: true), '');
       expect(Equalizer.fromGains(const [0.01, -0.04]).isFlat, isTrue, reason: 'a hundredth of a decibel is nothing');
     });
 
-    test('filters the bands that are not flat, and takes the loudest boost back off', () {
+    test('raises a boosted band and leaves the rest as it was: no preamp turning it all down', () {
       final eq = Equalizer.fromGains(const [0, 0, 0, 0, 0, 6, 0, 0, -3.5, 0]);
-      expect(eq.filter, 'lavfi=[equalizer=f=1000:t=q:w=1.41:g=6,equalizer=f=8000:t=q:w=1.41:g=-3.5,volume=-6dB]');
-      expect(eq.headroomDb, 6);
+      expect(eq.filter(), 'lavfi=[equalizer=f=1000:t=q:w=1.41:g=6,equalizer=f=8000:t=q:w=1.41:g=-3.5]');
+      expect(eq.filter(), isNot(contains('volume')));
     });
 
-    test('has no preamp when it only lowers', () {
+    test('holds the peaks of a boost below full scale where the player has a limiter, without levelling', () {
+      final eq = Equalizer.fromGains(const [6]);
+      expect(eq.filter(limiter: true), 'lavfi=[equalizer=f=31:t=q:w=1.41:g=6,alimiter=limit=0.98:level=disabled]');
+    });
+
+    test('needs no limiter when it only lowers', () {
       final eq = Equalizer.fromGains(const [-4, 0, 0, 0, 0, 0, 0, 0, 0, -2]);
-      expect(eq.headroomDb, 0);
-      expect(eq.filter, 'lavfi=[equalizer=f=31:t=q:w=1.41:g=-4,equalizer=f=16000:t=q:w=1.41:g=-2]');
+      expect(eq.boosts, isFalse);
+      expect(eq.filter(limiter: true), 'lavfi=[equalizer=f=31:t=q:w=1.41:g=-4,equalizer=f=16000:t=q:w=1.41:g=-2]');
     });
 
     test('keeps a band within what is allowed, and leaves the missing ones flat', () {

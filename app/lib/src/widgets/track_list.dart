@@ -53,9 +53,13 @@ class TrackSliver extends StatefulWidget {
     this.horizontalPadding,
     this.onReorder,
     this.columnHeaders = true,
+    this.playingFrom,
   });
 
   final List<Track> tracks;
+
+  /// The list's name, which the player shows as what it plays from when a row is played.
+  final String Function()? playingFrom;
 
   /// The page's sort (Tracks, Favourites), which [tracks] are already in: the column headers change it, as the sort
   /// buttons do. Without one the list keeps its own order (an album's, a playlist's, the best match first) until a
@@ -99,6 +103,20 @@ class _Columns {
   bool get showAdded => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && width >= 880;
   bool get showQuality => kind != TrackTableKind.search && width >= 1060;
   bool get showBpm => showQuality && width >= 1130;
+
+  /// The same columns: a width between the same thresholds lays the rows out again, but needn't build them again.
+  @override
+  bool operator ==(Object other) =>
+      other is _Columns &&
+      other.kind == kind &&
+      other.showAlbum == showAlbum &&
+      other.showReleased == showReleased &&
+      other.showAdded == showAdded &&
+      other.showQuality == showQuality &&
+      other.showBpm == showBpm;
+
+  @override
+  int get hashCode => Object.hash(kind, showAlbum, showReleased, showAdded, showQuality, showBpm);
 
   int get titleFlex {
     if (!showArtist && !showAlbum) return 8; // an album's table shows neither
@@ -149,7 +167,7 @@ class _TrackSliverState extends State<TrackSliver> {
     return sorting != null ? sorting.addedAt(track) : track.addedAt;
   }
 
-  void _play(Track track) => context.vm.player.playQueue(_tracks, track);
+  void _play(Track track) => context.vm.player.playQueue(_tracks, track, widget.playingFrom);
 
   TrackTableKind get kind => widget.kind;
   _Columns get _columns => _Columns(kind, _tableWidth);
@@ -183,7 +201,11 @@ class _TrackSliverState extends State<TrackSliver> {
     // The rows follow what plays (the playing track's mark), the favourites (the hearts) and the downloads (their
     // states, not their every byte).
     final listenable = Listenable.merge([vm.player.nowPlaying, vm.favorites, vm.downloads.states]);
+    final phone = PhoneChrome.isPhone(context);
+    final sidePadding = widget.horizontalPadding ?? (phone ? 8.0 : TrackSliver.tablePadding);
     return SliverWidthBuilder(
+      // The rows are built again when a column comes or goes; between, a width that changes only lays them out.
+      keyOf: (width) => (phone, phone ? null : _Columns(kind, width - 2 * sidePadding)),
       builder: (context, width) {
         // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
@@ -276,11 +298,13 @@ class TrackColumnHeaders extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) => Padding(
+    // Built again when a column comes or goes; between, a width that changes only lays the headers out.
+    return KeyedLayoutBuilder<_Columns>(
+      keyOf: (constraints) => _Columns(TrackTableKind.tracks, constraints.maxWidth - 2 * TrackSliver.tablePadding),
+      builder: (context, columns) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: TrackSliver.tablePadding),
         child: _ColumnHeaders(
-          columns: _Columns(TrackTableKind.tracks, constraints.maxWidth - 2 * TrackSliver.tablePadding),
+          columns: columns,
           reorderable: false,
           sortField: sorting.sortField,
           descending: sorting.isSortDescending,
@@ -478,7 +502,7 @@ class _TableRowState extends State<_TableRow> {
                           alignment: Alignment.centerLeft,
                           child: ArtistLinks(
                             track.artistNames,
-                            hoverColor: colors.palette.coral,
+                            hoverColor: colors.accent,
                             style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
                             onOpen: vm.openArtistByName,
                           ),
@@ -490,7 +514,7 @@ class _TableRowState extends State<_TableRow> {
                       flex: state._columns.albumFlex,
                       child: _CellLink(
                         track.album,
-                        hoverColor: colors.palette.purple,
+                        hoverColor: colors.accent,
                         color: colors.textMuted,
                         onTap: () => vm.openAlbumOfTrack(track),
                       ),
@@ -561,7 +585,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
     _IconCell(
       width: 44,
       tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
-      icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.coral : colors.textMuted, size: 18),
+      icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.favorite : colors.textMuted, size: 18),
       onPressed: () => context.vm.library.toggleFavorite(track.id),
     ),
     TrackMenu(track: track, kind: kind, width: 44),
@@ -1017,7 +1041,7 @@ class _PhoneRow extends StatelessWidget {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 13, color: colors.textMuted),
+                            style: TextStyle(fontSize: 13.5, color: colors.textMuted),
                           ),
                         ),
                       ],

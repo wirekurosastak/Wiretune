@@ -23,12 +23,14 @@ import java.io.File
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.PluginRegistry
 
 /**
  * Answers `wiretune/platform` (is this a television? where do downloads go? may the app read the music on the
- * device? which app installed this one? install this update) and `wiretune/power` (playback started or stopped).
+ * device? which app installed this one? install this update) and `wiretune/power` (playback started or stopped), and
+ * streams `wiretune/pcm` (a track decoded for the spectrum: [PcmDecoder]).
  *
  * The permission to read audio files is asked for only when the user scans a folder of the phone's own, never at start:
  * a player that streams from its server needs none.
@@ -41,6 +43,8 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
     private var activityBinding: ActivityPluginBinding? = null
     private var pendingAccess: MethodChannel.Result? = null
     private var powerChannel: MethodChannel? = null
+    private var pcmChannel: EventChannel? = null
+    private val pcm = PcmDecoder()
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
@@ -57,6 +61,7 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                 }
             }
         }
+        pcmChannel = EventChannel(binding.binaryMessenger, "wiretune/pcm").apply { setStreamHandler(pcm) }
         powerChannel = MethodChannel(binding.binaryMessenger, "wiretune/power").apply {
             setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -74,8 +79,11 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         platformChannel?.setMethodCallHandler(null)
         powerChannel?.setMethodCallHandler(null)
+        pcmChannel?.setStreamHandler(null)
+        pcm.stop()
         platformChannel = null
         powerChannel = null
+        pcmChannel = null
         release()
     }
 

@@ -17,7 +17,12 @@ import 'device_reservation.dart';
 /// and Core Audio devices on macOS can be opened exclusively. Bit-perfect is exclusive access, the volume at 100 %, no
 /// filters and no resampling requested; whether the device then gets the samples untouched depends on its driver.
 class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
-  MediaKitAudioDriver({required this.allowDeviceSelection, required this.enableSpectrum}) {
+  MediaKitAudioDriver({
+    required this.allowDeviceSelection,
+    required this.enableSpectrum,
+    this.spectrumOnlyWhenShown = false,
+    Stream<List<int>> Function(String source)? pcmDecoder,
+  }) : _pcm = PcmCache(decoder: pcmDecoder) {
     _subscriptions.addAll([
       _player.stream.playing.listen(_onPlaying),
       _player.stream.completed.listen(_onCompleted),
@@ -31,8 +36,13 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   /// Whether the user may pick an output (desktop); phones and TVs play to the system's output.
   final bool allowDeviceSelection;
 
-  /// Whether to run the spectrum analyser (it needs `ffmpeg` on the PATH; desktop only).
+  /// Whether to run the spectrum analyser: on a computer (it needs `ffmpeg` on the PATH), and on an Android phone (with
+  /// the phone's own decoder).
   final bool enableSpectrum;
+
+  /// Whether it runs only while a spectrum is on screen ([spectrumShown]): a phone's, as decoding each track a second
+  /// time and analysing it 30 times a second costs battery.
+  final bool spectrumOnlyWhenShown;
 
   final Player _player = Player(
     configuration: const PlayerConfiguration(
@@ -43,7 +53,13 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   );
   final List<StreamSubscription<Object?>> _subscriptions = [];
   final SpectrumAnalyzer _analyzer = SpectrumAnalyzer();
-  final PcmCache _pcm = PcmCache();
+  final PcmCache _pcm;
+
+  /// The current track's source, for the analyser to decode when a spectrum comes on screen.
+  String? _source;
+  bool _shown = false;
+
+  bool get _analysing => enableSpectrum && (_shown || !spectrumOnlyWhenShown);
   final Float32List _window = Float32List(SpectrumAnalyzer.fftSize);
   Timer? _spectrumTimer;
   Timer? _startCheck;
@@ -72,6 +88,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   int _generation = 0;
   String? _lastError;
   DateTime _lastPositionEvent = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Since mpv last told the position, which a phone's does only about four times a second.
+  final Stopwatch _sincePosition = Stopwatch()..start();
 
   @override
   PlaybackState get state => _state;
@@ -313,9 +332,12 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
       }
     });
 
-    if (enableSpectrum) {
+    _source = audioSource;
+    if (_analysing) {
       unawaited(_pcm.loadTrack(audioSource));
       _startSpectrum();
+    } else {
+      _pcm.cancelAndReset(); // the last track's, until a spectrum comes on screen
     }
   }
 
@@ -349,6 +371,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _releaseTimer?.cancel();
     _releaseTimer = null;
     _setState(PlaybackState.stopped);
+    _source = null;
     _pcm.cancelAndReset();
     await _player.stop();
     await _card.release();
@@ -390,7 +413,12 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
         }
       }),
     );
-    if (enableSpectrum) unawaited(_pcm.loadTrack(source));
+    _source = source;
+    if (_analysing) {
+      unawaited(_pcm.loadTrack(source));
+    } else {
+      _pcm.cancelAndReset();
+    }
     advanced.emit(null);
   }
 
@@ -429,7 +457,14 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   /// The filters of the chain: the equalizer, and none for bit-perfect output.
-  Future<void> _applyFilters(NativePlayer native) => native.setProperty('af', _bitPerfect ? '' : _equalizer.filter);
+  Future<void> _applyFilters(NativePlayer native) =>
+      native.setProperty('af', _bitPerfect ? '' : _equalizer.filter(limiter: _hasLimiter));
+
+  /// Whether this system's mpv has `ffmpeg`'s limiter: Linux's uses the system's `ffmpeg`, which has it; the one built
+  /// into the Android player lacks it (and mpv drops a chain naming a filter it lacks, the equalizer with it), and the
+  /// others' are unchecked. Without it the peaks a boost takes past full scale go on to the system in its float
+  /// output, which turns them down with its own volume: they can only clip at full volume on a loud recording.
+  static final bool _hasLimiter = Platform.isLinux;
 
   @override
   bool get reportsOutput => true;
@@ -491,6 +526,7 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   }
 
   void _onPosition(Duration position) {
+    _sincePosition.reset();
     // The next entry's first position (the finished one's last ones are near its end).
     if (_arriving != null && position > Duration.zero && position < const Duration(seconds: 2)) _arrived();
     final now = DateTime.now();
@@ -546,7 +582,28 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     if (_state == newState) return;
     _state = newState;
     stateChanged.emit(newState);
-    if (newState != PlaybackState.playing) _stopSpectrumSoon();
+    if (newState != PlaybackState.playing) {
+      _stopSpectrumSoon();
+    } else {
+      _sincePosition.reset(); // the position stood still while paused
+      if (_analysing && _spectrumTimer == null) _startSpectrum(); // resumed after the bars had stopped
+    }
+  }
+
+  @override
+  set spectrumShown(bool shown) {
+    if (_shown == shown) return;
+    _shown = shown;
+    if (!enableSpectrum || !spectrumOnlyWhenShown) return;
+    if (!shown) {
+      // The decoded track is kept: shown again, the bars go on at once.
+      _spectrumTimer?.cancel();
+      _spectrumTimer = null;
+      return;
+    }
+    final source = _source;
+    if (source != null) unawaited(_pcm.loadTrack(source));
+    if (_state == PlaybackState.playing) _startSpectrum();
   }
 
   // ── Spectrum ───────────────────────────────────────────────────────────────────────────────────
@@ -556,11 +613,17 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _spectrumTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
       // Without decoded audio for the position the bars fall, as they do when playback stops.
       final live =
-          _state == PlaybackState.playing &&
-          _player.state.playing &&
-          _pcm.tryGetWindow(_player.state.position, _window);
+          _state == PlaybackState.playing && _player.state.playing && _pcm.tryGetWindow(_spectrumPosition, _window);
       spectrumDataAvailable.emit(_analyzer.processPcm(_window, isPlaying: live));
     });
+  }
+
+  /// The position the bars show: the last one mpv told and the time since, so that they move on between its reports
+  /// (a phone's come every ~260 ms, and the bars jumped with them). Capped, so that a late report doesn't run them ahead.
+  Duration get _spectrumPosition {
+    const step = Duration(milliseconds: 300);
+    final since = _sincePosition.elapsed;
+    return _player.state.position + (since < step ? since : step);
   }
 
   void _stopSpectrumSoon() {

@@ -101,6 +101,11 @@ abstract final class CoverFlight {
   /// same frame, so that it is there from the first; else [_CoverFlightTargetState._flyBack] sends it a frame later.
   static ({String tag, Rect from, Widget cover, double? radius})? _returning;
 
+  /// The artwork of a page that just closed, and where it was on the screen, for the frame it closes in: the page that
+  /// opens in its place from a pressed cover shows it in its own artwork's place until that cover has flown in over it,
+  /// rather than an empty place (an album opened from its artist's page, over the artist's picture).
+  static ({Rect rect, Widget artwork})? _leftBehind;
+
   static void _land(String tag) {
     if (_landing != tag) return;
     _landing = null;
@@ -318,6 +323,10 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   /// The pressed cover flying in, while it does: what it shows, where from, its corners.
   ({Widget cover, Rect from, double? radius})? _arriving;
 
+  /// The artwork of the page this one replaced ([CoverFlight._leftBehind]), in this one's place while the pressed cover
+  /// flies in over it.
+  ({Rect rect, Widget artwork})? _standIn;
+
   /// Where the artwork is on the screen, kept up to date while the page scrolls: a closed page can't be measured.
   Rect? _rect;
 
@@ -327,6 +336,9 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
 
   /// The screen's overlay, the flights' sky: kept, as a closing page can't look it up.
   OverlayState? _overlay;
+
+  /// The screen's size, kept for the same reason.
+  Size? _screen;
 
   @override
   void initState() {
@@ -347,6 +359,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
         from: pressed.rect,
         radius: pressed.radius,
       );
+      _standIn = CoverFlight._leftBehind;
       _flight.show();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -361,6 +374,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
     setState(() {
       _waiting = false;
       _arriving = null;
+      _standIn = null;
     });
   }
 
@@ -368,6 +382,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _overlay = Overlay.maybeOf(context, rootOverlay: true);
+    _screen = MediaQuery.maybeSizeOf(context);
     final position = Scrollable.maybeOf(context)?.position;
     if (position == _position) return;
     _position?.removeListener(_measure);
@@ -378,8 +393,22 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
 
   @override
   void deactivate() {
+    _leaveBehind();
     _flyBack();
     super.deactivate();
+  }
+
+  /// The page closes: its artwork, if it was on the screen, stays for the page that opens in its place in this frame
+  /// ([CoverFlight._leftBehind]).
+  void _leaveBehind() {
+    final rect = _rect;
+    final screen = _screen;
+    if (rect == null || screen == null || !rect.overlaps(Offset.zero & screen)) return;
+    final left = (rect: rect, artwork: widget.child);
+    CoverFlight._leftBehind = left;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (identical(CoverFlight._leftBehind, left)) CoverFlight._leftBehind = null;
+    });
   }
 
   @override
@@ -450,7 +479,21 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
         onLanded: _arrived,
       );
     },
-    child: Opacity(opacity: _waiting ? 0 : 1, child: widget.child),
+    child: Stack(
+      fit: StackFit.passthrough,
+      clipBehavior: Clip.none,
+      children: [
+        Opacity(opacity: _waiting ? 0 : 1, child: widget.child),
+        if (_standIn case final standIn? when _waiting)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: FittedBox(
+                child: SizedBox.fromSize(size: standIn.rect.size, child: standIn.artwork),
+              ),
+            ),
+          ),
+      ],
+    ),
   );
 }
 

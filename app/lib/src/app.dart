@@ -14,8 +14,9 @@ import 'layouts/wide_layout.dart';
 import 'localization.dart';
 import 'platform.dart';
 import 'theme/app_theme.dart';
-import 'view_models/app_section.dart';
+import 'theme/palette.dart';
 import 'view_models/main_view_model.dart';
+import 'widgets/ambient.dart';
 import 'widgets/tv_focus.dart';
 
 /// The root widget: theme, language, the keyboard and remote shortcuts, the back button, and the layout for the screen.
@@ -35,8 +36,12 @@ class WiretuneApp extends StatefulWidget {
 }
 
 class _WiretuneAppState extends State<WiretuneApp> {
-  final Map<(bool, AppSection, bool), ThemeData> _themes = {};
   late final AppLifecycleListener _lifecycle;
+
+  /// The colour of the cover of the song that plays, which the accent is made of (`Palette.accentOf`): null for none,
+  /// or a grey one. It stays until the next one's has been read.
+  Color? _cover;
+  String? _coverPath;
 
   /// What back can close: the main view model's layers and tabs, the queue, and the open detail pages.
   late final Listenable _backState = Listenable.merge([
@@ -51,20 +56,38 @@ class _WiretuneAppState extends State<WiretuneApp> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(widget.vm.resume()));
+    widget.vm.player.addListener(_followCover);
+    _followCover();
   }
 
   @override
   void dispose() {
+    widget.vm.player.removeListener(_followCover);
     _lifecycle.dispose();
     super.dispose();
   }
 
-  // The accent follows the section, so a theme is built once per (light, section) and reused.
-  ThemeData _theme(bool light, AppSection section, bool isTv) => _themes.putIfAbsent((
-    light,
-    section,
-    isTv,
-  ), () => buildTheme(light: light, section: section, isTv: isTv, desktopFonts: AppPlatform.current.isDesktop));
+  void _followCover() {
+    final path = AmbientBackdrop.activeCoverPath(widget.vm, nowPlaying: true);
+    if (path == _coverPath) return;
+    _coverPath = path;
+    if (path == null) return _showCover(null);
+    if (CoverColor.isKnown(path)) return _showCover(CoverColor.known(path));
+    CoverColor.read(path).then((colour) {
+      if (mounted && _coverPath == path) _showCover(colour);
+    });
+  }
+
+  void _showCover(Color? colour) {
+    if (colour != _cover) setState(() => _cover = colour);
+  }
+
+  ThemeData _theme(bool light, bool isTv) => cachedTheme(
+    light: light,
+    accent: (light ? Palette.light : Palette.dark).accentOf(_cover),
+    isTv: isTv,
+    desktopFonts: AppPlatform.current.isDesktop,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +108,7 @@ class _WiretuneAppState extends State<WiretuneApp> {
                 title: 'Wiretune',
                 debugShowCheckedModeBanner: false,
                 showPerformanceOverlay: vm.showPerformanceStats,
-                theme: _theme(light, vm.selectedSection, platform.isTv),
+                theme: _theme(light, platform.isTv),
                 themeAnimationDuration: const Duration(milliseconds: 350),
                 // A remote's arrows move between controls: a slider keeps Left and Right, not Up and Down too; a text
                 // field lets them go (TvTextFieldKeys).
@@ -249,7 +272,8 @@ class _PhoneUprightState extends State<_PhoneUpright> {
 }
 
 /// Shows the latest [AppNotice] at the top of the screen for a few seconds (an error a little longer), over either
-/// layout. It takes no focus, so a TV remote stays where it was; a tap or its close button dismisses it.
+/// layout. It takes no focus, so a TV remote stays where it was; a tap, its close button or a swipe up or sideways (as
+/// a phone's own notifications go) dismisses it.
 class _NoticeHost extends StatefulWidget {
   const _NoticeHost({required this.vm});
 
@@ -262,6 +286,12 @@ class _NoticeHost extends StatefulWidget {
 class _NoticeHostState extends State<_NoticeHost> {
   AppNotice? _notice;
   Timer? _hide;
+
+  /// How far the notice is swiped away, 0 in place to 1 gone: it fades as it goes, as a phone's notification does.
+  final ValueNotifier<double> _swiped = ValueNotifier(0);
+
+  /// Thrown away with a swipe: it has gone already, and leaves without the fade.
+  bool _thrown = false;
 
   void Function()? _unsubscribe;
 
@@ -281,7 +311,11 @@ class _NoticeHostState extends State<_NoticeHost> {
 
   void _show(AppNotice notice) {
     _hide?.cancel();
-    setState(() => _notice = notice);
+    _swiped.value = 0;
+    setState(() {
+      _notice = notice;
+      _thrown = false;
+    });
     _hide = Timer(Duration(seconds: notice.isError ? 7 : 4), _dismiss);
   }
 
@@ -290,9 +324,15 @@ class _NoticeHostState extends State<_NoticeHost> {
     if (mounted) setState(() => _notice = null);
   }
 
+  void _throwAway() {
+    _thrown = true;
+    _dismiss();
+  }
+
   @override
   void dispose() {
     _hide?.cancel();
+    _swiped.dispose();
     _unsubscribe?.call();
     super.dispose();
   }
@@ -310,85 +350,105 @@ class _NoticeHostState extends State<_NoticeHost> {
         child: Align(
           alignment: Alignment.topCenter,
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
+            duration: _thrown ? Duration.zero : const Duration(milliseconds: 200),
             child: notice == null
                 ? const SizedBox.shrink()
-                : Padding(
+                // Thrown away up or sideways, fading as it goes; gone, it leaves no room behind to close.
+                : Dismissible(
                     key: ObjectKey(notice),
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 560),
-                      child: Semantics(
-                        liveRegion: true,
-                        child: ExcludeFocus(
-                          // Solid and round, with the hairline edge of the floating bars (and their shadow).
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(30),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: colors.palette.shadow,
-                                  blurRadius: 24,
-                                  spreadRadius: -4,
-                                  offset: const Offset(0, 8),
-                                ),
-                              ],
-                            ),
-                            child: Material(
-                              color: colors.palette.modal,
-                              borderRadius: BorderRadius.circular(30),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(30),
-                                onTap: _dismiss,
-                                child: Container(
-                                  padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+                    direction: DismissDirection.up,
+                    resizeDuration: null,
+                    onUpdate: (details) => _swiped.value = details.progress,
+                    onDismissed: (_) => _throwAway(),
+                    child: Dismissible(
+                      key: ObjectKey((notice, 'sideways')),
+                      direction: DismissDirection.horizontal,
+                      resizeDuration: null,
+                      onUpdate: (details) => _swiped.value = details.progress,
+                      onDismissed: (_) => _throwAway(),
+                      child: ValueListenableBuilder<double>(
+                        valueListenable: _swiped,
+                        builder: (context, swiped, child) =>
+                            Opacity(opacity: (1 - 1.5 * swiped).clamp(0.0, 1.0), child: child),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 560),
+                            child: Semantics(
+                              liveRegion: true,
+                              child: ExcludeFocus(
+                                // Solid and round, with the hairline edge of the floating bars (and their shadow).
+                                child: DecoratedBox(
                                   decoration: BoxDecoration(
                                     borderRadius: BorderRadius.circular(30),
-                                    border: Border.all(
-                                      color: notice.isError
-                                          ? colors.danger.withValues(alpha: 0.6)
-                                          : colors.palette.panelBorder,
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        notice.isError
-                                            ? Icons.error_outline_rounded
-                                            : Icons.check_circle_outline_rounded,
-                                        size: 20,
-                                        color: notice.isError ? colors.danger : colors.palette.lime,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          notice.message,
-                                          style: TextStyle(fontSize: 13, color: colors.textMain),
-                                        ),
-                                      ),
-                                      if (notice.undo case final undo?)
-                                        TextButton(
-                                          onPressed: () {
-                                            undo();
-                                            _dismiss();
-                                          },
-                                          child: Text(context.tr('Undo')),
-                                        )
-                                      else if (notice.action case (final label, final run))
-                                        TextButton(
-                                          onPressed: () {
-                                            run();
-                                            _dismiss();
-                                          },
-                                          child: Text(label),
-                                        ),
-                                      IconButton(
-                                        tooltip: context.tr('TipDismissNotice'),
-                                        onPressed: _dismiss,
-                                        iconSize: 16,
-                                        icon: const Icon(Icons.close_rounded),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: colors.palette.shadow,
+                                        blurRadius: 24,
+                                        spreadRadius: -4,
+                                        offset: const Offset(0, 8),
                                       ),
                                     ],
+                                  ),
+                                  child: Material(
+                                    color: colors.palette.modal,
+                                    borderRadius: BorderRadius.circular(30),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(30),
+                                      onTap: _dismiss,
+                                      child: Container(
+                                        padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(30),
+                                          border: Border.all(
+                                            color: notice.isError
+                                                ? colors.danger.withValues(alpha: 0.6)
+                                                : colors.palette.panelBorder,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              notice.isError
+                                                  ? Icons.error_outline_rounded
+                                                  : Icons.check_circle_outline_rounded,
+                                              size: 20,
+                                              // Done and failed in the colours that say so, not the song's.
+                                              color: notice.isError ? colors.danger : colors.palette.success,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                notice.message,
+                                                style: TextStyle(fontSize: 13, color: colors.textMain),
+                                              ),
+                                            ),
+                                            if (notice.undo case final undo?)
+                                              TextButton(
+                                                onPressed: () {
+                                                  undo();
+                                                  _dismiss();
+                                                },
+                                                child: Text(context.tr('Undo')),
+                                              )
+                                            else if (notice.action case (final label, final run))
+                                              TextButton(
+                                                onPressed: () {
+                                                  run();
+                                                  _dismiss();
+                                                },
+                                                child: Text(label),
+                                              ),
+                                            IconButton(
+                                              tooltip: context.tr('TipDismissNotice'),
+                                              onPressed: _dismiss,
+                                              iconSize: 16,
+                                              icon: const Icon(Icons.close_rounded),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

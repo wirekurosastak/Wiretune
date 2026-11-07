@@ -121,7 +121,8 @@ keep both on the same version ([back up first](server.md#data-directory)).
 
 Phones stay in portrait; tablets rotate. On a touch screen:
 
-- swipe the mini player to skip
+- swipe the mini player, or the full-screen player's cover, to skip
+- swipe a song in the full-screen player's queue to the left to take it out
 - pull a list down past its top to search
 - long-press an album, artist or playlist for a preview with its menu
 - pinch to resize tiles (tablets and touchpads)

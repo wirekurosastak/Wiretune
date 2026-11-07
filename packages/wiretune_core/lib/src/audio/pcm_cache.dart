@@ -7,13 +7,20 @@ import 'dart:typed_data';
 
 import '../services/wiretune_log.dart';
 
-/// The current track decoded to 16-bit mono 44.1 kHz PCM in memory, by a separate `ffmpeg` process, so the spectrum
-/// analyser can read the window at the playback position. It never touches the audio that is being played.
+/// The current track decoded to 16-bit mono 44.1 kHz PCM in memory, by a separate `ffmpeg` process or the platform's
+/// own [decoder], so the spectrum analyser can read the window at the playback position. It never touches the audio
+/// that is being played.
 ///
 /// Decoding stops after 20 minutes of audio (about 106 MB), so a very long mix cannot exhaust memory. A server track is
 /// requested from the server a second time for this; the player downloads it and hands it to `ffmpeg` on its standard
 /// input, so the address with the stream token never stands in the process list.
 class PcmCache {
+  PcmCache({this.decoder});
+
+  /// Decodes a source (a file path or a stream URL) into that PCM, little-endian, in chunks: an Android phone's
+  /// decoder, which has no `ffmpeg`. Null: `ffmpeg`.
+  final Stream<List<int>> Function(String source)? decoder;
+
   static const int sampleRate = 44100;
   static const int _maxSamples = sampleRate * 60 * 20;
 
@@ -40,6 +47,18 @@ class PcmCache {
     _samples = Int16List(sampleRate * 180); // three minutes; grows on demand
     _sampleCount = 0;
     _pendingByte = -1;
+
+    final decoder = this.decoder;
+    if (decoder != null) {
+      _subscription = decoder(audioSource).listen(
+        (chunk) => _append(chunk, generation),
+        onError: (Object e) {
+          if (generation == _generation) WiretuneLog.warn('PcmCache', 'PCM decode error: $e');
+        },
+        cancelOnError: true,
+      );
+      return;
+    }
 
     Process process;
     try {

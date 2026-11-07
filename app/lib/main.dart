@@ -59,7 +59,14 @@ Future<void> main() async {
     driver = TizenAudioDriver();
   } else {
     MediaKit.ensureInitialized();
-    driver = MediaKitAudioDriver(allowDeviceSelection: platform.isDesktop, enableSpectrum: platform.isDesktop);
+    // A phone decodes for the spectrum with Android's own decoder (it has no ffmpeg), and only while one is on screen.
+    final phone = platform.isAndroid && !platform.isTv;
+    driver = MediaKitAudioDriver(
+      allowDeviceSelection: platform.isDesktop,
+      enableSpectrum: platform.isDesktop || phone,
+      spectrumOnlyWhenShown: phone,
+      pcmDecoder: phone ? MobileAudio.decodeForSpectrum : null,
+    );
   }
 
   final repository = LibraryRepository(DatabaseManager());

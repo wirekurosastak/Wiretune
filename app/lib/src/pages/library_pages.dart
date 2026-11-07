@@ -105,7 +105,7 @@ class TracksPage extends StatelessWidget {
           ),
           columnHeaders: TrackColumnHeaders(sorting: page),
           slivers: [
-            TrackSliver(tracks: page.tracks, sorting: page, columnHeaders: false),
+            TrackSliver(tracks: page.tracks, sorting: page, columnHeaders: false, playingFrom: page.playingFrom),
             const PageEndSpace(),
           ],
         );
@@ -161,7 +161,12 @@ class FavoritesPage extends StatelessWidget {
           ),
           columnHeaders: TrackColumnHeaders(sorting: favorites),
           slivers: [
-            TrackSliver(tracks: favorites.tracks, sorting: favorites, columnHeaders: false),
+            TrackSliver(
+              tracks: favorites.tracks,
+              sorting: favorites,
+              columnHeaders: false,
+              playingFrom: favorites.playingFrom,
+            ),
             const PageEndSpace(),
           ],
         );
@@ -274,9 +279,10 @@ class DetailHeader extends StatelessWidget {
     if (titleWidget case final widget?) return PinnedTitleBar.pageTitle(context, widget);
     return LayoutBuilder(
       builder: (context, constraints) {
+        final (:text, style: fitted) = wrapByWords(context, title, style, constraints.maxWidth);
         // Measured in the font it is drawn in (the app's, which a Text takes from around it).
         final painter = TextPainter(
-          text: TextSpan(text: title, style: DefaultTextStyle.of(context).style.merge(style)),
+          text: TextSpan(text: text, style: DefaultTextStyle.of(context).style.merge(fitted)),
           maxLines: 1,
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
@@ -285,8 +291,8 @@ class DetailHeader extends StatelessWidget {
         painter.dispose();
         return PinnedTitleBar.pageTitle(
           context,
-          Text(title, textAlign: textAlign, maxLines: maxLines, overflow: TextOverflow.ellipsis, style: style),
-          shrinkStyle: oneLine ? style : null,
+          Text(text, textAlign: textAlign, maxLines: maxLines, overflow: TextOverflow.ellipsis, style: fitted),
+          shrinkStyle: oneLine ? fitted : null,
         );
       },
     );
@@ -308,7 +314,6 @@ class DetailHeader extends StatelessWidget {
     final dot = Text('•', style: TextStyle(color: colors.textMuted));
     final shadow = [
       BoxShadow(color: colors.palette.shadow, blurRadius: 40, spreadRadius: -8, offset: const Offset(0, 20)),
-      BoxShadow(color: colors.accent.withValues(alpha: 0.18), blurRadius: 60, spreadRadius: -10),
     ];
     final frame = roundArtwork
         ? BoxDecoration(shape: BoxShape.circle, boxShadow: shadow)
@@ -824,17 +829,16 @@ class AlbumDetail extends StatelessWidget {
                 radius: Radii.card,
                 decodeWidth: 640,
                 placeholderIcon: Icons.album,
-                placeholderColor: colors.palette.purple,
               ),
               artworkFlight: 'album:${album.id}',
               artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
-              tags: [TagBadge(context.tr('ColAlbum'), color: colors.palette.purple)],
+              tags: [TagBadge(context.tr('ColAlbum'), color: colors.accent)],
               title: album.title,
               details: [
                 ArtistLinks(
                   album.artistNames,
                   onOpen: vm.openArtistByName,
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.coral),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.accent),
                 ),
               ],
               secondaryDetails: [
@@ -860,7 +864,7 @@ class AlbumDetail extends StatelessWidget {
               ],
             ),
           ),
-          TrackSliver(tracks: album.tracks, kind: TrackTableKind.album),
+          TrackSliver(tracks: album.tracks, kind: TrackTableKind.album, playingFrom: () => album.title),
           const PageEndSpace(),
         ],
       ),
@@ -937,15 +941,10 @@ class ArtistDetail extends StatelessWidget {
           SliverToBoxAdapter(
             child: DetailHeader(
               back: BackLink(text: artists.backText, onPressed: artists.closeArtistDetail),
-              artwork: CoverImage(
-                path: artist.picturePath,
-                circle: true,
-                placeholderIcon: Icons.person,
-                placeholderColor: colors.palette.coral,
-              ),
+              artwork: CoverImage(path: artist.picturePath, circle: true, placeholderIcon: Icons.person),
               artworkFlight: 'artist:${artist.id}',
               roundArtwork: true,
-              tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.coral)],
+              tags: [TagBadge(context.tr('ColArtist'), color: colors.accent)],
               title: artist.name,
               details: [
                 DetailText(context.trf('AlbumCount', [artist.albumCount])),
@@ -985,7 +984,7 @@ class ArtistDetail extends StatelessWidget {
               child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
             ),
           ),
-          TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist),
+          TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist, playingFrom: () => artist.name),
           const PageEndSpace(),
         ],
       ),

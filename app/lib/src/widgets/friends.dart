@@ -162,22 +162,11 @@ class _FromFriendsList extends StatelessWidget {
         '${track.title} • ${track.artist}',
       ),
       (_, final album?, _) => (
-        CoverImage(
-          path: album.coverArtPath,
-          size: size,
-          placeholderIcon: Icons.album,
-          placeholderColor: colors.palette.purple,
-        ),
+        CoverImage(path: album.coverArtPath, size: size, placeholderIcon: Icons.album),
         '${album.title} • ${album.artist}',
       ),
       (_, _, final artist?) => (
-        CoverImage(
-          path: artist.picturePath,
-          size: size,
-          circle: true,
-          placeholderIcon: Icons.person,
-          placeholderColor: colors.palette.coral,
-        ),
+        CoverImage(path: artist.picturePath, size: size, circle: true, placeholderIcon: Icons.person),
         artist.name,
       ),
       _ => (const SizedBox.square(dimension: size), ''),

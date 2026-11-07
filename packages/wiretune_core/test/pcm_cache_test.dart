@@ -99,4 +99,31 @@ void main() {
       await until(() => _hasSound(cache));
     });
   });
+
+  test(
+    "a platform's decoder (an Android phone's) is used instead of ffmpeg, a chunk split mid-sample included",
+    () async {
+      // Half a second of silence, then a loud square wave: 16-bit little-endian mono.
+      final samples = Int16List(44100);
+      for (var i = 22050; i < samples.length; i++) {
+        samples[i] = (i ~/ 50).isEven ? 20000 : -20000;
+      }
+      final bytes = samples.buffer.asUint8List();
+      final asked = <String>[];
+      final cache = PcmCache(
+        decoder: (source) {
+          asked.add(source);
+          // An odd split: the cache has to keep the half sample for the next chunk.
+          return Stream.fromIterable([bytes.sublist(0, 30001), bytes.sublist(30001)]);
+        },
+      );
+      addTearDown(cache.dispose);
+      await cache.loadTrack('/music/track.flac');
+      await until(() => _hasSound(cache));
+      expect(asked, ['/music/track.flac']);
+      final window = Float32List(4);
+      cache.tryGetWindow(const Duration(milliseconds: 250), window);
+      expect(window, everyElement(0), reason: 'the silence where it was');
+    },
+  );
 }
