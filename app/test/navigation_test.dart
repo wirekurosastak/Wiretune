@@ -304,7 +304,8 @@ void main() {
       ..setSetting('preference.language', 'de')
       ..setSetting('preference.theme', 'light')
       ..setSetting('preference.online_lyrics', '0')
-      ..setSetting('preference.sidebar_pinned', '1');
+      ..setSetting('preference.sidebar_pinned', '1')
+      ..setSetting('preference.sidebar_opened', '1');
     final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
     final vm = MainViewModel(TestSupport.createEngine(), library, ServerSession(library, repo));
     await vm.start();
@@ -314,6 +315,7 @@ void main() {
     expect(vm.lyrics.isOnlineEnabled, isFalse);
     expect(vm.showPerformanceStats, isFalse);
     expect(vm.isSidebarPinned, isTrue);
+    expect(vm.hasOpenedSidebar, isTrue);
 
     vm.changeLanguage('hu');
     vm.setTheme(light: false);

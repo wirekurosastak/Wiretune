@@ -129,6 +129,7 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
     _closing?.cancel();
     if (_atEdge || _overSidebar || _focused) {
       _out.forward();
+      widget.vm.sidebarOpened();
     } else {
       _closing = Timer(const Duration(milliseconds: 350), () {
         if (mounted) _out.reverse();
@@ -221,7 +222,10 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
             bottom: 0,
             width: 28,
             child: IgnorePointer(
-              child: FadeTransition(opacity: ReverseAnimation(_out), child: const _EdgeHint()),
+              child: FadeTransition(
+                opacity: ReverseAnimation(_out),
+                child: _EdgeHint(quiet: widget.vm.hasOpenedSidebar),
+              ),
             ),
           ),
         // The window's left edge: the mouse there brings the sidebar out. There pinned too: a region taken away under
@@ -243,76 +247,90 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
   }
 }
 
-/// A chevron at the window's left edge, where the hidden sidebar comes from. Every few seconds it pulses, and
-/// copies of it run out to the right, fading; between the pulses nothing moves, so no frame is drawn for it.
+/// A chevron at the window's left edge, where the hidden sidebar comes from. Every few seconds it is thrown out to the
+/// right and falls back to the edge, bouncing as it lands, as a ball thrown up would; between its hops nothing moves,
+/// so no frame is drawn for it. Once the sidebar has been out ([quiet], `MainViewModel.hasOpenedSidebar`) it stays still
+/// for good: it has been found.
 class _EdgeHint extends StatefulWidget {
-  const _EdgeHint();
+  const _EdgeHint({required this.quiet});
+
+  final bool quiet;
 
   @override
   State<_EdgeHint> createState() => _EdgeHintState();
 }
 
 class _EdgeHintState extends State<_EdgeHint> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  );
-  late final Timer _every = Timer.periodic(const Duration(seconds: 5), (_) => _pulse.forward(from: 0));
-  late final Timer _first = Timer(const Duration(milliseconds: 800), () => _pulse.forward(from: 0));
+  late final AnimationController _hop = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
+  Timer? _first, _every;
 
   @override
   void initState() {
     super.initState();
-    _every;
-    _first;
+    if (!widget.quiet) _start();
   }
 
   @override
+  void didUpdateWidget(_EdgeHint oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.quiet && !oldWidget.quiet) _stop();
+  }
+
+  void _start() {
+    _first = Timer(const Duration(milliseconds: 1500), _jump);
+    _every = Timer.periodic(const Duration(seconds: 7), (_) => _jump());
+  }
+
+  void _stop() {
+    _first?.cancel();
+    _every?.cancel();
+  }
+
+  void _jump() => unawaited(_hop.forward(from: 0));
+
+  @override
   void dispose() {
-    _every.cancel();
-    _first.cancel();
-    _pulse.dispose();
+    _stop();
+    _hop.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) =>
-      RepaintBoundary(child: CustomPaint(painter: _ChevronPainter(_pulse, context.colors.textMuted)));
+      RepaintBoundary(child: CustomPaint(painter: _ChevronPainter(_hop, context.colors.textMuted)));
 }
 
 class _ChevronPainter extends CustomPainter {
-  _ChevronPainter(this.pulse, this.color) : super(repaint: pulse);
+  _ChevronPainter(this.hop, this.color) : super(repaint: hop);
 
-  final Animation<double> pulse;
+  final Animation<double> hop;
   final Color color;
+
+  /// How far out it is through a hop, 0 at the edge to 1 at its highest: thrown, slowing as it rises, then falling back
+  /// and bouncing as it lands.
+  static final Animatable<double> _arc = TweenSequence([
+    TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.0).chain(CurveTween(curve: Curves.easeOutCubic)), weight: 35),
+    TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.0).chain(CurveTween(curve: Curves.bounceOut)), weight: 65),
+  ]);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final t = pulse.value;
+    final out = _arc.transform(hop.value);
+    final x = 4 + 12 * out;
     final y = size.height / 2;
-    void chevron(double x, double alpha) {
-      if (alpha <= 0) return;
-      final paint = Paint()
-        ..color = color.withValues(alpha: color.a * alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.2
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round;
-      canvas.drawPath(
-        Path()
-          ..moveTo(x, y - 7)
-          ..lineTo(x + 5, y)
-          ..lineTo(x, y + 7),
-        paint,
-      );
-    }
-
-    // The chevron itself brightens and dims once; two copies of it run out to the right one after the other, fading.
-    chevron(3, 0.45 + 0.4 * math.sin(math.pi * t));
-    for (var copy = 0; copy < 2; copy++) {
-      final p = ((t - copy * 0.2) / 0.7).clamp(0.0, 1.0);
-      if (p > 0 && p < 1) chevron(3 + 14 * p, 0.7 * math.sin(math.pi * p));
-    }
+    final paint = Paint()
+      ..color = color.withValues(alpha: color.a * (0.5 + 0.35 * out))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    canvas.drawPath(
+      Path()
+        ..moveTo(x, y - 8)
+        ..lineTo(x + 6, y)
+        ..lineTo(x, y + 8),
+      paint,
+    );
   }
 
   @override

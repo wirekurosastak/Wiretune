@@ -3992,6 +3992,34 @@ void main() {
     },
   );
 
+  testWidgets(
+    "the chevron at a computer's left edge hops now and then until the sidebar has been out, then keeps still",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(1400, 900));
+      expect(vm.hasOpenedSidebar, isFalse);
+      // Its first hop, a moment after the start.
+      await tester.pump(const Duration(milliseconds: 1600));
+      expect(tester.hasRunningAnimations, isTrue, reason: 'hopping');
+      await tester.pump(const Duration(seconds: 2));
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(700, 870));
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(const Offset(3, 400));
+      await settle(tester);
+      expect(vm.hasOpenedSidebar, isTrue);
+      expect(vm.library.getPreference('sidebar_opened'), '1', reason: 'for good');
+      await mouse.moveTo(const Offset(800, 400));
+      await tester.pump(const Duration(seconds: 1));
+      await settle(tester);
+      // Found: no more hops.
+      for (var i = 0; i < 80; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.hasRunningAnimations, isFalse, reason: 'still at ${i * 100} ms');
+      }
+    },
+  );
+
   testWidgets("a computer's sidebar pin keeps it out beside the page", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
