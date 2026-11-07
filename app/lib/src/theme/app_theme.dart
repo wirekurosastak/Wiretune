@@ -155,6 +155,17 @@ ThemeData buildTheme({required bool light, required Color accent, required bool 
       thumbShape: const KnobThumbShape(),
       overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
       trackShape: const GlowTrackShape(),
+      // A held slider's value (a seek bar's time) over its knob, solid and rounded as the popups are.
+      showValueIndicator: ShowValueIndicator.onDrag,
+      valueIndicatorShape: const RectangularSliderValueIndicatorShape(),
+      valueIndicatorColor: palette.modal,
+      valueIndicatorStrokeColor: palette.glassBorder,
+      valueIndicatorTextStyle: TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: palette.textMain,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(

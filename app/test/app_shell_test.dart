@@ -4448,18 +4448,16 @@ void main() {
     vm.player.playQueue(vm.library.tracks.take(1).toList());
     vm.openNowPlaying();
     await settle(tester);
-    final bar = find.byType(SeekBar);
-    double bubble() =>
-        tester.widget<AnimatedOpacity>(find.descendant(of: bar, matching: find.byType(AnimatedOpacity))).opacity;
-    expect(bubble(), 0);
-    final slider = find.descendant(of: bar, matching: find.byType(Slider));
+    final slider = find.descendant(of: find.byType(SeekBar), matching: find.byType(Slider));
+    // The slider's own bubble, shown while it is dragged, with the time the knob is at.
+    expect(SliderTheme.of(tester.element(slider)).showValueIndicator, ShowValueIndicator.onDrag);
     final finger = await tester.startGesture(tester.getCenter(slider));
     await finger.moveBy(const Offset(30, 0));
     await tester.pump(const Duration(milliseconds: 200));
-    expect(bubble(), 1);
+    final held = tester.widget<Slider>(slider);
+    expect(held.label, formatClock(Duration(milliseconds: (held.value * 1000).round())));
     await finger.up();
     await settle(tester);
-    expect(bubble(), 0);
   });
 
   testWidgets("a computer's tab page keeps its header and the column headers while the list scrolls", (tester) async {

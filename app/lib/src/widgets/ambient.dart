@@ -338,23 +338,15 @@ class ViewedAccentScope extends StatefulWidget {
   State<ViewedAccentScope> createState() => _ViewedAccentScopeState();
 }
 
-class _ViewedAccentScopeState extends State<ViewedAccentScope> with SingleTickerProviderStateMixin {
-  /// As the app's own theme blends (`MaterialApp.themeAnimationDuration`).
-  late final AnimationController _blend = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 350),
-    value: 1,
-  )..addListener(() => setState(() {}));
-
+class _ViewedAccentScopeState extends State<ViewedAccentScope> {
   late final Listenable _views;
   String? _path;
 
   /// The open album's or artist's cover colour; null: the page has the app's accent (the song's).
   ({Color? colour})? _viewed;
 
-  /// The theme shown when the accent changed, which the new one blends from.
-  ThemeData? _from;
-  ThemeData? _shown;
+  /// Whether the pages have the app's own theme as it is: no album or artist open, and the blend back from one over.
+  bool _plain = true;
 
   @override
   void initState() {
@@ -367,7 +359,6 @@ class _ViewedAccentScopeState extends State<ViewedAccentScope> with SingleTicker
   @override
   void dispose() {
     _views.removeListener(_follow);
-    _blend.dispose();
     super.dispose();
   }
 
@@ -385,34 +376,40 @@ class _ViewedAccentScopeState extends State<ViewedAccentScope> with SingleTicker
 
   void _show(({Color? colour})? viewed) {
     if (viewed == _viewed) return;
-    _from = _shown;
-    _viewed = viewed;
-    // The first build shows it at once (no theme yet to blend from).
-    if (_from == null) return;
-    _blend.forward(from: 0);
-    setState(() {});
+    setState(() {
+      _viewed = viewed;
+      if (viewed != null) _plain = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // rebuilt with the app's theme
+    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
     final inherited = context.findAncestorWidgetOfExactType<Theme>()!.data;
     final viewed = _viewed;
     final platform = AppPlatform.current;
     final palette = context.colors.palette;
     final target = viewed == null
-        ? null
+        ? inherited
         : cachedTheme(
             light: !palette.isDark,
             accent: palette.accentOf(viewed.colour),
             isTv: platform.isTv,
             desktopFonts: platform.isDesktop,
           );
-    final from = _from;
-    // Null while the pages have the app's own theme.
-    final data = from == null || _blend.isCompleted ? target : ThemeData.lerp(from, target ?? inherited, _blend.value);
-    _shown = data ?? inherited;
-    return _ViewedTheme(data: data, child: widget.child);
+    // From the theme on show to the new one, as the app's own theme blends (`MaterialApp.themeAnimationDuration`); the
+    // first one at once.
+    return TweenAnimationBuilder<ThemeData>(
+      tween: ThemeDataTween(end: target),
+      duration: const Duration(milliseconds: 350),
+      onEnd: () {
+        if (_viewed == null && !_plain) setState(() => _plain = true);
+      },
+      // Null while the pages have the app's own theme.
+      builder: (context, data, child) => _ViewedTheme(data: _plain ? null : data, child: child!),
+      child: widget.child,
+    );
   }
 }
 
