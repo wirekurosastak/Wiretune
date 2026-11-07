@@ -4004,6 +4004,32 @@ void main() {
     expect(artist.top, greaterThanOrEqualTo(title.bottom));
   });
 
+  testWidgets("a phone's tab page has its title, its sort and its rows' pictures at one edge", (tester) async {
+    AppPlatform.forTesting(system: 'android');
+    final vm = await pumpApp(tester, const Size(400, 860));
+    for (final (section, name) in [
+      (AppSection.artists, 'NavArtists'),
+      (AppSection.albums, 'NavAlbums'),
+      (AppSection.tracks, 'NavTracks'),
+    ]) {
+      vm.navigateTo(section);
+      await settle(tester);
+      // The big title, not the tab's label.
+      final title = tester.getRect(
+        find
+            .byWidgetPredicate(
+              (widget) => widget is Text && widget.data == Localizer.get(name) && (widget.style?.fontSize ?? 0) >= 30,
+            )
+            .first,
+      );
+      final sort = tester.getRect(find.byType(SortButtons));
+      final picture = tester.getRect(find.byType(CoverImage).first);
+      expect(title.left, PhoneChrome.edge, reason: '$section title');
+      expect(sort.left, PhoneChrome.edge, reason: '$section sort');
+      expect(picture.left, PhoneChrome.edge, reason: '$section picture');
+    }
+  });
+
   testWidgets(
     "a computer's sidebar is out of sight until the mouse comes to the window's left edge; the page follows it "
     'out and back',

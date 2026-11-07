@@ -1041,7 +1041,7 @@ class _PhoneRow extends StatelessWidget {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 13, color: colors.textMuted),
+                            style: TextStyle(fontSize: 13.5, color: colors.textMuted),
                           ),
                         ),
                       ],

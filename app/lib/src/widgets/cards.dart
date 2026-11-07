@@ -1030,18 +1030,14 @@ class _ListRow extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // A phone list's row text, the same in every list (the tracks', the queue's).
                     Text(
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.2,
-                        color: colors.textMain,
-                      ),
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.textMain),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       subtitle,
                       maxLines: 1,

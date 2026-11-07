@@ -312,7 +312,7 @@ class _QueueRowState extends State<_QueueRow> {
                             track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: phone ? 13 : 11.5, color: colors.textMuted),
+                            style: TextStyle(fontSize: phone ? 13.5 : 11.5, color: colors.textMuted),
                           ),
                         ],
                       ),

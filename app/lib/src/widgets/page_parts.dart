@@ -686,7 +686,8 @@ class _PhonePageHeader extends StatelessWidget {
     final titleRow = ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 68),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
+        // At the edge the sort and the rows under it keep.
+        padding: const EdgeInsets.fromLTRB(PhoneChrome.edge, 4, 8, 4),
         child: Row(
           children: [
             Expanded(
@@ -1151,7 +1152,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
   }
 
   /// The left edge of the bar's title: beside the way back, else where the page's own edge is.
-  double get _barLeft => widget.onBack == null ? 20 : 4 + PinnedTitleBar.buttonSize;
+  double get _barLeft => widget.onBack == null ? PhoneChrome.edge : 4 + PinnedTitleBar.buttonSize;
 
   /// The middle of the bar, in its box.
   double _barMiddle(BuildContext context) => MediaQuery.paddingOf(context).top + PinnedTitleBar.height / 2;
@@ -1300,7 +1301,7 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
       child: SizedBox(
         height: PinnedTitleBar.height,
         child: Padding(
-          padding: EdgeInsets.fromLTRB(onBack == null ? 20 : 4, 0, 8, 0),
+          padding: EdgeInsets.fromLTRB(onBack == null ? PhoneChrome.edge : 4, 0, 8, 0),
           child: Row(
             children: [
               if (onBack != null)
