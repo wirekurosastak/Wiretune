@@ -197,7 +197,8 @@ class _BottomNavigation extends StatelessWidget {
 
   Widget _build(BuildContext context) {
     final vm = context.vm;
-    final accent = context.colors.accent;
+    // Each section in its own colour, the active one's the glow's.
+    final palette = context.colors.palette;
     const items = [
       (AppSection.artists, 'NavArtists'),
       (AppSection.albums, 'NavAlbums'),
@@ -227,7 +228,9 @@ class _BottomNavigation extends StatelessWidget {
                   height: _NavItem.glowSize,
                   child: IgnorePointer(
                     child: TweenAnimationBuilder<Color?>(
-                      tween: ColorTween(end: active < 0 ? accent.withValues(alpha: 0) : accent),
+                      tween: ColorTween(
+                        end: active < 0 ? palette.neutral.withValues(alpha: 0) : palette.sectionColor(items[active].$1),
+                      ),
                       duration: const Duration(milliseconds: 320),
                       curve: Curves.easeOutCubic,
                       builder: (context, color, _) => DecoratedBox(
@@ -251,7 +254,7 @@ class _BottomNavigation extends StatelessWidget {
                         child: _NavItem(
                           icon: sectionIcon(section),
                           label: context.tr(label),
-                          color: accent,
+                          color: palette.sectionColor(section),
                           active: i == active,
                           onTap: () => vm.navigateTo(section),
                         ),
@@ -579,50 +582,53 @@ class _MiniPlayer extends StatelessWidget {
     final vm = context.vm;
     final player = vm.player;
 
-    return ListenableBuilder(
-      listenable: player,
-      builder: (context, _) {
-        if (player.currentTrack == null) return const SizedBox.shrink();
+    // In the colour of the cover it shows, as every player is.
+    return PlayerAccent(
+      child: ListenableBuilder(
+        listenable: player,
+        builder: (context, _) {
+          if (player.currentTrack == null) return const SizedBox.shrink();
 
-        // Room above it, as in TIDAL's pill, under the pill's rounded top.
-        return Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: PlayerSheetDrag(
-            // The cover and Play stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
-            // of the pill's width, as they are. A swipe over the track skips (no buttons for it, as in TIDAL and
-            // Spotify).
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final column = constraints.maxWidth / 5;
-                return SizedBox(
-                  height: 66,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: vm.openNowPlaying,
-                          child: _SkipSwipe(
-                            player: player,
-                            builder: (context, track, {required current}) => Padding(
-                              padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
-                              child: _MiniTrack(track: track, current: current),
+          // Room above it, as in TIDAL's pill, under the pill's rounded top.
+          return Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: PlayerSheetDrag(
+              // The cover and Play stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
+              // of the pill's width, as they are. A swipe over the track skips (no buttons for it, as in TIDAL and
+              // Spotify).
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final column = constraints.maxWidth / 5;
+                  return SizedBox(
+                    height: 66,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: vm.openNowPlaying,
+                            child: _SkipSwipe(
+                              player: player,
+                              builder: (context, track, {required current}) => Padding(
+                                padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
+                                child: _MiniTrack(track: track, current: current),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      // The players' round Play, as in the full-screen player and on a computer.
-                      Padding(
-                        padding: EdgeInsets.only(right: math.max(0, (column - _playSize) / 2)),
-                        child: const PlayButton(size: _playSize),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                        // The players' round Play, as in the full-screen player and on a computer.
+                        Padding(
+                          padding: EdgeInsets.only(right: math.max(0, (column - _playSize) / 2)),
+                          child: const PlayButton(size: _playSize),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }

@@ -254,10 +254,16 @@ class _BestMatchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    // In its kind's colour: an artist's, an album's, a track's.
+    final kind = switch (match.kind) {
+      BestMatchKind.artist => colors.palette.artist,
+      BestMatchKind.album => colors.palette.album,
+      BestMatchKind.track => colors.palette.track,
+    };
     return SizedBox(
       width: fill ? double.infinity : width,
       child: _MetricCard(
-        accent: colors.accent,
+        accent: kind,
         padding: 20,
         // An artist or an album opens, like the cards under it; a track plays.
         onTap: switch (match.item) {
@@ -280,7 +286,7 @@ class _BestMatchCard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 14),
-            TagBadge(match.typeLabel, color: colors.accent),
+            TagBadge(match.typeLabel, color: kind),
             const SizedBox(height: 4),
             Text(
               match.title,

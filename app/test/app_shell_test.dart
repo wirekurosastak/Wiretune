@@ -3,8 +3,8 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -2375,67 +2375,67 @@ void main() {
     expect(slider, findsNothing);
   });
 
-  testWidgets("the accent is the colour of the song that plays, on every page, an album's too; a favourite is red", (
-    tester,
-  ) async {
-    AppPlatform.forTesting(system: 'android');
-    final vm = await pumpApp(tester, const Size(400, 860), () async {
-      // A red cover for the song that plays, a blue one for another album.
-      Future<String> cover(String name, Color colour) async {
+  testWidgets(
+    "each section is in its own colour, as on main: its pages and their Play; the players are in their song's, the "
+    'artist coral there too; a heart is coral',
+    (tester) async {
+      AppPlatform.forTesting(system: 'android');
+      final vm = await pumpApp(tester, const Size(400, 860), () async {
+        // A red cover for the song that plays.
         final recorder = ui.PictureRecorder();
-        Canvas(recorder).drawColor(colour, BlendMode.src);
+        Canvas(recorder).drawColor(const Color(0xFFFF0000), BlendMode.src);
         final image = await recorder.endRecording().toImage(8, 8);
         final png = await image.toByteData(format: ui.ImageByteFormat.png);
-        return (File(
-          '${Directory.systemTemp.createTempSync('wiretune_accent_').path}/$name.png',
+        final red = (File(
+          '${Directory.systemTemp.createTempSync('wiretune_accent_').path}/red.png',
         )..writeAsBytesSync(png!.buffer.asUint8List())).path;
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Red')..coverArtPath = red,
+          TestSupport.makeTrack('2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps'),
+        ]);
+        library.initialize();
+        return createMainViewModel(library);
+      });
+      final palette = tester.element(find.byType(PhoneLayout)).colors.palette;
+      for (final (section, colour) in [
+        (AppSection.artists, palette.artist),
+        (AppSection.albums, palette.album),
+        (AppSection.tracks, palette.track),
+        (AppSection.favorites, palette.favorite),
+        (AppSection.playlists, palette.playlist),
+        (AppSection.settings, palette.neutral),
+      ]) {
+        vm.navigateTo(section);
+        // The theme's blend: it starts with the next frame, and is over after it.
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(tester.element(find.byType(PhoneLayout)).colors.accent, colour, reason: '$section');
       }
 
-      final red = await cover('red', const Color(0xFFFF0000));
-      final blue = await cover('blue', const Color(0xFF0000FF));
-      final library = createLibrary([
-        TestSupport.makeTrack('1', 'So What', album: 'Red')..coverArtPath = red,
-        TestSupport.makeTrack('2', 'Naima', album: 'Blue')..coverArtPath = blue,
-      ]);
-      library.initialize();
-      return createMainViewModel(library);
-    });
-    final palette = tester.element(find.byType(PhoneLayout)).colors.palette;
-    expect(tester.element(find.byType(PhoneLayout)).colors.accent, palette.neutral, reason: 'nothing plays');
-    Color playColor(Finder player) =>
-        (tester
-                    .widget<AnimatedContainer>(
-                      find.descendant(
-                        of: find.descendant(of: player, matching: find.byType(PlayButton)),
-                        matching: find.byType(AnimatedContainer),
-                      ),
-                    )
-                    .decoration!
-                as BoxDecoration)
-            .gradient!
-            .colors
-            .last;
+      // An album's page in the Albums colour; the mini player in the song's, whatever the section.
+      vm.player.playQueue([vm.library.getTrack('1')!]);
+      await loadCovers(tester, washOf(find.byType(PhoneLayout)));
+      final red = palette.accentOf(const Color(0xFFFF0000));
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Giant Steps'));
+      await settle(tester);
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.element(find.byType(ListPlayButton)).colors.accent, palette.album, reason: "the page's Play");
+      final mini = find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_MiniPlayer');
+      expect(tester.element(find.descendant(of: mini, matching: find.byType(PlayButton))).colors.accent, red);
 
-    vm.player.playQueue([vm.library.getTrack('1')!]);
-    await loadCovers(tester, washOf(find.byType(PhoneLayout)));
-    final red = palette.accentOf(const Color(0xFFFF0000));
-    expect(playColor(find.byType(PhoneLayout)), red, reason: "the mini player's");
-
-    // An album's page has the song's colour too, whatever its own cover's: browsing doesn't recolour the app.
-    final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
-    vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
-    await loadCovers(tester, find.byType(ListPlayButton));
-    expect(tester.element(pagePlay).colors.accent, red, reason: "the blue album's Play");
-    expect(playColor(find.byType(PhoneLayout)), red, reason: 'the mini player, over the blue album');
-
-    vm.openNowPlaying();
-    await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
-    expect(playColor(find.byType(NowPlayingPage)), red, reason: "the full-screen player's");
-    vm.library.toggleFavorite('1');
-    await settle(tester);
-    final heart = find.descendant(of: find.byType(NowPlayingPage), matching: find.byType(HeartIcon));
-    expect(tester.widget<HeartIcon>(heart).color, palette.favorite);
-  });
+      // The full-screen player in the song's colour, its artist coral, a heart coral.
+      vm.openNowPlaying();
+      await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
+      final player = find.byType(NowPlayingPage);
+      expect(tester.element(find.descendant(of: player, matching: find.byType(PlayButton)).first).colors.accent, red);
+      final artist = tester.widget<Text>(find.descendant(of: player, matching: find.text('Miles Davis')).first);
+      expect(artist.style?.color, palette.artist);
+      vm.library.toggleFavorite('1');
+      await settle(tester);
+      final heart = find.descendant(of: player, matching: find.byType(HeartIcon));
+      expect(tester.widget<HeartIcon>(heart).color, palette.favorite);
+    },
+  );
 
   test(
     "a cover's colour is the one most of it has that is a colour, not a tinted grey or the dark; a grey one or a speck of colour has none",
@@ -3958,6 +3958,7 @@ void main() {
       final vm = await pumpApp(tester, const Size(1400, 900));
       vm.navigateTo(AppSection.albums);
       await settle(tester);
+      await tester.pump(const Duration(seconds: 1)); // the Albums colour blended in
       Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
       Rect sidebar() => tester.getRect(named('_Sidebar'));
       double page() => tester.getRect(named('_Content')).left;

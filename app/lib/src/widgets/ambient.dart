@@ -14,6 +14,7 @@ import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
+import '../view_models/player_view_model.dart';
 import 'cover_image.dart';
 
 /// A cover turned into a soft wash of its colours: decoded tiny, blurred and saturated once into a 96 px bitmap, then
@@ -303,6 +304,74 @@ class AmbientBackdrop extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// A player in the colour of the cover of the song that plays (`Palette.accentOf`): the mini player, the full-screen
+/// player, a computer's player bar and its queue. The pages around them are in their section's colour. The colour
+/// stays until the next song's has been read, and blends over as the app's theme does.
+class PlayerAccent extends StatefulWidget {
+  const PlayerAccent({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<PlayerAccent> createState() => _PlayerAccentState();
+}
+
+class _PlayerAccentState extends State<PlayerAccent> {
+  late final PlayerViewModel _player = context.vm.player;
+  String? _path;
+
+  /// The cover's colour: null for none, or a grey one (the neutral).
+  Color? _cover;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.addListener(_follow);
+    _follow();
+  }
+
+  @override
+  void dispose() {
+    _player.removeListener(_follow);
+    super.dispose();
+  }
+
+  void _follow() {
+    final path = AmbientBackdrop.activeCoverPath(context.vm, nowPlaying: true);
+    if (path == _path) return;
+    _path = path;
+    if (path == null) return _show(null);
+    if (CoverColor.isKnown(path)) return _show(CoverColor.known(path));
+    CoverColor.read(path).then((colour) {
+      if (mounted && _path == path) _show(colour);
+    });
+  }
+
+  void _show(Color? colour) {
+    if (colour != _cover) setState(() => _cover = colour);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final platform = AppPlatform.current;
+    final palette = context.colors.palette;
+    final theme = cachedTheme(
+      light: !palette.isDark,
+      accent: palette.accentOf(_cover),
+      isTv: platform.isTv,
+      desktopFonts: platform.isDesktop,
+    );
+    // From the colour on show to the next song's, as the app's theme blends (`MaterialApp.themeAnimationDuration`);
+    // the first at once.
+    return TweenAnimationBuilder<ThemeData>(
+      tween: ThemeDataTween(end: theme),
+      duration: const Duration(milliseconds: 350),
+      builder: (context, data, child) => Theme(data: data, child: child!),
+      child: widget.child,
     );
   }
 }

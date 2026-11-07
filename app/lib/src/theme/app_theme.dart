@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'palette.dart';
 
-/// The palette and the accent (the colour of the song that plays, `Palette.accentOf`), reachable from any widget
+/// The palette and the accent (the colour of the section on show, `Palette.sectionColor`), reachable from any widget
 /// through `context.colors`.
 class WiretuneColors extends ThemeExtension<WiretuneColors> {
   const WiretuneColors(this.palette, this.accent);
@@ -86,7 +86,7 @@ ThemeData cachedTheme({required bool light, required Color accent, required bool
   ), () => buildTheme(light: light, accent: accent, isTv: isTv, desktopFonts: desktopFonts));
 }
 
-/// The theme, in [accent] (`Palette.accentOf`).
+/// The theme, in [accent] (`Palette.sectionColor`).
 ThemeData buildTheme({required bool light, required Color accent, required bool isTv, bool desktopFonts = false}) {
   final palette = light ? Palette.light : Palette.dark;
   // Text and icons on an accent-filled button: near-black on the dark theme's bright accents, white on the light one's.

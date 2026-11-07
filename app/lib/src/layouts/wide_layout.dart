@@ -487,7 +487,7 @@ class _Content extends StatelessWidget {
       final Widget page;
       if (vm.player.isQueueOpen) {
         // A card in the page, not scrolling as a whole: its edge is not faded.
-        page = const QueueLyricsPanel(key: ValueKey('queue'));
+        page = const PlayerAccent(key: ValueKey('queue'), child: QueueLyricsPanel());
       } else if (vm.isSearchActive) {
         page = const _PageFade(key: ValueKey('search'), child: SearchResults());
       } else {
@@ -1164,6 +1164,7 @@ class _Sidebar extends StatelessWidget {
             final library = vm.library;
             Widget item(AppSection section, String label, int? count, {bool autofocus = false}) => _SidebarItem(
               selected: vm.selectedSection == section && !vm.isSearchActive && !vm.player.isQueueOpen,
+              colour: context.colors.palette.sectionColor(section),
               icon: sectionIcon(section),
               label: label,
               count: count,
@@ -1240,6 +1241,7 @@ class _GroupTitle extends StatelessWidget {
 class _SidebarItem extends StatefulWidget {
   const _SidebarItem({
     required this.selected,
+    required this.colour,
     required this.icon,
     required this.label,
     required this.count,
@@ -1249,6 +1251,9 @@ class _SidebarItem extends StatefulWidget {
   });
 
   final bool selected;
+
+  /// Its section's colour (`Palette.sectionColor`), which it takes while selected.
+  final Color colour;
   final IconData icon;
   final String label;
   final int? count;
@@ -1267,7 +1272,7 @@ class _SidebarItemState extends State<_SidebarItem> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final selected = widget.selected;
-    final color = selected ? colors.accent : colors.neutral;
+    final color = selected ? widget.colour : colors.neutral;
     const duration = Duration(milliseconds: 260);
     // The tile pops under the mouse: quick, with a small overshoot, rather than the slower fade of the rest.
     final tile = AnimatedScale(
@@ -1379,204 +1384,211 @@ class _PlayerBar extends StatelessWidget {
     final compact = width < WideLayout.compactWidth;
     // A 540 px middle, narrower when the window is (its two sides keep at least 180 px each).
     final centerWidth = math.min(540.0, math.max(300.0, width - 64 - 2 * 280));
-    return Container(
-      // The controls and the times grow with the user's font size; the bar grows with them.
-      height: 80 + MediaQuery.textScalerOf(context).scale(16),
-      margin: const EdgeInsets.symmetric(horizontal: WideLayout.gap),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: colors.palette.modal,
-        borderRadius: BorderRadius.circular(Radii.panel),
-        border: Border.all(color: colors.palette.panelBorder),
-        boxShadow: [
-          BoxShadow(color: colors.palette.shadow, blurRadius: 30, spreadRadius: -8, offset: const Offset(0, 12)),
-        ],
-      ),
-      child: ListenableBuilder(
-        listenable: player,
-        builder: (context, _) {
-          final track = player.currentTrack;
-          Widget artist(Track track) => Tooltip(
-            message: track.artist,
-            child: ArtistLinks(
-              track.artistNames,
-              hoverColor: colors.accent,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.textMuted),
-              onOpen: vm.openArtistByName,
-            ),
-          );
-          return CustomMultiChildLayout(
-            delegate: _PlayerBarLayout(),
-            children: [
-              LayoutId(
-                id: _PlayerBarSlot.track,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const _QueueCover(),
-                    const SizedBox(width: 14),
-                    Flexible(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Tooltip(
-                            message: track?.title ?? '',
-                            child: Text(
-                              player.nowPlayingTitle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: -0.1,
-                                color: colors.textMain,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          if (player.hasError)
+    // In the colour of the cover of the song, as every player is.
+    return PlayerAccent(
+      child: Container(
+        // The controls and the times grow with the user's font size; the bar grows with them.
+        height: 80 + MediaQuery.textScalerOf(context).scale(16),
+        margin: const EdgeInsets.symmetric(horizontal: WideLayout.gap),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: colors.palette.modal,
+          borderRadius: BorderRadius.circular(Radii.panel),
+          border: Border.all(color: colors.palette.panelBorder),
+          boxShadow: [
+            BoxShadow(color: colors.palette.shadow, blurRadius: 30, spreadRadius: -8, offset: const Offset(0, 12)),
+          ],
+        ),
+        child: ListenableBuilder(
+          listenable: player,
+          builder: (context, _) {
+            final track = player.currentTrack;
+            Widget artist(Track track) => Tooltip(
+              message: track.artist,
+              child: ArtistLinks(
+                track.artistNames,
+                hoverColor: colors.palette.artist,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.textMuted),
+                onOpen: vm.openArtistByName,
+              ),
+            );
+            return CustomMultiChildLayout(
+              delegate: _PlayerBarLayout(),
+              children: [
+                LayoutId(
+                  id: _PlayerBarSlot.track,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const _QueueCover(),
+                      const SizedBox(width: 14),
+                      Flexible(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Tooltip(
-                              message: player.errorMessage!,
+                              message: track?.title ?? '',
                               child: Text(
-                                player.errorMessage!,
+                                player.nowPlayingTitle,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 12, color: colors.danger),
-                              ),
-                            )
-                          else if (track == null)
-                            Text(
-                              player.nowPlayingArtist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, color: colors.textMuted),
-                            )
-                          else if (track.album.trim().isEmpty)
-                            artist(track)
-                          else
-                            _SharedLine(
-                              first: artist(track),
-                              separator: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 4),
-                                child: Text(
-                                  '•',
-                                  style: TextStyle(fontSize: 11, color: colors.textMuted.withValues(alpha: 0.6)),
-                                ),
-                              ),
-                              second: Tooltip(
-                                message: track.album,
-                                child: LinkText(
-                                  track.album,
-                                  hoverColor: colors.accent,
-                                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colors.textMuted),
-                                  onTap: () => vm.openAlbumOfTrack(track),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.1,
+                                  color: colors.textMain,
                                 ),
                               ),
                             ),
-                          if (player.isRemote) ...[const SizedBox(height: 3), const PlayingOnLabel(fontSize: 11)],
-                        ],
+                            const SizedBox(height: 3),
+                            if (player.hasError)
+                              Tooltip(
+                                message: player.errorMessage!,
+                                child: Text(
+                                  player.errorMessage!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(fontSize: 12, color: colors.danger),
+                                ),
+                              )
+                            else if (track == null)
+                              Text(
+                                player.nowPlayingArtist,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 12, color: colors.textMuted),
+                              )
+                            else if (track.album.trim().isEmpty)
+                              artist(track)
+                            else
+                              _SharedLine(
+                                first: artist(track),
+                                separator: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Text(
+                                    '•',
+                                    style: TextStyle(fontSize: 11, color: colors.textMuted.withValues(alpha: 0.6)),
+                                  ),
+                                ),
+                                second: Tooltip(
+                                  message: track.album,
+                                  child: LinkText(
+                                    track.album,
+                                    hoverColor: colors.palette.album,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: colors.textMuted,
+                                    ),
+                                    onTap: () => vm.openAlbumOfTrack(track),
+                                  ),
+                                ),
+                              ),
+                            if (player.isRemote) ...[const SizedBox(height: 3), const PlayingOnLabel(fontSize: 11)],
+                          ],
+                        ),
                       ),
-                    ),
-                    // The heart and the track's menu with the rest, as on its row and in the phone's player.
-                    if (track != null) ...[
-                      const SizedBox(width: 8),
-                      const FavoriteCurrentButton(size: 19, visualDensity: VisualDensity.compact),
-                      TrackMenu(track: track, kind: TrackTableKind.tracks, width: 40, iconSize: 19),
+                      // The heart and the track's menu with the rest, as on its row and in the phone's player.
+                      if (track != null) ...[
+                        const SizedBox(width: 8),
+                        const FavoriteCurrentButton(size: 19, visualDensity: VisualDensity.compact),
+                        TrackMenu(track: track, kind: TrackTableKind.tracks, width: 40, iconSize: 19),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              LayoutId(
-                id: _PlayerBarSlot.middle,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SizedBox(
-                    width: centerWidth,
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [TransportControls(), SizedBox(height: 2), SeekBar()],
+                LayoutId(
+                  id: _PlayerBarSlot.middle,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: SizedBox(
+                      width: centerWidth,
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [TransportControls(), SizedBox(height: 2), SeekBar()],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              LayoutId(
-                id: _PlayerBarSlot.right,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Spectrum, quality and volume, as many as fit: the volume first, then the quality tag, then the
-                    // spectrum in what is left, down to 160 px.
-                    final scale = MediaQuery.textScalerOf(context).scale(1);
-                    // The devices button (while there are other devices to reach) takes its place first.
-                    final devices = player.canReachDevices || player.isRemote;
-                    // A computer's volume is a button with its slider above it. A tablet's and a TV's own buttons set
-                    // their own volume, but not another device's: a slider in the bar for that, where it fits.
-                    final volumeButton = platform.isDesktop;
-                    final volumeSlider = !volumeButton && player.isRemote && constraints.maxWidth >= 12 + 36 + 8 + 95;
-                    final room =
-                        constraints.maxWidth -
-                        12 -
-                        (volumeButton ? 40 : 0) -
-                        (volumeSlider ? 36 + 8 + 95 : 0) -
-                        (devices ? 40 : 0) -
-                        40 -
-                        8;
-                    final showTag = !compact && track != null && room >= 125 * scale;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (!compact && platform.isDesktop)
-                            Flexible(
-                              child: LayoutBuilder(
-                                builder: (context, space) {
-                                  final width = math.min(260.0, space.maxWidth - 14);
-                                  if (width < 160) return const SizedBox.shrink();
-                                  return Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      SpectrumVisualizer(
-                                        bands: player.spectrum,
-                                        color: colors.accent,
-                                        highlight: colors.hover,
-                                        width: width,
-                                      ),
-                                      const SizedBox(width: 14),
-                                    ],
-                                  );
-                                },
+                LayoutId(
+                  id: _PlayerBarSlot.right,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Spectrum, quality and volume, as many as fit: the volume first, then the quality tag, then the
+                      // spectrum in what is left, down to 160 px.
+                      final scale = MediaQuery.textScalerOf(context).scale(1);
+                      // The devices button (while there are other devices to reach) takes its place first.
+                      final devices = player.canReachDevices || player.isRemote;
+                      // A computer's volume is a button with its slider above it. A tablet's and a TV's own buttons set
+                      // their own volume, but not another device's: a slider in the bar for that, where it fits.
+                      final volumeButton = platform.isDesktop;
+                      final volumeSlider = !volumeButton && player.isRemote && constraints.maxWidth >= 12 + 36 + 8 + 95;
+                      final room =
+                          constraints.maxWidth -
+                          12 -
+                          (volumeButton ? 40 : 0) -
+                          (volumeSlider ? 36 + 8 + 95 : 0) -
+                          (devices ? 40 : 0) -
+                          40 -
+                          8;
+                      final showTag = !compact && track != null && room >= 125 * scale;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!compact && platform.isDesktop)
+                              Flexible(
+                                child: LayoutBuilder(
+                                  builder: (context, space) {
+                                    final width = math.min(260.0, space.maxWidth - 14);
+                                    if (width < 160) return const SizedBox.shrink();
+                                    return Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SpectrumVisualizer(
+                                          bands: player.spectrum,
+                                          color: colors.accent,
+                                          highlight: colors.hover,
+                                          width: width,
+                                        ),
+                                        const SizedBox(width: 14),
+                                      ],
+                                    );
+                                  },
+                                ),
                               ),
-                            ),
-                          // The quality's tag alone, to keep the bar calm; its tooltip tells the bitrate and the BPM.
-                          if (showTag) ...[
-                            ConstrainedBox(
-                              constraints: BoxConstraints(maxWidth: room),
-                              child: QualityTag(
-                                tier: track.format.tier,
-                                spec: track.format.tagSpec,
-                                details: [
-                                  if (PlayerTags.bitrateShown(track.format))
-                                    context.trf('BitrateKbps', [track.format.bitrateKbps]),
-                                  if (track.bpm case final bpm? when bpm > 0) '$bpm BPM',
-                                ].join(' · '),
+                            // The quality's tag alone, to keep the bar calm; its tooltip tells the bitrate and the BPM.
+                            if (showTag) ...[
+                              ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: room),
+                                child: QualityTag(
+                                  tier: track.format.tier,
+                                  spec: track.format.tagSpec,
+                                  details: [
+                                    if (PlayerTags.bitrateShown(track.format))
+                                      context.trf('BitrateKbps', [track.format.bitrateKbps]),
+                                    if (track.bpm case final bpm? when bpm > 0) '$bpm BPM',
+                                  ].join(' · '),
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
+                              const SizedBox(width: 8),
+                            ],
+                            if (volumeButton) const VolumeButton(iconSize: 19, dimension: 40),
+                            const SleepTimerButton(iconSize: 19, dimension: 40),
+                            if (devices) const DevicesButton(iconSize: 19, dimension: 40),
+                            if (volumeSlider) const VolumeControl(sliderWidth: 95),
                           ],
-                          if (volumeButton) const VolumeButton(iconSize: 19, dimension: 40),
-                          const SleepTimerButton(iconSize: 19, dimension: 40),
-                          if (devices) const DevicesButton(iconSize: 19, dimension: 40),
-                          if (volumeSlider) const VolumeControl(sliderWidth: 95),
-                        ],
-                      ),
-                    );
-                  },
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

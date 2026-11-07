@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/palette.dart';
 
 /// Where covers may be requested with the sign-in token: only the Wiretune server's own address ever sees it. A cover
 /// that was downloaded (with an album, a playlist ...) comes from its copy.
@@ -183,7 +184,7 @@ class CoverImage extends StatelessWidget {
             child: LayoutBuilder(
               builder: (context, constraints) => Icon(
                 placeholderIcon,
-                color: placeholderColor ?? colors.accent.withValues(alpha: 0.8),
+                color: placeholderColor ?? _kindColour(colors.palette).withValues(alpha: 0.8),
                 size: (constraints.biggest.shortestSide.isFinite ? constraints.biggest.shortestSide : 48) * 0.42,
               ),
             ),
@@ -205,6 +206,14 @@ class CoverImage extends StatelessWidget {
         : ClipRRect(borderRadius: BorderRadius.circular(radius), child: image);
     return size == null ? clipped : SizedBox.square(dimension: size, child: clipped);
   }
+
+  /// The colour of the kind the placeholder's icon shows: an album's, an artist's, a playlist's, else a track's.
+  Color _kindColour(Palette palette) => switch (placeholderIcon) {
+    Icons.album || Icons.album_outlined => palette.album,
+    Icons.person || Icons.person_outline_rounded => palette.artist,
+    Icons.queue_music || Icons.queue_music_rounded => palette.playlist,
+    _ => palette.track,
+  };
 }
 
 class _NoPlaceholders extends InheritedWidget {

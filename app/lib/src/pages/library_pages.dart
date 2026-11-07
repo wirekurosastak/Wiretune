@@ -832,13 +832,13 @@ class AlbumDetail extends StatelessWidget {
               ),
               artworkFlight: 'album:${album.id}',
               artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
-              tags: [TagBadge(context.tr('ColAlbum'), color: colors.accent)],
+              tags: [TagBadge(context.tr('ColAlbum'), color: colors.palette.album)],
               title: album.title,
               details: [
                 ArtistLinks(
                   album.artistNames,
                   onOpen: vm.openArtistByName,
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.accent),
+                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: colors.palette.artist),
                 ),
               ],
               secondaryDetails: [
@@ -944,7 +944,7 @@ class ArtistDetail extends StatelessWidget {
               artwork: CoverImage(path: artist.picturePath, circle: true, placeholderIcon: Icons.person),
               artworkFlight: 'artist:${artist.id}',
               roundArtwork: true,
-              tags: [TagBadge(context.tr('ColArtist'), color: colors.accent)],
+              tags: [TagBadge(context.tr('ColArtist'), color: colors.palette.artist)],
               title: artist.name,
               details: [
                 DetailText(context.trf('AlbumCount', [artist.albumCount])),

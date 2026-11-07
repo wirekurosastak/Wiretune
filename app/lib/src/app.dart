@@ -15,8 +15,8 @@ import 'localization.dart';
 import 'platform.dart';
 import 'theme/app_theme.dart';
 import 'theme/palette.dart';
+import 'view_models/app_section.dart';
 import 'view_models/main_view_model.dart';
-import 'widgets/ambient.dart';
 import 'widgets/tv_focus.dart';
 
 /// The root widget: theme, language, the keyboard and remote shortcuts, the back button, and the layout for the screen.
@@ -38,11 +38,6 @@ class WiretuneApp extends StatefulWidget {
 class _WiretuneAppState extends State<WiretuneApp> {
   late final AppLifecycleListener _lifecycle;
 
-  /// The colour of the cover of the song that plays, which the accent is made of (`Palette.accentOf`): null for none,
-  /// or a grey one. It stays until the next one's has been read.
-  Color? _cover;
-  String? _coverPath;
-
   /// What back can close: the main view model's layers and tabs, the queue, and the open detail pages.
   late final Listenable _backState = Listenable.merge([
     widget.vm,
@@ -56,35 +51,19 @@ class _WiretuneAppState extends State<WiretuneApp> {
   void initState() {
     super.initState();
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(widget.vm.resume()));
-    widget.vm.player.addListener(_followCover);
-    _followCover();
   }
 
   @override
   void dispose() {
-    widget.vm.player.removeListener(_followCover);
     _lifecycle.dispose();
     super.dispose();
   }
 
-  void _followCover() {
-    final path = AmbientBackdrop.activeCoverPath(widget.vm, nowPlaying: true);
-    if (path == _coverPath) return;
-    _coverPath = path;
-    if (path == null) return _showCover(null);
-    if (CoverColor.isKnown(path)) return _showCover(CoverColor.known(path));
-    CoverColor.read(path).then((colour) {
-      if (mounted && _coverPath == path) _showCover(colour);
-    });
-  }
-
-  void _showCover(Color? colour) {
-    if (colour != _cover) setState(() => _cover = colour);
-  }
-
-  ThemeData _theme(bool light, bool isTv) => cachedTheme(
+  // In the colour of the section on show (Artists coral, Albums purple, …); the players are in their song's
+  // (`PlayerAccent`), and the cover washes the backdrop.
+  ThemeData _theme(bool light, AppSection section, bool isTv) => cachedTheme(
     light: light,
-    accent: (light ? Palette.light : Palette.dark).accentOf(_cover),
+    accent: (light ? Palette.light : Palette.dark).sectionColor(section),
     isTv: isTv,
     desktopFonts: AppPlatform.current.isDesktop,
   );
@@ -108,7 +87,7 @@ class _WiretuneAppState extends State<WiretuneApp> {
                 title: 'Wiretune',
                 debugShowCheckedModeBanner: false,
                 showPerformanceOverlay: vm.showPerformanceStats,
-                theme: _theme(light, platform.isTv),
+                theme: _theme(light, vm.selectedSection, platform.isTv),
                 themeAnimationDuration: const Duration(milliseconds: 350),
                 // A remote's arrows move between controls: a slider keeps Left and Right, not Up and Down too; a text
                 // field lets them go (TvTextFieldKeys).

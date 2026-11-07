@@ -500,9 +500,10 @@ class _TableRowState extends State<_TableRow> {
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
                           alignment: Alignment.centerLeft,
+                          // A link in its kind's colour under the mouse, an artist's and an album's.
                           child: ArtistLinks(
                             track.artistNames,
-                            hoverColor: colors.accent,
+                            hoverColor: colors.palette.artist,
                             style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: colors.textMuted),
                             onOpen: vm.openArtistByName,
                           ),
@@ -514,7 +515,7 @@ class _TableRowState extends State<_TableRow> {
                       flex: state._columns.albumFlex,
                       child: _CellLink(
                         track.album,
-                        hoverColor: colors.accent,
+                        hoverColor: colors.palette.album,
                         color: colors.textMuted,
                         onTap: () => vm.openAlbumOfTrack(track),
                       ),

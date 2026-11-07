@@ -41,103 +41,106 @@ class NowPlayingPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
-    // Only the tab: the parts below are const, so a rebuild here passes them by, and each follows the player itself.
-    return ListenableBuilder(
-      listenable: vm,
-      builder: (context, _) {
-        final tab = vm.nowPlayingTab;
-        return Material(
-          color: colors.palette.background,
-          child: Stack(
-            children: [
-              const Positioned.fill(child: AmbientBackdrop(colour: 1, nowPlaying: true)),
-              // The queue and the lyrics are read on a layer of the background's colour, so their grey text holds on a
-              // bright cover; the track's tab keeps the cover's colours at full strength.
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedOpacity(
-                    opacity: tab == NowPlayingTab.track ? 0 : 1,
-                    duration: _PlayerBody.duration,
-                    curve: Curves.easeInOutCubic,
-                    child: ColoredBox(color: colors.palette.background.withValues(alpha: 0.55)),
+    // In the colour of the cover of the song, as every player is. Only the tab: the parts below are const, so a rebuild
+    // here passes them by, and each follows the player itself.
+    return PlayerAccent(
+      child: ListenableBuilder(
+        listenable: vm,
+        builder: (context, _) {
+          final tab = vm.nowPlayingTab;
+          return Material(
+            color: colors.palette.background,
+            child: Stack(
+              children: [
+                const Positioned.fill(child: AmbientBackdrop(colour: 1, nowPlaying: true)),
+                // The queue and the lyrics are read on a layer of the background's colour, so their grey text holds on a
+                // bright cover; the track's tab keeps the cover's colours at full strength.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: tab == NowPlayingTab.track ? 0 : 1,
+                      duration: _PlayerBody.duration,
+                      curve: Curves.easeInOutCubic,
+                      child: ColoredBox(color: colors.palette.background.withValues(alpha: 0.55)),
+                    ),
                   ),
                 ),
-              ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    PlayerSheetDrag(
-                      child: SizedBox(
-                        height: 60,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Row(
-                            children: [
-                              SizedBox.square(
-                                dimension: 44,
-                                child: IconButton(
-                                  tooltip: context.tr('Close'),
-                                  onPressed: vm.closeNowPlaying,
-                                  icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
+                SafeArea(
+                  child: Column(
+                    children: [
+                      PlayerSheetDrag(
+                        child: SizedBox(
+                          height: 60,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Row(
+                              children: [
+                                SizedBox.square(
+                                  dimension: 44,
+                                  child: IconButton(
+                                    tooltip: context.tr('Close'),
+                                    onPressed: vm.closeNowPlaying,
+                                    icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
+                                  ),
                                 ),
-                              ),
-                              // As wide as the sleep timer on the other side, so the title stays centred.
-                              const SizedBox(width: 44),
-                              Expanded(
-                                child: ListenableBuilder(
-                                  listenable: vm.player,
-                                  builder: (context, _) {
-                                    if (vm.player.isRemote) return const Center(child: PlayingOnLabel(fontSize: 12));
-                                    // What the queue was played from, as Spotify and TIDAL say it; else only that it
-                                    // plays.
-                                    final from = vm.player.playingFrom;
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          context.tr(from == null ? 'NowPlaying' : 'PlayingFrom'),
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: colors.textMain.withValues(alpha: 0.75),
-                                          ),
-                                        ),
-                                        if (from != null) ...[
-                                          const SizedBox(height: 2),
+                                // As wide as the sleep timer on the other side, so the title stays centred.
+                                const SizedBox(width: 44),
+                                Expanded(
+                                  child: ListenableBuilder(
+                                    listenable: vm.player,
+                                    builder: (context, _) {
+                                      if (vm.player.isRemote) return const Center(child: PlayingOnLabel(fontSize: 12));
+                                      // What the queue was played from, as Spotify and TIDAL say it; else only that it
+                                      // plays.
+                                      final from = vm.player.playingFrom;
+                                      return Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                           Text(
-                                            from,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                            context.tr(from == null ? 'NowPlaying' : 'PlayingFrom'),
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
-                                              fontSize: 13.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: colors.textMain,
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: colors.textMain.withValues(alpha: 0.75),
                                             ),
                                           ),
+                                          if (from != null) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              from,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 13.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: colors.textMain,
+                                              ),
+                                            ),
+                                          ],
                                         ],
-                                      ],
-                                    );
-                                  },
+                                      );
+                                    },
+                                  ),
                                 ),
-                              ),
-                              const SleepTimerButton(),
-                              const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
-                            ],
+                                const SleepTimerButton(),
+                                const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    Expanded(child: _PlayerBody(tab: tab)),
-                    const _Transport(),
-                  ],
+                      Expanded(child: _PlayerBody(tab: tab)),
+                      const _Transport(),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
-      },
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -448,7 +451,11 @@ class _NowPlayingRow extends StatelessWidget {
                                   player.nowPlayingArtist,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: colors.accent),
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.palette.artist,
+                                  ),
                                 ),
                               ],
                             ),
@@ -822,14 +829,18 @@ class _TrackTab extends StatelessWidget {
                 offset: const Offset(0, -(_heartBox - _artistLine) / 2),
                 child: Row(
                   children: [
-                    // The artist in the accent, as on an album's page.
+                    // The artist in an artist's colour, as on an album's page.
                     Expanded(
                       child: track != null && track.artists.isNotEmpty
                           ? Padding(
                               padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
                               child: ArtistLinks(
                                 track.artistNames,
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: colors.palette.artist,
+                                ),
                                 onOpen: vm.openArtistByName,
                               ),
                             )
@@ -844,7 +855,11 @@ class _TrackTab extends StatelessWidget {
                                     preview?.artist ?? player.nowPlayingArtist,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: colors.palette.artist,
+                                    ),
                                   ),
                                 ),
                               ),

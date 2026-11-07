@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:material_color_utilities/material_color_utilities.dart' show Hct;
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// The colours of one theme (dark or light): neutral ones, as in TIDAL, but for the accent, which is the colour of the
-/// song that plays ([accentOf]), and the favourites' red.
+import '../view_models/app_section.dart';
+
+/// The colours of one theme (dark or light): neutral ones, as in TIDAL, each section's own ([sectionColor]), the
+/// accent while it is on show, and the players' made from the cover of the song that plays ([accentOf]).
 class Palette {
   const Palette({
     required this.isDark,
@@ -27,6 +29,10 @@ class Palette {
     required this.panelBorder,
     required this.favorite,
     required this.neutral,
+    required this.artist,
+    required this.album,
+    required this.track,
+    required this.playlist,
     required this.onAccent,
     required this.shadow,
   });
@@ -62,6 +68,21 @@ class Palette {
   /// on the light one.
   final Color neutral;
 
+  /// The colours of the kinds of things, on what marks them: their section in the navigation, their links, their
+  /// placeholders. An artist's coral (a favourite's heart is the same), an album's purple, a track's cyan, a playlist's
+  /// lime. Small marks only: what is pressed to play is neutral, and the cover's colour is the players' alone.
+  final Color artist, album, track, playlist;
+
+  /// The colour of a section: its kind's; Settings neutral.
+  Color sectionColor(AppSection section) => switch (section) {
+    AppSection.artists => artist,
+    AppSection.albums => album,
+    AppSection.tracks => track,
+    AppSection.favorites => favorite,
+    AppSection.playlists => playlist,
+    AppSection.settings => neutral,
+  };
+
   /// Text and icons on an accent-filled surface.
   final Color onAccent;
 
@@ -87,6 +108,10 @@ class Palette {
     panelBorder: Color(0x2EFFFFFF),
     favorite: Color(0xFFFB7185),
     neutral: Color(0xFFE2E8F0),
+    artist: Color(0xFFFB7185),
+    album: Color(0xFFC084FC),
+    track: Color(0xFF22D3EE),
+    playlist: Color(0xFFA3E635),
     onAccent: Color(0xFF07070B),
     shadow: Color(0x99000000),
   );
@@ -110,6 +135,10 @@ class Palette {
     panelBorder: Color(0x22000000),
     favorite: Color(0xFFE11D48),
     neutral: Color(0xFF1E293B),
+    artist: Color(0xFFE11D48),
+    album: Color(0xFF9333EA),
+    track: Color(0xFF0891B2),
+    playlist: Color(0xFF16A34A),
     onAccent: Color(0xFFFFFFFF),
     shadow: Color(0x2E1A1A33),
   );
