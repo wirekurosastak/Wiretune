@@ -308,17 +308,36 @@ class AmbientBackdrop extends StatelessWidget {
 
 /// The Albums or the Artists page, in the accent of the album or the artist it has open (the cover its backdrop shows):
 /// its Play button, its slider, the song that plays in its list. The players around it keep the colour of the song that
-/// plays, and the page takes it back when the album or the artist closes.
-class ViewedAccent extends StatefulWidget {
+/// plays, and the page takes it back when the album or the artist closes. The accent and its blend are the
+/// [ViewedAccentScope]'s, above the pages: an album opened from its artist's page (another section's) blends on from the
+/// artist's accent, not from the song's.
+class ViewedAccent extends StatelessWidget {
   const ViewedAccent({super.key, required this.child});
 
   final Widget child;
 
   @override
-  State<ViewedAccent> createState() => _ViewedAccentState();
+  Widget build(BuildContext context) {
+    Theme.of(context); // rebuilt with the app's theme
+    final viewed = context.dependOnInheritedWidgetOfExactType<_ViewedTheme>()?.data;
+    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
+    return Theme(data: viewed ?? context.findAncestorWidgetOfExactType<Theme>()!.data, child: child);
+  }
 }
 
-class _ViewedAccentState extends State<ViewedAccent> with SingleTickerProviderStateMixin {
+/// Where the open album's or artist's accent is kept, and blended over as it changes, for the [ViewedAccent] pages
+/// under it: above them, so that one page giving way to another (an artist's to its album's, a section to another)
+/// blends from the accent that was on show, and keeps it while the next cover's colour is read.
+class ViewedAccentScope extends StatefulWidget {
+  const ViewedAccentScope({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<ViewedAccentScope> createState() => _ViewedAccentScopeState();
+}
+
+class _ViewedAccentScopeState extends State<ViewedAccentScope> with SingleTickerProviderStateMixin {
   /// As the app's own theme blends (`MaterialApp.themeAnimationDuration`).
   late final AnimationController _blend = AnimationController(
     vsync: this,
@@ -357,6 +376,7 @@ class _ViewedAccentState extends State<ViewedAccent> with SingleTickerProviderSt
     _path = path;
     if (path == null) return _show(null);
     if (CoverColor.isKnown(path)) return _show((colour: CoverColor.known(path)));
+    // Until its colour is read, the accent on show stays.
     CoverColor.read(path).then((colour) {
       if (mounted && _path == path) _show((colour: colour));
     });
@@ -375,13 +395,12 @@ class _ViewedAccentState extends State<ViewedAccent> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     Theme.of(context); // rebuilt with the app's theme
-    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
     final inherited = context.findAncestorWidgetOfExactType<Theme>()!.data;
     final viewed = _viewed;
     final platform = AppPlatform.current;
     final palette = context.colors.palette;
     final target = viewed == null
-        ? inherited
+        ? null
         : cachedTheme(
             light: !palette.isDark,
             accent: palette.accentOf(viewed.colour),
@@ -389,10 +408,20 @@ class _ViewedAccentState extends State<ViewedAccent> with SingleTickerProviderSt
             desktopFonts: platform.isDesktop,
           );
     final from = _from;
-    final data = from == null || _blend.isCompleted ? target : ThemeData.lerp(from, target, _blend.value);
-    _shown = data;
-    return Theme(data: data, child: widget.child);
+    // Null while the pages have the app's own theme.
+    final data = from == null || _blend.isCompleted ? target : ThemeData.lerp(from, target ?? inherited, _blend.value);
+    _shown = data ?? inherited;
+    return _ViewedTheme(data: data, child: widget.child);
   }
+}
+
+class _ViewedTheme extends InheritedWidget {
+  const _ViewedTheme({required this.data, required super.child});
+
+  final ThemeData? data;
+
+  @override
+  bool updateShouldNotify(_ViewedTheme oldWidget) => data != oldWidget.data;
 }
 
 /// The colour of a cover, what the accent is made of (`Palette.accentOf`): read once, from the same small decoding as

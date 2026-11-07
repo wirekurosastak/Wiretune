@@ -162,7 +162,9 @@ class _WiretuneAppState extends State<WiretuneApp> {
                         ? _StartupErrorPage(message: vm.startupError!)
                         : Stack(
                             children: [
-                              const Positioned.fill(child: _PhoneUpright(child: _LayoutSwitch())),
+                              const Positioned.fill(
+                                child: _PhoneUpright(child: ViewedAccentScope(child: _LayoutSwitch())),
+                              ),
                               _NoticeHost(vm: vm),
                             ],
                           ),
