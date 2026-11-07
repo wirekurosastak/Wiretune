@@ -3928,9 +3928,8 @@ void main() {
     expect(tester.getRect(find.byType(LyricsView)).right, frame.right);
   });
 
-  testWidgets("over the queue or the lyrics the phone's player keeps Play and how far the song is in its top row", (
-    tester,
-  ) async {
+  testWidgets("over the queue or the lyrics the phone's player keeps Play and how far the song is in its top row, and "
+      'gives the title the rest', (tester) async {
     AppPlatform.forTesting(system: 'android');
     final vm = await pumpApp(tester, const Size(400, 860));
     Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
@@ -3951,12 +3950,58 @@ void main() {
         findsOneWidget,
         reason: '$tab',
       );
+      // As in the mini player: no heart or menu beside it (they are on the track's own page).
+      expect(
+        find.descendant(of: row, matching: find.byType(FavoriteCurrentButton)),
+        findsNothing,
+        reason: '$tab',
+      );
+      expect(
+        find.descendant(of: row, matching: find.byType(TrackMenu)),
+        findsNothing,
+        reason: '$tab',
+      );
     }
     expect(vm.player.isPlaying, isTrue);
     await tester.tap(play);
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
     await settle(tester);
     expect(vm.player.isPlaying, isFalse);
+  });
+
+  testWidgets("a phone's player keeps one edge for the cover, the title, the seek bar and its times", (tester) async {
+    AppPlatform.forTesting(system: 'android');
+    final vm = await pumpApp(tester, const Size(400, 860));
+    Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
+    await tester.runAsync(() async {
+      vm.player.playQueue(vm.library.tracks);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    vm.openNowPlaying();
+    await settle(tester);
+    await tester.pump(const Duration(seconds: 1)); // the cover's spring as the music plays
+    final page = named('_TrackTab');
+    final cover = tester.getRect(find.descendant(of: page, matching: find.byType(CoverImage)).first);
+    final title = tester.getRect(find.descendant(of: page, matching: find.text(vm.player.nowPlayingTitle)));
+    final slider = tester.getRect(find.byType(Slider));
+    // The times under the track (not the one over the knob while it is held).
+    final times = [
+      for (final element in find.descendant(of: find.byType(SeekBar), matching: find.byType(Text)).evaluate())
+        tester.getRect(find.byWidget(element.widget)),
+    ].where((rect) => rect.top >= slider.bottom).toList()..sort((a, b) => a.left.compareTo(b.left));
+    final elapsed = times.first;
+    expect(cover.left, 24);
+    expect(title.left, 24);
+    expect(slider.left + SeekBar.inset, 24, reason: "the track's start");
+    expect(elapsed.left, 24);
+    expect(400 - cover.right, 24);
+    expect(400 - (slider.right - SeekBar.inset), 24, reason: "the track's end");
+    expect(400 - times.last.right, 24, reason: 'the length, under the end');
+    // The heart and the menu on the artist's line, the title above them to the edge.
+    final artist = tester.getRect(find.descendant(of: page, matching: find.text(vm.player.nowPlayingArtist)));
+    final heart = tester.getRect(find.descendant(of: page, matching: find.byType(FavoriteCurrentButton)));
+    expect((heart.center.dy - artist.center.dy).abs(), lessThan(1));
+    expect(artist.top, greaterThanOrEqualTo(title.bottom));
   });
 
   testWidgets(

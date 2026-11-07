@@ -1561,6 +1561,9 @@ class PhoneChrome extends InheritedWidget {
   /// download, the menu), so a line of them is even.
   static const double controlHeight = 44;
 
+  /// The space at a phone page's sides: its title, its buttons' line and its rows' pictures stand this far in.
+  static const double edge = 16;
+
   /// A list's Play on a phone: a little larger than the buttons beside it, as in Spotify.
   static const double playSize = 48;
 

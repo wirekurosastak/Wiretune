@@ -290,8 +290,11 @@ Listenable progressOf(PlayerViewModel player) => AppPlatform.current.isMobile ? 
 class SeekBar extends StatefulWidget {
   const SeekBar({super.key, this.timesBelow = false});
 
-  /// Phone layout: the times under the slider instead of beside it.
+  /// Phone layout: the times under the slider instead of beside it, under the track's ends.
   final bool timesBelow;
+
+  /// How far the track's ends are in from the slider's sides: the slider keeps its knob's overlay room free there.
+  static const double inset = 14;
 
   @override
   State<SeekBar> createState() => _SeekBarState();
@@ -326,8 +329,7 @@ class _SeekBarState extends State<SeekBar> {
           // While the knob is held, the time it is at floats over it, where the finger doesn't cover it.
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // The track's ends: the slider keeps the overlay's radius free at each side.
-              const inset = 14.0;
+              const inset = SeekBar.inset;
               final x = inset + (constraints.maxWidth - 2 * inset) * _heldAt;
               return Stack(
                 clipBehavior: Clip.none,
@@ -386,7 +388,7 @@ class _SeekBarState extends State<SeekBar> {
             children: [
               slider,
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.symmetric(horizontal: SeekBar.inset),
                 child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [elapsed, length]),
               ),
             ],

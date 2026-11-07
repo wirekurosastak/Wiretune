@@ -21,6 +21,7 @@ import '../widgets/cover_image.dart';
 import '../widgets/devices.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/links.dart';
+import '../widgets/page_parts.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/player_sheet.dart';
 import '../widgets/spectrum_visualizer.dart';
@@ -370,8 +371,9 @@ class _BodyDrag extends InheritedWidget {
   bool updateShouldNotify(_BodyDrag oldWidget) => drag != oldWidget.drag;
 }
 
-/// The track over the queue or the lyrics: its cover small, the title and the artists, the heart and the menu. A tap on
-/// the cover or the title, or a drag down, leads back to the track's own page.
+/// The track over the queue or the lyrics, as the mini player shows it: its cover small, the title and the artists, and
+/// Play, the title given the rest of the row (the heart and the menu are on the track's own page). A tap on the cover or
+/// the title, or a drag down, leads back to the track's own page.
 class _NowPlayingRow extends StatelessWidget {
   const _NowPlayingRow({required this.coverKey, required this.coverHidden});
 
@@ -394,7 +396,7 @@ class _NowPlayingRow extends StatelessWidget {
     return PlayerSheetDrag(
       other: _BodyDrag.of(context),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 4, 16, 12),
+        padding: const EdgeInsets.fromLTRB(PhoneChrome.edge, 4, PhoneChrome.edge, 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -429,23 +431,24 @@ class _NowPlayingRow extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // A list row's sizes, as the queue's under it, the title bolder: it is the one playing.
                                 Text(
                                   player.nowPlayingTitle,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 17,
-                                    letterSpacing: -0.3,
-                                    fontWeight: FontWeight.w800,
+                                    fontSize: 16,
+                                    letterSpacing: -0.2,
+                                    fontWeight: FontWeight.w700,
                                     color: colors.textMain,
                                   ),
                                 ),
-                                const SizedBox(height: 2),
+                                const SizedBox(height: 3),
                                 Text(
                                   player.nowPlayingArtist,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colors.accent),
+                                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: colors.accent),
                                 ),
                               ],
                             ),
@@ -455,11 +458,8 @@ class _NowPlayingRow extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox.square(dimension: 44, child: FavoriteCurrentButton(size: 24)),
-                if (track != null)
-                  TrackMenu(track: track, kind: TrackTableKind.tracks, width: 40, color: colors.textMain),
                 // Over the queue or the lyrics the controls are covered: Play stays here, where the mini player has it.
-                const SizedBox(width: 6),
+                const SizedBox(width: 12),
                 const PlayButton(size: 40),
               ],
             ),
@@ -684,6 +684,13 @@ class _TrackTab extends StatelessWidget {
   /// The cover's size while the music is paused, of its size while it plays.
   static const double _pausedScale = 0.86;
 
+  /// The space at the sides of the cover, the title, the seek bar and its times: one edge, as TIDAL's and Spotify's.
+  static const double edge = 24;
+
+  /// The heart's square, and the height of the artist's line beside it (its 16 with the room to press it above and
+  /// below).
+  static const double _heartBox = 48, _artistLine = 27;
+
   /// How wide the cover is decoded: the swipe between the tracks decodes the next ones at it too.
   static const int coverDecodeWidth = 900;
 
@@ -726,21 +733,23 @@ class _TrackTab extends StatelessWidget {
       children: [
         Expanded(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
+            // The edge the title, the seek bar and its times keep too.
+            padding: const EdgeInsets.symmetric(horizontal: _TrackTab.edge),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                // The cover at its size while playing (paused, it sits back within the same room), centred above the
-                // title with at least [below] under it; a track's tags sit midway between that edge and the title,
-                // under the cover rather than on it.
+                // The cover at its size while playing (paused, it sits back within the same room), as far under the
+                // header as over the title, with at least [below] under it; a track's tags sit midway between that edge
+                // and the title, under the cover rather than on it.
                 final below = track != null ? 48.0 : 16.0;
                 final side = math.max(
                   0.0,
                   math.min(420.0, math.min(constraints.maxWidth, constraints.maxHeight - below)),
                 );
-                final spare = math.max(0.0, constraints.maxHeight - side - below);
+                final spare = math.max(0.0, constraints.maxHeight - side);
+                final under = math.max(below, spare / 2);
                 return Column(
                   children: [
-                    SizedBox(height: spare / 2),
+                    SizedBox(height: spare - under),
                     SizedBox.square(
                       dimension: side,
                       child: Builder(
@@ -786,73 +795,85 @@ class _TrackTab extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 16, 4),
-          child: Row(
+          padding: const EdgeInsets.fromLTRB(_TrackTab.edge, 0, 0, 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              // As large as TIDAL's and Spotify's, and the whole width to the edge: the heart and the menu are on the
+              // artist's line.
+              Padding(
+                padding: const EdgeInsets.only(right: _TrackTab.edge),
+                child: Text(
+                  preview?.title ?? player.nowPlayingTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 21,
+                    letterSpacing: -0.5,
+                    fontWeight: FontWeight.w800,
+                    color: colors.textMain,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              // The buttons are taller than the artist's line: lifted by what they stand over it, it stays close under
+              // the title (the room it leaves goes under it, before the seek bar).
+              Transform.translate(
+                offset: const Offset(0, -(_heartBox - _artistLine) / 2),
+                child: Row(
                   children: [
-                    Text(
-                      preview?.title ?? player.nowPlayingTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 24,
-                        letterSpacing: -0.6,
-                        fontWeight: FontWeight.w800,
-                        color: colors.textMain,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
                     // The artist in the accent, as on an album's page.
-                    if (track != null && track.artists.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                        child: ArtistLinks(
-                          track.artistNames,
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
-                          onOpen: vm.openArtistByName,
-                        ),
-                      )
-                    else
-                      InkWell(
-                        borderRadius: BorderRadius.circular(Radii.tag),
-                        onTap: track == null ? null : () => vm.openArtistByName(track.artist),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                          child: Text(
-                            preview?.artist ?? player.nowPlayingArtist,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
-                          ),
-                        ),
-                      ),
-                    if (preview == null && player.hasError)
-                      Text(player.errorMessage!, style: TextStyle(fontSize: 12, color: colors.danger)),
+                    Expanded(
+                      child: track != null && track.artists.isNotEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
+                              child: ArtistLinks(
+                                track.artistNames,
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
+                                onOpen: vm.openArtistByName,
+                              ),
+                            )
+                          : Align(
+                              alignment: Alignment.centerLeft,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(Radii.tag),
+                                onTap: track == null ? null : () => vm.openArtistByName(track.artist),
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
+                                  child: Text(
+                                    preview?.artist ?? player.nowPlayingArtist,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
+                                  ),
+                                ),
+                              ),
+                            ),
+                    ),
+                    SizedBox.square(
+                      dimension: _heartBox,
+                      child: preview == null
+                          ? const FavoriteCurrentButton(size: 28)
+                          : Center(
+                              child: HeartIcon(
+                                filled: vm.library.isFavorite(preview.id),
+                                color: vm.library.isFavorite(preview.id) ? colors.palette.favorite : colors.textMuted,
+                                size: 28,
+                              ),
+                            ),
+                    ),
+                    if (track != null)
+                      TrackMenu(track: track, kind: TrackTableKind.tracks, width: 44, color: colors.textMain),
+                    // The menu's dots (in the middle of its 44) end at the edge, as the cover and the seek bar do.
+                    const SizedBox(width: _TrackTab.edge - 20),
                   ],
                 ),
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox.square(
-                    dimension: 48,
-                    child: preview == null
-                        ? const FavoriteCurrentButton(size: 28)
-                        : Center(
-                            child: HeartIcon(
-                              filled: vm.library.isFavorite(preview.id),
-                              color: vm.library.isFavorite(preview.id) ? colors.palette.favorite : colors.textMuted,
-                              size: 28,
-                            ),
-                          ),
-                  ),
-                  if (track != null)
-                    TrackMenu(track: track, kind: TrackTableKind.tracks, width: 44, color: colors.textMain),
-                ],
-              ),
+              if (preview == null && player.hasError)
+                Padding(
+                  padding: const EdgeInsets.only(right: _TrackTab.edge),
+                  child: Text(player.errorMessage!, style: TextStyle(fontSize: 12, color: colors.danger)),
+                ),
             ],
           ),
         ),
@@ -878,7 +899,7 @@ class _QueueTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 8, 4),
+          padding: const EdgeInsets.fromLTRB(PhoneChrome.edge, 0, 8, 4),
           child: Row(
             children: [
               // How many are still to come, as the list below holds: the tab above already says it is the queue.
@@ -908,7 +929,10 @@ class _QueueTab extends StatelessWidget {
             ],
           ),
         ),
-        const Expanded(child: QueueList(padding: EdgeInsets.fromLTRB(8, 0, 8, 12), opensAtNext: true)),
+        // The rows' covers under the playing track's, 16 from the edge (a row keeps 10 inside it).
+        const Expanded(
+          child: QueueList(padding: EdgeInsets.fromLTRB(PhoneChrome.edge - 10, 0, 6, 12), opensAtNext: true),
+        ),
       ],
     );
   }
@@ -980,8 +1004,11 @@ class _Transport extends StatelessWidget {
       return mode(data, tip, open, () => vm.nowPlayingTab = open ? NowPlayingTab.track : tab);
     }
 
+    // The seek bar's track and times at the page's edge, under the title (the slider keeps its ends in from its sides);
+    // the buttons further in.
+    const buttons = EdgeInsets.symmetric(horizontal: 20 - (_TrackTab.edge - SeekBar.inset));
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+      padding: const EdgeInsets.fromLTRB(_TrackTab.edge - SeekBar.inset, 0, _TrackTab.edge - SeekBar.inset, 6),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1004,22 +1031,25 @@ class _Transport extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const SeekBar(timesBelow: true),
-                SizedBox(
-                  height: 84,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      mode(Icons.shuffle_rounded, shuffleTip(player), player.isShuffle, player.toggleShuffle),
-                      icon(Icons.skip_previous_rounded, 'TipPrevious', player.previousTrack),
-                      const PlayButton(size: 70),
-                      icon(Icons.skip_next_rounded, 'TipNext', player.nextTrack),
-                      mode(
-                        repeatIcon(player),
-                        repeatTip(player),
-                        player.repeatMode != RepeatMode.off,
-                        player.toggleRepeat,
-                      ),
-                    ],
+                Padding(
+                  padding: buttons,
+                  child: SizedBox(
+                    height: 84,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        mode(Icons.shuffle_rounded, shuffleTip(player), player.isShuffle, player.toggleShuffle),
+                        icon(Icons.skip_previous_rounded, 'TipPrevious', player.previousTrack),
+                        const PlayButton(size: 70),
+                        icon(Icons.skip_next_rounded, 'TipNext', player.nextTrack),
+                        mode(
+                          repeatIcon(player),
+                          repeatTip(player),
+                          player.repeatMode != RepeatMode.off,
+                          player.toggleRepeat,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1028,19 +1058,22 @@ class _Transport extends StatelessWidget {
           // The two under shuffle and repeat (the transport's row shares its room out evenly around its five buttons), and
           // between them the spectrum, as the computer's player bar has it; while another device plays, whose music isn't
           // analysed here, that device's volume, which the phone's own buttons don't reach.
-          LayoutBuilder(
-            builder: (context, box) {
-              final side = math.max(0.0, (box.maxWidth - 52 * 4 - 70) / 6);
-              return Row(
-                children: [
-                  SizedBox(width: side),
-                  list(Icons.lyrics_outlined, 'TabLyrics', NowPlayingTab.lyrics),
-                  Expanded(child: player.isRemote ? const VolumeControl.fill() : const _PlayerSpectrum()),
-                  list(Icons.playlist_play_rounded, 'Queue', NowPlayingTab.queue),
-                  SizedBox(width: side),
-                ],
-              );
-            },
+          Padding(
+            padding: buttons,
+            child: LayoutBuilder(
+              builder: (context, box) {
+                final side = math.max(0.0, (box.maxWidth - 52 * 4 - 70) / 6);
+                return Row(
+                  children: [
+                    SizedBox(width: side),
+                    list(Icons.lyrics_outlined, 'TabLyrics', NowPlayingTab.lyrics),
+                    Expanded(child: player.isRemote ? const VolumeControl.fill() : const _PlayerSpectrum()),
+                    list(Icons.playlist_play_rounded, 'Queue', NowPlayingTab.queue),
+                    SizedBox(width: side),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
