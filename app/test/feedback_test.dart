@@ -71,6 +71,40 @@ void main() {
     }
   });
 
+  testWidgets('a notice is thrown away with a swipe up or sideways, as a phone notification is', (tester) async {
+    for (final size in [wide, phone]) {
+      final vm = createMainViewModel(await library(tester));
+      await showApp(tester, vm, size);
+      var undone = false;
+      for (final throw_ in const [Offset(0, -300), Offset(-300, 0), Offset(300, 0)]) {
+        vm.showNotice('Added.', undo: () => undone = true);
+        await settle(tester);
+        expect(find.text('Added.'), findsOneWidget, reason: '$size');
+        await tester.fling(find.text('Added.'), throw_, 1000);
+        await tester.pump(const Duration(seconds: 1));
+        await settle(tester);
+        expect(find.text('Added.'), findsNothing, reason: '$size, $throw_');
+      }
+      expect(undone, isFalse, reason: 'thrown away, not undone');
+
+      // It fades as it goes; a short swipe lets it come back, whole.
+      vm.showNotice('Added.');
+      await settle(tester);
+      double opacity() =>
+          tester.widget<Opacity>(find.ancestor(of: find.text('Added.'), matching: find.byType(Opacity)).first).opacity;
+      final finger = await tester.startGesture(tester.getCenter(find.text('Added.')));
+      await finger.moveBy(const Offset(-30, 0));
+      await finger.moveBy(const Offset(-60, 0));
+      await tester.pump();
+      expect(opacity(), lessThan(1), reason: '$size');
+      await finger.up();
+      await settle(tester);
+      expect(find.text('Added.'), findsOneWidget, reason: '$size');
+      expect(opacity(), 1, reason: '$size');
+      vm.dispose();
+    }
+  });
+
   testWidgets("a change the server's data can't take while it is out of reach says why", (tester) async {
     final lib = await library(tester, [serverTrack]);
     final vm = createMainViewModel(lib);
