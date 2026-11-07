@@ -2375,69 +2375,7 @@ void main() {
     expect(slider, findsNothing);
   });
 
-  testWidgets("an album opened from its artist's page blends on from the artist's accent, never through the song's", (
-    tester,
-  ) async {
-    AppPlatform.forTesting(system: 'android');
-    final colours = {'red': const Color(0xFFFF0000), 'blue': const Color(0xFF0000FF), 'green': const Color(0xFF00FF00)};
-    final vm = await pumpApp(tester, const Size(400, 860), () async {
-      Future<String> cover(String name) async {
-        final recorder = ui.PictureRecorder();
-        Canvas(recorder).drawColor(colours[name]!, BlendMode.src);
-        final image = await recorder.endRecording().toImage(8, 8);
-        final png = await image.toByteData(format: ui.ImageByteFormat.png);
-        return (File(
-          '${Directory.systemTemp.createTempSync('wiretune_accent_').path}/$name.png',
-        )..writeAsBytesSync(png!.buffer.asUint8List())).path;
-      }
-
-      // A red song plays; an artist has a blue album and a green one.
-      final library = createLibrary([
-        TestSupport.makeTrack('1', 'So What', artist: 'Miles', album: 'red')..coverArtPath = await cover('red'),
-        TestSupport.makeTrack('2', 'Naima', artist: 'Trane', album: 'blue')..coverArtPath = await cover('blue'),
-        TestSupport.makeTrack('3', 'Giant Steps', artist: 'Trane', album: 'green')..coverArtPath = await cover('green'),
-      ]);
-      library.initialize();
-      return createMainViewModel(library);
-    });
-    final palette = tester.element(find.byType(PhoneLayout)).colors.palette;
-    vm.player.playQueue([vm.library.getTrack('1')!]);
-    await loadCovers(tester, washOf(find.byType(PhoneLayout)));
-    final song = palette.accentOf(colours['red']);
-
-    // The artist's page in the colour of its first album's cover (it has no picture of its own).
-    final artist = vm.library.artists.firstWhere((artist) => artist.name == 'Trane');
-    final artistColour = palette.accentOf(colours[artist.albums.first.title]);
-    final other = artist.albums.firstWhere((album) => album != artist.albums.first);
-    final albumColour = palette.accentOf(colours[other.title]);
-    vm.openArtist(artist);
-    for (var i = 0; i < 40 && tester.element(find.byType(ArtistsPage)).colors.accent != artistColour; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-    expect(tester.element(find.byType(ArtistsPage)).colors.accent, artistColour);
-
-    // Its other album, in the Albums section: from the artist's colour to the album's, at every frame.
-    vm.openAlbum(other);
-    final shown = <Color>[];
-    for (var i = 0; i < 40; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 16));
-      shown.add(tester.element(find.byType(AlbumsPage)).colors.accent);
-    }
-    expect(shown.last, albumColour);
-    for (final colour in shown) {
-      expect(colour, isNot(song));
-      expect(
-        colour.r,
-        lessThanOrEqualTo(math.max(artistColour.r, albumColour.r) + 0.01),
-        reason: "the song's red: $colour",
-      );
-    }
-    await tester.pump(const Duration(seconds: 2));
-  });
-
-  testWidgets("the accent is the colour of the song that plays; an open album's page has its own; a favourite is red", (
+  testWidgets("the accent is the colour of the song that plays, on every page, an album's too; a favourite is red", (
     tester,
   ) async {
     AppPlatform.forTesting(system: 'android');
@@ -2483,29 +2421,12 @@ void main() {
     final red = palette.accentOf(const Color(0xFFFF0000));
     expect(playColor(find.byType(PhoneLayout)), red, reason: "the mini player's");
 
+    // An album's page has the song's colour too, whatever its own cover's: browsing doesn't recolour the app.
     final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
-    // Until the page's accent is [colour]: its cover read, then the blend into it.
-    Future<void> pageTurns(Color colour) async {
-      for (var i = 0; i < 40 && tester.element(pagePlay).colors.accent != colour; i++) {
-        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-        await tester.pump(const Duration(milliseconds: 50));
-      }
-    }
-
     vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
     await loadCovers(tester, find.byType(ListPlayButton));
-    final blue = palette.accentOf(const Color(0xFF0000FF));
-    await pageTurns(blue);
-    expect(tester.element(pagePlay).colors.accent, blue, reason: "the blue album's Play");
+    expect(tester.element(pagePlay).colors.accent, red, reason: "the blue album's Play");
     expect(playColor(find.byType(PhoneLayout)), red, reason: 'the mini player, over the blue album');
-
-    vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Red'));
-    await pageTurns(red);
-    expect(tester.element(pagePlay).colors.accent, red, reason: "the red album's Play");
-    vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
-    await tester.pump(); // the blend's first frame
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(tester.element(pagePlay).colors.accent, blue, reason: 'its colour known, the blue album has it again');
 
     vm.openNowPlaying();
     await loadCovers(tester, washOf(find.byType(NowPlayingPage)));
