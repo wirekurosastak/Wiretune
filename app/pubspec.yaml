@@ -17,6 +17,8 @@ dependencies:
   dbus: ^0.7.15
   file_picker: ^13.1.0
   http: ^1.6.0
+  # Google's colour science (Material You's), which Flutter itself is built on: the version is the SDK's.
+  material_color_utilities: any
   media_kit: ^1.2.6
   media_kit_libs_audio: ^1.0.7
   path: ^1.9.1

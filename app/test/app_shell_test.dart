@@ -2516,44 +2516,55 @@ void main() {
     expect(tester.widget<HeartIcon>(heart).color, palette.favorite);
   });
 
-  test("a cover's colour is the hue most of its colourful pixels share; a grey one or a speck of colour has none", () {
-    // [counts] pixels of each colour, as a decoded cover's.
-    ByteData cover(Map<(int, int, int), int> counts) {
-      final colours = [
-        for (final MapEntry(key: (r, g, b), :value) in counts.entries)
-          for (var i = 0; i < value; i++) (r << 24) | (g << 16) | (b << 8) | 0xFF,
-      ];
-      final bytes = ByteData(colours.length * 4);
-      for (final (i, rgba) in colours.indexed) {
-        bytes.setUint32(i * 4, rgba);
+  test(
+    "a cover's colour is the one most of it has that is a colour, not a tinted grey or the dark; a grey one or a speck of colour has none",
+    () async {
+      // [counts] pixels of each colour, as a decoded cover's.
+      ByteData cover(Map<(int, int, int), int> counts) {
+        final colours = [
+          for (final MapEntry(key: (r, g, b), :value) in counts.entries)
+            for (var i = 0; i < value; i++) (r << 24) | (g << 16) | (b << 8) | 0xFF,
+        ];
+        final bytes = ByteData(colours.length * 4);
+        for (final (i, rgba) in colours.indexed) {
+          bytes.setUint32(i * 4, rgba);
+        }
+        return bytes;
       }
-      return bytes;
-    }
 
-    // Mostly red with some blue: red, not the purple of the average.
-    final mostlyRed = CoverColor.of(cover({(220, 20, 30): 60, (20, 40, 200): 30, (128, 128, 128): 10}))!;
-    expect(HSLColor.fromColor(mostlyRed).hue, anyOf(lessThan(10), greaterThan(350)));
-    expect(CoverColor.of(cover({(120, 120, 124): 90, (40, 40, 40): 10})), isNull);
-    expect(CoverColor.of(cover({(128, 128, 128): 99, (255, 0, 0): 1})), isNull);
+      // Mostly red with some blue: red, not the purple of the average.
+      final mostlyRed = (await CoverColor.of(cover({(220, 20, 30): 60, (20, 40, 200): 30, (128, 128, 128): 10})))!;
+      expect(HSLColor.fromColor(mostlyRed).hue, anyOf(lessThan(10), greaterThan(350)));
+      expect(await CoverColor.of(cover({(120, 120, 124): 90, (40, 40, 40): 10})), isNull);
+      expect(await CoverColor.of(cover({(128, 128, 128): 99, (255, 0, 0): 1})), isNull);
+      // A dark cover of a clear colour keeps it; a black one, whatever its noise, has none; a tinted grey is grey.
+      final darkRed = (await CoverColor.of(cover({(110, 20, 30): 70, (10, 10, 10): 30})))!;
+      expect(HSLColor.fromColor(darkRed).hue, anyOf(lessThan(10), greaterThan(350)));
+      expect(await CoverColor.of(cover({(14, 6, 9): 50, (6, 14, 8): 50})), isNull);
+      expect(await CoverColor.of(cover({(130, 124, 120): 100})), isNull);
+      // Its own colour, not one drawn from the dark: a red tent on a dark teal-tinted night is red.
+      final tent = (await CoverColor.of(cover({(200, 40, 40): 20, (240, 240, 240): 20, (12, 26, 30): 60})))!;
+      expect(HSLColor.fromColor(tent).hue, anyOf(lessThan(15), greaterThan(345)));
 
-    // None (nothing plays, or its cover is grey): the neutral.
-    expect(Palette.dark.accentOf(null), Palette.dark.neutral);
-    // Every hue readable: light enough on the dark theme, deep enough on the light one (to the 8-bit channels).
-    for (final hue in [0.0, 60, 120, 180, 240, 300]) {
-      final source = HSLColor.fromAHSL(1, hue.toDouble(), 0.8, 0.5).toColor();
-      expect(Palette.dark.accentOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: 'dark, $hue');
-      if (hue == 60) continue; // a yellow: the light theme has the neutral, below
-      expect(Palette.light.accentOf(source).computeLuminance(), inInclusiveRange(0.06, 0.19), reason: 'light, $hue');
-    }
-    // A yellow deep enough to read on white is olive: the light theme has the neutral instead; the dark keeps it.
-    for (final hue in [40.0, 50.0, 60.0, 69.0]) {
-      final source = HSLColor.fromAHSL(1, hue, 0.8, 0.5).toColor();
-      expect(Palette.light.accentOf(source), Palette.light.neutral, reason: 'light, $hue');
-      expect(Palette.dark.accentOf(source), isNot(Palette.dark.neutral), reason: 'dark, $hue');
-    }
-    final orange = HSLColor.fromAHSL(1, 30, 0.8, 0.5).toColor();
-    expect(Palette.light.accentOf(orange), isNot(Palette.light.neutral), reason: 'an orange stays');
-  });
+      // None (nothing plays, or its cover is grey): the neutral.
+      expect(Palette.dark.accentOf(null), Palette.dark.neutral);
+      // Every hue readable: light enough on the dark theme, deep enough on the light one (to the 8-bit channels).
+      for (final hue in [0.0, 60, 120, 180, 240, 300]) {
+        final source = HSLColor.fromAHSL(1, hue.toDouble(), 0.8, 0.5).toColor();
+        expect(Palette.dark.accentOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: 'dark, $hue');
+        if (hue == 60) continue; // a yellow: the light theme has the neutral, below
+        expect(Palette.light.accentOf(source).computeLuminance(), inInclusiveRange(0.06, 0.19), reason: 'light, $hue');
+      }
+      // A yellow deep enough to read on white is olive: the light theme has the neutral instead; the dark keeps it.
+      for (final hue in [40.0, 50.0, 60.0, 69.0]) {
+        final source = HSLColor.fromAHSL(1, hue, 0.8, 0.5).toColor();
+        expect(Palette.light.accentOf(source), Palette.light.neutral, reason: 'light, $hue');
+        expect(Palette.dark.accentOf(source), isNot(Palette.dark.neutral), reason: 'dark, $hue');
+      }
+      final orange = HSLColor.fromAHSL(1, 30, 0.8, 0.5).toColor();
+      expect(Palette.light.accentOf(orange), isNot(Palette.light.neutral), reason: 'an orange stays');
+    },
+  );
 
   test("a TV's focus is in the neutral colour whatever plays; a computer's keyboard focus is in the accent", () {
     const red = Color(0xFFE53935);

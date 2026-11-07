@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/material_color_utilities.dart' show Hct;
 import 'package:wiretune_core/wiretune_core.dart';
 
 /// The colours of one theme (dark or light): neutral ones, as in TIDAL, but for the accent, which is the colour of the
@@ -114,30 +115,20 @@ class Palette {
   );
 
   /// The accent for the colour of the cover of what plays (`CoverColor.of`; null for none, or a grey one: the
-  /// [neutral]): vivid, light on the dark theme and deep on the light one, and kept within the luminance at which text
-  /// in it and [onAccent] on it read, whatever its hue. Within that a hue keeps its own brightness: a red stays red
-  /// rather than pink, a yellow yellow. On the light theme a yellow (a gold, a khaki) deep enough to read on white is
-  /// olive, so there it is the [neutral].
+  /// [neutral]): its hue, about as colourful as the cover is (a muted cover a muted accent, a loud one not a neon one),
+  /// at the lightness the eye sees as light on the dark theme and deep on the light one, whatever the hue, so that text
+  /// in it and [onAccent] on it read (Material's tone). On the light theme a yellow (a gold, a khaki) deep enough to
+  /// read on white is olive, so there it is the [neutral].
   Color accentOf(Color? cover) {
     if (cover == null) return neutral;
-    final hsl = HSLColor.fromColor(cover);
-    if (!isDark && hsl.hue >= 40 && hsl.hue < 70) return neutral;
-    final colour = hsl.withSaturation((hsl.saturation * 1.3).clamp(0.5, 0.9)).withLightness(isDark ? 0.6 : 0.42);
-    final (least, most) = isDark ? (0.28, 0.6) : (0.07, 0.18);
-    final luminance = colour.toColor().computeLuminance();
-    if (luminance >= least && luminance <= most) return colour.toColor();
-    final target = luminance < least ? least : most;
-    var low = 0.0, high = 1.0;
-    for (var i = 0; i < 14; i++) {
-      final mid = (low + high) / 2;
-      if (colour.withLightness(mid).toColor().computeLuminance() < target) {
-        low = mid;
-      } else {
-        high = mid;
-      }
-    }
-    return colour.withLightness((low + high) / 2).toColor();
+    final hue = HSLColor.fromColor(cover).hue;
+    if (!isDark && hue >= 40 && hue < 70) return neutral;
+    final hct = Hct.fromInt(cover.toARGB32());
+    return Color(Hct.from(hct.hue, hct.chroma.clamp(_leastChroma, _mostChroma), isDark ? 72 : 40).toInt());
   }
+
+  /// How colourful an accent is at least (clearly a colour, not a grey) and at most (not a neon).
+  static const double _leastChroma = 24, _mostChroma = 60;
 
   /// [accent] under the mouse: a little lighter.
   Color hoverOf(Color accent) => _lighter(accent, isDark ? 0.1 : 0.06);

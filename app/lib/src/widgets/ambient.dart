@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:material_color_utilities/material_color_utilities.dart' show Hct, QuantizerCelebi, Score;
 
 import '../app_scope.dart';
 import '../platform.dart';
@@ -450,7 +451,7 @@ abstract final class CoverColor {
             if (done.isCompleted) return info.dispose();
             info.image
                 .toByteData()
-                .then((rgba) => done.complete(rgba == null ? null : of(rgba)))
+                .then((rgba) async => done.complete(rgba == null ? null : await of(rgba)))
                 .catchError((Object _) => done.complete(null))
                 .whenComplete(info.dispose);
           },
@@ -470,45 +471,36 @@ abstract final class CoverColor {
     }();
   }
 
-  /// The colour of a cover from its pixels ([rgba], four bytes each): the hue most of its colourful pixels share (the
-  /// more colourful a pixel, the more it counts), as their average, rather than the average of all (a brown or a
-  /// grey). Null for a grey cover, or one whose colour is only a speck.
-  static Color? of(ByteData rgba) {
-    const bins = 36;
-    // Per hue: how much colour there is, and how much the vivid pixels count (the square of it).
-    final amount = List<double>.filled(bins, 0), weight = List<double>.filled(bins, 0);
-    final red = List<double>.filled(bins, 0), green = List<double>.filled(bins, 0), blue = List<double>.filled(bins, 0);
-    var pixels = 0;
+  /// The colour of a cover from its pixels ([rgba], four bytes each), as Android takes a wallpaper's (Material You):
+  /// its colours grouped, those near black left out (their tint is the file's noise or a vignette), and of the rest
+  /// the one scored first (the most of the cover, the more colourful the better) that is a colour rather than a tinted
+  /// grey. Null for a grey cover, or one whose colour is only a speck.
+  static Future<Color?> of(ByteData rgba) async {
+    final pixels = <int>[];
     for (var i = 0; i + 3 < rgba.lengthInBytes; i += 4) {
       if (rgba.getUint8(i + 3) < 128) continue;
-      pixels++;
-      final r = rgba.getUint8(i) / 255, g = rgba.getUint8(i + 1) / 255, b = rgba.getUint8(i + 2) / 255;
-      final high = math.max(r, math.max(g, b));
-      final chroma = high - math.min(r, math.min(g, b));
-      if (chroma < 0.1) continue;
-      // The hue, 0 to 6 round the colour wheel.
-      final hue = high == r ? ((g - b) / chroma) % 6 : (high == g ? (b - r) / chroma + 2 : (r - g) / chroma + 4);
-      final bin = (hue / 6 * bins).floor() % bins;
-      final w = chroma * chroma;
-      amount[bin] += chroma;
-      weight[bin] += w;
-      red[bin] += r * w;
-      green[bin] += g * w;
-      blue[bin] += b * w;
+      pixels.add(0xFF000000 | rgba.getUint8(i) << 16 | rgba.getUint8(i + 1) << 8 | rgba.getUint8(i + 2));
     }
-    double around(List<double> of, int bin) => of[(bin + bins - 1) % bins] + of[bin] + of[(bin + 1) % bins];
-    var best = 0;
-    for (var bin = 1; bin < bins; bin++) {
-      if (around(weight, bin) > around(weight, best)) best = bin;
-    }
-    // Less colour than a tenth of the cover at a middling chroma, or a thirtieth of it in full colour: a grey cover.
-    if (pixels == 0 || around(amount, best) / pixels < 0.03) return null;
-    final total = around(weight, best);
-    return Color.from(
-      alpha: 1,
-      red: around(red, best) / total,
-      green: around(green, best) / total,
-      blue: around(blue, best) / total,
-    );
+    if (pixels.isEmpty) return null;
+    final groups = await QuantizerCelebi().quantize(pixels, 128);
+    final lit = {
+      for (final MapEntry(:key, :value) in groups.colorToCount.entries)
+        if (Hct.fromInt(key).tone >= _leastTone) key: value,
+    };
+    if (lit.isEmpty) return null;
+    // The scorer's fallback when nothing passes, which no cover's colour is.
+    const none = 0x00000000;
+    final best = Score.score(
+      lit,
+      desired: 4,
+      fallbackColorARGB: none,
+    ).where((colour) => colour != none && Hct.fromInt(colour).chroma >= _leastChroma).firstOrNull;
+    return best == null ? null : Color(best);
   }
+
+  /// Darker than this a colour group is near black (Material's tone, 0 black to 100 white).
+  static const double _leastTone = 20;
+
+  /// Less colourful than this a colour group is a tinted grey (Material's chroma).
+  static const double _leastChroma = 20;
 }
