@@ -99,8 +99,10 @@ class TracksPage extends StatelessWidget {
             title: context.tr('NavTracks'),
             subtitle: '${context.trf('TrackCount', [page.tracks.length])}  •  ${page.totalDuration}',
             actions: [
-              if (PhoneChrome.isPhone(context)) TrackSortButtons(page), // a wide table sorts by its headers
-              if (page.genres.isNotEmpty)
+              // A wide table sorts by its headers; a phone's pill holds the genre too.
+              if (PhoneChrome.isPhone(context))
+                TrackSortButtons(page, genre: (genres: page.genres, selected: page.genre, onSelected: page.setGenre))
+              else if (page.genres.isNotEmpty)
                 _GenreFilter(genres: page.genres, selected: page.genre, onSelected: page.setGenre),
               PlayShuffleButtons(tracks: page.tracks, onPlay: page.playAll),
             ],
@@ -141,8 +143,13 @@ class FavoritesPage extends StatelessWidget {
             title: context.tr('NavFavorites'),
             subtitle: '${context.trf('TrackCount', [favorites.tracks.length])}  •  ${favorites.totalDuration}',
             actions: [
-              if (phone) TrackSortButtons(favorites), // a wide table sorts by its headers
-              if (favorites.genres.isNotEmpty)
+              // A wide table sorts by its headers; a phone's pill holds the genre too.
+              if (phone)
+                TrackSortButtons(
+                  favorites,
+                  genre: (genres: favorites.genres, selected: favorites.genre, onSelected: favorites.setGenre),
+                )
+              else if (favorites.genres.isNotEmpty)
                 _GenreFilter(genres: favorites.genres, selected: favorites.genre, onSelected: favorites.setGenre),
               PlayShuffleButtons(
                 tracks: favorites.tracks,
@@ -540,25 +547,36 @@ class DetailText extends StatelessWidget {
   );
 }
 
+/// A list page's genre filter: the genres there are, the one chosen (null for all of them), and what choosing does.
+typedef GenreChoice = ({List<String> genres, String? selected, ValueChanged<String?> onSelected});
+
 /// The sort buttons of a list page ("Sort by: ABC ↑ | Released") as one segmented pill; the active segment is filled with
-/// the accent.
+/// the accent. On a phone one pill holds the sort and the [genre] filter together ("ABC ↑ · Jazz"), opening one sheet
+/// with both, so the line keeps room for Play and the rest; a wider screen has the genre's own button beside these.
 class SortButtons extends StatelessWidget {
-  const SortButtons({super.key, required this.buttons});
+  const SortButtons({super.key, required this.buttons, this.genre});
 
   final List<(String label, bool selected, VoidCallback onTap)> buttons;
+
+  /// The genre filter a phone's pill holds too; null, or no genres, for none.
+  final GenreChoice? genre;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     if (PhoneChrome.isPhone(context)) {
-      // The active field with its direction, as on every other sort control.
+      // The active field with its direction, as on every other sort control; then the chosen genre.
       final active = buttons.firstWhere((b) => b.$2, orElse: () => buttons.first);
+      final genre = this.genre;
+      final genres = genre?.genres ?? const <String>[];
+      final chosenGenre = genre?.selected;
+      final style = TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.accent);
       return SizedBox(
         width: double.infinity,
         height: PhoneChrome.controlHeight,
         // The label is the order alone ("ABC ↑"): the tooltip, and a screen reader, say what the button is.
         child: Tooltip(
-          message: context.tr('TipSortBy'),
+          message: context.tr(genres.isEmpty ? 'TipSortBy' : 'TipSortAndGenre'),
           child: OutlinedButton(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -567,25 +585,45 @@ class SortButtons extends StatelessWidget {
               shape: const StadiumBorder(),
             ),
             onPressed: () async {
-              final chosen = await showChoiceSheet<int>(
+              // A sort's number or a genre's name ('' for all of them).
+              final chosen = await showChoiceSections<Object>(
                 context,
-                title: context.tr('SortBy'),
-                choices: [
-                  for (final (i, (label, selected, _)) in buttons.indexed) SheetChoice(i, label, selected: selected),
+                sections: [
+                  (
+                    title: context.tr('SortBy'),
+                    choices: [
+                      for (final (i, (label, selected, _)) in buttons.indexed)
+                        SheetChoice<Object>(i, label, selected: selected),
+                    ],
+                  ),
+                  if (genres.isNotEmpty)
+                    (
+                      title: context.tr('Genre'),
+                      choices: [
+                        SheetChoice<Object>('', context.tr('AllGenres'), selected: chosenGenre == null),
+                        for (final g in genres) SheetChoice<Object>(g, g, selected: equalsIgnoreCase(g, chosenGenre)),
+                      ],
+                    ),
                 ],
               );
-              if (chosen != null) buttons[chosen].$3();
+              switch (chosen) {
+                case final int sort:
+                  buttons[sort].$3();
+                case final String name:
+                  genre?.onSelected(name.isEmpty ? null : name);
+              }
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Flexible(
-                  child: SortLabel(
-                    active.$1,
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.accent),
+                Flexible(child: SortLabel(active.$1, style: style)),
+                if (chosenGenre != null) ...[
+                  Text('  ·  ', style: style.copyWith(color: colors.textMuted)),
+                  Flexible(
+                    child: Text(chosenGenre, maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -654,14 +692,18 @@ class SortButtons extends StatelessWidget {
 
 /// The sort buttons of a list of tracks on a phone (a wide table sorts by its headers).
 class TrackSortButtons extends StatelessWidget {
-  const TrackSortButtons(this.sorting, {super.key});
+  const TrackSortButtons(this.sorting, {super.key, this.genre});
 
   final TrackSorting sorting;
+
+  /// The genre filter the phone's pill holds too ([SortButtons.genre]).
+  final GenreChoice? genre;
 
   @override
   Widget build(BuildContext context) {
     context.tr('SortBy'); // the labels follow the language
     return SortButtons(
+      genre: genre,
       buttons: [
         for (final field in TrackSortField.values)
           (sorting.sortLabel(field), sorting.sortField == field, () => sorting.setSortField(field)),
@@ -670,8 +712,8 @@ class TrackSortButtons extends StatelessWidget {
   }
 }
 
-/// The genre filter of a list page: a pill naming the chosen genre (or "All genres"), opening a menu of the library's
-/// genres.
+/// The genre filter of a computer's list page: a pill naming the chosen genre (or "All genres"), opening a menu of the
+/// page's genres, the chosen one in the accent. A phone's sort pill holds it instead ([SortButtons.genre]).
 class _GenreFilter extends StatelessWidget {
   const _GenreFilter({required this.genres, required this.selected, required this.onSelected});
 
@@ -684,84 +726,43 @@ class _GenreFilter extends StatelessWidget {
     final colors = context.colors;
     final active = selected != null;
     final color = active ? colors.accent : colors.textMuted;
-    final phone = PhoneChrome.isPhone(context);
-    // Where a phone's line leaves it too little room for "All genres" (beside the sort, Play and shuffle), it shows its
-    // icon alone until a genre is chosen.
-    final pill = LayoutBuilder(
-      builder: (context, constraints) {
-        final iconOnly = !active && constraints.maxWidth < 130;
-        return Container(
-          height: phone ? PhoneChrome.controlHeight : 38,
-          // Centred, as the sort pill's, where a phone's line stretches it; elsewhere as wide as what it says.
-          alignment: phone ? Alignment.center : null,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
-            borderRadius: BorderRadius.circular(Radii.pill),
-            border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.filter_list_rounded, size: 16, color: color),
-              if (!iconOnly) ...[
-                const SizedBox(width: 6),
-                // A long genre is cut short, also where the phone's header leaves the pill less than its 180 px.
-                Flexible(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 180),
-                    child: Text(
-                      selected ?? context.tr('AllGenres'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: active ? colors.accent : colors.textMain,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(width: 2),
-              Icon(Icons.expand_more_rounded, size: 18, color: color),
-            ],
-          ),
-        );
-      },
-    );
-    // The menu's "all" entry has the empty string as its value: a null reads as "closed without a choice".
-    void choose(String? value) {
-      if (value != null) onSelected(value.isEmpty ? null : value);
-    }
-
-    // A phone's opens as a sheet, as the sort beside it does.
-    if (phone) {
-      return Tooltip(
-        message: context.tr('TipGenreFilter'),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            customBorder: const StadiumBorder(),
-            onTap: () async => choose(
-              await showChoiceSheet<String>(
-                context,
-                title: context.tr('TipGenreFilter'),
-                choices: [
-                  SheetChoice('', context.tr('AllGenres'), selected: !active),
-                  for (final genre in genres) SheetChoice(genre, genre, selected: equalsIgnoreCase(genre, selected)),
-                ],
+    final pill = Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
+        borderRadius: BorderRadius.circular(Radii.pill),
+        border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.filter_list_rounded, size: 16, color: color),
+          const SizedBox(width: 6),
+          // A long genre is cut short.
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 180),
+            child: Text(
+              selected ?? context.tr('AllGenres'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: active ? colors.accent : colors.textMain,
               ),
             ),
-            child: pill,
           ),
-        ),
-      );
-    }
+          const SizedBox(width: 2),
+          Icon(Icons.expand_more_rounded, size: 18, color: color),
+        ],
+      ),
+    );
     return PopupMenuButton<String>(
       tooltip: context.tr('TipGenreFilter'),
       position: PopupMenuPosition.under,
-      onSelected: choose,
+      // The menu's "all" entry has the empty string as its value: a null reads as "closed without a choice".
+      onSelected: (value) => onSelected(value.isEmpty ? null : value),
       // The chosen one in the accent, with its tick, as the phone's sheet shows it.
       itemBuilder: (context) {
         PopupMenuItem<String> item(String value, String label, bool chosen) => PopupMenuItem(
@@ -813,12 +814,14 @@ class AlbumsPage extends StatelessWidget {
             subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
             actions: [
               SortButtons(
+                genre: (genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
                 buttons: [
                   for (final field in AlbumSortField.values)
                     (albums.sortLabel(field), albums.sortField == field, () => albums.setSortField(field)),
                 ],
               ),
-              if (albums.genres.isNotEmpty)
+              // A phone's sort pill holds the genre.
+              if (albums.genres.isNotEmpty && !PhoneChrome.isPhone(context))
                 _GenreFilter(genres: albums.genres, selected: albums.genre, onSelected: albums.setGenre),
             ],
           ),
@@ -978,12 +981,14 @@ class ArtistsPage extends StatelessWidget {
             subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
             actions: [
               SortButtons(
+                genre: (genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
                 buttons: [
                   for (final field in ArtistSortField.values)
                     (artists.sortLabel(field), artists.sortField == field, () => artists.setSortField(field)),
                 ],
               ),
-              if (artists.genres.isNotEmpty)
+              // A phone's sort pill holds the genre.
+              if (artists.genres.isNotEmpty && !PhoneChrome.isPhone(context))
                 _GenreFilter(genres: artists.genres, selected: artists.genre, onSelected: artists.setGenre),
             ],
           ),

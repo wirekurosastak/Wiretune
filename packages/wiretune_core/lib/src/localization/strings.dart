@@ -263,6 +263,7 @@ const Map<String, (String, String, String)> allStrings = {
   'SortTracks': ('Számok', 'Tracks', 'Titel'),
   'SortAdded': ('Hozzáadás', 'Added', 'Hinzugefügt'),
   'AllGenres': ('Minden műfaj', 'All genres', 'Alle Genres'),
+  'Genre': ('Műfaj', 'Genre', 'Genre'),
   'EmptyFavoritesTitle': ('Még nincsenek kedvenceid', 'No favorites yet', 'Noch keine Favoriten'),
   'EmptyFavoritesHint': (
     'A számok melletti szív ikonnal jelölhetsz meg kedvenceket.',
@@ -385,6 +386,7 @@ const Map<String, (String, String, String)> allStrings = {
   'TipRepeatOff': ('Ismétlés kikapcsolása', 'Turn repeat off', 'Wiederholen ausschalten'),
   'TipSortBy': ('Rendezés', 'Sort by', 'Sortieren nach'),
   'TipGenreFilter': ('Szűrés műfaj szerint', 'Filter by genre', 'Nach Genre filtern'),
+  'TipSortAndGenre': ('Rendezés és műfaj', 'Sort and genre', 'Sortierung und Genre'),
   'TipPrevious': ('Előző szám', 'Previous track', 'Vorheriger Titel'),
   'TipNext': ('Következő szám', 'Next track', 'Nächster Titel'),
   'TipDismissError': ('Hibaüzenet elrejtése', 'Dismiss error message', 'Fehlermeldung ausblenden'),

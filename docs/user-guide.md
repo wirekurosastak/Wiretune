@@ -43,6 +43,8 @@ Your files are never changed.
   produced, played and mixed it.
 - **Related music:** an album's page ends with *More by* its artist and *Similar albums*, an artist's with *Related
   artists*. They come from who is credited together on a track, then the genre, then the era.
+- **Genre filter:** Albums, Artists, Tracks and Favorites narrow to a genre (on a computer with the genre button, on a
+  phone in the sort's sheet, under *Genre*).
 - **Sorting** lasts until the app closes. Press the active sort again to reverse it.
 - **Hidden** artists, albums and tracks come back from *Settings → Hidden content*.
 

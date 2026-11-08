@@ -377,47 +377,57 @@ Future<T?> showChoiceSheet<T extends Object>(
   required String title,
   required List<SheetChoice<T>> choices,
   String? note,
+}) => showChoiceSections(context, sections: [(title: title, choices: choices)], note: note);
+
+/// [showChoiceSheet] with several [sections] of choices, each under its own title (a list's sort and its genre): the
+/// value of the one tapped, whichever section it is in.
+Future<T?> showChoiceSections<T extends Object>(
+  BuildContext context, {
+  required List<({String title, List<SheetChoice<T>> choices})> sections,
+  String? note,
 }) {
   final colors = context.colors;
   return showPhoneSheet<T>(
     context,
     builder: (sheet) => [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        child: Text(
-          title,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-        ),
-      ),
-      for (final choice in choices)
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-          leading:
-              choice.picture ??
-              (choice.icon == null
-                  ? null
-                  : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted)),
-          title: Text(
-            choice.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: choice.selected ? FontWeight.w700 : FontWeight.w500,
-              color: choice.selected ? colors.accent : colors.textMain,
-            ),
+      for (final (i, (:title, :choices)) in sections.indexed) ...[
+        Padding(
+          padding: EdgeInsets.fromLTRB(24, i == 0 ? 8 : 20, 24, 8),
+          child: Text(
+            title,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
           ),
-          subtitle: choice.subtitle == null
-              ? null
-              : Text(
-                  choice.subtitle!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12.5, color: colors.textMuted),
-                ),
-          trailing: choice.selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
-          onTap: () => Navigator.pop(sheet, choice.value),
         ),
+        for (final choice in choices)
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+            leading:
+                choice.picture ??
+                (choice.icon == null
+                    ? null
+                    : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted)),
+            title: Text(
+              choice.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: choice.selected ? FontWeight.w700 : FontWeight.w500,
+                color: choice.selected ? colors.accent : colors.textMain,
+              ),
+            ),
+            subtitle: choice.subtitle == null
+                ? null
+                : Text(
+                    choice.subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12.5, color: colors.textMuted),
+                  ),
+            trailing: choice.selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
+            onTap: () => Navigator.pop(sheet, choice.value),
+          ),
+      ],
       if (note != null)
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),

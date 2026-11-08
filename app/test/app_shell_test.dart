@@ -2894,7 +2894,7 @@ void main() {
     expect(find.text(genre), findsOneWidget);
   });
 
-  testWidgets("a phone's genre filter and sleep timer open as sheets, as its sort does", (tester) async {
+  testWidgets("a phone's sort and genre open as one sheet, and its sleep timer as a sheet too", (tester) async {
     const genre = 'Jazz';
     final vm = await pumpApp(tester, const Size(400, 860), () async {
       final library = createLibrary([
@@ -2905,9 +2905,10 @@ void main() {
     });
     vm.navigateTo(AppSection.albums);
     await settle(tester);
-    await tester.tap(find.byTooltip(Localizer.get('TipGenreFilter')));
+    await tester.tap(find.byTooltip(Localizer.get('TipSortAndGenre')));
     await settle(tester);
     expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text(Localizer.get('Genre')), findsOneWidget, reason: 'the genres under the sort');
     await tester.tap(find.widgetWithText(ListTile, genre));
     await settle(tester);
     expect(vm.albums.genre, genre);
@@ -4569,22 +4570,28 @@ void main() {
       await settle(tester);
       expect(vm.tracks.genres, ['Hip Hop', 'Jazz']);
       expect(vm.favorites.genres, ['Jazz'], reason: "the favourites' own");
-      final filter = find.byTooltip(Localizer.get('TipGenreFilter'));
+      // A computer has the genre's own button; a phone's sort pill holds it, opening one sheet with both.
+      final phone = layout == 'phone';
+      final filter = find.byTooltip(Localizer.get(phone ? 'TipSortAndGenre' : 'TipGenreFilter'));
       expect(filter, findsOneWidget);
-      // A phone's line, beside the sort, Play and shuffle, has room for the icon alone.
-      expect(
-        find.descendant(of: filter, matching: find.text(Localizer.get('AllGenres'))),
-        layout == 'phone' ? findsNothing : findsOneWidget,
-      );
+      expect(find.byTooltip(Localizer.get('TipGenreFilter')), phone ? findsNothing : findsOneWidget);
 
       await tester.tap(filter);
       await settle(tester);
+      if (phone) expect(find.text(Localizer.get('SortBy')), findsOneWidget, reason: 'the sort above the genres');
       await tester.tap(find.text('Jazz').last);
       await settle(tester);
       expect(vm.tracks.genre, 'Jazz');
       expect([for (final t in vm.tracks.tracks) t.title], ['Naima']);
       final chosen = tester.widget<Text>(find.descendant(of: filter, matching: find.text('Jazz')));
       expect(chosen.style?.color, tester.element(filter).colors.accent);
+      if (phone) {
+        expect(
+          find.descendant(of: filter, matching: find.textContaining('ABC')),
+          findsOneWidget,
+          reason: 'the sort beside it',
+        );
+      }
 
       // Opened again, the chosen genre is in the accent there too.
       await tester.tap(filter);
