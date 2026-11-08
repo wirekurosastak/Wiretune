@@ -43,7 +43,8 @@ Your files are never changed.
 ## Playing music
 
 Clicking a track plays the list it's in. Every *⋮* menu has **Play next** and **Add to queue**. The queue survives a
-restart. The sleep timer (the moon) pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
+restart. Drag a song in it by its ≡ to move it (on a phone, a long press anywhere on it works too; on a TV, its
+arrows). The sleep timer (the moon) pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
 
 Lyrics come from the file if it has them. Timed lyrics follow the song: tap a line to jump there. For other tracks the
 player asks [LRCLIB](https://lrclib.net), unless *Settings → Appearance → Lyrics from the internet* is off.

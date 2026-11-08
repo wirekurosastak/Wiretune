@@ -45,8 +45,9 @@ class QueueList extends StatelessWidget {
         if (items.isEmpty || (opensAtNext && items.length == 1 && current == 0)) {
           return const _QueueEmpty();
         }
-        // A remote or a keyboard cannot drag: they get buttons. A phone's row moves under a long press.
-        final moveButtons = !AppPlatform.current.isMobile;
+        // A TV's remote cannot drag: it gets buttons. Elsewhere a row moves by its handle (and on a phone also under a
+        // long press anywhere on it).
+        final moveButtons = AppPlatform.current.isTv;
         final proxy = liftedRow(context, const EdgeInsets.only(bottom: 4));
         if (!opensAtNext) {
           // Its rows fade towards the edges as the lyrics' lines do, where more of the queue goes on past them.
@@ -122,6 +123,16 @@ class QueueList extends StatelessWidget {
   }
 }
 
+/// The ≡ a queue row moves by.
+class _Handle extends StatelessWidget {
+  const _Handle({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Icon(Icons.drag_handle_rounded, size: size, color: context.colors.textMuted);
+}
+
 class _QueueEmpty extends StatelessWidget {
   const _QueueEmpty();
 
@@ -133,11 +144,11 @@ class _QueueEmpty extends StatelessWidget {
   );
 }
 
-/// A queue entry: a rounded row with the drag handle, the cover (with the entry's number, "Next" on the one after the
-/// current track, or the current one's bouncing bars), title and artist, format, length, the arrows and the remove
-/// button. The current entry is washed in the accent. It moves by its handle or a long press anywhere on it (as a
-/// playlist's rows); on a computer its menu opens on a right click. On a phone it is as large as the phone's other track
-/// rows, with neither the handle nor the length nor the ×: a long press moves it and a swipe to the left takes it away.
+/// A queue entry: a rounded row with the cover (with the entry's number, "Next" on the one after the current track, or
+/// the current one's bouncing bars), title and artist, format, length, the remove button and, at its right end, the
+/// handle (≡, as in TIDAL) it moves by at once; a long press anywhere on it moves it too. On a computer its menu opens on
+/// a right click. On a phone it is as large as the phone's other track rows, without the length or the ×: a swipe to
+/// the left takes it away. A TV's remote cannot drag: there the row has arrows instead of the handle.
 class _QueueRow extends StatefulWidget {
   const _QueueRow({
     super.key,
@@ -229,20 +240,6 @@ class _QueueRowState extends State<_QueueRow> {
                 padding: EdgeInsets.fromLTRB(10, phone ? 6 : 7, phone ? 0 : 10, phone ? 6 : 7),
                 child: Row(
                   children: [
-                    // A phone's row moves under a long press anywhere on it: no handle, too small for a finger.
-                    if (!phone) ...[
-                      ReorderableDragStartListener(
-                        index: widget.index,
-                        child: Tooltip(
-                          message: context.tr('TipDragToReorder'),
-                          child: SizedBox(
-                            width: 20,
-                            child: Icon(Icons.drag_indicator_rounded, size: 16, color: colors.palette.textDisabled),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
                     SizedBox(
                       width: cover,
                       height: cover,
@@ -357,6 +354,18 @@ class _QueueRowState extends State<_QueueRow> {
                         'TipRemoveFromQueue',
                         () => player.removeQueueItem(item),
                         color: colors.danger,
+                      ),
+                    // The handle at the right end, a finger's width on a phone (where a held finger means a drag, not
+                    // a tip). A played row stays in its place.
+                    if (!AppPlatform.current.isTv && !widget.played)
+                      ReorderableDragStartListener(
+                        index: widget.index,
+                        child: phone
+                            ? const SizedBox.square(dimension: 48, child: _Handle(size: 22))
+                            : Tooltip(
+                                message: context.tr('TipDragToReorder'),
+                                child: const SizedBox.square(dimension: 32, child: _Handle(size: 18)),
+                              ),
                       ),
                   ],
                 ),

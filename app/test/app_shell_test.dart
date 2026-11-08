@@ -3262,31 +3262,52 @@ void main() {
     expect(find.byTooltip(Localizer.get('Search')), findsNothing);
   });
 
-  testWidgets("a phone's queue row moves by a long press anywhere on it, as by its handle, and leaves its length out", (
-    tester,
-  ) async {
-    final vm = await pumpApp(tester, const Size(400, 860));
-    vm.player.playQueue(vm.library.tracks);
-    vm.openNowPlaying();
-    vm.nowPlayingTab = NowPlayingTab.queue;
-    await settle(tester);
-    final before = [for (final item in vm.player.queueItems) item.track.title];
-    final title = find.descendant(of: find.byType(NowPlayingPage), matching: find.text(before[1]));
-    final row = find.ancestor(of: title, matching: find.byType(InkWell)).first;
-    final length = vm.player.queueItems[1].track.formattedDuration;
-    expect(find.descendant(of: row, matching: find.text(length)), findsNothing);
+  testWidgets(
+    "a phone's queue row moves by its ≡ at once, or by a long press anywhere on it, and leaves its length out",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(400, 860));
+      vm.player.playQueue(vm.library.tracks);
+      vm.openNowPlaying();
+      vm.nowPlayingTab = NowPlayingTab.queue;
+      await settle(tester);
+      final before = [for (final item in vm.player.queueItems) item.track.title];
+      final title = find.descendant(of: find.byType(NowPlayingPage), matching: find.text(before[1]));
+      final row = find.ancestor(of: title, matching: find.byType(InkWell)).first;
+      final length = vm.player.queueItems[1].track.formattedDuration;
+      expect(find.descendant(of: row, matching: find.text(length)), findsNothing);
 
-    final finger = await tester.startGesture(tester.getCenter(title));
-    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
-    expect(find.text(Localizer.get('PlayNext')), findsNothing, reason: 'it grabs the row, it opens no menu');
-    for (var i = 0; i < 12; i++) {
-      await finger.moveBy(const Offset(0, 10));
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-    await finger.up();
-    await settle(tester);
-    expect([for (final item in vm.player.queueItems) item.track.title], [before[0], before[2], before[1]]);
-  });
+      final finger = await tester.startGesture(tester.getCenter(title));
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+      expect(find.text(Localizer.get('PlayNext')), findsNothing, reason: 'it grabs the row, it opens no menu');
+      for (var i = 0; i < 12; i++) {
+        await finger.moveBy(const Offset(0, 10));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await finger.up();
+      await settle(tester);
+      expect([for (final item in vm.player.queueItems) item.track.title], [before[0], before[2], before[1]]);
+
+      // By the handle at the right end, at once: what is now second goes back down.
+      final handle = find.descendant(
+        of: find
+            .ancestor(
+              of: find.descendant(of: find.byType(NowPlayingPage), matching: find.text(before[2])),
+              matching: find.byType(InkWell),
+            )
+            .first,
+        matching: find.byIcon(Icons.drag_handle_rounded),
+      );
+      expect(tester.getCenter(handle).dx, greaterThan(tester.getCenter(title).dx));
+      final drag = await tester.startGesture(tester.getCenter(handle));
+      for (var i = 0; i < 12; i++) {
+        await drag.moveBy(const Offset(0, 10));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await drag.up();
+      await settle(tester);
+      expect([for (final item in vm.player.queueItems) item.track.title], before);
+    },
+  );
 
   testWidgets("both players show shuffle and repeat alike, and the phone's queue says how many tracks are to come", (
     tester,
@@ -3314,10 +3335,10 @@ void main() {
     await settle(tester);
     expect(find.descendant(of: player, matching: find.text(Localizer.format('TrackCount', [2]))), findsOneWidget);
     expect(find.descendant(of: player, matching: find.byIcon(Icons.clear_all_rounded)), findsOneWidget);
-    // A phone's queue rows have no × and no handle (a swipe takes one out, a long press moves it); the playing track is
-    // above the list, not in it, the next one says so, and the transport gives the list its room.
+    // A phone's queue rows have no × (a swipe takes one out) but their ≡; the playing track is above the list, not in
+    // it, the next one says so, and the transport gives the list its room.
     expect(find.descendant(of: player, matching: find.byTooltip(Localizer.get('TipRemoveFromQueue'))), findsNothing);
-    expect(find.descendant(of: player, matching: find.byIcon(Icons.drag_indicator_rounded)), findsNothing);
+    expect(find.descendant(of: player, matching: find.byIcon(Icons.drag_handle_rounded)), findsWidgets);
     expect(find.descendant(of: player, matching: find.text(Localizer.get('QueueNextTag'))), findsOneWidget);
     expect(find.descendant(of: player, matching: find.byType(SeekBar)), findsNothing);
   });
@@ -4368,6 +4389,49 @@ void main() {
     }
     expect(cursorAt(find.byType(LinkText)), SystemMouseCursors.click);
   });
+
+  testWidgets(
+    "a computer's queue row moves by its ≡ at the right end, and has its × but no arrows; a TV's has arrows",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(1400, 900));
+      vm.player.playQueue(vm.library.tracks);
+      vm.player.isQueueOpen = true;
+      await settle(tester);
+      final panel = find.byType(QueueLyricsPanel);
+      final titles = [for (final item in vm.player.queueItems) item.track.title];
+      final handles = find.descendant(of: panel, matching: find.byIcon(Icons.drag_handle_rounded));
+      expect(handles, findsNWidgets(titles.length));
+      expect(find.descendant(of: panel, matching: find.byIcon(Icons.drag_indicator_rounded)), findsNothing);
+      expect(find.descendant(of: panel, matching: find.byTooltip(Localizer.get('MoveUp'))), findsNothing);
+      expect(find.descendant(of: panel, matching: find.byTooltip(Localizer.get('TipRemoveFromQueue'))), findsWidgets);
+      // The handle is the row's last thing, right of its ×.
+      final row = find.ancestor(of: handles.at(1), matching: find.byType(InkWell)).first;
+      final remove = find.descendant(of: row, matching: find.byTooltip(Localizer.get('TipRemoveFromQueue')));
+      expect(tester.getCenter(handles.at(1)).dx, greaterThan(tester.getCenter(remove).dx));
+
+      // Dragged at once, no long press first: the third goes above the second.
+      final drag = await tester.startGesture(tester.getCenter(handles.at(2)));
+      for (var i = 0; i < 10; i++) {
+        await drag.moveBy(const Offset(0, -6));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await drag.up();
+      await settle(tester);
+      expect(
+        [for (final item in vm.player.queueItems) item.track.title],
+        [titles[0], titles[2], titles[1], ...titles.skip(3)],
+      );
+
+      AppPlatform.forTesting(tv: true);
+      await pumpApp(tester, const Size(1400, 900)).then((tv) async {
+        tv.player.playQueue(tv.library.tracks);
+        tv.player.isQueueOpen = true;
+        await settle(tester);
+      });
+      expect(find.descendant(of: panel, matching: find.byIcon(Icons.drag_handle_rounded)), findsNothing);
+      expect(find.descendant(of: panel, matching: find.byTooltip(Localizer.get('MoveUp'))), findsWidgets);
+    },
+  );
 
   testWidgets("a right click on a queue row opens the track's menu", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
