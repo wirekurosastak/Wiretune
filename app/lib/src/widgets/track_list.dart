@@ -911,11 +911,19 @@ class TrackMenu extends StatelessWidget {
                 icon: icon,
                 onPressed: () => showSheet(context, track, kind, withFavorite: withFavorite),
               )
-            : PopupMenuButton<TrackAction>(
-                tooltip: context.tr('TipMore'),
-                icon: icon,
-                onSelected: (action) => handleAction(context, action, track),
-                itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
+            // Under the mouse it pops as the other icons do, without a disc behind it; the keyboard's focus still shows.
+            : PopEffect(
+                child: PopupMenuButton<TrackAction>(
+                  tooltip: context.tr('TipMore'),
+                  icon: icon,
+                  style: ButtonStyle(
+                    overlayColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.focused) ? null : Colors.transparent,
+                    ),
+                  ),
+                  onSelected: (action) => handleAction(context, action, track),
+                  itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
+                ),
               ),
       ),
     );
