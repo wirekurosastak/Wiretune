@@ -6,9 +6,9 @@
 enum AppSection { tracks, albums, artists, playlists, favorites, settings }
 
 /// The app's look, picked under Settings → Theme. Airy: the cover of what plays (or of the album or the artist that is
-/// open) washes the whole window. Dark: the pages lie in a black frame (on a phone, an album's and an artist's
-/// page), at whose top the open album's or artist's cover glows, and they take its colour as their accent; around
-/// them the window keeps the colours of the song that plays.
+/// open) washes the whole window. Dark: the pages lie on black (on a computer in a frame, the window around it in the
+/// colours of the song that plays), and an open album's or artist's cover glows at the top. In both an album's or an
+/// artist's page takes its cover's colour as its accent ([ViewedAccent]); the players keep the song's.
 enum WiretuneTheme { airy, dark }
 
 /// What the phone's full-screen player shows over its controls: the track that plays (its cover, title and menu), or

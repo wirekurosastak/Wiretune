@@ -395,9 +395,9 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'SettingsLanguageHint': ('A felület nyelve.', 'Interface language.', 'Die Sprache der Oberfläche.'),
   'SettingsThemeHint': (
-    'Légies: a borító színei betöltik az ablakot. Sötét: fekete oldalak, a megnyitott album vagy előadó színeiben.',
-    "Airy: the cover's colors fill the window. Dark: pages on black, in the open album's or artist's colors.",
-    'Luftig: die Farben des Covers füllen das Fenster. Dunkel: schwarze Seiten in den Farben des geöffneten Albums oder Künstlers.',
+    'Légies: a borító színei betöltik az ablakot. Sötét: fekete oldalak.',
+    "Airy: the cover's colors fill the window. Dark: pages on black.",
+    'Luftig: die Farben des Covers füllen das Fenster. Dunkel: schwarze Seiten.',
   ),
   'ServerUrlPlaceholder': ('http://szerver-ip:5200', 'http://server-ip:5200', 'http://server-ip:5200'),
   'ServerFolderLabel': ('Szerver mappa', 'Server folder', 'Serverordner'),

@@ -11,7 +11,7 @@ if you have none, pick your music folder in *Settings → Library* and press **S
 permission to read your music.
 
 The interface starts in English. Hungarian and German are in *Settings → Appearance*, and so is the theme: **Airy**
-(the cover's colors fill the window) or **Dark** (pages on black, an open album or artist in its cover's colors).
+(the cover's colors fill the window) or **Dark** (pages on black). An open album or artist is in its cover's colors.
 
 ## The library
 

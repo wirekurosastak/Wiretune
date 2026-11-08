@@ -356,8 +356,8 @@ class FrameWash extends StatelessWidget {
   }
 }
 
-/// The Albums or the Artists page, in the Dark theme in the accent of the album or the artist it has open (the cover
-/// its [FrameWash] shows): its Play button, its slider, the song that plays in its list. The players around it keep the
+/// The Albums or the Artists page, in the accent of the album or the artist it has open (the cover that washes it,
+/// in either theme): its Play button, its slider, the song that plays in its list. The players around it keep the
 /// colour of the song that plays, and the page takes it back when the album or the artist closes. The accent and its
 /// blend are the [ViewedAccentScope]'s, above the pages: an album opened from its artist's page (another section's)
 /// blends on from the artist's accent, not from the song's.
@@ -377,8 +377,7 @@ class ViewedAccent extends StatelessWidget {
 
 /// Where the open album's or artist's accent is kept, and blended over as it changes, for the [ViewedAccent] pages
 /// under it: above them, so that one page giving way to another (an artist's to its album's, a section to another)
-/// blends from the accent that was on show, and keeps it while the next cover's colour is read. Only in the Dark
-/// theme; in the Airy one the pages keep the app's accent.
+/// blends from the accent that was on show, and keeps it while the next cover's colour is read.
 class ViewedAccentScope extends StatefulWidget {
   const ViewedAccentScope({super.key, required this.child});
 
@@ -414,7 +413,7 @@ class _ViewedAccentScopeState extends State<ViewedAccentScope> {
 
   void _follow() {
     final vm = context.vm;
-    final path = vm.theme == WiretuneTheme.dark ? AmbientBackdrop.viewedCoverPath(vm) : null;
+    final path = AmbientBackdrop.viewedCoverPath(vm);
     if (path == _path) return;
     _path = path;
     if (path == null) return _show(null);
