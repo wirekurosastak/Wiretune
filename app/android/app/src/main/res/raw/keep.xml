@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The notification icon is only named from Dart (audio_service's androidNotificationIcon); keep it from the resource
-     shrinker. -->
+<!-- Drawables only named from Dart, which the resource shrinker can't see: the notification icon (audio_service's
+     androidNotificationIcon) and the notification's own buttons (MediaControl.custom in media_session.dart). Without
+     these, a release build drops them, and the buttons, given no icon, keep the notification from showing at all. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@drawable/ic_notification,@drawable/tv_banner" />
+    tools:keep="@drawable/ic_notification,@drawable/tv_banner,@drawable/ic_favorite,@drawable/ic_favorite_border,@drawable/ic_shuffle,@drawable/ic_shuffle_on" />
