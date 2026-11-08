@@ -80,10 +80,7 @@ Future<void> showListeningSummary(BuildContext context) async {
     context: context,
     builder: (dialog) => AppDialog(
       title: dialog.tr('ListeningSummary'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 560, minWidth: 420, maxWidth: 520),
-        child: SingleChildScrollView(child: ListeningSummaryView(close: () => Navigator.pop(dialog))),
-      ),
+      content: DialogScroll(maxHeight: 560, child: ListeningSummaryView(close: () => Navigator.pop(dialog))),
       actions: [TextButton(onPressed: () => Navigator.pop(dialog), child: Text(dialog.tr('Close')))],
     ),
   );

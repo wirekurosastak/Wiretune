@@ -73,10 +73,7 @@ Future<void> showFromFriends(BuildContext context) async {
     context: context,
     builder: (dialog) => AppDialog(
       title: dialog.tr('FromFriends'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420, minWidth: 360),
-        child: SingleChildScrollView(child: _FromFriendsList(close: () => Navigator.pop(dialog), padding: 0)),
-      ),
+      content: DialogScroll(maxHeight: 420, child: _FromFriendsList(close: () => Navigator.pop(dialog), padding: 0)),
       actions: [TextButton(onPressed: () => Navigator.pop(dialog), child: Text(dialog.tr('Close')))],
     ),
   );

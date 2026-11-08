@@ -40,18 +40,16 @@ Future<void> showCredits(BuildContext context, Track track) async {
     context: context,
     builder: (dialog) => AppDialog(
       title: dialog.tr('Credits'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 460, minWidth: 360, maxWidth: 460),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(title, style: TextStyle(fontSize: 13, color: dialog.colors.textMuted)),
-              const SizedBox(height: 12),
-              CreditsList(track: track),
-            ],
-          ),
+      content: DialogScroll(
+        maxHeight: 460,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: TextStyle(fontSize: 13, color: dialog.colors.textMuted)),
+            const SizedBox(height: 12),
+            CreditsList(track: track),
+          ],
         ),
       ),
       actions: [TextButton(onPressed: () => Navigator.pop(dialog), child: Text(dialog.tr('Close')))],

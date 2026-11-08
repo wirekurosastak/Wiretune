@@ -288,6 +288,32 @@ class AppDialog extends StatelessWidget {
   }
 }
 
+/// What an [AppDialog] holds when it may be too tall: at most [maxHeight], then scrolling. As wide as the dialog, so
+/// its scrollbar stands at the dialog's edge, not where the longest line ends, with room before it for the text.
+class DialogScroll extends StatelessWidget {
+  const DialogScroll({super.key, required this.maxHeight, required this.child});
+
+  final double maxHeight;
+  final Widget child;
+
+  /// The room between the text and the scrollbar.
+  static const double barRoom = 14;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: BoxConstraints(maxHeight: maxHeight),
+    child: SizedBox(
+      width: double.infinity,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.only(right: barRoom),
+          child: child,
+        ),
+      ),
+    ),
+  );
+}
+
 /// A sheet over the bottom of a phone's screen, the handle on top, then what [builder] gives: as tall as that (a sheet
 /// keeps to 9/16 of the screen otherwise, which cut the last entries off), and scrolling when even the screen is too
 /// short for it. Returns what the sheet is closed with.
