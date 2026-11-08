@@ -79,6 +79,8 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                             arguments?.get("artist") as? String,
                             arguments?.get("playing") == true,
                             arguments?.get("cover") as? String,
+                            arguments?.get("favorite") == true,
+                            arguments?.get("shuffle") == true,
                         )
                         result.success(null)
                     }

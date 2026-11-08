@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/audio/media_session.dart';
 import 'package:wiretune/src/view_models/library_view_models.dart';
@@ -46,6 +47,49 @@ void main() {
       vm.library.toggleFavorite(vm.player.currentTrack!.id);
       await pumpEventQueue();
       expect(icons().first, 'drawable/ic_favorite_border');
+
+      session.playbackState.close();
+      vm.dispose();
+    },
+  );
+
+  test(
+    "Android's home-screen widget is told what plays, the heart and shuffle too, and only when that changes",
+    () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final told = <Map<Object?, Object?>>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        const MethodChannel('wiretune/power'),
+        (call) async {
+          if (call.method == 'showOnWidget') told.add(call.arguments as Map<Object?, Object?>);
+          return null;
+        },
+      );
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+          const MethodChannel('wiretune/power'),
+          null,
+        ),
+      );
+      final library = createLibrary([TestSupport.makeTrack('1', 'One')]);
+      library.initialize();
+      final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      final session = WiretuneMediaSession(vm, homeWidget: true);
+      await pumpEventQueue();
+      expect(told.single['title'], isNull, reason: 'nothing plays');
+
+      vm.player.playQueue(vm.library.tracks);
+      await pumpEventQueue();
+      expect((told.last['title'], told.last['playing'], told.last['favorite']), ('One', true, false));
+      final before = told.length;
+      vm.player.position.value = const Duration(seconds: 5);
+      await pumpEventQueue();
+      expect(told, hasLength(before), reason: 'the position is no news to it');
+
+      vm.library.toggleFavorite('1');
+      vm.player.toggleShuffle();
+      await pumpEventQueue();
+      expect((told.last['favorite'], told.last['shuffle']), (true, true));
 
       session.playbackState.close();
       vm.dispose();

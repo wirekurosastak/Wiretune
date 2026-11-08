@@ -51,3 +51,8 @@ kotlin {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
+
+dependencies {
+    // The media session's controller, which the widget's heart and shuffle send their actions through.
+    implementation("androidx.media:media:1.7.0")
+}

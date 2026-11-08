@@ -7,4 +7,6 @@
     <string name="wiretune_widget_previous">Előző</string>
     <string name="wiretune_widget_play">Lejátszás vagy szünet</string>
     <string name="wiretune_widget_next">Következő</string>
+    <string name="wiretune_widget_favorite">Kedvenc</string>
+    <string name="wiretune_widget_shuffle">Keverés</string>
 </resources>

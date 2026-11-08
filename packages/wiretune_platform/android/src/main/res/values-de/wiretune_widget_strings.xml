@@ -7,4 +7,6 @@
     <string name="wiretune_widget_previous">Zurück</string>
     <string name="wiretune_widget_play">Wiedergabe oder Pause</string>
     <string name="wiretune_widget_next">Weiter</string>
+    <string name="wiretune_widget_favorite">Favorit</string>
+    <string name="wiretune_widget_shuffle">Zufällig</string>
 </resources>

@@ -4,18 +4,23 @@
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:rxdart/rxdart.dart';
 import 'package:wiretune_core/wiretune_core.dart' hide PlaybackState;
 import 'package:wiretune_core/wiretune_core.dart' as core show PlaybackState;
 
+import '../platform.dart';
 import '../view_models/main_view_model.dart';
+import '../widgets/cover_image.dart';
 
 /// Connects the player to the system's media session: the playback notification and its buttons on Android, the
 /// lock screen and Control Center on iOS, the Now Playing widget on macOS, media buttons on headsets, and the browse
 /// tree that Android Auto shows in the car (albums, artists, playlists, favourites) and its voice search.
 class WiretuneMediaSession extends BaseAudioHandler {
-  /// [now] is the clock the published positions are timed by; replaceable by tests.
-  WiretuneMediaSession(this._vm, {DateTime Function()? now}) : _now = now ?? DateTime.now {
+  /// [now] is the clock the published positions are timed by; replaceable by tests. [homeWidget]: tell Android's
+  /// home-screen widget what plays too.
+  WiretuneMediaSession(this._vm, {DateTime Function()? now, this.homeWidget = false}) : _now = now ?? DateTime.now {
     _vm.player.addListener(_publish);
     _vm.player.position.addListener(_followPosition);
     _vm.library.libraryChanged.listen((_) => notifyChildrenChanged());
@@ -27,13 +32,14 @@ class WiretuneMediaSession extends BaseAudioHandler {
 
   final MainViewModel _vm;
   final DateTime Function() _now;
+  final bool homeWidget;
   String? _publishedTrackId;
   List<String> _publishedQueue = const [];
   String? _streamToken;
   bool _publishedFavorite = false;
 
   static Future<WiretuneMediaSession> start(MainViewModel vm) => AudioService.init(
-    builder: () => WiretuneMediaSession(vm),
+    builder: () => WiretuneMediaSession(vm, homeWidget: AppPlatform.current.isAndroid),
     config: const AudioServiceConfig(
       androidNotificationChannelId: 'com.wiretune.player.playback',
       androidNotificationChannelName: 'Wiretune',
@@ -83,6 +89,12 @@ class WiretuneMediaSession extends BaseAudioHandler {
       playbackState.add(state);
     }
 
+    _showOnWidget();
+    if (trackChanged && homeWidget) {
+      // A server's cover is a file only once the player has shown it: told again when it may have come.
+      Timer(const Duration(seconds: 3), _showOnWidget);
+    }
+
     // Another queue of the same length (the next album) or a reordered one is a new queue too.
     final queueTracks = player.queueTracks.take(_maxQueue).toList();
     final ids = [for (final t in queueTracks) t.id];
@@ -93,6 +105,33 @@ class WiretuneMediaSession extends BaseAudioHandler {
   }
 
   static const int _maxQueue = 500;
+
+  // ── The home-screen widget (Android) ───────────────────────────────────────────────────────────
+
+  static const MethodChannel _widget = MethodChannel('wiretune/power');
+  Map<String, Object?>? _shownOnWidget;
+
+  /// Tells Android's home-screen widget what plays, when anything it shows changed.
+  void _showOnWidget() {
+    if (!homeWidget) return;
+    final player = _vm.player;
+    final track = player.currentTrack;
+    final shown = {
+      'title': track?.title,
+      'artist': track?.artist,
+      'playing': player.playbackState == core.PlaybackState.playing,
+      'cover': CoverArt.fileOf(track?.coverArtPath),
+      'favorite': track != null && _vm.library.isFavorite(track.id),
+      'shuffle': player.isShuffle,
+    };
+    if (_shownOnWidget != null && mapEquals(shown, _shownOnWidget)) return;
+    _shownOnWidget = shown;
+    unawaited(
+      _widget.invokeMethod<void>('showOnWidget', shown).catchError((Object _) {
+        // Not registered (tests): no widget.
+      }),
+    );
+  }
 
   static bool _sameIds(List<String> a, List<String> b) {
     if (a.length != b.length) return false;

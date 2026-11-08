@@ -4,12 +4,10 @@
 import 'dart:async';
 
 import 'package:audio_session/audio_session.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../platform.dart';
-import '../widgets/cover_image.dart';
 
 /// The phone's side of playing music: the audio focus (a call pauses, a navigation prompt ducks, unplugged headphones
 /// pause), and on Android a CPU lock while playing and a Wi-Fi lock while the music comes over the network, so a stream
@@ -46,39 +44,12 @@ abstract final class MobileAudio {
       }
     }
 
-    // The home-screen widget: what plays, told when it changes. A server's cover is a file only once the player has
-    // shown it, so a new track is told again a moment later, when its cover may have come.
-    Map<String, Object?>? shown;
-    Future<void> showOnWidget() async {
-      if (!AppPlatform.current.isAndroid) return;
-      final track = engine.currentTrack;
-      final now = {
-        'title': track?.title,
-        'artist': track?.artist,
-        'playing': engine.state == PlaybackState.playing,
-        'cover': CoverArt.fileOf(track?.coverArtPath),
-      };
-      if (shown != null && mapEquals(now, shown)) return;
-      shown = now;
-      try {
-        await _power.invokeMethod<void>('showOnWidget', now);
-      } on MissingPluginException {
-        // Not registered (tests): no widget.
-      }
-    }
-
     engine.stateChanged.listen((state) async {
       if (state == PlaybackState.playing) await session.setActive(true);
       await holdLocks();
-      await showOnWidget();
     });
     // The next track may come from elsewhere (a stream after a download) without playback ever pausing.
-    engine.trackChanged.listen((_) {
-      unawaited(holdLocks());
-      unawaited(showOnWidget());
-      Timer(const Duration(seconds: 3), () => unawaited(showOnWidget()));
-    });
-    unawaited(showOnWidget());
+    engine.trackChanged.listen((_) => holdLocks());
 
     session.interruptionEventStream.listen((event) async {
       if (event.begin) {

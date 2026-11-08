@@ -138,8 +138,8 @@ Phones stay in portrait; tablets rotate. On a touch screen:
 - swipe the mini player, or the full-screen player's cover, to skip
 - swipe a song in the full-screen player's queue to the left to take it out
 - on Android, the media notification (and Android Auto) has a heart for the song that plays and a shuffle button
-- on Android, the *Wiretune* widget on the home screen shows what plays, with previous, play or pause and next; a tap
-  on it opens the app
+- on Android, the *Wiretune* widget on the home screen shows what plays, with previous, play or pause and next; made
+  two cells tall, also the heart and shuffle; a tap on it opens the app
 - pull a list down past its top to search
 - long-press an album, artist or playlist for a preview with its menu
 - pinch to resize tiles (tablets and touchpads)
