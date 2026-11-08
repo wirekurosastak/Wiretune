@@ -235,6 +235,11 @@ void main() {
     await serverAnswers();
     await settle(tester);
 
+    // A phone's Settings cards are folded: Friends opens with a tap on its title.
+    await tester.ensureVisible(find.text(Localizer.get('FriendsSection')));
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('FriendsSection')));
+    await settle(tester);
     final card = find.ancestor(of: find.text(Localizer.get('FriendsSection')), matching: find.byType(GlassCard));
     expect(find.descendant(of: card, matching: find.text('anna')), findsOneWidget);
     expect(

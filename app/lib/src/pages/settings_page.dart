@@ -87,19 +87,96 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
+/// A card of Settings: its [title] and what it holds ([children]). On a phone each folds, its title alone (with a
+/// chevron) until it is tapped, so that the page is a short list of them; the account's starts open. A card stays as it
+/// was left while the app runs. On a wider screen every card is open.
+class _SettingsCard extends StatefulWidget {
+  const _SettingsCard({
+    required this.title,
+    required this.children,
+    this.crossAxisAlignment = CrossAxisAlignment.stretch,
+  });
+
+  final _CardTitle title;
+  final List<Widget> children;
+  final CrossAxisAlignment crossAxisAlignment;
+
+  /// The cards open on a phone, by their icon (each card has its own); the account's from the start.
+  static final Set<IconData> _open = {Icons.person_rounded};
+
+  @override
+  State<_SettingsCard> createState() => _SettingsCardState();
+}
+
+class _SettingsCardState extends State<_SettingsCard> {
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.title;
+    if (!PhoneChrome.isPhone(context)) {
+      return GlassCard(
+        opaque: true,
+        child: Column(crossAxisAlignment: widget.crossAxisAlignment, children: [title, ...widget.children]),
+      );
+    }
+    final open = _SettingsCard._open.contains(title.icon);
+    final colors = context.colors;
+    return GlassCard(
+      opaque: true,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        child: Column(
+          crossAxisAlignment: widget.crossAxisAlignment,
+          children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(Radii.medium),
+              onTap: () => setState(() {
+                if (!_SettingsCard._open.remove(title.icon)) _SettingsCard._open.add(title.icon);
+              }),
+              child: _CardTitle(
+                icon: title.icon,
+                title: title.title,
+                subtitle: title.subtitle,
+                bottom: open ? 12 : 0,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Cut short (a status badge) rather than pushed off a narrow screen with a large font.
+                    if (title.trailing case final trailing?) Flexible(child: trailing),
+                    AnimatedRotation(
+                      turns: open ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 220),
+                      child: Icon(Icons.expand_more_rounded, color: colors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (open) ...widget.children,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CardTitle extends StatelessWidget {
-  const _CardTitle({required this.icon, required this.title, this.subtitle, this.trailing});
+  const _CardTitle({required this.icon, required this.title, this.subtitle, this.trailing, this.bottom = 12});
 
   final IconData icon;
   final String title;
   final String? subtitle;
   final Widget? trailing;
 
+  /// The room under it, before what the card holds.
+  final double bottom;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: bottom),
       child: Row(
         children: [
           Container(
@@ -130,7 +207,7 @@ class _CardTitle extends StatelessWidget {
               ],
             ),
           ),
-          ?trailing,
+          if (trailing case final trailing?) Flexible(child: trailing),
         ],
       ),
     );
@@ -457,293 +534,290 @@ class _AccountCardState extends State<_AccountCard> {
             : server.isOfflineMode
             ? colors.textMuted
             : (server.isServerOffline ? colors.danger : colors.palette.warning);
-        return GlassCard(
-          opaque: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _CardTitle(
-                icon: Icons.person_rounded,
-                title: context.tr('AccountAndConnection'),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: badgeColor.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(Radii.pill),
-                  ),
-                  child: Text(
-                    server.serverStatusBadge,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: badgeColor),
-                  ),
-                ),
+        return _SettingsCard(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          title: _CardTitle(
+            icon: Icons.person_rounded,
+            title: context.tr('AccountAndConnection'),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: badgeColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(Radii.pill),
               ),
-              _FieldRow(
-                field: TextField(
-                  controller: _url,
-                  keyboardType: TextInputType.url,
-                  decoration: InputDecoration(
-                    hintText: context.tr('ServerUrlPlaceholder'),
-                    prefixIcon: const Icon(Icons.link_rounded, size: 18),
-                  ),
-                  onChanged: (v) => server.serverUrl = v,
-                  onSubmitted: (_) => _connect(server),
+              child: Text(
+                server.serverStatusBadge,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: badgeColor),
+              ),
+            ),
+          ),
+          children: [
+            _FieldRow(
+              field: TextField(
+                controller: _url,
+                keyboardType: TextInputType.url,
+                decoration: InputDecoration(
+                  hintText: context.tr('ServerUrlPlaceholder'),
+                  prefixIcon: const Icon(Icons.link_rounded, size: 18),
                 ),
-                actions: [
-                  PressShrink(
-                    child: FilledButton(
-                      onPressed: server.isConnecting ? null : () => _connect(server),
-                      child: server.isConnecting
-                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                          : Text(context.tr('Connect')),
+                onChanged: (v) => server.serverUrl = v,
+                onSubmitted: (_) => _connect(server),
+              ),
+              actions: [
+                PressShrink(
+                  child: FilledButton(
+                    onPressed: server.isConnecting ? null : () => _connect(server),
+                    child: server.isConnecting
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : Text(context.tr('Connect')),
+                  ),
+                ),
+              ],
+            ),
+            _StatusLine(server.statusMessage, isError: server.isServerOffline),
+            if (server.offersOfflineMode) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('OfflineMode'),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                        ),
+                        Text(context.tr('OfflineModeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                      ],
+                    ),
+                  ),
+                  Switch(value: server.isOfflineMode, onChanged: (v) => server.setOfflineMode(v)),
+                ],
+              ),
+            ],
+            const SizedBox(height: 16),
+            Divider(color: colors.glassBorder, height: 1),
+            const SizedBox(height: 16),
+            if (server.isLoggedIn) ...[
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: colors.surface2,
+                    child: Icon(
+                      server.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
+                      color: colors.textMain,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          server.currentUserName,
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
+                        ),
+                        Text(server.currentUserRole, style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                      ],
                     ),
                   ),
                 ],
               ),
-              _StatusLine(server.statusMessage, isError: server.isServerOffline),
-              if (server.offersOfflineMode) ...[
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('OfflineMode'),
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                          ),
-                          Text(context.tr('OfflineModeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                        ],
-                      ),
-                    ),
-                    Switch(value: server.isOfflineMode, onChanged: (v) => server.setOfflineMode(v)),
-                  ],
-                ),
-              ],
-              const SizedBox(height: 16),
-              Divider(color: colors.glassBorder, height: 1),
-              const SizedBox(height: 16),
-              if (server.isLoggedIn) ...[
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 22,
-                      backgroundColor: colors.surface2,
-                      child: Icon(
-                        server.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
-                        color: colors.textMain,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            server.currentUserName,
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                          ),
-                          Text(server.currentUserRole, style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (server.canRename)
-                      OutlinedButton.icon(
-                        onPressed: () => _openNameDialog(
-                          context,
-                          title: context.tr('ChangeUsername'),
-                          current: server.currentUserName,
-                          submit: server.changeUsername,
-                          done: (name) => context.trf('UsernameChanged', [name]),
-                        ),
-                        icon: const Icon(Icons.badge_outlined, size: 16),
-                        label: Text(context.tr('ChangeUsername')),
-                      ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (server.canRename)
                     OutlinedButton.icon(
-                      onPressed: () => _openPasswordDialog(
+                      onPressed: () => _openNameDialog(
                         context,
-                        title: context.tr('ChangePassword'),
-                        submit: server.changePassword,
-                        done: context.tr('PasswordChangedOthersSignedOut'),
+                        title: context.tr('ChangeUsername'),
+                        current: server.currentUserName,
+                        submit: server.changeUsername,
+                        done: (name) => context.trf('UsernameChanged', [name]),
                       ),
-                      icon: const Icon(Icons.key_rounded, size: 16),
-                      label: Text(context.tr('ChangePassword')),
+                      icon: const Icon(Icons.badge_outlined, size: 16),
+                      label: Text(context.tr('ChangeUsername')),
                     ),
-                    OutlinedButton.icon(
-                      onPressed: () => confirmAndSignOut(context),
-                      icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
-                      label: Text(context.tr('SignOut')),
+                  OutlinedButton.icon(
+                    onPressed: () => _openPasswordDialog(
+                      context,
+                      title: context.tr('ChangePassword'),
+                      submit: server.changePassword,
+                      done: context.tr('PasswordChangedOthersSignedOut'),
                     ),
-                  ],
-                ),
-              ] else
-                Row(
-                  children: [
-                    Icon(Icons.account_circle_outlined, size: 40, color: colors.textMuted),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('NotSignedIn'),
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                          ),
-                          Text(context.tr('NotSignedInHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                        ],
-                      ),
-                    ),
-                    PressShrink(
-                      child: FilledButton.icon(
-                        onPressed: vm.showLoginScreen,
-                        icon: const Icon(Icons.login_rounded, size: 16),
-                        label: Text(context.tr('SignIn')),
-                      ),
-                    ),
-                  ],
-                ),
-              if (server.isLoggedIn && server.isAdmin) ...[
-                const SizedBox(height: 20),
-                Divider(color: colors.glassBorder, height: 1),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SectionLabel(context.tr('NewUser'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 8)),
-                    ),
-                    IconButton(
-                      tooltip: context.tr('TipRefreshList'),
-                      onPressed: server.loadUsers,
-                      icon: const Icon(Icons.refresh_rounded, size: 18),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final add = PressShrink(
-                      child: FilledButton.icon(
-                        onPressed: server.isAddingUser ? null : () => _add(server),
-                        icon: const Icon(Icons.person_add_alt_1_rounded),
-                        label: Text(context.tr('Add')),
-                      ),
-                    );
-                    if (constraints.maxWidth < 760) {
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 10), child: f),
-                          Align(alignment: Alignment.centerRight, child: add),
-                        ],
-                      );
-                    }
-                    return IntrinsicHeight(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          for (final f in fields) ...[Expanded(child: f), const SizedBox(width: 10)],
-                          add,
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                _StatusLine(server.userManagementErrorMessage, isError: true),
-                SectionLabel(context.tr('RegisteredUsers'), padding: const EdgeInsets.fromLTRB(0, 16, 0, 4)),
-                for (final user in server.serverUsers)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
+                    icon: const Icon(Icons.key_rounded, size: 16),
+                    label: Text(context.tr('ChangePassword')),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => confirmAndSignOut(context),
+                    icon: Icon(Icons.logout_rounded, color: colors.danger, size: 16),
+                    label: Text(context.tr('SignOut')),
+                  ),
+                ],
+              ),
+            ] else
+              Row(
+                children: [
+                  Icon(Icons.account_circle_outlined, size: 40, color: colors.textMuted),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: colors.surface2,
-                          child: Icon(
-                            user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
-                            size: 18,
-                            color: colors.textMain,
-                          ),
+                        Text(
+                          context.tr('NotSignedIn'),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user.username,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
-                              ),
-                              Text(
-                                '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • '
-                                '${context.trf('CreatedAt', [user.createdAt])}',
-                                style: TextStyle(fontSize: 12, color: colors.textMuted),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (user.id != server.currentUserId) ...[
-                          IconButton(
-                            tooltip: context.tr('Rename'),
-                            icon: Icon(Icons.edit_outlined, color: colors.textMuted),
-                            onPressed: () => _openNameDialog(
-                              context,
-                              title: '${context.tr('Rename')}: ${user.username}',
-                              current: user.username,
-                              submit: (name) => server.renameUser(user.id, name),
-                              done: (name) => context.trf('UserRenamed', [name]),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: context.tr('ResetPassword'),
-                            icon: Icon(Icons.lock_reset_rounded, color: colors.textMuted),
-                            onPressed: () => _openPasswordDialog(
-                              context,
-                              title: '${context.tr('ResetPassword')}: ${user.username}',
-                              submit: (password, confirm) => server.adminResetPassword(user.id, password, confirm),
-                              done: context.trf('PasswordResetDone', [user.username]),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: context.tr('TipDeleteUser'),
-                            icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
-                            onPressed: () => _confirmDeleteUser(context, server, user),
-                          ),
-                        ],
+                        Text(context.tr('NotSignedInHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
                       ],
                     ),
                   ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('MembersCanRename'),
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                          ),
-                          Text(
-                            context.tr('MembersCanRenameHint'),
-                            style: TextStyle(fontSize: 12, color: colors.textMuted),
-                          ),
-                        ],
-                      ),
+                  PressShrink(
+                    child: FilledButton.icon(
+                      onPressed: vm.showLoginScreen,
+                      icon: const Icon(Icons.login_rounded, size: 16),
+                      label: Text(context.tr('SignIn')),
                     ),
-                    Switch(value: server.membersCanRename, onChanged: server.setMembersCanRename),
-                  ],
+                  ),
+                ],
+              ),
+            if (server.isLoggedIn && server.isAdmin) ...[
+              const SizedBox(height: 20),
+              Divider(color: colors.glassBorder, height: 1),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(child: SectionLabel(context.tr('NewUser'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 8))),
+                  IconButton(
+                    tooltip: context.tr('TipRefreshList'),
+                    onPressed: server.loadUsers,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final add = PressShrink(
+                    child: FilledButton.icon(
+                      onPressed: server.isAddingUser ? null : () => _add(server),
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: Text(context.tr('Add')),
+                    ),
+                  );
+                  if (constraints.maxWidth < 760) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final f in fields) Padding(padding: const EdgeInsets.only(bottom: 10), child: f),
+                        Align(alignment: Alignment.centerRight, child: add),
+                      ],
+                    );
+                  }
+                  return IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final f in fields) ...[Expanded(child: f), const SizedBox(width: 10)],
+                        add,
+                      ],
+                    ),
+                  );
+                },
+              ),
+              _StatusLine(server.userManagementErrorMessage, isError: true),
+              SectionLabel(context.tr('RegisteredUsers'), padding: const EdgeInsets.fromLTRB(0, 16, 0, 4)),
+              for (final user in server.serverUsers)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: colors.surface2,
+                        child: Icon(
+                          user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
+                          size: 18,
+                          color: colors.textMain,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.username,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textMain),
+                            ),
+                            Text(
+                              '${context.tr(user.isAdmin ? 'RoleAdmin' : 'RoleUser')} • '
+                              '${context.trf('CreatedAt', [user.createdAt])}',
+                              style: TextStyle(fontSize: 12, color: colors.textMuted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (user.id != server.currentUserId) ...[
+                        IconButton(
+                          tooltip: context.tr('Rename'),
+                          icon: Icon(Icons.edit_outlined, color: colors.textMuted),
+                          onPressed: () => _openNameDialog(
+                            context,
+                            title: '${context.tr('Rename')}: ${user.username}',
+                            current: user.username,
+                            submit: (name) => server.renameUser(user.id, name),
+                            done: (name) => context.trf('UserRenamed', [name]),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: context.tr('ResetPassword'),
+                          icon: Icon(Icons.lock_reset_rounded, color: colors.textMuted),
+                          onPressed: () => _openPasswordDialog(
+                            context,
+                            title: '${context.tr('ResetPassword')}: ${user.username}',
+                            submit: (password, confirm) => server.adminResetPassword(user.id, password, confirm),
+                            done: context.trf('PasswordResetDone', [user.username]),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: context.tr('TipDeleteUser'),
+                          icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
+                          onPressed: () => _confirmDeleteUser(context, server, user),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('MembersCanRename'),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                        ),
+                        Text(
+                          context.tr('MembersCanRenameHint'),
+                          style: TextStyle(fontSize: 12, color: colors.textMuted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Switch(value: server.membersCanRename, onChanged: server.setMembersCanRename),
+                ],
+              ),
             ],
-          ),
+          ],
         );
       },
     );
@@ -823,107 +897,104 @@ class _LibraryCardState extends State<_LibraryCard> {
         }
 
         final admin = server.isLoggedIn && server.isAdmin;
-        return GlassCard(
-          opaque: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _CardTitle(icon: Icons.library_music_outlined, title: context.tr('SettingsLibrarySection')),
-              if (admin) ...[
-                SectionLabel(context.tr('ServerFolderLabel'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
-                _FieldRow(
-                  field: TextField(
-                    controller: _serverFolder,
-                    decoration: InputDecoration(
-                      hintText: context.tr('ServerFolderPlaceholder'),
-                      prefixIcon: const Icon(Icons.folder_outlined, size: 18),
-                    ),
-                    onChanged: (v) => server.serverFolder = v,
-                    onSubmitted: (_) => _saveServerFolder(server),
+        return _SettingsCard(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          title: _CardTitle(icon: Icons.library_music_outlined, title: context.tr('SettingsLibrarySection')),
+          children: [
+            if (admin) ...[
+              SectionLabel(context.tr('ServerFolderLabel'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
+              _FieldRow(
+                field: TextField(
+                  controller: _serverFolder,
+                  decoration: InputDecoration(
+                    hintText: context.tr('ServerFolderPlaceholder'),
+                    prefixIcon: const Icon(Icons.folder_outlined, size: 18),
                   ),
-
-                  actions: [
-                    Tooltip(
-                      message: context.tr('TipReindex'),
-                      child: OutlinedButton.icon(
-                        onPressed: server.canReindexServer ? server.reindexServer : null,
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                        label: Text(context.tr('Reindex')),
-                      ),
-                    ),
-                    PressShrink(
-                      child: FilledButton.icon(
-                        onPressed: server.isUpdatingServerConfig ? null : () => _saveServerFolder(server),
-                        icon: const Icon(Icons.save_rounded, size: 18),
-                        label: Text(context.tr('SaveFolder')),
-                      ),
-                    ),
-                  ],
+                  onChanged: (v) => server.serverFolder = v,
+                  onSubmitted: (_) => _saveServerFolder(server),
                 ),
-                // Under the row, not in the field: the buttons beside it are as tall as the field alone.
-                _StatusLine(context.tr('ServerFolderHelper')),
-                _StatusLine(server.serverFolderProblem, isError: true),
-                _StatusLine(server.serverFolderMessage, isError: server.serverFolderIsError),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            context.tr('LookUpOnline'),
-                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                          ),
-                          Text(context.tr('LookUpOnlineHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-                        ],
-                      ),
-                    ),
-                    Switch(value: server.lookUpOnline, onChanged: server.setLookUpOnline),
-                  ],
-                ),
-              ],
 
-              if (server.supportsLocalFolder) ...[
-                if (admin) ...[
-                  const SizedBox(height: 20),
-                  Divider(color: colors.glassBorder, height: 1),
-                  const SizedBox(height: 12),
-                ],
-                SectionLabel(context.tr('LocalFolder'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
-                _FieldRow(
-                  field: TextField(
-                    controller: _localPath,
-                    decoration: InputDecoration(
-                      hintText: context.tr('LocalFolderPlaceholder'),
-                      prefixIcon: const Icon(Icons.folder_outlined, size: 18),
+                actions: [
+                  Tooltip(
+                    message: context.tr('TipReindex'),
+                    child: OutlinedButton.icon(
+                      onPressed: server.canReindexServer ? server.reindexServer : null,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: Text(context.tr('Reindex')),
                     ),
-                    onChanged: (v) => server.localFolder = v,
-                    onSubmitted: (_) => server.scanLocalFolder(),
                   ),
-                  actions: [
-                    OutlinedButton.icon(
-                      onPressed: () => _browseLocal(server),
-                      icon: const Icon(Icons.folder_open_rounded, size: 18),
-                      label: Text(context.tr('Browse')),
+                  PressShrink(
+                    child: FilledButton.icon(
+                      onPressed: server.isUpdatingServerConfig ? null : () => _saveServerFolder(server),
+                      icon: const Icon(Icons.save_rounded, size: 18),
+                      label: Text(context.tr('SaveFolder')),
                     ),
-                    PressShrink(
-                      child: FilledButton.icon(
-                        onPressed: server.isScanning ? null : server.scanLocalFolder,
-                        icon: const Icon(Icons.manage_search_rounded, size: 18),
-                        label: Text(context.tr('Scan')),
-                      ),
-                    ),
-                  ],
-                ),
-                if (server.isScanning) ...[
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(value: server.scanProgress > 0 ? server.scanProgress / 100 : null),
+                  ),
                 ],
-                _StatusLine(server.localFolderMessage, isError: server.localFolderIsError),
-              ],
+              ),
+              // Under the row, not in the field: the buttons beside it are as tall as the field alone.
+              _StatusLine(context.tr('ServerFolderHelper')),
+              _StatusLine(server.serverFolderProblem, isError: true),
+              _StatusLine(server.serverFolderMessage, isError: server.serverFolderIsError),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('LookUpOnline'),
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                        ),
+                        Text(context.tr('LookUpOnlineHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                      ],
+                    ),
+                  ),
+                  Switch(value: server.lookUpOnline, onChanged: server.setLookUpOnline),
+                ],
+              ),
             ],
-          ),
+
+            if (server.supportsLocalFolder) ...[
+              if (admin) ...[
+                const SizedBox(height: 20),
+                Divider(color: colors.glassBorder, height: 1),
+                const SizedBox(height: 12),
+              ],
+              SectionLabel(context.tr('LocalFolder'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
+              _FieldRow(
+                field: TextField(
+                  controller: _localPath,
+                  decoration: InputDecoration(
+                    hintText: context.tr('LocalFolderPlaceholder'),
+                    prefixIcon: const Icon(Icons.folder_outlined, size: 18),
+                  ),
+                  onChanged: (v) => server.localFolder = v,
+                  onSubmitted: (_) => server.scanLocalFolder(),
+                ),
+                actions: [
+                  OutlinedButton.icon(
+                    onPressed: () => _browseLocal(server),
+                    icon: const Icon(Icons.folder_open_rounded, size: 18),
+                    label: Text(context.tr('Browse')),
+                  ),
+                  PressShrink(
+                    child: FilledButton.icon(
+                      onPressed: server.isScanning ? null : server.scanLocalFolder,
+                      icon: const Icon(Icons.manage_search_rounded, size: 18),
+                      label: Text(context.tr('Scan')),
+                    ),
+                  ),
+                ],
+              ),
+              if (server.isScanning) ...[
+                const SizedBox(height: 12),
+                LinearProgressIndicator(value: server.scanProgress > 0 ? server.scanProgress / 100 : null),
+              ],
+              _StatusLine(server.localFolderMessage, isError: server.localFolderIsError),
+            ],
+          ],
         );
       },
     );
@@ -941,71 +1012,65 @@ class _DownloadsCard extends StatelessWidget {
     final colors = context.colors;
     return ListenableBuilder(
       listenable: downloads,
-      builder: (context, _) => GlassCard(
-        opaque: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _CardTitle(
-              icon: Icons.download_for_offline_outlined,
-              title: context.tr('Downloads'),
-              subtitle: context.tr('DownloadsHint'),
-            ),
-            Text(
-              context.trf('DownloadsLocation', [downloads.destinationDirectory]),
-              style: TextStyle(fontSize: 12, color: colors.textMuted),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              downloads.sizeText,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textMain),
-            ),
-            _StatusLine(downloads.statusText, isError: downloads.hasError),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr('DownloadsSyncMode'),
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                      ),
-                      Text(
-                        context.tr('DownloadsSyncModeHint'),
-                        style: TextStyle(fontSize: 12, color: colors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(value: downloads.isSyncModeEnabled, onChanged: (v) => downloads.setSyncModeEnabled(v)),
-              ],
-            ),
-
-            if (downloads.hasAnything) ...[
-              const SizedBox(height: 14),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
-                  onPressed: () async {
-                    final confirmed = await confirmAction(
-                      context,
-                      title: context.tr('DownloadsRemoveAllQuestion'),
-                      message: context.trf('DownloadsRemoveAllConfirm', [downloads.copyCount, downloads.sizeLabel]),
-                      confirmLabel: context.tr('DownloadsRemoveConfirm'),
-                      destructive: true,
-                    );
-                    if (confirmed) downloads.removeAll();
-                  },
-                  icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
-                  label: Text(context.tr('DownloadsRemoveAll')),
+      builder: (context, _) => _SettingsCard(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        title: _CardTitle(
+          icon: Icons.download_for_offline_outlined,
+          title: context.tr('Downloads'),
+          subtitle: context.tr('DownloadsHint'),
+        ),
+        children: [
+          Text(
+            context.trf('DownloadsLocation', [downloads.destinationDirectory]),
+            style: TextStyle(fontSize: 12, color: colors.textMuted),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            downloads.sizeText,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colors.textMain),
+          ),
+          _StatusLine(downloads.statusText, isError: downloads.hasError),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('DownloadsSyncMode'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                    ),
+                    Text(context.tr('DownloadsSyncModeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                  ],
                 ),
               ),
+              Switch(value: downloads.isSyncModeEnabled, onChanged: (v) => downloads.setSyncModeEnabled(v)),
             ],
+          ),
+
+          if (downloads.hasAnything) ...[
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(foregroundColor: colors.danger),
+                onPressed: () async {
+                  final confirmed = await confirmAction(
+                    context,
+                    title: context.tr('DownloadsRemoveAllQuestion'),
+                    message: context.trf('DownloadsRemoveAllConfirm', [downloads.copyCount, downloads.sizeLabel]),
+                    confirmLabel: context.tr('DownloadsRemoveConfirm'),
+                    destructive: true,
+                  );
+                  if (confirmed) downloads.removeAll();
+                },
+                icon: Icon(Icons.delete_outline_rounded, color: colors.danger),
+                label: Text(context.tr('DownloadsRemoveAll')),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1042,32 +1107,29 @@ class _RemoteCardState extends State<_RemoteCard> {
       listenable: Listenable.merge([player, vm]),
       // The status follows the session (the view model) and the devices in reach (the player).
       builder: (context, _) {
-        return GlassCard(
-          opaque: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _CardTitle(
-                icon: Icons.cast_rounded,
-                title: context.tr('RemoteControl'),
-                subtitle: context.tr('RemoteControlHint'),
-                trailing: Switch(value: vm.isRemoteEnabled, onChanged: (value) => vm.isRemoteEnabled = value),
-              ),
-              TextField(
-                controller: _name,
-                enabled: vm.isRemoteEnabled,
-                maxLength: RemoteRules.maxDeviceNameLength,
-                decoration: InputDecoration(
-                  counterText: '',
-                  labelText: context.tr('DeviceNameLabel'),
-                  hintText: deviceLabel(context, '', vm.capabilities.kind),
-                  prefixIcon: Icon(deviceIcon(vm.capabilities.kind), size: 18),
-                ),
-                onChanged: (value) => vm.deviceName = value,
-              ),
-              _StatusLine(vm.remoteStatus, isError: vm.hasRemoteProblem),
-            ],
+        return _SettingsCard(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          title: _CardTitle(
+            icon: Icons.cast_rounded,
+            title: context.tr('RemoteControl'),
+            subtitle: context.tr('RemoteControlHint'),
+            trailing: Switch(value: vm.isRemoteEnabled, onChanged: (value) => vm.isRemoteEnabled = value),
           ),
+          children: [
+            TextField(
+              controller: _name,
+              enabled: vm.isRemoteEnabled,
+              maxLength: RemoteRules.maxDeviceNameLength,
+              decoration: InputDecoration(
+                counterText: '',
+                labelText: context.tr('DeviceNameLabel'),
+                hintText: deviceLabel(context, '', vm.capabilities.kind),
+                prefixIcon: Icon(deviceIcon(vm.capabilities.kind), size: 18),
+              ),
+              onChanged: (value) => vm.deviceName = value,
+            ),
+            _StatusLine(vm.remoteStatus, isError: vm.hasRemoteProblem),
+          ],
         );
       },
     );
@@ -1142,230 +1204,227 @@ class _AudioCard extends StatelessWidget {
           );
         }
 
-        return GlassCard(
-          opaque: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _CardTitle(
-                icon: Icons.volume_up_rounded,
-                title: context.tr('SettingsAudioSection'),
-                trailing: audio.hasDeviceChoice
-                    ? IconButton(
-                        tooltip: context.tr('Refresh'),
-                        onPressed: audio.refreshDevices,
-                        icon: const Icon(Icons.refresh_rounded, size: 18),
-                      )
-                    : null,
-              ),
-              // The Tizen TV's player starts each track on its own and reads no ReplayGain tags.
-              if (!tizen) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(context.tr('SettingsGapless'), style: heading()),
-                          Text(context.tr('SettingsGaplessHint'), style: hint()),
-                        ],
-                      ),
+        return _SettingsCard(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          title: _CardTitle(
+            icon: Icons.volume_up_rounded,
+            title: context.tr('SettingsAudioSection'),
+            trailing: audio.hasDeviceChoice
+                ? IconButton(
+                    tooltip: context.tr('Refresh'),
+                    onPressed: audio.refreshDevices,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                  )
+                : null,
+          ),
+          children: [
+            // The Tizen TV's player starts each track on its own and reads no ReplayGain tags.
+            if (!tizen) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(context.tr('SettingsGapless'), style: heading()),
+                        Text(context.tr('SettingsGaplessHint'), style: hint()),
+                      ],
                     ),
-                    Switch(value: vm.isGaplessEnabled, onChanged: (v) => vm.isGaplessEnabled = v),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Text(context.tr('SettingsNormalization'), style: heading()),
-                Text(context.tr('SettingsNormalizationHint'), style: hint()),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final (mode, key) in const [
-                      (VolumeNormalization.off, 'NormalizationOff'),
-                      (VolumeNormalization.track, 'NormalizationTrack'),
-                      (VolumeNormalization.album, 'NormalizationAlbum'),
-                    ])
-                      _choice(
-                        context.tr(key),
-                        selected: mode == vm.normalization,
-                        // Bit-perfect output is never normalized.
-                        onPressed: audio.isBitPerfect ? null : () => vm.normalization = mode,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(context.tr('SettingsEqualizer'), style: heading()),
-                          Text(context.tr('SettingsEqualizerHint'), style: hint()),
-                        ],
-                      ),
-                    ),
-                    // Bit-perfect output never filters.
-                    Switch(value: vm.isEqualizerOn, onChanged: audio.isBitPerfect ? null : (v) => vm.isEqualizerOn = v),
-                  ],
-                ),
-                if (vm.isEqualizerOn && !audio.isBitPerfect) ...[
-                  const SizedBox(height: 10),
-                  _EqualizerSliders(vm: vm),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final (preset, key) in const [
-                        ('flat', 'EqualizerFlat'),
-                        ('bass', 'EqualizerBass'),
-                        ('treble', 'EqualizerTreble'),
-                        ('vocal', 'EqualizerVocal'),
-                      ])
-                        _choice(
-                          context.tr(key),
-                          selected: vm.equalizer == Equalizer.fromGains(Equalizer.presets[preset]!),
-                          onPressed: () => vm.setEqualizerPreset(preset),
-                        ),
-                    ],
                   ),
+                  Switch(value: vm.isGaplessEnabled, onChanged: (v) => vm.isGaplessEnabled = v),
                 ],
-                const SizedBox(height: 14),
-                Text(context.tr('SettingsStreamingQuality'), style: heading()),
-                Text(context.tr('SettingsStreamingQualityHint'), style: hint()),
+              ),
+              const SizedBox(height: 14),
+              Text(context.tr('SettingsNormalization'), style: heading()),
+              Text(context.tr('SettingsNormalizationHint'), style: hint()),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (mode, key) in const [
+                    (VolumeNormalization.off, 'NormalizationOff'),
+                    (VolumeNormalization.track, 'NormalizationTrack'),
+                    (VolumeNormalization.album, 'NormalizationAlbum'),
+                  ])
+                    _choice(
+                      context.tr(key),
+                      selected: mode == vm.normalization,
+                      // Bit-perfect output is never normalized.
+                      onPressed: audio.isBitPerfect ? null : () => vm.normalization = mode,
+                    ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(context.tr('SettingsEqualizer'), style: heading()),
+                        Text(context.tr('SettingsEqualizerHint'), style: hint()),
+                      ],
+                    ),
+                  ),
+                  // Bit-perfect output never filters.
+                  Switch(value: vm.isEqualizerOn, onChanged: audio.isBitPerfect ? null : (v) => vm.isEqualizerOn = v),
+                ],
+              ),
+              if (vm.isEqualizerOn && !audio.isBitPerfect) ...[
                 const SizedBox(height: 10),
+                _EqualizerSliders(vm: vm),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final (quality, key) in const [
-                      (StreamingQuality.original, 'StreamingOriginal'),
-                      (StreamingQuality.high, 'StreamingHigh'),
-                      (StreamingQuality.normal, 'StreamingNormal'),
-                      (StreamingQuality.dataSaver, 'StreamingDataSaver'),
+                    for (final (preset, key) in const [
+                      ('flat', 'EqualizerFlat'),
+                      ('bass', 'EqualizerBass'),
+                      ('treble', 'EqualizerTreble'),
+                      ('vocal', 'EqualizerVocal'),
                     ])
                       _choice(
                         context.tr(key),
-                        selected: quality == vm.streamingQuality,
-                        // Bit-perfect output plays the file.
-                        onPressed: audio.isBitPerfect ? null : () => vm.streamingQuality = quality,
+                        selected: vm.equalizer == Equalizer.fromGains(Equalizer.presets[preset]!),
+                        onPressed: () => vm.setEqualizerPreset(preset),
                       ),
                   ],
                 ),
               ],
-              if (audio.hasDeviceChoice) ...[
-                if (!tizen) ...[
-                  const SizedBox(height: 18),
-                  Divider(color: colors.glassBorder, height: 1),
-                  const SizedBox(height: 14),
+              const SizedBox(height: 14),
+              Text(context.tr('SettingsStreamingQuality'), style: heading()),
+              Text(context.tr('SettingsStreamingQualityHint'), style: hint()),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final (quality, key) in const [
+                    (StreamingQuality.original, 'StreamingOriginal'),
+                    (StreamingQuality.high, 'StreamingHigh'),
+                    (StreamingQuality.normal, 'StreamingNormal'),
+                    (StreamingQuality.dataSaver, 'StreamingDataSaver'),
+                  ])
+                    _choice(
+                      context.tr(key),
+                      selected: quality == vm.streamingQuality,
+                      // Bit-perfect output plays the file.
+                      onPressed: audio.isBitPerfect ? null : () => vm.streamingQuality = quality,
+                    ),
                 ],
-                Text(
-                  context.tr('OutputDevice'),
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
-                  isExpanded: true,
-                  items: [
-                    for (final d in devices)
-                      DropdownMenuItem(
-                        value: d.id,
-                        child: Row(
-                          children: [
-                            Icon(Icons.speaker_outlined, size: 16, color: colors.textMain),
-                            const SizedBox(width: 10),
-                            Flexible(
-                              child: Text(
-                                d.name,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            if (d.driverType.isNotEmpty) ...[
-                              const SizedBox(width: 10),
-                              Flexible(
-                                child: Text(
-                                  '[${d.driverType}]',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(fontSize: 11, color: colors.textMuted),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                  ],
-                  onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
-                ),
-                const SizedBox(height: 8),
-                Text(audio.hardwareStatusText, style: TextStyle(fontSize: 11.5, color: colors.textMuted)),
-
+              ),
+            ],
+            if (audio.hasDeviceChoice) ...[
+              if (!tizen) ...[
                 const SizedBox(height: 18),
                 Divider(color: colors.glassBorder, height: 1),
                 const SizedBox(height: 14),
-
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final exclusive = mode(
-                      'EXCLUSIVE',
-                      QualityTier.silver,
-                      context.tr('ExclusiveDescription'),
-                      audio.isExclusiveMode,
-                      audio.isExclusiveAvailable,
-                      audio.setExclusiveMode,
-                    );
-                    final bitPerfect = mode(
-                      'BIT-PERFECT',
-                      QualityTier.gold,
-                      context.tr('BitPerfectDescription'),
-                      audio.isBitPerfect,
-                      audio.isBitPerfectAvailable,
-                      audio.setBitPerfect,
-                    );
-                    if (constraints.maxWidth < 420) {
-                      return Column(children: [exclusive, const SizedBox(height: 10), bitPerfect]);
-                    }
-                    return Row(
-                      children: [
-                        Expanded(child: exclusive),
-                        const SizedBox(width: 10),
-                        Expanded(child: bitPerfect),
-                      ],
-                    );
-                  },
-                ),
               ],
+              Text(
+                context.tr('OutputDevice'),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                initialValue: devices.any((d) => d.id == audio.selectedDevice?.id) ? audio.selectedDevice?.id : null,
+                isExpanded: true,
+                items: [
+                  for (final d in devices)
+                    DropdownMenuItem(
+                      value: d.id,
+                      child: Row(
+                        children: [
+                          Icon(Icons.speaker_outlined, size: 16, color: colors.textMain),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              d.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          if (d.driverType.isNotEmpty) ...[
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                '[${d.driverType}]',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontSize: 11, color: colors.textMuted),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
+                onChanged: (id) => audio.selectDevice(devices.where((d) => d.id == id).firstOrNull),
+              ),
+              const SizedBox(height: 8),
+              Text(audio.hardwareStatusText, style: TextStyle(fontSize: 11.5, color: colors.textMuted)),
 
               const SizedBox(height: 18),
               Divider(color: colors.glassBorder, height: 1),
               const SizedBox(height: 14),
 
-              Text(
-                context.tr('SignalPath'),
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small)),
-                child: Text(
-                  audio.signalPath,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontFamilyFallback: const ['JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'],
-                    fontSize: 11.5,
-                    height: 18 / 11.5,
-                    color: palette.success,
-                  ),
-                ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final exclusive = mode(
+                    'EXCLUSIVE',
+                    QualityTier.silver,
+                    context.tr('ExclusiveDescription'),
+                    audio.isExclusiveMode,
+                    audio.isExclusiveAvailable,
+                    audio.setExclusiveMode,
+                  );
+                  final bitPerfect = mode(
+                    'BIT-PERFECT',
+                    QualityTier.gold,
+                    context.tr('BitPerfectDescription'),
+                    audio.isBitPerfect,
+                    audio.isBitPerfectAvailable,
+                    audio.setBitPerfect,
+                  );
+                  if (constraints.maxWidth < 420) {
+                    return Column(children: [exclusive, const SizedBox(height: 10), bitPerfect]);
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: exclusive),
+                      const SizedBox(width: 10),
+                      Expanded(child: bitPerfect),
+                    ],
+                  );
+                },
               ),
             ],
-          ),
+
+            const SizedBox(height: 18),
+            Divider(color: colors.glassBorder, height: 1),
+            const SizedBox(height: 14),
+
+            Text(
+              context.tr('SignalPath'),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: colors.textMuted),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: colors.surface1, borderRadius: BorderRadius.circular(Radii.small)),
+              child: Text(
+                audio.signalPath,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontFamilyFallback: const ['JetBrains Mono', 'Consolas', 'DejaVu Sans Mono', 'Courier New'],
+                  fontSize: 11.5,
+                  height: 18 / 11.5,
+                  color: palette.success,
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -1394,90 +1453,87 @@ class _AppearanceCard extends StatelessWidget {
     final colors = context.colors;
     return ListenableBuilder(
       listenable: vm,
-      builder: (context, _) => GlassCard(
-        opaque: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _CardTitle(icon: Icons.palette_outlined, title: context.tr('SettingsAppearanceSection')),
-            Text(
-              context.tr('Language'),
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-            ),
-            const SizedBox(height: 2),
-            Text(context.tr('SettingsLanguageHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final l in Localizer.languages)
-                  _choice(l.nativeName, selected: l.code == vm.language, onPressed: () => vm.changeLanguage(l.code)),
-              ],
-            ),
-            const SizedBox(height: 14),
-            // The themes as choices, like the languages.
-            Text(
-              context.tr('Theme'),
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-            ),
-            const SizedBox(height: 2),
-            Text(context.tr('SettingsThemeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final (theme, key) in const [(WiretuneTheme.airy, 'ThemeAiry'), (WiretuneTheme.dark, 'ThemeDark')])
-                  _choice(context.tr(key), selected: vm.theme == theme, onPressed: () => vm.setTheme(theme)),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Divider(color: colors.glassBorder, height: 1),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr('SettingsOnlineLyrics'),
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                      ),
-                      Text(
-                        context.tr('SettingsOnlineLyricsHint'),
-                        style: TextStyle(fontSize: 12, color: colors.textMuted),
-                      ),
-                    ],
-                  ),
+      builder: (context, _) => _SettingsCard(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        title: _CardTitle(icon: Icons.palette_outlined, title: context.tr('SettingsAppearanceSection')),
+        children: [
+          Text(
+            context.tr('Language'),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+          ),
+          const SizedBox(height: 2),
+          Text(context.tr('SettingsLanguageHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final l in Localizer.languages)
+                _choice(l.nativeName, selected: l.code == vm.language, onPressed: () => vm.changeLanguage(l.code)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // The themes as choices, like the languages.
+          Text(
+            context.tr('Theme'),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+          ),
+          const SizedBox(height: 2),
+          Text(context.tr('SettingsThemeHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (theme, key) in const [(WiretuneTheme.airy, 'ThemeAiry'), (WiretuneTheme.dark, 'ThemeDark')])
+                _choice(context.tr(key), selected: vm.theme == theme, onPressed: () => vm.setTheme(theme)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Divider(color: colors.glassBorder, height: 1),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('SettingsOnlineLyrics'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                    ),
+                    Text(
+                      context.tr('SettingsOnlineLyricsHint'),
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                  ],
                 ),
-                Switch(value: vm.useOnlineLyrics, onChanged: (v) => vm.useOnlineLyrics = v),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr('SettingsPerformanceStats'),
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                      ),
-                      Text(
-                        context.tr('SettingsPerformanceStatsHint'),
-                        style: TextStyle(fontSize: 12, color: colors.textMuted),
-                      ),
-                    ],
-                  ),
+              ),
+              Switch(value: vm.useOnlineLyrics, onChanged: (v) => vm.useOnlineLyrics = v),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('SettingsPerformanceStats'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                    ),
+                    Text(
+                      context.tr('SettingsPerformanceStatsHint'),
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                  ],
                 ),
-                Switch(value: vm.showPerformanceStats, onChanged: (v) => vm.showPerformanceStats = v),
-              ],
-            ),
-          ],
-        ),
+              ),
+              Switch(value: vm.showPerformanceStats, onChanged: (v) => vm.showPerformanceStats = v),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -1493,76 +1549,73 @@ class _AboutCard extends StatelessWidget {
     final vm = context.vm;
     final colors = context.colors;
     final text = TextStyle(fontSize: 12.5, height: 1.45, color: colors.textMuted);
-    return GlassCard(
-      opaque: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _CardTitle(
-            icon: Icons.info_outline_rounded,
-            title: context.tr('SettingsAboutSection'),
-            subtitle: 'Wiretune • ${context.trf('AboutVersion', [WiretuneInfo.version])}',
+    return _SettingsCard(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      title: _CardTitle(
+        icon: Icons.info_outline_rounded,
+        title: context.tr('SettingsAboutSection'),
+        subtitle: 'Wiretune • ${context.trf('AboutVersion', [WiretuneInfo.version])}',
+      ),
+      children: [
+        Text(WiretuneInfo.copyright, style: text),
+        const SizedBox(height: 4),
+        Text(context.tr('AboutLicense'), style: text),
+        const SizedBox(height: 4),
+        // Selectable, so that it can be copied (the app opens no browser).
+        SelectableText.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: '${context.tr('AboutSource')}: '),
+              TextSpan(
+                text: WiretuneInfo.sourceUrl,
+                style: TextStyle(color: colors.accent),
+              ),
+            ],
           ),
-          Text(WiretuneInfo.copyright, style: text),
-          const SizedBox(height: 4),
-          Text(context.tr('AboutLicense'), style: text),
-          const SizedBox(height: 4),
-          // Selectable, so that it can be copied (the app opens no browser).
-          SelectableText.rich(
-            TextSpan(
-              children: [
-                TextSpan(text: '${context.tr('AboutSource')}: '),
-                TextSpan(
-                  text: WiretuneInfo.sourceUrl,
-                  style: TextStyle(color: colors.accent),
-                ),
-              ],
-            ),
-            style: text,
-          ),
-          // Only a copy that a release can update looks for one (not a debug build, iOS or Tizen).
-          if (vm.updates.isSupported) ...[
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        context.tr('SettingsUpdateCheck'),
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
-                      ),
-                      Text(
-                        context.tr('SettingsUpdateCheckHint'),
-                        style: TextStyle(fontSize: 12, color: colors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-                // The card is const and its page doesn't follow this setting: the switch listens itself.
-                ListenableBuilder(
-                  listenable: vm.updates,
-                  builder: (context, _) => Switch(value: vm.checkForUpdates, onChanged: (v) => vm.checkForUpdates = v),
-                ),
-              ],
-            ),
-          ],
+          style: text,
+        ),
+        // Only a copy that a release can update looks for one (not a debug build, iOS or Tizen).
+        if (vm.updates.isSupported) ...[
           const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: () => showLicensePage(
-              context: context,
-              applicationName: 'Wiretune',
-              applicationVersion: WiretuneInfo.version,
-              applicationLegalese:
-                  '${WiretuneInfo.copyright}\n${context.tr('AboutLicense')}\n'
-                  '${context.tr('AboutSource')}: ${WiretuneInfo.sourceUrl}',
-            ),
-            icon: Icon(Icons.description_outlined, size: 18, color: colors.accent),
-            label: Text(context.tr('AboutLicenses')),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('SettingsUpdateCheck'),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                    ),
+                    Text(
+                      context.tr('SettingsUpdateCheckHint'),
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              // The card is const and its page doesn't follow this setting: the switch listens itself.
+              ListenableBuilder(
+                listenable: vm.updates,
+                builder: (context, _) => Switch(value: vm.checkForUpdates, onChanged: (v) => vm.checkForUpdates = v),
+              ),
+            ],
           ),
         ],
-      ),
+        const SizedBox(height: 14),
+        OutlinedButton.icon(
+          onPressed: () => showLicensePage(
+            context: context,
+            applicationName: 'Wiretune',
+            applicationVersion: WiretuneInfo.version,
+            applicationLegalese:
+                '${WiretuneInfo.copyright}\n${context.tr('AboutLicense')}\n'
+                '${context.tr('AboutSource')}: ${WiretuneInfo.sourceUrl}',
+          ),
+          icon: Icon(Icons.description_outlined, size: 18, color: colors.accent),
+          label: Text(context.tr('AboutLicenses')),
+        ),
+      ],
     );
   }
 }
@@ -1592,52 +1645,49 @@ class _FriendsCardState extends State<_FriendsCard> {
     final colors = context.colors;
     return ListenableBuilder(
       listenable: friends,
-      builder: (context, _) => GlassCard(
-        opaque: true,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _CardTitle(
-              icon: Icons.people_outline_rounded,
-              title: context.tr('FriendsSection'),
-              subtitle: context.tr('FriendsHint'),
-            ),
-            if (friends.friends.isEmpty && friends.friendsError.isEmpty)
-              Text(context.tr('FriendsNone'), style: TextStyle(color: colors.textMuted, fontSize: 13)),
-            for (final account in friends.friends) ...[
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(Icons.person_outline_rounded, size: 18, color: colors.textMuted),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        account.username,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, color: colors.textMain),
-                      ),
-                    ),
-                    if (friends.blocked.contains(account.id)) ...[
-                      Text(context.tr('Blocked'), style: TextStyle(fontSize: 12, color: colors.danger)),
-                      const SizedBox(width: 8),
-                      TextButton(
-                        onPressed: () => friends.setBlocked(account, false),
-                        child: Text(context.tr('Unblock'), style: TextStyle(color: colors.accent, fontSize: 13)),
-                      ),
-                    ] else
-                      TextButton(
-                        onPressed: () => friends.setBlocked(account, true),
-                        child: Text(context.tr('Block'), style: TextStyle(color: colors.danger, fontSize: 13)),
-                      ),
-                  ],
-                ),
-              ),
-              Divider(color: colors.glassBorder, height: 1),
-            ],
-            _StatusLine(friends.friendsError, isError: true),
-          ],
+      builder: (context, _) => _SettingsCard(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        title: _CardTitle(
+          icon: Icons.people_outline_rounded,
+          title: context.tr('FriendsSection'),
+          subtitle: context.tr('FriendsHint'),
         ),
+        children: [
+          if (friends.friends.isEmpty && friends.friendsError.isEmpty)
+            Text(context.tr('FriendsNone'), style: TextStyle(color: colors.textMuted, fontSize: 13)),
+          for (final account in friends.friends) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.person_outline_rounded, size: 18, color: colors.textMuted),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      account.username,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: colors.textMain),
+                    ),
+                  ),
+                  if (friends.blocked.contains(account.id)) ...[
+                    Text(context.tr('Blocked'), style: TextStyle(fontSize: 12, color: colors.danger)),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () => friends.setBlocked(account, false),
+                      child: Text(context.tr('Unblock'), style: TextStyle(color: colors.accent, fontSize: 13)),
+                    ),
+                  ] else
+                    TextButton(
+                      onPressed: () => friends.setBlocked(account, true),
+                      child: Text(context.tr('Block'), style: TextStyle(color: colors.danger, fontSize: 13)),
+                    ),
+                ],
+              ),
+            ),
+            Divider(color: colors.glassBorder, height: 1),
+          ],
+          _StatusLine(friends.friendsError, isError: true),
+        ],
       ),
     );
   }
@@ -1655,68 +1705,62 @@ class _HiddenContentCard extends StatelessWidget {
       listenable: vm,
       builder: (context, _) {
         final hidden = vm.hiddenItems;
-        return GlassCard(
-          opaque: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _CardTitle(
-                icon: Icons.visibility_off_outlined,
-                title: context.tr('HiddenContent'),
-                subtitle: context.tr('HiddenContentHint'),
-              ),
-              if (hidden.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(
-                    context.tr('HiddenContentEmpty'),
-                    style: TextStyle(color: colors.textMuted, fontSize: 13),
-                  ),
-                )
-              else ...[
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 280),
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final item in hidden) ...[
-                        _hiddenRow(
-                          context,
-                          icon: switch (item.kind) {
-                            HiddenKind.artist => Icons.person_outline_rounded,
-                            HiddenKind.album => Icons.album_outlined,
-                            HiddenKind.track => Icons.music_note_outlined,
-                          },
-                          label: item.label,
-                          onUnhide: () => vm.unhide(item),
-                        ),
-                        Divider(color: colors.glassBorder, height: 1),
-                      ],
+        return _SettingsCard(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          title: _CardTitle(
+            icon: Icons.visibility_off_outlined,
+            title: context.tr('HiddenContent'),
+            subtitle: context.tr('HiddenContentHint'),
+          ),
+          children: [
+            if (hidden.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(context.tr('HiddenContentEmpty'), style: TextStyle(color: colors.textMuted, fontSize: 13)),
+              )
+            else ...[
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final item in hidden) ...[
+                      _hiddenRow(
+                        context,
+                        icon: switch (item.kind) {
+                          HiddenKind.artist => Icons.person_outline_rounded,
+                          HiddenKind.album => Icons.album_outlined,
+                          HiddenKind.track => Icons.music_note_outlined,
+                        },
+                        label: item.label,
+                        onUnhide: () => vm.unhide(item),
+                      ),
+                      Divider(color: colors.glassBorder, height: 1),
                     ],
+                  ],
+                ),
+              ),
+              if (hidden.length > 1) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final confirmed = await confirmAction(
+                        context,
+                        title: context.tr('UnhideAllConfirm'),
+                        message: context.trf('UnhideAllConfirmHint', [hidden.length]),
+                        confirmLabel: context.tr('UnhideAll'),
+                      );
+                      if (confirmed) vm.library.unhideAll();
+                    },
+                    icon: const Icon(Icons.visibility_outlined, size: 16),
+                    label: Text(context.tr('UnhideAll')),
                   ),
                 ),
-                if (hidden.length > 1) ...[
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final confirmed = await confirmAction(
-                          context,
-                          title: context.tr('UnhideAllConfirm'),
-                          message: context.trf('UnhideAllConfirmHint', [hidden.length]),
-                          confirmLabel: context.tr('UnhideAll'),
-                        );
-                        if (confirmed) vm.library.unhideAll();
-                      },
-                      icon: const Icon(Icons.visibility_outlined, size: 16),
-                      label: Text(context.tr('UnhideAll')),
-                    ),
-                  ),
-                ],
               ],
             ],
-          ),
+          ],
         );
       },
     );

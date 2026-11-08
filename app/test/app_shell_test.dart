@@ -1416,9 +1416,49 @@ void main() {
     signedIn.dispose();
   });
 
+  testWidgets("a phone's Settings cards fold, the account's open, and stay as left; a computer's are all open", (
+    tester,
+  ) async {
+    var vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    final appearance = find.text(Localizer.get('SettingsAppearanceSection'));
+    final theme = find.text(Localizer.get('ThemeAiry'));
+    expect(find.text(Localizer.get('AccountAndConnection')), findsOneWidget);
+    expect(theme, findsNothing, reason: 'folded');
+    await tester.ensureVisible(appearance);
+    await settle(tester);
+    await tester.tap(appearance);
+    await settle(tester);
+    expect(theme, findsOneWidget);
+
+    // Left open: another section and back, and it is still open.
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    await tester.ensureVisible(appearance);
+    await settle(tester);
+    expect(theme, findsOneWidget);
+    await tester.tap(appearance);
+    await settle(tester);
+    expect(theme, findsNothing, reason: 'folded again');
+
+    vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    expect(find.text(Localizer.get('ThemeAiry'), skipOffstage: false), findsOneWidget, reason: 'every card open');
+  });
+
   testWidgets('the equalizer shows ten sliders and the presets once it is on, and fits a phone', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    // A phone's Settings cards are folded: the audio card opens with a tap on its title.
+    final audio = find.text(Localizer.get('SettingsAudioSection'));
+    await tester.ensureVisible(audio);
+    await settle(tester);
+    await tester.tap(audio);
     await settle(tester);
     final heading = find.text(Localizer.get('SettingsEqualizer'));
     await tester.ensureVisible(heading);
