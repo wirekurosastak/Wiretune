@@ -2493,6 +2493,22 @@ void main() {
       expect(black, findsOneWidget);
       expect(washed(find.byType(FrameWash)), album.coverArtPath, reason: "the album's cover at the page's top");
 
+      // Pulled down past its top, the page gives; the wash stays at the top and stretches down with it, no black above.
+      final wash = find.descendant(of: find.byType(FrameWash), matching: find.byType(ShaderMask));
+      final still = tester.getRect(wash);
+      final pull = await tester.startGesture(tester.getRect(find.byType(AlbumDetail)).center);
+      await pull.moveBy(const Offset(0, 40));
+      await pull.moveBy(const Offset(0, 120));
+      await tester.pump();
+      final pulled = tester.getRect(wash);
+      expect(pulled.top, still.top);
+      expect(pulled.height, greaterThan(still.height + 20));
+      await pull.up();
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 100)); // the page bounces back
+      }
+      expect(tester.getRect(wash), still, reason: 'back in place');
+
       // Airy: the album's page on the backdrop, still in its own cover's colour.
       vm.setTheme(WiretuneTheme.airy, persist: false);
       await settle(tester);
@@ -2559,12 +2575,13 @@ void main() {
   });
 
   testWidgets(
-    "in the Dark theme a computer's page is framed in black, an album's cover washing its top, the window the song's",
+    "in the Dark theme a computer's page is framed in black, an album's cover washing its top and leaving with it, the window the song's",
     (tester) async {
       final vm = await pumpApp(tester, const Size(1400, 900), () async {
         final library = createLibrary([
           TestSupport.makeTrack('1', 'So What', album: 'Red')..coverArtPath = '/covers/red.png',
-          TestSupport.makeTrack('2', 'Naima', album: 'Blue')..coverArtPath = '/covers/blue.png',
+          for (var i = 0; i < 40; i++)
+            TestSupport.makeTrack('b$i', 'Naima $i', album: 'Blue')..coverArtPath = '/covers/blue.png',
         ]);
         library.initialize();
         return createMainViewModel(library);
@@ -2601,6 +2618,25 @@ void main() {
       await settle(tester);
       expect(washed(find.byType(FrameWash)), '/covers/blue.png');
       expect(washed(window), '/covers/red.png');
+
+      // Scrolled, the wash goes up with the page's header; another album's page starts it at the top again.
+      double washMoved() => tester
+          .widget<Transform>(find.descendant(of: find.byType(FrameWash), matching: find.byType(Transform)).first)
+          .transform
+          .getTranslation()
+          .y;
+      final list = tester.state<ScrollableState>(
+        find.descendant(of: find.byType(AlbumDetail), matching: find.byType(Scrollable)).first,
+      );
+      list.position.jumpTo(300);
+      await tester.pump();
+      expect(list.position.pixels, 300);
+      expect(washMoved(), -300);
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Red'));
+      await settle(tester);
+      expect(washMoved(), 0);
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
+      await settle(tester);
 
       vm.setTheme(WiretuneTheme.airy, persist: false);
       await settle(tester);

@@ -515,7 +515,9 @@ class _PageFrame extends StatelessWidget {
           : const BoxDecoration(),
       child: ClipRRect(
         borderRadius: radius,
-        child: Stack(fit: StackFit.expand, children: [framed ? const FrameWash() : const SizedBox.shrink(), child]),
+        child: FrameWashScope(
+          child: Stack(fit: StackFit.expand, children: [framed ? const FrameWash() : const SizedBox.shrink(), child]),
+        ),
       ),
     );
   }

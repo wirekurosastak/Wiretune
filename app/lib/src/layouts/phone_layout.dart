@@ -61,35 +61,40 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
                 backgroundColor: colors.palette.background,
                 // The page reaches under the floating bars; the Scaffold tells it how much they cover.
                 extendBody: true,
-                body: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: vm.theme == WiretuneTheme.dark ? const _BlackPage() : const AmbientBackdrop(colour: 0.70),
-                    ),
-                    Column(
-                      children: [
-                        _SearchBarSlot(open: vm.isSearchOpen),
-                        if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
-                        const UpdateBanner(phone: true, margin: EdgeInsets.fromLTRB(12, 4, 12, 4)),
-                        Expanded(
-                          child: SizedBox.expand(
-                            child: vm.isSearchOpen
-                                // A touch on the results puts the keyboard away (as in Spotify): a menu opened there
-                                // then has no field to give the focus back to when it closes.
-                                ? Listener(
-                                    key: const ValueKey('search'),
-                                    onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
-                                    child: const SearchResults(),
-                                  )
-                                : KeyedSubtree(
-                                    key: ValueKey(vm.selectedSection),
-                                    child: sectionPage(vm.selectedSection),
-                                  ),
+                // The page's scrolling for its wash, in the Dark theme ([FrameWash]).
+                body: FrameWashScope(
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: vm.theme == WiretuneTheme.dark
+                            ? const _BlackPage()
+                            : const AmbientBackdrop(colour: 0.70),
+                      ),
+                      Column(
+                        children: [
+                          _SearchBarSlot(open: vm.isSearchOpen),
+                          if (vm.isServerOfflineBannerVisible) const SafeArea(bottom: false, child: _OfflineBanner()),
+                          const UpdateBanner(phone: true, margin: EdgeInsets.fromLTRB(12, 4, 12, 4)),
+                          Expanded(
+                            child: SizedBox.expand(
+                              child: vm.isSearchOpen
+                                  // A touch on the results puts the keyboard away (as in Spotify): a menu opened there
+                                  // then has no field to give the focus back to when it closes.
+                                  ? Listener(
+                                      key: const ValueKey('search'),
+                                      onPointerDown: (_) => FocusManager.instance.primaryFocus?.unfocus(),
+                                      child: const SearchResults(),
+                                    )
+                                  : KeyedSubtree(
+                                      key: ValueKey(vm.selectedSection),
+                                      child: sectionPage(vm.selectedSection),
+                                    ),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
                 bottomNavigationBar: const _BottomBars(),
               ),

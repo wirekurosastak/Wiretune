@@ -305,13 +305,16 @@ class AmbientBackdrop extends StatelessWidget {
 }
 
 /// The top of a black page of the Dark theme ([WiretuneTheme.dark]) on an album's or an artist's page: washed in
-/// the colours of its cover, fading out downwards over about the page's header. Nothing on any other page, or in the
-/// Airy theme.
+/// the colours of its cover, fading out downwards over about the page's header, and leaving with the header as the
+/// page scrolls ([FrameWashScope]). Nothing on any other page, or in the Airy theme.
 class FrameWash extends StatelessWidget {
   const FrameWash({super.key});
 
   /// How far down the wash reaches, at most.
   static const double height = 380;
+
+  /// Where it stays without a [FrameWashScope] around it.
+  static final ValueNotifier<double> _unscrolled = ValueNotifier(0);
 
   /// Whether an album's or an artist's page is on show in the Dark theme, with no search or queue over it.
   static bool isOn(MainViewModel vm) =>
@@ -331,14 +334,26 @@ class FrameWash extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.vm;
+    final scrolled = context.findAncestorStateOfType<_FrameWashScopeState>()?._scrolled ?? _unscrolled;
     return ListenableBuilder(
       listenable: Listenable.merge([vm, vm.player, vm.albums, vm.artists]),
       builder: (context, _) => LayoutBuilder(
-        builder: (context, constraints) => Align(
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: double.infinity,
-            height: math.min(height, constraints.maxHeight * 0.6),
+        builder: (context, constraints) => ValueListenableBuilder(
+          valueListenable: scrolled,
+          // Up as far as the page has scrolled, as its header goes. Pulled down past its top (a phone's page gives, as
+          // an iPhone's does) it stays at the top and stretches down with the header, leaving no black above it.
+          builder: (context, offset, child) => Transform.translate(
+            offset: Offset(0, -math.max(offset, 0.0)),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: double.infinity,
+                height: math.min(height, constraints.maxHeight * 0.6) + math.max(-offset, 0.0),
+                child: child,
+              ),
+            ),
+          ),
+          child: RepaintBoundary(
             child: ShaderMask(
               blendMode: BlendMode.dstIn,
               shaderCallback: (rect) => const LinearGradient(
@@ -354,6 +369,40 @@ class FrameWash extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Around the page and its [FrameWash]: how far the page has scrolled, from its own list (the outermost one under this,
+/// going up and down; not a row of tiles going sideways), as soon as it is laid out and as it scrolls.
+class FrameWashScope extends StatefulWidget {
+  const FrameWashScope({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<FrameWashScope> createState() => _FrameWashScopeState();
+}
+
+class _FrameWashScopeState extends State<FrameWashScope> {
+  final ValueNotifier<double> _scrolled = ValueNotifier(0);
+
+  @override
+  void dispose() {
+    _scrolled.dispose();
+    super.dispose();
+  }
+
+  bool _follow(Notification notification) {
+    final (metrics, depth) = switch (notification) {
+      ScrollNotification(:final metrics, :final depth) => (metrics, depth),
+      ScrollMetricsNotification(:final metrics, :final depth) => (metrics, depth),
+      _ => (null, -1),
+    };
+    if (metrics != null && depth == 0 && metrics.axis == Axis.vertical) _scrolled.value = metrics.pixels;
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) => NotificationListener(onNotification: _follow, child: widget.child);
 }
 
 /// The Albums or the Artists page, in the accent of the album or the artist it has open (the cover that washes it,
