@@ -36,8 +36,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   /// Whether the user may pick an output (desktop); phones and TVs play to the system's output.
   final bool allowDeviceSelection;
 
-  /// Whether to run the spectrum analyser: on a computer (it needs `ffmpeg` on the PATH), and on an Android phone (with
-  /// the phone's own decoder).
+  /// Whether to run the spectrum analyser: on a computer (it needs `ffmpeg` on the PATH), and on a phone (with the
+  /// phone's own decoder).
   final bool enableSpectrum;
 
   /// Whether it runs only while a spectrum is on screen ([spectrumShown]): a phone's, as decoding each track a second

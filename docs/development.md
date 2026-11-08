@@ -134,7 +134,8 @@ development machine with a throw-away data folder ([SECURITY.md](../SECURITY.md#
   `com.wiretune.player`.
 - **iOS and macOS:** `ios/Runner/Info.plist` declares background audio, local network access and plain HTTP.
   `ios/Runner/AppDelegate.swift` handles `excludeFromBackup` on the `wiretune/platform` channel (keeps downloads out of
-  iCloud backups). `macos/Runner/*.entitlements` leaves the app unsandboxed; its comment says why. Every platform's
+  iCloud backups), and `ios/Runner/PcmDecoder.swift` decodes a track for the spectrum on `wiretune/pcm`, as Android's
+  `PcmDecoder.kt` does. `macos/Runner/*.entitlements` leaves the app unsandboxed; its comment says why. Every platform's
   channel methods are listed on `AppPlatform._channel` (`app/lib/src/platform.dart`).
 - **Linux and Windows:** `main.dart` hides the system title bar; the header draws its own window buttons.
 - **Tizen:** `tizen/` is the .NET runner. Dart sees Tizen as Linux, so `App.cs` answers the `wiretune/platform` channel
@@ -197,7 +198,9 @@ icons are made by hand; the commands are in `app/pubspec.yaml`.
 - analyzes every package and `tool/` with `--fatal-infos`
 - runs every test, with `ffmpeg` installed
 - builds the server, the APKs, the desktop players, the Linux packages and an unsigned iOS app through
-  `tool/build.dart`, and keeps `dist/server` and the APKs as artifacts
+  `tool/build.dart`, and keeps `dist/server`, the APKs and the unsigned iOS app as artifacts
+
+*Run workflow* runs it on any branch, for that branch's iPhone app.
 
 It doesn't build Tizen and runs nothing on a device. Releases: [releasing.md](releasing.md).
 
@@ -212,7 +215,8 @@ It doesn't build Tizen and runs nothing on a device. Releases: [releasing.md](re
 | Linux packages | The `.deb` and `.rpm` installed and started on Ubuntu 24.04, Debian 13 and Fedora 44 (in containers) |
 | Windows | Built and run |
 | Android | Built and run on a phone. **Untested on a TV and in a car**, and so is downloading into the shared *Music* folder without a permission (Android 11 and later) |
-| macOS, iOS | Built by CI only; **never run** |
+| macOS | Built by CI only; **never run** |
+| iOS | Sideloaded and run on an iPhone (iOS 27). The spectrum came after that and is **untested** |
 | Tizen | Built on Fedora and tried briefly on a 2024 Samsung TV (Tizen 8.0): signs in, plays, the remote reaches everything, but navigation is slow and **needs more work** |
 | Updates | In the tests: the check, the download and its checksum, and replacing a Linux folder. No release exists yet, so no copy has updated itself for real. The package, Windows, macOS and Android steps are untried |
 | Exclusive, bit-perfect | Tried on Linux and Windows with an SMSL SU-1 DAC; not measured ([audio.md](audio.md#bit-perfect)) |

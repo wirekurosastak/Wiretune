@@ -154,6 +154,11 @@ dart tool/build.dart ios
 
 Output: `dist/ios/*.ipa`. Bundle ID: `com.wiretune.player`.
 
+Without a Mac: run CI on your branch (*Actions → CI → Run workflow*), download its `wiretune-ios-unsigned` artifact,
+and sign and install the `.ipa` with your Apple ID through a sideloading tool such as
+[Impactor](https://github.com/claration/impactor). The iPhone needs *Developer Mode* on. With a free Apple ID the app
+runs for 7 days, then sign it again.
+
 ## Samsung TV player (Tizen)
 
 Install the [Tizen SDK with the TV extensions](https://developer.samsung.com/smarttv/develop/getting-started/setting-up-sdk/installing-tv-sdk.html)
