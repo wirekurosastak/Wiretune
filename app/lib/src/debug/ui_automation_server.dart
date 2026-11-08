@@ -95,10 +95,11 @@ class UiAutomationServer {
           _vm.changeLanguage(code);
           return await _json(request, 200, {'success': true, 'language': code});
         case '/api/ui/theme':
-          final mode = query['mode'];
-          if (mode != 'light' && mode != 'dark') break;
-          _vm.setTheme(light: mode == 'light', persist: false);
-          return await _json(request, 200, {'success': true, 'theme': mode});
+          // ?name=airy|dark
+          final theme = WiretuneTheme.values.asNameMap()[query['name']];
+          if (theme == null) break;
+          _vm.setTheme(theme, persist: false);
+          return await _json(request, 200, {'success': true, 'theme': theme.name});
         case '/api/ui/sort':
           // ?list=tracks|favorites|albums|artists&field=<the field's name>; the active field flips its direction.
           final field = query['field'];

@@ -10,7 +10,8 @@ the administrator account with its setup code ([server.md](server.md#start-it)).
 if you have none, pick your music folder in *Settings → Library* and press **Scan**. On Android the first scan asks for
 permission to read your music.
 
-The interface starts in English. Hungarian and German are in *Settings → Appearance*.
+The interface starts in English. Hungarian and German are in *Settings → Appearance*, and so is the theme: **Airy**
+(the cover's colors fill the window) or **Dark** (pages on black, an open album or artist in its cover's colors).
 
 ## The library
 

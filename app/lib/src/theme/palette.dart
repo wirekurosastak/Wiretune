@@ -5,11 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:material_color_utilities/material_color_utilities.dart' show Hct;
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// The colours of one theme (dark or light): neutral ones, as in TIDAL, but for the accent, which is the colour of the
-/// song that plays ([accentOf]), and the favourites' red.
+/// The app's colours, dark ones only (as in TIDAL and Spotify): neutral ones, but for the accent, which is the colour
+/// of the song that plays ([accentOf]), and the favourites' red.
 class Palette {
   const Palette({
-    required this.isDark,
     required this.background,
     required this.panel,
     required this.surface1,
@@ -31,7 +30,6 @@ class Palette {
     required this.shadow,
   });
 
-  final bool isDark;
   final Color background;
 
   /// A translucent surface over the backdrop (the sign-in card, a notice, the empty state's orb), so that the
@@ -58,8 +56,7 @@ class Palette {
   /// The favourites' red: a favourite's heart, whatever the accent.
   final Color favorite;
 
-  /// The accent while nothing plays, or what plays has a grey cover or none: a soft white on the dark theme, a slate
-  /// on the light one.
+  /// The accent while nothing plays, or what plays has a grey cover or none: a soft white.
   final Color neutral;
 
   /// Text and icons on an accent-filled surface.
@@ -69,7 +66,6 @@ class Palette {
   final Color shadow;
 
   static const dark = Palette(
-    isDark: true,
     background: Color(0xFF060609),
     panel: Color(0xB80C0C12),
     surface1: Color(0x0FFFFFFF),
@@ -91,50 +87,24 @@ class Palette {
     shadow: Color(0x99000000),
   );
 
-  static const light = Palette(
-    isDark: false,
-    background: Color(0xFFF2F3F7),
-    panel: Color(0xC7FFFFFF),
-    surface1: Color(0x0C000000),
-    surface2: Color(0x16000000),
-    glassBackground: Color(0x08000000),
-    glassBorder: Color(0x14000000),
-    glassHighlight: Color(0x2A000000),
-    textMain: Color(0xFF0E0E14),
-    textMuted: Color(0xFF2B3648),
-    textDisabled: Color(0xFF64748B),
-    success: Color(0xFF0E9F6E),
-    warning: Color(0xFFD97706),
-    danger: Color(0xFFE11D48),
-    modal: Color(0xFFFFFFFF),
-    panelBorder: Color(0x22000000),
-    favorite: Color(0xFFE11D48),
-    neutral: Color(0xFF1E293B),
-    onAccent: Color(0xFFFFFFFF),
-    shadow: Color(0x2E1A1A33),
-  );
-
   /// The accent for the colour of the cover of what plays (`CoverColor.of`; null for none, or a grey one: the
   /// [neutral]): its hue, about as colourful as the cover is (a muted cover a muted accent, a loud one not a neon one),
-  /// at the lightness the eye sees as light on the dark theme and deep on the light one, whatever the hue, so that text
-  /// in it and [onAccent] on it read (Material's tone). On the light theme a yellow (a gold, a khaki) deep enough to
-  /// read on white is olive, so there it is the [neutral].
+  /// at a lightness the eye sees as light whatever the hue, so that text in it and [onAccent] on it read (Material's
+  /// tone).
   Color accentOf(Color? cover) {
     if (cover == null) return neutral;
-    final hue = HSLColor.fromColor(cover).hue;
-    if (!isDark && hue >= 40 && hue < 70) return neutral;
     final hct = Hct.fromInt(cover.toARGB32());
-    return Color(Hct.from(hct.hue, hct.chroma.clamp(_leastChroma, _mostChroma), isDark ? 72 : 40).toInt());
+    return Color(Hct.from(hct.hue, hct.chroma.clamp(_leastChroma, _mostChroma), 72).toInt());
   }
 
   /// How colourful an accent is at least (clearly a colour, not a grey) and at most (not a neon).
   static const double _leastChroma = 24, _mostChroma = 60;
 
   /// [accent] under the mouse: a little lighter.
-  Color hoverOf(Color accent) => _lighter(accent, isDark ? 0.1 : 0.06);
+  Color hoverOf(Color accent) => _lighter(accent, 0.1);
 
   /// [accent] pressed: a little deeper.
-  Color pressedOf(Color accent) => _lighter(accent, isDark ? -0.1 : -0.08);
+  Color pressedOf(Color accent) => _lighter(accent, -0.1);
 
   static Color _lighter(Color color, double by) {
     final hsl = HSLColor.fromColor(color);

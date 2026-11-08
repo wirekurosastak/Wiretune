@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 
 import '../view_models/app_section.dart';
+import '../widgets/ambient.dart';
 import 'library_pages.dart';
 import 'playlists_page.dart';
 import 'settings_page.dart';
@@ -11,14 +12,14 @@ import 'settings_page.dart';
 /// The page of a navigation section; the same in both layouts.
 Widget sectionPage(AppSection section) => switch (section) {
   AppSection.tracks => const TracksPage(),
-  AppSection.albums => const AlbumsPage(),
-  AppSection.artists => const ArtistsPage(),
+  AppSection.albums => const ViewedAccent(child: AlbumsPage()),
+  AppSection.artists => const ViewedAccent(child: ArtistsPage()),
   AppSection.playlists => const PlaylistsPage(),
   AppSection.favorites => const FavoritesPage(),
   AppSection.settings => const SettingsPage(),
 };
 
-/// The icon of a section, in the sidebar and the phone's tab bar alike (its colour is `Palette.accentFor`).
+/// The icon of a section, in the sidebar and the phone's tab bar alike.
 IconData sectionIcon(AppSection section) => switch (section) {
   AppSection.artists => Icons.person_rounded,
   AppSection.albums => Icons.album,

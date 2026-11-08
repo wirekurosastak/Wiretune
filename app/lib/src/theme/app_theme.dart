@@ -30,7 +30,7 @@ class WiretuneColors extends ThemeExtension<WiretuneColors> {
   /// The coloured glow under an accent-filled control.
   List<BoxShadow> accentGlow([double strength = 1]) => [
     BoxShadow(
-      color: accent.withValues(alpha: (palette.isDark ? 0.45 : 0.35) * strength),
+      color: accent.withValues(alpha: 0.45 * strength),
       blurRadius: 18 * strength,
       spreadRadius: -2,
       offset: Offset(0, 4 * strength),
@@ -73,33 +73,31 @@ abstract final class Radii {
   static const double pill = 999;
 }
 
-final Map<(bool, int, bool, bool), ThemeData> _themes = {};
+final Map<(int, bool, bool), ThemeData> _themes = {};
 
 /// [buildTheme], built once per accent and reused while it comes back (the same album's songs, its page opened again).
-ThemeData cachedTheme({required bool light, required Color accent, required bool isTv, bool desktopFonts = false}) {
+ThemeData cachedTheme({required Color accent, required bool isTv, bool desktopFonts = false}) {
   if (_themes.length > 16) _themes.clear();
   return _themes.putIfAbsent((
-    light,
     accent.toARGB32(),
     isTv,
     desktopFonts,
-  ), () => buildTheme(light: light, accent: accent, isTv: isTv, desktopFonts: desktopFonts));
+  ), () => buildTheme(accent: accent, isTv: isTv, desktopFonts: desktopFonts));
 }
 
 /// The theme, in [accent] (`Palette.accentOf`).
-ThemeData buildTheme({required bool light, required Color accent, required bool isTv, bool desktopFonts = false}) {
-  final palette = light ? Palette.light : Palette.dark;
-  // Text and icons on an accent-filled button: near-black on the dark theme's bright accents, white on the light one's.
+ThemeData buildTheme({required Color accent, required bool isTv, bool desktopFonts = false}) {
+  const palette = Palette.dark;
+  // Text and icons on an accent-filled button: near-black on the bright accents.
   final onAccent = palette.onAccent;
-  final scheme = ColorScheme.fromSeed(seedColor: accent, brightness: light ? Brightness.light : Brightness.dark)
-      .copyWith(
-        primary: accent,
-        onPrimary: onAccent,
-        secondary: accent,
-        surface: palette.modal,
-        onSurface: palette.textMain,
-        error: palette.danger,
-      );
+  final scheme = ColorScheme.fromSeed(seedColor: accent, brightness: Brightness.dark).copyWith(
+    primary: accent,
+    onPrimary: onAccent,
+    secondary: accent,
+    surface: palette.modal,
+    onSurface: palette.textMain,
+    error: palette.danger,
+  );
 
   // A TV remote's focus shows only by this: there in the neutral colour, which reads over every cover's wash.
   final focus = isTv ? palette.neutral.withValues(alpha: 0.45) : accent.withValues(alpha: 0.25);
@@ -108,9 +106,9 @@ ThemeData buildTheme({required bool light, required Color accent, required bool 
     borderRadius: BorderRadius.circular(Radii.medium),
     borderSide: BorderSide(color: color, width: width),
   );
-  final textTheme = Typography.material2021(platform: TargetPlatform.android).englishLike
-      .merge(light ? Typography.blackMountainView : Typography.whiteMountainView)
-      .apply(bodyColor: palette.textMain, displayColor: palette.textMain);
+  final textTheme = Typography.material2021(
+    platform: TargetPlatform.android,
+  ).englishLike.merge(Typography.whiteMountainView).apply(bodyColor: palette.textMain, displayColor: palette.textMain);
   return ThemeData(
     useMaterial3: true,
     // The font chain: Segoe UI Variable on Windows, Inter where installed, otherwise the system's sans-serif
@@ -120,7 +118,7 @@ ThemeData buildTheme({required bool light, required Color accent, required bool 
         ? const ['Segoe UI', 'Inter', 'Noto Sans', 'Cantarell', 'DejaVu Sans', 'Arial']
         : null,
     colorScheme: scheme,
-    brightness: light ? Brightness.light : Brightness.dark,
+    brightness: Brightness.dark,
     scaffoldBackgroundColor: palette.background,
     canvasColor: palette.modal,
     focusColor: focus,
@@ -134,7 +132,7 @@ ThemeData buildTheme({required bool light, required Color accent, required bool 
     tooltipTheme: TooltipThemeData(
       waitDuration: const Duration(milliseconds: 500),
       decoration: BoxDecoration(
-        color: light ? const Color(0xF0181820) : const Color(0xF22A2A34),
+        color: const Color(0xF22A2A34),
         borderRadius: BorderRadius.circular(Radii.small),
         boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 12, offset: Offset(0, 4))],
       ),

@@ -63,7 +63,9 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
                 extendBody: true,
                 body: Stack(
                   children: [
-                    const Positioned.fill(child: AmbientBackdrop(colour: 0.70)),
+                    Positioned.fill(
+                      child: vm.theme == WiretuneTheme.dark ? const _BlackPage() : const AmbientBackdrop(colour: 0.70),
+                    ),
                     Column(
                       children: [
                         _SearchBarSlot(open: vm.isSearchOpen),
@@ -101,6 +103,16 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
       ),
     );
   }
+}
+
+/// In the Dark theme every page lies on black, as a computer's page frame is: an album's or an artist's with its cover
+/// glowing at the top ([FrameWash]). The colours of the song that plays are the full-screen player's alone, and black
+/// pixels cost an OLED screen nothing.
+class _BlackPage extends StatelessWidget {
+  const _BlackPage();
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(color: context.colors.palette.modal, child: const FrameWash());
 }
 
 /// The full-screen player, as far open as its [sheet] is: rising from the screen's bottom when opened and going back

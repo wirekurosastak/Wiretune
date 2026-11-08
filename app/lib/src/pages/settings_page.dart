@@ -10,6 +10,7 @@ import '../localization.dart';
 import '../platform.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
+import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
 import '../view_models/settings_view_models.dart';
 import '../widgets/devices.dart';
@@ -1277,7 +1278,7 @@ class _AppearanceCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            // The two themes as choices, like the languages.
+            // The themes as choices, like the languages.
             Text(
               context.tr('Theme'),
               style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
@@ -1289,12 +1290,8 @@ class _AppearanceCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                for (final (light, key) in const [(false, 'ThemeDark'), (true, 'ThemeLight')])
-                  _choice(
-                    context.tr(key),
-                    selected: vm.isLight == light,
-                    onPressed: () => vm.setTheme(light: light),
-                  ),
+                for (final (theme, key) in const [(WiretuneTheme.airy, 'ThemeAiry'), (WiretuneTheme.dark, 'ThemeDark')])
+                  _choice(context.tr(key), selected: vm.theme == theme, onPressed: () => vm.setTheme(theme)),
               ],
             ),
             const SizedBox(height: 16),

@@ -246,7 +246,8 @@ class AmbientBackdrop extends StatelessWidget {
 
   final double colour;
 
-  /// Behind the full-screen player: the colours of the track that plays, whatever page is open under it.
+  /// The colours of the track that plays, whatever page is open: behind the full-screen player, and around the black
+  /// pages of the Dark theme, where the open album's or artist's cover glows at the top instead ([FrameWash]).
   final bool nowPlaying;
 
   /// The cover whose colours wash the backdrop: the album's or the artist's whose page is open (unless [nowPlaying]),
@@ -274,13 +275,9 @@ class AmbientBackdrop extends StatelessWidget {
     final player = vm.player;
     final platform = AppPlatform.current;
     final colors = context.colors;
-    final isDark = colors.palette.isDark;
     final base = colors.palette.background;
-    // The less colour, the thicker the veil. In light mode a gentle pastel wash keeps readability crisp.
-    final veil = isDark
-        ? [0.5 - 0.35 * colour, 0.75 - 0.4 * colour, 0.85 - 0.1 * colour]
-        : [0.68 - 0.22 * colour, 0.82 - 0.18 * colour, 0.92 - 0.12 * colour];
-    final artworkOpacity = isDark ? colour : (colour * 0.42).clamp(0.0, 0.36);
+    // The less colour, the thicker the veil.
+    final veil = [0.5 - 0.35 * colour, 0.75 - 0.4 * colour, 0.85 - 0.1 * colour];
 
     return ListenableBuilder(
       listenable: Listenable.merge([vm, player, vm.albums, vm.artists]),
@@ -290,7 +287,7 @@ class AmbientBackdrop extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             AnimatedContainer(duration: const Duration(milliseconds: 450), color: base),
-            AmbientArtwork(path: cover, drift: player.isPlaying && platform.isDesktop, opacity: artworkOpacity),
+            AmbientArtwork(path: cover, drift: player.isPlaying && platform.isDesktop, opacity: colour),
             DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -305,6 +302,173 @@ class AmbientBackdrop extends StatelessWidget {
       },
     );
   }
+}
+
+/// The top of a black page of the Dark theme ([WiretuneTheme.dark]) on an album's or an artist's page: washed in
+/// the colours of its cover, fading out downwards over about the page's header. Nothing on any other page, or in the
+/// Airy theme.
+class FrameWash extends StatelessWidget {
+  const FrameWash({super.key});
+
+  /// How far down the wash reaches, at most.
+  static const double height = 380;
+
+  /// Whether an album's or an artist's page is on show in the Dark theme, with no search or queue over it.
+  static bool isOn(MainViewModel vm) =>
+      vm.theme == WiretuneTheme.dark &&
+      !vm.isSearchActive &&
+      !vm.isSearchOpen &&
+      !vm.player.isQueueOpen &&
+      switch (vm.selectedSection) {
+        AppSection.albums => vm.albums.isAlbumDetailOpen,
+        AppSection.artists => vm.artists.isArtistDetailOpen,
+        _ => false,
+      };
+
+  /// The cover it shows: the open album's or artist's while [isOn].
+  static String? coverPath(MainViewModel vm) => isOn(vm) ? AmbientBackdrop.viewedCoverPath(vm) : null;
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    return ListenableBuilder(
+      listenable: Listenable.merge([vm, vm.player, vm.albums, vm.artists]),
+      builder: (context, _) => LayoutBuilder(
+        builder: (context, constraints) => Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: double.infinity,
+            height: math.min(height, constraints.maxHeight * 0.6),
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (rect) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.black, Colors.black54, Colors.transparent],
+                stops: [0, 0.55, 1],
+              ).createShader(rect),
+              child: AmbientArtwork(path: coverPath(vm), opacity: 0.6),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The Albums or the Artists page, in the Dark theme in the accent of the album or the artist it has open (the cover
+/// its [FrameWash] shows): its Play button, its slider, the song that plays in its list. The players around it keep the
+/// colour of the song that plays, and the page takes it back when the album or the artist closes. The accent and its
+/// blend are the [ViewedAccentScope]'s, above the pages: an album opened from its artist's page (another section's)
+/// blends on from the artist's accent, not from the song's.
+class ViewedAccent extends StatelessWidget {
+  const ViewedAccent({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context); // rebuilt with the app's theme
+    final viewed = context.dependOnInheritedWidgetOfExactType<_ViewedTheme>()?.data;
+    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
+    return Theme(data: viewed ?? context.findAncestorWidgetOfExactType<Theme>()!.data, child: child);
+  }
+}
+
+/// Where the open album's or artist's accent is kept, and blended over as it changes, for the [ViewedAccent] pages
+/// under it: above them, so that one page giving way to another (an artist's to its album's, a section to another)
+/// blends from the accent that was on show, and keeps it while the next cover's colour is read. Only in the Dark
+/// theme; in the Airy one the pages keep the app's accent.
+class ViewedAccentScope extends StatefulWidget {
+  const ViewedAccentScope({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<ViewedAccentScope> createState() => _ViewedAccentScopeState();
+}
+
+class _ViewedAccentScopeState extends State<ViewedAccentScope> {
+  late final Listenable _views;
+  String? _path;
+
+  /// The open album's or artist's cover colour; null: the page has the app's accent (the song's).
+  ({Color? colour})? _viewed;
+
+  /// Whether the pages have the app's own theme as it is: no album or artist open, and the blend back from one over.
+  bool _plain = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final vm = context.vm;
+    _views = Listenable.merge([vm, vm.albums, vm.artists])..addListener(_follow);
+    _follow();
+  }
+
+  @override
+  void dispose() {
+    _views.removeListener(_follow);
+    super.dispose();
+  }
+
+  void _follow() {
+    final vm = context.vm;
+    final path = vm.theme == WiretuneTheme.dark ? AmbientBackdrop.viewedCoverPath(vm) : null;
+    if (path == _path) return;
+    _path = path;
+    if (path == null) return _show(null);
+    if (CoverColor.isKnown(path)) return _show((colour: CoverColor.known(path)));
+    // Until its colour is read, the accent on show stays.
+    CoverColor.read(path).then((colour) {
+      if (mounted && _path == path) _show((colour: colour));
+    });
+  }
+
+  void _show(({Color? colour})? viewed) {
+    if (viewed == _viewed) return;
+    setState(() {
+      _viewed = viewed;
+      if (viewed != null) _plain = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Theme.of(context); // rebuilt with the app's theme
+    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
+    final inherited = context.findAncestorWidgetOfExactType<Theme>()!.data;
+    final viewed = _viewed;
+    final platform = AppPlatform.current;
+    final target = viewed == null
+        ? inherited
+        : cachedTheme(
+            accent: context.colors.palette.accentOf(viewed.colour),
+            isTv: platform.isTv,
+            desktopFonts: platform.isDesktop,
+          );
+    // From the theme on show to the new one, as the app's own theme blends (`MaterialApp.themeAnimationDuration`); the
+    // first one at once.
+    return TweenAnimationBuilder<ThemeData>(
+      tween: ThemeDataTween(end: target),
+      duration: const Duration(milliseconds: 350),
+      onEnd: () {
+        if (_viewed == null && !_plain) setState(() => _plain = true);
+      },
+      // Null while the pages have the app's own theme.
+      builder: (context, data, child) => _ViewedTheme(data: _plain ? null : data, child: child!),
+      child: widget.child,
+    );
+  }
+}
+
+class _ViewedTheme extends InheritedWidget {
+  const _ViewedTheme({required this.data, required super.child});
+
+  final ThemeData? data;
+
+  @override
+  bool updateShouldNotify(_ViewedTheme oldWidget) => data != oldWidget.data;
 }
 
 /// The colour of a cover, what the accent is made of (`Palette.accentOf`): read once, from the same small decoding as

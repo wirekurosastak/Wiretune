@@ -774,15 +774,18 @@ void main() {
     for (final size in const [Size(1400, 900), Size(1000, 700), Size(400, 860)]) {
       final vm = await pumpApp(tester, size);
       vm.player.currentTrack = vm.library.tracks.first;
-      for (final light in [false, true]) {
-        vm.setTheme(light: light, persist: false);
+      for (final theme in WiretuneTheme.values) {
+        vm.setTheme(theme, persist: false);
         for (final section in AppSection.values) {
           vm.navigateTo(section);
           await settle(tester);
-          expect(tester.takeException(), isNull, reason: '$section at $size, light: $light');
+          expect(tester.takeException(), isNull, reason: '$section at $size, $theme');
         }
+        // An album's page too, where the Dark theme has its black page and its wash.
+        vm.openAlbum(vm.library.albums.first);
+        await settle(tester);
+        expect(tester.takeException(), isNull, reason: 'an album at $size, $theme');
       }
-      expect(Theme.of(tester.element(find.byType(Material).first)).brightness, Brightness.light);
     }
   });
 
@@ -2437,6 +2440,176 @@ void main() {
     expect(tester.widget<HeartIcon>(heart).color, palette.favorite);
   });
 
+  testWidgets(
+    "in the Dark theme a phone's pages are black, an album's washed and in its own cover's colour; the players keep the song's",
+    (tester) async {
+      AppPlatform.forTesting(system: 'android');
+      final colours = {'red': const Color(0xFFFF0000), 'blue': const Color(0xFF0000FF)};
+      final vm = await pumpApp(tester, const Size(400, 860), () async {
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'So What', album: 'red')
+            ..coverArtPath = await _colourCover('red', colours['red']!),
+          TestSupport.makeTrack('2', 'Naima', album: 'blue')
+            ..coverArtPath = await _colourCover('blue', colours['blue']!),
+        ]);
+        library.initialize();
+        return createMainViewModel(library);
+      });
+      final palette = tester.element(find.byType(PhoneLayout)).colors.palette;
+      final red = palette.accentOf(colours['red']);
+      final blue = palette.accentOf(colours['blue']);
+      final pagePlay = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
+      final black = find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_BlackPage');
+      // The pages' backdrop in the song's colours (the full-screen player has one of its own).
+      final backdrop = find.byWidgetPredicate((widget) => widget is AmbientBackdrop && !widget.nowPlaying);
+      String? washed(Finder area) =>
+          tester.widget<AmbientArtwork>(find.descendant(of: area, matching: find.byType(AmbientArtwork)).first).path;
+      Future<void> pageTurns(Color colour) async {
+        for (var i = 0; i < 40 && tester.element(pagePlay).colors.accent != colour; i++) {
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+      }
+
+      vm.player.playQueue([vm.library.getTrack('1')!]);
+      await loadCovers(tester, washOf(find.byType(PhoneLayout)));
+      vm.setTheme(WiretuneTheme.dark, persist: false);
+      await settle(tester);
+      expect(black, findsOneWidget, reason: 'a list page on black');
+      expect(backdrop, findsNothing);
+      expect(washed(find.byType(FrameWash)), isNull, reason: 'no album open');
+
+      final album = vm.library.albums.firstWhere((album) => album.title == 'blue');
+      vm.openAlbum(album);
+      await loadCovers(tester, find.byType(ListPlayButton));
+      await pageTurns(blue);
+      expect(tester.element(pagePlay).colors.accent, blue, reason: "the blue album's Play");
+      expect(tester.element(find.byType(PhoneLayout)).colors.accent, red, reason: 'the players around it');
+      expect(black, findsOneWidget);
+      expect(washed(find.byType(FrameWash)), album.coverArtPath, reason: "the album's cover at the page's top");
+
+      // Airy: the album's page in the song's colour, on the backdrop, as before.
+      vm.setTheme(WiretuneTheme.airy, persist: false);
+      await pageTurns(red);
+      expect(tester.element(pagePlay).colors.accent, red);
+      await settle(tester);
+      expect(black, findsNothing);
+      expect(backdrop, findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+    },
+  );
+
+  testWidgets(
+    "in the Dark theme an album opened from its artist's page blends on from the artist's accent, never through the song's",
+    (tester) async {
+      AppPlatform.forTesting(system: 'android');
+      final colours = {
+        'red': const Color(0xFFFF0000),
+        'blue': const Color(0xFF0000FF),
+        'green': const Color(0xFF00FF00),
+      };
+      final vm = await pumpApp(tester, const Size(400, 860), () async {
+        // A red song plays; an artist has a blue album and a green one.
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'So What', artist: 'Miles', album: 'red')
+            ..coverArtPath = await _colourCover('red', colours['red']!),
+          TestSupport.makeTrack('2', 'Naima', artist: 'Trane', album: 'blue')
+            ..coverArtPath = await _colourCover('blue', colours['blue']!),
+          TestSupport.makeTrack('3', 'Giant Steps', artist: 'Trane', album: 'green')
+            ..coverArtPath = await _colourCover('green', colours['green']!),
+        ]);
+        library.initialize();
+        return createMainViewModel(library);
+      });
+      vm.setTheme(WiretuneTheme.dark, persist: false);
+      final palette = tester.element(find.byType(PhoneLayout)).colors.palette;
+      vm.player.playQueue([vm.library.getTrack('1')!]);
+      await loadCovers(tester, washOf(find.byType(PhoneLayout)));
+      final song = palette.accentOf(colours['red']);
+
+      // The artist's page in the colour of its first album's cover (it has no picture of its own).
+      final artist = vm.library.artists.firstWhere((artist) => artist.name == 'Trane');
+      final artistColour = palette.accentOf(colours[artist.albums.first.title]);
+      final other = artist.albums.firstWhere((album) => album != artist.albums.first);
+      final albumColour = palette.accentOf(colours[other.title]);
+      vm.openArtist(artist);
+      for (var i = 0; i < 40 && tester.element(find.byType(ArtistsPage)).colors.accent != artistColour; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(tester.element(find.byType(ArtistsPage)).colors.accent, artistColour);
+
+      // Its other album, in the Albums section: from the artist's colour to the album's, at every frame.
+      vm.openAlbum(other);
+      final shown = <Color>[];
+      for (var i = 0; i < 40; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+        await tester.pump(const Duration(milliseconds: 16));
+        shown.add(tester.element(find.byType(AlbumsPage)).colors.accent);
+      }
+      expect(shown.last, albumColour);
+      for (final colour in shown) {
+        expect(colour, isNot(song));
+        expect(
+          colour.r,
+          lessThanOrEqualTo(math.max(artistColour.r, albumColour.r) + 0.01),
+          reason: "the song's red: $colour",
+        );
+      }
+      await tester.pump(const Duration(seconds: 2));
+    },
+  );
+
+  testWidgets(
+    "in the Dark theme a computer's page is framed in black, an album's cover washing its top, the window the song's",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(1400, 900), () async {
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'So What', album: 'Red')..coverArtPath = '/covers/red.png',
+          TestSupport.makeTrack('2', 'Naima', album: 'Blue')..coverArtPath = '/covers/blue.png',
+        ]);
+        library.initialize();
+        return createMainViewModel(library);
+      });
+      String? washed(Finder area) =>
+          tester.widget<AmbientArtwork>(find.descendant(of: area, matching: find.byType(AmbientArtwork)).first).path;
+      final window = find.descendant(of: find.byType(WideLayout), matching: find.byType(AmbientBackdrop));
+      final tracksPage = find.byType(TracksPage);
+      final frame = find.ancestor(
+        of: tracksPage,
+        matching: find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_PageFrame'),
+      );
+      bool framed() =>
+          tester
+              .widget<DecoratedBox>(find.descendant(of: frame, matching: find.byType(DecoratedBox)).first)
+              .decoration !=
+          const BoxDecoration();
+
+      vm.player.playQueue([vm.library.getTrack('1')!]);
+      vm.navigateTo(AppSection.tracks);
+      await settle(tester);
+      expect(framed(), isFalse, reason: 'Airy');
+      expect(find.byType(FrameWash), findsNothing);
+      // The page keeps its place, so changing the theme leaves it as it was.
+      final page = tester.element(tracksPage);
+
+      vm.setTheme(WiretuneTheme.dark, persist: false);
+      await settle(tester);
+      expect(tester.element(tracksPage), same(page));
+      expect(framed(), isTrue);
+      expect(washed(find.byType(FrameWash)), isNull, reason: 'a page of no album or artist');
+
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
+      await settle(tester);
+      expect(washed(find.byType(FrameWash)), '/covers/blue.png');
+      expect(washed(window), '/covers/red.png');
+
+      vm.setTheme(WiretuneTheme.airy, persist: false);
+      await settle(tester);
+      expect(washed(window), '/covers/blue.png', reason: "Airy: the open album's cover washes the window");
+    },
+  );
+
   test(
     "a cover's colour is the one most of it has that is a colour, not a tinted grey or the dark; a grey one or a speck of colour has none",
     () async {
@@ -2469,31 +2642,19 @@ void main() {
 
       // None (nothing plays, or its cover is grey): the neutral.
       expect(Palette.dark.accentOf(null), Palette.dark.neutral);
-      // Every hue readable: light enough on the dark theme, deep enough on the light one (to the 8-bit channels).
-      for (final hue in [0.0, 60, 120, 180, 240, 300]) {
+      // Every hue readable: light enough on the dark background (to the 8-bit channels), a yellow too.
+      for (final hue in [0.0, 50, 60, 120, 180, 240, 300]) {
         final source = HSLColor.fromAHSL(1, hue.toDouble(), 0.8, 0.5).toColor();
-        expect(Palette.dark.accentOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: 'dark, $hue');
-        if (hue == 60) continue; // a yellow: the light theme has the neutral, below
-        expect(Palette.light.accentOf(source).computeLuminance(), inInclusiveRange(0.06, 0.19), reason: 'light, $hue');
+        expect(Palette.dark.accentOf(source).computeLuminance(), inInclusiveRange(0.27, 0.61), reason: '$hue');
+        expect(Palette.dark.accentOf(source), isNot(Palette.dark.neutral), reason: '$hue');
       }
-      // A yellow deep enough to read on white is olive: the light theme has the neutral instead; the dark keeps it.
-      for (final hue in [40.0, 50.0, 60.0, 69.0]) {
-        final source = HSLColor.fromAHSL(1, hue, 0.8, 0.5).toColor();
-        expect(Palette.light.accentOf(source), Palette.light.neutral, reason: 'light, $hue');
-        expect(Palette.dark.accentOf(source), isNot(Palette.dark.neutral), reason: 'dark, $hue');
-      }
-      final orange = HSLColor.fromAHSL(1, 30, 0.8, 0.5).toColor();
-      expect(Palette.light.accentOf(orange), isNot(Palette.light.neutral), reason: 'an orange stays');
     },
   );
 
   test("a TV's focus is in the neutral colour whatever plays; a computer's keyboard focus is in the accent", () {
     const red = Color(0xFFE53935);
-    for (final light in [false, true]) {
-      final palette = light ? Palette.light : Palette.dark;
-      expect(buildTheme(light: light, accent: red, isTv: true).focusColor, palette.neutral.withValues(alpha: 0.45));
-      expect(buildTheme(light: light, accent: red, isTv: false).focusColor, red.withValues(alpha: 0.25));
-    }
+    expect(buildTheme(accent: red, isTv: true).focusColor, Palette.dark.neutral.withValues(alpha: 0.45));
+    expect(buildTheme(accent: red, isTv: false).focusColor, red.withValues(alpha: 0.25));
   });
 
   testWidgets("dragging the player's seek bar seeks, and is no swipe", (tester) async {
@@ -2866,20 +3027,20 @@ void main() {
       Localizer.get('Connect'),
       'Magyar',
       'Deutsch',
+      Localizer.get('ThemeAiry'),
       Localizer.get('ThemeDark'),
-      Localizer.get('ThemeLight'),
     ]) {
       expect(find.text(label), findsWidgets, reason: label); // or the loop below would check nothing
       for (final element in find.text(label).evaluate()) {
         expect(find.ancestor(of: find.byWidget(element.widget), matching: find.byType(Tooltip)), findsNothing);
       }
     }
-    final light = find.text(Localizer.get('ThemeLight'));
-    await tester.ensureVisible(light);
+    final dark = find.text(Localizer.get('ThemeDark'));
+    await tester.ensureVisible(dark);
     await settle(tester);
-    await tester.tap(light);
+    await tester.tap(dark);
     await settle(tester);
-    expect(vm.isLight, isTrue);
+    expect(vm.theme, WiretuneTheme.dark);
   });
 
   testWidgets("the player bar's cover follows the track that plays, without the mouse over it", (tester) async {
@@ -4630,4 +4791,15 @@ void main() {
       expect(tester.takeException(), isNull, reason: account);
     }
   });
+}
+
+/// A PNG cover of one [colour], in a temporary folder.
+Future<String> _colourCover(String name, Color colour) async {
+  final recorder = ui.PictureRecorder();
+  Canvas(recorder).drawColor(colour, BlendMode.src);
+  final image = await recorder.endRecording().toImage(8, 8);
+  final png = await image.toByteData(format: ui.ImageByteFormat.png);
+  return (File(
+    '${Directory.systemTemp.createTempSync('wiretune_accent_').path}/$name.png',
+  )..writeAsBytesSync(png!.buffer.asUint8List())).path;
 }

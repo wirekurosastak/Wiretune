@@ -5,6 +5,12 @@
 /// order of the values is the order they were added in, not the order they are drawn in (see [navVisualOrder]).
 enum AppSection { tracks, albums, artists, playlists, favorites, settings }
 
+/// The app's look, picked under Settings → Theme. Airy: the cover of what plays (or of the album or the artist that is
+/// open) washes the whole window. Dark: the pages lie in a black frame (on a phone, an album's and an artist's
+/// page), at whose top the open album's or artist's cover glows, and they take its colour as their accent; around
+/// them the window keeps the colours of the song that plays.
+enum WiretuneTheme { airy, dark }
+
 /// What the phone's full-screen player shows over its controls: the track that plays (its cover, title and menu), or
 /// the queue or the lyrics, which its buttons at the bottom open.
 enum NowPlayingTab { track, queue, lyrics }

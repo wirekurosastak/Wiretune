@@ -747,14 +747,14 @@ class MainViewModel extends ChangeNotifier {
   static const String _gaplessPreference = 'gapless';
   static const String _updateCheckPreference = 'update_check';
 
-  bool _isLight = false;
+  WiretuneTheme _theme = WiretuneTheme.airy;
   bool _showPerformanceStats = false;
 
-  bool get isLight => _isLight;
+  WiretuneTheme get theme => _theme;
 
-  void setTheme({required bool light, bool persist = true}) {
-    _isLight = light;
-    if (persist) _remember(_themePreference, light ? 'light' : 'dark');
+  void setTheme(WiretuneTheme theme, {bool persist = true}) {
+    _theme = theme;
+    if (persist) _remember(_themePreference, theme.name);
     notifyListeners();
   }
 
@@ -953,8 +953,8 @@ class MainViewModel extends ChangeNotifier {
     final language = Localizer.normalize(library.getPreference(_languagePreference));
     if (language != null) Localizer.instance.setLanguage(language);
 
-    final theme = library.getPreference(_themePreference);
-    if (theme != null) _isLight = theme == 'light';
+    // Airy unless Dark was picked (an earlier version's light theme too).
+    _theme = WiretuneTheme.values.asNameMap()[library.getPreference(_themePreference)] ?? WiretuneTheme.airy;
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
     _isSidebarPinned = library.getPreference(_sidebarPinnedPreference) == '1';

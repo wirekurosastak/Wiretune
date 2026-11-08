@@ -50,7 +50,7 @@ void main() {
     final opened = <String>[];
     await tester.pumpWidget(
       MaterialApp(
-        theme: buildTheme(light: false, accent: Palette.dark.neutral, isTv: false),
+        theme: buildTheme(accent: Palette.dark.neutral, isTv: false),
         home: PhoneChrome(
           child: Scaffold(
             body: Center(

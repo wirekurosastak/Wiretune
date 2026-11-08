@@ -82,12 +82,8 @@ class _WiretuneAppState extends State<WiretuneApp> {
     if (colour != _cover) setState(() => _cover = colour);
   }
 
-  ThemeData _theme(bool light, bool isTv) => cachedTheme(
-    light: light,
-    accent: (light ? Palette.light : Palette.dark).accentOf(_cover),
-    isTv: isTv,
-    desktopFonts: AppPlatform.current.isDesktop,
-  );
+  ThemeData _theme(bool isTv) =>
+      cachedTheme(accent: Palette.dark.accentOf(_cover), isTv: isTv, desktopFonts: AppPlatform.current.isDesktop);
 
   @override
   Widget build(BuildContext context) {
@@ -96,7 +92,6 @@ class _WiretuneAppState extends State<WiretuneApp> {
     return ListenableBuilder(
       listenable: vm,
       builder: (context, _) {
-        final light = vm.isLight;
         return LanguageScope(
           language: vm.language,
           child: AppScope(
@@ -108,7 +103,7 @@ class _WiretuneAppState extends State<WiretuneApp> {
                 title: 'Wiretune',
                 debugShowCheckedModeBanner: false,
                 showPerformanceOverlay: vm.showPerformanceStats,
-                theme: _theme(light, platform.isTv),
+                theme: _theme(platform.isTv),
                 themeAnimationDuration: const Duration(milliseconds: 350),
                 // A remote's arrows move between controls: a slider keeps Left and Right, not Up and Down too; a text
                 // field lets them go (TvTextFieldKeys).
@@ -141,7 +136,7 @@ class _WiretuneAppState extends State<WiretuneApp> {
                   _PlayerIntent: _PlayerAction(vm),
                 },
                 home: AnnotatedRegion<SystemUiOverlayStyle>(
-                  value: (light ? SystemUiOverlayStyle.dark : SystemUiOverlayStyle.light).copyWith(
+                  value: SystemUiOverlayStyle.light.copyWith(
                     statusBarColor: Colors.transparent,
                     systemNavigationBarColor: Colors.transparent,
                     systemNavigationBarContrastEnforced: false,
@@ -162,7 +157,9 @@ class _WiretuneAppState extends State<WiretuneApp> {
                         ? _StartupErrorPage(message: vm.startupError!)
                         : Stack(
                             children: [
-                              const Positioned.fill(child: _PhoneUpright(child: _LayoutSwitch())),
+                              const Positioned.fill(
+                                child: _PhoneUpright(child: ViewedAccentScope(child: _LayoutSwitch())),
+                              ),
                               _NoticeHost(vm: vm),
                             ],
                           ),

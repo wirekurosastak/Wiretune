@@ -61,7 +61,8 @@ class WideLayout extends StatelessWidget {
           listenable: vm,
           builder: (context, _) => Stack(
             children: [
-              const Positioned.fill(child: AmbientBackdrop()),
+              // In the Dark theme the open album's or artist's cover glows in the page's frame, the song's around it.
+              Positioned.fill(child: AmbientBackdrop(nowPlaying: vm.theme == WiretuneTheme.dark)),
               // Under the sign-in page nothing takes the focus: a remote's arrows or Tab would go behind it.
               ExcludeFocus(
                 excluding: vm.isLoginViewActive,
@@ -148,8 +149,8 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     const gap = WideLayout.gap;
     final content = RepaintBoundary(
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(Radii.panel),
+      child: _PageFrame(
+        framed: widget.vm.theme == WiretuneTheme.dark,
         child: TvFocusArea(
           area: TvArea.content,
           child: FocusTraversalGroup(child: _Content(vm: widget.vm)),
@@ -487,6 +488,35 @@ class _Panel extends StatelessWidget {
         border: Border.all(color: palette.panelBorder),
       ),
       child: ClipRRect(borderRadius: radius, child: child),
+    );
+  }
+}
+
+/// The page, in the Dark theme in a black frame of its own, as the sidebar is, with the open album's or artist's
+/// cover glowing at its top ([FrameWash]). The page keeps its place in the tree either way, so that changing the theme
+/// in Settings leaves it as it was.
+class _PageFrame extends StatelessWidget {
+  const _PageFrame({required this.framed, required this.child});
+
+  final bool framed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.colors.palette;
+    final radius = BorderRadius.circular(Radii.panel);
+    return DecoratedBox(
+      decoration: framed
+          ? BoxDecoration(
+              color: palette.modal,
+              borderRadius: radius,
+              border: Border.all(color: palette.panelBorder),
+            )
+          : const BoxDecoration(),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(fit: StackFit.expand, children: [framed ? const FrameWash() : const SizedBox.shrink(), child]),
+      ),
     );
   }
 }

@@ -25,8 +25,8 @@ const Map<String, (String, String, String)> allStrings = {
   'Or': ('VAGY', 'OR', 'ODER'),
   'Language': ('Nyelv', 'Language', 'Sprache'),
   'Theme': ('Téma', 'Theme', 'Farbschema'),
+  'ThemeAiry': ('Légies', 'Airy', 'Luftig'),
   'ThemeDark': ('Sötét', 'Dark', 'Dunkel'),
-  'ThemeLight': ('Világos', 'Light', 'Hell'),
   'Unknown': ('ismeretlen', 'unknown', 'unbekannt'),
 
   // ── Navigation and shell ────────────────────────────────────────────────────────────────────────────
@@ -395,9 +395,9 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'SettingsLanguageHint': ('A felület nyelve.', 'Interface language.', 'Die Sprache der Oberfläche.'),
   'SettingsThemeHint': (
-    'Sötét vagy világos megjelenés.',
-    'Dark or light appearance.',
-    'Dunkles oder helles Erscheinungsbild.',
+    'Légies: a borító színei betöltik az ablakot. Sötét: fekete oldalak, a megnyitott album vagy előadó színeiben.',
+    "Airy: the cover's colors fill the window. Dark: pages on black, in the open album's or artist's colors.",
+    'Luftig: die Farben des Covers füllen das Fenster. Dunkel: schwarze Seiten in den Farben des geöffneten Albums oder Künstlers.',
   ),
   'ServerUrlPlaceholder': ('http://szerver-ip:5200', 'http://server-ip:5200', 'http://server-ip:5200'),
   'ServerFolderLabel': ('Szerver mappa', 'Server folder', 'Serverordner'),

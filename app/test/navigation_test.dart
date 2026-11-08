@@ -302,7 +302,7 @@ void main() {
   test('preferences are applied at start and remembered', () async {
     final repo = testRepository()
       ..setSetting('preference.language', 'de')
-      ..setSetting('preference.theme', 'light')
+      ..setSetting('preference.theme', 'dark')
       ..setSetting('preference.online_lyrics', '0')
       ..setSetting('preference.sidebar_pinned', '1')
       ..setSetting('preference.sidebar_opened', '1');
@@ -310,7 +310,7 @@ void main() {
     final vm = MainViewModel(TestSupport.createEngine(), library, ServerSession(library, repo));
     await vm.start();
     expect(Localizer.instance.language, 'de');
-    expect(vm.isLight, isTrue);
+    expect(vm.theme, WiretuneTheme.dark);
     expect(vm.useOnlineLyrics, isFalse);
     expect(vm.lyrics.isOnlineEnabled, isFalse);
     expect(vm.showPerformanceStats, isFalse);
@@ -318,12 +318,12 @@ void main() {
     expect(vm.hasOpenedSidebar, isTrue);
 
     vm.changeLanguage('hu');
-    vm.setTheme(light: false);
+    vm.setTheme(WiretuneTheme.airy);
     vm.showPerformanceStats = true;
     vm.isSidebarPinned = false;
     await Future<void>.delayed(Duration.zero);
     expect(repo.getSetting('preference.language'), 'hu');
-    expect(repo.getSetting('preference.theme'), 'dark');
+    expect(repo.getSetting('preference.theme'), 'airy');
     expect(repo.getSetting('preference.show_performance_stats'), '1');
     expect(repo.getSetting('preference.sidebar_pinned'), '0');
     Localizer.instance.setLanguage('en');
