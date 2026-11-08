@@ -203,6 +203,7 @@ const Map<String, (String, String, String)> allStrings = {
     'Your most played artists, albums and tracks.',
     'Deine meistgehörten Künstler, Alben und Titel.',
   ),
+  'SummaryThisMonth': ('E hónapban', 'This month', 'Diesen Monat'),
   'SummaryThisYear': ('Idén', 'This year', 'Dieses Jahr'),
   'SummaryAllTime': ('Összesen', 'All time', 'Insgesamt'),
   'SummaryMinutes': ('{0} perc', '{0} minutes', '{0} Minuten'),

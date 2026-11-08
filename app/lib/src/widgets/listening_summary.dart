@@ -98,34 +98,43 @@ class ListeningSummaryView extends StatefulWidget {
   State<ListeningSummaryView> createState() => _ListeningSummaryViewState();
 }
 
+/// The time a listening summary covers: this month or this year (from the server's play log), or all time.
+enum _Period { month, year, allTime }
+
 class _ListeningSummaryViewState extends State<ListeningSummaryView> {
-  /// This year needs the server's play log; without a server, all time is what there is.
-  late bool _thisYear = context.vm.session.isLoggedIn;
+  /// A month or a year needs the server's play log; without a server, all time is what there is.
+  late _Period _period = context.vm.session.isLoggedIn ? _Period.year : _Period.allTime;
   late Future<({ListeningSummary summary, DateTime? since})> _summary = _load();
 
   Future<({ListeningSummary summary, DateTime? since})> _load() async {
     final vm = context.vm;
     final library = vm.library;
-    if (!_thisYear) {
+    final now = DateTime.now();
+    final start = switch (_period) {
+      _Period.month => DateTime(now.year, now.month),
+      _Period.year => DateTime(now.year),
+      _Period.allTime => null,
+    };
+    if (start == null) {
       return (
         // What the library shows: nothing hidden.
         summary: ListeningSummary.of({for (final track in library.tracks) track: library.playCount(track.id)}),
         since: null,
       );
     }
-    final now = DateTime.now();
-    final (:plays, :since) = await vm.session.getPlays(DateTime(now.year), now.add(const Duration(minutes: 1)));
+    final (:plays, :since) = await vm.session.getPlays(start, now.add(const Duration(minutes: 1)));
     final tracks = library.resolveTracks(plays.keys).where((track) => !library.isTrackHidden(track));
     return (
       summary: ListeningSummary.of({for (final track in tracks) track: plays[library.sharedId(track)] ?? 0}),
-      since: since != null && since.isAfter(DateTime(now.year)) ? since.toLocal() : null,
+      // The log began within the time: what it counts is from then.
+      since: since != null && since.isAfter(start) ? since.toLocal() : null,
     );
   }
 
-  void _choose(bool thisYear) {
-    if (thisYear == _thisYear) return;
+  void _choose(_Period period) {
+    if (period == _period) return;
     setState(() {
-      _thisYear = thisYear;
+      _period = period;
       _summary = _load();
     });
   }
@@ -149,13 +158,16 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
         if (server)
           Align(
             alignment: Alignment.centerLeft,
-            child: SegmentedButton<bool>(
+            child: SegmentedButton<_Period>(
               showSelectedIcon: false,
+              // A phone's spans the sheet, in equal parts, so the three fit in any language.
+              expandedInsets: PhoneChrome.isPhone(context) ? EdgeInsets.zero : null,
               segments: [
-                ButtonSegment(value: true, label: Text(context.tr('SummaryThisYear'))),
-                ButtonSegment(value: false, label: Text(context.tr('SummaryAllTime'))),
+                ButtonSegment(value: _Period.month, label: Text(context.tr('SummaryThisMonth'))),
+                ButtonSegment(value: _Period.year, label: Text(context.tr('SummaryThisYear'))),
+                ButtonSegment(value: _Period.allTime, label: Text(context.tr('SummaryAllTime'))),
               ],
-              selected: {_thisYear},
+              selected: {_period},
               onSelectionChanged: (chosen) => _choose(chosen.single),
             ),
           ),

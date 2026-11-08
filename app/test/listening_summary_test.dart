@@ -86,11 +86,18 @@ void main() {
     await settle(tester);
     await openSummary(tester);
 
-    final from = parseIsoUtc(Uri.splitQueryString(asked.single)['from']);
+    final from = parseIsoUtc(Uri.splitQueryString(asked.first)['from']);
     expect(from, DateTime(DateTime.now().year).toUtc(), reason: 'from the start of this year, here');
     expect(find.text(Localizer.format('SummaryPlays', [4])), findsWidgets);
     expect(find.text('Naima'), findsOneWidget);
     expect(find.textContaining('2026-11-08'), findsOneWidget, reason: 'counted since the log began');
+
+    // This month: from its first day.
+    await tester.tap(find.text(Localizer.get('SummaryThisMonth')));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await settle(tester);
+    final now = DateTime.now();
+    expect(parseIsoUtc(Uri.splitQueryString(asked.last)['from']), DateTime(now.year, now.month).toUtc());
 
     await tester.tap(find.text(Localizer.get('SummaryAllTime')));
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
