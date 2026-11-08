@@ -55,6 +55,23 @@ class TrackDetails {
 
   static const TrackDetails none = TrackDetails();
 
+  /// What a release names as its maker, as an album's page ends with it: the ℗ line, given its ℗ and [year] when the
+  /// tag has neither (as TIDAL writes it), and before it the [label] unless that line names it already.
+  static List<String> releaseLines({String? label, String? copyright, int? year}) {
+    final line = copyright?.trim();
+    final marked = line == null || line.isEmpty
+        ? null
+        : RegExp(r'^(℗|©|\(P\)|\(C\)|copyright\b)', caseSensitive: false).hasMatch(line)
+        ? line
+        : RegExp(r'^\d{4}\b').hasMatch(line) || year == null
+        ? '℗ $line'
+        : '℗ $year $line';
+    final name = label?.trim();
+    final named =
+        name != null && name.isNotEmpty && marked != null && marked.toLowerCase().contains(name.toLowerCase());
+    return [if (name != null && name.isNotEmpty && !named) name, ?marked];
+  }
+
   bool get isEmpty => toJson().isEmpty;
 
   TrackDetails withLabel(String? label) => TrackDetails(

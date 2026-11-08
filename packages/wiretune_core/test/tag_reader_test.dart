@@ -345,6 +345,18 @@ void main() {
       expect((tags.artist, tags.artists.length), ('Simon & Garfunkel', 0));
     });
 
+    test("an album's ℗ line gets its ℗ and year when the tag has neither, and a label it names isn't said twice", () {
+      List<String> lines(String? label, String? copyright, [int? year = 1995]) =>
+          TrackDetails.releaseLines(label: label, copyright: copyright, year: year);
+      expect(lines('Warp Records', 'Warp Records'), ['℗ 1995 Warp Records'], reason: 'once, marked');
+      expect(lines('MCA', '℗ 2002 UMG Recordings, Inc.'), ['MCA', '℗ 2002 UMG Recordings, Inc.']);
+      expect(lines(null, '2019 Prime Events Management'), ['℗ 2019 Prime Events Management'], reason: 'its own year');
+      expect(lines('Okayplayer', null), ['Okayplayer']);
+      expect(lines('Label', '© 2001 Label Ltd'), ['© 2001 Label Ltd']);
+      expect(lines(null, 'Some Label', null), ['℗ Some Label'], reason: 'no year to give');
+      expect(lines(null, null), isEmpty);
+    });
+
     test("the codes, label, ℗ line and composer, each from the field that ranks first, as a track's details", () {
       final tags = read([
         'ISRC=USMC10201424',

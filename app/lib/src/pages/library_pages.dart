@@ -891,7 +891,7 @@ Widget _albumShelf(BuildContext context, String title, List<Album> albums) {
 }
 
 /// The end of an album's page, as in TIDAL: its label and its ℗ line, in small type, as its tracks give them (a label
-/// the server looked up counts); nothing when they give neither.
+/// the server looked up counts; [TrackDetails.releaseLines]); nothing when they give neither.
 class _AlbumFooter extends StatelessWidget {
   const _AlbumFooter({required this.album});
 
@@ -901,7 +901,11 @@ class _AlbumFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     String? first(String? Function(TrackDetails details) field) =>
         album.tracks.map((track) => field(track.details)).nonNulls.firstOrNull;
-    final lines = [?first((d) => d.label), ?first((d) => d.copyright)];
+    final lines = TrackDetails.releaseLines(
+      label: first((d) => d.label),
+      copyright: first((d) => d.copyright),
+      year: album.releaseYear,
+    );
     if (lines.isEmpty) return const SliverToBoxAdapter();
     final edge = PhoneChrome.isPhone(context) ? PhoneChrome.edge : 30.0;
     return SliverPadding(
