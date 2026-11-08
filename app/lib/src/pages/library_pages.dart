@@ -100,6 +100,8 @@ class TracksPage extends StatelessWidget {
             subtitle: '${context.trf('TrackCount', [page.tracks.length])}  •  ${page.totalDuration}',
             actions: [
               if (PhoneChrome.isPhone(context)) TrackSortButtons(page), // a wide table sorts by its headers
+              if (page.genres.isNotEmpty)
+                _GenreFilter(genres: page.genres, selected: page.genre, onSelected: page.setGenre),
               PlayShuffleButtons(tracks: page.tracks, onPlay: page.playAll),
             ],
           ),
@@ -140,6 +142,8 @@ class FavoritesPage extends StatelessWidget {
             subtitle: '${context.trf('TrackCount', [favorites.tracks.length])}  •  ${favorites.totalDuration}',
             actions: [
               if (phone) TrackSortButtons(favorites), // a wide table sorts by its headers
+              if (favorites.genres.isNotEmpty)
+                _GenreFilter(genres: favorites.genres, selected: favorites.genre, onSelected: favorites.setGenre),
               PlayShuffleButtons(
                 tracks: favorites.tracks,
                 onPlay: favorites.playAll,
@@ -681,39 +685,50 @@ class _GenreFilter extends StatelessWidget {
     final active = selected != null;
     final color = active ? colors.accent : colors.textMuted;
     final phone = PhoneChrome.isPhone(context);
-    final pill = Container(
-      height: phone ? PhoneChrome.controlHeight : 38,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
-        borderRadius: BorderRadius.circular(Radii.pill),
-        border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.filter_list_rounded, size: 16, color: color),
-          const SizedBox(width: 6),
-          // A long genre is cut short, also where the phone's header leaves the pill less than its 180 px.
-          Flexible(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 180),
-              child: Text(
-                selected ?? context.tr('AllGenres'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: active ? colors.accent : colors.textMain,
-                ),
-              ),
-            ),
+    // Where a phone's line leaves it too little room for "All genres" (beside the sort, Play and shuffle), it shows its
+    // icon alone until a genre is chosen.
+    final pill = LayoutBuilder(
+      builder: (context, constraints) {
+        final iconOnly = !active && constraints.maxWidth < 130;
+        return Container(
+          height: phone ? PhoneChrome.controlHeight : 38,
+          // Centred, as the sort pill's, where a phone's line stretches it; elsewhere as wide as what it says.
+          alignment: phone ? Alignment.center : null,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: active ? colors.accent.withValues(alpha: 0.16) : colors.surface1,
+            borderRadius: BorderRadius.circular(Radii.pill),
+            border: Border.all(color: active ? colors.accent.withValues(alpha: 0.6) : colors.glassBorder),
           ),
-          const SizedBox(width: 2),
-          Icon(Icons.expand_more_rounded, size: 18, color: color),
-        ],
-      ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.filter_list_rounded, size: 16, color: color),
+              if (!iconOnly) ...[
+                const SizedBox(width: 6),
+                // A long genre is cut short, also where the phone's header leaves the pill less than its 180 px.
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 180),
+                    child: Text(
+                      selected ?? context.tr('AllGenres'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: active ? colors.accent : colors.textMain,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(width: 2),
+              Icon(Icons.expand_more_rounded, size: 18, color: color),
+            ],
+          ),
+        );
+      },
     );
     // The menu's "all" entry has the empty string as its value: a null reads as "closed without a choice".
     void choose(String? value) {
@@ -747,12 +762,28 @@ class _GenreFilter extends StatelessWidget {
       tooltip: context.tr('TipGenreFilter'),
       position: PopupMenuPosition.under,
       onSelected: choose,
-      itemBuilder: (context) => [
-        CheckedPopupMenuItem(value: '', checked: !active, child: Text(context.tr('AllGenres'))),
-        const PopupMenuDivider(),
-        for (final genre in genres)
-          CheckedPopupMenuItem(value: genre, checked: equalsIgnoreCase(genre, selected), child: Text(genre)),
-      ],
+      // The chosen one in the accent, with its tick, as the phone's sheet shows it.
+      itemBuilder: (context) {
+        PopupMenuItem<String> item(String value, String label, bool chosen) => PopupMenuItem(
+          value: value,
+          child: Row(
+            children: [
+              SizedBox(width: 28, child: chosen ? Icon(Icons.check_rounded, size: 18, color: colors.accent) : null),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(color: chosen ? colors.accent : null, fontWeight: chosen ? FontWeight.w700 : null),
+                ),
+              ),
+            ],
+          ),
+        );
+        return [
+          item('', context.tr('AllGenres'), !active),
+          const PopupMenuDivider(),
+          for (final genre in genres) item(genre, genre, equalsIgnoreCase(genre, selected)),
+        ];
+      },
       child: pill,
     );
   }

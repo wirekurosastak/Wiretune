@@ -175,10 +175,27 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
 
   List<Track> tracks = const [];
   String totalDuration = '';
-  bool get isEmpty => tracks.isEmpty;
+
+  /// Whether the page has no tracks at all (a genre that leaves none still shows the page, and its filter).
+  bool get isEmpty => tracks.isEmpty && genre == null;
+
+  /// The genres of the page's tracks, for the filter; empty when none has one.
+  List<String> genres = const [];
+
+  /// The genre the page is narrowed to; null shows every track.
+  String? genre;
+
+  /// Narrows the page to the tracks of [value]; null shows them all again.
+  void setGenre(String? value) {
+    genre = value;
+    refresh();
+  }
 
   /// Reads the tracks again; also in a new language (the total's units).
   void refresh() {
+    genres = genresOf(_source());
+    // A genre the page no longer has would leave it empty.
+    if (genre != null && !genres.any((g) => equalsIgnoreCase(g, genre))) genre = null;
     _applySort();
     totalDuration = formatTotal(tracks);
     notifyListeners();
@@ -192,7 +209,13 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
   };
 
   @override
-  void _applySort() => tracks = _sorted(_source());
+  void _applySort() {
+    final wanted = genre;
+    tracks = _sorted([
+      for (final track in _source())
+        if (wanted == null || equalsIgnoreCase(track.genre, wanted)) track,
+    ]);
+  }
 
   /// Plays the page from its first track, or from any while shuffle is on (the header's shuffle switch shows which).
   void playAll() {
@@ -217,6 +240,16 @@ enum ArtistSortField { name, albums, added }
 /// What the playlists page sorts by, in the order of its buttons: the name, the playlist's own field, then when it was
 /// made.
 enum PlaylistSortField { name, tracks, added }
+
+/// The genres [tracks] have, each once whatever its capitalisation, A to Z.
+List<String> genresOf(Iterable<Track> tracks) {
+  final seen = <String, String>{};
+  for (final track in tracks) {
+    final genre = track.genre?.trim();
+    if (genre != null && genre.isNotEmpty) seen.putIfAbsent(genre.toLowerCase(), () => genre);
+  }
+  return seen.values.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+}
 
 /// Whether any of [tracks] is tagged with [genre], in any capitalisation.
 bool hasGenre(Iterable<Track> tracks, String genre) => tracks.any((t) => equalsIgnoreCase(t.genre, genre));

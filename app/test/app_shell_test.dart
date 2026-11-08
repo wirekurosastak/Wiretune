@@ -4512,6 +4512,48 @@ void main() {
     });
   }
 
+  for (final (layout, size) in const [('computer', Size(1400, 900)), ('phone', Size(400, 860))]) {
+    testWidgets("on a $layout Tracks and Favorites narrow to a genre, the chosen one in the accent", (tester) async {
+      if (layout == 'phone') AppPlatform.forTesting(system: 'android');
+      final vm = await pumpApp(tester, size, () async {
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'The Seed', album: 'Phrenology')..genre = 'Hip Hop',
+          TestSupport.makeTrack('2', 'Naima', album: 'Giant Steps')..genre = 'Jazz',
+          TestSupport.makeTrack('3', 'No Genre', album: 'Other'),
+        ]);
+        library.initialize();
+        library.toggleFavorite('2');
+        return createMainViewModel(library);
+      });
+      vm.navigateTo(AppSection.tracks);
+      await settle(tester);
+      expect(vm.tracks.genres, ['Hip Hop', 'Jazz']);
+      expect(vm.favorites.genres, ['Jazz'], reason: "the favourites' own");
+      final filter = find.byTooltip(Localizer.get('TipGenreFilter'));
+      expect(filter, findsOneWidget);
+      // A phone's line, beside the sort, Play and shuffle, has room for the icon alone.
+      expect(
+        find.descendant(of: filter, matching: find.text(Localizer.get('AllGenres'))),
+        layout == 'phone' ? findsNothing : findsOneWidget,
+      );
+
+      await tester.tap(filter);
+      await settle(tester);
+      await tester.tap(find.text('Jazz').last);
+      await settle(tester);
+      expect(vm.tracks.genre, 'Jazz');
+      expect([for (final t in vm.tracks.tracks) t.title], ['Naima']);
+      final chosen = tester.widget<Text>(find.descendant(of: filter, matching: find.text('Jazz')));
+      expect(chosen.style?.color, tester.element(filter).colors.accent);
+
+      // Opened again, the chosen genre is in the accent there too.
+      await tester.tap(filter);
+      await settle(tester);
+      final listed = tester.widget<Text>(find.text('Jazz').last);
+      expect(listed.style?.color, tester.element(filter).colors.accent);
+    });
+  }
+
   testWidgets("a right click on a queue row opens the track's menu", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.player.playQueue(vm.library.tracks);
