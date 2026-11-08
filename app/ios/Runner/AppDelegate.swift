@@ -3,6 +3,9 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+  /// `wiretune/pcm`: a track decoded for the spectrum.
+  private let pcm = PcmDecoder()
+
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -14,6 +17,7 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "WiretunePlatform") {
       registerPlatformChannel(registrar.messenger())
+      FlutterEventChannel(name: "wiretune/pcm", binaryMessenger: registrar.messenger()).setStreamHandler(pcm)
     }
   }
 

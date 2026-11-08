@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Actions → CI → Run workflow, on any branch: its iPhone app to sideload, for one.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -148,7 +150,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libmpv-dev rpm
       - if: matrix.target != 'ios'
         run: dart tool/build.dart ${{ matrix.target }}
-      # Not signed: this only checks that the iOS app builds (an .ipa, tool/build.dart ios, needs a signing team).
+      # Unsigned (a signed .ipa, tool/build.dart ios, needs a signing team): to sign with an Apple ID while sideloading
+      # it (docs/building.md).
       - if: matrix.target == 'ios'
         working-directory: app
-        run: flutter build ios --release --no-codesign
+        run: |
+          flutter build ios --release --no-codesign
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qr wiretune-unsigned.ipa Payload
+      - if: matrix.target == 'ios'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiretune-ios-unsigned
+          path: app/wiretune-unsigned.ipa

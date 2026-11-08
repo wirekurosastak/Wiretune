@@ -38,10 +38,10 @@ update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-net
 | Play a server library | Yes | Yes | Yes | Yes | Yes | Browse and play | Yes | Yes |
 | Play a local folder | Yes | Yes | Yes | Yes | No | No | No | No |
 | Exclusive / bit-perfect | Yes | Yes | Untested | No | No | No | No | No |
-| Spectrum analyzer | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | Phone | No | No | No | No |
+| Spectrum analyzer | With `ffmpeg` | With `ffmpeg` | With `ffmpeg` | Phone | No | No | Untested | No |
 | System media controls | MPRIS | Media keys, while focused | Media keys, Now Playing | Notification, lock screen | Remote | The car | Lock screen, Control Center | Remote, in the app |
 | Run the server | Yes | Yes | Yes | — | — | — | — | — |
-| [Tried on real hardware](docs/development.md#what-has-been-tried) | Yes | Yes | No | Phone | No | No | No | Briefly |
+| [Tried on real hardware](docs/development.md#what-has-been-tried) | Yes | Yes | No | Phone | No | No | iPhone | Briefly |
 
 Bit-perfect sets up an untouched path to the DAC and shows the format the player opened, but doesn't measure what the
 DAC receives ([audio.md](docs/audio.md#bit-perfect)). Samsung TVs use their own decoder, so some formats may not play

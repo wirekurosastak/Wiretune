@@ -734,6 +734,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _languagePreference = 'language';
   static const String _themePreference = 'theme';
   static const String _sidebarPinnedPreference = 'sidebar_pinned';
+  static const String _sidebarOpenedPreference = 'sidebar_opened';
   static const String _performanceStatsPreference = 'show_performance_stats';
   static const String _onlineLyricsPreference = 'online_lyrics';
   static const String _remoteIdPreference = 'remote_device_id';
@@ -758,6 +759,17 @@ class MainViewModel extends ChangeNotifier {
   }
 
   bool _isSidebarPinned = false;
+  bool _hasOpenedSidebar = false;
+
+  /// A computer's hidden sidebar has been out once: the chevron at the window's edge has done its job and keeps still,
+  /// from then on.
+  bool get hasOpenedSidebar => _hasOpenedSidebar;
+  void sidebarOpened() {
+    if (_hasOpenedSidebar) return;
+    _hasOpenedSidebar = true;
+    _remember(_sidebarOpenedPreference, '1');
+    notifyListeners();
+  }
 
   /// A computer's sidebar stays beside the page; unpinned (the default) it is out of sight until the mouse comes to the
   /// window's left edge, and then over the page.
@@ -946,6 +958,7 @@ class MainViewModel extends ChangeNotifier {
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
     _isSidebarPinned = library.getPreference(_sidebarPinnedPreference) == '1';
+    _hasOpenedSidebar = library.getPreference(_sidebarOpenedPreference) == '1';
     lyrics.isOnlineEnabled = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     updates.isEnabled = library.getPreference(_updateCheckPreference) != '0'; // on unless turned off
     final normalization = VolumeNormalization.values.asNameMap()[library.getPreference(_normalizationPreference)];

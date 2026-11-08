@@ -17,8 +17,8 @@ import '../services/wiretune_log.dart';
 class PcmCache {
   PcmCache({this.decoder});
 
-  /// Decodes a source (a file path or a stream URL) into that PCM, little-endian, in chunks: an Android phone's
-  /// decoder, which has no `ffmpeg`. Null: `ffmpeg`.
+  /// Decodes a source (a file path or a stream URL) into that PCM, little-endian, in chunks: a phone's own
+  /// decoder, as a phone has no `ffmpeg`. Null: `ffmpeg`.
   final Stream<List<int>> Function(String source)? decoder;
 
   static const int sampleRate = 44100;
