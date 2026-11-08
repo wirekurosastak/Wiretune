@@ -86,8 +86,9 @@ Future<void> showListeningSummary(BuildContext context) async {
   );
 }
 
-/// What the account (or this device, without one) listened to most: this year, from the server's play log, or all
-/// time, from the play counts. Nothing hidden counts. A tap on an artist, an album or a track opens or plays it.
+/// What the account (or this device, without one) listened to most: this month or this year, from the server's play
+/// log (or from the play counts, when the account was made within that time), or all time, from the play counts.
+/// Nothing hidden counts. A tap on an artist, an album or a track opens or plays it.
 class ListeningSummaryView extends StatefulWidget {
   const ListeningSummaryView({super.key, required this.close});
 
@@ -115,7 +116,10 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
       _Period.year => DateTime(now.year),
       _Period.allTime => null,
     };
-    if (start == null) {
+    // An account made within the time has played nothing before it: its counts are the time's, complete, also the plays
+    // from before the log began (as for every account while Wiretune was younger than a year).
+    final made = vm.session.currentUser?.createdAt;
+    if (start == null || (made != null && !made.isBefore(start))) {
       return (
         // What the library shows: nothing hidden.
         summary: ListeningSummary.of({for (final track in library.tracks) track: library.playCount(track.id)}),

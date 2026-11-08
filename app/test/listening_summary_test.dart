@@ -66,6 +66,12 @@ void main() {
           TestSupport.makeServerTrack('s2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps', trackNumber: 2),
         ],
         respond: (request) {
+          // An account from before this year: its year is in the play log alone.
+          final old = UserInfo('user-1', 'owner', true, DateTime.utc(2020), null);
+          if (request.url.path == '/api/auth/me') return http.Response(jsonEncode(old.toJson()), 200);
+          if (request.url.path == '/api/auth/login') {
+            return http.Response(jsonEncode(AuthResponse('t', old, DateTime.utc(2099)).toJson()), 200);
+          }
           if (request.url.path != '/api/me/plays' || request.method != 'GET') return null;
           asked.add(request.url.query);
           return http.Response(
@@ -103,5 +109,43 @@ void main() {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
     await settle(tester);
     expect(find.text(Localizer.get('SummaryNone')), findsOneWidget, reason: 'no counts on this account yet');
+  });
+
+  testWidgets("an account made this year has its whole counts as this year's, its plays before the log too", (
+    tester,
+  ) async {
+    var asked = 0;
+    final library = createLibrary();
+    library.initialize();
+    final session = (await tester.runAsync(
+      () => signedInSession(
+        library,
+        tracks: [TestSupport.makeServerTrack('s1', 'Giant Steps', artist: 'John Coltrane', album: 'Giant Steps')],
+        respond: (request) {
+          final made = UserInfo('user-1', 'owner', true, DateTime.now().toUtc(), null);
+          if (request.url.path == '/api/auth/login') {
+            return http.Response(jsonEncode(AuthResponse('t', made, DateTime.utc(2099)).toJson()), 200);
+          }
+          if (request.url.path == '/api/me/plays') asked++;
+          return null;
+        },
+      ),
+    ))!;
+    library.recordPlay('s1');
+    library.recordPlay('s1');
+    final vm = createMainViewModel(library, null, session);
+    addTearDown(vm.dispose);
+    await showApp(tester, vm, const Size(400, 860));
+    vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    await openSummary(tester);
+
+    expect(find.text(Localizer.get('SummaryThisYear')), findsOneWidget);
+    expect(
+      find.text(Localizer.format('SummaryPlays', [2])),
+      findsWidgets,
+      reason: "the counts: all of them this year's",
+    );
+    expect(asked, 0, reason: 'no log to ask');
   });
 }

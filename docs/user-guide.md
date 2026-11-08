@@ -78,7 +78,8 @@ signed in is a server playlist.
 The server identifies a track by its file path. When you move or rename a file, the next scan finds it again and keeps its
 favorites and playlists, unless several files are so alike that it can't tell which is which.
 **Your listening**, at the top of Playlists, sums up your most played artists, albums, tracks and genres, with the minutes:
-this month or this year (with a server, counted from when it started keeping each play) or all time. **Most played** and **Recently
+this month or this year (with a server; for an account older than that, counted from when the server started keeping
+each play) or all time. **Most played** and **Recently
 played** are built from your plays, and **Recently added** from when music came into the library; each holds 50 tracks. To reorder a playlist, drag
 its tracks (on a phone, long-press first).
 
