@@ -207,7 +207,10 @@ class _CardTitle extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing case final trailing?) Flexible(child: trailing),
+          // At its own width at the right end, but never more than its share: a long status badge is cut short there
+          // rather than pushed off a narrow screen with a large font.
+          if (trailing case final trailing?)
+            ConstrainedBox(constraints: const BoxConstraints(maxWidth: 180), child: trailing),
         ],
       ),
     );

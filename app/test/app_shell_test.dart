@@ -1425,6 +1425,15 @@ void main() {
     final appearance = find.text(Localizer.get('SettingsAppearanceSection'));
     final theme = find.text(Localizer.get('ThemeAiry'));
     expect(find.text(Localizer.get('AccountAndConnection')), findsOneWidget);
+    // Each title's chevron at its right end.
+    Rect titleOf(Finder text) => tester.getRect(
+      find.ancestor(of: text, matching: find.byWidgetPredicate((w) => '${w.runtimeType}' == '_CardTitle')),
+    );
+    final chevron = find.descendant(
+      of: find.ancestor(of: appearance, matching: find.byType(InkWell)).first,
+      matching: find.byIcon(Icons.expand_more_rounded),
+    );
+    expect(tester.getRect(chevron).right, closeTo(titleOf(appearance).right, 1));
     expect(theme, findsNothing, reason: 'folded');
     await tester.ensureVisible(appearance);
     await settle(tester);
@@ -1448,6 +1457,12 @@ void main() {
     vm.navigateTo(AppSection.settings);
     await settle(tester);
     expect(find.text(Localizer.get('ThemeAiry'), skipOffstage: false), findsOneWidget, reason: 'every card open');
+    // The account card's status badge at its title's right end.
+    final badge = find.text(vm.serverSettings.serverStatusBadge);
+    expect(
+      tester.getRect(find.ancestor(of: badge, matching: find.byType(Container)).first).right,
+      closeTo(titleOf(find.text(Localizer.get('AccountAndConnection'))).right, 1),
+    );
   });
 
   testWidgets('the equalizer shows ten sliders and the presets once it is on, and fits a phone', (tester) async {
