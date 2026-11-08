@@ -866,11 +866,28 @@ class AlbumDetail extends StatelessWidget {
           ),
           TrackSliver(tracks: album.tracks, kind: TrackTableKind.album, playingFrom: () => album.title),
           _AlbumFooter(album: album),
+          _albumShelf(context, context.trf('LabelMoreBy', [album.artist]), Related.moreByOf(album, vm.library.albums)),
+          _albumShelf(context, context.tr('LabelSimilarAlbums'), Related.albumsOf(album, vm.library.albums)),
           const PageEndSpace(),
         ],
       ),
     );
   }
+}
+
+/// A line of [albums] at the end of an album's page, each opening its own page.
+Widget _albumShelf(BuildContext context, String title, List<Album> albums) {
+  final vm = context.vm;
+  return TileShelf(
+    title: title,
+    kind: TileKind.album,
+    count: albums.length,
+    tile: (context, index) => AlbumCard(
+      album: albums[index],
+      onOpen: () => vm.openAlbum(albums[index]),
+      onPlay: () => vm.albums.playAlbum(albums[index]),
+    ),
+  );
 }
 
 /// The end of an album's page, as in TIDAL: its label and its ℗ line, in small type, as its tracks give them (a label
@@ -1015,6 +1032,21 @@ class ArtistDetail extends StatelessWidget {
             ),
           ),
           TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist, playingFrom: () => artist.name),
+          Builder(
+            builder: (context) {
+              final related = Related.artistsOf(artist, vm.library.artists, vm.library.tracks);
+              return TileShelf(
+                title: context.tr('LabelRelatedArtists'),
+                kind: TileKind.twoLines,
+                count: related.length,
+                tile: (context, index) => ArtistCard(
+                  artist: related[index],
+                  onOpen: () => vm.openArtist(related[index]),
+                  onPlay: () => vm.artists.playArtist(related[index]),
+                ),
+              );
+            },
+          ),
           const PageEndSpace(),
         ],
       ),

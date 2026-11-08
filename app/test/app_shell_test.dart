@@ -4461,6 +4461,57 @@ void main() {
     },
   );
 
+  for (final (layout, size) in const [('computer', Size(1400, 900)), ('phone', Size(400, 860))]) {
+    testWidgets("on a $layout an album's page ends with More by and Similar albums, an artist's with Related artists", (
+      tester,
+    ) async {
+      if (layout == 'phone') AppPlatform.forTesting(system: 'android');
+      final vm = await pumpApp(tester, size, () async {
+        Track track(String id, String artist, String album, String genre, {List<String>? artists}) =>
+            TestSupport.makeTrack(id, 'Song $id', artist: artist, album: album)
+              ..genre = genre
+              ..releaseYear = 2002;
+        final library = createLibrary([
+          track('1', 'The Roots', 'Phrenology', 'Hip Hop'),
+          track('2', 'The Roots', 'Things Fall Apart', 'Hip Hop'),
+          track('3', 'Outkast', 'Stankonia', 'Hip Hop'),
+          track('4', 'Norah Jones', 'Come Away With Me', 'Jazz'),
+        ]);
+        library.initialize();
+        return createMainViewModel(library);
+      });
+      Future<void> toEnd() async {
+        await tester.drag(find.byType(CustomScrollView).last, const Offset(0, -3000));
+        await settle(tester);
+      }
+
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Phrenology'));
+      await settle(tester);
+      await toEnd();
+      for (final label in [
+        Localizer.format('LabelMoreBy', ['The Roots']),
+        Localizer.get('LabelSimilarAlbums'),
+      ]) {
+        expect(find.text(label.toUpperCase()), findsOneWidget, reason: label);
+      }
+      expect(find.text('Things Fall Apart'), findsWidgets, reason: 'more by the same artist');
+      expect(find.text('Stankonia'), findsWidgets, reason: 'the same genre');
+      expect(find.text('Come Away With Me'), findsNothing);
+
+      // A tile opens its album.
+      await tester.tap(find.text('Stankonia').last);
+      await settle(tester);
+      expect(vm.albums.selectedAlbum?.title, 'Stankonia');
+
+      vm.openArtist(vm.library.artists.firstWhere((artist) => artist.name == 'The Roots'));
+      await settle(tester);
+      await toEnd();
+      expect(find.text(Localizer.get('LabelRelatedArtists').toUpperCase()), findsOneWidget);
+      expect(find.text('Outkast'), findsWidgets);
+      expect(find.text('Norah Jones'), findsNothing);
+    });
+  }
+
   testWidgets("a right click on a queue row opens the track's menu", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.player.playQueue(vm.library.tracks);

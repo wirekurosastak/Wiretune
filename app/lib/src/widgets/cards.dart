@@ -1367,6 +1367,10 @@ class TileGridSliver extends StatelessWidget {
   static ({int columns, double tileWidth, double extent}) layoutIn(BuildContext context, double width, TileKind kind) =>
       _layout(width - 2 * padding, context.vm.tileSize.value, _captionHeight(context, kind));
 
+  /// The height of a [kind]'s tile [tileWidth] wide.
+  static double extentOf(BuildContext context, double tileWidth, TileKind kind) =>
+      tileWidth + _DesktopTile.captionGap + _captionHeight(context, kind) + 2;
+
   /// The caption's lines under a [kind]'s cover, at the user's font size.
   static double _captionHeight(BuildContext context, TileKind kind) {
     final title = _lineHeight(context, 14, FontWeight.w700);
@@ -1425,6 +1429,71 @@ class _TileGridDelegate extends SliverGridDelegate {
   @override
   bool shouldRelayout(_TileGridDelegate oldDelegate) =>
       oldDelegate.minTileWidth != minTileWidth || oldDelegate.lines != lines;
+}
+
+/// One line of album or artist tiles under a [title], at the end of an album's or an artist's page (More by, Similar
+/// albums, Related artists): on a wide screen as many as fit, the size of the grid's tiles; on a phone a line that
+/// scrolls sideways, as Spotify's. Nothing when there are none.
+class TileShelf extends StatelessWidget {
+  const TileShelf({super.key, required this.title, required this.kind, required this.count, required this.tile});
+
+  final String title;
+  final TileKind kind;
+  final int count;
+  final Widget Function(BuildContext context, int index) tile;
+
+  /// The width of a phone's tiles: two and a bit fit, so the line looks like it goes on.
+  static const double phoneTileWidth = 150;
+
+  @override
+  Widget build(BuildContext context) {
+    if (count == 0) return const SliverToBoxAdapter();
+    final phone = PhoneChrome.isPhone(context);
+    final edge = phone ? PhoneChrome.edge - TileGridSliver.tileInset : TileGridSliver.padding;
+    final Widget line;
+    if (phone) {
+      final extent = TileGridSliver.extentOf(context, phoneTileWidth, kind);
+      line = SizedBox(
+        height: extent,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(horizontal: edge),
+          itemCount: count,
+          separatorBuilder: (_, _) => const SizedBox(width: 4),
+          itemBuilder: (context, index) => SizedBox(width: phoneTileWidth, child: tile(context, index)),
+        ),
+      );
+    } else {
+      line = LayoutBuilder(
+        builder: (context, constraints) {
+          final layout = TileGridSliver.layoutIn(context, constraints.maxWidth, kind);
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: edge),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TileRow(
+                tileWidth: layout.tileWidth,
+                extent: layout.extent,
+                children: [for (var i = 0; i < count && i < layout.columns; i++) tile(context, i)],
+              ),
+            ),
+          );
+        },
+      );
+    }
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: phone ? PhoneChrome.edge : 26),
+            child: SectionLabel(title, padding: const EdgeInsets.fromLTRB(4, 24, 4, 6)),
+          ),
+          line,
+        ],
+      ),
+    );
+  }
 }
 
 /// A few tiles in a row, as [TileGridSliver] lays them out (the same size, gap and caption), where they go beside

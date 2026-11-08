@@ -37,6 +37,10 @@ Your files are never changed.
 - **New music** appears by itself. A computer watches its local folder while the player runs, a phone checks it when
   you return to the app, and the server watches its own folder ([server.md](server.md#scanning)). An administrator can
   force a server rescan with **Reindex** in *Settings → Library*.
+- **Genres and labels** come from the tags, or with a server from Deezer for albums whose files don't name them
+  ([what's sent](../SECURITY.md#what-leaves-your-network)). An album's page ends with its label and ℗ line.
+- **Related music:** an album's page ends with *More by* its artist and *Similar albums*, an artist's with *Related
+  artists*. They come from who is credited together on a track, then the genre, then the era.
 - **Sorting** lasts until the app closes. Press the active sort again to reverse it.
 - **Hidden** artists, albums and tracks come back from *Settings → Hidden content*.
 
