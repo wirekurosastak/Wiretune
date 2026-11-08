@@ -90,6 +90,9 @@ sends it to the friends you pick, with a note if you like. What friends send you
 a count of what's new: tap one to play or open it, or × to remove it. Nothing you've hidden shows up there, whoever
 sends it.
 
+To stop someone's recommendations and invites, **Block** them in *Settings → Friends*. They aren't told, and **Unblock**
+lets them reach you again.
+
 *Listen together…* in the cast menu invites friends to hear what you play. They join from the bell, or from the notice
 the invite brings, and their players play your music in step with yours, each streaming it from the server. They can
 skip, seek and add to the queue; pausing is each one's own, and play catches up again. Playing something else leaves;

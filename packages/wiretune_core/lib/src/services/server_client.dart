@@ -180,6 +180,35 @@ class ServerClient {
   Future<void> adminResetPassword(String baseUrl, String userId, String newPassword) =>
       _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/password', body: {'newPassword': newPassword});
 
+  /// Gives the signed-in account a new name; the account as it is now.
+  Future<UserInfo> changeUsername(String baseUrl, String username) async => _parse(
+    UserInfo.fromJson,
+    await _send('POST', baseUrl, '/api/auth/change-username', body: {'username': username}),
+  );
+
+  /// An administrator gives the account [userId] a new name.
+  Future<UserInfo> renameUser(String baseUrl, String userId, String username) async => _parse(
+    UserInfo.fromJson,
+    await _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/username', body: {'username': username}),
+  );
+
+  /// An administrator lets the other accounts change their own names, or stops them.
+  Future<ServerConfigInfo> setMembersCanRename(String baseUrl, bool allowed) async => _parse(
+    ServerConfigInfo.fromJson,
+    await _send('POST', baseUrl, '/api/config/members-can-rename', body: {'enabled': allowed}),
+  );
+
+  /// The accounts this one blocked, by name.
+  Future<List<AccountInfo>> getBlocked(String baseUrl) async {
+    final list = await _send('GET', baseUrl, '/api/me/blocked');
+    if (list is! List) throw ServerRequestException(_notWiretune(), 200);
+    return list.map((a) => _parse(AccountInfo.fromJson, a)).toList();
+  }
+
+  /// Blocks the account [userId], or unblocks it.
+  Future<void> setBlocked(String baseUrl, String userId, bool blocked) =>
+      _send(blocked ? 'PUT' : 'DELETE', baseUrl, '/api/me/blocked/${Uri.encodeComponent(userId)}');
+
   Future<ServerConfigInfo> getServerConfig(String baseUrl) async =>
       _parse(ServerConfigInfo.fromJson, await _send('GET', baseUrl, '/api/config'));
 

@@ -7,7 +7,7 @@ import '../util/text.dart';
 import '../util/time.dart';
 
 class UserInfo {
-  const UserInfo(this.id, this.username, this.isAdmin, this.createdAt, this.lastLoginAt);
+  const UserInfo(this.id, this.username, this.isAdmin, this.createdAt, this.lastLoginAt, {this.canRename = false});
 
   final String id;
   final String username;
@@ -15,8 +15,12 @@ class UserInfo {
   final DateTime createdAt;
   final DateTime? lastLoginAt;
 
+  /// Whether the account may change its own name: an administrator always, the others when the server lets members
+  /// ([ServerConfigInfo.membersCanRename]).
+  final bool canRename;
+
   UserInfo copyWith({DateTime? lastLoginAt}) =>
-      UserInfo(id, username, isAdmin, createdAt, lastLoginAt ?? this.lastLoginAt);
+      UserInfo(id, username, isAdmin, createdAt, lastLoginAt ?? this.lastLoginAt, canRename: canRename);
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -24,6 +28,7 @@ class UserInfo {
     'isAdmin': isAdmin,
     'createdAt': formatIsoUtc(createdAt),
     'lastLoginAt': lastLoginAt == null ? null : formatIsoUtc(lastLoginAt!),
+    'canRename': canRename,
   };
 
   static UserInfo fromJson(Object? json) {
@@ -34,6 +39,7 @@ class UserInfo {
       jsonField<bool>(map, 'isAdmin') ?? false,
       parseIsoUtc(map['createdAt']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       parseIsoUtc(map['lastLoginAt']),
+      canRename: jsonField<bool>(map, 'canRename') ?? false,
     );
   }
 }
@@ -190,13 +196,22 @@ class ServerLibraryStatus {
 }
 
 class ServerConfigInfo {
-  const ServerConfigInfo(this.musicFolder);
+  const ServerConfigInfo(this.musicFolder, {this.membersCanRename = false});
 
   final String musicFolder;
 
-  Map<String, Object?> toJson() => {'musicFolder': musicFolder};
+  /// Whether the accounts that aren't administrators may change their own names (an administrator can rename anyone).
+  final bool membersCanRename;
 
-  static ServerConfigInfo fromJson(Object? json) => ServerConfigInfo(_string(_object(json), 'musicFolder'));
+  Map<String, Object?> toJson() => {'musicFolder': musicFolder, 'membersCanRename': membersCanRename};
+
+  static ServerConfigInfo fromJson(Object? json) {
+    final map = _object(json);
+    return ServerConfigInfo(
+      _string(map, 'musicFolder'),
+      membersCanRename: jsonField<bool>(map, 'membersCanRename') ?? false,
+    );
+  }
 }
 
 /// Play statistics of one track for one account.
@@ -377,6 +392,7 @@ abstract final class ErrorCodes {
   static const String userNotFound = 'userNotFound';
   static const String cannotDeleteSelf = 'cannotDeleteSelf';
   static const String cannotResetOwnPassword = 'cannotResetOwnPassword';
+  static const String renameNotAllowed = 'renameNotAllowed';
 
   // The music folder (with path where there is one)
   static const String folderRequired = 'folderRequired';

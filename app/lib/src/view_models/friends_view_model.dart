@@ -61,8 +61,60 @@ class FriendsViewModel extends ChangeNotifier {
 
   Artist? artistOf(Recommendation r) => r.kind == RecommendationKind.artist ? _library.getArtist(r.itemId) : null;
 
-  /// The other accounts, the people music can be recommended to. Throws when the server can't be reached.
-  Future<List<AccountInfo>> otherAccounts() => recommendations.otherAccounts();
+  /// The other accounts, the people music can be recommended to (but the ones this account blocked). Throws when the
+  /// server can't be reached. A server from before blocking (it has no list of them) blocks none.
+  Future<List<AccountInfo>> otherAccounts() async {
+    final (others, blocked) = await (
+      recommendations.otherAccounts(),
+      _session.getBlocked().catchError((Object _) => const <AccountInfo>[]),
+    ).wait;
+    final ids = {for (final account in blocked) account.id};
+    return [
+      for (final account in others)
+        if (!ids.contains(account.id)) account,
+    ];
+  }
+
+  // ── Blocking ───────────────────────────────────────────────────────────────────────────────────
+
+  /// The other accounts, for Settings → Friends, and which of them this account blocked; empty until [loadFriends].
+  List<AccountInfo> friends = const [];
+  Set<String> blocked = const {};
+
+  /// What went wrong loading or changing them; empty when nothing did.
+  String friendsError = '';
+
+  /// Loads [friends] and [blocked].
+  Future<void> loadFriends() async {
+    if (!isAvailable) return;
+    try {
+      final (others, blockedAccounts) = await (recommendations.otherAccounts(), _session.getBlocked()).wait;
+      friends = others;
+      blocked = {for (final account in blockedAccounts) account.id};
+      friendsError = '';
+    } catch (e) {
+      friendsError = Localizer.format('FriendsLoadError', ['$e']);
+    }
+    notifyListeners();
+  }
+
+  /// Blocks [account] (its recommendations and invites stop reaching this one; it isn't told), or unblocks it. Shown at
+  /// once; a refusal puts it back and says why.
+  Future<void> setBlocked(AccountInfo account, bool block) async {
+    final before = blocked;
+    blocked = {...before.where((id) => id != account.id), if (block) account.id};
+    notifyListeners();
+    try {
+      await _session.setBlocked(account.id, block);
+      friendsError = '';
+      // What it recommended goes with the block.
+      if (block) unawaited(recommendations.refresh());
+    } catch (e) {
+      blocked = before;
+      friendsError = Localizer.format('ChangeRefused', ['$e']);
+    }
+    notifyListeners();
+  }
 
   // ── Recommending ───────────────────────────────────────────────────────────────────────────────
 

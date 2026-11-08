@@ -158,6 +158,7 @@ class MainViewModel extends ChangeNotifier {
       session.changeRefused.listen((reason) => showNotice(Localizer.format('ChangeRefused', [reason]), isError: true)),
       // Another player of the account changed its favourites, playlists or hidden items: this one shows them too.
       this.remote.accountDataChanged.listen((_) => unawaited(session.refreshUserData())),
+      this.remote.accountChanged.listen((_) => unawaited(session.refreshCurrentUser())),
       // The server found new music: it shows here without a restart.
       this.remote.libraryChanged.listen((_) => unawaited(session.refreshLibrary())),
       // Listening together: who joined, an invite, the end, and what the others asked for.

@@ -68,6 +68,12 @@ class AuthService {
     if (isBlank(username) || password == null || password.isEmpty) {
       return const RuleViolation(ErrorCodes.credentialsRequired, 'Username and password are required.');
     }
+    return validateUsername(username) ?? validatePassword(password);
+  }
+
+  /// Null when [username] may be an account's name (a new one's, or a new name), otherwise the rule it breaks.
+  static RuleViolation? validateUsername(String? username) {
+    if (isBlank(username)) return const RuleViolation(ErrorCodes.credentialsRequired, 'The username is required.');
     final trimmed = username!.trim();
     if (trimmed.length > AuthRules.maxUsernameLength || hasControlCharacters(trimmed)) {
       return const RuleViolation(
@@ -76,8 +82,35 @@ class AuthService {
         {'max': AuthRules.maxUsernameLength},
       );
     }
-    return validatePassword(password);
+    return null;
   }
+
+  static const String _membersCanRenameKey = 'members_can_rename';
+
+  /// Whether the accounts that aren't administrators may change their own names; off until an administrator allows it.
+  bool get membersCanRename =>
+      _db.connection.select('SELECT value FROM settings WHERE key = ?', [_membersCanRenameKey]).firstOrNull?['value'] ==
+      '1';
+
+  set membersCanRename(bool allowed) => _db.connection.execute(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    [_membersCanRenameKey, allowed ? '1' : '0'],
+  );
+
+  /// Gives [userId] the name [username] (checked with [validateUsername] first): the account, its favourites,
+  /// playlists, friends and sessions stay as they are, as everything goes by its ID. It signs in with the new name from
+  /// now on. [RenameOutcome.taken] when another account has that name, ignoring case.
+  ({RenameOutcome outcome, UserInfo? user}) rename(String userId, String username) => _db.transaction((db) {
+    final name = username.trim();
+    if (db.select('SELECT 1 FROM users WHERE id = ?', [userId]).isEmpty) {
+      return (outcome: RenameOutcome.noAccount, user: null);
+    }
+    if (db.select('SELECT 1 FROM users WHERE username = ? COLLATE NOCASE AND id != ?', [name, userId]).isNotEmpty) {
+      return (outcome: RenameOutcome.taken, user: null);
+    }
+    db.execute('UPDATE users SET username = ? WHERE id = ?', [name, userId]);
+    return (outcome: RenameOutcome.renamed, user: getUser(userId));
+  });
 
   /// Null when [password] may be used, otherwise the rule it breaks.
   static RuleViolation? validatePassword(String password) {
@@ -196,8 +229,8 @@ class AuthService {
       AccountInfo(row['id'] as String, row['username'] as String),
   ];
 
-  /// Deletes the account together with its favourites, play statistics, playlists, hidden items and the
-  /// recommendations it sent and got.
+  /// Deletes the account together with its favourites, play statistics, playlists, hidden items, the recommendations
+  /// it sent and got, and whom it blocked and who blocked it.
   bool deleteUser(String userId) => _db.transaction((db) {
     db.execute('DELETE FROM users WHERE id = ?', [userId]);
     final count = db.updatedRows;
@@ -206,6 +239,7 @@ class AuthService {
     db.execute('DELETE FROM user_playlists WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM recommendations WHERE from_user_id = ?1 OR to_user_id = ?1', [userId]);
+    db.execute('DELETE FROM user_blocks WHERE user_id = ?1 OR blocked_user_id = ?1', [userId]);
     return count > 0;
   });
 
@@ -251,7 +285,7 @@ class AuthService {
           as int?;
 
   static UserInfo _newUser(String username, {required bool isAdmin}) =>
-      UserInfo(newId(), username.trim(), isAdmin, DateTime.now().toUtc(), null);
+      UserInfo(newId(), username.trim(), isAdmin, DateTime.now().toUtc(), null, canRename: isAdmin);
 
   String _signInToken(UserInfo user, int version, DateTime expires) =>
       _sign(user.id, user.username, audience, version, expires);
@@ -264,13 +298,17 @@ class AuthService {
     'exp': expires.millisecondsSinceEpoch ~/ 1000,
   });
 
-  static UserInfo _toUserInfo(Map<String, Object?> row) => UserInfo(
-    row['id'] as String,
-    row['username'] as String,
-    (row['is_admin'] as int) != 0,
-    fromDbTime(row['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-    fromDbTime(row['last_login_at']),
-  );
+  UserInfo _toUserInfo(Map<String, Object?> row) {
+    final isAdmin = (row['is_admin'] as int) != 0;
+    return UserInfo(
+      row['id'] as String,
+      row['username'] as String,
+      isAdmin,
+      fromDbTime(row['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      fromDbTime(row['last_login_at']),
+      canRename: isAdmin || membersCanRename,
+    );
+  }
 }
 
 // bcrypt is slow on purpose; it runs in a background isolate so that other requests are not held up meanwhile. The
@@ -291,3 +329,6 @@ Future<bool> _verify(String password, String hash) async {
     return false;
   }
 }
+
+/// How [AuthService.rename] went.
+enum RenameOutcome { renamed, taken, noAccount }

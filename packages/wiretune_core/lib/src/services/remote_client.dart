@@ -115,6 +115,9 @@ class RemoteClient {
   /// players, or the connection was lost for a while.
   final Event<void> recommendationsChanged = Event<void>();
 
+  /// The account itself changed (it was renamed): ask the server for it again.
+  final Event<void> accountChanged = Event<void>();
+
   /// A message of listening together ([ListenTogether]): the server's clock, the group, its invites, the host's playback
   /// and the members' requests.
   final Event<Map<Object?, Object?>> listenMessage = Event();
@@ -368,6 +371,8 @@ class RemoteClient {
         libraryChanged.emit(null);
       case 'recommendationsChanged':
         recommendationsChanged.emit(null);
+      case 'accountChanged':
+        accountChanged.emit(null);
       case 'time' || 'listen' || 'listenInvites' || 'listenState' || 'listenCommand':
         listenMessage.emit(message);
     }

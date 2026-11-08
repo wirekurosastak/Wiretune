@@ -455,6 +455,29 @@ const Map<String, (String, String, String)> allStrings = {
   'PasswordMinPlaceholder': ('Jelszó (min. 8)', 'Password (min. 8)', 'Passwort (mind. 8)'),
   'PasswordConfirmPlaceholder': ('Jelszó megerősítése', 'Confirm password', 'Passwort bestätigen'),
   'ChangePassword': ('Jelszó módosítása', 'Change password', 'Passwort ändern'),
+  'ChangeUsername': ('Név módosítása', 'Change name', 'Namen ändern'),
+  'NewUsername': ('Új név', 'New name', 'Neuer Name'),
+  'EnterUsername': ('Add meg a nevet!', 'Enter a name!', 'Namen eingeben!'),
+  'UsernameChanged': (
+    'Mostantól {0} vagy. Ezzel a névvel jelentkezz be.',
+    "You're {0} now. Sign in with this name from now on.",
+    'Du heißt jetzt {0}. Melde dich ab jetzt mit diesem Namen an.',
+  ),
+  'UserRenamed': (
+    'Mostantól {0} a neve, és ezzel jelentkezik be.',
+    "It's called {0} now, and signs in with that name.",
+    'Es heißt jetzt {0} und meldet sich mit diesem Namen an.',
+  ),
+  'MembersCanRename': (
+    'A tagok módosíthatják a nevüket',
+    'Members can change their name',
+    'Mitglieder können ihren Namen ändern',
+  ),
+  'MembersCanRenameHint': (
+    'Különben csak te nevezheted át a fiókokat.',
+    'Otherwise only you can rename accounts.',
+    'Sonst kannst nur du Konten umbenennen.',
+  ),
   'NewPassword': ('Új jelszó', 'New password', 'Neues Passwort'),
   'ResetPassword': ('Jelszó visszaállítása', 'Reset password', 'Passwort zurücksetzen'),
   'EnterNewPassword': ('Add meg az új jelszót!', 'Enter a new password!', 'Neues Passwort eingeben!'),
@@ -985,6 +1008,20 @@ const Map<String, (String, String, String)> allStrings = {
 
   // ── Friends: the server's other accounts ──────────────────────────────────────────────────────────────
   'FromFriends': ('Barátoktól', 'From friends', 'Von Freunden'),
+  'FriendsSection': ('Barátok', 'Friends', 'Freunde'),
+  'FriendsHint': (
+    'Akit letiltasz, annak az ajánlásai és meghívásai nem jutnak el hozzád. Ő erről nem kap értesítést.',
+    "Someone you block can't send you recommendations or invites. They aren't told.",
+    'Wen du blockierst, kann dir keine Empfehlungen oder Einladungen schicken. Er erfährt es nicht.',
+  ),
+  'FriendsLoadError': (
+    'A barátok nem tölthetők be: {0}',
+    "Couldn't load the friends: {0}",
+    'Die Freunde konnten nicht geladen werden: {0}',
+  ),
+  'Block': ('Letiltás', 'Block', 'Blockieren'),
+  'Unblock': ('Feloldás', 'Unblock', 'Freigeben'),
+  'Blocked': ('Letiltva', 'Blocked', 'Blockiert'),
   'FromFriendsNone': ('Még semmi a barátaidtól.', 'Nothing from friends yet.', 'Noch nichts von Freunden.'),
   'FriendsNone': (
     'Ezen a szerveren nincs más fiók.',
@@ -1074,6 +1111,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Ez a fiók már nem létezik a szerveren. Kérj újat a rendszergazdától.',
     'This account no longer exists on the server. Ask the administrator for a new one.',
     'Dieses Konto gibt es auf dem Server nicht mehr. Bitte den Administrator um ein neues.',
+  ),
+  'ErrorRenameNotAllowed': (
+    'Ezen a szerveren csak a rendszergazda változtathat nevet.',
+    'On this server only the administrator can change names.',
+    'Auf diesem Server kann nur der Administrator Namen ändern.',
   ),
   'ErrorWrongCredentials': (
     'Hibás felhasználónév vagy jelszó.',

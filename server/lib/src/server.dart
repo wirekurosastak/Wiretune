@@ -12,6 +12,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'auth_service.dart';
+import 'block_service.dart';
 import 'config.dart';
 import 'http_utils.dart';
 import 'library_scan_service.dart';
@@ -137,13 +138,14 @@ class WiretuneServer {
   final UserDataService userData;
   final SetupCode setupCode;
   final LibraryScanService scanner;
-  final RemoteHub remote = RemoteHub();
+  late final RemoteHub remote = RemoteHub()..blocks = blocks.blocks;
 
   /// Converts tracks for players that asked for less than the original (`?format=opus&bitrate=96`).
   late final Transcoder transcoder = Transcoder(p.join(paths.dataDirectory, 'Transcodes'));
 
   /// What the accounts recommend to each other.
   late final RecommendationService recommendations = RecommendationService(database);
+  late final BlockService blocks = BlockService(database);
   final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
   HttpServer? _http;
   late final List<_Route> _routes = _buildRoutes();
@@ -353,6 +355,7 @@ class WiretuneServer {
       (call) => jsonResponse(auth.createStreamToken(call.principal!).toJson()),
     ),
     _Route('POST', '/api/auth/change-password', Access.user, _changePassword, rateLimited: true),
+    _Route('POST', '/api/auth/change-username', Access.user, _changeUsername, rateLimited: true),
     _Route('GET', '/api/auth/me', Access.user, (call) {
       final user = auth.getUser(call.userId);
       return user == null ? unauthorized(ErrorCodes.accountRemoved) : jsonResponse(user.toJson());
@@ -360,6 +363,7 @@ class WiretuneServer {
     _Route('GET', '/api/users', Access.admin, (_) => jsonResponse(auth.getAllUsers().map((u) => u.toJson()).toList())),
     _Route('POST', '/api/users', Access.admin, _addUser),
     _Route('POST', '/api/users/{userId}/password', Access.admin, _adminResetPassword),
+    _Route('POST', '/api/users/{userId}/username', Access.admin, (call) => _rename(call, call.params['userId']!)),
     _Route('DELETE', '/api/users/{userId}', Access.admin, (call) {
       final userId = call.params['userId']!;
       if (call.userId == userId) {
@@ -371,8 +375,16 @@ class WiretuneServer {
     }),
     // Every account by its name, for the others to recommend to and listen together with
     _Route('GET', '/api/accounts', Access.user, (_) => jsonResponse([for (final a in auth.getAccounts()) a.toJson()])),
-    _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(ServerConfigInfo(paths.musicFolder).toJson())),
+    _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(_config.toJson())),
     _Route('POST', '/api/config/music-folder', Access.admin, _setMusicFolder),
+    _Route('POST', '/api/config/members-can-rename', Access.admin, (call) async {
+      final allowed = (await call.jsonObject())?['enabled'];
+      if (allowed is! bool) {
+        return errorResponse(400, ErrorCodes.invalidJson, 'The body is { "enabled": true or false }.');
+      }
+      auth.membersCanRename = allowed;
+      return jsonResponse(_config.toJson());
+    }),
 
     // Library
     _Route(
@@ -446,6 +458,24 @@ class WiretuneServer {
       (call) => jsonResponse([for (final r in recommendations.received(call.userId)) r.toJson()]),
     ),
     _Route('POST', '/api/me/recommendations', Access.user, _recommend),
+    // The accounts this one blocked
+    _Route(
+      'GET',
+      '/api/me/blocked',
+      Access.user,
+      (call) => jsonResponse([for (final a in blocks.blocked(call.userId)) a.toJson()]),
+    ),
+    _Route('PUT', '/api/me/blocked/{userId}', Access.user, (call) {
+      final other = call.params['userId']!;
+      if (!blocks.block(call.userId, other)) return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
+      remote.blocked(call.userId, other);
+      remote.recommendationsChanged(call.userId); // what it recommended went
+      return jsonResponse({'userId': other, 'blocked': true});
+    }),
+    _Route('DELETE', '/api/me/blocked/{userId}', Access.user, (call) {
+      blocks.unblock(call.userId, call.params['userId']!);
+      return jsonResponse({'userId': call.params['userId'], 'blocked': false});
+    }),
     _Route('POST', '/api/me/recommendations/seen', Access.user, (call) {
       recommendations.markSeen(call.userId);
       remote.recommendationsChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
@@ -512,8 +542,13 @@ class WiretuneServer {
         {'max': RecommendationRules.maxRecipients},
       );
     }
-    final ids = recommendations.send(call.userId, recipients.toList(), kind, itemId, note);
-    recipients.forEach(remote.recommendationsChanged);
+    // An account that blocked the sender never gets it; the sender isn't told.
+    final open = [
+      for (final to in recipients)
+        if (!blocks.blocks(to, call.userId)) to,
+    ];
+    final ids = open.isEmpty ? const <String>[] : recommendations.send(call.userId, open, kind, itemId, note);
+    open.forEach(remote.recommendationsChanged);
     return jsonResponse({'ids': ids});
   }
 
@@ -578,6 +613,33 @@ class WiretuneServer {
     return jsonResponse({'changed': true, ...renewed.toJson()});
   }
 
+  /// The caller changes its own name: an administrator always, another account when the server lets members.
+  Future<Response> _changeUsername(_Call call) async {
+    if (!call.principal!.isAdmin && !auth.membersCanRename) {
+      return errorResponse(403, ErrorCodes.renameNotAllowed, 'On this server only the administrator can change names.');
+    }
+    return _rename(call, call.userId);
+  }
+
+  /// Gives the account [userId] the body's `username`: `{ "username" }`.
+  Future<Response> _rename(_Call call, String userId) async {
+    final username = _text(await call.jsonObject(), 'username');
+    if (AuthService.validateUsername(username) case final violation?) return violationResponse(violation);
+    final (:outcome, :user) = auth.rename(userId, username!);
+    switch (outcome) {
+      case RenameOutcome.noAccount:
+        return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
+      case RenameOutcome.taken:
+        return errorResponse(409, ErrorCodes.usernameTaken, 'Username already taken.');
+      case RenameOutcome.renamed:
+        remote.renamed(userId, user!.username);
+        return jsonResponse(user.toJson());
+    }
+  }
+
+  /// What an administrator sets about the server.
+  ServerConfigInfo get _config => ServerConfigInfo(paths.musicFolder, membersCanRename: auth.membersCanRename);
+
   Future<Response> _adminResetPassword(_Call call) async {
     final userId = call.params['userId']!;
     // Resetting would sign the administrator out everywhere, this request's token included.
@@ -627,7 +689,7 @@ class WiretuneServer {
     repository.setSetting(_chosenMusicFolderKey, fullPath);
     paths.musicFolder = fullPath;
     scanner.requestScan();
-    return jsonResponse(ServerConfigInfo(paths.musicFolder).toJson());
+    return jsonResponse(_config.toJson());
   }
 
   /// Why the existing folder [fullPath] cannot be the music folder, or null. It must not be a whole disk or a system's

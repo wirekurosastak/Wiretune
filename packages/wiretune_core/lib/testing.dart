@@ -338,7 +338,7 @@ Future<ServerSession> signedInSession(
   String serverUrl = 'http://server:5200',
   http.Response? Function(http.Request request)? respond,
 }) async {
-  final user = UserInfo('user-1', 'owner', true, DateTime.utc(2026), null);
+  final user = UserInfo('user-1', 'owner', true, DateTime.utc(2026), null, canRename: true);
   final client = MockClient((request) async {
     // A test's own answer for a request comes first; null leaves it to the stand-in below.
     final own = respond?.call(request);

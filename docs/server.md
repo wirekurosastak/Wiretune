@@ -145,6 +145,9 @@ renewal. The players accept only certificates their system trusts: a self-signed
 
 The administrator adds and removes other accounts in *Settings → Account & connection*. Those are regular users and
 can't be promoted. The administrator can't delete their own account. Names: up to 64 characters, unique ignoring case.
+The administrator can rename any account there, and with *Members can change their name* let the others rename
+themselves (*Change name*). A renamed account keeps everything and stays signed in; it signs in with the new name next
+time.
 Passwords: at least 8 characters and at most 72 bytes (bcrypt ignores the rest).
 
 Each account's favorites, play counts, playlists and hidden items are stored on the server, so they're the same on every

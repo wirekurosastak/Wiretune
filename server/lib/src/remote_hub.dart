@@ -28,6 +28,10 @@ class RemoteHub {
   /// How long a group waits for its host to come back; tests shorten it.
   Duration hostGrace = RemoteRules.listenHostGrace;
 
+  /// Whether the account `userId` blocked the account `otherId`: then `otherId` can't invite it to listen together.
+  /// The server sets it; none are blocked without it.
+  bool Function(String userId, String otherId) blocks = (_, _) => false;
+
   /// The players of [userId] that are online.
   int devicesOf(String userId) => _accounts[userId]?.length ?? 0;
 
@@ -69,6 +73,33 @@ class RemoteHub {
   void dataChanged(String userId, {String? except}) {
     for (final peer in _accounts[userId]?.values ?? const <_Peer>[]) {
       if (peer.id != except) _send(peer, const {'type': 'dataChanged'});
+    }
+  }
+
+  /// [userId] blocked [otherId]: the invites of [otherId]'s group are gone for it.
+  void blocked(String userId, String otherId) {
+    var changed = false;
+    for (final group in _groups.values) {
+      if (group.hostKey.$1 == otherId) changed |= group.invited.remove(userId);
+    }
+    if (changed) _announceInvites(userId);
+  }
+
+  /// The account [userId] is called [username] now: its groups and its invites say so, and its own players hear of it
+  /// (`accountChanged`), so each shows the new name.
+  void renamed(String userId, String username) {
+    final peers = _peers.where((p) => p.userId == userId).toList();
+    for (final peer in peers) {
+      peer.username = username;
+    }
+    for (final group in {for (final peer in peers) ?peer.group}) {
+      _announceGroup(group);
+    }
+    for (final group in _groups.values) {
+      if (group.hostKey.$1 == userId) group.invited.forEach(_announceInvites);
+    }
+    for (final peer in _accounts[userId]?.values ?? const <_Peer>[]) {
+      _send(peer, const {'type': 'accountChanged'});
     }
   }
 
@@ -287,7 +318,10 @@ class RemoteHub {
   void _invite(_Peer host, Set<String> invite) {
     final group = host.group;
     if (group == null || group.host != host) return;
-    final added = invite.where((id) => id != host.userId && !group.invited.contains(id)).toList();
+    // An account that blocked the host never hears of the invite, and the host isn't told.
+    final added = invite
+        .where((id) => id != host.userId && !group.invited.contains(id) && !blocks(id, host.userId))
+        .toList();
     final room = RemoteRules.maxListenInvites - group.invited.length;
     if (room <= 0) return;
     group.invited.addAll(added.take(room));
@@ -425,7 +459,9 @@ class _Peer {
 
   final WebSocket socket;
   final String userId;
-  final String username;
+
+  /// The account's name; it changes when the account is renamed ([RemoteHub.renamed]).
+  String username;
 
   /// The group it hosts or listens in.
   _Group? group;

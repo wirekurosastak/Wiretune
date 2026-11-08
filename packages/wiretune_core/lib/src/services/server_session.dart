@@ -417,6 +417,36 @@ class ServerSession {
   Future<void> adminResetPassword(String userId, String newPassword) =>
       _client.adminResetPassword(serverUrl, userId, newPassword);
 
+  /// Gives the signed-in account the name [username]; it signs in with it from now on. Throws as [changePassword].
+  Future<void> changeUsername(String username) async {
+    final user = await _client.changeUsername(serverUrl, username.trim());
+    if (currentUser?.id != user.id) return; // signed out or in as another meanwhile
+    currentUser = user;
+    stateChanged.emit(null);
+  }
+
+  /// Asks the server for the signed-in account again: another of its players renamed it, or the administrator did.
+  Future<void> refreshCurrentUser() async {
+    final user = currentUser;
+    if (user == null || !isLoggedIn) return;
+    try {
+      final now = await _client.getCurrentUser(serverUrl);
+      if (currentUser?.id != now.id) return;
+      currentUser = now;
+      stateChanged.emit(null);
+    } catch (e) {
+      WiretuneLog.debug('ServerSession', 'Could not ask for the account again: $e');
+    }
+  }
+
+  Future<UserInfo> renameUser(String userId, String username) => _client.renameUser(serverUrl, userId, username.trim());
+
+  Future<ServerConfigInfo> setMembersCanRename(bool allowed) => _client.setMembersCanRename(serverUrl, allowed);
+
+  Future<List<AccountInfo>> getBlocked() => _client.getBlocked(serverUrl);
+
+  Future<void> setBlocked(String userId, bool blocked) => _client.setBlocked(serverUrl, userId, blocked);
+
   Future<ServerConfigInfo> getServerConfig() => _client.getServerConfig(serverUrl);
 
   Future<ServerConfigInfo> saveServerFolder(String folder) => _client.saveServerFolder(serverUrl, folder);

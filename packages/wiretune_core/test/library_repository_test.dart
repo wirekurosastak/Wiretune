@@ -31,6 +31,7 @@ void main() {
   /// Takes a database of the current schema back to what an older Wiretune of schema [version] left behind.
   void downgrade(DatabaseManager db, int version) {
     final c = db.connection;
+    if (version < 14) c.execute('DROP TABLE user_blocks');
     if (version < 13) c.execute('DROP TABLE recommendations');
     // Schemas 10 and 11 had ListenBrainz's tables, 9 and 10 the app password.
     if (version == 10 || version == 11) {
@@ -261,6 +262,19 @@ void main() {
     expect(hidden[HiddenKind.track], isEmpty);
     expect(hidden[HiddenKind.album], isEmpty);
     expect(hidden[HiddenKind.artist], isEmpty);
+  });
+
+  test('a database of schema 13 is upgraded, gaining the blocks, its recommendations kept', () async {
+    final (_, db) = await open();
+    db.connection.execute(
+      "INSERT INTO recommendations (id, from_user_id, to_user_id, item_type, item_id, sent_at) VALUES ('r', 'a', 'b', 'track', 't', 0)",
+    );
+    downgrade(db, 13);
+
+    final (_, again) = await open();
+    expect(count(again, 'PRAGMA user_version'), DatabaseManager.schemaVersion);
+    expect(count(again, 'SELECT COUNT(*) FROM recommendations'), 1);
+    expect(count(again, 'SELECT COUNT(*) FROM user_blocks'), 0);
   });
 
   test('a database of schema 8 to 11 is upgraded: its accounts stay, the app passwords and the listens go', () async {

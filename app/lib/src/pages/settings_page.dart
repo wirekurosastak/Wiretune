@@ -33,7 +33,11 @@ class SettingsPage extends StatelessWidget {
         final server = vm.serverSettings;
         // The music folders: the server's for its administrator, this computer's on a desktop.
         final library = (server.isLoggedIn && server.isAdmin) || server.supportsLocalFolder;
-        final account = [const _AccountCard(), if (library) const _LibraryCard()];
+        final account = [
+          const _AccountCard(),
+          if (server.isLoggedIn) const _FriendsCard(),
+          if (library) const _LibraryCard(),
+        ];
         final options = [
           // The Tizen TV's player has neither an output to choose nor gapless playback or normalization.
           if (vm.audioSettings.hasDeviceChoice || !AppPlatform.current.isTizen) const _AudioCard(),
@@ -333,6 +337,78 @@ class _AccountCardState extends State<_AccountCard> {
     );
   }
 
+  /// Asks for a name, starting from [current], and hands it to [submit], which answers what is wrong with it, or null;
+  /// then the notice [done] makes of it. The signed-in account's Change name and an administrator's Rename.
+  void _openNameDialog(
+    BuildContext context, {
+    required String title,
+    required String current,
+    required Future<String?> Function(String name) submit,
+    required String Function(String name) done,
+  }) {
+    final name = TextEditingController(text: current)
+      ..selection = TextSelection(baseOffset: 0, extentOffset: current.length);
+    String? error;
+    bool busy = false;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          Future<void> save() async {
+            setDialogState(() {
+              busy = true;
+              error = null;
+            });
+            final err = await submit(name.text);
+            if (err != null) {
+              setDialogState(() {
+                busy = false;
+                error = err;
+              });
+            } else {
+              if (ctx.mounted) Navigator.of(ctx).pop();
+              if (context.mounted) context.vm.showNotice(done(name.text.trim()));
+            }
+          }
+
+          return PopScope(
+            canPop: !busy,
+            child: AppDialog(
+              title: title,
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: name,
+                      autofocus: true,
+                      maxLength: AuthRules.maxUsernameLength,
+                      decoration: InputDecoration(labelText: ctx.tr('NewUsername'), counterText: ''),
+                      onSubmitted: (_) => busy ? null : save(),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(error!, style: TextStyle(color: ctx.colors.danger, fontSize: 13)),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: busy ? null : () => Navigator.of(ctx).pop(), child: Text(ctx.tr('Cancel'))),
+                PressShrink(
+                  child: FilledButton(onPressed: busy ? null : save, child: Text(ctx.tr('Save'))),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   /// Deleting an account takes its data with it, so it is asked once more.
   Future<void> _confirmDeleteUser(BuildContext context, ServerSettingsViewModel server, UserInfo user) async {
     final confirmed = await confirmAction(
@@ -478,6 +554,18 @@ class _AccountCardState extends State<_AccountCard> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    if (server.canRename)
+                      OutlinedButton.icon(
+                        onPressed: () => _openNameDialog(
+                          context,
+                          title: context.tr('ChangeUsername'),
+                          current: server.currentUserName,
+                          submit: server.changeUsername,
+                          done: (name) => context.trf('UsernameChanged', [name]),
+                        ),
+                        icon: const Icon(Icons.badge_outlined, size: 16),
+                        label: Text(context.tr('ChangeUsername')),
+                      ),
                     OutlinedButton.icon(
                       onPressed: () => _openPasswordDialog(
                         context,
@@ -601,7 +689,18 @@ class _AccountCardState extends State<_AccountCard> {
                             ],
                           ),
                         ),
-                        if (user.username != server.currentUserName) ...[
+                        if (user.id != server.currentUserId) ...[
+                          IconButton(
+                            tooltip: context.tr('Rename'),
+                            icon: Icon(Icons.edit_outlined, color: colors.textMuted),
+                            onPressed: () => _openNameDialog(
+                              context,
+                              title: '${context.tr('Rename')}: ${user.username}',
+                              current: user.username,
+                              submit: (name) => server.renameUser(user.id, name),
+                              done: (name) => context.trf('UserRenamed', [name]),
+                            ),
+                          ),
                           IconButton(
                             tooltip: context.tr('ResetPassword'),
                             icon: Icon(Icons.lock_reset_rounded, color: colors.textMuted),
@@ -621,6 +720,27 @@ class _AccountCardState extends State<_AccountCard> {
                       ],
                     ),
                   ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('MembersCanRename'),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                          ),
+                          Text(
+                            context.tr('MembersCanRenameHint'),
+                            style: TextStyle(fontSize: 12, color: colors.textMuted),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(value: server.membersCanRename, onChanged: server.setMembersCanRename),
+                  ],
+                ),
               ],
             ],
           ),
@@ -1424,6 +1544,82 @@ class _AboutCard extends StatelessWidget {
             label: Text(context.tr('AboutLicenses')),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The server's other accounts, each with Block or Unblock: someone blocked can't send this account recommendations
+/// or invites to listen together, and isn't told.
+class _FriendsCard extends StatefulWidget {
+  const _FriendsCard();
+
+  @override
+  State<_FriendsCard> createState() => _FriendsCardState();
+}
+
+class _FriendsCardState extends State<_FriendsCard> {
+  @override
+  void initState() {
+    super.initState();
+    // As the accounts are now; after the frame, as loading tells the listeners at once.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.vm.friends.loadFriends();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final friends = context.vm.friends;
+    final colors = context.colors;
+    return ListenableBuilder(
+      listenable: friends,
+      builder: (context, _) => GlassCard(
+        opaque: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _CardTitle(
+              icon: Icons.people_outline_rounded,
+              title: context.tr('FriendsSection'),
+              subtitle: context.tr('FriendsHint'),
+            ),
+            if (friends.friends.isEmpty && friends.friendsError.isEmpty)
+              Text(context.tr('FriendsNone'), style: TextStyle(color: colors.textMuted, fontSize: 13)),
+            for (final account in friends.friends) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.person_outline_rounded, size: 18, color: colors.textMuted),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        account.username,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13, color: colors.textMain),
+                      ),
+                    ),
+                    if (friends.blocked.contains(account.id)) ...[
+                      Text(context.tr('Blocked'), style: TextStyle(fontSize: 12, color: colors.danger)),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => friends.setBlocked(account, false),
+                        child: Text(context.tr('Unblock'), style: TextStyle(color: colors.accent, fontSize: 13)),
+                      ),
+                    ] else
+                      TextButton(
+                        onPressed: () => friends.setBlocked(account, true),
+                        child: Text(context.tr('Block'), style: TextStyle(color: colors.danger, fontSize: 13)),
+                      ),
+                  ],
+                ),
+              ),
+              Divider(color: colors.glassBorder, height: 1),
+            ],
+            _StatusLine(friends.friendsError, isError: true),
+          ],
+        ),
       ),
     );
   }

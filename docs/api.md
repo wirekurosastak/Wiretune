@@ -22,10 +22,12 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` missing field, `401` wrong credentials. Rate limited |
 | `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't request another |
 | `POST /api/auth/change-password` | user | Body `{ "newPassword" }` (the current password isn't required). `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, expiring when the old one would have. `400` invalid password. Rate limited. All earlier tokens (the caller's, other devices', stream tokens) stop working, and the account's remote-control connections close with `4401` |
-| `GET /api/auth/me` | user | The caller's `UserInfo` |
+| `POST /api/auth/change-username` | user | Body `{ "username" }`. Renames the caller: an administrator always, another account when the administrator lets members (`membersCanRename`). `200` with the `UserInfo`, `400` invalid name, `403` `renameNotAllowed`, `409` name taken. Rate limited. Sessions stay signed in; the next sign-in uses the new name |
+| `GET /api/auth/me` | user | The caller's `UserInfo`, with `canRename`: whether it may change its own name |
 | `GET /api/accounts` | user | Every account as `{ "id", "username" }`, by name: the friends to recommend to |
 | `GET /api/users` | admin | All accounts |
 | `POST /api/users` | admin | Creates a regular user. Body `{ "username", "password" }`. `200` with a `UserInfo`, `400`, or `409` name taken |
+| `POST /api/users/{userId}/username` | admin | Body `{ "username" }`. Renames an account; it keeps its data and its sessions. `200` with the `UserInfo`, `400` invalid name, `404` unknown account, `409` name taken |
 | `POST /api/users/{userId}/password` | admin | Body `{ "newPassword" }`. Sets another account's password and ends all its sessions. `200` `{ "changed": true }`, `400` invalid password or your own account (use `change-password`), `404` unknown account |
 | `DELETE /api/users/{userId}` | admin | Deletes an account and its data. `400` your own account, `404` unknown account |
 
@@ -41,7 +43,8 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
 | `POST /api/library/scan` | admin | Requests a scan: `202 { "message": "Scan requested." }`. Poll the status route |
 | `GET /api/tracks` | user | All tracks, with an `ETag`. Send it as `If-None-Match`: an unchanged list returns `304` with no body |
 | `GET /api/artists/pictures` | user | Artists with their own picture in the music folder (`artist.jpg`, see the [user guide](user-guide.md#the-library)): `{ artistId: version }`; the version changes with the file. `ETag` as on `/api/tracks` |
-| `GET /api/config` | admin | `{ "musicFolder" }` |
+| `GET /api/config` | admin | `{ "musicFolder", "membersCanRename" }` |
+| `POST /api/config/members-can-rename` | admin | Body `{ "enabled": true }` or `false`: whether accounts that aren't administrators may change their own names (off at first). `200` with the config, `400` not a boolean |
 | `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (saved in the database, kept after a restart even while missing) and requests a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that contains or is inside the server's data folder (following symbolic links) |
 
 A **track** has:
@@ -89,11 +92,20 @@ account keeps its newest 200; one more pushes out the oldest.
 | Route | Role | |
 |---|---|---|
 | `GET /api/me/recommendations` | user | What others recommended to this account, newest first: `[{ "id", "from": { "id", "username" }, "kind", "itemId", "note", "sentAt", "seen" }]` |
-| `POST /api/me/recommendations` | user | Body `{ "kind", "itemId", "to": [accountId], "note" }`: an item of the library, 1 to 50 other accounts, a note of up to 200 characters (may be empty). `200 { "ids" }`, one per recipient. `400` rule violation, `404` not in the library |
+| `POST /api/me/recommendations` | user | Body `{ "kind", "itemId", "to": [accountId], "note" }`: an item of the library, 1 to 50 other accounts, a note of up to 200 characters (may be empty). `200 { "ids" }`, one per recipient that gets it: an account that blocked the sender doesn't, and the answer is otherwise the same. `400` rule violation, `404` not in the library |
 | `POST /api/me/recommendations/seen` | user | Marks them all seen (the bell was opened). `200 { "seen": true }` |
 | `DELETE /api/me/recommendations/{id}` | user | Its recipient dismisses it, or its sender takes it back. `200 { "deleted": true }`, `404` if it is neither's |
 
 Each change sends `recommendationsChanged` to the recipient's players.
+
+An account can block another: a blocked account's recommendations stop reaching it (the ones it sent before are
+deleted) and its invites to listen together never arrive. The blocked account isn't told.
+
+| Route | Role | |
+|---|---|---|
+| `GET /api/me/blocked` | user | The accounts this one blocked, by name: `[{ "id", "username" }]` |
+| `PUT /api/me/blocked/{userId}` | user | Blocks another account. `200 { "userId", "blocked": true }`, `404` for an unknown account or the caller's own |
+| `DELETE /api/me/blocked/{userId}` | user | Unblocks it; what it sent before the block doesn't come back. `200 { "userId", "blocked": false }` |
 
 ## Media
 
@@ -127,6 +139,7 @@ Every message is a JSON text object with a `type`, at most 64 K characters.
 | `{ "type": "command", "from", "command" }` | server | A command for this player |
 | `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change, if it sent its device ID in an `X-Wiretune-Device` header with that request |
 | `{ "type": "libraryChanged" }` | server | A scan changed `/api/tracks` or `/api/artists/pictures` (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
+| `{ "type": "accountChanged" }` | server | The account was renamed: download `/api/auth/me` again |
 | `{ "type": "recommendationsChanged" }` | server | What the account was recommended changed: one came or was taken back, or the bell was opened on another of its players: download `/api/me/recommendations` again. Not sent to the player that made the change, as for `dataChanged` |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
@@ -188,7 +201,7 @@ the host plays, and seek when they are more than 150 ms off.
 | `adminOnly` | 403 | An administrator's route |
 | `rateLimited` | 429 | With `retryAfter` (seconds), also as the `Retry-After` header |
 | `credentialsRequired`, `usernameInvalid` (`max`), `passwordTooShort` (`min`), `passwordTooLong` (`max`, in bytes) | 400 | Account rules |
-| `alreadySetUp` (409), `setupCodeWrong` (403), `usernameTaken` (409), `userNotFound` (404), `cannotDeleteSelf` (400), `cannotResetOwnPassword` (400) | | Accounts |
+| `alreadySetUp` (409), `setupCodeWrong` (403), `usernameTaken` (409), `userNotFound` (404), `cannotDeleteSelf` (400), `cannotResetOwnPassword` (400), `renameNotAllowed` (403) | | Accounts |
 | `folderRequired`, `folderInvalid`, `folderMissing` (`path`), `folderUnreadable` (`path`), `folderWholeDisk`, `folderSystem`, `folderServerData` | 400 | The music folder |
 | `invalidId`, `invalidItemType`, `playlistInvalid`, `playlistNameRequired`, `playlistNameTooLong` (`max`), `playlistDescriptionTooLong` (`max`), `playlistTooManyTracks` (`max`) | 400 | The account's data |
 | `favoritesLimit`, `playCountsLimit`, `playlistsLimit`, `hiddenLimit` (all with `limit`) | 409 | The account's limits |

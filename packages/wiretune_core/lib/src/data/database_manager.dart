@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 13;
+  static const int schemaVersion = 14;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -78,6 +78,8 @@ class DatabaseManager {
     'DROP TABLE IF EXISTS user_listens; DROP TABLE IF EXISTS user_listenbrainz;',
     // 12 -> 13: what the accounts recommend to each other.
     _recommendationsTable,
+    // 13 -> 14: the accounts each account blocked.
+    _userBlocksTable,
   ];
 
   final String databasePath;
@@ -258,6 +260,7 @@ const String _schema =
   $_userHiddenTable
   $_downloadsTable
   $_recommendationsTable
+  $_userBlocksTable
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
@@ -296,4 +299,15 @@ const String _recommendationsTable = '''
       seen INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX recommendations_to ON recommendations (to_user_id, sent_at);
+''';
+
+/// The accounts each account blocked (`blocked_user_id`): they can't recommend it anything or invite it to listen
+/// together, and aren't told.
+const String _userBlocksTable = '''
+  CREATE TABLE user_blocks (
+      user_id TEXT NOT NULL,
+      blocked_user_id TEXT NOT NULL,
+      blocked_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, blocked_user_id)
+  );
 ''';

@@ -66,6 +66,9 @@ class ServerSettingsViewModel extends ChangeNotifier {
   String localFolderMessage = '';
   bool localFolderIsError = false;
   List<UserInfo> serverUsers = const [];
+
+  /// Whether the server lets the accounts that aren't administrators change their own names (for its administrator).
+  bool membersCanRename = false;
   bool isAddingUser = false;
   String userManagementErrorMessage = '';
 
@@ -85,6 +88,11 @@ class ServerSettingsViewModel extends ChangeNotifier {
   bool get isLoggedIn => _session.isLoggedIn;
   bool get isAdmin => _session.currentUser?.isAdmin ?? false;
   String get currentUserName => _session.currentUser?.username ?? '';
+  String get currentUserId => _session.currentUser?.id ?? '';
+
+  /// Whether the signed-in account may change its own name: an administrator always, the others when the server lets
+  /// members.
+  bool get canRename => _session.currentUser?.canRename ?? false;
   String get currentUserRole => Localizer.get(isAdmin ? 'RoleAdmin' : 'RoleUser');
 
   /// What the session is doing, in a sentence; empty while there is nothing to tell (its badge says how it stands).
@@ -126,7 +134,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
     }
 
     // The administrator's data is fetched once per administrator sign-in, not on every state change.
-    final adminKey = isLoggedIn && isAdmin ? '${_session.serverUrl}|$currentUserName' : null;
+    final adminKey = isLoggedIn && isAdmin ? '${_session.serverUrl}|$currentUserId' : null;
     if (adminKey != _adminDataKey) {
       _adminDataKey = adminKey;
       if (adminKey != null) {
@@ -375,8 +383,50 @@ class ServerSettingsViewModel extends ChangeNotifier {
     _showUserManagementError(null);
     try {
       serverUsers = await _session.getUsers();
+      membersCanRename = (await _session.getServerConfig()).membersCanRename;
     } catch (e) {
       _showUserManagementError(Localizer.format('UsersLoadError', ['$e']));
+    }
+    notifyListeners();
+  }
+
+  /// Gives the signed-in account the name [username]; answers what went wrong, or null.
+  Future<String?> changeUsername(String username) async {
+    if (!isLoggedIn) return Localizer.get('NotSignedIn');
+    if (username.trim().isEmpty) return Localizer.get('EnterUsername');
+    try {
+      await _session.changeUsername(username);
+      if (isAdmin) await loadUsers();
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
+  /// The administrator gives the account [userId] the name [username]; answers what went wrong, or null.
+  Future<String?> renameUser(String userId, String username) async {
+    if (!isLoggedIn || !isAdmin) return Localizer.get('SessionRejected');
+    if (username.trim().isEmpty) return Localizer.get('EnterUsername');
+    try {
+      await _session.renameUser(userId, username);
+      await loadUsers();
+      return null;
+    } catch (e) {
+      return '$e';
+    }
+  }
+
+  /// The administrator lets the other accounts change their own names, or stops them.
+  Future<void> setMembersCanRename(bool allowed) async {
+    if (!isLoggedIn || !isAdmin) return;
+    final before = membersCanRename;
+    membersCanRename = allowed;
+    notifyListeners();
+    try {
+      membersCanRename = (await _session.setMembersCanRename(allowed)).membersCanRename;
+    } catch (e) {
+      membersCanRename = before;
+      _showUserManagementError(Localizer.format('ChangeRefused', ['$e']));
     }
     notifyListeners();
   }
