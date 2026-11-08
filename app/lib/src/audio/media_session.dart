@@ -20,6 +20,8 @@ class WiretuneMediaSession extends BaseAudioHandler {
     _vm.player.position.addListener(_followPosition);
     _vm.library.libraryChanged.listen((_) => notifyChildrenChanged());
     _vm.library.playlistsChanged.listen((_) => notifyChildrenChanged());
+    // The heart in the notification follows the favourite, wherever it changes.
+    _vm.library.favoriteChanged.listen((_) => _publish());
     _publish();
   }
 
@@ -28,6 +30,7 @@ class WiretuneMediaSession extends BaseAudioHandler {
   String? _publishedTrackId;
   List<String> _publishedQueue = const [];
   String? _streamToken;
+  bool _publishedFavorite = false;
 
   static Future<WiretuneMediaSession> start(MainViewModel vm) => AudioService.init(
     builder: () => WiretuneMediaSession(vm),
@@ -66,7 +69,11 @@ class WiretuneMediaSession extends BaseAudioHandler {
 
     final state = _playbackState();
     final last = playbackState.value;
+    final favorite = track != null && _vm.library.isFavorite(track.id);
+    final favoriteChanged = favorite != _publishedFavorite;
+    _publishedFavorite = favorite;
     if (trackChanged ||
+        favoriteChanged ||
         state.playing != last.playing ||
         state.processingState != last.processingState ||
         state.repeatMode != last.repeatMode ||
@@ -103,18 +110,34 @@ class WiretuneMediaSession extends BaseAudioHandler {
     if ((_vm.player.position.value - carried).abs() > const Duration(seconds: 1)) playbackState.add(_playbackState());
   }
 
-  /// The player's state as the system shows it, with the position at this moment.
+  /// The player's state as the system shows it, with the position at this moment. Beside the transport, as in TIDAL's
+  /// and Spotify's: the heart of the track that plays (filled when it is a favourite) and shuffle (with a dot when on),
+  /// which Android 13 and later show in the media controls, and Android Auto on its screen.
   PlaybackState _playbackState() {
     final player = _vm.player;
     final playing = player.playbackState == core.PlaybackState.playing;
+    final track = player.currentTrack;
+    final favorite = track != null && _vm.library.isFavorite(track.id);
     return PlaybackState(
       controls: [
+        if (track != null)
+          MediaControl.custom(
+            androidIcon: favorite ? 'drawable/ic_favorite' : 'drawable/ic_favorite_border',
+            label: Localizer.get(favorite ? 'RemoveFromFavorites' : 'Favorite'),
+            name: favoriteAction,
+          ),
         MediaControl.skipToPrevious,
         if (playing) MediaControl.pause else MediaControl.play,
         MediaControl.skipToNext,
+        MediaControl.custom(
+          androidIcon: player.isShuffle ? 'drawable/ic_shuffle_on' : 'drawable/ic_shuffle',
+          label: Localizer.get(player.isShuffle ? 'TipShuffleOff' : 'TipShuffleOn'),
+          name: shuffleAction,
+        ),
       ],
       systemActions: const {MediaAction.seek, MediaAction.seekForward, MediaAction.seekBackward},
-      androidCompactActionIndices: const [0, 1, 2],
+      // Folded, the notification shows the transport alone.
+      androidCompactActionIndices: track != null ? const [1, 2, 3] : const [0, 1, 2],
       processingState: switch (player.playbackState) {
         core.PlaybackState.error => AudioProcessingState.error,
         core.PlaybackState.stopped =>
@@ -173,6 +196,21 @@ class WiretuneMediaSession extends BaseAudioHandler {
   );
 
   // ── Commands from the system ───────────────────────────────────────────────────────────────────
+
+  /// The notification's own buttons ([MediaControl.custom]): the heart and shuffle.
+  static const String favoriteAction = 'favorite';
+  static const String shuffleAction = 'shuffle';
+
+  @override
+  Future<dynamic> customAction(String name, [Map<String, dynamic>? extras]) async {
+    switch (name) {
+      case favoriteAction:
+        final track = _vm.player.currentTrack;
+        if (track != null) _vm.library.toggleFavorite(track.id);
+      case shuffleAction:
+        _vm.player.toggleShuffle();
+    }
+  }
 
   @override
   Future<void> play() => _vm.player.play();

@@ -16,6 +16,42 @@ void main() {
   setUpAll(useTempDataDirectory);
   setUp(() => Localizer.instance.setLanguage('en'));
 
+  test(
+    "the notification has the track's heart and shuffle beside the transport; they mark it, and follow it",
+    () async {
+      final library = createLibrary([TestSupport.makeTrack('1', 'One'), TestSupport.makeTrack('2', 'Two')]);
+      library.initialize();
+      final vm = createMainViewModel(library, TestSupport.createEngine(FakeAudioDriver()));
+      final session = WiretuneMediaSession(vm);
+      List<String> icons() => [for (final c in session.playbackState.value.controls) c.androidIcon];
+
+      expect(icons(), isNot(contains('drawable/ic_favorite_border')), reason: 'no heart without a track');
+      vm.player.playQueue(vm.library.tracks);
+      await pumpEventQueue();
+      expect(icons().first, 'drawable/ic_favorite_border');
+      expect(icons().last, 'drawable/ic_shuffle');
+      expect(session.playbackState.value.androidCompactActionIndices, [1, 2, 3], reason: 'folded: the transport');
+
+      await session.customAction(WiretuneMediaSession.favoriteAction);
+      await pumpEventQueue();
+      expect(vm.library.isFavorite('1'), isTrue);
+      expect(icons().first, 'drawable/ic_favorite');
+
+      await session.customAction(WiretuneMediaSession.shuffleAction);
+      await pumpEventQueue();
+      expect(vm.player.isShuffle, isTrue);
+      expect(icons().last, 'drawable/ic_shuffle_on');
+
+      // A heart marked elsewhere (the app, another device) shows here too.
+      vm.library.toggleFavorite(vm.player.currentTrack!.id);
+      await pumpEventQueue();
+      expect(icons().first, 'drawable/ic_favorite_border');
+
+      session.playbackState.close();
+      vm.dispose();
+    },
+  );
+
   test('the playback state is published at changes, not at every position update', () async {
     final driver = FakeAudioDriver();
     final library = createLibrary([TestSupport.makeTrack('1', 'One'), TestSupport.makeTrack('2', 'Two')]);
