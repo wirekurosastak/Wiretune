@@ -548,12 +548,29 @@ class _WideBackBarState extends State<_WideBackBar> {
               padding: const EdgeInsets.fromLTRB(_left, _rowTop, _right, 0),
               child: Row(
                 children: [
-                  SizedBox.square(
-                    dimension: PinnedTitleBar.buttonSize,
-                    child: IconButton(
-                      tooltip: widget.backText ?? context.tr('Back'),
+                  // Growing a little and glowing under the mouse, as the table's headers do, not in a disc.
+                  Tooltip(
+                    message: widget.backText ?? context.tr('Back'),
+                    child: Pressable(
                       onPressed: widget.onBack,
-                      icon: Icon(Icons.arrow_back_rounded, size: 24, color: colors.textMain),
+                      builder: (context, lit) => AnimatedScale(
+                        scale: lit ? 1.12 : 1.0,
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutCubic,
+                        child: SizedBox.square(
+                          dimension: PinnedTitleBar.buttonSize,
+                          child: Center(
+                            child: Icon(
+                              Icons.arrow_back_rounded,
+                              size: 24,
+                              color: colors.textMain,
+                              shadows: lit
+                                  ? [BoxShadow(color: colors.textMain.withValues(alpha: 0.6), blurRadius: 10)]
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
