@@ -192,6 +192,12 @@ class ServerClient {
     await _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/username', body: {'username': username}),
   );
 
+  /// An administrator turns the album lookups on or off.
+  Future<ServerConfigInfo> setAlbumLookups(String baseUrl, bool on) async => _parse(
+    ServerConfigInfo.fromJson,
+    await _send('POST', baseUrl, '/api/config/album-lookups', body: {'enabled': on}),
+  );
+
   /// An administrator lets the other accounts change their own names, or stops them.
   Future<ServerConfigInfo> setMembersCanRename(String baseUrl, bool allowed) async => _parse(
     ServerConfigInfo.fromJson,

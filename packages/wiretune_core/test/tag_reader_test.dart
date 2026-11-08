@@ -345,6 +345,32 @@ void main() {
       expect((tags.artist, tags.artists.length), ('Simon & Garfunkel', 0));
     });
 
+    test("the codes, label, ℗ line and composer, each from the field that ranks first, as a track's details", () {
+      final tags = read([
+        'ISRC=USMC10201424',
+        'UPC=0602498614129',
+        'BARCODE=5060193569031', // listed before UPC: it wins whatever their order
+        'MUSICBRAINZ_TRACKID=2f73426d-dc30-46fe-b274-2adaf0bfb982',
+        'ORGANIZATION=Okayplayer',
+        'COPYRIGHT=℗ 2002 UMG Recordings, Inc.',
+        'COMPOSER=Cody ChestnuTT',
+      ]);
+      expect(
+        (tags.isrc, tags.barcode, tags.musicBrainzTrackId, tags.label, tags.copyright, tags.composer),
+        (
+          'USMC10201424',
+          '5060193569031',
+          '2f73426d-dc30-46fe-b274-2adaf0bfb982',
+          'Okayplayer',
+          '℗ 2002 UMG Recordings, Inc.',
+          'Cody ChestnuTT',
+        ),
+      );
+      final details = TrackDetails(isrc: tags.isrc, label: tags.label);
+      expect(TrackDetails.fromJson(Track(details: details).toJson()['details']).toJson(), details.toJson());
+      expect(Track().toJson().containsKey('details'), isFalse, reason: 'none, none sent');
+    });
+
     test('one ALBUMARTIST field per album artist: the first files the album, all of them are kept', () {
       final tags = read(['ALBUMARTIST=aza', 'ENSEMBLE=Orchestra', 'ALBUMARTIST=Mikee Mykanic', 'ALBUMARTIST=Ketioz']);
       expect(tags.albumArtist, 'aza');

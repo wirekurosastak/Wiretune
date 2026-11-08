@@ -443,6 +443,8 @@ class ServerSession {
 
   Future<ServerConfigInfo> setMembersCanRename(bool allowed) => _client.setMembersCanRename(serverUrl, allowed);
 
+  Future<ServerConfigInfo> setAlbumLookups(bool on) => _client.setAlbumLookups(serverUrl, on);
+
   Future<List<AccountInfo>> getBlocked() => _client.getBlocked(serverUrl);
 
   Future<void> setBlocked(String userId, bool blocked) => _client.setBlocked(serverUrl, userId, blocked);

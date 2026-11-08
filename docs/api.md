@@ -41,9 +41,10 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
 |---|---|---|
 | `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanAt", "lastScanError", "lastScanProblem" }`. The last two say why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`). Both are `null` when it went well, and for non-administrators (they name server folders) |
 | `POST /api/library/scan` | admin | Requests a scan: `202 { "message": "Scan requested." }`. Poll the status route |
-| `GET /api/tracks` | user | All tracks, with an `ETag`. Send it as `If-None-Match`: an unchanged list returns `304` with no body |
+| `GET /api/tracks` | user | All tracks, with an `ETag`. Send it as `If-None-Match`: an unchanged list returns `304` with no body. A track's `details` (when its tags give any) hold `isrc`, `barcode`, `musicBrainzTrackId`, `label`, `copyright` (the ℗ line) and `composer`. A track whose file names no genre or label has its album's, when the server looked the album up |
 | `GET /api/artists/pictures` | user | Artists with their own picture in the music folder (`artist.jpg`, see the [user guide](user-guide.md#the-library)): `{ artistId: version }`; the version changes with the file. `ETag` as on `/api/tracks` |
-| `GET /api/config` | admin | `{ "musicFolder", "membersCanRename" }` |
+| `GET /api/config` | admin | `{ "musicFolder", "membersCanRename", "lookUpAlbums" }` |
+| `POST /api/config/album-lookups` | admin | Body `{ "enabled": true }` or `false`: whether the server looks albums up on Deezer for their genre and label (on at first). Turned on, it looks up the albums it hasn't asked about yet. `200` with the config, `400` not a boolean |
 | `POST /api/config/members-can-rename` | admin | Body `{ "enabled": true }` or `false`: whether accounts that aren't administrators may change their own names (off at first). `200` with the config, `400` not a boolean |
 | `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (saved in the database, kept after a restart even while missing) and requests a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that contains or is inside the server's data folder (following symbolic links) |
 

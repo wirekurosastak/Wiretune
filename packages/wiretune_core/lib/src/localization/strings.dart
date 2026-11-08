@@ -468,6 +468,12 @@ const Map<String, (String, String, String)> allStrings = {
     "It's called {0} now, and signs in with that name.",
     'Es heißt jetzt {0} und meldet sich mit diesem Namen an.',
   ),
+  'LookUpAlbums': ('Albumok keresése online', 'Look up albums online', 'Alben online nachschlagen'),
+  'LookUpAlbumsHint': (
+    'A műfajt és a kiadót a Deezer adja, ahol a fájlok nem tartalmazzák.',
+    "Genre and label from Deezer, where the files don't name them.",
+    'Genre und Label von Deezer, wo die Dateien sie nicht nennen.',
+  ),
   'MembersCanRename': (
     'A tagok módosíthatják a nevüket',
     'Members can change their name',

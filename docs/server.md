@@ -195,6 +195,10 @@ An administrator can start a scan with **Reindex** in the player (*Settings → 
 there. That choice is saved and overrides `--library` from then on, even while the folder is missing (such as a share
 that mounts late).
 
+After a scan the server looks up the albums it hasn't asked about on Deezer, for the genre and label their files
+don't name ([what is sent](../SECURITY.md#what-leaves-your-network)). The albums' genre filter then works without genre
+tags. Turn it off in *Settings → Library → Look up albums online*.
+
 Indexed formats: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis, Opus. Whether a file also
 plays depends on the player ([audio.md](audio.md)). Missing tags fall back to the file name, `Unknown artist` and
 `Unknown album`. If the folder suddenly looks empty, the server skips the scan and reports *Library folder is empty

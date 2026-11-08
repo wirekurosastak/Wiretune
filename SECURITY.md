@@ -13,7 +13,7 @@ made public. Fixes go to the latest release, or to the default branch until ther
 
 ## What leaves your network
 
-The players make three kinds of internet requests. Nothing else leaves your network.
+The players make three kinds of internet requests, and the server one. Nothing else leaves your network.
 
 - **Artist pictures** from Deezer's public API. Deezer sees the artist names and up to two album titles per artist
   (to tell apart artists with the same name). Artists with their own `artist.jpg` aren't looked up.
@@ -26,7 +26,13 @@ The players make three kinds of internet requests. Nothing else leaves your netw
   replaced by someone who took over the GitHub account. Android also requires the same signature.
   Off: *Settings → About*, or `WIRETUNE_NO_UPDATE_CHECK=1`.
 
-Pictures and lyrics are cached in the player's data folder.
+- **Album genres and labels** (the server): after a scan it looks each album up once on Deezer's public API, for
+  the genre and label its files don't name. Deezer sees the album's barcode or a track's ISRC from the tags, or else
+  its title and artist, with a `Wiretune/<version>` user agent; nothing about the accounts. An album that wasn't found
+  is asked again after 30 days. Off: *Settings → Library → Look up albums online* (administrator); what was found
+  stays.
+
+Pictures and lyrics are cached in the player's data folder, album genres and labels in the server's database.
 
 ## Server
 

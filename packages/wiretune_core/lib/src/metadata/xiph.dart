@@ -30,6 +30,16 @@ const Map<String, TagField> _vorbisFields = {
   'BPM': TagField.bpm,
   'TEMPO': TagField.bpm,
   'FBPM': TagField.bpm,
+  'ISRC': TagField.isrc,
+  'BARCODE': TagField.barcode,
+  'UPC': TagField.barcode,
+  'EAN': TagField.barcode,
+  'MUSICBRAINZ_TRACKID': TagField.musicBrainzTrackId,
+  'LABEL': TagField.label,
+  'ORGANIZATION': TagField.label,
+  'PUBLISHER': TagField.label,
+  'COPYRIGHT': TagField.copyright,
+  'COMPOSER': TagField.composer,
 };
 
 /// Reads a Vorbis comment block (FLAC's VORBIS_COMMENT, the comment packet of Ogg Vorbis and Opus) into [tags].

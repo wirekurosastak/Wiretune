@@ -8,8 +8,8 @@ Wiretune has two parts:
 - **Player**: plays from the server, a local folder, or both. Runs on Linux, Windows, macOS, Android (phone, tablet, TV,
   Auto), iOS and Samsung Tizen TVs. On a computer it can play bit-perfect to your DAC.
 
-No cloud, no third-party account, no telemetry. The only internet requests are artist pictures, missing lyrics and the
-update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-network)).
+No cloud, no third-party account, no telemetry. The only internet requests are artist pictures, missing lyrics, album
+genres and labels, and the update check. Each can be turned off ([details](SECURITY.md#what-leaves-your-network)).
 
 ![The albums on a computer](docs/images/albums.png)
 

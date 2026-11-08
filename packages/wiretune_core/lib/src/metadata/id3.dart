@@ -259,6 +259,10 @@ const Map<String, TagField> _v23Frames = {
   'TORY': TagField.year,
   'TDOR': TagField.year,
   'TBPM': TagField.bpm,
+  'TSRC': TagField.isrc,
+  'TPUB': TagField.label,
+  'TCOP': TagField.copyright,
+  'TCOM': TagField.composer,
 };
 
 const Map<String, TagField> _v22Frames = {
@@ -272,6 +276,10 @@ const Map<String, TagField> _v22Frames = {
   'TYE': TagField.year,
   'TOR': TagField.year,
   'TBP': TagField.bpm,
+  'TRC': TagField.isrc,
+  'TPB': TagField.label,
+  'TCR': TagField.copyright,
+  'TCM': TagField.composer,
 };
 
 /// Reads the ID3v2 tag at [offset]; null when there is none or it cannot be read.

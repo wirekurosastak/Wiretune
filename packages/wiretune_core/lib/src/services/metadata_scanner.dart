@@ -402,6 +402,14 @@ Track? _readTrack(
         coverArtPath: coverArtPath,
         format: format,
         addedAt: added ?? DateTime.now().toUtc(),
+        details: TrackDetails(
+          isrc: cleanText(tags.isrc),
+          barcode: cleanText(tags.barcode),
+          musicBrainzTrackId: cleanText(tags.musicBrainzTrackId),
+          label: cleanText(tags.label),
+          copyright: cleanText(tags.copyright),
+          composer: cleanText(tags.composer),
+        ),
       );
     } finally {
       source.close();

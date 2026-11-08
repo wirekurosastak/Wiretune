@@ -196,20 +196,28 @@ class ServerLibraryStatus {
 }
 
 class ServerConfigInfo {
-  const ServerConfigInfo(this.musicFolder, {this.membersCanRename = false});
+  const ServerConfigInfo(this.musicFolder, {this.membersCanRename = false, this.lookUpAlbums = false});
 
   final String musicFolder;
 
   /// Whether the accounts that aren't administrators may change their own names (an administrator can rename anyone).
   final bool membersCanRename;
 
-  Map<String, Object?> toJson() => {'musicFolder': musicFolder, 'membersCanRename': membersCanRename};
+  /// Whether the server looks each album up online for its genre and label (for files that don't name them).
+  final bool lookUpAlbums;
+
+  Map<String, Object?> toJson() => {
+    'musicFolder': musicFolder,
+    'membersCanRename': membersCanRename,
+    'lookUpAlbums': lookUpAlbums,
+  };
 
   static ServerConfigInfo fromJson(Object? json) {
     final map = _object(json);
     return ServerConfigInfo(
       _string(map, 'musicFolder'),
       membersCanRename: jsonField<bool>(map, 'membersCanRename') ?? false,
+      lookUpAlbums: jsonField<bool>(map, 'lookUpAlbums') ?? false,
     );
   }
 }

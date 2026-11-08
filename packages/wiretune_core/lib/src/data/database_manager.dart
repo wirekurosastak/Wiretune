@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 14;
+  static const int schemaVersion = 15;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -80,6 +80,9 @@ class DatabaseManager {
     _recommendationsTable,
     // 13 -> 14: the accounts each account blocked.
     _userBlocksTable,
+    // 14 -> 15: what the tags say beyond what a track plays as (codes, label, ℗ line, composer), and the server's
+    // album lookups. As for 5 -> 6, the next scan reads each file again.
+    'ALTER TABLE tracks ADD COLUMN details TEXT; UPDATE tracks SET file_modified_at = NULL; $_albumLookupsTable',
   ];
 
   final String databasePath;
@@ -200,7 +203,9 @@ const String _schema =
       play_count INTEGER NOT NULL DEFAULT 0,
       last_played_at INTEGER,
       added_at INTEGER NOT NULL,
-      favorited_at INTEGER
+      favorited_at INTEGER,
+      -- JSON: the codes, label, ℗ line and composer the tags give (TrackDetails); null when they give none.
+      details TEXT
   );
 
   -- The player's playlists; is_server marks a cached copy of one that belongs to the signed-in server account.
@@ -261,6 +266,7 @@ const String _schema =
   $_downloadsTable
   $_recommendationsTable
   $_userBlocksTable
+  $_albumLookupsTable
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
@@ -309,5 +315,17 @@ const String _userBlocksTable = '''
       blocked_user_id TEXT NOT NULL,
       blocked_at INTEGER NOT NULL,
       PRIMARY KEY (user_id, blocked_user_id)
+  );
+''';
+
+/// What the server looked up online about each album (by `album_id`): its genre and label, when found (`found`), and
+/// when it looked (`looked_up_at`), so that one not found is asked again only after a while.
+const String _albumLookupsTable = '''
+  CREATE TABLE album_lookups (
+      album_id TEXT PRIMARY KEY,
+      looked_up_at INTEGER NOT NULL,
+      found INTEGER NOT NULL,
+      genre TEXT,
+      label TEXT
   );
 ''';

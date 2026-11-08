@@ -4433,6 +4433,34 @@ void main() {
     },
   );
 
+  testWidgets(
+    "an album's page ends with its label and its ℗ line, as its tracks give them; without them, with nothing",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(400, 860), () async {
+        final library = createLibrary([
+          TestSupport.makeTrack('1', 'The Seed', album: 'Phrenology')
+            ..details = const TrackDetails(copyright: '℗ 2002 UMG Recordings, Inc.'),
+          TestSupport.makeTrack('2', 'Break You Off', album: 'Phrenology')
+            ..details = const TrackDetails(label: 'MCA', copyright: '℗ 2002 UMG Recordings, Inc.'),
+          TestSupport.makeTrack('3', 'Naima', album: 'Giant Steps'),
+        ]);
+        library.initialize();
+        return createMainViewModel(library);
+      });
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Phrenology'));
+      await settle(tester);
+      final page = find.byType(CustomScrollView).last;
+      await tester.drag(page, const Offset(0, -600));
+      await settle(tester);
+      expect(find.text('MCA'), findsOneWidget);
+      expect(find.text('℗ 2002 UMG Recordings, Inc.'), findsOneWidget, reason: 'once, though both tracks have it');
+
+      vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Giant Steps'));
+      await settle(tester);
+      expect(find.textContaining('℗'), findsNothing);
+    },
+  );
+
   testWidgets("a right click on a queue row opens the track's menu", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     vm.player.playQueue(vm.library.tracks);

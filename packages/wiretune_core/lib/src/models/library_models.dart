@@ -36,6 +36,62 @@ typedef AlbumPlace = ({String album, String? albumArtist, int? trackNumber, int?
 /// How often a track was played, and when last.
 typedef PlayStats = ({int count, DateTime? lastPlayedAt});
 
+/// What a file's tags say about the recording beyond what it plays as: the codes that name it (to look it up online),
+/// its label and ℗ line, its composer. Each is null when the tags don't say; the server may add a label it looked up.
+class TrackDetails {
+  const TrackDetails({this.isrc, this.barcode, this.musicBrainzTrackId, this.label, this.copyright, this.composer});
+
+  /// The recording's code (International Standard Recording Code).
+  final String? isrc;
+
+  /// The release's UPC or EAN.
+  final String? barcode;
+  final String? musicBrainzTrackId;
+  final String? label;
+
+  /// The ℗ line, such as "℗ 2002 UMG Recordings, Inc.".
+  final String? copyright;
+  final String? composer;
+
+  static const TrackDetails none = TrackDetails();
+
+  bool get isEmpty => toJson().isEmpty;
+
+  TrackDetails withLabel(String? label) => TrackDetails(
+    isrc: isrc,
+    barcode: barcode,
+    musicBrainzTrackId: musicBrainzTrackId,
+    label: label,
+    copyright: copyright,
+    composer: composer,
+  );
+
+  Map<String, Object?> toJson() => {
+    'isrc': ?isrc,
+    'barcode': ?barcode,
+    'musicBrainzTrackId': ?musicBrainzTrackId,
+    'label': ?label,
+    'copyright': ?copyright,
+    'composer': ?composer,
+  };
+
+  static TrackDetails fromJson(Object? json) {
+    if (json is! Map) return none;
+    String? text(String key) => switch (json[key]) {
+      final String value when value.trim().isNotEmpty => value.trim(),
+      _ => null,
+    };
+    return TrackDetails(
+      isrc: text('isrc'),
+      barcode: text('barcode'),
+      musicBrainzTrackId: text('musicBrainzTrackId'),
+      label: text('label'),
+      copyright: text('copyright'),
+      composer: text('composer'),
+    );
+  }
+}
+
 /// One audio file: what its tags and stream properties say. Whether it is a favourite and how often it was played the
 /// library keeps by track ID (`LibraryService.isFavorite`, `LibraryService.playCount`).
 class Track {
@@ -62,6 +118,7 @@ class Track {
     this.coverArtPath,
     this.format = const AudioFormat(),
     DateTime? addedAt,
+    this.details = TrackDetails.none,
   }) : id = id ?? newId(),
        artists = artists != null && artists.length > 1 ? List.unmodifiable(artists) : const [],
        albumArtists = albumArtists != null && albumArtists.length > 1 ? List.unmodifiable(albumArtists) : const [],
@@ -118,6 +175,9 @@ class Track {
   AudioFormat format;
   DateTime addedAt;
 
+  /// What the tags say beyond what it plays as: codes, label, ℗ line, composer.
+  TrackDetails details;
+
   /// Each artist of the track on its own, main artist first: [artists], or [artist] alone.
   List<String> get artistNames => artists.isEmpty ? [artist] : artists;
 
@@ -165,6 +225,7 @@ class Track {
     'hasCoverArt': hasCoverArt,
     'format': format.toJson(),
     'addedAt': formatIsoUtc(addedAt),
+    if (!details.isEmpty) 'details': details.toJson(),
   };
 
   /// Reads a track of the server's listing. Throws [FormatException] when [json] is not a track.
@@ -197,6 +258,7 @@ class Track {
       hasCoverArt: jsonField<bool>(json, 'hasCoverArt') ?? false,
       format: AudioFormat.fromJson(json['format']),
       addedAt: parseIsoUtc(json['addedAt']),
+      details: TrackDetails.fromJson(json['details']),
     );
   }
 

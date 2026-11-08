@@ -222,6 +222,8 @@ const Map<String, TagField> _mp4Fields = {
   '©gen': TagField.genre,
   '©day': TagField.year,
   '©lyr': TagField.lyrics,
+  '©wrt': TagField.composer,
+  'cprt': TagField.copyright,
 };
 
 /// MP4 audio (`.m4a`): the audio track's sample entry (AAC or ALAC), its length, and the iTunes-style `ilst` tags.
@@ -415,6 +417,7 @@ const Map<String, TagField> _infoFields = {
   'IGNR': TagField.genre,
   'ITRK': TagField.track,
   'IPRT': TagField.track,
+  'ICOP': TagField.copyright,
 };
 
 AudioTags? readWav(ByteSource source, {required bool wantLyrics}) {

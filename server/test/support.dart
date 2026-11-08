@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/testing.dart';
@@ -31,8 +32,13 @@ class ServerFixture {
   String get dataPath => p.join(root, 'data');
   String get baseUrl => 'http://127.0.0.1:${server.port}';
 
-  /// [existingRoot] reuses the folders of an earlier fixture (a restart); null creates fresh ones.
-  static Future<ServerFixture> start({String? existingRoot, bool trustProxy = false}) async {
+  /// [existingRoot] reuses the folders of an earlier fixture (a restart); null creates fresh ones. [deezer] answers the
+  /// album lookups (path and query); without it Deezer has nothing, and no test ever reaches the internet.
+  static Future<ServerFixture> start({
+    String? existingRoot,
+    bool trustProxy = false,
+    Object? Function(String pathAndQuery)? deezer,
+  }) async {
     WiretuneLog.writeToConsole = false;
     final root = existingRoot ?? Directory.systemTemp.createTempSync('wiretune_server_').path;
     if (existingRoot == null) {
@@ -52,6 +58,19 @@ class ServerFixture {
         port: 0,
         trustProxy: trustProxy,
       ),
+      online: MockClient((request) async {
+        final body = deezer?.call(request.url.hasQuery ? '${request.url.path}?${request.url.query}' : request.url.path);
+        return http.Response(
+          jsonEncode(
+            body ??
+                {
+                  'error': {'code': 800},
+                },
+          ),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
     );
     return ServerFixture._(root, server, existingRoot == null);
   }

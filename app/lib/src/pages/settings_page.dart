@@ -864,6 +864,24 @@ class _LibraryCardState extends State<_LibraryCard> {
                 _StatusLine(context.tr('ServerFolderHelper')),
                 _StatusLine(server.serverFolderProblem, isError: true),
                 _StatusLine(server.serverFolderMessage, isError: server.serverFolderIsError),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            context.tr('LookUpAlbums'),
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
+                          ),
+                          Text(context.tr('LookUpAlbumsHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                        ],
+                      ),
+                    ),
+                    Switch(value: server.lookUpAlbums, onChanged: server.setLookUpAlbums),
+                  ],
+                ),
               ],
 
               if (server.supportsLocalFolder) ...[

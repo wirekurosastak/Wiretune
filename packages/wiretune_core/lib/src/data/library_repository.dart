@@ -52,6 +52,10 @@ class LibraryRepository {
             isLossless: _int(r['is_lossless']) == 1,
           ),
           addedAt: fromDbTime(r['added_at']),
+          details: switch (r['details']) {
+            final String json => TrackDetails.fromJson(jsonDecode(json)),
+            _ => TrackDetails.none,
+          },
         ),
     ];
   }
@@ -105,9 +109,9 @@ class LibraryRepository {
         id, title, artist, album, album_artist, track_number, track_count, disc_number,
         release_year, bpm, genre, duration_ms, file_size_bytes, file_modified_at, file_path, stream_url,
         has_cover_art, cover_art_path, codec, sample_rate, bits_per_sample, channels,
-        bitrate_kbps, is_lossless, added_at, artists, album_artists
+        bitrate_kbps, is_lossless, added_at, artists, album_artists, details
     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23,
-              ?24, ?25, ?26, ?27)
+              ?24, ?25, ?26, ?27, ?28)
     ON CONFLICT(id) DO UPDATE SET
         title = excluded.title, artist = excluded.artist, artists = excluded.artists, album = excluded.album,
         album_artist = excluded.album_artist, album_artists = excluded.album_artists,
@@ -118,7 +122,8 @@ class LibraryRepository {
         file_path = excluded.file_path, stream_url = excluded.stream_url, has_cover_art = excluded.has_cover_art,
         cover_art_path = excluded.cover_art_path, codec = excluded.codec, sample_rate = excluded.sample_rate,
         bits_per_sample = excluded.bits_per_sample, channels = excluded.channels,
-        bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless, added_at = excluded.added_at
+        bitrate_kbps = excluded.bitrate_kbps, is_lossless = excluded.is_lossless, added_at = excluded.added_at,
+        details = excluded.details
     WHERE title IS NOT excluded.title OR artist IS NOT excluded.artist OR artists IS NOT excluded.artists
        OR album IS NOT excluded.album
        OR album_artist IS NOT excluded.album_artist OR album_artists IS NOT excluded.album_artists
@@ -132,7 +137,7 @@ class LibraryRepository {
        OR codec IS NOT excluded.codec OR sample_rate IS NOT excluded.sample_rate
        OR bits_per_sample IS NOT excluded.bits_per_sample OR channels IS NOT excluded.channels
        OR bitrate_kbps IS NOT excluded.bitrate_kbps OR is_lossless IS NOT excluded.is_lossless
-       OR added_at IS NOT excluded.added_at
+       OR added_at IS NOT excluded.added_at OR details IS NOT excluded.details
     ''';
 
   /// Makes the table hold exactly [tracks]. Rows that are gone are deleted and the others are inserted or updated in
@@ -189,6 +194,7 @@ class LibraryRepository {
             toDbTime(t.addedAt),
             t.artists.isEmpty ? null : jsonEncode(t.artists),
             t.albumArtists.isEmpty ? null : jsonEncode(t.albumArtists),
+            t.details.isEmpty ? null : jsonEncode(t.details.toJson()),
           ]);
         }
       } finally {

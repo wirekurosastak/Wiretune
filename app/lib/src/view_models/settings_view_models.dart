@@ -342,8 +342,10 @@ class ServerSettingsViewModel extends ChangeNotifier {
   Future<void> loadServerFolder() async {
     if (!isLoggedIn || !isAdmin) return;
     try {
-      serverFolder = (await _session.getServerConfig()).musicFolder;
+      final config = await _session.getServerConfig();
+      serverFolder = config.musicFolder;
       savedServerFolder = serverFolder;
+      lookUpAlbums = config.lookUpAlbums;
     } on ServerRequestException catch (e) {
       _showServerFolder(Localizer.format('ServerSettingsLoadError', [e.message]), isError: true);
     }
@@ -352,6 +354,24 @@ class ServerSettingsViewModel extends ChangeNotifier {
 
   /// The server's music folder as the server has it (what [serverFolder] was before the administrator typed).
   String savedServerFolder = '';
+
+  /// Whether the server looks each album up online for its genre and label (for its administrator).
+  bool lookUpAlbums = false;
+
+  /// The administrator turns the album lookups on or off.
+  Future<void> setLookUpAlbums(bool on) async {
+    if (!isLoggedIn || !isAdmin) return;
+    final before = lookUpAlbums;
+    lookUpAlbums = on;
+    notifyListeners();
+    try {
+      lookUpAlbums = (await _session.setAlbumLookups(on)).lookUpAlbums;
+    } catch (e) {
+      lookUpAlbums = before;
+      _showServerFolder(Localizer.format('ChangeRefused', ['$e']), isError: true);
+    }
+    notifyListeners();
+  }
 
   /// Whether saving the folder field would change the server's music folder.
   bool get serverFolderChanged => serverFolder.trim() != savedServerFolder;

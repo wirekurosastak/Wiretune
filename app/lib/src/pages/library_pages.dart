@@ -865,8 +865,38 @@ class AlbumDetail extends StatelessWidget {
             ),
           ),
           TrackSliver(tracks: album.tracks, kind: TrackTableKind.album, playingFrom: () => album.title),
+          _AlbumFooter(album: album),
           const PageEndSpace(),
         ],
+      ),
+    );
+  }
+}
+
+/// The end of an album's page, as in TIDAL: its label and its ℗ line, in small type, as its tracks give them (a label
+/// the server looked up counts); nothing when they give neither.
+class _AlbumFooter extends StatelessWidget {
+  const _AlbumFooter({required this.album});
+
+  final Album album;
+
+  @override
+  Widget build(BuildContext context) {
+    String? first(String? Function(TrackDetails details) field) =>
+        album.tracks.map((track) => field(track.details)).nonNulls.firstOrNull;
+    final lines = [?first((d) => d.label), ?first((d) => d.copyright)];
+    if (lines.isEmpty) return const SliverToBoxAdapter();
+    final edge = PhoneChrome.isPhone(context) ? PhoneChrome.edge : 30.0;
+    return SliverPadding(
+      padding: EdgeInsets.fromLTRB(edge, 20, edge, 0),
+      sliver: SliverToBoxAdapter(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final line in lines)
+              Text(line, style: TextStyle(fontSize: 12.5, height: 1.5, color: context.colors.textMuted)),
+          ],
+        ),
       ),
     );
   }

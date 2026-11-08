@@ -21,6 +21,14 @@ const Map<String, TagField> _apeFields = {
   'lyrics': TagField.lyrics,
   'unsyncedlyrics': TagField.lyrics,
   'bpm': TagField.bpm,
+  'isrc': TagField.isrc,
+  'barcode': TagField.barcode,
+  'upc': TagField.barcode,
+  'musicbrainz_trackid': TagField.musicBrainzTrackId,
+  'label': TagField.label,
+  'publisher': TagField.label,
+  'copyright': TagField.copyright,
+  'composer': TagField.composer,
 };
 
 /// The footer of the APEv2 tag at the end of the file (before an ID3v1 tag, if there is one): where it ends, the size of

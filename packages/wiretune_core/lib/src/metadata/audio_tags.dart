@@ -40,6 +40,14 @@ class AudioTags {
   int? year;
   int? bpm;
 
+  /// What the file says about the recording beyond what it plays as ([TrackDetails]).
+  String? isrc;
+  String? barcode;
+  String? musicBrainzTrackId;
+  String? label;
+  String? copyright;
+  String? composer;
+
   Duration duration = Duration.zero;
   int sampleRate = 0;
   int bitsPerSample = 0;
@@ -99,6 +107,12 @@ class AudioTags {
     disc ??= other.disc;
     year ??= other.year;
     bpm ??= other.bpm;
+    isrc ??= other.isrc;
+    barcode ??= other.barcode;
+    musicBrainzTrackId ??= other.musicBrainzTrackId;
+    label ??= other.label;
+    copyright ??= other.copyright;
+    composer ??= other.composer;
     if (!hasPicture && other.hasPicture) {
       pictureData = other.pictureData;
       pictureLocation = other.pictureLocation;
@@ -164,11 +178,41 @@ class AudioTags {
       case TagField.bpm:
         final parsed = int.tryParse(text) ?? double.tryParse(text)?.round();
         if (parsed != null && parsed > 0) bpm ??= parsed;
+      case TagField.isrc:
+        isrc ??= text;
+      case TagField.barcode:
+        barcode ??= text;
+      case TagField.musicBrainzTrackId:
+        musicBrainzTrackId ??= text;
+      case TagField.label:
+        label ??= text;
+      case TagField.copyright:
+        copyright ??= text;
+      case TagField.composer:
+        composer ??= text;
     }
   }
 }
 
-enum TagField { title, artist, albumArtist, album, genre, lyrics, track, trackCount, disc, year, bpm }
+enum TagField {
+  title,
+  artist,
+  albumArtist,
+  album,
+  genre,
+  lyrics,
+  track,
+  trackCount,
+  disc,
+  year,
+  bpm,
+  isrc,
+  barcode,
+  musicBrainzTrackId,
+  label,
+  copyright,
+  composer,
+}
 
 /// "3/12" -> (3, 12), "3" -> (3, null); zero or garbage -> null.
 (int?, int?) parseNumberPair(String text) {

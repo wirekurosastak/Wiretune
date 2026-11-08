@@ -6,11 +6,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:wiretune_core/wiretune_core.dart';
 
+import 'album_lookup_service.dart';
 import 'auth_service.dart';
 import 'block_service.dart';
 import 'config.dart';
@@ -121,6 +123,7 @@ class WiretuneServer {
     this.userData,
     this.setupCode,
     this.scanner,
+    this.albumLookups,
   );
 
   static const int _defaultBodyLimit = 64 * 1024;
@@ -138,6 +141,9 @@ class WiretuneServer {
   final UserDataService userData;
   final SetupCode setupCode;
   final LibraryScanService scanner;
+
+  /// Each album's genre and label, looked up online for the tracks whose files don't name them.
+  final AlbumLookupService albumLookups;
   late final RemoteHub remote = RemoteHub()..blocks = blocks.blocks;
 
   /// Converts tracks for players that asked for less than the original (`?format=opus&bitrate=96`).
@@ -163,8 +169,9 @@ class WiretuneServer {
   /// The port the server listens on (useful when started on port 0).
   int get port => _http!.port;
 
-  /// Opens the database and the library, then starts listening and scanning.
-  static Future<WiretuneServer> start(ServerOptions options) async {
+  /// Opens the database and the library, then starts listening and scanning. [online] is what reaches the internet
+  /// (the album lookups); tests give one of their own.
+  static Future<WiretuneServer> start(ServerOptions options, {http.Client? online}) async {
     final dataDirectory = AppPaths.getDataDirectory(overridePath: options.dataDirectory, subdirectory: 'Server');
     WiretuneLog.initialize(path: p.join(dataDirectory, 'wiretune-server.log'), level: options.logLevel);
     WiretuneLog.info('Server', '=== Starting the Wiretune server ${WiretuneInfo.version} ===');
@@ -210,6 +217,7 @@ class WiretuneServer {
       UserDataService(database),
       SetupCode(options.setupCode),
       scanner,
+      AlbumLookupService(database, client: online),
     );
 
     if (!auth.hasAnyUsers()) {
@@ -233,6 +241,7 @@ class WiretuneServer {
   }
 
   Future<void> close() async {
+    albumLookups.close();
     await scanner.stop();
     await remote.close(); // their sockets left the HTTP server when they were upgraded
     await _http?.close(force: true);
@@ -377,6 +386,13 @@ class WiretuneServer {
     _Route('GET', '/api/accounts', Access.user, (_) => jsonResponse([for (final a in auth.getAccounts()) a.toJson()])),
     _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(_config.toJson())),
     _Route('POST', '/api/config/music-folder', Access.admin, _setMusicFolder),
+    _Route('POST', '/api/config/album-lookups', Access.admin, (call) async {
+      final on = (await call.jsonObject())?['enabled'];
+      if (on is! bool) return errorResponse(400, ErrorCodes.invalidJson, 'The body is { "enabled": true or false }.');
+      albumLookups.enabled = on;
+      if (on) _lookUpAlbums();
+      return jsonResponse(_config.toJson());
+    }),
     _Route('POST', '/api/config/members-can-rename', Access.admin, (call) async {
       final allowed = (await call.jsonObject())?['enabled'];
       if (allowed is! bool) {
@@ -638,7 +654,8 @@ class WiretuneServer {
   }
 
   /// What an administrator sets about the server.
-  ServerConfigInfo get _config => ServerConfigInfo(paths.musicFolder, membersCanRename: auth.membersCanRename);
+  ServerConfigInfo get _config =>
+      ServerConfigInfo(paths.musicFolder, membersCanRename: auth.membersCanRename, lookUpAlbums: albumLookups.enabled);
 
   Future<Response> _adminResetPassword(_Call call) async {
     final userId = call.params['userId']!;
@@ -740,19 +757,27 @@ class WiretuneServer {
 
   JsonDocument get _tracks => _trackList ??= _listTracks();
 
-  /// Each track as [Track.toJson] gives it, and with a cover the version of the album's cover, which the players put
-  /// in its address: a changed cover gets a new one, and a player shows it at once.
+  /// Each track as [Track.toJson] gives it, with the genre and the label its album was looked up for when its file
+  /// names none ([albumLookups]), and with a cover the version of the album's cover, which the players put in its
+  /// address: a changed cover gets a new one, and a player shows it at once.
   JsonDocument _listTracks() {
     final coverVersions = <String, String?>{};
-    final json = jsonEncode([
-      for (final track in library.tracks)
-        {
-          ...track.toJson(),
-          if (track.hasCoverArt)
-            'coverVersion': coverVersions.putIfAbsent(track.albumId, () => _coverVersion(track.albumId)),
-        },
-    ]);
-    return JsonDocument(utf8.encode(json));
+    Map<String, Object?> json(Track track) {
+      final facts = albumLookups.of(track.albumId);
+      final details = facts?.label != null && track.details.label == null
+          ? track.details.withLabel(facts!.label)
+          : track.details;
+      return {
+        ...track.toJson(),
+        if ((track.genre ?? '').isEmpty && facts?.genre != null) 'genre': facts!.genre,
+        if (!details.isEmpty) 'details': details.toJson(),
+        if (track.hasCoverArt)
+          'coverVersion': coverVersions.putIfAbsent(track.albumId, () => _coverVersion(track.albumId)),
+      };
+    }
+
+    final text = jsonEncode([for (final track in library.tracks) json(track)]);
+    return JsonDocument(utf8.encode(text));
   }
 
   /// Changes with what [_cover] serves for the album: the size and time of the cover's file, or of the audio file
@@ -800,10 +825,19 @@ class WiretuneServer {
     }
   }
 
-  /// A scan ended: when the lists the players get changed, they are told.
+  /// A scan ended: when the lists the players get changed, they are told; the albums not looked up yet are.
   Future<void> _scanned() async {
-    _trackList = null;
     _artistPictureList = null;
+    await _tracksChanged();
+    _lookUpAlbums();
+  }
+
+  /// Looks up the albums not looked up yet, in the background.
+  void _lookUpAlbums() => unawaited(albumLookups.run(library.albums, onLearned: () => unawaited(_tracksChanged())));
+
+  /// The track list is made again; when it changed, the players are told.
+  Future<void> _tracksChanged() async {
+    _trackList = null;
     final version = await _libraryVersion();
     if (version == _announcedLibrary) return;
     _announcedLibrary = version;
