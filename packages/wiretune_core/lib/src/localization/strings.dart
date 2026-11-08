@@ -263,7 +263,7 @@ const Map<String, (String, String, String)> allStrings = {
   'SortTracks': ('Számok', 'Tracks', 'Titel'),
   'SortAdded': ('Hozzáadás', 'Added', 'Hinzugefügt'),
   'AllGenres': ('Minden műfaj', 'All genres', 'Alle Genres'),
-  'Genre': ('Műfaj', 'Genre', 'Genre'),
+  'Genre': ('Műfaj:', 'Genre:', 'Genre:'),
   'EmptyFavoritesTitle': ('Még nincsenek kedvenceid', 'No favorites yet', 'Noch keine Favoriten'),
   'EmptyFavoritesHint': (
     'A számok melletti szív ikonnal jelölhetsz meg kedvenceket.',

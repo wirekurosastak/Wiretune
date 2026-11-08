@@ -392,7 +392,8 @@ Future<T?> showChoiceSections<T extends Object>(
     builder: (sheet) => [
       for (final (i, (:title, :choices)) in sections.indexed) ...[
         Padding(
-          padding: EdgeInsets.fromLTRB(24, i == 0 ? 8 : 20, 24, 8),
+          // A section after the first stands an empty line apart from the one above.
+          padding: EdgeInsets.fromLTRB(24, i == 0 ? 8 : 36, 24, 8),
           child: Text(
             title,
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
