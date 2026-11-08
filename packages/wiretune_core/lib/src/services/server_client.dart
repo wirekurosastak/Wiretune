@@ -13,6 +13,7 @@ import '../localization/strings.dart';
 import '../models/library_models.dart';
 import '../models/protocol.dart';
 import '../models/remote.dart';
+import '../util/time.dart';
 
 /// The server rejected the credentials (HTTP 401). [token] is the sign-in token the request carried, if any, and
 /// [code] why ([ErrorCodes]: none sent, expired, the password changed, the account removed …). Where that makes no
@@ -111,6 +112,22 @@ class ServerClient {
   /// A short-lived token that opens only the audio and cover routes, for use in stream URLs.
   Future<StreamTokenResponse> getStreamToken(String baseUrl) async =>
       _parse(StreamTokenResponse.fromJson, await _send('POST', baseUrl, '/api/auth/stream-token'));
+
+  /// How often the account played each track from [from] until [until], and since when the server keeps its plays.
+  Future<({Map<String, int> plays, DateTime? since})> getPlays(String baseUrl, DateTime from, DateTime until) async {
+    final query =
+        'from=${Uri.encodeQueryComponent(formatIsoUtc(from.toUtc()))}'
+        '&to=${Uri.encodeQueryComponent(formatIsoUtc(until.toUtc()))}';
+    final answer = await _send('GET', baseUrl, '/api/me/plays?$query');
+    if (answer is! Map || answer['plays'] is! Map) throw ServerRequestException(_notWiretune(), 200);
+    return (
+      plays: {
+        for (final MapEntry(:key, :value) in (answer['plays'] as Map).entries)
+          if (key is String && value is num) key: value.toInt(),
+      },
+      since: parseIsoUtc(answer['since']),
+    );
+  }
 
   /// Who did what on the track [trackId]: from its tags, and from MusicBrainz when the server may look it up.
   Future<List<Credit>> getCredits(String baseUrl, String trackId) async {

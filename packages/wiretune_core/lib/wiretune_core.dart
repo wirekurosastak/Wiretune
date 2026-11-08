@@ -25,6 +25,7 @@ export 'src/services/download_service.dart';
 export 'src/services/folder_watch.dart';
 export 'src/services/library_service.dart';
 export 'src/services/listen_together.dart';
+export 'src/services/listening_summary.dart';
 export 'src/services/lrc_parser.dart';
 export 'src/services/metadata_scanner.dart';
 export 'src/services/online_lyrics.dart';

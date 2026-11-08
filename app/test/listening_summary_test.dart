@@ -1,0 +1,100 @@
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:wiretune/src/platform.dart';
+import 'package:wiretune/src/view_models/app_section.dart';
+import 'package:wiretune_core/wiretune_core.dart';
+
+import 'support.dart';
+
+/// The listening summary, opened from the card at the top of Playlists: this year from the server's play log, or all
+/// time from the play counts; nothing hidden counts.
+void main() {
+  setUpAll(useTempDataDirectory);
+  setUp(() {
+    Localizer.instance.setLanguage('en');
+    AppPlatform.forTesting();
+  });
+
+  Future<void> openSummary(WidgetTester tester) async {
+    await tester.tap(find.text(Localizer.get('ListeningSummary')));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await settle(tester);
+  }
+
+  testWidgets('without a server, all time: the most played first, with the minutes and plays, a hidden one left out', (
+    tester,
+  ) async {
+    final library = createLibrary([
+      TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue'),
+      TestSupport.makeTrack('2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps'),
+      TestSupport.makeTrack('3', 'Secret', artist: 'Nobody', album: 'Hidden'),
+    ]);
+    library.initialize();
+    for (final id in ['1', '1', '2', '3', '3', '3']) {
+      library.recordPlay(id);
+    }
+    library.setHidden(HiddenKind.track, '3', true);
+    final vm = createMainViewModel(library);
+    addTearDown(vm.dispose);
+    await showApp(tester, vm, const Size(400, 860));
+    vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    await openSummary(tester);
+
+    expect(find.text(Localizer.get('SummaryThisYear')), findsNothing, reason: 'no play log without a server');
+    expect(find.text(Localizer.format('SummaryPlays', [3])), findsOneWidget, reason: 'the hidden plays left out');
+    expect(find.text('Secret'), findsNothing);
+    final miles = tester.getTopLeft(find.text('Miles Davis').first).dy;
+    expect(miles, lessThan(tester.getTopLeft(find.text('John Coltrane').first).dy), reason: 'played more');
+  });
+
+  testWidgets("with a server, this year from its play log; all time from the counts", (tester) async {
+    final asked = <String>[];
+    final library = createLibrary();
+    library.initialize();
+    final session = (await tester.runAsync(
+      () => signedInSession(
+        library,
+        tracks: [
+          TestSupport.makeServerTrack('s1', 'Giant Steps', artist: 'John Coltrane', album: 'Giant Steps'),
+          TestSupport.makeServerTrack('s2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps', trackNumber: 2),
+        ],
+        respond: (request) {
+          if (request.url.path != '/api/me/plays' || request.method != 'GET') return null;
+          asked.add(request.url.query);
+          return http.Response(
+            jsonEncode({
+              'plays': {'s2': 4},
+              'since': formatIsoUtc(DateTime.utc(2026, 11, 8)),
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        },
+      ),
+    ))!;
+    final vm = createMainViewModel(library, null, session);
+    addTearDown(vm.dispose);
+    await showApp(tester, vm, const Size(400, 860));
+    vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    await openSummary(tester);
+
+    final from = parseIsoUtc(Uri.splitQueryString(asked.single)['from']);
+    expect(from, DateTime(DateTime.now().year).toUtc(), reason: 'from the start of this year, here');
+    expect(find.text(Localizer.format('SummaryPlays', [4])), findsWidgets);
+    expect(find.text('Naima'), findsOneWidget);
+    expect(find.textContaining('2026-11-08'), findsOneWidget, reason: 'counted since the log began');
+
+    await tester.tap(find.text(Localizer.get('SummaryAllTime')));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await settle(tester);
+    expect(find.text(Localizer.get('SummaryNone')), findsOneWidget, reason: 'no counts on this account yet');
+  });
+}

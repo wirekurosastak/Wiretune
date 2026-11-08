@@ -76,7 +76,8 @@ IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000. Ov
 | `GET /api/me/data` | user | Everything: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. Favorites are in the order they were marked; marking one again keeps its time. `ETag` as on `/api/tracks` |
 | `PUT /api/me/favorites/{trackId}` | user | Marks a favorite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
-| `POST /api/me/plays/{trackId}` | user | Adds a play and sets the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
+| `GET /api/me/plays?from=…&to=…` | user | How often the account played each track from `from` until `to` (ISO times): `{ "plays": { trackId: count }, "since" }`, `since` when its play log begins (the log keeps the newest 200,000 plays). `400` `invalidPeriod` |
+| `POST /api/me/plays/{trackId}` | user | Adds a play (also to the play log) and sets the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
 | `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` rule violation, `409` at the limit |
 | `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` unknown ID |
 | `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` invalid type or ID, `409` at the limit |
@@ -209,6 +210,7 @@ the host plays, and seek when they are more than 150 ms off.
 | `favoritesLimit`, `playCountsLimit`, `playlistsLimit`, `hiddenLimit` (all with `limit`) | 409 | The account's limits |
 | `recommendationNoteTooLong` (`max`), `recommendationRecipientsInvalid` (`max`) | 400 | Recommendations |
 | `playlistNotFound`, `recommendationNotFound`, `notFound` | 404 | |
+| `invalidPeriod` | 400 | `from` and `to` missing, unreadable, or in the wrong order |
 | `invalidJson` (400), `bodyTooLarge` (413), `internalError` (500) | | Any route |
 | `notWebSocket` (400, 426), `originRefused` (403), `tooManyConnections` (429) | | `/api/remote` |
 

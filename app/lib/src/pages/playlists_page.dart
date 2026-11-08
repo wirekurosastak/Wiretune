@@ -8,6 +8,7 @@ import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/library_view_models.dart';
+import '../widgets/listening_summary.dart';
 import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
@@ -70,6 +71,7 @@ class PlaylistsPage extends StatelessWidget {
             ],
           ),
           slivers: [
+            const SliverToBoxAdapter(child: ListeningSummaryCard()),
             PlaylistsSliver(
               playlists: playlists.allPlaylists,
               tracksOf: playlists.tracksOf,

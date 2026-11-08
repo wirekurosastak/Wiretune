@@ -150,8 +150,8 @@ themselves (*Change name*). A renamed account keeps everything and stays signed 
 time.
 Passwords: at least 8 characters and at most 72 bytes (bcrypt ignores the rest).
 
-Each account's favorites, play counts, playlists and hidden items are stored on the server, so they're the same on every
-device, and they're deleted with the account ([limits](api.md#your-data)).
+Each account's favorites, play counts (with a log of its plays, for its listening summary), playlists and hidden items
+are stored on the server, so they're the same on every device, and they're deleted with the account ([limits](api.md#your-data)).
 
 Changing your own password doesn't ask for the current one, and it signs out the account's other devices. When the
 administrator resets another account's password (*Settings → Account & connection*), that account is signed out

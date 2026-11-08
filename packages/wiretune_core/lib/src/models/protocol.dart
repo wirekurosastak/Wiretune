@@ -484,6 +484,7 @@ abstract final class ErrorCodes {
   static const String playlistDescriptionTooLong = 'playlistDescriptionTooLong'; // with max
   static const String playlistTooManyTracks = 'playlistTooManyTracks'; // with max
   static const String playlistNotFound = 'playlistNotFound';
+  static const String invalidPeriod = 'invalidPeriod';
 
   // Recommendations
   static const String recommendationNoteTooLong = 'recommendationNoteTooLong'; // with max
@@ -515,6 +516,9 @@ abstract final class UserDataRules {
   static const int maxFavorites = 100000;
   static const int maxTrackStats = 100000;
   static const int maxHidden = 50000;
+
+  /// The plays an account's log keeps for its summaries (about five years at a hundred a day); the oldest go first.
+  static const int maxPlayLog = 200000;
 
   /// Returns null when [id] is acceptable as a track or playlist ID, otherwise the reason.
   static String? validateId(String? id) {

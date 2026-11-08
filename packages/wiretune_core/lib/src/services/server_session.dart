@@ -447,6 +447,9 @@ class ServerSession {
 
   Future<List<Credit>> getCredits(String trackId) => _client.getCredits(serverUrl, trackId);
 
+  Future<({Map<String, int> plays, DateTime? since})> getPlays(DateTime from, DateTime until) =>
+      _client.getPlays(serverUrl, from, until);
+
   Future<List<AccountInfo>> getBlocked() => _client.getBlocked(serverUrl);
 
   Future<void> setBlocked(String userId, bool blocked) => _client.setBlocked(serverUrl, userId, blocked);

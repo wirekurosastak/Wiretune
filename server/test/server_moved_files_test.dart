@@ -66,6 +66,13 @@ void main() {
     expect(mine.plays.single.playCount, 2);
     expect(mine.hiddenTracks, [renamed]);
     expect(mine.playlists.single.trackIds, [first, renamed]);
+    // The play log too, for the summaries.
+    final day = Duration(days: 1);
+    final now = DateTime.now().toUtc();
+    final logged = json(
+      await admin.get('/api/me/plays?from=${formatIsoUtc(now.subtract(day))}&to=${formatIsoUtc(now.add(day))}'),
+    );
+    expect(logged['plays'], {renamed: 2});
 
     final theirs = await data(guest);
     expect(theirs.favorites, unorderedEquals([first, renamed]));

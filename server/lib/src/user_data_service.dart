@@ -118,11 +118,40 @@ class UserDataService {
       if (db.updatedRows == 0) return null; // at the limit
     }
 
+    // The log for the summaries: the oldest go once an account has played more than it keeps.
+    db.execute('INSERT INTO user_play_log (user_id, track_id, played_at) VALUES (?, ?, ?)', [userId, trackId, now]);
+    if ((db.select('SELECT COUNT(*) AS n FROM user_play_log WHERE user_id = ?', [userId]).first['n'] as int) >
+        UserDataRules.maxPlayLog) {
+      db.execute(
+        'DELETE FROM user_play_log WHERE rowid IN '
+        '(SELECT rowid FROM user_play_log WHERE user_id = ? ORDER BY played_at LIMIT 1000)',
+        [userId],
+      );
+    }
+
     final rows = db.select(
       'SELECT track_id, play_count, last_played_at FROM user_plays WHERE user_id = ? AND track_id = ?',
       [userId, trackId],
     );
     return rows.isEmpty ? null : _toStats(rows.first);
+  }
+
+  /// How often [userId] played each track from [from] until [until] (the log's), and when its log begins.
+  ({Map<String, int> plays, DateTime? since}) playsBetween(String userId, DateTime from, DateTime until) {
+    final db = _db.connection;
+    return (
+      plays: {
+        for (final row in db.select(
+          'SELECT track_id, COUNT(*) AS n FROM user_play_log WHERE user_id = ? AND played_at >= ? AND played_at < ? '
+          'GROUP BY track_id',
+          [userId, toDbTime(from), toDbTime(until)],
+        ))
+          row['track_id'] as String: row['n'] as int,
+      },
+      since: fromDbTime(
+        db.select('SELECT MIN(played_at) AS first FROM user_play_log WHERE user_id = ?', [userId]).first['first'],
+      ),
+    );
   }
 
   /// Creates the playlist or replaces its name, description and tracks. Null when it is new and the account is at its
@@ -187,6 +216,16 @@ class UserDataService {
           move.close();
           leave.close();
         }
+      }
+
+      // The log has no row of its own per track: each play of a moved one goes with it.
+      final relog = db.prepare('UPDATE user_play_log SET track_id = ?2 WHERE track_id = ?1');
+      try {
+        for (final MapEntry(key: before, value: after) in moved.entries) {
+          relog.execute([before, after]);
+        }
+      } finally {
+        relog.close();
       }
 
       final update = db.prepare(

@@ -236,6 +236,7 @@ class AuthService {
     final count = db.updatedRows;
     db.execute('DELETE FROM user_favorites WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_plays WHERE user_id = ?', [userId]);
+    db.execute('DELETE FROM user_play_log WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_playlists WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM user_hidden WHERE user_id = ?', [userId]);
     db.execute('DELETE FROM recommendations WHERE from_user_id = ?1 OR to_user_id = ?1', [userId]);

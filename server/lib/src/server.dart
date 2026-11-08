@@ -481,6 +481,17 @@ class WiretuneServer {
             )
           : jsonResponse(stats.toJson());
     }),
+    // How often the account played each track in a time, for its listening summary
+    _Route('GET', '/api/me/plays', Access.user, (call) {
+      final query = call.request.url.queryParameters;
+      final from = parseIsoUtc(query['from']);
+      final until = parseIsoUtc(query['to']);
+      if (from == null || until == null || !from.isBefore(until)) {
+        return errorResponse(400, ErrorCodes.invalidPeriod, 'Give "from" and "to" as ISO times, "from" first.');
+      }
+      final (:plays, :since) = userData.playsBetween(call.userId, from, until);
+      return jsonResponse({'plays': plays, 'since': since == null ? null : formatIsoUtc(since)});
+    }),
     // What the other accounts recommended to this one, and recommending
     _Route(
       'GET',

@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 16;
+  static const int schemaVersion = 17;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -85,6 +85,8 @@ class DatabaseManager {
     'ALTER TABLE tracks ADD COLUMN details TEXT; UPDATE tracks SET file_modified_at = NULL; $_albumLookupsTable',
     // 15 -> 16: the server's credit lookups.
     _creditLookupsTable,
+    // 16 -> 17: when each account played what, for its listening summary.
+    _playLogTable,
   ];
 
   final String databasePath;
@@ -270,6 +272,7 @@ const String _schema =
   $_userBlocksTable
   $_albumLookupsTable
   $_creditLookupsTable
+  $_playLogTable
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
@@ -342,4 +345,15 @@ const String _creditLookupsTable = '''
       found INTEGER NOT NULL,
       credits TEXT
   );
+''';
+
+/// Each play of each account (`user_plays` only counts them), for the listening summary of a year: kept from schema 17
+/// on, so a summary of an earlier time has the counts alone.
+const String _playLogTable = '''
+  CREATE TABLE user_play_log (
+      user_id TEXT NOT NULL,
+      track_id TEXT NOT NULL,
+      played_at INTEGER NOT NULL
+  );
+  CREATE INDEX user_play_log_time ON user_play_log (user_id, played_at);
 ''';
