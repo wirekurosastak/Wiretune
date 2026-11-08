@@ -359,8 +359,10 @@ class FrameWash extends StatelessWidget {
               shaderCallback: (rect) => const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.black, Colors.black54, Colors.transparent],
-                stops: [0, 0.55, 1],
+                // Fully gone a little before its edge: the edge of a layer moved by fractions of a pixel (as the
+                // page scrolls) can otherwise show as a hairline of the cover's colour on a phone's GPU.
+                colors: [Colors.black, Colors.black54, Colors.transparent, Colors.transparent],
+                stops: [0, 0.55, 0.95, 1],
               ).createShader(rect),
               child: AmbientArtwork(path: coverPath(vm), opacity: 0.6),
             ),
