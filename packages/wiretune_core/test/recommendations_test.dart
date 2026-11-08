@@ -89,6 +89,28 @@ void main() {
     expect(inbox.items, isEmpty, reason: "another account's are not shown");
   });
 
+  test("what this account hides never shows, whoever recommends it, and shows again once it isn't hidden", () async {
+    final inbox = Recommendations(session, library, remote);
+    addTearDown(inbox.dispose);
+    await until(() => inbox.items.isNotEmpty);
+    final track = library.resolveTracks(['s1']).single;
+    var changes = 0;
+    inbox.changed.listen((_) => changes++);
+
+    for (final (kind, id) in [
+      (HiddenKind.track, track.id),
+      (HiddenKind.album, track.albumId),
+      (HiddenKind.artist, artistIdOf(track.primaryArtist)),
+    ]) {
+      library.setHidden(kind, id, true);
+      expect(inbox.items, isEmpty, reason: 'its $kind hidden');
+      expect(inbox.unseenCount, 0, reason: 'nor counted under the bell');
+      library.setHidden(kind, id, false);
+      expect(inbox.items.map((r) => r.id), ['r1'], reason: 'its $kind shown again');
+    }
+    expect(changes, greaterThanOrEqualTo(6), reason: 'the bell redrawn at each change');
+  });
+
   test('opening the bell sees them all; a dismissed one goes at once', () async {
     final inbox = Recommendations(session, library, remote);
     addTearDown(inbox.dispose);

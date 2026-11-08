@@ -86,7 +86,8 @@ a server, to get everything back.
 
 Everyone else with an account on your server is a friend. *Recommend…* in the ⋮ menu of a track, an album or an artist
 sends it to the friends you pick, with a note if you like. What friends send you waits under the bell at the top, with
-a count of what's new: tap one to play or open it, or × to remove it.
+a count of what's new: tap one to play or open it, or × to remove it. Nothing you've hidden shows up there, whoever
+sends it.
 
 *Listen together…* in the cast menu invites friends to hear what you play. They join from the bell, or from the notice
 the invite brings, and their players play your music in step with yours, each streaming it from the server. They can

@@ -35,7 +35,9 @@ class Recommendations {
   /// Raised when [items] or [unseenCount] may have changed.
   final Event<void> changed = Event<void>();
 
-  /// The ones whose artist, album or track this library has, the newest first.
+  /// The ones whose artist, album or track this library has, the newest first. What the account hides never shows,
+  /// whoever recommends it: a hidden track, or one of a hidden album or artist, is left out as the hidden album or
+  /// artist is.
   List<Recommendation> get items => [
     for (final recommendation in _all)
       if (isInLibrary(recommendation)) recommendation,
@@ -45,7 +47,7 @@ class Recommendations {
   int get unseenCount => items.where((r) => !r.seen).length;
 
   bool isInLibrary(Recommendation recommendation) => switch (recommendation.kind) {
-    RecommendationKind.track => _library.resolveTracks([recommendation.itemId]).isNotEmpty,
+    RecommendationKind.track => _library.resolveTracks([recommendation.itemId]).any((t) => !_library.isTrackHidden(t)),
     RecommendationKind.album => _library.getAlbum(recommendation.itemId) != null,
     RecommendationKind.artist => _library.getArtist(recommendation.itemId) != null,
   };
