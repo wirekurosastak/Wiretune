@@ -130,7 +130,8 @@ development machine with a throw-away data folder ([SECURITY.md](../SECURITY.md#
 ## Platform code
 
 - **Android:** `MainActivity.kt` shares its Flutter engine with the media service. `packages/wiretune_platform` has TV
-  detection, the music folder, the audio permission, the CPU and Wi-Fi locks, and installing updates. Application ID:
+  detection, the music folder, the audio permission, the CPU and Wi-Fi locks, installing updates, and the home-screen
+  widget (`NowPlayingWidget.kt`, whose buttons are media-button presses for the media session). Application ID:
   `com.wiretune.player`.
 - **iOS and macOS:** `ios/Runner/Info.plist` declares background audio, local network access and plain HTTP.
   `ios/Runner/AppDelegate.swift` handles `excludeFromBackup` on the `wiretune/platform` channel (keeps downloads out of

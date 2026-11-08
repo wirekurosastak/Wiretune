@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The home-screen widget's texts. -->
+<resources>
+    <string name="wiretune_widget_name">Wiretune</string>
+    <string name="wiretune_widget_description">What plays, with its controls.</string>
+    <string name="wiretune_widget_idle">Nothing is playing</string>
+    <string name="wiretune_widget_previous">Previous</string>
+    <string name="wiretune_widget_play">Play or pause</string>
+    <string name="wiretune_widget_next">Next</string>
+</resources>

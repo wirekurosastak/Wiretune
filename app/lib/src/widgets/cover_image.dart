@@ -54,6 +54,18 @@ abstract final class CoverArt {
     return decodeWidth == null ? image : ResizeImage(image, width: decodeWidth, allowUpscaling: false);
   }
 
+  /// The file the cover at [pathOrUrl] is in on this device: a local file, a download's copy, or a server's cover kept
+  /// once shown; null when there is none (yet). For what can only show a file: the home-screen widget.
+  static String? fileOf(String? pathOrUrl) {
+    if (pathOrUrl == null || pathOrUrl.trim().isEmpty) return null;
+    final path = localCopy?.call(pathOrUrl) ?? pathOrUrl;
+    final cache = cacheDirectory;
+    final file = path.startsWith('http://') || path.startsWith('https://')
+        ? (cache == null ? null : p.join(cache, '${stableId(path)}.img'))
+        : path;
+    return file != null && File(file).existsSync() ? file : null;
+  }
+
   /// Keeps the kept covers within their limit: the oldest go first.
   static Future<void> trimCache() async {
     final cache = cacheDirectory;

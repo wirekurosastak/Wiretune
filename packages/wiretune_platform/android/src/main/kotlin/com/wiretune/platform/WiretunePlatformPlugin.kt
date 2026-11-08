@@ -29,7 +29,8 @@ import io.flutter.plugin.common.PluginRegistry
 
 /**
  * Answers `wiretune/platform` (is this a television? where do downloads go? may the app read the music on the
- * device? which app installed this one? install this update) and `wiretune/power` (playback started or stopped), and
+ * device? which app installed this one? install this update) and `wiretune/power` (playback started or stopped, what
+ * the home-screen widget shows: [NowPlayingWidget]), and
  * streams `wiretune/pcm` (a track decoded for the spectrum: [PcmDecoder]).
  *
  * The permission to read audio files is asked for only when the user scans a folder of the phone's own, never at start:
@@ -68,6 +69,17 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                     "setPlaying" -> {
                         val arguments = call.arguments as? Map<*, *>
                         setPlaying(context, arguments?.get("playing") == true, arguments?.get("streaming") == true)
+                        result.success(null)
+                    }
+                    "showOnWidget" -> {
+                        val arguments = call.arguments as? Map<*, *>
+                        NowPlayingWidget.show(
+                            context,
+                            arguments?.get("title") as? String,
+                            arguments?.get("artist") as? String,
+                            arguments?.get("playing") == true,
+                            arguments?.get("cover") as? String,
+                        )
                         result.success(null)
                     }
                     else -> result.notImplemented()
