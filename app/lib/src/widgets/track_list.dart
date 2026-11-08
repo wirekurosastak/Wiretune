@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -128,16 +130,68 @@ class _Columns {
   int get artistFlex => 4;
   int get albumFlex => 4;
 
-  // The columns of figures are as wide as their longest header (German) and value; the text columns share the rest.
-  static const double lengthWidth = 76;
-  static const double releasedWidth = 112;
-  static const double addedWidth = 124;
-  static const double bpmWidth = 70;
-  static const double qualityWidth = 168;
-  static const double bitrateWidth = 104;
-
   // The drag handle at the start of a row that can be moved.
   static const double handleWidth = 24;
+}
+
+/// The widths of the columns of figures and tags: each the wider of its header (with the sort's arrow) and its widest
+/// value, measured in the language and at the font size on show, and the same room after each, so that the gaps between
+/// them are even however long their words are. The text columns (title, artist, album) share the rest.
+class _ColumnWidths {
+  const _ColumnWidths({
+    required this.length,
+    required this.released,
+    required this.added,
+    required this.bpm,
+    required this.quality,
+    required this.bitrate,
+  });
+
+  final double length, released, added, bpm, quality, bitrate;
+
+  /// A cell's padding at each side, as every cell of the table has it.
+  static const double padding = 10;
+
+  /// What a column adds after its widest value, besides the two paddings: with them, the gap between two columns.
+  static const double room = 6;
+
+  static final Map<(String, double, String?), _ColumnWidths> _known = {};
+
+  static _ColumnWidths of(BuildContext context) {
+    final base = DefaultTextStyle.of(context).style;
+    final scaler = MediaQuery.textScalerOf(context);
+    return _known[(Localizer.instance.language, scaler.scale(100), base.fontFamily)] ??= _measure(base, scaler);
+  }
+
+  static _ColumnWidths _measure(TextStyle base, TextScaler scaler) {
+    double width(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: base.merge(style)),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+        maxLines: 1,
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return width;
+    }
+
+    const header = TextStyle(fontSize: 10, letterSpacing: 0.9, fontWeight: FontWeight.w700);
+    const figure = TextStyle(fontSize: 13, fontWeight: FontWeight.w500, fontFeatures: [FontFeature.tabularFigures()]);
+    const tag = TextStyle(fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.2);
+    // A header with the active sort's arrow beside it ([_HeaderCell]); a tag with its padding and border ([QualityTag]).
+    double head(String text) => width(text, header) + 4 + 12;
+    double tagged(String text) => width(text, tag) + 2 * 6 + 2;
+    double column(String title, double widest) => math.max(head(title), widest) + 2 * padding + room;
+    return _ColumnWidths(
+      length: column(Localizer.get('ColLength'), width('8:88:88', figure)),
+      released: column(Localizer.get('ColReleased'), width('8888', figure)),
+      added: column(Localizer.get('ColAdded'), width(Localizer.format('DateShort', [DateTime(2088, 8, 28)]), figure)),
+      bpm: column('BPM', width('888', figure)),
+      quality: column(Localizer.get('ColQuality'), tagged('FLAC 24bit/192kHz')),
+      bitrate: column(Localizer.get('ColBitrate'), tagged(Localizer.format('BitrateKbps', [8888]))),
+    );
+  }
 }
 
 class _TrackSliverState extends State<TrackSliver> {
@@ -335,6 +389,7 @@ class _ColumnHeaders extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final widths = _ColumnWidths.of(context);
     Widget cell(String label, TrackSortField? column, {int flex = 0, double? width}) {
       final active = column != null && sortField == column;
       final content = column != null
@@ -372,14 +427,13 @@ class _ColumnHeaders extends StatelessWidget {
           cell(context.tr('ColTitle'), TrackSortField.title, flex: columns.titleFlex),
           if (columns.showArtist) cell(context.tr('ColArtist'), TrackSortField.artist, flex: columns.artistFlex),
           if (columns.showAlbum) cell(context.tr('ColAlbum'), TrackSortField.album, flex: columns.albumFlex),
-          cell(context.tr('ColLength'), TrackSortField.length, width: _Columns.lengthWidth),
-          if (columns.showReleased)
-            cell(context.tr('ColReleased'), TrackSortField.released, width: _Columns.releasedWidth),
-          if (columns.showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: _Columns.addedWidth),
+          cell(context.tr('ColLength'), TrackSortField.length, width: widths.length),
+          if (columns.showReleased) cell(context.tr('ColReleased'), TrackSortField.released, width: widths.released),
+          if (columns.showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: widths.added),
           // The same in every language.
-          if (columns.showBpm) cell('BPM', TrackSortField.bpm, width: _Columns.bpmWidth),
-          if (columns.showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: _Columns.qualityWidth),
-          if (columns.showQuality) cell(context.tr('ColBitrate'), TrackSortField.bitrate, width: _Columns.bitrateWidth),
+          if (columns.showBpm) cell('BPM', TrackSortField.bpm, width: widths.bpm),
+          if (columns.showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: widths.quality),
+          if (columns.showQuality) cell(context.tr('ColBitrate'), TrackSortField.bitrate, width: widths.bitrate),
           const SizedBox(width: 2 * 44),
         ],
       ),
@@ -407,6 +461,7 @@ class _TableRowState extends State<_TableRow> {
   Widget build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
+    final widths = _ColumnWidths.of(context);
     final track = widget.track;
     final state = widget.state;
     final playing = vm.player.isCurrent(track);
@@ -520,9 +575,9 @@ class _TableRowState extends State<_TableRow> {
                         onTap: () => vm.openAlbumOfTrack(track),
                       ),
                     ),
-                  _FigureCell(track.formattedDuration, width: _Columns.lengthWidth),
+                  _FigureCell(track.formattedDuration, width: widths.length),
                   if (state._columns.showReleased)
-                    _FigureCell(track.releaseYear?.toString() ?? '—', width: _Columns.releasedWidth),
+                    _FigureCell(track.releaseYear?.toString() ?? '—', width: widths.released),
                   if (state._columns.showAdded)
                     _FigureCell(
                       // A playlist knows no date of its tracks, only the order they were added in.
@@ -532,16 +587,16 @@ class _TableRowState extends State<_TableRow> {
                               final date? => context.trf('DateShort', [date]),
                               null => '—',
                             },
-                      width: _Columns.addedWidth,
+                      width: widths.added,
                     ),
                   if (state._columns.showBpm)
                     _FigureCell(switch (track.bpm) {
                       final bpm? when bpm > 0 => '$bpm',
                       _ => '—',
-                    }, width: _Columns.bpmWidth),
+                    }, width: widths.bpm),
                   if (state._columns.showQuality)
                     SizedBox(
-                      width: _Columns.qualityWidth,
+                      width: widths.quality,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
@@ -553,7 +608,7 @@ class _TableRowState extends State<_TableRow> {
                   // The file's average bitrate, in the quality's colours.
                   if (state._columns.showQuality)
                     SizedBox(
-                      width: _Columns.bitrateWidth,
+                      width: widths.bitrate,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
