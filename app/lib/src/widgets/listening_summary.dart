@@ -23,7 +23,11 @@ class ListeningSummaryCard extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(phone ? PhoneChrome.edge : 20, 4, phone ? PhoneChrome.edge : 20, 12),
       child: Material(
         color: colors.surface1,
-        borderRadius: BorderRadius.circular(Radii.card),
+        // The hairline edge the sort and filter pills have.
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Radii.card),
+          side: BorderSide(color: colors.glassBorder),
+        ),
         child: InkWell(
           borderRadius: BorderRadius.circular(Radii.card),
           onTap: () => showListeningSummary(context),
