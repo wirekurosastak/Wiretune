@@ -157,7 +157,6 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
           ),
         if (server)
           Align(
-            alignment: Alignment.centerLeft,
             child: SegmentedButton<_Period>(
               showSelectedIcon: false,
               // A phone's spans the sheet, in equal parts, so the three fit in any language.
