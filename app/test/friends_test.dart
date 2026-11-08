@@ -315,6 +315,10 @@ void main() {
     await serverAnswers();
     await settle(tester);
 
+    // A phone's Settings cards start folded: the account's opens with a tap on its title.
+    await tester.tap(find.text(Localizer.get('AccountAndConnection')));
+    await settle(tester);
+
     // Its own name.
     final change = find.text(Localizer.get('ChangeUsername'));
     await toMiddle(change);

@@ -88,8 +88,8 @@ class SettingsPage extends StatelessWidget {
 }
 
 /// A card of Settings: its [title] and what it holds ([children]). On a phone each folds, its title alone (with a
-/// chevron) until it is tapped, so that the page is a short list of them; the account's starts open. A card stays as it
-/// was left while the app runs. On a wider screen every card is open.
+/// chevron) until it is tapped, so that the page is a short list of them; all start folded. A card stays as it was
+/// left while the app runs. On a wider screen every card is open.
 class _SettingsCard extends StatefulWidget {
   const _SettingsCard({
     required this.title,
@@ -101,8 +101,8 @@ class _SettingsCard extends StatefulWidget {
   final List<Widget> children;
   final CrossAxisAlignment crossAxisAlignment;
 
-  /// The cards open on a phone, by their icon (each card has its own); the account's from the start.
-  static final Set<IconData> _open = {Icons.person_rounded};
+  /// The cards open on a phone, by their icon (each card has its own).
+  static final Set<IconData> _open = {};
 
   @override
   State<_SettingsCard> createState() => _SettingsCardState();
