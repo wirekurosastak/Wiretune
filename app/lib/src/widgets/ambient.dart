@@ -313,6 +313,9 @@ class FrameWash extends StatelessWidget {
   /// How far down the wash reaches, at most.
   static const double height = 380;
 
+  /// How far short of the wash's edge its picture ends.
+  static const double _edgeRoom = 8;
+
   /// Where it stays without a [FrameWashScope] around it.
   static final ValueNotifier<double> _unscrolled = ValueNotifier(0);
 
@@ -342,29 +345,39 @@ class FrameWash extends StatelessWidget {
           valueListenable: scrolled,
           // Up as far as the page has scrolled, as its header goes. Pulled down past its top (a phone's page gives, as
           // an iPhone's does) it stays at the top and stretches down with the header, leaving no black above it.
-          builder: (context, offset, child) => Transform.translate(
-            offset: Offset(0, -math.max(offset, 0.0)),
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: double.infinity,
-                height: math.min(height, constraints.maxHeight * 0.6) + math.max(-offset, 0.0),
-                child: child,
+          // In whole pixels of the screen, so that its edges never fall between two.
+          builder: (context, offset, child) {
+            final ratio = MediaQuery.devicePixelRatioOf(context);
+            double pixels(double value) => (value * ratio).roundToDouble() / ratio;
+            return Transform.translate(
+              offset: Offset(0, -pixels(math.max(offset, 0.0))),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: pixels(math.min(height, constraints.maxHeight * 0.6) + math.max(-offset, 0.0)),
+                  child: child,
+                ),
               ),
-            ),
-          ),
+            );
+          },
           child: RepaintBoundary(
             child: ShaderMask(
               blendMode: BlendMode.dstIn,
               shaderCallback: (rect) => const LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                // Fully gone a little before its edge: the edge of a layer moved by fractions of a pixel (as the
-                // page scrolls) can otherwise show as a hairline of the cover's colour on a phone's GPU.
+                // Fully gone a little before its edge.
                 colors: [Colors.black, Colors.black54, Colors.transparent, Colors.transparent],
                 stops: [0, 0.55, 0.95, 1],
               ).createShader(rect),
-              child: AmbientArtwork(path: coverPath(vm), opacity: 0.6),
+              // The picture ends short of the mask's edge, where the mask has made it clear: its own clipped edge
+              // can round out by a row of pixels, and a row past the mask would show unmasked, a hairline of the
+              // cover's colour across the page (seen on a phone under an album's title).
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: _edgeRoom),
+                child: AmbientArtwork(path: coverPath(vm), opacity: 0.6),
+              ),
             ),
           ),
         ),
