@@ -15,6 +15,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import 'album_lookup_service.dart';
 import 'auth_service.dart';
 import 'block_service.dart';
+import 'credit_lookup_service.dart';
 import 'config.dart';
 import 'http_utils.dart';
 import 'library_scan_service.dart';
@@ -124,6 +125,7 @@ class WiretuneServer {
     this.setupCode,
     this.scanner,
     this.albumLookups,
+    this.creditLookups,
   );
 
   static const int _defaultBodyLimit = 64 * 1024;
@@ -144,6 +146,9 @@ class WiretuneServer {
 
   /// Each album's genre and label, looked up online for the tracks whose files don't name them.
   final AlbumLookupService albumLookups;
+
+  /// A track's credits, looked up online when a player asks.
+  final CreditLookupService creditLookups;
   late final RemoteHub remote = RemoteHub()..blocks = blocks.blocks;
 
   /// Converts tracks for players that asked for less than the original (`?format=opus&bitrate=96`).
@@ -207,6 +212,7 @@ class WiretuneServer {
       interval: options.scanIntervalMinutes > 0 ? Duration(minutes: options.scanIntervalMinutes) : null,
     );
 
+    final albums = AlbumLookupService(database, client: online);
     final server = WiretuneServer._(
       options,
       paths,
@@ -217,7 +223,8 @@ class WiretuneServer {
       UserDataService(database),
       SetupCode(options.setupCode),
       scanner,
-      AlbumLookupService(database, client: online),
+      albums,
+      CreditLookupService(database, enabled: () => albums.enabled, client: online),
     );
 
     if (!auth.hasAnyUsers()) {
@@ -242,6 +249,7 @@ class WiretuneServer {
 
   Future<void> close() async {
     albumLookups.close();
+    creditLookups.close();
     await scanner.stop();
     await remote.close(); // their sockets left the HTTP server when they were upgraded
     await _http?.close(force: true);
@@ -386,7 +394,7 @@ class WiretuneServer {
     _Route('GET', '/api/accounts', Access.user, (_) => jsonResponse([for (final a in auth.getAccounts()) a.toJson()])),
     _Route('GET', '/api/config', Access.admin, (_) => jsonResponse(_config.toJson())),
     _Route('POST', '/api/config/music-folder', Access.admin, _setMusicFolder),
-    _Route('POST', '/api/config/album-lookups', Access.admin, (call) async {
+    _Route('POST', '/api/config/online-lookups', Access.admin, (call) async {
       final on = (await call.jsonObject())?['enabled'];
       if (on is! bool) return errorResponse(400, ErrorCodes.invalidJson, 'The body is { "enabled": true or false }.');
       albumLookups.enabled = on;
@@ -437,6 +445,13 @@ class WiretuneServer {
     ),
     _Route('GET', '/api/cover/artist/{artistId}', Access.media, _artistPicture),
     _Route('GET', '/api/lyrics/{trackId}', Access.user, _lyrics),
+    _Route('GET', '/api/tracks/{trackId}/credits', Access.user, (call) async {
+      final track = library.getTrack(call.params['trackId']!);
+      if (track == null) return errorResponse(404, ErrorCodes.notFound, 'Track not found.');
+      return jsonResponse({
+        'credits': [for (final credit in await creditLookups.creditsOf(track)) credit.toJson()],
+      });
+    }),
 
     // Remote control: a WebSocket per player
     _Route('GET', '/api/remote', Access.user, _remote),
@@ -655,7 +670,7 @@ class WiretuneServer {
 
   /// What an administrator sets about the server.
   ServerConfigInfo get _config =>
-      ServerConfigInfo(paths.musicFolder, membersCanRename: auth.membersCanRename, lookUpAlbums: albumLookups.enabled);
+      ServerConfigInfo(paths.musicFolder, membersCanRename: auth.membersCanRename, lookUpOnline: albumLookups.enabled);
 
   Future<Response> _adminResetPassword(_Call call) async {
     final userId = call.params['userId']!;

@@ -43,8 +43,8 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
 | `POST /api/library/scan` | admin | Requests a scan: `202 { "message": "Scan requested." }`. Poll the status route |
 | `GET /api/tracks` | user | All tracks, with an `ETag`. Send it as `If-None-Match`: an unchanged list returns `304` with no body. A track's `details` (when its tags give any) hold `isrc`, `barcode`, `musicBrainzTrackId`, `label`, `copyright` (the ℗ line) and `composer`. A track whose file names no genre or label has its album's, when the server looked the album up |
 | `GET /api/artists/pictures` | user | Artists with their own picture in the music folder (`artist.jpg`, see the [user guide](user-guide.md#the-library)): `{ artistId: version }`; the version changes with the file. `ETag` as on `/api/tracks` |
-| `GET /api/config` | admin | `{ "musicFolder", "membersCanRename", "lookUpAlbums" }` |
-| `POST /api/config/album-lookups` | admin | Body `{ "enabled": true }` or `false`: whether the server looks albums up on Deezer for their genre and label (on at first). Turned on, it looks up the albums it hasn't asked about yet. `200` with the config, `400` not a boolean |
+| `GET /api/config` | admin | `{ "musicFolder", "membersCanRename", "lookUpOnline" }` |
+| `POST /api/config/online-lookups` | admin | Body `{ "enabled": true }` or `false`: whether the server looks music up online (on at first): albums on Deezer for their genre and label, tracks' credits on MusicBrainz. Turned on, it looks up the albums it hasn't asked about yet. `200` with the config, `400` not a boolean |
 | `POST /api/config/members-can-rename` | admin | Body `{ "enabled": true }` or `false`: whether accounts that aren't administrators may change their own names (off at first). `200` with the config, `400` not a boolean |
 | `POST /api/config/music-folder` | admin | Body `{ "musicFolder" }`. Switches the music folder (saved in the database, kept after a restart even while missing) and requests a scan. `400` for an empty or missing folder, a whole disk, `/proc`, `/sys`, `/dev` or `/run`, or a folder that contains or is inside the server's data folder (following symbolic links) |
 
@@ -115,6 +115,7 @@ deleted) and its invites to listen together never arrive. The blocked account is
 | `GET /api/stream/{trackId}` | user | The audio file, with range requests. `404` if the track is unknown, outside the music folder, or gone. With `?format=opus` or `mp3` and `&bitrate=<kbit/s>` (Opus 24–256, default 128; MP3 64–320, default 192), the track converted by `ffmpeg` and kept on disk ([how](server.md#streaming-on-a-slow-connection)); the file itself when the server can't convert it, or when it is lossy and at or below the bitrate |
 | `GET /api/cover/album/{albumId}` | user | The cover of the album's first track that has one (`image/jpeg` or `image/png`), cacheable for a day. `404` if there's none. `?v=` is ignored |
 | `GET /api/cover/artist/{artistId}` | user | The artist's own picture, like an album cover. `404` if there's none |
+| `GET /api/tracks/{trackId}/credits` | user | Who did what: `{ "credits": [{ "role", "name", "detail" }] }`, `role` one of `composer`, `lyricist`, `writer`, `producer`, `arranger`, `vocal`, `instrument` (`detail`: which), `performer`, `programming`, `remixer`, `mix`, `engineer`, `recording`, in that order. From the file's composer tag and, when the lookups are on, MusicBrainz (asked the first time, by the file's MusicBrainz ID or ISRC, then kept). `404` unknown track |
 | `GET /api/lyrics/{trackId}` | user | `{ "lyrics" }` from the file's tags (up to 100,000 characters), `404` if there are none. The server never looks online; the players ask LRCLIB themselves |
 
 ## Remote control

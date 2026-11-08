@@ -112,6 +112,13 @@ class ServerClient {
   Future<StreamTokenResponse> getStreamToken(String baseUrl) async =>
       _parse(StreamTokenResponse.fromJson, await _send('POST', baseUrl, '/api/auth/stream-token'));
 
+  /// Who did what on the track [trackId]: from its tags, and from MusicBrainz when the server may look it up.
+  Future<List<Credit>> getCredits(String baseUrl, String trackId) async {
+    final answer = await _send('GET', baseUrl, '/api/tracks/${Uri.encodeComponent(trackId)}/credits');
+    if (answer is! Map || answer['credits'] is! List) throw ServerRequestException(_notWiretune(), 200);
+    return [for (final credit in answer['credits'] as List) _parse(Credit.fromJson, credit)];
+  }
+
   Future<UserInfo> getCurrentUser(String baseUrl) async =>
       _parse(UserInfo.fromJson, await _send('GET', baseUrl, '/api/auth/me'));
 
@@ -192,10 +199,10 @@ class ServerClient {
     await _send('POST', baseUrl, '/api/users/${Uri.encodeComponent(userId)}/username', body: {'username': username}),
   );
 
-  /// An administrator turns the album lookups on or off.
-  Future<ServerConfigInfo> setAlbumLookups(String baseUrl, bool on) async => _parse(
+  /// An administrator turns the online lookups (albums' genres and labels, tracks' credits) on or off.
+  Future<ServerConfigInfo> setOnlineLookups(String baseUrl, bool on) async => _parse(
     ServerConfigInfo.fromJson,
-    await _send('POST', baseUrl, '/api/config/album-lookups', body: {'enabled': on}),
+    await _send('POST', baseUrl, '/api/config/online-lookups', body: {'enabled': on}),
   );
 
   /// An administrator lets the other accounts change their own names, or stops them.

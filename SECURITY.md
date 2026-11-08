@@ -13,7 +13,7 @@ made public. Fixes go to the latest release, or to the default branch until ther
 
 ## What leaves your network
 
-The players make three kinds of internet requests, and the server one. Nothing else leaves your network.
+The players make three kinds of internet requests, and the server two. Nothing else leaves your network.
 
 - **Artist pictures** from Deezer's public API. Deezer sees the artist names and up to two album titles per artist
   (to tell apart artists with the same name). Artists with their own `artist.jpg` aren't looked up.
@@ -29,10 +29,14 @@ The players make three kinds of internet requests, and the server one. Nothing e
 - **Album genres and labels** (the server): after a scan it looks each album up once on Deezer's public API, for
   the genre and label its files don't name. Deezer sees the album's barcode or a track's ISRC from the tags, or else
   its title and artist, with a `Wiretune/<version>` user agent; nothing about the accounts. An album that wasn't found
-  is asked again after 30 days. Off: *Settings → Library → Look up albums online* (administrator); what was found
-  stays.
+  is asked again after 30 days.
+- **Track credits** (the server): when someone opens a track's *Credits*, it asks MusicBrainz once, by the file's
+  MusicBrainz recording ID or its ISRC, with a `Wiretune/<version>` user agent and the project's address. Nothing else
+  about the track or the accounts. A recording MusicBrainz doesn't know is asked again after 30 days.
 
-Pictures and lyrics are cached in the player's data folder, album genres and labels in the server's database.
+Both are off with *Settings → Library → Look up music online* (administrator); what was found stays.
+
+Pictures and lyrics are cached in the player's data folder, album genres, labels and credits in the server's database.
 
 ## Server
 

@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:wiretune_core/wiretune_core.dart';
 
+import 'credit_lookup_service.dart' show CreditLookupService;
+
 /// What the server learned online about an album: its genre and its label, either of them null when not known.
 typedef AlbumFacts = ({String? genre, String? label});
 
@@ -32,7 +34,7 @@ class AlbumLookupService {
   /// An album that wasn't found is asked again after this long (its release may have come to Deezer since).
   static const Duration retryAfter = Duration(days: 30);
 
-  static const String _enabledKey = 'album_lookups';
+  static const String _enabledKey = 'online_lookups';
   static const String _api = 'https://api.deezer.com';
 
   final Map<String, AlbumFacts> _known = {};
@@ -42,7 +44,8 @@ class AlbumLookupService {
   /// What is known about the album [albumId]; null when nothing was found.
   AlbumFacts? of(String albumId) => _known[albumId];
 
-  /// Whether albums are looked up online; on until an administrator turns it off.
+  /// Whether music is looked up online (albums here, credits by [CreditLookupService]); on until an administrator
+  /// turns it off.
   bool get enabled =>
       _db.connection.select('SELECT value FROM settings WHERE key = ?', [_enabledKey]).firstOrNull?['value'] != '0';
 

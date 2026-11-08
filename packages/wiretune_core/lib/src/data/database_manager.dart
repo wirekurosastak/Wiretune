@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 15;
+  static const int schemaVersion = 16;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -83,6 +83,8 @@ class DatabaseManager {
     // 14 -> 15: what the tags say beyond what a track plays as (codes, label, ℗ line, composer), and the server's
     // album lookups. As for 5 -> 6, the next scan reads each file again.
     'ALTER TABLE tracks ADD COLUMN details TEXT; UPDATE tracks SET file_modified_at = NULL; $_albumLookupsTable',
+    // 15 -> 16: the server's credit lookups.
+    _creditLookupsTable,
   ];
 
   final String databasePath;
@@ -267,6 +269,7 @@ const String _schema =
   $_recommendationsTable
   $_userBlocksTable
   $_albumLookupsTable
+  $_creditLookupsTable
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
@@ -327,5 +330,16 @@ const String _albumLookupsTable = '''
       found INTEGER NOT NULL,
       genre TEXT,
       label TEXT
+  );
+''';
+
+/// What the server looked up online about a track's credits (by `track_id`): the credits as JSON when found (`found`),
+/// and when it looked (`looked_up_at`).
+const String _creditLookupsTable = '''
+  CREATE TABLE credit_lookups (
+      track_id TEXT PRIMARY KEY,
+      looked_up_at INTEGER NOT NULL,
+      found INTEGER NOT NULL,
+      credits TEXT
   );
 ''';

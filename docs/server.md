@@ -197,7 +197,8 @@ that mounts late).
 
 After a scan the server looks up the albums it hasn't asked about on Deezer, for the genre and label their files
 don't name ([what is sent](../SECURITY.md#what-leaves-your-network)). The albums' genre filter then works without genre
-tags. Turn it off in *Settings → Library → Look up albums online*.
+tags. A track's *Credits* (in its menu) are asked from MusicBrainz the first time someone opens them. Turn both off in
+*Settings → Library → Look up music online*.
 
 Indexed formats: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis, Opus. Whether a file also
 plays depends on the player ([audio.md](audio.md)). Missing tags fall back to the file name, `Unknown artist` and

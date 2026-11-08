@@ -59,6 +59,63 @@ class AccountInfo {
   }
 }
 
+/// Who did what on a recording: a [role] ([CreditRoles]: composer, producer, an instrument…) and the person's [name];
+/// [detail] names the instrument for [CreditRoles.instrument].
+class Credit {
+  const Credit(this.role, this.name, {this.detail});
+
+  final String role;
+  final String name;
+  final String? detail;
+
+  Map<String, Object?> toJson() => {'role': role, 'name': name, 'detail': ?detail};
+
+  static Credit fromJson(Object? json) {
+    final map = _object(json);
+    return Credit(_string(map, 'role'), _string(map, 'name'), detail: jsonField<String>(map, 'detail'));
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is Credit && other.role == role && other.name == name && other.detail == detail;
+
+  @override
+  int get hashCode => Object.hash(role, name, detail);
+}
+
+/// The roles a [Credit] can have, in the order a track's credits list them: who wrote it, then who made the recording.
+abstract final class CreditRoles {
+  static const String composer = 'composer';
+  static const String lyricist = 'lyricist';
+  static const String writer = 'writer';
+  static const String producer = 'producer';
+  static const String arranger = 'arranger';
+  static const String vocal = 'vocal';
+  static const String instrument = 'instrument';
+  static const String performer = 'performer';
+  static const String programming = 'programming';
+  static const String remixer = 'remixer';
+  static const String mix = 'mix';
+  static const String engineer = 'engineer';
+  static const String recording = 'recording';
+
+  static const List<String> all = [
+    composer,
+    lyricist,
+    writer,
+    producer,
+    arranger,
+    vocal,
+    instrument,
+    performer,
+    programming,
+    remixer,
+    mix,
+    engineer,
+    recording,
+  ];
+}
+
 /// What can be recommended.
 enum RecommendationKind {
   artist,
@@ -196,20 +253,21 @@ class ServerLibraryStatus {
 }
 
 class ServerConfigInfo {
-  const ServerConfigInfo(this.musicFolder, {this.membersCanRename = false, this.lookUpAlbums = false});
+  const ServerConfigInfo(this.musicFolder, {this.membersCanRename = false, this.lookUpOnline = false});
 
   final String musicFolder;
 
   /// Whether the accounts that aren't administrators may change their own names (an administrator can rename anyone).
   final bool membersCanRename;
 
-  /// Whether the server looks each album up online for its genre and label (for files that don't name them).
-  final bool lookUpAlbums;
+  /// Whether the server looks music up online: each album's genre and label (Deezer), a track's credits when asked
+  /// (MusicBrainz), for files that don't name them.
+  final bool lookUpOnline;
 
   Map<String, Object?> toJson() => {
     'musicFolder': musicFolder,
     'membersCanRename': membersCanRename,
-    'lookUpAlbums': lookUpAlbums,
+    'lookUpOnline': lookUpOnline,
   };
 
   static ServerConfigInfo fromJson(Object? json) {
@@ -217,7 +275,7 @@ class ServerConfigInfo {
     return ServerConfigInfo(
       _string(map, 'musicFolder'),
       membersCanRename: jsonField<bool>(map, 'membersCanRename') ?? false,
-      lookUpAlbums: jsonField<bool>(map, 'lookUpAlbums') ?? false,
+      lookUpOnline: jsonField<bool>(map, 'lookUpOnline') ?? false,
     );
   }
 }

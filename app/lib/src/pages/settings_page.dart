@@ -872,14 +872,14 @@ class _LibraryCardState extends State<_LibraryCard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            context.tr('LookUpAlbums'),
+                            context.tr('LookUpOnline'),
                             style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: colors.textMain),
                           ),
-                          Text(context.tr('LookUpAlbumsHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
+                          Text(context.tr('LookUpOnlineHint'), style: TextStyle(fontSize: 12, color: colors.textMuted)),
                         ],
                       ),
                     ),
-                    Switch(value: server.lookUpAlbums, onChanged: server.setLookUpAlbums),
+                    Switch(value: server.lookUpOnline, onChanged: server.setLookUpOnline),
                   ],
                 ),
               ],

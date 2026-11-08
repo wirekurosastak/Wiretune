@@ -76,9 +76,9 @@ void main() {
 
       // Turned off, it asks no more; what it found stays.
       var config = ServerConfigInfo.fromJson(json(await admin.get('/api/config')));
-      expect(config.lookUpAlbums, isTrue, reason: 'on at first');
-      config = ServerConfigInfo.fromJson(json(await admin.post('/api/config/album-lookups', {'enabled': false})));
-      expect(config.lookUpAlbums, isFalse);
+      expect(config.lookUpOnline, isTrue, reason: 'on at first');
+      config = ServerConfigInfo.fromJson(json(await admin.post('/api/config/online-lookups', {'enabled': false})));
+      expect(config.lookUpOnline, isFalse);
       expect([for (final t in await server.waitForTracks(admin, 4)) Track.fromJson(t).genre].whereType<String>(), [
         'Rock',
         'Rock',

@@ -443,7 +443,9 @@ class ServerSession {
 
   Future<ServerConfigInfo> setMembersCanRename(bool allowed) => _client.setMembersCanRename(serverUrl, allowed);
 
-  Future<ServerConfigInfo> setAlbumLookups(bool on) => _client.setAlbumLookups(serverUrl, on);
+  Future<ServerConfigInfo> setOnlineLookups(bool on) => _client.setOnlineLookups(serverUrl, on);
+
+  Future<List<Credit>> getCredits(String trackId) => _client.getCredits(serverUrl, trackId);
 
   Future<List<AccountInfo>> getBlocked() => _client.getBlocked(serverUrl);
 

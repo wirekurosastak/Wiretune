@@ -12,6 +12,7 @@ import 'badges.dart';
 import 'buttons.dart';
 import 'cover_flight.dart';
 import 'cover_image.dart';
+import 'credits.dart';
 import 'dialogs.dart';
 import 'downloads.dart';
 import 'equalizer_bars.dart';
@@ -604,6 +605,7 @@ enum TrackAction {
   download,
   openAlbum,
   openArtist,
+  credits,
   recommend,
   hideTrack,
 }
@@ -762,6 +764,7 @@ class TrackMenu extends StatelessWidget {
           ),
       if (kind != TrackTableKind.album) item(TrackAction.openAlbum, Icons.album_rounded, context.tr('GoToAlbum')),
       if (kind != TrackTableKind.artist) item(TrackAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
+      item(TrackAction.credits, Icons.groups_outlined, context.tr('Credits')),
       if (vm.friends.canRecommend([track])) item(TrackAction.recommend, Icons.send_rounded, context.tr('Recommend')),
       // What takes the track away comes last, away from Add to playlist: a slip of one row can't remove instead of add.
       if (kind == TrackTableKind.playlist && playlists.selectedPlaylist?.isAutomatic == false)
@@ -805,6 +808,8 @@ class TrackMenu extends StatelessWidget {
         vm.openAlbumOfTrack(track);
       case TrackAction.openArtist:
         vm.openArtistByName(track.primaryArtist);
+      case TrackAction.credits:
+        showCredits(context, track);
       case TrackAction.recommend:
         showRecommendDialog(
           context,

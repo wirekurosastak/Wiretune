@@ -39,6 +39,8 @@ Your files are never changed.
   force a server rescan with **Reindex** in *Settings → Library*.
 - **Genres and labels** come from the tags, or with a server from Deezer for albums whose files don't name them
   ([what's sent](../SECURITY.md#what-leaves-your-network)). An album's page ends with its label and ℗ line.
+- **Credits** (a track's *⋮ → Credits*): the composer the tags name and, with a server, who MusicBrainz says wrote,
+  produced, played and mixed it.
 - **Related music:** an album's page ends with *More by* its artist and *Similar albums*, an artist's with *Related
   artists*. They come from who is credited together on a track, then the genre, then the era.
 - **Sorting** lasts until the app closes. Press the active sort again to reverse it.
