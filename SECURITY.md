@@ -1,7 +1,7 @@
 # Security
 
-Wiretune is made for a home network with one administrator and a few trusted people. It is not hardened for the open
-internet.
+Wiretune runs on your home network and doesn't open itself to the internet: it opens no ports on your router and has
+no relay. To reach it away from home, use Tailscale or HTTPS through Caddy ([how](docs/server.md#away-from-home)).
 
 ## Reporting a problem
 
@@ -54,17 +54,29 @@ Pictures and lyrics are cached in the player's data folder, album genres, labels
   earlier session, stream tokens included.
 - **Tokens in URLs.** libmpv and the TV player can't send headers, so audio and cover URLs carry `?token=`. Only a
   **stream token** is accepted there: valid 8 hours, audio and covers only, never logged. These URLs can still end up in
-  a proxy's access log. The spectrum analyzer's `ffmpeg` doesn't get the URL: the player downloads the track and hands
-  it over on standard input.
+  a proxy's access log, and a streamer (UPnP/DLNA) you play on gets them too. The spectrum analyzer's `ffmpeg` doesn't
+  get the URL: the player downloads the track and hands it over on standard input.
 - **The setup code** ([how it's used](docs/server.md#start-it)) stops strangers from creating the first account on a
   server with an empty data folder, such as after a wrong path or an unmounted disk. It protects the first account
   only.
-- **Roles**: administrator and user. Every user can read the whole library. Favorites, play counts and playlists are
-  per account. No route, not even an administrator's, reads another account's data.
-- **Friends.** Every account sees the others' usernames, to recommend music to them and listen together. A
-  recommendation is seen only by the account it was sent to. Only invited accounts can join a group listening
-  together, which hears the host's queue and position and can skip, seek and queue.
-- **Remote control** (`/api/remote`) connects only the players of one account (and of one group listening together).
+- **Roles**: administrator and user. Every user can read the whole library. Favorites, plays (with when, for *Your
+  listening*) and playlists are per account. Other accounts see only what the account shares (below). No route, not
+  even an administrator's, reads the rest.
+- **Friends.** Every account sees the others' usernames, to recommend music to them and listen together. What is
+  shared, and with whom:
+  - A recommendation: only the account it was sent to.
+  - Listening together: only invited accounts join. They hear the host's queue and position and can skip, seek and
+    queue.
+  - A Blend: both accounts see a mix of each one's most played and favorite tracks, without what either hides.
+  - A shared playlist: its members see its tracks and can add, remove and reorder them. Only its owner renames or
+    deletes it.
+  - A player that lets others play on it (*Settings → Remote control*; on by default, off on phones): the other
+    accounts see it and what it plays, and can play on it and control it.
+
+  Blocking an account stops its recommendations and invitations reaching you, and ends the Blend, the shared
+  playlists and the shared players between the two of you.
+- **Remote control** (`/api/remote`) connects the players of one account, the players other accounts let it play on,
+  and the players of one group listening together.
   It accepts only the sign-in token in the header, refuses requests from web pages, and closes when the sign-in stops
   being valid. Whoever has an account's token can control its players. A signed-in account can also make the server
   hold one oversized message in memory.
