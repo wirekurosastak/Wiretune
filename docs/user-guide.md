@@ -83,6 +83,11 @@ each play) or all time. **Most played** and **Recently
 played** are built from your plays, and **Recently added** from when music came into the library; each holds 50 tracks. To reorder a playlist, drag
 its tracks (on a phone, long-press first).
 
+**Share…** on a server playlist's page (on a phone, in its ⋮) shares it with the friends you tick. Once they join it
+from the bell, it's in their Playlists too, and they can add, remove and reorder its tracks. Only you rename or delete
+it; untick someone to stop sharing it with them. A playlist shared with you says whose it is, and **Leave playlist**
+takes it off your list. When two people change it at once, the later change wins.
+
 ## Downloads
 
 You can download a track, album, artist, playlist or all favorites to play without the server: use the download button

@@ -110,7 +110,7 @@ String artistCounts(BuildContext context, Artist artist) =>
 
 /// In the order they show, in the menu and as a page's header buttons ([PlayShuffleButtons]); a track's ([TrackAction])
 /// are in the same.
-enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, openArtist, recommend, remove }
+enum _ListAction { play, shuffle, playNext, addToQueue, addToPlaylist, download, openArtist, recommend, share, remove }
 
 /// The menu of an album, an artist or a playlist: on its tile (the ⋮ on the cover, or a right click), its phone row (the
 /// ⋮), a long press's preview ([preview]) and a phone page's top bar (which leaves out the header's buttons; a wide
@@ -136,6 +136,7 @@ class ListMenu {
     this.removeIcon = Icons.delete_outline_rounded,
     this.onRemove,
     this.removeIsDanger = false,
+    this.onShare,
   });
 
   /// [withArtist]: the menu leads to the album's (first) artist, except on that artist's page.
@@ -216,15 +217,25 @@ class ListMenu {
     subtitle: (context) => context.trf('TrackCount', [playlist.trackCount]),
     removeKey: PlaylistsViewModel.isBlend(playlist)
         ? 'BlendLeave'
+        : playlist.isSharedWithMe
+        ? 'PlaylistLeave'
         : playlist.isAutomatic
         ? null
         : 'PlaylistDeleteAction',
-    removeIcon: PlaylistsViewModel.isBlend(playlist) ? Icons.logout_rounded : Icons.delete_outline_rounded,
+    removeIcon: PlaylistsViewModel.isBlend(playlist) || playlist.isSharedWithMe
+        ? Icons.logout_rounded
+        : Icons.delete_outline_rounded,
     removeIsDanger: true,
     // Asked first.
     onRemove: (context) => PlaylistsViewModel.isBlend(playlist)
         ? confirmLeaveBlend(context, playlist)
+        : playlist.isSharedWithMe
+        ? confirmLeavePlaylist(context, playlist)
         : confirmDeletePlaylist(context, playlist),
+    // A server playlist of this account's own: its friends can have it too.
+    onShare: playlist.isServer && !playlist.isAutomatic && !playlist.isSharedWithMe
+        ? (context) => showPlaylistShare(context, playlist)
+        : null,
   );
 
   /// The favourite tracks, as a list: [name] is the page's.
@@ -275,6 +286,9 @@ class ListMenu {
   final bool removeIsDanger;
   final void Function(BuildContext context)? onRemove;
 
+  /// Shares a playlist with friends; null leaves "Share…" out.
+  final void Function(BuildContext context)? onShare;
+
   /// [header]: the page's header has play, shuffle, the download, the playlist and the queue's two as buttons of their
   /// own. [only]: just those entries. What removes something (the download, a playlist) is red, as in every menu.
   List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false, Set<_ListAction>? only}) {
@@ -316,6 +330,8 @@ class ListMenu {
       if (!header && artist != null) item(_ListAction.openArtist, Icons.person_rounded, context.tr('GoToArtist')),
       if (recommend != null && vm.friends.canRecommend(tracks))
         item(_ListAction.recommend, Icons.send_rounded, context.tr('Recommend')),
+      if (onShare != null && vm.friends.isAvailable)
+        item(_ListAction.share, Icons.group_add_rounded, context.tr('PlaylistShare')),
       // Hiding or deleting comes last.
       if (removeKey case final key?)
         item(_ListAction.remove, removeIcon, context.tr(key), color: removeIsDanger ? colors.danger : null),
@@ -351,6 +367,8 @@ class ListMenu {
       case _ListAction.recommend:
         final (kind, itemId) = recommend!;
         showRecommendDialog(context, kind: kind, itemId: itemId, label: label);
+      case _ListAction.share:
+        onShare?.call(context);
       case _ListAction.remove:
         onRemove?.call(context);
     }
@@ -559,6 +577,19 @@ class ListMenu {
               icon: Icon(Icons.more_vert_rounded, size: 24, color: context.colors.textMain),
             ),
           ),
+        );
+
+  /// A wide page's "Share…", as a header button of its own; on a phone it is in the top bar's ⋮ ([topBarButton]).
+  Widget? shareButton() => onShare == null
+      ? null
+      : Builder(
+          builder: (context) => !context.vm.friends.isAvailable
+              ? const SizedBox.shrink()
+              : HeaderIconButton(
+                  tooltip: context.tr('PlaylistShare'),
+                  icon: Icons.group_add_rounded,
+                  onPressed: () => _run(context, _ListAction.share),
+                ),
         );
 
   /// A wide page's hide or delete, as a header button of its own beside the others: there is room for it there. On a

@@ -163,6 +163,18 @@ Future<void> confirmLeaveBlend(BuildContext context, Playlist playlist) async {
   if (confirmed && context.mounted) context.vm.playlists.leaveBlend(playlist);
 }
 
+/// Asks before the playlist another account shares is left: it stays theirs.
+Future<void> confirmLeavePlaylist(BuildContext context, Playlist playlist) async {
+  final confirmed = await confirmAction(
+    context,
+    title: context.trf('PlaylistLeaveConfirm', [playlist.name]),
+    message: context.trf('PlaylistLeaveHint', [playlist.sharing.owner?.username ?? '']),
+    confirmLabel: context.tr('PlaylistLeave'),
+    destructive: true,
+  );
+  if (confirmed && context.mounted) context.vm.playlists.deletePlaylist(playlist);
+}
+
 /// Asks before the queue is cleared.
 Future<void> confirmClearQueue(BuildContext context) async {
   final confirmed = await confirmAction(

@@ -306,7 +306,15 @@ class TrackPlayStats {
 
 /// A playlist as the server stores it for one account.
 class PlaylistData {
-  const PlaylistData(this.id, this.name, this.description, this.trackIds, this.createdAt, this.modifiedAt);
+  const PlaylistData(
+    this.id,
+    this.name,
+    this.description,
+    this.trackIds,
+    this.createdAt,
+    this.modifiedAt, [
+    this.sharing = PlaylistSharing.none,
+  ]);
 
   final String id;
   final String name;
@@ -314,6 +322,7 @@ class PlaylistData {
   final List<String> trackIds;
   final DateTime createdAt;
   final DateTime modifiedAt;
+  final PlaylistSharing sharing;
 
   Map<String, Object?> toJson() => {
     'id': id,
@@ -322,6 +331,7 @@ class PlaylistData {
     'trackIds': trackIds,
     'createdAt': formatIsoUtc(createdAt),
     'modifiedAt': formatIsoUtc(modifiedAt),
+    ...sharing.toJson(),
   };
 
   static PlaylistData fromJson(Object? json) {
@@ -333,6 +343,72 @@ class PlaylistData {
       _stringList(map['trackIds']),
       parseIsoUtc(map['createdAt']) ?? DateTime.now().toUtc(),
       parseIsoUtc(map['modifiedAt']) ?? DateTime.now().toUtc(),
+      PlaylistSharing.fromJson(map),
+    );
+  }
+}
+
+/// Who else has a playlist: its [owner] when another account shares it with this one (null for this account's own),
+/// the [members] who joined it, and for its owner the accounts [invited] that haven't yet. Members change its tracks;
+/// only its owner renames or deletes it, and shares it.
+class PlaylistSharing {
+  const PlaylistSharing({this.owner, this.members = const [], this.invited = const []});
+
+  static const PlaylistSharing none = PlaylistSharing();
+
+  final AccountInfo? owner;
+  final List<AccountInfo> members;
+  final List<AccountInfo> invited;
+
+  /// Whether nobody else has it.
+  bool get isEmpty => owner == null && members.isEmpty && invited.isEmpty;
+
+  /// The fields of a playlist's JSON; none for a playlist nobody else has.
+  Map<String, Object?> toJson() => {
+    if (owner case final owner?) 'owner': owner.toJson(),
+    if (members.isNotEmpty) 'members': [for (final a in members) a.toJson()],
+    if (invited.isNotEmpty) 'invited': [for (final a in invited) a.toJson()],
+  };
+
+  /// From a playlist's JSON ([toJson]'s fields), or from [toJson] stored on its own.
+  static PlaylistSharing fromJson(Map<Object?, Object?> map) {
+    List<AccountInfo> accounts(Object? list) => [
+      if (list is List)
+        for (final a in list) AccountInfo.fromJson(a),
+    ];
+    final owner = map['owner'];
+    final sharing = PlaylistSharing(
+      owner: owner == null ? null : AccountInfo.fromJson(owner),
+      members: accounts(map['members']),
+      invited: accounts(map['invited']),
+    );
+    return sharing.isEmpty ? none : sharing;
+  }
+}
+
+/// An invitation to a playlist another account shares: its name and how many tracks it has, to decide by.
+class PlaylistInvite {
+  const PlaylistInvite(this.playlistId, this.name, this.owner, this.trackCount);
+
+  final String playlistId;
+  final String name;
+  final AccountInfo owner;
+  final int trackCount;
+
+  Map<String, Object?> toJson() => {
+    'playlistId': playlistId,
+    'name': name,
+    'owner': owner.toJson(),
+    'trackCount': trackCount,
+  };
+
+  static PlaylistInvite fromJson(Object? json) {
+    final map = _object(json);
+    return PlaylistInvite(
+      _string(map, 'playlistId'),
+      jsonField<String>(map, 'name') ?? '',
+      AccountInfo.fromJson(map['owner']),
+      jsonField<int>(map, 'trackCount') ?? 0,
     );
   }
 }
@@ -484,6 +560,9 @@ abstract final class ErrorCodes {
   static const String playlistDescriptionTooLong = 'playlistDescriptionTooLong'; // with max
   static const String playlistTooManyTracks = 'playlistTooManyTracks'; // with max
   static const String playlistNotFound = 'playlistNotFound';
+  static const String playlistMemberInvalid = 'playlistMemberInvalid';
+  static const String playlistMembersLimit = 'playlistMembersLimit'; // with limit
+  static const String playlistInviteNotFound = 'playlistInviteNotFound';
   static const String invalidPeriod = 'invalidPeriod';
 
   // Recommendations
@@ -518,6 +597,9 @@ abstract final class UserDataRules {
   static const int maxPlaylistDescriptionLength = 1000;
   static const int maxPlaylistTracks = 20000;
   static const int maxPlaylists = 500;
+
+  /// The accounts a playlist can be shared with, invited ones too.
+  static const int maxPlaylistMembers = 50;
   static const int maxFavorites = 100000;
   static const int maxTrackStats = 100000;
   static const int maxHidden = 50000;

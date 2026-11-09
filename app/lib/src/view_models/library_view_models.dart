@@ -878,7 +878,8 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   void deletePlaylist(Playlist playlist) => _library.deletePlaylist(playlist.id);
 
   void startRename() {
-    if (selectedPlaylist?.isAutomatic ?? true) return;
+    // Another account's playlist is its owner's to name.
+    if (selectedPlaylist case null || Playlist(isAutomatic: true) || Playlist(isSharedWithMe: true)) return;
     isEditingName = true;
     notifyListeners();
   }

@@ -7,12 +7,16 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 /// Favourites, play statistics and playlists of each account. They live in the server's database, next to the account
 /// itself, so they follow the person to every device and survive a restart of the server and a sign-out of a player.
-/// Every method takes the account ID from the validated token; nothing here can reach another account's rows. The
-/// limits are part of each insert's SQL, so parallel requests cannot go past them.
+/// Every method takes the account ID from the validated token; nothing here can reach another account's rows, but the
+/// tracks of a playlist its owner shares with that account ([sharePlaylist]). The limits are part of each insert's SQL,
+/// so parallel requests cannot go past them.
 class UserDataService {
   UserDataService(this._db);
 
   final DatabaseManager _db;
+
+  /// Whether the first account blocks the second: an invitation to a playlist from an account it blocks doesn't show.
+  bool Function(String userId, String otherId) blocks = (_, _) => false;
 
   static const String _favoriteInsertSql = '''
     INSERT OR IGNORE INTO user_favorites (user_id, track_id, favorited_at)
@@ -46,14 +50,7 @@ class UserDataService {
         .select('SELECT track_id, play_count, last_played_at FROM user_plays WHERE user_id = ?', [userId])
         .map(_toStats)
         .toList();
-    final playlists = db
-        .select(
-          'SELECT id, name, description, track_ids_json, created_at, modified_at FROM user_playlists '
-          'WHERE user_id = ? ORDER BY name COLLATE NOCASE, id',
-          [userId],
-        )
-        .map(_toPlaylist)
-        .toList();
+    final playlists = playlistsOf(userId);
     final hiddenRows = db.select('SELECT item_type, item_id FROM user_hidden WHERE user_id = ? ORDER BY hidden_at', [
       userId,
     ]);
@@ -154,8 +151,80 @@ class UserDataService {
     );
   }
 
-  /// Creates the playlist or replaces its name, description and tracks. Null when it is new and the account is at its
-  /// playlist limit. The caller has validated the input with [validatePlaylist].
+  /// The playlists [userId] has, by name: its own, with whom it shares each, and the ones others share with it that it
+  /// joined, with their owner and its other members.
+  List<PlaylistData> playlistsOf(String userId) {
+    final db = _db.connection;
+    // Who has each playlist, by its owner and ID: the accounts that joined it and the ones invited.
+    final members = <(String, String), ({List<AccountInfo> joined, List<AccountInfo> invited})>{};
+    for (final row in db.select(
+      'SELECT m.owner_id, m.playlist_id, m.user_id, m.joined_at, u.username FROM playlist_members m '
+      'JOIN users u ON u.id = m.user_id '
+      'WHERE m.owner_id = ?1 OR (m.owner_id, m.playlist_id) IN '
+      '(SELECT owner_id, playlist_id FROM playlist_members WHERE user_id = ?1 AND joined_at IS NOT NULL) '
+      'ORDER BY u.username COLLATE NOCASE',
+      [userId],
+    )) {
+      final entry = members[(row['owner_id'] as String, row['playlist_id'] as String)] ??= (joined: [], invited: []);
+      final account = AccountInfo(row['user_id'] as String, row['username'] as String);
+      (row['joined_at'] == null ? entry.invited : entry.joined).add(account);
+    }
+    final rows = db.select(
+      'SELECT p.user_id, u.username, p.id, p.name, p.description, p.track_ids_json, p.created_at, p.modified_at '
+      'FROM user_playlists p JOIN users u ON u.id = p.user_id '
+      'WHERE p.user_id = ?1 OR (p.user_id, p.id) IN '
+      '(SELECT owner_id, playlist_id FROM playlist_members WHERE user_id = ?1 AND joined_at IS NOT NULL) '
+      'ORDER BY p.name COLLATE NOCASE, p.id',
+      [userId],
+    );
+    return [
+      for (final row in rows)
+        if (row['user_id'] as String case final owner)
+          _toPlaylist(row, switch (members[(owner, row['id'] as String)]) {
+            null => PlaylistSharing.none,
+            final m when owner == userId => PlaylistSharing(members: m.joined, invited: m.invited),
+            final m => PlaylistSharing(
+              owner: AccountInfo(owner, row['username'] as String),
+              members: [
+                for (final account in m.joined)
+                  if (account.id != userId) account,
+              ],
+            ),
+          }),
+    ];
+  }
+
+  /// The owner of the playlist [playlistId] that another account shares with [userId], who joined it; null for none.
+  String? _sharedOwner(String userId, String playlistId) =>
+      _db.connection.select(
+            'SELECT owner_id FROM playlist_members WHERE user_id = ? AND playlist_id = ? AND joined_at IS NOT NULL '
+            'ORDER BY joined_at LIMIT 1',
+            [userId, playlistId],
+          ).firstOrNull?['owner_id']
+          as String?;
+
+  /// Everyone else who has the playlist [playlistId] as [userId] sees it: the members of its own, or the owner and the
+  /// other members of one shared with it. To tell of a change.
+  Set<String> playlistAccounts(String userId, String playlistId) {
+    final own = _db.connection.select('SELECT 1 FROM user_playlists WHERE user_id = ? AND id = ?', [
+      userId,
+      playlistId,
+    ]).isNotEmpty;
+    final owner = own ? userId : _sharedOwner(userId, playlistId);
+    if (owner == null) return const {};
+    return {
+      owner,
+      for (final row in _db.connection.select(
+        'SELECT user_id FROM playlist_members WHERE owner_id = ? AND playlist_id = ? AND joined_at IS NOT NULL',
+        [owner, playlistId],
+      ))
+        row['user_id'] as String,
+    }..remove(userId);
+  }
+
+  /// Creates the playlist or replaces its name, description and tracks; for one another account shares with [userId],
+  /// its tracks only. Null when it is new and the account is at its playlist limit. The caller has validated the input
+  /// with [validatePlaylist].
   PlaylistData? savePlaylist(String userId, String playlistId, PlaylistUpdate update) {
     final db = _db.connection;
     final now = toDbTime(DateTime.now());
@@ -164,7 +233,16 @@ class UserDataService {
     final tracks = jsonEncode(update.trackIds ?? const <String>[]);
 
     db.execute(_playlistUpdateSql, [userId, playlistId, name, description, tracks, now]);
-    if (db.updatedRows == 0) {
+    final updated = db.updatedRows > 0;
+    final sharedBy = updated ? null : _sharedOwner(userId, playlistId);
+    if (sharedBy != null) {
+      db.execute('UPDATE user_playlists SET track_ids_json = ?3, modified_at = ?4 WHERE user_id = ?1 AND id = ?2', [
+        sharedBy,
+        playlistId,
+        tracks,
+        now,
+      ]);
+    } else if (!updated) {
       db.execute(
         'INSERT OR IGNORE INTO user_playlists (user_id, id, name, description, track_ids_json, created_at, modified_at) '
         'SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?6 WHERE (SELECT COUNT(*) FROM user_playlists WHERE user_id = ?1) < ?7',
@@ -173,17 +251,117 @@ class UserDataService {
       if (db.updatedRows == 0) return null;
     }
 
-    final rows = db.select(
-      'SELECT id, name, description, track_ids_json, created_at, modified_at FROM user_playlists WHERE user_id = ? AND id = ?',
-      [userId, playlistId],
-    );
-    return rows.isEmpty ? null : _toPlaylist(rows.first);
+    return playlistsOf(userId).where((p) => p.id == playlistId).firstOrNull;
   }
 
-  bool deletePlaylist(String userId, String playlistId) {
-    _db.connection.execute('DELETE FROM user_playlists WHERE user_id = ? AND id = ?', [userId, playlistId]);
+  /// Deletes [userId]'s playlist, and its sharing; for one another account shares with it, leaves it. False when it
+  /// has neither.
+  bool deletePlaylist(String userId, String playlistId) => _db.transaction((db) {
+    db.execute('DELETE FROM user_playlists WHERE user_id = ? AND id = ?', [userId, playlistId]);
+    if (db.updatedRows > 0) {
+      db.execute('DELETE FROM playlist_members WHERE owner_id = ? AND playlist_id = ?', [userId, playlistId]);
+      return true;
+    }
+    db.execute('DELETE FROM playlist_members WHERE user_id = ? AND playlist_id = ? AND joined_at IS NOT NULL', [
+      userId,
+      playlistId,
+    ]);
+    return db.updatedRows > 0;
+  });
+
+  /// [ownerId] shares its playlist [playlistId] with [memberId] (another account of the server): an invitation, which
+  /// [joinPlaylist] accepts; sharing again changes nothing. Null when it has no such playlist; false when the playlist
+  /// is shared with [UserDataRules.maxPlaylistMembers] already.
+  bool? sharePlaylist(String ownerId, String playlistId, String memberId) => _db.transaction((db) {
+    if (db.select('SELECT 1 FROM user_playlists WHERE user_id = ? AND id = ?', [ownerId, playlistId]).isEmpty) {
+      return null;
+    }
+    db.execute(
+      'INSERT OR IGNORE INTO playlist_members (owner_id, playlist_id, user_id, invited_at) '
+      'SELECT ?1, ?2, ?3, ?4 WHERE (SELECT COUNT(*) FROM playlist_members WHERE owner_id = ?1 AND playlist_id = ?2) < ?5',
+      [ownerId, playlistId, memberId, toDbTime(DateTime.now()), UserDataRules.maxPlaylistMembers],
+    );
+    return db.updatedRows > 0 ||
+        db.select('SELECT 1 FROM playlist_members WHERE owner_id = ? AND playlist_id = ? AND user_id = ?', [
+          ownerId,
+          playlistId,
+          memberId,
+        ]).isNotEmpty;
+  });
+
+  /// [ownerId] stops sharing its playlist [playlistId] with [memberId] (a member or an invitation). False when it had
+  /// not shared it with [memberId].
+  bool unsharePlaylist(String ownerId, String playlistId, String memberId) {
+    _db.connection.execute('DELETE FROM playlist_members WHERE owner_id = ? AND playlist_id = ? AND user_id = ?', [
+      ownerId,
+      playlistId,
+      memberId,
+    ]);
     return _db.connection.updatedRows > 0;
   }
+
+  /// The invitations to playlists [userId] has, the newest first; none from an account it blocks.
+  List<PlaylistInvite> playlistInvites(String userId) => [
+    for (final row in _db.connection.select(
+      'SELECT p.id, p.name, p.track_ids_json, u.id AS owner_id, u.username FROM playlist_members m '
+      'JOIN user_playlists p ON p.user_id = m.owner_id AND p.id = m.playlist_id JOIN users u ON u.id = m.owner_id '
+      'WHERE m.user_id = ? AND m.joined_at IS NULL ORDER BY m.invited_at DESC, p.id',
+      [userId],
+    ))
+      if (!blocks(userId, row['owner_id'] as String))
+        PlaylistInvite(
+          row['id'] as String,
+          row['name'] as String,
+          AccountInfo(row['owner_id'] as String, row['username'] as String),
+          decodeTrackIds(row['track_ids_json']).length,
+        ),
+  ];
+
+  /// [userId] accepts its invitation to [playlistId]: the playlist, as it has it now; null when it has no such
+  /// invitation.
+  PlaylistData? joinPlaylist(String userId, String playlistId) {
+    final owner = playlistInvites(userId).where((i) => i.playlistId == playlistId).firstOrNull?.owner.id;
+    if (owner == null) return null;
+    _db.connection.execute(
+      'UPDATE playlist_members SET joined_at = ? WHERE owner_id = ? AND playlist_id = ? AND user_id = ?',
+      [toDbTime(DateTime.now()), owner, playlistId, userId],
+    );
+    return playlistsOf(userId).where((p) => p.id == playlistId).firstOrNull;
+  }
+
+  /// [userId] turns down its invitation to [playlistId]: the account that invited it, or null when there was none.
+  String? declinePlaylist(String userId, String playlistId) => _db.transaction((db) {
+    final row = db.select(
+      'SELECT owner_id FROM playlist_members WHERE user_id = ? AND playlist_id = ? AND joined_at IS NULL',
+      [userId, playlistId],
+    ).firstOrNull;
+    if (row == null) return null;
+    db.execute('DELETE FROM playlist_members WHERE user_id = ? AND playlist_id = ? AND joined_at IS NULL', [
+      userId,
+      playlistId,
+    ]);
+    return row['owner_id'] as String;
+  });
+
+  /// Ends the sharing of playlists between [userId] and [otherId], either way (one blocked the other). Whether there
+  /// was any.
+  bool endSharing(String userId, String otherId) {
+    _db.connection.execute(
+      'DELETE FROM playlist_members WHERE (owner_id = ?1 AND user_id = ?2) OR (owner_id = ?2 AND user_id = ?1)',
+      [userId, otherId],
+    );
+    return _db.connection.updatedRows > 0;
+  }
+
+  /// The accounts [userId] shares playlists with or has shared ones from, invitations too.
+  Set<String> sharingPartners(String userId) => {
+    for (final row in _db.connection.select(
+      'SELECT CASE WHEN owner_id = ?1 THEN user_id ELSE owner_id END AS other FROM playlist_members '
+      'WHERE owner_id = ?1 OR user_id = ?1',
+      [userId],
+    ))
+      row['other'] as String,
+  };
 
   /// Moves what every account has on tracks to their new IDs ([moved]: old ID -> new ID), for files that were moved or
   /// renamed: favourites, play counts, hidden tracks and playlist entries. All or nothing. Returns the accounts that
@@ -298,12 +476,14 @@ class UserDataService {
     );
   }
 
-  static PlaylistData _toPlaylist(Map<String, Object?> row) => PlaylistData(
-    row['id'] as String,
-    row['name'] as String,
-    row['description'] as String?,
-    decodeTrackIds(row['track_ids_json']),
-    fromDbTime(row['created_at']) ?? DateTime.now().toUtc(),
-    fromDbTime(row['modified_at']) ?? DateTime.now().toUtc(),
-  );
+  static PlaylistData _toPlaylist(Map<String, Object?> row, [PlaylistSharing sharing = PlaylistSharing.none]) =>
+      PlaylistData(
+        row['id'] as String,
+        row['name'] as String,
+        row['description'] as String?,
+        decodeTrackIds(row['track_ids_json']),
+        fromDbTime(row['created_at']) ?? DateTime.now().toUtc(),
+        fromDbTime(row['modified_at']) ?? DateTime.now().toUtc(),
+        sharing,
+      );
 }

@@ -97,7 +97,8 @@ class _FromFriendsList extends StatelessWidget {
         final items = friends.items;
         final invites = friends.invites;
         final blends = friends.blendInvitations;
-        if (items.isEmpty && invites.isEmpty && blends.isEmpty) {
+        final playlists = friends.playlistInvites.items;
+        if (items.isEmpty && invites.isEmpty && blends.isEmpty && playlists.isEmpty) {
           return Padding(
             padding: EdgeInsets.fromLTRB(padding, 8, padding, 8),
             child: Text(context.tr('FromFriendsNone'), style: TextStyle(fontSize: 13, color: colors.textMuted)),
@@ -108,6 +109,7 @@ class _FromFriendsList extends StatelessWidget {
           children: [
             for (final invite in invites) _inviteRow(context, invite),
             for (final blend in blends) _blendRow(context, blend),
+            for (final invite in playlists) _playlistRow(context, invite),
             for (final item in items) _recommendationRow(context, item),
           ],
         );
@@ -167,6 +169,39 @@ class _FromFriendsList extends StatelessWidget {
             iconSize: 18,
             icon: Icon(Icons.close_rounded, color: colors.textMuted),
             onPressed: () => friends.declineBlend(blend),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _playlistRow(BuildContext context, PlaylistInvite invite) {
+    final friends = context.vm.friends;
+    final colors = context.colors;
+    return ListTile(
+      contentPadding: EdgeInsets.only(left: padding, right: padding),
+      leading: CircleAvatar(
+        radius: 22,
+        backgroundColor: colors.accent.withValues(alpha: 0.18),
+        child: Icon(Icons.queue_music_rounded, color: colors.accent),
+      ),
+      title: Text(context.trf('PlaylistInvitedYou', [invite.owner.username, invite.name]), maxLines: 2),
+      subtitle: Text(
+        context.trf('TrackCount', [invite.trackCount]),
+        style: TextStyle(fontSize: 12.5, color: colors.textMuted),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton(
+            onPressed: () => friends.answerPlaylistInvite(invite, join: true),
+            child: Text(context.tr('PlaylistJoin')),
+          ),
+          IconButton(
+            tooltip: context.tr('Remove'),
+            iconSize: 18,
+            icon: Icon(Icons.close_rounded, color: colors.textMuted),
+            onPressed: () => friends.answerPlaylistInvite(invite, join: false),
           ),
         ],
       ),
@@ -236,6 +271,20 @@ Future<void> showBlendInvite(BuildContext context) async {
   await context.vm.friends.inviteToBlend(picked.$1);
 }
 
+/// Shares [playlist] with the friends the user picks (the ones it is shared with already are ticked): they can change
+/// its tracks once they join it from the bell.
+Future<void> showPlaylistShare(BuildContext context, Playlist playlist) async {
+  final picked = await showFriendPicker(
+    context,
+    title: context.tr('PlaylistShare'),
+    subtitle: context.trf('PlaylistShareHint', [playlist.name]),
+    action: context.tr('Save'),
+    chosen: [...playlist.sharing.members, ...playlist.sharing.invited],
+  );
+  if (picked == null || !context.mounted) return;
+  await context.vm.friends.sharePlaylist(playlist, picked.$1);
+}
+
 /// Recommends an artist, an album or a track ([label] in the dialog and the notice) to the friends the user picks.
 Future<void> showRecommendDialog(
   BuildContext context, {
@@ -255,25 +304,33 @@ Future<void> showRecommendDialog(
 }
 
 /// Asks which friends (the server's other accounts) something is for, and with [withNote] what to tell them. Null when
-/// the user cancels.
+/// the user cancels. [chosen] are ticked at first; with them, the user may untick all.
 Future<(List<AccountInfo>, String)?> showFriendPicker(
   BuildContext context, {
   required String title,
   String? subtitle,
   required String action,
   bool withNote = false,
+  List<AccountInfo> chosen = const [],
 }) => showDialog<(List<AccountInfo>, String)>(
   context: context,
-  builder: (_) => _FriendPicker(title: title, subtitle: subtitle, action: action, withNote: withNote),
+  builder: (_) => _FriendPicker(title: title, subtitle: subtitle, action: action, withNote: withNote, chosen: chosen),
 );
 
 class _FriendPicker extends StatefulWidget {
-  const _FriendPicker({required this.title, required this.subtitle, required this.action, required this.withNote});
+  const _FriendPicker({
+    required this.title,
+    required this.subtitle,
+    required this.action,
+    required this.withNote,
+    required this.chosen,
+  });
 
   final String title;
   final String? subtitle;
   final String action;
   final bool withNote;
+  final List<AccountInfo> chosen;
 
   @override
   State<_FriendPicker> createState() => _FriendPickerState();
@@ -281,7 +338,7 @@ class _FriendPicker extends StatefulWidget {
 
 class _FriendPickerState extends State<_FriendPicker> {
   late final Future<List<AccountInfo>> _accounts = context.vm.friends.otherAccounts();
-  final Set<String> _chosen = {};
+  late final Set<String> _chosen = {for (final account in widget.chosen) account.id};
   final TextEditingController _note = TextEditingController();
 
   @override
@@ -346,7 +403,7 @@ class _FriendPickerState extends State<_FriendPicker> {
             TextButton(onPressed: () => Navigator.pop(context), child: Text(context.tr('Cancel'))),
             PressShrink(
               child: FilledButton(
-                onPressed: _chosen.isEmpty
+                onPressed: _chosen.isEmpty && widget.chosen.isEmpty
                     ? null
                     : () => Navigator.pop(context, (
                         [

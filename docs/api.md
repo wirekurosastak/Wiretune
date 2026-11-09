@@ -69,19 +69,30 @@ The signed-in account's favorites, play counts, playlists and hidden items. Thes
 token, and none accepts a stream token.
 
 Limits: 100,000 favorites, 100,000 tracks with play counts, 500 playlists of up to 20,000 tracks, 50,000 hidden items,
-IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000. Over a limit: `409`.
+IDs up to 128 characters, playlist names up to 200, descriptions up to 1,000, 50 accounts a playlist is shared with
+(invited ones too). Over a limit: `409`.
 
 | Route | Role | |
 |---|---|---|
-| `GET /api/me/data` | user | Everything: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. Favorites are in the order they were marked; marking one again keeps its time. `ETag` as on `/api/tracks` |
+| `GET /api/me/data` | user | Everything: `{ "favorites": [trackId], "favoritedAt": { trackId: when }, "plays": [{ "trackId", "playCount", "lastPlayedAt" }], "playlists": [{ "id", "name", "description", "trackIds", "createdAt", "modifiedAt", "owner", "members", "invited" }], "hiddenArtists": [artistId], "hiddenAlbums": [albumId], "hiddenTracks": [trackId] }`. Favorites are in the order they were marked; marking one again keeps its time. `ETag` as on `/api/tracks` |
 | `PUT /api/me/favorites/{trackId}` | user | Marks a favorite (idempotent). `200 { "trackId", "isFavorite": true }`, `400` invalid ID, `409` at the limit |
 | `DELETE /api/me/favorites/{trackId}` | user | Unmarks it. `200 { "trackId", "isFavorite": false }` |
 | `GET /api/me/plays?from=…&to=…` | user | How often the account played each track from `from` until `to` (ISO times): `{ "plays": { trackId: count }, "since" }`, `since` when its play log begins (the log keeps the newest 200,000 plays). `400` `invalidPeriod` |
 | `POST /api/me/plays/{trackId}` | user | Adds a play (also to the play log) and sets the last-played time. `200 { "trackId", "playCount", "lastPlayedAt" }`, `409` at the limit |
-| `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. `200` with the stored playlist, `400` rule violation, `409` at the limit |
-| `DELETE /api/me/playlists/{playlistId}` | user | `200 { "deleted": true }`, `404` unknown ID |
+| `PUT /api/me/playlists/{playlistId}` | user | Creates or replaces a playlist. Body `{ "name", "description", "trackIds" }`. For a playlist shared with the account, only `trackIds` count. `200` with the stored playlist, `400` rule violation, `409` at the limit |
+| `DELETE /api/me/playlists/{playlistId}` | user | Deletes it, with its sharing; leaves one shared with the account. `200 { "deleted": true }`, `404` unknown ID |
+| `PUT /api/me/playlists/{playlistId}/members/{userId}` | user | Shares the account's own playlist with another account: an invitation. Sharing again changes nothing. `200 { "userId", "shared": true }`, `400` `playlistMemberInvalid`, `404` not the account's playlist, `409` `playlistMembersLimit` |
+| `DELETE /api/me/playlists/{playlistId}/members/{userId}` | user | Stops sharing it with that account (a member or an invitation). `200 { "userId", "shared": false }`, `404` |
+| `GET /api/me/playlist-invites` | user | The playlists others share with the account that it hasn't joined, newest first: `[{ "playlistId", "name", "owner": { "id", "username" }, "trackCount" }]`. None from an account it blocks |
+| `POST /api/me/playlist-invites/{playlistId}` | user | Joins it: `200` with the playlist, `404` `playlistInviteNotFound` |
+| `DELETE /api/me/playlist-invites/{playlistId}` | user | Turns it down. `200 { "declined": true }`, `404` `playlistInviteNotFound` |
 | `PUT /api/me/hidden/{type}/{itemId}` | user | Hides an artist, album or track (`type`: `artist`, `album`, `track`). `200 { "itemType", "itemId", "hidden": true }`, `400` invalid type or ID, `409` at the limit |
 | `DELETE /api/me/hidden/{type}/{itemId}` | user | Unhides it. `200 { "itemType", "itemId", "hidden": false }` |
+
+A **shared playlist** stays its owner's. In `/api/me/data`, one shared with the account has `owner` (`{ "id", "username" }`)
+and the other `members`; the owner's own has the `members` who joined and the accounts `invited`. Each is left out when
+there is nobody. A change to a shared playlist sends `dataChanged` to everyone who has it, and an invitation sends
+`playlistInvitesChanged` to the invited account. Blocking ends the sharing between the two accounts, either way.
 
 The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept. A scan that
 finds a moved or renamed file moves the data to the new ID and sends `dataChanged`.
@@ -158,6 +169,7 @@ Every message is a JSON text object with a `type`, at most 64 K characters.
 | `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change, if it sent its device ID in an `X-Wiretune-Device` header with that request |
 | `{ "type": "libraryChanged" }` | server | A scan changed `/api/tracks` or `/api/artists/pictures` (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
 | `{ "type": "accountChanged" }` | server | The account was renamed: download `/api/auth/me` again |
+| `{ "type": "playlistInvitesChanged" }` | server | The account's invitations to playlists changed: download `/api/me/playlist-invites` again. Not sent to the player that made the change, as for `dataChanged` |
 | `{ "type": "blendsChanged" }` | server | The account's Blends changed: one was asked for, accepted or left: download `/api/me/blends` again. Not sent to the player that made the change, as for `dataChanged` |
 | `{ "type": "recommendationsChanged" }` | server | What the account was recommended changed: one came or was taken back, or the bell was opened on another of its players: download `/api/me/recommendations` again. Not sent to the player that made the change, as for `dataChanged` |
 

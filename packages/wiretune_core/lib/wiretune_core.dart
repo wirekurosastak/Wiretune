@@ -30,6 +30,7 @@ export 'src/services/listening_summary.dart';
 export 'src/services/lrc_parser.dart';
 export 'src/services/metadata_scanner.dart';
 export 'src/services/online_lyrics.dart';
+export 'src/services/playlist_invites.dart';
 export 'src/services/recommendations.dart';
 export 'src/services/related.dart';
 export 'src/services/remote_client.dart';

@@ -308,6 +308,29 @@ const Map<String, (String, String, String)> allStrings = {
   'PlaylistDeleteAction': ('Lista törlése', 'Delete playlist', 'Playlist löschen'),
   'PlaylistDeleteConfirm': ('Törlöd a(z) „{0}” listát?', 'Delete the playlist “{0}”?', 'Die Playlist „{0}“ löschen?'),
   'RemoveFromPlaylist': ('Eltávolítás a listából', 'Remove from playlist', 'Aus Playlist entfernen'),
+  'PlaylistShare': ('Megosztás…', 'Share…', 'Teilen…'),
+  'PlaylistShareHint': (
+    'Akivel megosztod, számokat adhat a(z) „{0}” listához és vehet ki belőle.',
+    'Whoever you share “{0}” with can add tracks and remove them.',
+    'Wer „{0}“ von dir geteilt bekommt, kann Titel hinzufügen und entfernen.',
+  ),
+  'PlaylistSharedTo': ('Megosztva vele: {0}', 'Shared with {0}', 'Geteilt mit {0}'),
+  'PlaylistSharedWith': ('Megosztva: {0}', 'Shared with {0}', 'Geteilt mit {0}'),
+  'PlaylistBy': ('{0} listája', 'By {0}', 'Von {0}'),
+  'PlaylistInvitedYou': (
+    '{0} megosztja veled: „{1}”',
+    '{0} shares “{1}” with you',
+    '{0} teilt „{1}“ mit dir',
+  ),
+  'PlaylistJoin': ('Csatlakozás', 'Join', 'Beitreten'),
+  'PlaylistJoined': ('A(z) „{0}” a Listák között van', '“{0}” is in Playlists', '„{0}“ ist unter Playlists'),
+  'PlaylistLeave': ('Kilépés a listából', 'Leave playlist', 'Playlist verlassen'),
+  'PlaylistLeaveConfirm': ('Kilépsz ebből: „{0}”?', 'Leave “{0}”?', '„{0}“ verlassen?'),
+  'PlaylistLeaveHint': (
+    'A lista {0} listája marad.',
+    'It stays {0}’s playlist.',
+    'Sie bleibt die Playlist von {0}.',
+  ),
 
   // ── Search ──────────────────────────────────────────────────────────────────────────────────────────
   'NoResultsTitle': ('Nincs találat', 'No results found', 'Keine Treffer'),
@@ -1353,6 +1376,21 @@ const Map<String, (String, String, String)> allStrings = {
     'Válassz 1–{0} másik fiókot ezen a szerveren.',
     'Choose 1 to {0} other accounts of this server.',
     'Wähle 1 bis {0} andere Konten dieses Servers.',
+  ),
+  'ErrorPlaylistMemberInvalid': (
+    'Válassz egy másik fiókot ezen a szerveren.',
+    'Choose another account of this server.',
+    'Wähle ein anderes Konto dieses Servers.',
+  ),
+  'ErrorPlaylistMembersLimit': (
+    'Egy lista legfeljebb {0} fiókkal osztható meg.',
+    'A playlist can be shared with at most {0} accounts.',
+    'Eine Playlist kann mit höchstens {0} Konten geteilt werden.',
+  ),
+  'ErrorPlaylistInviteNotFound': (
+    'Ez a meghívás már nincs meg.',
+    'That invitation is gone.',
+    'Diese Einladung gibt es nicht mehr.',
   ),
   'ErrorBlendAccountInvalid': (
     'Válassz egy másik fiókot ezen a szerveren.',

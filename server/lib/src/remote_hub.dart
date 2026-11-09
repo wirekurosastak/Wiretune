@@ -68,6 +68,14 @@ class RemoteHub {
     }
   }
 
+  /// Tells the players of [userId] that its invitations to playlists changed: one came, or went; [except] is the one
+  /// that changed it.
+  void playlistInvitesChanged(String userId, {String? except}) {
+    for (final peer in _accounts[userId]?.values ?? const <_Peer>[]) {
+      if (peer.id != except) _send(peer, const {'type': 'playlistInvitesChanged'});
+    }
+  }
+
   /// Tells the players of [userId] that its Blends changed: one was asked for, accepted or left; [except] is the one
   /// that changed it.
   void blendsChanged(String userId, {String? except}) {

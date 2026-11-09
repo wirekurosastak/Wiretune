@@ -129,7 +129,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
     final tracks = playlists.selectedPlaylistTracks;
     final blend = playlists.blendOf(playlist);
 
-    final title = playlist.isAutomatic
+    final title = playlist.isAutomatic || playlist.isSharedWithMe
         ? null
         : playlists.isEditingName
         ? Row(
@@ -233,6 +233,14 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               title: playlist.name,
               titleWidget: title,
               details: [
+                if (playlist.sharing.owner case final owner?)
+                  DetailText(context.trf('PlaylistBy', [owner.username]))
+                else if (playlist.sharing.members.isNotEmpty)
+                  DetailText(
+                    context.trf('PlaylistSharedWith', [
+                      [for (final a in playlist.sharing.members) a.username].join(', '),
+                    ]),
+                  ),
                 DetailText(context.trf('TrackCount', [playlist.trackCount])),
                 if (playlists.selectedPlaylistTotalDuration.isNotEmpty)
                   DetailText(playlists.selectedPlaylistTotalDuration),
@@ -252,6 +260,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
                           isDownloaded: () => context.vm.downloads.isPlaylistDownloaded(playlist),
                           onPressed: () => context.vm.downloads.togglePlaylist(playlist),
                         ),
+                  share: menu.shareButton(),
                   remove: menu.removeButton(),
                 ),
               ],

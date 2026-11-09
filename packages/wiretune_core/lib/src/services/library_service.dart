@@ -500,6 +500,7 @@ class LibraryService {
           createdAt: pl.createdAt,
           modifiedAt: pl.modifiedAt,
           isServer: true,
+          sharing: pl.sharing,
         ),
     ];
 

@@ -152,11 +152,12 @@ class _PopEffectState extends State<PopEffect> {
 
 /// A list's accent-filled, glowing "Play" and the player's shuffle switch beside it ([ShuffleSwitch]: Play starts
 /// the list from its first track, or from any while shuffle is on), then the queue's two ([playNext], [addToQueue]), its
-/// way into a playlist ([addToPlaylist]), the list's [download] and its hide or delete ([remove]): the order of its menu
-/// (`ListMenu`). On a phone Play is round, the largest, at the right edge, and the rest follow it leftwards in that
+/// way into a playlist ([addToPlaylist]), the list's [download], a playlist's [share] and its hide or delete ([remove]):
+/// the order of its menu (`ListMenu`). On a phone Play is round, the largest, at the right edge, and the rest follow it leftwards in that
 /// order: shuffle beside it, then on an album's, an artist's or a playlist's page (the pages with a way into a
 /// playlist) the queue's two, the playlist and the download, spread over the line to the left edge, as in Spotify;
-/// hide or delete is in the top bar's ⋮ there (`ListMenu.topBarButton`). While the queue is [tracks], Play pauses and resumes it ([ListPlayButton]).
+/// share and hide or delete are in the top bar's ⋮ there (`ListMenu.topBarButton`). While the queue is [tracks], Play
+/// pauses and resumes it ([ListPlayButton]).
 class PlayShuffleButtons extends StatelessWidget {
   const PlayShuffleButtons({
     super.key,
@@ -166,6 +167,7 @@ class PlayShuffleButtons extends StatelessWidget {
     this.addToQueue,
     this.addToPlaylist,
     this.download,
+    this.share,
     this.remove,
   });
 
@@ -177,6 +179,9 @@ class PlayShuffleButtons extends StatelessWidget {
   final Widget? addToQueue;
   final Widget? addToPlaylist;
   final Widget? download;
+
+  /// A wide page's "Share…" (a phone has it in the top bar's ⋮).
+  final Widget? share;
   final Widget? remove;
 
   @override
@@ -215,7 +220,7 @@ class PlayShuffleButtons extends StatelessWidget {
     return Wrap(
       spacing: 12,
       runSpacing: 8,
-      children: [play, shuffle, ?playNext, ?addToQueue, ?addToPlaylist, ?download, ?remove],
+      children: [play, shuffle, ?playNext, ?addToQueue, ?addToPlaylist, ?download, ?share, ?remove],
     );
   }
 

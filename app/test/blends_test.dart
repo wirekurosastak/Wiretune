@@ -136,6 +136,10 @@ void main() {
     await tester.tap(find.text(Localizer.format('BlendName', ['anna'])).first);
     await settle(tester);
     expect(find.text(Localizer.format('BlendWaiting', ['anna'])), findsOneWidget);
+
+    await tester.tap(find.text(Localizer.get('Undo')));
+    await serverAnswers(tester);
+    expect(requests.last, 'DELETE /api/me/blends/b-new', reason: 'the invitation taken back');
     await tester.pump(const Duration(seconds: 5)); // the notices go
   });
 }

@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 18;
+  static const int schemaVersion = 19;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -89,6 +89,8 @@ class DatabaseManager {
     _playLogTable,
     // 17 -> 18: the Blends, playlists mixed from two accounts' listening.
     _blendsTable,
+    // 18 -> 19: shared playlists: who an account shares each with (the server), and a player's copy of that.
+    'ALTER TABLE playlists ADD COLUMN sharing TEXT; $_playlistMembersTable',
   ];
 
   final String databasePath;
@@ -222,7 +224,8 @@ const String _schema =
       track_ids_json TEXT NOT NULL,
       created_at INTEGER NOT NULL,
       modified_at INTEGER NOT NULL,
-      is_server INTEGER NOT NULL DEFAULT 0
+      is_server INTEGER NOT NULL DEFAULT 0,
+      sharing TEXT
   );
 
   CREATE TABLE settings (
@@ -276,6 +279,7 @@ const String _schema =
   $_creditLookupsTable
   $_playLogTable
   $_blendsTable
+  $_playlistMembersTable
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
@@ -359,6 +363,20 @@ const String _playLogTable = '''
       played_at INTEGER NOT NULL
   );
   CREATE INDEX user_play_log_time ON user_play_log (user_id, played_at);
+''';
+
+/// The accounts each playlist is shared with (by its owner, `owner_id`): invited (`invited_at`), and from when they
+/// joined (`joined_at`), able to change its tracks.
+const String _playlistMembersTable = '''
+  CREATE TABLE playlist_members (
+      owner_id TEXT NOT NULL,
+      playlist_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      invited_at INTEGER NOT NULL,
+      joined_at INTEGER,
+      PRIMARY KEY (owner_id, playlist_id, user_id)
+  );
+  CREATE INDEX playlist_members_user ON playlist_members (user_id);
 ''';
 
 /// The Blends: [inviter_id] asked [invitee_id] to mix their listening into a playlist, which both have from when the

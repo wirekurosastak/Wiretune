@@ -230,7 +230,7 @@ class AuthService {
   ];
 
   /// Deletes the account together with its favourites, play statistics, playlists, hidden items, the recommendations
-  /// it sent and got, whom it blocked and who blocked it, and its Blends.
+  /// it sent and got, whom it blocked and who blocked it, its Blends, and the sharing of playlists with it.
   bool deleteUser(String userId) => _db.transaction((db) {
     db.execute('DELETE FROM users WHERE id = ?', [userId]);
     final count = db.updatedRows;
@@ -242,6 +242,7 @@ class AuthService {
     db.execute('DELETE FROM recommendations WHERE from_user_id = ?1 OR to_user_id = ?1', [userId]);
     db.execute('DELETE FROM user_blocks WHERE user_id = ?1 OR blocked_user_id = ?1', [userId]);
     db.execute('DELETE FROM blends WHERE inviter_id = ?1 OR invitee_id = ?1', [userId]);
+    db.execute('DELETE FROM playlist_members WHERE owner_id = ?1 OR user_id = ?1', [userId]);
     return count > 0;
   });
 

@@ -394,6 +394,14 @@ class ServerSession {
 
   Future<void> removeRecommendation(String id) => _client.removeRecommendation(serverUrl, id);
 
+  Future<void> setPlaylistMember(String playlistId, String accountId, bool shared) =>
+      _client.setPlaylistMember(serverUrl, playlistId, accountId, shared);
+
+  Future<List<PlaylistInvite>> getPlaylistInvites() => _client.getPlaylistInvites(serverUrl);
+
+  Future<void> answerPlaylistInvite(String playlistId, bool join) =>
+      _client.answerPlaylistInvite(serverUrl, playlistId, join);
+
   Future<List<Blend>> getBlends() => _client.getBlends(serverUrl);
 
   Future<Blend> inviteToBlend(String accountId) => _client.inviteToBlend(serverUrl, accountId);

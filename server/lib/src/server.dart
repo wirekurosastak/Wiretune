@@ -241,6 +241,7 @@ class WiretuneServer {
     server._announcedLibrary = await server._libraryVersion();
     scanner.onScanned = server._scanned;
     library.onTracksMoved = server._tracksMoved;
+    server.userData.blocks = server.blocks.blocks;
 
     final http = server._http = await shelf_io.serve(server.handler, options.host, options.port, securityContext: tls);
     http.autoCompress = false; // JSON is compressed by the handler, audio never
@@ -391,9 +392,14 @@ class WiretuneServer {
         return errorResponse(400, ErrorCodes.cannotDeleteSelf, 'You cannot delete your own account.');
       }
       final partners = blends.partners(userId);
+      final sharers = userData.sharingPartners(userId);
       if (!auth.deleteUser(userId)) return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
       remote.disconnectAccount(userId, 'The account was removed.');
       partners.forEach(remote.blendsChanged); // its Blends went
+      for (final account in sharers) {
+        remote.dataChanged(account); // and its shared playlists, and its invitations
+        remote.playlistInvitesChanged(account);
+      }
       return Response.ok(null);
     }),
     // Every account by its name, for the others to recommend to and listen together with
@@ -522,6 +528,13 @@ class WiretuneServer {
         remote.blendsChanged(call.userId);
         remote.blendsChanged(other);
       }
+      // The playlists either shared with the other go from it.
+      if (userData.endSharing(call.userId, other)) {
+        for (final account in [call.userId, other]) {
+          remote.dataChanged(account);
+          remote.playlistInvitesChanged(account);
+        }
+      }
       return jsonResponse({'userId': other, 'blocked': true});
     }),
     _Route('DELETE', '/api/me/blocked/{userId}', Access.user, (call) {
@@ -560,11 +573,75 @@ class WiretuneServer {
     }),
     _Route('PUT', '/api/me/playlists/{playlistId}', Access.user, _savePlaylist, bodyLimit: _playlistBodyLimit),
     _Route('DELETE', '/api/me/playlists/{playlistId}', Access.user, (call) {
-      if (!userData.deletePlaylist(call.userId, call.params['playlistId']!)) {
+      final playlistId = call.params['playlistId']!;
+      // Told before it goes: the members of one deleted, or the owner and members of one left.
+      final others = userData.playlistAccounts(call.userId, playlistId);
+      final invited = userData.playlistsOf(call.userId).where((p) => p.id == playlistId).firstOrNull?.sharing.invited;
+      if (!userData.deletePlaylist(call.userId, playlistId)) {
         return errorResponse(404, ErrorCodes.playlistNotFound, 'Playlist not found.');
       }
       _dataChanged(call);
+      others.forEach(remote.dataChanged);
+      for (final account in invited ?? const <AccountInfo>[]) {
+        remote.playlistInvitesChanged(account.id);
+      }
       return jsonResponse({'deleted': true});
+    }),
+    // Sharing a playlist: its owner invites another account or stops sharing with it; the account joins or declines
+    _Route('PUT', '/api/me/playlists/{playlistId}/members/{userId}', Access.user, (call) {
+      final playlistId = call.params['playlistId']!;
+      final member = call.params['userId']!;
+      if (member == call.userId || !auth.getAccounts().any((a) => a.id == member)) {
+        return errorResponse(400, ErrorCodes.playlistMemberInvalid, 'Choose another account of this server.');
+      }
+      final shared = userData.sharePlaylist(call.userId, playlistId, member);
+      if (shared == null) return errorResponse(404, ErrorCodes.playlistNotFound, 'Playlist not found.');
+      if (!shared) {
+        return errorResponse(
+          409,
+          ErrorCodes.playlistMembersLimit,
+          'A playlist can be shared with at most ${UserDataRules.maxPlaylistMembers} accounts.',
+          {'limit': UserDataRules.maxPlaylistMembers},
+        );
+      }
+      _dataChanged(call); // whom it is shared with
+      remote.playlistInvitesChanged(member);
+      return jsonResponse({'userId': member, 'shared': true});
+    }),
+    _Route('DELETE', '/api/me/playlists/{playlistId}/members/{userId}', Access.user, (call) {
+      final playlistId = call.params['playlistId']!;
+      final member = call.params['userId']!;
+      final others = userData.playlistAccounts(call.userId, playlistId);
+      if (!userData.unsharePlaylist(call.userId, playlistId, member)) {
+        return errorResponse(404, ErrorCodes.playlistNotFound, 'Playlist not found.');
+      }
+      _dataChanged(call);
+      others.forEach(remote.dataChanged); // the member's playlist goes; the others' list of members changes
+      remote.playlistInvitesChanged(member);
+      return jsonResponse({'userId': member, 'shared': false});
+    }),
+    _Route(
+      'GET',
+      '/api/me/playlist-invites',
+      Access.user,
+      (call) => jsonResponse([for (final invite in userData.playlistInvites(call.userId)) invite.toJson()]),
+    ),
+    _Route('POST', '/api/me/playlist-invites/{playlistId}', Access.user, (call) {
+      final playlistId = call.params['playlistId']!;
+      final joined = userData.joinPlaylist(call.userId, playlistId);
+      if (joined == null) return errorResponse(404, ErrorCodes.playlistInviteNotFound, 'Invitation not found.');
+      // The joining player has it from the answer; the account's other players and everyone else with it are told.
+      remote.dataChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
+      remote.playlistInvitesChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
+      userData.playlistAccounts(call.userId, playlistId).forEach(remote.dataChanged);
+      return jsonResponse(joined.toJson());
+    }),
+    _Route('DELETE', '/api/me/playlist-invites/{playlistId}', Access.user, (call) {
+      final owner = userData.declinePlaylist(call.userId, call.params['playlistId']!);
+      if (owner == null) return errorResponse(404, ErrorCodes.playlistInviteNotFound, 'Invitation not found.');
+      remote.playlistInvitesChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
+      remote.dataChanged(owner); // whom it is shared with
+      return jsonResponse({'declined': true});
     }),
   ];
 
@@ -1070,6 +1147,7 @@ class WiretuneServer {
       );
     }
     _dataChanged(call);
+    userData.playlistAccounts(call.userId, playlistId).forEach(remote.dataChanged); // a shared one's
     return jsonResponse(saved.toJson());
   }
 }

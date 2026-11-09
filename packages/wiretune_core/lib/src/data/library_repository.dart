@@ -215,14 +215,26 @@ class LibraryRepository {
           modifiedAt: fromDbTime(r['modified_at']),
           isServer: _int(r['is_server']) == 1,
           trackIds: decodeTrackIds(r['track_ids_json']),
+          sharing: _sharing(r['sharing']),
         ),
     ];
   }
 
+  /// A playlist's [PlaylistSharing] as stored; none for anything else.
+  static PlaylistSharing _sharing(Object? stored) {
+    if (stored is! String) return PlaylistSharing.none;
+    try {
+      final json = jsonDecode(stored);
+      return json is Map ? PlaylistSharing.fromJson(json) : PlaylistSharing.none;
+    } on FormatException {
+      return PlaylistSharing.none;
+    }
+  }
+
   void savePlaylist(Playlist playlist) {
     _db.connection.execute(
-      'INSERT OR REPLACE INTO playlists (id, name, description, track_ids_json, created_at, modified_at, is_server) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO playlists (id, name, description, track_ids_json, created_at, modified_at, is_server, '
+      'sharing) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [
         playlist.id,
         playlist.name,
@@ -231,6 +243,7 @@ class LibraryRepository {
         toDbTime(playlist.createdAt),
         toDbTime(playlist.modifiedAt),
         playlist.isServer ? 1 : 0,
+        playlist.sharing.isEmpty ? null : jsonEncode(playlist.sharing.toJson()),
       ],
     );
   }

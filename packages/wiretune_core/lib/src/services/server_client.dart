@@ -186,6 +186,25 @@ class ServerClient {
   Future<void> removeRecommendation(String baseUrl, String id) =>
       _send('DELETE', baseUrl, '/api/me/recommendations/${Uri.encodeComponent(id)}');
 
+  /// Shares this account's playlist [playlistId] with [accountId] (an invitation), or stops sharing it ([shared]
+  /// false).
+  Future<void> setPlaylistMember(String baseUrl, String playlistId, String accountId, bool shared) => _send(
+    shared ? 'PUT' : 'DELETE',
+    baseUrl,
+    '/api/me/playlists/${Uri.encodeComponent(playlistId)}/members/${Uri.encodeComponent(accountId)}',
+  );
+
+  /// The invitations to playlists other accounts share with this one, the newest first.
+  Future<List<PlaylistInvite>> getPlaylistInvites(String baseUrl) async {
+    final list = await _send('GET', baseUrl, '/api/me/playlist-invites');
+    if (list is! List) throw ServerRequestException(_notWiretune(), 200);
+    return list.map((i) => _parse(PlaylistInvite.fromJson, i)).toList();
+  }
+
+  /// Joins a playlist another account shares ([join]), or turns its invitation down.
+  Future<void> answerPlaylistInvite(String baseUrl, String playlistId, bool join) =>
+      _send(join ? 'POST' : 'DELETE', baseUrl, '/api/me/playlist-invites/${Uri.encodeComponent(playlistId)}');
+
   /// The Blends this account is in or invited to.
   Future<List<Blend>> getBlends(String baseUrl) async {
     final list = await _send('GET', baseUrl, '/api/me/blends');

@@ -116,6 +116,7 @@ class MainViewModel extends ChangeNotifier {
       Recommendations(session, library, this.remote),
       together,
       blends,
+      PlaylistInvites(session, this.remote),
       notify: (message, {isError = false, undo}) => showNotice(message, isError: isError, undo: undo),
     );
     updates = UpdateViewModel(

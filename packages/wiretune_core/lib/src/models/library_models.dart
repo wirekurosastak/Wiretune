@@ -366,6 +366,7 @@ class Playlist {
     this.isServer = false,
     this.isAutomatic = false,
     List<String>? trackIds,
+    this.sharing = PlaylistSharing.none,
   }) : id = id ?? newId(),
        name = name ?? Localizer.get('PlaylistNew'),
        createdAt = createdAt ?? DateTime.now().toUtc(),
@@ -387,6 +388,13 @@ class Playlist {
 
   /// Replaced (never mutated in place) by the library service, so readers can iterate it safely.
   List<String> trackIds;
+
+  /// Who else has it, for a server playlist: the account that shares it with this one, or whom this one shares it
+  /// with.
+  PlaylistSharing sharing;
+
+  /// Whether another account shares it with this one: its tracks can change, but not its name, and Delete leaves it.
+  bool get isSharedWithMe => sharing.owner != null;
 
   int get trackCount => trackIds.length;
 }

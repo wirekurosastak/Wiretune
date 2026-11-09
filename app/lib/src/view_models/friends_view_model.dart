@@ -14,10 +14,12 @@ class FriendsViewModel extends ChangeNotifier {
     this._library,
     this.recommendations,
     this.together,
-    this.blends, {
+    this.blends,
+    this.playlistInvites, {
     required this.notify,
   }) {
     _unsubscribers.addAll([
+      playlistInvites.changed.listen((_) => notifyListeners()),
       recommendations.changed.listen((_) => notifyListeners()),
       together.changed.listen((_) => notifyListeners()),
       blends.changed.listen((_) => notifyListeners()),
@@ -30,6 +32,7 @@ class FriendsViewModel extends ChangeNotifier {
   final Recommendations recommendations;
   final ListenTogether together;
   final Blends blends;
+  final PlaylistInvites playlistInvites;
 
   /// Shows a notice, with its Undo when given.
   final void Function(String message, {bool isError, VoidCallback? undo}) notify;
@@ -40,7 +43,50 @@ class FriendsViewModel extends ChangeNotifier {
 
   /// What the bell's count says: the recommendations that came since it was opened, and the open invites (to listen
   /// together and to Blends).
-  int get unseenCount => recommendations.unseenCount + invites.length + blendInvitations.length;
+  int get unseenCount =>
+      recommendations.unseenCount + invites.length + blendInvitations.length + playlistInvites.items.length;
+
+  /// Joins a playlist a friend shares ([join]), or turns it down.
+  Future<void> answerPlaylistInvite(PlaylistInvite invite, {required bool join}) async {
+    try {
+      await playlistInvites.answer(invite, join: join);
+      if (join) notify(Localizer.format('PlaylistJoined', [invite.name]));
+    } catch (e) {
+      notify(Localizer.format('ChangeRefused', ['$e']), isError: true);
+    }
+  }
+
+  /// Shares [playlist] with exactly [chosen]: invites the ones it isn't shared with yet, and stops sharing it with the
+  /// others. The notice of new ones has an Undo, which puts back whom it was shared with.
+  Future<void> sharePlaylist(Playlist playlist, List<AccountInfo> chosen, {bool tell = true}) async {
+    final previous = [...playlist.sharing.members, ...playlist.sharing.invited];
+    final before = {for (final a in previous) a.id};
+    final after = {for (final a in chosen) a.id};
+    try {
+      for (final id in after.difference(before)) {
+        await _session.setPlaylistMember(playlist.id, id, true);
+      }
+      for (final id in before.difference(after)) {
+        await _session.setPlaylistMember(playlist.id, id, false);
+      }
+      await _session.refreshUserData(); // whom it is shared with, as the server has it
+      final added = [
+        for (final a in chosen)
+          if (!before.contains(a.id)) a.username,
+      ];
+      if (tell && added.isNotEmpty) {
+        final shared = _library.getPlaylist(playlist.id) ?? playlist;
+        notify(
+          Localizer.format('PlaylistSharedTo', [
+            added.length == 1 ? added.single : Localizer.format('PeopleCount', [added.length]),
+          ]),
+          undo: () => unawaited(sharePlaylist(shared, previous, tell: false)),
+        );
+      }
+    } catch (e) {
+      notify(Localizer.format('ChangeRefused', ['$e']), isError: true);
+    }
+  }
 
   /// The invitations to Blends this account got.
   List<Blend> get blendInvitations => blends.invitations;
@@ -58,14 +104,25 @@ class FriendsViewModel extends ChangeNotifier {
   /// Turns down an invitation to a Blend.
   void declineBlend(Blend blend) => unawaited(blends.leave(blend));
 
-  /// Invites [to] to Blends, one each: theirs once they accept.
+  /// Invites [to] to Blends, one each: theirs once they accept. The notice has an Undo, which takes the new
+  /// invitations back.
   Future<void> inviteToBlend(List<AccountInfo> to) async {
     try {
-      for (final account in to) {
-        await blends.invite(account);
-      }
+      final before = {for (final b in blends.items) b.id};
+      final sent = [
+        for (final account in to) await blends.invite(account),
+      ].where((b) => !before.contains(b.id) && b.state == BlendState.inviting).toList();
       final who = to.length == 1 ? to.single.username : Localizer.format('PeopleCount', [to.length]);
-      notify(Localizer.format('BlendInvited', [who]));
+      notify(
+        Localizer.format('BlendInvited', [who]),
+        undo: sent.isEmpty
+            ? null
+            : () {
+                for (final blend in sent) {
+                  unawaited(blends.leave(blend));
+                }
+              },
+      );
     } catch (e) {
       notify(Localizer.format('ChangeRefused', ['$e']), isError: true);
     }
@@ -189,6 +246,7 @@ class FriendsViewModel extends ChangeNotifier {
       unsubscribe();
     }
     recommendations.dispose();
+    playlistInvites.dispose();
     super.dispose();
   }
 }

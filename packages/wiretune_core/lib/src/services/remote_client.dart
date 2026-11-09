@@ -121,6 +121,9 @@ class RemoteClient {
   /// The account's Blends changed: one was asked for, accepted or left.
   final Event<void> blendsChanged = Event<void>();
 
+  /// The account's invitations to playlists changed: one came or went.
+  final Event<void> playlistInvitesChanged = Event<void>();
+
   /// The account itself changed (it was renamed): ask the server for it again.
   final Event<void> accountChanged = Event<void>();
 
@@ -264,6 +267,7 @@ class RemoteClient {
       libraryChanged.emit(null);
       recommendationsChanged.emit(null);
       blendsChanged.emit(null);
+      playlistInvitesChanged.emit(null);
     }
     _connectedBefore = true;
   }
@@ -392,6 +396,8 @@ class RemoteClient {
         recommendationsChanged.emit(null);
       case 'blendsChanged':
         blendsChanged.emit(null);
+      case 'playlistInvitesChanged':
+        playlistInvitesChanged.emit(null);
       case 'accountChanged':
         accountChanged.emit(null);
       case 'time' || 'listen' || 'listenInvites' || 'listenState' || 'listenCommand':
