@@ -286,6 +286,47 @@ class _HeartIconState extends State<HeartIcon> with SingleTickerProviderStateMix
 /// drawn once a second there.
 Listenable progressOf(PlayerViewModel player) => AppPlatform.current.isMobile ? player.elapsedSeconds : player.position;
 
+/// A thin line, how far the song has played: under the playing track's row over a phone's queue or lyrics, and between
+/// the mini player and the navigation, as YouTube Music has it. On a phone it is drawn once a second ([progressOf]).
+class SongProgressLine extends StatelessWidget {
+  const SongProgressLine({super.key, this.rounded = true});
+
+  /// Its ends rounded; a line across the whole screen has square ones.
+  final bool rounded;
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.vm.player;
+    final colors = context.colors;
+    return ExcludeSemantics(
+      child: ListenableBuilder(
+        listenable: progressOf(player),
+        builder: (context, _) {
+          final total = player.durationSeconds;
+          final done = total <= 0 ? 0.0 : (player.positionSeconds / total).clamp(0.0, 1.0);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(rounded ? 1 : 0),
+            child: SizedBox(
+              height: 2,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ColoredBox(color: colors.palette.surface2),
+                  FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: done,
+                    child: ColoredBox(color: colors.accent),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 /// The position slider with the elapsed and total time.
 class SeekBar extends StatefulWidget {
   const SeekBar({super.key, this.timesBelow = false});
@@ -594,16 +635,65 @@ class _VolumeButtonState extends State<VolumeButton> {
 /// The sleep timer: a menu of times after which the music pauses (or the end of the track), and the moon lit while one
 /// is set. Its tooltip and the menu's title say when.
 class SleepTimerButton extends StatelessWidget {
-  const SleepTimerButton({super.key, this.iconSize = 22, this.dimension = 44});
+  const SleepTimerButton({super.key, this.iconSize = 22, this.dimension = 44, this.onlyWhileSet = false});
 
   final double iconSize;
   final double dimension;
+
+  /// Shown only while a timer is set: where the timer is otherwise chosen from a menu (a phone's player's ⋮).
+  final bool onlyWhileSet;
 
   static const List<int> _minutes = [15, 30, 45, 60];
 
   // The menu's values: minutes, or these two.
   static const int _trackEnd = -1;
   static const int _off = 0;
+
+  /// When the music pauses, as the timer's title says it; null while no timer is set.
+  static String? statusOf(BuildContext context) {
+    final player = context.vm.player;
+    final at = player.sleepAt;
+    if (at != null) {
+      return context.trf('SleepTimerAt', [
+        MaterialLocalizations.of(context).formatTimeOfDay(
+          TimeOfDay.fromDateTime(at),
+          alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
+        ),
+      ]);
+    }
+    return player.sleepsAtTrackEnd ? context.tr('SleepTimerAtTrackEnd') : null;
+  }
+
+  static void _choose(BuildContext context, int? value) {
+    final player = context.vm.player;
+    switch (value) {
+      case null:
+        return;
+      case _trackEnd:
+        player.sleepAtTrackEnd();
+      case _off:
+        player.setSleepTimer(null);
+      case final minutes:
+        player.setSleepTimer(Duration(minutes: minutes));
+    }
+  }
+
+  /// The phone's sheet of times, within the thumb's reach.
+  static Future<void> showSheet(BuildContext context) async {
+    final player = context.vm.player;
+    final status = statusOf(context);
+    final value = await showChoiceSheet<int>(
+      context,
+      title: status ?? context.tr('SleepTimer'),
+      choices: [
+        for (final minutes in _minutes) SheetChoice(minutes, context.trf('SleepTimerMinutes', [minutes])),
+        if (!player.isRemote)
+          SheetChoice(_trackEnd, context.tr('SleepTimerTrackEnd'), selected: player.sleepsAtTrackEnd),
+        if (status != null) SheetChoice(_off, context.tr('SleepTimerOff')),
+      ],
+    );
+    if (context.mounted) _choose(context, value);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -612,33 +702,14 @@ class SleepTimerButton extends StatelessWidget {
     return ListenableBuilder(
       listenable: player,
       builder: (context, _) {
-        final at = player.sleepAt;
-        final status = at != null
-            ? context.trf('SleepTimerAt', [
-                MaterialLocalizations.of(context).formatTimeOfDay(
-                  TimeOfDay.fromDateTime(at),
-                  alwaysUse24HourFormat: MediaQuery.alwaysUse24HourFormatOf(context),
-                ),
-              ])
-            : (player.sleepsAtTrackEnd ? context.tr('SleepTimerAtTrackEnd') : null);
+        final status = statusOf(context);
+        if (onlyWhileSet && status == null) return const SizedBox.shrink();
         final icon = Icon(
           status != null ? Icons.bedtime_rounded : Icons.bedtime_outlined,
           color: status != null ? colors.accent : colors.textMain,
         );
-        void choose(int? value) {
-          switch (value) {
-            case null:
-              return;
-            case _trackEnd:
-              player.sleepAtTrackEnd();
-            case _off:
-              player.setSleepTimer(null);
-            case final minutes:
-              player.setSleepTimer(Duration(minutes: minutes));
-          }
-        }
+        void choose(int? value) => _choose(context, value);
 
-        // A phone's opens as a sheet, within the thumb's reach.
         if (PhoneChrome.isPhone(context)) {
           return SizedBox.square(
             dimension: dimension,
@@ -646,18 +717,7 @@ class SleepTimerButton extends StatelessWidget {
               tooltip: status ?? context.tr('SleepTimer'),
               iconSize: iconSize,
               icon: icon,
-              onPressed: () async => choose(
-                await showChoiceSheet<int>(
-                  context,
-                  title: status ?? context.tr('SleepTimer'),
-                  choices: [
-                    for (final minutes in _minutes) SheetChoice(minutes, context.trf('SleepTimerMinutes', [minutes])),
-                    if (!player.isRemote)
-                      SheetChoice(_trackEnd, context.tr('SleepTimerTrackEnd'), selected: player.sleepsAtTrackEnd),
-                    if (status != null) SheetChoice(_off, context.tr('SleepTimerOff')),
-                  ],
-                ),
-              ),
+              onPressed: () => showSheet(context),
             ),
           );
         }
@@ -716,7 +776,13 @@ class FavoriteCurrentButton extends StatelessWidget {
           visualDensity: visualDensity,
           tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
           iconSize: size,
-          onPressed: player.currentTrack == null ? null : player.toggleFavoriteCurrent,
+          // A tap you can feel, as the heart pops; taking it away is asked first.
+          onPressed: track == null
+              ? null
+              : () {
+                  unawaited(HapticFeedback.lightImpact());
+                  unawaited(toggleFavoriteAsked(context, track));
+                },
           icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.favorite : colors.textMuted),
         );
       },

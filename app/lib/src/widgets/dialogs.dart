@@ -3,6 +3,7 @@
 
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -173,6 +174,22 @@ Future<void> confirmLeavePlaylist(BuildContext context, Playlist playlist) async
     destructive: true,
   );
   if (confirmed && context.mounted) context.vm.playlists.deletePlaylist(playlist);
+}
+
+/// Adds [track] to the favorites, or takes it out of them after asking, as TIDAL asks.
+Future<void> toggleFavoriteAsked(BuildContext context, Track track) async {
+  final library = context.vm.library;
+  if (library.isFavorite(track.id)) {
+    final confirmed = await confirmAction(
+      context,
+      title: context.trf('UnfavoriteConfirm', [track.title]),
+      message: context.tr('TrackStaysInLibrary'),
+      confirmLabel: context.tr('Remove'),
+      destructive: true,
+    );
+    if (!confirmed || !context.mounted) return;
+  }
+  library.toggleFavorite(track.id);
 }
 
 /// Asks before the queue is cleared.
@@ -403,63 +420,94 @@ Future<T?> showChoiceSheet<T extends Object>(
   String? note,
 }) => showChoiceSections(context, sections: [(title: title, choices: choices)], note: note);
 
-/// [showChoiceSheet] with several [sections] of choices, each under its own title (a list's sort and its genre): the
-/// value of the one tapped, whichever section it is in.
+/// [showChoiceSheet] with several [sections] of choices, each under its own title: the value of the one tapped,
+/// whichever section it is in.
 Future<T?> showChoiceSections<T extends Object>(
   BuildContext context, {
-  required List<({String title, List<SheetChoice<T>> choices})> sections,
+  required List<ChoiceSection<T>> sections,
   String? note,
-}) {
-  final colors = context.colors;
-  return showPhoneSheet<T>(
-    context,
-    builder: (sheet) => [
-      for (final (i, (:title, :choices)) in sections.indexed) ...[
-        Padding(
-          // A section after the first stands an empty line apart from the one above.
-          padding: EdgeInsets.fromLTRB(24, i == 0 ? 8 : 36, 24, 8),
-          child: Text(
-            title,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-          ),
+}) => showPhoneSheet<T>(
+  context,
+  builder: (sheet) => _choices(sheet, sections, note, (value) => Navigator.pop(sheet, value)),
+);
+
+/// Choices under a title in a [showChoiceSections].
+typedef ChoiceSection<T extends Object> = ({String title, List<SheetChoice<T>> choices});
+
+/// [showChoiceSections] that stays open while choices are made (a list's sort and its genre): each tap goes to
+/// [onChoose] at once, and the sheet shows [sections] as they are now, the list under it following. It closes as any
+/// sheet does: a tap beside it, a swipe down, Back.
+Future<void> showLiveChoiceSections<T extends Object>(
+  BuildContext context, {
+  required ValueListenable<List<ChoiceSection<T>>> sections,
+  required ValueChanged<T> onChoose,
+}) => showPhoneSheet<void>(
+  context,
+  builder: (sheet) => [
+    ValueListenableBuilder(
+      valueListenable: sections,
+      builder: (context, sections, _) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _choices(sheet, sections, null, onChoose),
+      ),
+    ),
+  ],
+);
+
+List<Widget> _choices<T extends Object>(
+  BuildContext sheet,
+  List<ChoiceSection<T>> sections,
+  String? note,
+  ValueChanged<T> onTap,
+) {
+  final colors = sheet.colors;
+  return [
+    for (final (i, (:title, :choices)) in sections.indexed) ...[
+      Padding(
+        // A section after the first stands an empty line apart from the one above.
+        padding: EdgeInsets.fromLTRB(24, i == 0 ? 8 : 36, 24, 8),
+        child: Text(
+          title,
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
         ),
-        for (final choice in choices)
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-            leading:
-                choice.picture ??
-                (choice.icon == null
-                    ? null
-                    : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted)),
-            title: Text(
-              choice.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: choice.selected ? FontWeight.w700 : FontWeight.w500,
-                color: choice.selected ? colors.accent : colors.textMain,
-              ),
+      ),
+      for (final choice in choices)
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+          leading:
+              choice.picture ??
+              (choice.icon == null
+                  ? null
+                  : Icon(choice.icon, color: choice.selected ? colors.accent : colors.textMuted)),
+          title: Text(
+            choice.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: choice.selected ? FontWeight.w700 : FontWeight.w500,
+              color: choice.selected ? colors.accent : colors.textMain,
             ),
-            subtitle: choice.subtitle == null
-                ? null
-                : Text(
-                    choice.subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12.5, color: colors.textMuted),
-                  ),
-            trailing: choice.selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
-            onTap: () => Navigator.pop(sheet, choice.value),
           ),
-      ],
-      if (note != null)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-          child: Text(note, style: TextStyle(fontSize: 12.5, height: 1.4, color: colors.textMuted)),
+          subtitle: choice.subtitle == null
+              ? null
+              : Text(
+                  choice.subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12.5, color: colors.textMuted),
+                ),
+          trailing: choice.selected ? Icon(Icons.check_rounded, color: colors.accent) : null,
+          onTap: () => onTap(choice.value),
         ),
     ],
-  );
+    if (note != null)
+      Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+        child: Text(note, style: TextStyle(fontSize: 12.5, height: 1.4, color: colors.textMuted)),
+      ),
+  ];
 }
 
 /// A ⋮ menu on a phone, as a sheet ([showPhoneSheet]): what it is for on top, [cover] ([round]: an artist's picture),
@@ -471,41 +519,51 @@ Future<T?> showMenuSheet<T>(
   required String title,
   String? subtitle,
   required List<PopupMenuEntry<T>> items,
+  VoidCallback? onOpen,
 }) {
   final colors = context.colors;
   return showPhoneSheet<T>(
     context,
     builder: (sheet) => [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-        child: Row(
-          children: [
-            SizedBox.square(dimension: menuSheetCoverSize, child: cover),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
-                  ),
-                  if (subtitle != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.5, color: colors.textMuted),
-                      ),
+      // A tap on the top opens what the menu is for ([onOpen]): its page, as a tap on its row does.
+      InkWell(
+        onTap: onOpen == null
+            ? null
+            : () {
+                Navigator.pop(sheet);
+                onOpen();
+              },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          child: Row(
+            children: [
+              SizedBox.square(dimension: menuSheetCoverSize, child: cover),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
                     ),
-                ],
+                    if (subtitle != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13.5, color: colors.textMuted),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       Divider(height: 16, color: colors.glassBorder),

@@ -12,6 +12,7 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../view_models/search_view_model.dart';
 import '../widgets/badges.dart';
+import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/page_parts.dart';
@@ -38,9 +39,11 @@ class SearchResults extends StatelessWidget {
       listenable: search,
       builder: (context, _) {
         if (!search.hasQuery) {
-          return EmptyState(icon: Icons.search, title: context.tr('Search'));
+          final recent = search.recent;
+          if (recent.isEmpty) return EmptyState(icon: Icons.search, title: context.tr('Search'));
+          return _RecentSearches(recent: recent);
         }
-        if (!search.hasResults) {
+        if (!search.hasResults && search.filter == null) {
           return EmptyState(
             icon: Icons.search_off_rounded,
             title: context.tr('NoResultsTitle'),
@@ -82,10 +85,24 @@ class SearchResults extends StatelessWidget {
       return TileRow(tileWidth: layout.tileWidth, extent: layout.extent, children: children);
     }
 
-    // No title: the search field above shows what was searched for. The results start where a page's title would.
+    // No title: the search field above shows what was searched for. The results start where a page's title would,
+    // under the kinds they can be narrowed to.
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(child: SizedBox(height: narrow ? 8 : 28)),
+        SliverToBoxAdapter(child: SizedBox(height: narrow ? 8 : 24)),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.only(bottom: narrow ? 12 : 20),
+            child: _Filters(search: search, padding: pad),
+          ),
+        ),
+        if (!search.hasResults)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: pad,
+              child: Text(context.tr('NoResultsTitle'), style: TextStyle(color: context.colors.textMuted)),
+            ),
+          ),
         if (best != null && sideBySide)
           SliverToBoxAdapter(
             child: Padding(
@@ -237,6 +254,85 @@ class SearchResults extends StatelessWidget {
 
   static Widget _label(BuildContext context, String key, double inset) =>
       SectionLabel(context.tr(key), padding: EdgeInsets.fromLTRB(inset + 4, 28, 4, 12));
+}
+
+/// The kinds the results narrow to, as pills like Settings' choices (the chosen one filled), sliding sideways where
+/// they don't fit: all of them, or the artists, the albums, the tracks or the playlists alone.
+class _Filters extends StatelessWidget {
+  const _Filters({required this.search, required this.padding});
+
+  final SearchViewModel search;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    const style = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(0, 34)),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16)),
+    );
+    Widget pill(SearchFilter? filter, String key) {
+      final label = Text(context.tr(key));
+      return search.filter == filter
+          ? PressShrink(
+              child: FilledButton(style: style, onPressed: () => search.setFilter(filter), child: label),
+            )
+          : OutlinedButton(style: style, onPressed: () => search.setFilter(filter), child: label);
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: padding,
+      child: Row(
+        spacing: 8,
+        children: [
+          pill(null, 'SearchAll'),
+          pill(SearchFilter.artists, 'NavArtists'),
+          pill(SearchFilter.albums, 'NavAlbums'),
+          pill(SearchFilter.tracks, 'NavTracks'),
+          pill(SearchFilter.playlists, 'NavPlaylists'),
+        ],
+      ),
+    );
+  }
+}
+
+/// What was searched for lately on this device, in place of the results while nothing is typed: a tap searches it
+/// again, × forgets it.
+class _RecentSearches extends StatelessWidget {
+  const _RecentSearches({required this.recent});
+
+  final List<String> recent;
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final colors = context.colors;
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    return ListView(
+      padding: EdgeInsets.fromLTRB(narrow ? 8 : 22, narrow ? 8 : 28, narrow ? 8 : 22, 24),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: SectionLabel(context.tr('RecentSearches'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 6)),
+        ),
+        for (final query in recent)
+          ListTile(
+            contentPadding: const EdgeInsets.only(left: 8),
+            leading: Icon(Icons.history_rounded, color: colors.textMuted),
+            title: Text(query, maxLines: 1, overflow: TextOverflow.ellipsis),
+            onTap: () {
+              vm.openSearch();
+              vm.searchQuery = query;
+            },
+            trailing: IconButton(
+              tooltip: context.tr('Remove'),
+              icon: Icon(Icons.close_rounded, size: 20, color: colors.textMuted),
+              onPressed: () => vm.search.forget(query),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// The best match: a 116 px cover, its type, title and details, a play button and its ⋮, on a card 320 px wide; the

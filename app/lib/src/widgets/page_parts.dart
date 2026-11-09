@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
 import '../localization.dart';
@@ -165,9 +166,14 @@ class TabPageList extends StatelessWidget {
     required this.header,
     this.columnHeaders,
     required this.slivers,
+    this.scrollLabel,
   });
 
   final String title;
+
+  /// On a phone, a long list gets a thumb to drag it by ([FastScroller]); this names where it is (the first letter of
+  /// the row there), at a part of the way down. Null for none.
+  final String? Function(double fraction)? scrollLabel;
 
   /// Keeps the list's place while another tab is on show.
   final String storageKey;
@@ -197,9 +203,12 @@ class TabPageList extends StatelessWidget {
           ],
         );
         // Elsewhere the bar is the page alone, but still brings it back to its top.
+        final label = scrollLabel;
         return PinnedTitleBar(
           title: title,
-          child: phone || !apart
+          child: phone && label != null
+              ? FastScroller(label: label, child: list)
+              : phone || !apart
               ? list
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -695,8 +704,8 @@ class _PhonePageHeader extends StatelessWidget {
     final colors = context.colors;
     final buttons = PinnedTitleBar.hasBar(context) ? null : _topButtons(context);
     final titleStyle = TextStyle(
-      fontSize: 30,
-      letterSpacing: -0.8,
+      fontSize: 27,
+      letterSpacing: -0.7,
       fontWeight: FontWeight.w800,
       color: colors.textMain,
     );
@@ -783,13 +792,13 @@ Widget _fading(BuildContext context, String text) {
   );
 }
 
-/// A phone tab page's buttons at the top right: what friends sent, the way to another device (also while nothing plays
-/// here, with no mini player then), the search and the account (not on the Settings page: nothing to search there, and
-/// the account button leads to it).
+/// A phone tab page's buttons at the top right: what friends sent, the way to another device (only while no track is
+/// loaded: else it is in the full-screen player), the search and the account (not on the Settings page: nothing to
+/// search there, and the account button leads to it).
 List<Widget> _topButtons(BuildContext context, {ValueListenable<double>? pullIn}) {
   final vm = context.vm;
   final colors = context.colors;
-  const devices = DevicesButton(dimension: PinnedTitleBar.buttonSize, iconSize: 23);
+  const devices = DevicesButton(dimension: PinnedTitleBar.buttonSize, iconSize: 23, whileNothingLoaded: true);
   const bell = FriendsButton(dimension: PinnedTitleBar.buttonSize, iconSize: 24);
   // While the page is pulled towards the search, the bell and the cast button move along into the search's place.
   Widget along(Widget child) => pullIn == null
@@ -1030,8 +1039,12 @@ class _PinnedTitleBarState extends State<PinnedTitleBar> {
     _unsubscribe = context.vm.scrollToTopRequested.listen((_) => _scrollToTop());
   }
 
-  /// Where what the bar measured is kept: beside the place of its page's list, under the same key.
-  Object? get _storageId => switch (widget.child.key) {
+  /// Where what the bar measured is kept: beside the place of its page's list, under the same key (the list's own, under
+  /// its thumb).
+  Object? get _storageId => switch ((switch (widget.child) {
+    FastScroller(:final child) => child,
+    final child => child,
+  }).key) {
     PageStorageKey(:final value) => (PinnedTitleBar, value),
     _ => null,
   };
@@ -1904,4 +1917,191 @@ class _HoverBorderState extends State<_HoverBorder> {
       child: widget.builder(border),
     );
   }
+}
+
+/// A long list's thumb at a phone's right edge, as the music apps have: it shows while the list scrolls and fades a
+/// moment after it stops; dragged, it takes the list there, a bubble saying where ([label]: the first letter of the row
+/// there, ticking as it changes). Only a list some screens long has it, and only the thumb itself takes a touch: the
+/// rows' buttons under the edge stay within reach.
+class FastScroller extends StatefulWidget {
+  const FastScroller({super.key, required this.label, required this.child});
+
+  final String? Function(double fraction) label;
+  final Widget child;
+
+  /// How many screens long a list is at least to have it.
+  static const double longEnough = 4;
+
+  @override
+  State<FastScroller> createState() => _FastScrollerState();
+}
+
+class _FastScrollerState extends State<FastScroller> {
+  static const double _thumbHeight = 52, _touchWidth = 36, _bubble = 60;
+
+  ScrollPosition? _position;
+
+  /// How far down the list is, and whether the thumb shows; the thumb follows them, the list doesn't build again.
+  final ValueNotifier<double> _fraction = ValueNotifier(0);
+  final ValueNotifier<bool> _shown = ValueNotifier(false);
+
+  /// What the bubble says while the thumb is held; null while it isn't.
+  final ValueNotifier<String?> _bubbleText = ValueNotifier(null);
+  Timer? _hide;
+
+  @override
+  void dispose() {
+    _hide?.cancel();
+    _fraction.dispose();
+    _shown.dispose();
+    _bubbleText.dispose();
+    super.dispose();
+  }
+
+  bool _onScroll(ScrollNotification notification) {
+    final metrics = notification.metrics;
+    if (notification.depth != 0 || metrics.axis != Axis.vertical) return false;
+    final context = notification.context;
+    if (context != null) _position = Scrollable.maybeOf(context)?.position;
+    if (metrics.maxScrollExtent < metrics.viewportDimension * FastScroller.longEnough) {
+      _shown.value = false;
+      return false;
+    }
+    _fraction.value = (metrics.pixels / metrics.maxScrollExtent).clamp(0.0, 1.0);
+    if (notification is ScrollUpdateNotification || _bubbleText.value != null) {
+      _shown.value = true;
+      _hideLater();
+    }
+    return false;
+  }
+
+  void _hideLater() {
+    _hide?.cancel();
+    _hide = Timer(const Duration(milliseconds: 1400), () {
+      if (_bubbleText.value == null) _shown.value = false;
+    });
+  }
+
+  void _drag(double y, double track) {
+    final position = _position;
+    if (position == null || !position.hasContentDimensions) return;
+    final fraction = ((y - _thumbHeight / 2) / math.max(1, track - _thumbHeight)).clamp(0.0, 1.0);
+    position.jumpTo(fraction * position.maxScrollExtent);
+    final text = widget.label(fraction);
+    if (text != _bubbleText.value && _bubbleText.value != null) unawaited(HapticFeedback.selectionClick());
+    _bubbleText.value = text ?? '';
+  }
+
+  void _release() {
+    _bubbleText.value = null;
+    _hideLater();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final padding = MediaQuery.paddingOf(context);
+    final top = padding.top + PinnedTitleBar.height + 8;
+    final bottom = padding.bottom + 8;
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: Stack(
+        children: [
+          widget.child,
+          Positioned(
+            top: top,
+            bottom: bottom,
+            right: 0,
+            width: _touchWidth + _bubble + 16,
+            child: LayoutBuilder(
+              builder: (context, box) => ValueListenableBuilder<bool>(
+                valueListenable: _shown,
+                builder: (context, shown, _) => IgnorePointer(
+                  ignoring: !shown,
+                  child: AnimatedOpacity(
+                    opacity: shown ? 1 : 0,
+                    duration: const Duration(milliseconds: 220),
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _fraction,
+                      builder: (context, fraction, _) {
+                        final y = fraction * math.max(0, box.maxHeight - _thumbHeight);
+                        return Stack(
+                          children: [
+                            Positioned(
+                              right: 0,
+                              top: y,
+                              width: _touchWidth,
+                              height: _thumbHeight,
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onVerticalDragStart: (details) => _drag(y + details.localPosition.dy, box.maxHeight),
+                                onVerticalDragUpdate: (details) => _drag(y + details.localPosition.dy, box.maxHeight),
+                                onVerticalDragEnd: (_) => _release(),
+                                onVerticalDragCancel: _release,
+                                child: Center(
+                                  child: ValueListenableBuilder<String?>(
+                                    valueListenable: _bubbleText,
+                                    builder: (context, held, _) => Container(
+                                      width: 6,
+                                      height: _thumbHeight - 8,
+                                      decoration: BoxDecoration(
+                                        color: held != null ? colors.accent : colors.textMuted.withValues(alpha: 0.7),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            ValueListenableBuilder<String?>(
+                              valueListenable: _bubbleText,
+                              builder: (context, text, _) => text == null || text.isEmpty
+                                  ? const SizedBox.shrink()
+                                  : Positioned(
+                                      right: _touchWidth + 8,
+                                      top: y + _thumbHeight / 2 - _bubble / 2,
+                                      width: _bubble,
+                                      height: _bubble,
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(color: colors.accent, shape: BoxShape.circle),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10),
+                                          // A year fits too.
+                                          child: FittedBox(
+                                            child: Text(
+                                              text,
+                                              maxLines: 1,
+                                              style: TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.w800,
+                                                color: colors.onAccent,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The letter a list of names shows for [text] while dragged by its thumb: its first, without accents, in capitals; # for
+/// one that starts with a digit or a sign.
+String scrollLetter(String text) {
+  final folded = foldForSearch(text.trim());
+  if (folded.isEmpty) return '#';
+  final first = folded[0].toUpperCase();
+  return RegExp(r'\p{L}', unicode: true).hasMatch(first) ? first : '#';
 }

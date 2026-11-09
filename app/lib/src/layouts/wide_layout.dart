@@ -35,6 +35,7 @@ import '../widgets/nav_visualizer.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/spectrum_visualizer.dart';
 import '../widgets/track_list.dart';
+import '../widgets/track_info.dart';
 import '../widgets/tv_focus.dart';
 import '../widgets/update_banner.dart';
 
@@ -711,6 +712,13 @@ class _Header extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const FriendsButton(iconSize: 21, dimension: 40),
+                // The way to another device while the player bar, which has it otherwise, is out of sight.
+                ListenableBuilder(
+                  listenable: context.vm.player,
+                  builder: (context, _) => context.vm.player.isRemote
+                      ? const SizedBox.shrink()
+                      : const DevicesButton(iconSize: 20, dimension: 40, whileNothingLoaded: true),
+                ),
                 const SizedBox(width: 8),
                 _HeaderModes(compact: compact),
                 if (frameless) const _WindowButtons(),
@@ -1213,7 +1221,7 @@ class _Sidebar extends StatelessWidget {
           builder: (context, _) {
             final library = vm.library;
             Widget item(AppSection section, String label, int? count, {bool autofocus = false}) => _SidebarItem(
-              selected: vm.selectedSection == section && !vm.isSearchActive && !vm.player.isQueueOpen,
+              selected: vm.selectedTab == section && !vm.isSearchActive && !vm.player.isQueueOpen,
               icon: sectionIcon(section),
               label: label,
               count: count,
@@ -1602,14 +1610,18 @@ class _PlayerBar extends StatelessWidget {
                           if (showTag) ...[
                             ConstrainedBox(
                               constraints: BoxConstraints(maxWidth: room),
-                              child: QualityTag(
-                                tier: track.format.tier,
-                                spec: track.format.tagSpec,
-                                details: [
-                                  if (PlayerTags.bitrateShown(track.format))
-                                    context.trf('BitrateKbps', [track.format.bitrateKbps]),
-                                  if (track.bpm case final bpm? when bpm > 0) '$bpm BPM',
-                                ].join(' · '),
+                              // A click tells more: the file and the way it takes to the speakers.
+                              child: GestureDetector(
+                                onTap: () => showTrackInfo(context),
+                                child: QualityTag(
+                                  tier: track.format.tier,
+                                  spec: track.format.tagSpec,
+                                  details: [
+                                    if (PlayerTags.bitrateShown(track.format))
+                                      context.trf('BitrateKbps', [track.format.bitrateKbps]),
+                                    if (track.bpm case final bpm? when bpm > 0) '$bpm BPM',
+                                  ].join(' · '),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 8),

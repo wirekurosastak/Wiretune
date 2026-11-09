@@ -141,7 +141,7 @@ class _QueueEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => EmptyState(
-    icon: Icons.playlist_play_rounded,
+    icon: Icons.format_list_bulleted_rounded,
     title: context.tr('QueueEmptyTitle'),
     hint: context.tr('QueueEmptyHint'),
   );
@@ -197,7 +197,7 @@ class _QueueRowState extends State<_QueueRow> {
     final track = item.track;
     final current = item.isCurrent;
     final phone = PhoneChrome.isPhone(context);
-    final cover = phone ? 56.0 : 42.0;
+    final cover = phone ? 52.0 : 42.0;
     Widget small(
       IconData icon,
       String tip,
@@ -307,7 +307,7 @@ class _QueueRowState extends State<_QueueRow> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              fontSize: phone ? 16 : 13.5,
+                              fontSize: phone ? 15 : 13.5,
                               fontWeight: phone ? FontWeight.w600 : FontWeight.w700,
                               color: current ? colors.hover : colors.textMain,
                             ),
@@ -317,7 +317,7 @@ class _QueueRowState extends State<_QueueRow> {
                             track.artist,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: phone ? 13.5 : 11.5, color: colors.textMuted),
+                            style: TextStyle(fontSize: phone ? 13 : 11.5, color: colors.textMuted),
                           ),
                         ],
                       ),
@@ -778,6 +778,7 @@ class QueueLyricsPanel extends StatelessWidget {
                       ],
                     ),
                   ),
+                  const SaveQueueButton(),
                   PopEffect(
                     enabled: count > 0,
                     glowColor: colors.danger,
@@ -817,6 +818,29 @@ class QueueLyricsPanel extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Puts the queue's tracks into a playlist, a new one or one there is (the playlist dialog's choice), in the queue's
+/// order: beside the queue's Clear.
+class SaveQueueButton extends StatelessWidget {
+  const SaveQueueButton({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final player = context.vm.player;
+    return IconButton(
+      tooltip: context.tr('SaveQueueAsPlaylist'),
+      icon: const Icon(Icons.playlist_add_rounded, size: 22),
+      onPressed: player.queueTracks.isEmpty
+          ? null
+          : () => showAddToPlaylistDialog(
+              context,
+              player.queueTracks,
+              label: context.tr('Queue'),
+              suggestedName: player.playingFrom ?? context.tr('Queue'),
+            ),
     );
   }
 }

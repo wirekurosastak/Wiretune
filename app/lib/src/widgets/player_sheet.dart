@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
@@ -32,6 +33,25 @@ class PlayerSheet {
 
   /// The mini player's cover, out of which the full-screen player's flies as it opens, and back into it ([RisingPlayer]).
   final GlobalKey miniCover = GlobalKey();
+
+  /// The mini player, out of which the full-screen player grows; and the navigation under it, with the room below it,
+  /// which goes down out of sight meanwhile ([navigationSlide]). Where they are at rest.
+  final GlobalKey miniBar = GlobalKey();
+  final GlobalKey navigation = GlobalKey();
+
+  /// How far down the navigation is, as a part of its height: all of it while the player is open.
+  late final Animation<Offset> navigationSlide = position.drive(Tween(begin: Offset.zero, end: const Offset(0, 1)));
+
+  /// How far the player's top goes from closed to open: from the mini player's top to the screen's; the whole
+  /// [screenHeight] without a mini player.
+  double travel(double screenHeight) => _rectOf(miniBar)?.top.clamp(1.0, screenHeight) ?? screenHeight;
+
+  /// Where [key]'s box is on the screen, at rest; null while it isn't laid out.
+  static Rect? _rectOf(GlobalKey key) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.attached || !box.hasSize) return null;
+    return box.localToGlobal(Offset.zero) & box.size;
+  }
 
   /// The full-screen player's cover, where the mini player's flies to ([PlayerSheetCover.own]).
   _PlayerSheetCoverState? _artwork;
@@ -148,8 +168,8 @@ class _PlayerSheetDragState extends State<PlayerSheetDrag> {
           _other = other != null && other.takes(delta);
           if (_other == false) sheet?._start();
         }
-        // The player's top goes the screen's whole height, so it keeps with the finger.
-        _other! ? other!.move(delta) : sheet?._move(delta, height);
+        // The player's top goes from the mini player's to the screen's, so it keeps with the finger.
+        _other! ? other!.move(delta) : sheet?._move(delta, sheet.travel(height));
       },
       onVerticalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
@@ -169,10 +189,11 @@ class _PlayerSheetDragState extends State<PlayerSheetDrag> {
   }
 }
 
-/// The full-screen player as it opens and closes: it rises from the screen's bottom as far as the [sheet] is open
-/// (under a finger, as far as the finger has taken it), the corners of its top rounded while it moves, as a window's;
-/// and its cover flies out of the mini player's into its place, and back into it as the player goes down
-/// ([CoverFlightBetween]).
+/// The full-screen player as it opens and closes, as YouTube Music's does: it grows out of the mini player as far as the
+/// [sheet] is open (under a finger, as far as the finger has taken it), its top rising to the screen's while its bottom
+/// goes down with the navigation; solid from the first frame, as YouTube Music's, its controls coming on only on the
+/// last part of the way ([NowPlayingPage]'s). Its cover flies out of the mini player's into its place inside it, and back into it as the
+/// player goes down ([CoverFlightBetween]).
 class RisingPlayer extends StatefulWidget {
   const RisingPlayer({super.key, required this.sheet, required this.cover, required this.child});
 
@@ -190,12 +211,6 @@ class _RisingPlayerState extends State<RisingPlayer> {
   /// The player itself, unmoved: where its cover's place is measured in.
   final GlobalKey _player = GlobalKey();
 
-  /// The corners of its top while it moves, as a window's.
-  static const double _radius = 32;
-
-  /// The last part of the way open, over which they straighten (where the screen's own rounded corners are).
-  static const double _straighten = 0.15;
-
   /// Where [context]'s box is in [within]'s, as drawn (smaller, for a paused track's cover); null while it isn't laid
   /// out.
   static Rect? _rectOf(BuildContext? context, RenderObject? within) {
@@ -208,24 +223,28 @@ class _RisingPlayerState extends State<RisingPlayer> {
   Widget build(BuildContext context) {
     final sheet = widget.sheet;
     final t = sheet.position.value;
-    final corner = Radius.circular(_radius * ((1 - t) / _straighten).clamp(0.0, 1.0));
     // The mini player's cover where it is now; the player's own where it is once open (until the player is laid out,
     // the mini player's: the first frame's flight hasn't left it).
     final from = sheet.coverFlies ? _rectOf(sheet.miniCover.currentContext, context.findRenderObject()) : null;
     final to = from == null
         ? null
         : _rectOf(sheet._artwork?.context, _player.currentContext?.findRenderObject()) ?? from;
+    final height = MediaQuery.sizeOf(context).height;
+    final navigation = PlayerSheet._rectOf(sheet.navigation);
+    final window = Rect.fromLTRB(
+      0,
+      sheet.travel(height) * (1 - t),
+      double.infinity,
+      navigation == null ? height : math.min(height, navigation.top + navigation.height * t),
+    );
     return Stack(
       fit: StackFit.expand,
       children: [
-        FractionalTranslation(
-          translation: Offset(0, 1 - t),
-          child: ClipRRect(
-            borderRadius: BorderRadius.vertical(top: corner),
-            // Always there (the player under it stays as it is), clipping only while the corners are round.
-            clipBehavior: corner == Radius.zero ? Clip.none : Clip.antiAlias,
-            child: RepaintBoundary(key: _player, child: widget.child),
-          ),
+        ClipRect(
+          // Always there (the player under it stays as it is), clipping only while it isn't the whole screen.
+          clipper: _Window(window),
+          clipBehavior: t < 1 ? Clip.hardEdge : Clip.none,
+          child: RepaintBoundary(key: _player, child: widget.child),
         ),
         if (from != null && to != null)
           CoverFlightBetween(
@@ -239,6 +258,19 @@ class _RisingPlayerState extends State<RisingPlayer> {
       ],
     );
   }
+}
+
+/// The part of the screen the opening player shows.
+class _Window extends CustomClipper<Rect> {
+  const _Window(this.rect);
+
+  final Rect rect;
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTRB(0, rect.top, size.width, math.min(rect.bottom, size.height));
+
+  @override
+  bool shouldReclip(_Window oldClipper) => oldClipper.rect != rect;
 }
 
 /// [child], a cover the full-screen player's flies out of or into: the mini player's, or the player's [own], where it

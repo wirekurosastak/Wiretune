@@ -95,6 +95,7 @@ class TracksPage extends StatelessWidget {
         return TabPageList(
           title: context.tr('NavTracks'),
           storageKey: 'tracks',
+          scrollLabel: (fraction) => _trackScrollLabel(page.tracks, page.sortField, fraction),
           header: PageHeader(
             title: context.tr('NavTracks'),
             subtitle: '${context.trf('TrackCount', [page.tracks.length])}  •  ${page.totalDuration}',
@@ -109,7 +110,13 @@ class TracksPage extends StatelessWidget {
           ),
           columnHeaders: TrackColumnHeaders(sorting: page),
           slivers: [
-            TrackSliver(tracks: page.tracks, sorting: page, columnHeaders: false, playingFrom: page.playingFrom),
+            TrackSliver(
+              tracks: page.tracks,
+              sorting: page,
+              columnHeaders: false,
+              playingFrom: page.playingFrom,
+              playingSource: page.section,
+            ),
             const PageEndSpace(),
           ],
         );
@@ -139,6 +146,7 @@ class FavoritesPage extends StatelessWidget {
         return TabPageList(
           title: context.tr('NavFavorites'),
           storageKey: 'favorites',
+          scrollLabel: (fraction) => _trackScrollLabel(favorites.tracks, favorites.sortField, fraction),
           header: PageHeader(
             title: context.tr('NavFavorites'),
             subtitle: '${context.trf('TrackCount', [favorites.tracks.length])}  •  ${favorites.totalDuration}',
@@ -177,6 +185,7 @@ class FavoritesPage extends StatelessWidget {
               sorting: favorites,
               columnHeaders: false,
               playingFrom: favorites.playingFrom,
+              playingSource: favorites.section,
             ),
             const PageEndSpace(),
           ],
@@ -553,13 +562,61 @@ typedef GenreChoice = ({List<String> genres, String? selected, ValueChanged<Stri
 /// The sort buttons of a list page ("Sort by: ABC ↑ | Released") as one segmented pill; the active segment is filled with
 /// the accent. On a phone one pill holds the sort and the [genre] filter together ("ABC ↑ · Jazz"), opening one sheet
 /// with both, so the line keeps room for Play and the rest; a wider screen has the genre's own button beside these.
-class SortButtons extends StatelessWidget {
+class SortButtons extends StatefulWidget {
   const SortButtons({super.key, required this.buttons, this.genre});
 
   final List<(String label, bool selected, VoidCallback onTap)> buttons;
 
   /// The genre filter a phone's pill holds too; null, or no genres, for none.
   final GenreChoice? genre;
+
+  @override
+  State<SortButtons> createState() => _SortButtonsState();
+}
+
+class _SortButtonsState extends State<SortButtons> {
+  /// What a phone's open sheet shows: the sorts and the genres as the page has them now.
+  late final ValueNotifier<List<ChoiceSection<Object>>> _sheet = ValueNotifier(const []);
+
+  List<(String label, bool selected, VoidCallback onTap)> get buttons => widget.buttons;
+  GenreChoice? get genre => widget.genre;
+
+  @override
+  void didUpdateWidget(SortButtons oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // After the frame: the sheet is another route, not to be rebuilt while this one builds.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _sheet.value = _sections(context);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sheet.dispose();
+    super.dispose();
+  }
+
+  /// A sort's number or a genre's name ('' for all of them), under their titles.
+  List<ChoiceSection<Object>> _sections(BuildContext context) {
+    final genres = genre?.genres ?? const <String>[];
+    final chosenGenre = genre?.selected;
+    return [
+      (
+        title: context.tr('SortBy'),
+        choices: [
+          for (final (i, (label, selected, _)) in buttons.indexed) SheetChoice<Object>(i, label, selected: selected),
+        ],
+      ),
+      if (genres.isNotEmpty)
+        (
+          title: context.tr('Genre'),
+          choices: [
+            SheetChoice<Object>('', context.tr('AllGenres'), selected: chosenGenre == null),
+            for (final g in genres) SheetChoice<Object>(g, g, selected: equalsIgnoreCase(g, chosenGenre)),
+          ],
+        ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -584,34 +641,21 @@ class SortButtons extends StatelessWidget {
               side: BorderSide(color: colors.glassBorder),
               shape: const StadiumBorder(),
             ),
-            onPressed: () async {
-              // A sort's number or a genre's name ('' for all of them).
-              final chosen = await showChoiceSections<Object>(
+            // The sheet stays open while a sort and a genre are chosen, the list behind following each choice.
+            onPressed: () {
+              _sheet.value = _sections(context);
+              showLiveChoiceSections<Object>(
                 context,
-                sections: [
-                  (
-                    title: context.tr('SortBy'),
-                    choices: [
-                      for (final (i, (label, selected, _)) in buttons.indexed)
-                        SheetChoice<Object>(i, label, selected: selected),
-                    ],
-                  ),
-                  if (genres.isNotEmpty)
-                    (
-                      title: context.tr('Genre'),
-                      choices: [
-                        SheetChoice<Object>('', context.tr('AllGenres'), selected: chosenGenre == null),
-                        for (final g in genres) SheetChoice<Object>(g, g, selected: equalsIgnoreCase(g, chosenGenre)),
-                      ],
-                    ),
-                ],
+                sections: _sheet,
+                onChoose: (chosen) {
+                  switch (chosen) {
+                    case final int sort:
+                      buttons[sort].$3();
+                    case final String name:
+                      genre?.onSelected(name.isEmpty ? null : name);
+                  }
+                },
               );
-              switch (chosen) {
-                case final int sort:
-                  buttons[sort].$3();
-                case final String name:
-                  genre?.onSelected(name.isEmpty ? null : name);
-              }
             },
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -809,6 +853,12 @@ class AlbumsPage extends StatelessWidget {
         return TabPageList(
           title: context.tr('NavAlbums'),
           storageKey: 'albums',
+          scrollLabel: (fraction) => _scrollLabel(albums.displayedAlbums, fraction, switch (albums.sortField) {
+            AlbumSortField.title => (Album album) => scrollLetter(album.title),
+            AlbumSortField.artist => (Album album) => scrollLetter(album.artist),
+            AlbumSortField.released => (Album album) => album.releaseYear?.toString(),
+            _ => null,
+          }),
           header: PageHeader(
             title: context.tr('NavAlbums'),
             subtitle: context.trf('AlbumCount', [albums.displayedAlbums.length]),
@@ -898,7 +948,12 @@ class AlbumDetail extends StatelessWidget {
               ],
             ),
           ),
-          TrackSliver(tracks: album.tracks, kind: TrackTableKind.album, playingFrom: () => album.title),
+          TrackSliver(
+            tracks: album.tracks,
+            kind: TrackTableKind.album,
+            playingFrom: () => album.title,
+            playingSource: album,
+          ),
           _AlbumFooter(album: album),
           _albumShelf(context, context.trf('LabelMoreBy', [album.artist]), Related.moreByOf(album, vm.library.albums)),
           _albumShelf(context, context.tr('LabelSimilarAlbums'), Related.albumsOf(album, vm.library.albums)),
@@ -925,7 +980,8 @@ Widget _albumShelf(BuildContext context, String title, List<Album> albums) {
 }
 
 /// The end of an album's page, as in TIDAL: its label and its ℗ line, in small type, as its tracks give them (a label
-/// the server looked up counts; [TrackDetails.releaseLines]); nothing when they give neither.
+/// the server looked up counts; [TrackDetails.releaseLines]); nothing when they give neither. A tap on them lists the
+/// label's albums in the library.
 class _AlbumFooter extends StatelessWidget {
   const _AlbumFooter({required this.album});
 
@@ -933,28 +989,121 @@ class _AlbumFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String? first(String? Function(TrackDetails details) field) =>
-        album.tracks.map((track) => field(track.details)).nonNulls.firstOrNull;
+    final label = labelOf(album);
     final lines = TrackDetails.releaseLines(
-      label: first((d) => d.label),
-      copyright: first((d) => d.copyright),
+      label: label,
+      copyright: album.tracks.map((track) => track.details.copyright).nonNulls.firstOrNull,
       year: album.releaseYear,
     );
     if (lines.isEmpty) return const SliverToBoxAdapter();
     final edge = PhoneChrome.isPhone(context) ? PhoneChrome.edge : 30.0;
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in lines)
+          Text(line, style: TextStyle(fontSize: 12.5, height: 1.5, color: context.colors.textMuted)),
+      ],
+    );
     return SliverPadding(
-      padding: EdgeInsets.fromLTRB(edge, 20, edge, 0),
+      padding: EdgeInsets.fromLTRB(edge - 6, 14, edge - 6, 0),
       sliver: SliverToBoxAdapter(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final line in lines)
-              Text(line, style: TextStyle(fontSize: 12.5, height: 1.5, color: context.colors.textMuted)),
-          ],
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: label == null
+              ? Padding(padding: const EdgeInsets.all(6), child: text)
+              : InkWell(
+                  borderRadius: BorderRadius.circular(Radii.small),
+                  onTap: () => showLabelAlbums(context, label),
+                  child: Padding(padding: const EdgeInsets.all(6), child: text),
+                ),
         ),
       ),
     );
   }
+
+  /// The label [album]'s tracks name (or the server looked up); null when none does.
+  static String? labelOf(Album album) =>
+      album.tracks.map((track) => track.details.label?.trim()).where((l) => l != null && l.isNotEmpty).firstOrNull;
+}
+
+/// The library's albums on the record label [label], newest first, each leading to its page: a sheet on a phone, a
+/// dialog elsewhere.
+Future<void> showLabelAlbums(BuildContext context, String label) async {
+  final vm = context.vm;
+  final albums = vm.library.albums.where((album) => equalsIgnoreCase(_AlbumFooter.labelOf(album), label)).toList()
+    ..sort((a, b) => (b.releaseYear ?? 0).compareTo(a.releaseYear ?? 0));
+  Widget list(BuildContext context, VoidCallback close) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      for (final album in albums)
+        InkWell(
+          borderRadius: BorderRadius.circular(Radii.medium),
+          onTap: () {
+            close();
+            vm.openAlbum(album);
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: Row(
+              children: [
+                CoverImage(path: album.coverArtPath, size: 48, placeholderIcon: Icons.album),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        album.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: context.colors.textMain),
+                      ),
+                      Text(
+                        [album.artist, if (album.releaseYear case final year?) '$year'].join(' • '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12.5, color: context.colors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+  final count = context.trf('AlbumCount', [albums.length]);
+  if (PhoneChrome.isPhone(context)) {
+    await showPhoneSheet<void>(
+      context,
+      builder: (sheet) => [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 2),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: sheet.colors.textMain),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+          child: Text(count, style: TextStyle(fontSize: 13, color: sheet.colors.textMuted)),
+        ),
+        Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8), child: list(sheet, () => Navigator.pop(sheet))),
+      ],
+    );
+    return;
+  }
+  await showDialog<void>(
+    context: context,
+    builder: (dialog) => AppDialog(
+      title: label,
+      subtitle: count,
+      content: DialogScroll(maxHeight: 460, child: list(dialog, () => Navigator.pop(dialog))),
+      actions: [TextButton(onPressed: () => Navigator.pop(dialog), child: Text(dialog.tr('Close')))],
+    ),
+  );
 }
 
 // ── Artists ─────────────────────────────────────────────────────────────────────────────────────────
@@ -976,6 +1125,11 @@ class ArtistsPage extends StatelessWidget {
         return TabPageList(
           title: context.tr('NavArtists'),
           storageKey: 'artists',
+          scrollLabel: (fraction) => _scrollLabel(
+            artists.displayedArtists,
+            fraction,
+            artists.sortField == ArtistSortField.name ? (Artist artist) => scrollLetter(artist.name) : null,
+          ),
           header: PageHeader(
             title: context.tr('NavArtists'),
             subtitle: context.trf('ArtistCount', [artists.displayedArtists.length]),
@@ -1016,6 +1170,12 @@ class ArtistDetail extends StatelessWidget {
     final narrow = DetailHeader.isNarrow(context);
     final albumTracks = [for (final album in albums) ...album.tracks];
     final menu = ListMenu.artist(artist, onPlay: artists.playArtist);
+    // The artist's tracks this account played most, as Spotify puts its popular ones first: from its own plays.
+    final mostPlayed =
+        (artist.tracks.where((t) => vm.library.playCount(t.id) > 0).toList()
+              ..sort((a, b) => vm.library.playCount(b.id).compareTo(vm.library.playCount(a.id))))
+            .take(5)
+            .toList();
     return PinnedTitleBar(
       title: artist.name,
       onBack: artists.closeArtistDetail,
@@ -1056,11 +1216,29 @@ class ArtistDetail extends StatelessWidget {
               ],
             ),
           ),
+          if (mostPlayed.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
+                child: SectionLabel(context.tr('LabelYourMostPlayed'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 8)),
+              ),
+            ),
+            TrackSliver(
+              tracks: mostPlayed,
+              kind: TrackTableKind.artist,
+              columnHeaders: false,
+              playingFrom: () => artist.name,
+              playingSource: artist,
+            ),
+          ],
           if (albums.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
-                child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 10)),
+                child: SectionLabel(
+                  context.tr('LabelAlbums'),
+                  padding: EdgeInsets.fromLTRB(4, mostPlayed.isEmpty ? 4 : 24, 4, 10),
+                ),
               ),
             ),
             AlbumsSliver(albums: albums, onOpen: vm.openAlbum, onPlay: vm.albums.playAlbum, withArtist: false),
@@ -1071,7 +1249,12 @@ class ArtistDetail extends StatelessWidget {
               child: SectionLabel(context.tr('LabelAllTracks'), padding: const EdgeInsets.fromLTRB(4, 24, 4, 8)),
             ),
           ),
-          TrackSliver(tracks: artist.tracks, kind: TrackTableKind.artist, playingFrom: () => artist.name),
+          TrackSliver(
+            tracks: artist.tracks,
+            kind: TrackTableKind.artist,
+            playingFrom: () => artist.name,
+            playingSource: artist,
+          ),
           Builder(
             builder: (context) {
               final related = Related.artistsOf(artist, vm.library.artists, vm.library.tracks);
@@ -1093,3 +1276,20 @@ class ArtistDetail extends StatelessWidget {
     );
   }
 }
+
+/// What a list's thumb says at [fraction] of the way down [items] ([FastScroller]): [labelOf] the item there; nothing
+/// for an order without one.
+String? _scrollLabel<T>(List<T> items, double fraction, String? Function(T item)? labelOf) {
+  if (items.isEmpty || labelOf == null) return null;
+  return labelOf(items[(fraction * (items.length - 1)).round()]);
+}
+
+/// [_scrollLabel] for tracks in the order of [field]: a name's first letter, or the year.
+String? _trackScrollLabel(List<Track> tracks, TrackSortField field, double fraction) =>
+    _scrollLabel(tracks, fraction, switch (field) {
+      TrackSortField.title => (Track track) => scrollLetter(track.title),
+      TrackSortField.artist => (Track track) => scrollLetter(track.artist),
+      TrackSortField.album => (Track track) => scrollLetter(track.album),
+      TrackSortField.released => (Track track) => track.releaseYear?.toString(),
+      _ => null,
+    });

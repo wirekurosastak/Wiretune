@@ -180,6 +180,11 @@ class PlayerViewModel extends ChangeNotifier {
   String? get playingFrom => _playingFrom?.call();
   String Function()? _playingFrom;
 
+  /// What the queue was played from, for the way back to it: an [Album], an [Artist], a [Playlist], or the section of a
+  /// page of tracks (Tracks, Favorites); null when that isn't known.
+  Object? get playingSource => _playingSource;
+  Object? _playingSource;
+
   /// Artist of the current track, or a hint when nothing is loaded.
   String get nowPlayingArtist => currentTrack?.artist ?? Localizer.get('ChooseMusic');
 
@@ -446,6 +451,12 @@ class PlayerViewModel extends ChangeNotifier {
   bool _isGaplessEnabled = true;
 
   /// Whether the next entry starts without a gap; on by default. Off, each track is opened after the last one ended.
+  /// Autoplay: when the queue runs out, music like what played last goes on ([autoplayTracks]); on by default.
+  bool isAutoplayEnabled = true;
+
+  /// How many tracks autoplay adds at a time.
+  static const int autoplayCount = 20;
+
   bool get isGaplessEnabled => _isGaplessEnabled;
   set isGaplessEnabled(bool value) {
     if (_isGaplessEnabled == value) return;
@@ -484,8 +495,8 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   /// Replaces the queue with [tracks] and starts [startTrack] (the first track, or a random one when shuffling). [from]
-  /// names what they are ([playingFrom]).
-  void playQueue(Iterable<Track> tracks, [Track? startTrack, String Function()? from]) {
+  /// names what they are ([playingFrom]), and [source] is what they come from ([playingSource]).
+  void playQueue(Iterable<Track> tracks, [Track? startTrack, String Function()? from, Object? source]) {
     _leaveForOwnMusic();
     _playingFor = null; // this account's own music again
     if (isRemote) {
@@ -499,6 +510,7 @@ class PlayerViewModel extends ChangeNotifier {
     }
     _playQueueInternal(tracks, startTrack);
     _playingFrom = from;
+    _playingSource = from == null ? null : source;
     notifyListeners();
   }
 
@@ -594,6 +606,7 @@ class PlayerViewModel extends ChangeNotifier {
     final list = tracks.toList();
     if (list.isEmpty) return;
     _playingFrom = null;
+    _playingSource = null;
     _originalQueue
       ..clear()
       ..addAll(list);
@@ -724,6 +737,8 @@ class PlayerViewModel extends ChangeNotifier {
       _playAt(_queueIndex + 1);
     } else if (_repeat == RepeatMode.all) {
       _playAt(0);
+    } else if (_autoplays && _autoplayAppended()) {
+      _playAt(_queueIndex + 1);
     } else {
       _queueIndex = _playbackQueue.length; // past the end: nothing is current any more
       _updateQueueState();
@@ -1097,7 +1112,68 @@ class PlayerViewModel extends ChangeNotifier {
       _playAt(_queueIndex);
     } else if (_queueIndex < _playbackQueue.length - 1 || _repeat == RepeatMode.all) {
       _nextTrackLocal();
+    } else if (_autoplays && _autoplayAppended()) {
+      // The queue ran out: music like it goes on. With nothing like it, the last track stays, stopped.
+      _playAt(_queueIndex + 1);
     }
+  }
+
+  /// Adds autoplay's tracks to the end of the queue and says it plays from Autoplay; false when there are none.
+  bool _autoplayAppended() {
+    final tracks = autoplayTracks(_playbackQueue);
+    if (tracks.isEmpty) return false;
+    _playbackQueue.addAll(tracks);
+    _originalQueue.addAll(tracks);
+    _updateQueueState();
+    _playingFrom = () => Localizer.get('Autoplay');
+    _playingSource = null;
+    return true;
+  }
+
+  /// Whether the end of the queue goes on with autoplay: it is on, and the queue is this account's own (not a group's
+  /// that another player leads, nor another account's playing here).
+  bool get _autoplays => isAutoplayEnabled && _hostState == null && _playingFor == null;
+
+  /// Tracks like the last ones of [queue] to go on with, up to [autoplayCount]: from their artists' other albums, the
+  /// albums like theirs and the artists like theirs ([Related]), a few of each album, none already in [queue] or
+  /// hidden; in a random order.
+  List<Track> autoplayTracks(List<Track> queue, {math.Random? random}) {
+    final seeds = queue.reversed.take(5).toList();
+    final queued = {for (final track in queue) track.id};
+    final albums = _library.albums;
+    final candidates = <Track>[];
+    void add(Iterable<Track> tracks) {
+      for (final track in tracks) {
+        if (!queued.contains(track.id) && !_library.isTrackHidden(track)) candidates.add(track);
+      }
+    }
+
+    for (final seed in seeds) {
+      final album = _library.getAlbumForTrack(seed);
+      if (album != null) {
+        for (final other in [...Related.moreByOf(album, albums), ...Related.albumsOf(album, albums)]) {
+          add(other.tracks);
+        }
+      }
+      final artist = _library.getArtistByName(seed.primaryArtist);
+      if (artist != null) {
+        for (final other in Related.artistsOf(artist, _library.artists, _library.tracks)) {
+          add(other.tracks);
+        }
+      }
+    }
+    final rng = random ?? math.Random();
+    candidates.shuffle(rng);
+    final perAlbum = <String, int>{};
+    final picked = <String>{};
+    return [
+      for (final track in candidates)
+        if (picked.length < autoplayCount &&
+            !picked.contains(track.id) &&
+            (perAlbum[track.albumId] = (perAlbum[track.albumId] ?? 0) + 1) <= 3 &&
+            picked.add(track.id))
+          track,
+    ];
   }
 
   void _setPosition(Duration value) {

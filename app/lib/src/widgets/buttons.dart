@@ -367,14 +367,18 @@ class HeaderIconButton extends StatefulWidget {
   const HeaderIconButton({
     super.key,
     required this.tooltip,
-    required this.icon,
+    this.icon,
+    this.glyph,
     required this.onPressed,
     this.color,
     this.progress,
-  });
+  }) : assert(icon != null || glyph != null);
 
   final String tooltip;
-  final IconData icon;
+
+  /// What it shows: Material's [icon], or a [glyph] of the app's own (drawn in the button's size and colour).
+  final IconData? icon;
+  final Widget? glyph;
   final VoidCallback onPressed;
   final Color? color;
   final double? progress;
@@ -409,12 +413,18 @@ class _HeaderIconButtonState extends State<HeaderIconButton> {
         splashFactory: NoSplash.splashFactory,
       ),
       onPressed: widget.onPressed,
-      icon: Icon(
-        widget.icon,
-        size: 22,
-        color: iconColor,
-        shadows: _hover ? [BoxShadow(color: iconColor.withValues(alpha: 0.7), blurRadius: 14)] : null,
-      ),
+      icon: switch (widget.glyph) {
+        final glyph? => IconTheme.merge(
+          data: IconThemeData(size: 22, color: iconColor),
+          child: glyph,
+        ),
+        null => Icon(
+          widget.icon,
+          size: 22,
+          color: iconColor,
+          shadows: _hover ? [BoxShadow(color: iconColor.withValues(alpha: 0.7), blurRadius: 14)] : null,
+        ),
+      },
     );
     return PopEffect(
       child: MouseRegion(

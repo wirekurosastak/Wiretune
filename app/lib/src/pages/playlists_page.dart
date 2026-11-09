@@ -291,6 +291,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               kind: TrackTableKind.playlist,
               onReorder: playlists.canReorder ? playlists.moveTrack : null,
               playingFrom: () => playlist.name,
+              playingSource: playlist,
             ),
           const PageEndSpace(),
         ],

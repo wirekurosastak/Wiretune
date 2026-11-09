@@ -50,10 +50,14 @@ const String _leaveEntry = '\u0001leave';
 /// device is being controlled, or while listening together; there only while remote control is connected (or a device
 /// is being controlled).
 class DevicesButton extends StatelessWidget {
-  const DevicesButton({super.key, this.iconSize = 22, this.dimension = 46});
+  const DevicesButton({super.key, this.iconSize = 22, this.dimension = 46, this.whileNothingLoaded = false});
 
   final double iconSize;
   final double dimension;
+
+  /// Shown only while nothing is loaded or queued: a phone's page then has no mini player, through whose full-screen
+  /// player the other devices are reached otherwise, and a computer no player bar.
+  final bool whileNothingLoaded;
 
   @override
   Widget build(BuildContext context) {
@@ -65,6 +69,9 @@ class DevicesButton extends StatelessWidget {
       builder: (context, _) {
         final remote = player.isRemote;
         if (!player.canReachDevices && !remote) return const SizedBox.shrink();
+        if (whileNothingLoaded && (player.currentTrack != null || player.queueItems.isNotEmpty)) {
+          return const SizedBox.shrink();
+        }
         final here = deviceLabel(context, vm.deviceName, vm.capabilities.kind);
         Widget entry(IconData icon, String title, String subtitle) => Row(
           children: [

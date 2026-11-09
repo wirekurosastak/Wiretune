@@ -54,6 +54,41 @@ void main() {
     expect(miles, lessThan(tester.getTopLeft(find.text('John Coltrane').first).dy), reason: 'played more');
   });
 
+  testWidgets('a top track plays the top tracks from it; Back from an album opened there brings the summary back', (
+    tester,
+  ) async {
+    final library = createLibrary([
+      TestSupport.makeTrack('1', 'So What', artist: 'Miles Davis', album: 'Kind of Blue'),
+      TestSupport.makeTrack('2', 'Naima', artist: 'John Coltrane', album: 'Giant Steps'),
+    ]);
+    library.initialize();
+    for (final id in ['1', '1', '2']) {
+      library.recordPlay(id);
+    }
+    final vm = createMainViewModel(library);
+    addTearDown(vm.dispose);
+    await showApp(tester, vm, const Size(400, 860));
+    vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    await openSummary(tester);
+
+    await tester.tap(find.text('Naima').last);
+    await settle(tester);
+    expect([for (final item in vm.player.queueItems) item.track.title], ['So What', 'Naima']);
+    expect(vm.player.currentTrack?.title, 'Naima');
+    expect(vm.player.playingFrom, Localizer.get('ListeningSummary'));
+
+    await openSummary(tester);
+    await tester.tap(find.text('Giant Steps').last);
+    await settle(tester);
+    expect((vm.selectedTab, vm.selectedSection), (AppSection.playlists, AppSection.albums));
+    expect(vm.tryNavigateBack(), isTrue);
+    await settle(tester);
+    await settle(tester);
+    expect(vm.selectedSection, AppSection.playlists);
+    expect(find.text(Localizer.get('SummaryTopAlbums').toUpperCase()), findsOneWidget, reason: 'the summary again');
+  });
+
   testWidgets("with a server, this year from its play log; all time from the counts", (tester) async {
     final asked = <String>[];
     final library = createLibrary();

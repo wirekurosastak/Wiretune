@@ -4,6 +4,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
+import 'package:wiretune/src/view_models/search_view_model.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'support.dart';
@@ -138,6 +139,36 @@ void main() {
     expect(vm.searchQuery, 'kind');
   });
 
+  test('a search that led to a result is remembered, the latest first; one is forgotten on asking', () async {
+    final vm = await create();
+    vm.openSearch();
+    vm.searchQuery = 'kind';
+    expect(vm.search.recent, isEmpty, reason: 'typed alone, nothing is kept');
+    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+    vm.closeSearch();
+    vm.openSearch();
+    vm.searchQuery = 'opening';
+    vm.search.bestMatch!.play();
+    expect(vm.search.recent, ['opening', 'kind']);
+
+    vm.searchQuery = 'kind';
+    vm.search.rememberQuery();
+    expect(vm.search.recent, ['kind', 'opening'], reason: 'once each, the latest first');
+    vm.search.forget('opening');
+    expect(vm.search.recent, ['kind']);
+  });
+
+  test('the results narrow to one kind, with no best match, until another search', () async {
+    final vm = await create();
+    vm.openSearch();
+    vm.searchQuery = 'blue';
+    expect(vm.search.hasAlbums && vm.search.hasTracks, isTrue);
+    vm.search.setFilter(SearchFilter.tracks);
+    expect((vm.search.hasAlbums, vm.search.hasTracks, vm.search.bestMatch), (false, true, null));
+    vm.searchQuery = 'blues';
+    expect(vm.search.filter, isNull);
+  });
+
   test('a playlist is found by its name, and back from it returns to the results', () async {
     final vm = await create();
     final mix = vm.library.createPlaylist('Blue Monday');
@@ -217,17 +248,81 @@ void main() {
     expect(vm.albums.isAlbumDetailOpen, isFalse);
   });
 
-  test('a page opened from elsewhere belongs to its tab once the user moves on through the tabs', () async {
+  test(
+    "a page opened from another tab's page stays in that tab, with its way back; its own tab keeps its own",
+    () async {
+      final vm = await create();
+      vm.navigateTo(AppSection.tracks);
+      vm.openAlbum(vm.library.albums.first);
+      expect((vm.selectedTab, vm.selectedSection), (AppSection.tracks, AppSection.albums));
+      expect(vm.albums.backText, Localizer.get('NavTracks'));
+
+      // Albums shows its own list; Tracks comes back with the album open, and Back from it to the tracks.
+      vm.navigateTo(AppSection.albums);
+      expect(
+        (vm.selectedTab, vm.selectedSection, vm.albums.isAlbumDetailOpen),
+        (AppSection.albums, AppSection.albums, false),
+      );
+      vm.navigateTo(AppSection.tracks);
+      expect((vm.selectedSection, vm.albums.isAlbumDetailOpen), (AppSection.albums, true));
+      expect(vm.tryNavigateBack(), isTrue);
+      expect(
+        (vm.selectedTab, vm.selectedSection, vm.albums.isAlbumDetailOpen),
+        (AppSection.tracks, AppSection.tracks, false),
+      );
+    },
+  );
+
+  test('back walks a chain of pages: a similar album, its artist, and on back to the search', () async {
     final vm = await create();
-    vm.navigateTo(AppSection.tracks);
-    vm.openAlbum(vm.library.albums.first);
-    expect(vm.selectedSection, AppSection.albums);
-    vm.navigateTo(AppSection.artists);
-    vm.navigateTo(AppSection.albums);
-    expect(vm.albums.isAlbumDetailOpen, isTrue);
-    expect(vm.albums.backText, Localizer.get('NavAlbums'));
+    vm.openSearch();
+    vm.searchQuery = 'kind';
+    final kind = vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue');
+    final other = vm.library.albums.firstWhere((a) => a.title != 'Kind of Blue');
+    vm.openAlbum(kind);
+    vm.openAlbum(other); // from its Similar albums
+    expect(vm.albums.backText, 'Kind of Blue');
+    vm.openArtistByName(other.artist);
+    expect((vm.selectedTab, vm.selectedSection), (AppSection.artists, AppSection.artists));
+    expect(vm.artists.backText, other.title);
+
     expect(vm.tryNavigateBack(), isTrue);
-    expect((vm.selectedSection, vm.albums.isAlbumDetailOpen), (AppSection.albums, false));
+    expect((vm.selectedSection, vm.albums.selectedAlbum?.title), (AppSection.albums, other.title));
+    expect(vm.tryNavigateBack(), isTrue);
+    expect(vm.albums.selectedAlbum?.title, 'Kind of Blue');
+    expect(vm.albums.backText, 'Search');
+    expect(vm.tryNavigateBack(), isTrue);
+    expect((vm.isSearchOpen, vm.searchQuery), (true, 'kind'));
+    expect(vm.tryNavigateBack(), isTrue);
+    expect((vm.isSearchOpen, vm.selectedSection, vm.artists.isArtistDetailOpen), (false, AppSection.artists, false));
+  });
+
+  test('an artist opened from a related artist leads back to the first; the tab chosen again drops the way', () async {
+    final vm = await create();
+    final miles = vm.library.artists.firstWhere((a) => a.name == 'Miles Davis');
+    final daft = vm.library.artists.firstWhere((a) => a.name == 'Daft Punk');
+    vm.navigateTo(AppSection.artists);
+    vm.artists.openArtist(miles);
+    vm.openArtist(daft); // from its Related artists
+    expect(vm.artists.backText, 'Miles Davis');
+    expect(vm.tryNavigateBack(), isTrue);
+    expect(vm.artists.selectedArtist?.name, 'Miles Davis');
+
+    vm.openArtist(daft);
+    vm.openAlbum(daft.albums.first);
+    vm.navigateTo(AppSection.artists);
+    expect((vm.selectedSection, vm.artists.isArtistDetailOpen), (AppSection.artists, false), reason: 'its list');
+    expect(vm.tryNavigateBack(), isFalse, reason: 'nothing left to go back to');
+  });
+
+  test('back to the place a page was opened from brings back what was over it (a sheet)', () async {
+    final vm = await create();
+    vm.navigateTo(AppSection.playlists);
+    var reopened = 0;
+    vm.openAlbum(vm.library.albums.first, reopen: () => reopened++);
+    expect((vm.selectedTab, reopened), (AppSection.playlists, 0));
+    expect(vm.tryNavigateBack(), isTrue);
+    expect((vm.selectedSection, reopened), (AppSection.playlists, 1));
   });
 
   test('navigating closes the search page', () async {

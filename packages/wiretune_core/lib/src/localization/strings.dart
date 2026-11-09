@@ -80,6 +80,13 @@ const Map<String, (String, String, String)> allStrings = {
     'Gleiche Lautheit anhand der ReplayGain-Tags der Dateien: pro Titel oder pro Album mit der Dynamik des Albums. '
         'Im Bit-Perfect-Modus aus.',
   ),
+  'SettingsAutoplay': ('Automatikus folytatás', 'Autoplay', 'Autoplay'),
+  'SettingsAutoplayHint': (
+    'Ha a sor véget ér, hasonló zenével folytatódik.',
+    'When the queue ends, similar music plays on.',
+    'Wenn die Warteschlange endet, läuft ähnliche Musik weiter.',
+  ),
+  'Autoplay': ('Automatikus folytatás', 'Autoplay', 'Autoplay'),
   'SettingsGapless': ('Szünet nélküli lejátszás', 'Gapless playback', 'Lückenlose Wiedergabe'),
   'SettingsGaplessHint': (
     'A következő szám azonnal indul, ha az előző véget ér (élő és folyamatos albumokhoz).',
@@ -196,6 +203,7 @@ const Map<String, (String, String, String)> allStrings = {
   'LabelPlaylists': ('LISTÁK', 'PLAYLISTS', 'PLAYLISTS'),
   'LabelTracks': ('SZÁMOK', 'TRACKS', 'TITEL'),
   'LabelAllTracks': ('ÖSSZES SZÁM', 'ALL TRACKS', 'ALLE TITEL'),
+  'LabelYourMostPlayed': ('LEGTÖBBET HALLGATOTT', 'YOUR MOST PLAYED', 'DEINE MEISTGEHÖRTEN'),
   'Credits': ('Közreműködők', 'Credits', 'Mitwirkende'),
   'ListeningSummary': ('Amit hallgattál', 'Your listening', 'Was du hörst'),
   'ListeningSummaryHint': (
@@ -274,6 +282,16 @@ const Map<String, (String, String, String)> allStrings = {
   'AddToPlaylist': ('Hozzáadás listához', 'Add to playlist', 'Zur Playlist hinzufügen'),
   'Favorite': ('Hozzáadás a kedvencekhez', 'Add to favorites', 'Zu Favoriten hinzufügen'),
   'RemoveFromFavorites': ('Eltávolítás a kedvencek közül', 'Remove from favorites', 'Aus Favoriten entfernen'),
+  'UnfavoriteConfirm': (
+    'Eltávolítod a(z) „{0}” számot a kedvencek közül?',
+    'Remove “{0}” from favorites?',
+    '„{0}“ aus den Favoriten entfernen?',
+  ),
+  'TrackStaysInLibrary': (
+    'A szám a könyvtárban marad.',
+    'The track stays in your library.',
+    'Der Titel bleibt in deiner Bibliothek.',
+  ),
 
   'Rename': ('Átnevezés', 'Rename', 'Umbenennen'),
 
@@ -347,6 +365,9 @@ const Map<String, (String, String, String)> allStrings = {
   'QueueNextTag': ('Következő', 'Next', 'Nächster'),
   'ClearQueue': ('Sor kiürítése', 'Clear queue', 'Warteschlange leeren'),
   'ClearQueueConfirm': ('Kiüríted a sort?', 'Clear the queue?', 'Die Warteschlange leeren?'),
+  'SaveQueueAsPlaylist': ('Mentés listaként', 'Save as playlist', 'Als Playlist speichern'),
+  'RecentSearches': ('Legutóbbi keresések', 'Recent searches', 'Letzte Suchen'),
+  'SearchAll': ('Mind', 'All', 'Alle'),
   'TracksStayInLibrary': (
     'A számok a könyvtárban maradnak.',
     'The tracks stay in your library.',
@@ -1051,9 +1072,9 @@ const Map<String, (String, String, String)> allStrings = {
     'Andere auf diesem Server können hier abspielen',
   ),
   'DeviceSharingHint': (
-    'Az ő lejátszásaik nekik számítanak. Akit letiltottál, vagy aki letiltott, sosem.',
-    'Their plays count for them. Never someone you blocked or who blocked you.',
-    'Ihre Wiedergaben zählen für sie. Nie, wen du blockiert hast oder wer dich blockiert hat.',
+    'Csak ugyanarról a hálózatról. Az ő lejátszásaik nekik számítanak. Akit letiltottál, vagy aki letiltott, sosem.',
+    'Only from the same network. Their plays count for them. Never someone you blocked or who blocked you.',
+    'Nur aus demselben Netzwerk. Ihre Wiedergaben zählen für sie. Nie, wen du blockiert hast oder wer dich blockiert hat.',
   ),
   'DeviceSharingOff': ('Ki', 'Off', 'Aus'),
   'DeviceSharingUnhidden': (

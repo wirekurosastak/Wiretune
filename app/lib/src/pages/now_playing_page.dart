@@ -24,7 +24,9 @@ import '../widgets/links.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/player_controls.dart';
 import '../widgets/player_sheet.dart';
+import '../widgets/scrolling_text.dart';
 import '../widgets/spectrum_visualizer.dart';
+import '../widgets/track_info.dart';
 import '../widgets/track_list.dart';
 import 'queue_panel.dart';
 
@@ -66,71 +68,95 @@ class NowPlayingPage extends StatelessWidget {
               SafeArea(
                 child: Column(
                   children: [
-                    PlayerSheetDrag(
-                      child: SizedBox(
-                        height: 60,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Row(
-                            children: [
-                              SizedBox.square(
-                                dimension: 44,
-                                child: IconButton(
-                                  tooltip: context.tr('Close'),
-                                  onPressed: vm.closeNowPlaying,
-                                  icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
+                    // Not uncovered by the opening player's rising edge: once the edge is past them, they fade in.
+                    _ShownOpen(
+                      past: _topRowHeight,
+                      child: PlayerSheetDrag(
+                        child: SizedBox(
+                          height: _topRowHeight,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            child: Row(
+                              children: [
+                                SizedBox.square(
+                                  dimension: 44,
+                                  child: IconButton(
+                                    tooltip: context.tr('Close'),
+                                    onPressed: vm.closeNowPlaying,
+                                    icon: Icon(Icons.keyboard_arrow_down_rounded, size: 28, color: colors.textMain),
+                                  ),
                                 ),
-                              ),
-                              // As wide as the sleep timer on the other side, so the title stays centred.
-                              const SizedBox(width: 44),
-                              Expanded(
-                                child: ListenableBuilder(
-                                  listenable: vm.player,
-                                  builder: (context, _) {
-                                    if (vm.player.isRemote) return const Center(child: PlayingOnLabel(fontSize: 12));
-                                    // What the queue was played from, as Spotify and TIDAL say it; else only that it
-                                    // plays.
-                                    final from = vm.player.playingFrom;
-                                    return Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          context.tr(from == null ? 'NowPlaying' : 'PlayingFrom'),
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 12.5,
-                                            fontWeight: FontWeight.w600,
-                                            color: colors.textMain.withValues(alpha: 0.75),
-                                          ),
-                                        ),
-                                        if (from != null) ...[
-                                          const SizedBox(height: 2),
+                                // A sleep timer that is set shows its moon beside the way down; it is chosen from the
+                                // ⋮ at the bottom. Its place stays when it isn't, as wide as the lyrics' on the other
+                                // side, so the title stays centred.
+                                const SizedBox(width: 44, child: SleepTimerButton(onlyWhileSet: true)),
+                                Expanded(
+                                  child: ListenableBuilder(
+                                    listenable: vm.player,
+                                    builder: (context, _) {
+                                      if (vm.player.isRemote) {
+                                        return const Center(child: PlayingOnLabel(fontSize: 12));
+                                      }
+                                      // What the queue was played from, as Spotify and TIDAL say it; else only that it
+                                      // plays.
+                                      final from = vm.player.playingFrom;
+                                      final column = Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                           Text(
-                                            from,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                            context.tr(from == null ? 'NowPlaying' : 'PlayingFrom'),
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
-                                              fontSize: 13.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: colors.textMain,
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: colors.textMain.withValues(alpha: 0.75),
                                             ),
                                           ),
+                                          if (from != null) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              from,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 13.5,
+                                                fontWeight: FontWeight.w700,
+                                                color: colors.textMain,
+                                              ),
+                                            ),
+                                          ],
                                         ],
-                                      ],
-                                    );
-                                  },
+                                      );
+                                      if (from == null || vm.player.playingSource == null) return column;
+                                      // A tap leads to it, as in Spotify.
+                                      return Semantics(
+                                        button: true,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(Radii.small),
+                                          onTap: vm.openPlayingSource,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            child: column,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
-                              ),
-                              const SleepTimerButton(),
-                              const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
-                            ],
+                                const SizedBox(width: 44, child: _LyricsButton()),
+                                const SizedBox(width: 44, child: DevicesButton(dimension: 44)),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    Expanded(child: _PlayerBody(tab: tab)),
-                    const _Transport(),
+                    // The controls come on the last part of the way open, as the player grows out of the mini player.
+                    Expanded(
+                      child: _ShownOpen(child: _PlayerBody(tab: tab)),
+                    ),
+                    const _ShownOpen(child: _Transport()),
                   ],
                 ),
               ),
@@ -138,6 +164,34 @@ class NowPlayingPage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// The height of the player's top row: the way down, what it plays from, the sleep timer and the devices.
+const double _topRowHeight = 60;
+
+/// [child] as the player opens: unseen until it is half way open, then coming on; or, [past] that far under the
+/// screen's top, unseen until the player's rising edge is past it, then coming on over the rest of the way.
+class _ShownOpen extends StatelessWidget {
+  const _ShownOpen({this.past, required this.child});
+
+  final double? past;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final sheet = PlayerSheetScope.maybeOf(context);
+    if (sheet == null) return child;
+    final past = this.past;
+    var from = 0.5;
+    if (past != null) {
+      final travel = sheet.travel(MediaQuery.sizeOf(context).height);
+      from = (1 - (MediaQuery.paddingOf(context).top + past) / travel).clamp(0.5, 0.95);
+    }
+    return FadeTransition(
+      opacity: sheet.position.drive(CurveTween(curve: Interval(from, 1, curve: Curves.easeOut))),
+      child: child,
     );
   }
 }
@@ -464,47 +518,9 @@ class _NowPlayingRow extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            const _RowProgress(),
+            const SongProgressLine(),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// A thin line under the playing track's row, over the queue or the lyrics: how far the song has played. On a phone it
-/// is drawn once a second (`progressOf`).
-class _RowProgress extends StatelessWidget {
-  const _RowProgress();
-
-  @override
-  Widget build(BuildContext context) {
-    final player = context.vm.player;
-    final colors = context.colors;
-    return ExcludeSemantics(
-      child: ListenableBuilder(
-        listenable: progressOf(player),
-        builder: (context, _) {
-          final total = player.durationSeconds;
-          final done = total <= 0 ? 0.0 : (player.positionSeconds / total).clamp(0.0, 1.0);
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(1),
-            child: SizedBox(
-              height: 2,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(color: colors.palette.surface2),
-                  FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: done,
-                    child: ColoredBox(color: colors.accent),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -687,9 +703,8 @@ class _TrackTab extends StatelessWidget {
   /// The space at the sides of the cover, the title, the seek bar and its times: one edge, as TIDAL's and Spotify's.
   static const double edge = 24;
 
-  /// The heart's square, and the height of the artist's line beside it (its 16 with the room to press it above and
-  /// below).
-  static const double _heartBox = 48, _artistLine = 27;
+  /// The heart's square, to press it by, and the heart in it.
+  static const double _heartBox = 48, _heartSize = 28;
 
   /// How wide the cover is decoded: the swipe between the tracks decodes the next ones at it too.
   static const int coverDecodeWidth = 900;
@@ -768,17 +783,7 @@ class _TrackTab extends StatelessWidget {
                               // Where the mini player's cover flies as the player opens, and back out of as it closes.
                               child: Opacity(
                                 opacity: coverHidden ? 0 : 1,
-                                child: preview != null
-                                    ? cover
-                                    // A tap on it brings the queue up, as a swipe up does.
-                                    : Semantics(
-                                        button: true,
-                                        label: context.tr('Queue'),
-                                        child: GestureDetector(
-                                          onTap: () => vm.nowPlayingTab = NowPlayingTab.queue,
-                                          child: PlayerSheetCover(own: true, child: cover),
-                                        ),
-                                      ),
+                                child: preview != null ? cover : PlayerSheetCover(own: true, child: cover),
                               ),
                             ),
                           );
@@ -786,7 +791,24 @@ class _TrackTab extends StatelessWidget {
                       ),
                     ),
                     Expanded(
-                      child: Center(child: track == null ? null : PlayerTags(track: track, fontSize: 11)),
+                      child: Center(
+                        child: track == null
+                            ? null
+                            : preview != null
+                            ? PlayerTags(track: track, fontSize: 11)
+                            // A tap tells more: the file and the way it takes to the speakers.
+                            : Semantics(
+                                button: true,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: () => showTrackInfo(context),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    child: PlayerTags(track: track, fontSize: 11),
+                                  ),
+                                ),
+                              ),
+                      ),
                     ),
                   ],
                 );
@@ -795,79 +817,56 @@ class _TrackTab extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(_TrackTab.edge, 0, 0, 4),
+          // The heart (in the middle of its box) ends at the edge, as the cover and the seek bar do.
+          padding: const EdgeInsets.fromLTRB(_TrackTab.edge, 0, _TrackTab.edge - (_heartBox - _heartSize) / 2, 2),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // As large as TIDAL's and Spotify's, and the whole width to the edge: the heart and the menu are on the
-              // artist's line.
-              Padding(
-                padding: const EdgeInsets.only(right: _TrackTab.edge),
-                child: Text(
-                  preview?.title ?? player.nowPlayingTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 21,
-                    letterSpacing: -0.5,
-                    fontWeight: FontWeight.w800,
-                    color: colors.textMain,
+              Row(
+                children: [
+                  // The title over the artist, as large as TIDAL's and Spotify's; a title too long for its room scrolls
+                  // through, as theirs do. The heart beside the two, in the middle of their height, as in Spotify.
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (preview != null)
+                          Text(preview.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: _titleStyle(colors))
+                        else
+                          ScrollingText(player.nowPlayingTitle, style: _titleStyle(colors)),
+                        const SizedBox(height: 2),
+                        // The artist in the accent, as on an album's page.
+                        if (track != null && track.artists.isNotEmpty)
+                          ArtistLinks(track.artistNames, style: _artistStyle(colors), onOpen: vm.openArtistByName)
+                        else
+                          InkWell(
+                            borderRadius: BorderRadius.circular(Radii.tag),
+                            onTap: track == null ? null : () => vm.openArtistByName(track.artist),
+                            child: Text(
+                              preview?.artist ?? player.nowPlayingArtist,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _artistStyle(colors),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 2),
-              // The buttons are taller than the artist's line: lifted by what they stand over it, it stays close under
-              // the title (the room it leaves goes under it, before the seek bar).
-              Transform.translate(
-                offset: const Offset(0, -(_heartBox - _artistLine) / 2),
-                child: Row(
-                  children: [
-                    // The artist in the accent, as on an album's page.
-                    Expanded(
-                      child: track != null && track.artists.isNotEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                              child: ArtistLinks(
-                                track.artistNames,
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
-                                onOpen: vm.openArtistByName,
-                              ),
-                            )
-                          : Align(
-                              alignment: Alignment.centerLeft,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(Radii.tag),
-                                onTap: track == null ? null : () => vm.openArtistByName(track.artist),
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(0, 4, 12, 4),
-                                  child: Text(
-                                    preview?.artist ?? player.nowPlayingArtist,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent),
-                                  ),
-                                ),
-                              ),
+                  const SizedBox(width: 12),
+                  SizedBox.square(
+                    dimension: _heartBox,
+                    child: preview == null
+                        ? const FavoriteCurrentButton(size: _heartSize)
+                        : Center(
+                            child: HeartIcon(
+                              filled: vm.library.isFavorite(preview.id),
+                              color: vm.library.isFavorite(preview.id) ? colors.palette.favorite : colors.textMuted,
+                              size: _heartSize,
                             ),
-                    ),
-                    SizedBox.square(
-                      dimension: _heartBox,
-                      child: preview == null
-                          ? const FavoriteCurrentButton(size: 28)
-                          : Center(
-                              child: HeartIcon(
-                                filled: vm.library.isFavorite(preview.id),
-                                color: vm.library.isFavorite(preview.id) ? colors.palette.favorite : colors.textMuted,
-                                size: 28,
-                              ),
-                            ),
-                    ),
-                    if (track != null)
-                      TrackMenu(track: track, kind: TrackTableKind.tracks, width: 44, color: colors.textMain),
-                    // The menu's dots (in the middle of its 44) end at the edge, as the cover and the seek bar do.
-                    const SizedBox(width: _TrackTab.edge - 20),
-                  ],
-                ),
+                          ),
+                  ),
+                ],
               ),
               if (preview == null && player.hasError)
                 Padding(
@@ -883,6 +882,12 @@ class _TrackTab extends StatelessWidget {
     // queue up.
     return preview != null ? IgnorePointer(child: page) : PlayerSheetDrag(other: _BodyDrag.of(context), child: page);
   }
+
+  static TextStyle _titleStyle(WiretuneColors colors) =>
+      TextStyle(fontSize: 21, letterSpacing: -0.5, fontWeight: FontWeight.w800, color: colors.textMain);
+
+  static TextStyle _artistStyle(WiretuneColors colors) =>
+      TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.accent);
 }
 
 class _QueueTab extends StatelessWidget {
@@ -909,6 +914,7 @@ class _QueueTab extends StatelessWidget {
                   style: TextStyle(fontSize: 13, color: colors.textMuted),
                 ),
               ),
+              const SaveQueueButton(),
               PopEffect(
                 enabled: player.queueItems.isNotEmpty,
                 glowColor: colors.danger,
@@ -1055,9 +1061,9 @@ class _Transport extends StatelessWidget {
               ],
             ),
           ),
-          // The two under shuffle and repeat (the transport's row shares its room out evenly around its five buttons), and
-          // between them the spectrum, as the computer's player bar has it; while another device plays, whose music isn't
-          // analysed here, that device's volume, which the phone's own buttons don't reach.
+          // The queue and the menu under shuffle and repeat (the transport's row shares its room out evenly around its
+          // five buttons), and between them the spectrum, as the computer's player bar has it; while another device
+          // plays, whose music isn't analysed here, that device's volume, which the phone's own buttons don't reach.
           Padding(
             padding: buttons,
             child: LayoutBuilder(
@@ -1066,9 +1072,9 @@ class _Transport extends StatelessWidget {
                 return Row(
                   children: [
                     SizedBox(width: side),
-                    list(Icons.lyrics_outlined, 'TabLyrics', NowPlayingTab.lyrics),
+                    list(Icons.format_list_bulleted_rounded, 'Queue', NowPlayingTab.queue),
                     Expanded(child: player.isRemote ? const VolumeControl.fill() : const _PlayerSpectrum()),
-                    list(Icons.playlist_play_rounded, 'Queue', NowPlayingTab.queue),
+                    const SizedBox.square(dimension: 52, child: _PlayerMenu()),
                     SizedBox(width: side),
                   ],
                 );
@@ -1081,7 +1087,93 @@ class _Transport extends StatelessWidget {
   }
 }
 
-/// The spectrum between the lyrics' and the queue's buttons. It is there only while the app is on screen: as long as it
+/// The lyrics at the top right, beside the devices: lit while they are open; pressed again, back to the track.
+class _LyricsButton extends StatelessWidget {
+  const _LyricsButton();
+
+  // It follows the tab itself: as a const child it isn't rebuilt with the player.
+  @override
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
+    final vm = context.vm;
+    final colors = context.colors;
+    final open = vm.nowPlayingTab == NowPlayingTab.lyrics;
+    return IconButton(
+      tooltip: context.tr('TabLyrics'),
+      isSelected: open,
+      icon: Icon(Icons.lyrics_outlined, color: open ? colors.accent : colors.textMain),
+      onPressed: () => vm.nowPlayingTab = open ? NowPlayingTab.track : NowPlayingTab.lyrics,
+    );
+  }
+}
+
+/// The things to do with what plays, from the ⋮ at the player's bottom right: the sleep timer, and the track's own menu
+/// (but its heart, which is beside the title).
+class _PlayerMenu extends StatelessWidget {
+  const _PlayerMenu();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final colors = context.colors;
+    return ListenableBuilder(
+      listenable: vm.player,
+      builder: (context, _) {
+        final track = vm.player.currentTrack;
+        return IconButton(
+          tooltip: context.tr('TipMore'),
+          iconSize: 24,
+          icon: Icon(Icons.more_vert_rounded, color: colors.textMain),
+          onPressed: track == null ? null : () => _open(context, track),
+        );
+      },
+    );
+  }
+
+  static Future<void> _open(BuildContext context, Track track) async {
+    final colors = context.colors;
+    final sleep = SleepTimerButton.statusOf(context);
+    PopupMenuItem<Object> entry(_PlayerEntry value, IconData icon, String text, {bool lit = false}) => PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: lit ? colors.accent : colors.textMuted),
+          const SizedBox(width: 14),
+          Flexible(child: Text(text)),
+        ],
+      ),
+    );
+    final chosen = await showMenuSheet<Object>(
+      context,
+      cover: CoverImage(path: track.coverArtPath, size: menuSheetCoverSize, placeholderIcon: Icons.music_note),
+      title: track.title,
+      subtitle: track.artist,
+      items: [
+        entry(
+          _PlayerEntry.sleepTimer,
+          sleep != null ? Icons.bedtime_rounded : Icons.bedtime_outlined,
+          sleep ?? context.tr('SleepTimer'),
+          lit: sleep != null,
+        ),
+        const PopupMenuDivider(),
+        ...TrackMenu.buildMenuItems(context, track, TrackTableKind.tracks),
+      ],
+    );
+    if (!context.mounted) return;
+    switch (chosen) {
+      case _PlayerEntry.sleepTimer:
+        await SleepTimerButton.showSheet(context);
+      case final TrackAction action:
+        TrackMenu.handleAction(context, action, track);
+    }
+  }
+}
+
+enum _PlayerEntry { sleepTimer }
+
+/// The spectrum between the queue's button and the menu. It is there only while the app is on screen: as long as it
 /// is, the phone decodes the track a second time and analyses it ([PlayerViewModel.spectrum]), which costs battery.
 class _PlayerSpectrum extends StatefulWidget {
   const _PlayerSpectrum();

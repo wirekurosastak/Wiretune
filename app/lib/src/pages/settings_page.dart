@@ -1287,6 +1287,21 @@ class _AudioCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(context.tr('SettingsAutoplay'), style: heading()),
+                        Text(context.tr('SettingsAutoplayHint'), style: hint()),
+                      ],
+                    ),
+                  ),
+                  Switch(value: vm.isAutoplayEnabled, onChanged: (v) => vm.isAutoplayEnabled = v),
+                ],
+              ),
+              const SizedBox(height: 14),
               Text(context.tr('SettingsNormalization'), style: heading()),
               Text(context.tr('SettingsNormalizationHint'), style: hint()),
               const SizedBox(height: 10),

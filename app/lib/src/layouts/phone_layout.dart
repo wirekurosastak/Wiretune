@@ -17,6 +17,7 @@ import '../pages/search_page.dart';
 import '../pages/section_page.dart';
 import '../theme/app_theme.dart';
 import '../view_models/app_section.dart';
+import '../view_models/main_view_model.dart';
 import '../view_models/player_view_model.dart';
 import '../widgets/ambient.dart';
 import '../widgets/cover_flight.dart';
@@ -28,8 +29,8 @@ import '../widgets/player_sheet.dart';
 import '../widgets/update_banner.dart';
 
 /// The phone layout: the page (each draws its own header with the search and account buttons) over the ambient
-/// backdrop, and floating over its lower edge the unified pill with the mini player and bottom navigation;
-/// search and the full-screen player slide over it, the player with the finger that drags it ([PlayerSheet]).
+/// backdrop, and under it the bars with the mini player and the bottom navigation; search and the full-screen player
+/// slide over it, the player with the finger that drags it ([PlayerSheet]).
 class PhoneLayout extends StatefulWidget {
   const PhoneLayout({super.key});
 
@@ -157,44 +158,55 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> {
   }
 }
 
-/// The floating bars at the bottom: a single unified pill containing the mini player and bottom navigation,
-/// which smoothly extends upwards when a song is playing (Tidal style).
+/// The bars at the bottom, across the whole width as in YouTube Music: the mini player while a track is loaded, rising
+/// over the bottom navigation, on one surface that reaches down under the system's gesture bar. As the full-screen
+/// player grows out of the mini player, the navigation goes down out of sight ([PlayerSheet.navigationSlide]).
 class _BottomBars extends StatelessWidget {
   const _BottomBars();
-
-  /// The pill's shape and place, TIDAL's: 9 from the sides, 18 above the screen's edge (over a gesture bar, clear of
-  /// the system's buttons), corners of 40.
-  static const double _side = 9, _bottom = 18, _radius = 40;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     final inset = MediaQuery.viewPaddingOf(context).bottom;
+    final sheet = PlayerSheetScope.maybeOf(context);
+    final surface = colors.palette.modal;
+    // The navigation fades over the page: dark under the mini player, the page showing more toward the screen's edge
+    // (under the system's buttons too).
+    Widget navigation = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [surface.withValues(alpha: 0.95), surface.withValues(alpha: 0.7)],
+        ),
+      ),
+      child: Padding(
+        padding: EdgeInsets.only(bottom: inset),
+        child: const _BottomNavigation(),
+      ),
+    );
+    if (sheet != null) {
+      navigation = KeyedSubtree(
+        key: sheet.navigation,
+        child: SlideTransition(position: sheet.navigationSlide, child: navigation),
+      );
+    }
     return MediaQuery.removePadding(
       context: context,
       removeBottom: true,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(_side, 0, _side, math.max(_bottom, inset - 6)),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.palette.modal,
-            borderRadius: BorderRadius.circular(_radius),
-            border: Border.all(color: colors.palette.panelBorder),
-            boxShadow: [
-              BoxShadow(color: colors.palette.shadow, blurRadius: 24, spreadRadius: -4, offset: const Offset(0, 8)),
+      child: Material(
+        type: MaterialType.transparency,
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.bottomCenter,
+          // The mini player solid, its progress line the edge of the fade under it.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ColoredBox(color: surface, child: const _MiniPlayer()),
+              navigation,
             ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(_radius),
-            child: Material(
-              type: MaterialType.transparency,
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                alignment: Alignment.bottomCenter,
-                child: const Column(mainAxisSize: MainAxisSize.min, children: [_MiniPlayer(), _BottomNavigation()]),
-              ),
-            ),
           ),
         ),
       ),
@@ -202,8 +214,7 @@ class _BottomBars extends StatelessWidget {
   }
 }
 
-/// The five sections at the bottom, on a floating pill bar; the active one takes the accent, and its glow glides over
-/// from the one that was.
+/// The five sections at the bottom; the active one takes the accent, and its glow glides over from the one that was.
 class _BottomNavigation extends StatelessWidget {
   const _BottomNavigation();
 
@@ -222,12 +233,11 @@ class _BottomNavigation extends StatelessWidget {
       (AppSection.favorites, 'NavFavorites'),
       (AppSection.playlists, 'NavPlaylistsShort'),
     ];
-    final active = vm.isSearchOpen ? -1 : items.indexWhere((item) => item.$1 == vm.selectedSection);
-    // Room under it, as in TIDAL's pill, so the labels clear the pill's rounded bottom.
+    final active = vm.isSearchOpen ? -1 : items.indexWhere((item) => item.$1 == vm.selectedTab);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.only(bottom: 2),
       child: SizedBox(
-        height: 64,
+        height: _NavItem.barHeight,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth / items.length;
@@ -299,9 +309,10 @@ class _NavItem extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  /// The glow behind the active icon ([_BottomNavigation]'s), and the height of the icon's middle in the bar: the
-  /// icon's 30 and the label's line (about 13 at 11 px) under it, centred in the bar's 64 less the 4 above and below.
-  static const double glowSize = 56, iconMiddle = 4 + (56 - 30 - 3 - 13) / 2 + 15;
+  /// The bar's height, the glow behind the active icon ([_BottomNavigation]'s), and the height of the icon's middle in
+  /// the bar: the icon's 30 and the label's line (about 13 at 11 px) under it, centred in the bar less the 4 above and
+  /// below.
+  static const double barHeight = 60, glowSize = 56, iconMiddle = 4 + (barHeight - 8 - 30 - 3 - 13) / 2 + 15;
 
   @override
   Widget build(BuildContext context) {
@@ -486,6 +497,13 @@ class _SearchBarState extends State<_SearchBar> {
   Widget _build(BuildContext context) {
     final vm = context.vm;
     final colors = context.colors;
+    // The query changed elsewhere: a recent search chosen, Back to the results.
+    if (_controller.text != vm.searchQuery) {
+      _controller.value = TextEditingValue(
+        text: vm.searchQuery,
+        selection: TextSelection.collapsed(offset: vm.searchQuery.length),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(4, 6, 12, 6),
       child: Row(
@@ -585,7 +603,7 @@ class _OfflineBanner extends StatelessWidget {
   }
 }
 
-/// The mini player in the upper part of the floating pill, while a track is loaded.
+/// The mini player over the bottom navigation, while a track is loaded.
 class _MiniPlayer extends StatelessWidget {
   const _MiniPlayer();
 
@@ -601,47 +619,56 @@ class _MiniPlayer extends StatelessWidget {
       builder: (context, _) {
         if (player.currentTrack == null) return const SizedBox.shrink();
 
-        // Room above it, as in TIDAL's pill, under the pill's rounded top.
         return Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: PlayerSheetDrag(
-            // The cover and Play stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
-            // of the pill's width, as they are. A swipe over the track skips (no buttons for it, as in TIDAL and
-            // Spotify).
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final column = constraints.maxWidth / 5;
-                return SizedBox(
-                  height: 66,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: vm.openNowPlaying,
-                          child: _SkipSwipe(
-                            player: player,
-                            builder: (context, track, {required current}) => Padding(
-                              padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
-                              child: _MiniTrack(track: track, current: current),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // The players' round Play, as in the full-screen player and on a computer.
-                      Padding(
-                        padding: EdgeInsets.only(right: math.max(0, (column - _playSize) / 2)),
-                        child: const PlayButton(size: _playSize),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+          // Where the full-screen player grows out of.
+          key: PlayerSheetScope.maybeOf(context)?.miniBar,
+          padding: const EdgeInsets.only(top: 4),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _miniRow(context, vm, player),
+              // How far the song has played, between it and the navigation, as YouTube Music has it.
+              const SongProgressLine(rounded: false),
+            ],
           ),
         );
       },
     );
   }
+
+  Widget _miniRow(BuildContext context, MainViewModel vm, PlayerViewModel player) => PlayerSheetDrag(
+    // The cover and Play stand over the nav's outer icons (Artists and Playlists): each is centred in a fifth
+    // of the width, as they are. A swipe over the track skips (no buttons for it, as in TIDAL and Spotify).
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        final column = constraints.maxWidth / 5;
+        return SizedBox(
+          height: 60,
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: vm.openNowPlaying,
+                  child: _SkipSwipe(
+                    player: player,
+                    builder: (context, track, {required current}) => Padding(
+                      padding: EdgeInsets.fromLTRB(math.max(0, (column - _coverSize) / 2), 0, 4, 0),
+                      child: _MiniTrack(track: track, current: current),
+                    ),
+                  ),
+                ),
+              ),
+              // The players' round Play, as in the full-screen player and on a computer.
+              Padding(
+                padding: EdgeInsets.only(right: math.max(0, (column - _playSize) / 2)),
+                child: const PlayButton(size: _playSize),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
 }
 
 /// A track in the mini player: its cover and titles. The [current] one's cover flies into the full-screen player and
@@ -716,7 +743,7 @@ class _MiniTrack extends StatelessWidget {
 /// The mini player's track as one of the queue's in a row, as in TIDAL and Spotify: a swipe left or right moves it with
 /// the finger, the next track (left) or the one before (right) coming in beside it, and let go past a third of the
 /// way, or flung, that one plays; else they go back. Changed any other way (it ran out, a button, another device),
-/// the new track comes in from the side it lies on in the queue too, so the pill shows which way it can be swiped. A
+/// the new track comes in from the side it lies on in the queue too, so the bar shows which way it can be swiped. A
 /// screen reader, which takes the swipes for itself, offers Next and Previous as its actions.
 class _SkipSwipe extends StatefulWidget {
   const _SkipSwipe({required this.player, required this.builder});

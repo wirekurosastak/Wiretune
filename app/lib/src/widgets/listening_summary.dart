@@ -12,12 +12,20 @@ import 'cover_image.dart';
 import 'dialogs.dart';
 import 'page_parts.dart';
 
-/// The card at the top of Playlists that opens the listening summary.
+/// The card at the top of Playlists that opens the listening summary; and opens it again when Back returns from a page
+/// opened in it ([MainViewModel.wantsListeningSummary]).
 class ListeningSummaryCard extends StatelessWidget {
   const ListeningSummaryCard({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.vm;
+    if (vm.wantsListeningSummary) {
+      vm.wantsListeningSummary = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) showListeningSummary(context);
+      });
+    }
     final colors = context.colors;
     final phone = PhoneChrome.isPhone(context);
     return Padding(
@@ -106,7 +114,10 @@ enum _Period { month, year, allTime }
 
 class _ListeningSummaryViewState extends State<ListeningSummaryView> {
   /// A month or a year needs the server's play log; without a server, all time is what there is.
-  late _Period _period = context.vm.session.isLoggedIn ? _Period.year : _Period.allTime;
+  late _Period _period = _lastPeriod ?? (context.vm.session.isLoggedIn ? _Period.year : _Period.allTime);
+
+  /// The time chosen last, which the summary shows again while the app runs.
+  static _Period? _lastPeriod;
   late Future<({ListeningSummary summary, DateTime? since})> _summary = _load();
 
   Future<({ListeningSummary summary, DateTime? since})> _load() async {
@@ -141,6 +152,7 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
     if (period == _period) return;
     setState(() {
       _period = period;
+      _lastPeriod = period;
       _summary = _load();
     });
   }
@@ -271,6 +283,10 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
       action();
     }
 
+    // Back from a page opened here returns to the summary.
+    void back() => vm.wantsListeningSummary = true;
+    final topTracks = [for (final entry in summary.tracks) entry.track];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -299,7 +315,7 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
             ),
             title: name,
             plays: plays,
-            onTap: () => open(() => vm.openArtistByName(name)),
+            onTap: () => open(() => vm.openArtistByName(name, reopen: back)),
           ),
         section(context.tr('SummaryTopAlbums')),
         for (final (:albumId, :plays) in summary.albums)
@@ -309,7 +325,7 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
               title: album.title,
               subtitle: album.artist,
               plays: plays,
-              onTap: () => open(() => vm.openAlbum(album)),
+              onTap: () => open(() => vm.openAlbum(album, reopen: back)),
             ),
         section(context.tr('SummaryTopTracks')),
         for (final (:track, :plays) in summary.tracks)
@@ -318,7 +334,8 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
             title: track.title,
             subtitle: track.artist,
             plays: plays,
-            onTap: () => open(() => vm.player.playQueue([track], track)),
+            // The top tracks from this one on, as a playlist of them would.
+            onTap: () => open(() => vm.player.playQueue(topTracks, track, () => Localizer.get('ListeningSummary'))),
           ),
         if (summary.genres.isNotEmpty) ...[
           section(context.tr('SummaryTopGenres')),

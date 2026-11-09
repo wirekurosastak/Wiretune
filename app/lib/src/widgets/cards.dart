@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'app_icons.dart';
 import 'dart:async';
 import 'dart:ui' as ui;
 
@@ -137,6 +138,7 @@ class ListMenu {
     this.onRemove,
     this.removeIsDanger = false,
     this.onShare,
+    this.onOpen,
   });
 
   /// [withArtist]: the menu leads to the album's (first) artist, except on that artist's page.
@@ -154,6 +156,7 @@ class ListMenu {
         : CoverImage(path: album.coverArtPath, size: menuSheetCoverSize, placeholderIcon: Icons.album),
     subtitle: (context) => album.artist,
     artist: withArtist ? album.artistNames.first : null,
+    onOpen: (context) => context.vm.openAlbum(album),
     recommend: (RecommendationKind.album, album.id),
     removeKey: 'HideAlbum',
     removeIcon: Icons.visibility_off_outlined,
@@ -186,6 +189,7 @@ class ListMenu {
         : CoverImage(path: artist.picturePath, size: menuSheetCoverSize, circle: true, placeholderIcon: Icons.person),
     subtitle: (context) => artistCounts(context, artist),
     round: true,
+    onOpen: (context) => context.vm.openArtist(artist),
     recommend: (RecommendationKind.artist, artist.id),
     removeKey: 'HideArtist',
     removeIcon: Icons.visibility_off_outlined,
@@ -215,6 +219,7 @@ class ListMenu {
     cover: (context, {required large}) =>
         PlaylistCover(covers: playlistCovers(tracks), radius: large ? Radii.card : Radii.small),
     subtitle: (context) => context.trf('TrackCount', [playlist.trackCount]),
+    onOpen: (context) => context.vm.openPlaylist(playlist),
     removeKey: PlaylistsViewModel.isBlend(playlist)
         ? 'BlendLeave'
         : playlist.isSharedWithMe
@@ -256,6 +261,9 @@ class ListMenu {
   /// What playing, shuffling, queueing and a playlist take.
   final List<Track> tracks;
 
+  /// Opens its page: a tap on the cover and the names on top of its sheet does, as a tap on its row does.
+  final void Function(BuildContext context)? onOpen;
+
   /// What its cover shows ([CoverFlight]): queued, it flies into the player's.
   final String flightTag;
 
@@ -294,19 +302,23 @@ class ListMenu {
   List<PopupMenuEntry<_ListAction>> _items(BuildContext context, {bool header = false, Set<_ListAction>? only}) {
     final vm = context.vm;
     final colors = context.colors;
-    PopupMenuItem<_ListAction> item(_ListAction action, IconData icon, String text, {Color? color}) => PopupMenuItem(
-      value: action,
-      enabled: tracks.isNotEmpty || action == _ListAction.remove,
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: color ?? colors.textMuted),
-          const SizedBox(width: 14),
-          Flexible(
-            child: Text(text, style: TextStyle(color: color)),
+    PopupMenuItem<_ListAction> item(_ListAction action, IconData? icon, String text, {Color? color, Widget? glyph}) =>
+        PopupMenuItem(
+          value: action,
+          enabled: tracks.isNotEmpty || action == _ListAction.remove,
+          child: Row(
+            children: [
+              IconTheme.merge(
+                data: IconThemeData(size: 20, color: color ?? colors.textMuted),
+                child: glyph ?? Icon(icon),
+              ),
+              const SizedBox(width: 14),
+              Flexible(
+                child: Text(text, style: TextStyle(color: color)),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
     final downloaded = isDownloaded(vm);
     final entries = [
       if (!header) ...[
@@ -314,8 +326,8 @@ class ListMenu {
         item(_ListAction.shuffle, Icons.shuffle_rounded, context.tr('Shuffle')),
       ],
       if (!header) ...[
-        item(_ListAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
-        item(_ListAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
+        item(_ListAction.playNext, null, context.tr('PlayNext'), glyph: const PlayNextIcon()),
+        item(_ListAction.addToQueue, Icons.format_list_bulleted_add, context.tr('AddToQueue')),
       ],
       // The page's header has it as a button of its own.
       if (!header) item(_ListAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('AddToPlaylist')),
@@ -385,7 +397,9 @@ class ListMenu {
     if (context.mounted) _run(context, action);
   }
 
+  /// [header]: the page's own menu, whose top doesn't lead to the page it is on.
   Future<void> _showSheet(BuildContext context, {bool header = false, Set<_ListAction>? only}) async {
+    final open = onOpen;
     final action = await showMenuSheet(
       context,
       cover: cover(context, large: false),
@@ -393,6 +407,7 @@ class ListMenu {
       title: name,
       subtitle: subtitle(context),
       items: _items(context, header: header, only: only),
+      onOpen: header || open == null ? null : () => open(context),
     );
     if (context.mounted) _run(context, action);
   }
@@ -541,12 +556,12 @@ class ListMenu {
   );
 
   /// The header's Play next and Add to queue (taken out of its menu).
-  Widget playNextButton() => _queueButton(_ListAction.playNext, Icons.queue_play_next_rounded, 'PlayNext');
-  Widget addToQueueButton() => _queueButton(_ListAction.addToQueue, Icons.add_to_queue_rounded, 'AddToQueue');
+  Widget playNextButton() => _queueButton(_ListAction.playNext, 'PlayNext', glyph: const PlayNextIcon());
+  Widget addToQueueButton() => _queueButton(_ListAction.addToQueue, 'AddToQueue', icon: Icons.format_list_bulleted_add);
 
-  Widget _queueButton(_ListAction action, IconData icon, String key) => Builder(
+  Widget _queueButton(_ListAction action, String key, {IconData? icon, Widget? glyph}) => Builder(
     builder: (context) =>
-        HeaderIconButton(tooltip: context.tr(key), icon: icon, onPressed: () => _run(context, action)),
+        HeaderIconButton(tooltip: context.tr(key), icon: icon, glyph: glyph, onPressed: () => _run(context, action)),
   );
 
   /// A phone tab's ⋮ in place of its download button, beside Play and Shuffle (the favourites'): Play next, Add to
@@ -1004,7 +1019,7 @@ class _ListRow extends StatelessWidget {
     this.trailing,
   });
 
-  static const double pictureSize = 68;
+  static const double pictureSize = 60;
 
   final VoidCallback onTap;
 
@@ -1039,7 +1054,7 @@ class _ListRow extends StatelessWidget {
         onLongPress: onLongPress,
         borderRadius: BorderRadius.circular(Radii.medium),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(
             children: [
               SizedBox.square(
@@ -1062,7 +1077,7 @@ class _ListRow extends StatelessWidget {
                         ],
                       ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1073,14 +1088,14 @@ class _ListRow extends StatelessWidget {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colors.textMain),
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: colors.textMain),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 13.5, color: colors.textMuted),
+                      style: TextStyle(fontSize: 13, color: colors.textMuted),
                     ),
                   ],
                 ),

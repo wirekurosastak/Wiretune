@@ -168,6 +168,9 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
 
   /// What the player says it plays from when it plays this page.
   String Function() get playingFrom => _from;
+
+  /// This page's section, which the player leads back to.
+  AppSection get section => _favoritedAt == null ? AppSection.tracks : AppSection.favorites;
   final DateTime? Function(String trackId)? _favoritedAt;
   final PlayerViewModel _player;
   final List<void Function()> _unsubscribers = [];
@@ -221,7 +224,7 @@ class TrackListViewModel extends ChangeNotifier with TrackSorting {
 
   /// Plays the page from its first track, or from any while shuffle is on (the header's shuffle switch shows which).
   void playAll() {
-    if (tracks.isNotEmpty) _player.playQueue(tracks, null, _from);
+    if (tracks.isNotEmpty) _player.playQueue(tracks, null, _from, section);
   }
 
   @override
@@ -451,10 +454,20 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
 
   void closeAlbumDetail() => _closePage(isAlbumDetailOpen, () => selectedAlbum = null);
 
+  /// Shows [album]'s page again as it was left, Back leading where [onReturn] goes; or, for null, the list. [wave] runs
+  /// the navigation's wave that way.
+  void showPage(Album? album, String Function()? backText, void Function()? onReturn, NavWaveDirection? wave) {
+    if (album != null) return openAlbumWithOrigin(album, backText, onReturn, wave);
+    forgetOrigin();
+    if (selectedAlbum == null) return;
+    selectedAlbum = null;
+    notifyListeners();
+  }
+
   void playAlbum([Album? album]) {
     final target = album ?? selectedAlbum;
     if (target == null || target.tracks.isEmpty) return;
-    _player.playQueue(target.tracks, null, () => target.title);
+    _player.playQueue(target.tracks, null, () => target.title, target);
   }
 
   @override
@@ -586,10 +599,20 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
 
   void closeArtistDetail() => _closePage(isArtistDetailOpen, () => selectedArtist = null);
 
+  /// Shows [artist]'s page again as it was left, Back leading where [onReturn] goes; or, for null, the list. [wave] runs
+  /// the navigation's wave that way.
+  void showPage(Artist? artist, String Function()? backText, void Function()? onReturn, NavWaveDirection? wave) {
+    if (artist != null) return openArtistWithOrigin(artist, backText, onReturn, wave);
+    forgetOrigin();
+    if (selectedArtist == null) return;
+    selectedArtist = null;
+    notifyListeners();
+  }
+
   void playArtist([Artist? artist]) {
     final target = artist ?? selectedArtist;
     if (target == null || target.tracks.isEmpty) return;
-    _player.playQueue(target.tracks, null, () => target.name);
+    _player.playQueue(target.tracks, null, () => target.name, target);
   }
 
   @override
@@ -853,6 +876,16 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
 
   void closePlaylistDetail() => _closePage(isPlaylistDetailOpen, () => _select(null));
 
+  /// Shows [playlist]'s page again as it was left, Back leading where [onReturn] goes; or, for null, the list. [wave]
+  /// runs the navigation's wave that way.
+  void showPage(Playlist? playlist, String Function()? backText, void Function()? onReturn, NavWaveDirection? wave) {
+    if (playlist != null) return openPlaylistWithOrigin(playlist, backText, onReturn, wave);
+    forgetOrigin();
+    if (selectedPlaylist == null) return;
+    _select(null);
+    notifyListeners();
+  }
+
   /// Makes a playlist called [name] (nothing for a blank one) with [tracks] in it, and opens it.
   void createPlaylist(String name, [List<Track> tracks = const []]) {
     if (name.trim().isEmpty) return;
@@ -901,8 +934,9 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   /// Plays [playlist] in its own order, or the open one in the order shown.
   void playPlaylist([Playlist? playlist]) {
     final tracks = playlist == null ? selectedPlaylistTracks : _library.getPlaylistTracks(playlist);
-    final name = (playlist ?? selectedPlaylist)?.name;
-    if (tracks.isNotEmpty) _player.playQueue(tracks, null, name == null ? null : () => name);
+    final source = playlist ?? selectedPlaylist;
+    final name = source?.name;
+    if (tracks.isNotEmpty) _player.playQueue(tracks, null, name == null ? null : () => name, source);
   }
 
   /// Takes [track] out of the open playlist; returns what puts it back in its place (null: it wasn't taken out).

@@ -239,6 +239,39 @@ void main() {
       expect(driver.playCalls, calls + 1);
     });
 
+    test(
+      "the queue's end goes on with music like the last (autoplay); turned off, or with nothing alike, it stops",
+      () {
+        final library = createLibrary([
+          TestSupport.makeTrack('a1', 'Blue', artist: 'Miles Davis', album: 'Kind of Blue'),
+          TestSupport.makeTrack('b1', 'Steps', artist: 'Miles Davis', album: 'Milestones'),
+          TestSupport.makeTrack('b2', 'Sid', artist: 'Miles Davis', album: 'Milestones', trackNumber: 2),
+        ]);
+        library.initialize();
+        final driver = FakeAudioDriver();
+        final player = PlayerViewModel(TestSupport.createEngine(driver), library);
+        final kind = library.albums.firstWhere((a) => a.title == 'Kind of Blue');
+        player.playQueue(kind.tracks, null, () => kind.title, kind);
+
+        driver.simulateTrackEnded();
+        expect(player.queueTracks.first.title, 'Blue');
+        expect({for (final t in player.queueTracks.skip(1)) t.title}, {'Steps', 'Sid'}, reason: 'More by the artist');
+        expect(player.currentTrack?.album, 'Milestones');
+        expect(player.playingFrom, Localizer.get('Autoplay'));
+
+        // The rest plays out; nothing alike is left, so the last track stays, stopped.
+        driver.simulateTrackEnded();
+        final last = player.currentTrack;
+        driver.simulateTrackEnded();
+        expect((player.queueTracks.length, player.currentTrack, player.isPlaying), (3, last, false));
+
+        player.isAutoplayEnabled = false;
+        player.playQueue([kind.tracks.single]);
+        driver.simulateTrackEnded();
+        expect((player.queueTracks.length, player.isPlaying), (1, false), reason: 'off: it stops');
+      },
+    );
+
     test('repeat cycles off, all, one', () {
       final (player, _, _) = createQueue();
       player.toggleRepeat();

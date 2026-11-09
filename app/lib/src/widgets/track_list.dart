@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'app_icons.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -58,12 +59,15 @@ class TrackSliver extends StatefulWidget {
     this.onReorder,
     this.columnHeaders = true,
     this.playingFrom,
+    this.playingSource,
   });
 
   final List<Track> tracks;
 
-  /// The list's name, which the player shows as what it plays from when a row is played.
+  /// The list's name, which the player shows as what it plays from when a row is played, and what it is (an album, an
+  /// artist, a playlist, a section), which the player leads back to.
   final String Function()? playingFrom;
+  final Object? playingSource;
 
   /// The page's sort (Tracks, Favourites), which [tracks] are already in: the column headers change it, as the sort
   /// buttons do. Without one the list keeps its own order (an album's, a playlist's, the best match first) until a
@@ -203,7 +207,7 @@ class _TrackSliverState extends State<TrackSliver> {
   double _tableWidth = 1200;
 
   // As large as the music apps' rows.
-  static const double _phoneRowHeight = 76;
+  static const double _phoneRowHeight = 70;
 
   @override
   void didUpdateWidget(TrackSliver oldWidget) {
@@ -223,7 +227,11 @@ class _TrackSliverState extends State<TrackSliver> {
     return sorting != null ? sorting.addedAt(track) : track.addedAt;
   }
 
-  void _play(Track track) => context.vm.player.playQueue(_tracks, track, widget.playingFrom);
+  void _play(Track track) {
+    // A search that led somewhere is one to remember.
+    if (kind == TrackTableKind.search) context.vm.search.rememberQuery();
+    context.vm.player.playQueue(_tracks, track, widget.playingFrom, widget.playingSource);
+  }
 
   TrackTableKind get kind => widget.kind;
   _Columns get _columns => _Columns(kind, _tableWidth);
@@ -645,7 +653,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
       width: 44,
       tooltip: context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
       icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.favorite : colors.textMuted, size: 18),
-      onPressed: () => context.vm.library.toggleFavorite(track.id),
+      onPressed: () => toggleFavoriteAsked(context, track),
     ),
     TrackMenu(track: track, kind: kind, width: 44),
   ];
@@ -772,20 +780,29 @@ class TrackMenu extends StatelessWidget {
     final downloads = vm.downloads;
     final isHidden = vm.library.isTrackExplicitlyHidden(track.id);
     final favorite = vm.library.isFavorite(track.id);
-    PopupMenuItem<TrackAction> item(TrackAction action, IconData icon, String text, {Color? color, bool? enabled}) =>
-        PopupMenuItem(
-          value: action,
-          enabled: enabled ?? true,
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: color ?? colors.textMuted),
-              const SizedBox(width: 14),
-              Flexible(
-                child: Text(text, style: TextStyle(color: color)),
-              ),
-            ],
+    PopupMenuItem<TrackAction> item(
+      TrackAction action,
+      IconData? icon,
+      String text, {
+      Color? color,
+      bool? enabled,
+      Widget? glyph,
+    }) => PopupMenuItem(
+      value: action,
+      enabled: enabled ?? true,
+      child: Row(
+        children: [
+          IconTheme.merge(
+            data: IconThemeData(size: 20, color: color ?? colors.textMuted),
+            child: glyph ?? Icon(icon),
           ),
-        );
+          const SizedBox(width: 14),
+          Flexible(
+            child: Text(text, style: TextStyle(color: color)),
+          ),
+        ],
+      ),
+    );
     // Moving needs the playlist in its own order; the arrows are the way to move it without dragging.
     final playlists = vm.playlists;
     final place = kind == TrackTableKind.playlist && playlists.canReorder ? playlists.positionOf(track) : null;
@@ -797,8 +814,8 @@ class TrackMenu extends StatelessWidget {
           context.tr(favorite ? 'RemoveFromFavorites' : 'Favorite'),
           color: favorite ? colors.danger : null,
         ),
-      item(TrackAction.playNext, Icons.queue_play_next_rounded, context.tr('PlayNext')),
-      item(TrackAction.addToQueue, Icons.add_to_queue_rounded, context.tr('AddToQueue')),
+      item(TrackAction.playNext, null, context.tr('PlayNext'), glyph: const PlayNextIcon()),
+      item(TrackAction.addToQueue, Icons.format_list_bulleted_add, context.tr('AddToQueue')),
       item(TrackAction.addToPlaylist, Icons.playlist_add_rounded, context.tr('AddToPlaylist')),
       if (place != null) ...[
         item(TrackAction.moveUp, Icons.arrow_upward_rounded, context.tr('MoveUp'), enabled: place > 1),
@@ -844,7 +861,7 @@ class TrackMenu extends StatelessWidget {
     final vm = context.vm;
     switch (action) {
       case TrackAction.favorite:
-        vm.library.toggleFavorite(track.id);
+        unawaited(toggleFavoriteAsked(context, track));
       case TrackAction.playNext:
         vm.queue([track], next: true, name: track.title);
         CoverFlight.toPlayer(_Cover.flightTag(track));
@@ -1071,8 +1088,8 @@ class _PhoneRow extends StatelessWidget {
               const SizedBox(width: 8),
               if (state._columns.leadIsNumber)
                 SizedBox(
-                  width: 56,
-                  height: 56,
+                  width: 52,
+                  height: 52,
                   child: Center(
                     child: playing
                         ? EqualizerBars(playing: context.vm.player.isPlaying)
@@ -1083,7 +1100,7 @@ class _PhoneRow extends StatelessWidget {
                   ),
                 )
               else
-                _Cover(track: track, playing: playing, size: 56, radius: Radii.small),
+                _Cover(track: track, playing: playing, size: 52, radius: Radii.small),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1095,7 +1112,7 @@ class _PhoneRow extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: playing ? colors.accent : colors.textMain,
                       ),
@@ -1112,7 +1129,7 @@ class _PhoneRow extends StatelessWidget {
                             subtitle,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 13.5, color: colors.textMuted),
+                            style: TextStyle(fontSize: 13, color: colors.textMuted),
                           ),
                         ),
                       ],

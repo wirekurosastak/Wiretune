@@ -1,12 +1,17 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'player_view_model.dart';
 
 enum BestMatchKind { artist, album, track }
+
+/// What the results narrow to: one kind of them, longer lists of it, and no best match.
+enum SearchFilter { artists, albums, tracks, playlists }
 
 /// The most likely result of a search, shown big at the top.
 class BestMatch {
@@ -54,6 +59,13 @@ class SearchViewModel extends ChangeNotifier {
   static const int maxTracks = 25;
   static const int maxCards = 12;
 
+  /// As many of one kind while the results are narrowed to it ([filter]).
+  static const int maxFiltered = 100;
+
+  /// How many searches it remembers ([recent]).
+  static const int maxRecent = 10;
+  static const String _recentPreference = 'recent_searches';
+
   final LibraryService _library;
   final PlayerViewModel _player;
 
@@ -62,6 +74,56 @@ class SearchViewModel extends ChangeNotifier {
   late final List<void Function()> _unsubscribers;
 
   String query = '';
+
+  /// The kind of results shown alone; null for all of them.
+  SearchFilter? filter;
+
+  /// Shows only [value]'s results (null: all of them), more of them; for the same query until it changes.
+  void setFilter(SearchFilter? value) {
+    if (filter == value) return;
+    filter = value;
+    if (hasQuery) {
+      _execute(query);
+    } else {
+      notifyListeners();
+    }
+  }
+
+  /// What was searched for on this device, the latest first: the searches that led somewhere (a result opened or
+  /// played).
+  List<String> get recent {
+    try {
+      final saved = jsonDecode(_library.getPreference(_recentPreference) ?? '[]');
+      return saved is List ? [for (final q in saved) ?q as String?] : const [];
+    } on FormatException {
+      return const [];
+    }
+  }
+
+  /// Remembers the query on show as a recent search: a result of it was opened or played.
+  void rememberQuery() {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    final kept = [
+      q,
+      for (final other in recent)
+        if (!equalsIgnoreCase(other, q)) other,
+    ].take(maxRecent).toList();
+    _library.setPreference(_recentPreference, jsonEncode(kept));
+    notifyListeners();
+  }
+
+  /// Forgets [q] from the recent searches.
+  void forget(String q) {
+    _library.setPreference(
+      _recentPreference,
+      jsonEncode([
+        for (final other in recent)
+          if (other != q) other,
+      ]),
+    );
+    notifyListeners();
+  }
 
   /// Whether anything is searched for (`MainViewModel.isSearchActive` says whether the results are on show).
   bool get hasQuery => query.isNotEmpty;
@@ -82,7 +144,10 @@ class SearchViewModel extends ChangeNotifier {
   }
 
   void updateQuery(String? newQuery) {
-    query = newQuery?.trim() ?? '';
+    final next = newQuery?.trim() ?? '';
+    // Another search starts with all of its results.
+    if (next != query) filter = null;
+    query = next;
     if (hasQuery) {
       _execute(query);
       return;
@@ -97,19 +162,27 @@ class SearchViewModel extends ChangeNotifier {
 
   void _execute(String q) {
     final lower = foldForSearch(q);
-    matchingTracks = _library.search(q).take(maxTracks).toList();
+    // Narrowed to one kind, that kind alone and more of it, as Spotify's chips do.
+    final only = filter;
+    int most(SearchFilter kind, int usual) => only == null ? usual : (only == kind ? maxFiltered : 0);
+    final cards = most(SearchFilter.albums, maxCards);
+    matchingTracks = _library.search(q).take(most(SearchFilter.tracks, maxTracks)).toList();
     matchingAlbums = _library.albums
         .where((a) => foldForSearch(a.title).contains(lower) || foldForSearch(a.artist).contains(lower))
-        .take(maxCards)
+        .take(cards)
         .toList();
-    matchingArtists = _library.artists.where((a) => foldForSearch(a.name).contains(lower)).take(maxCards).toList();
+    final artists = most(SearchFilter.artists, maxCards);
+    matchingArtists = _library.artists.where((a) => foldForSearch(a.name).contains(lower)).take(artists).toList();
     // An artist only featured on other people's songs has no place in the artist list, but is found by name.
-    if (!matchingArtists.any((a) => foldForSearch(a.name) == lower)) {
+    if (artists > 0 && !matchingArtists.any((a) => foldForSearch(a.name) == lower)) {
       final guest = _library.getArtistByName(q);
-      if (guest != null) matchingArtists = [guest, ...matchingArtists.take(maxCards - 1)];
+      if (guest != null) matchingArtists = [guest, ...matchingArtists.take(artists - 1)];
     }
-    matchingPlaylists = _allPlaylists().where((p) => foldForSearch(p.name).contains(lower)).take(maxCards).toList();
-    bestMatch = _computeBestMatch(lower);
+    matchingPlaylists = _allPlaylists()
+        .where((p) => foldForSearch(p.name).contains(lower))
+        .take(most(SearchFilter.playlists, maxCards))
+        .toList();
+    bestMatch = only == null ? _computeBestMatch(lower) : null;
     notifyListeners();
   }
 
@@ -147,7 +220,8 @@ class SearchViewModel extends ChangeNotifier {
     coverPath: artist.picturePath,
     tracks: artist.tracks,
     play: () {
-      if (artist.tracks.isNotEmpty) _player.playQueue(artist.tracks, null, () => artist.name);
+      rememberQuery();
+      if (artist.tracks.isNotEmpty) _player.playQueue(artist.tracks, null, () => artist.name, artist);
     },
   );
 
@@ -162,7 +236,8 @@ class SearchViewModel extends ChangeNotifier {
     coverPath: album.coverArtPath,
     tracks: album.tracks,
     play: () {
-      if (album.tracks.isNotEmpty) _player.playQueue(album.tracks, null, () => album.title);
+      rememberQuery();
+      if (album.tracks.isNotEmpty) _player.playQueue(album.tracks, null, () => album.title, album);
     },
   );
 
@@ -174,7 +249,10 @@ class SearchViewModel extends ChangeNotifier {
     meta: '${track.formattedDuration} • ${track.format.tagSpec}',
     coverPath: track.coverArtPath,
     tracks: [track],
-    play: () => _player.playQueue([track], track),
+    play: () {
+      rememberQuery();
+      _player.playQueue([track], track);
+    },
   );
 
   @override

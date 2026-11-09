@@ -251,25 +251,39 @@ class MainViewModel extends ChangeNotifier {
 
   // ── Navigation ─────────────────────────────────────────────────────────────────────────────────
 
+  /// The section whose page is on show: the tab's own, or another's opened from it (an album opened on an artist's page
+  /// shows under Artists, as in Spotify and TIDAL).
   AppSection _selectedSection = AppSection.artists;
 
-  // The tabs the user came from, the latest last; the tab that is open is never in it. Back walks it backwards.
+  /// The tab the navigation has lit: the one the page on show was reached from.
+  AppSection _selectedTab = AppSection.artists;
+
+  /// Each tab's way back: the places under the one on show, the latest last. Back goes to the last; the tab chosen again
+  /// drops them and shows its list.
+  final Map<AppSection, List<_Place>> _under = {};
+
+  /// Each tab's place on show when another tab was chosen, shown again when it is chosen again.
+  final Map<AppSection, _Place> _left = {};
+
+  // The tabs the user came from, the latest last; the tab that is open is never in it. Back from a tab's list walks it
+  // backwards.
   final List<AppSection> _tabHistory = [];
-  bool _isRestoringTab = false;
 
   int waveTrigger = 0;
   NavWaveDirection lastWaveDirection = NavWaveDirection.leftToRight;
 
   AppSection get selectedSection => _selectedSection;
-  set selectedSection(AppSection value) {
-    if (_selectedSection == value) return;
+  AppSection get selectedTab => _selectedTab;
+
+  /// Shows [section]'s page: its list, or the page open over it. The tab stays as it is.
+  void _showSection(AppSection section) {
+    if (_selectedSection == section) return;
     player.closeQueue();
     final previous = _selectedSection;
-    _selectedSection = value;
-    if (!_isRestoringTab) _rememberTab(previous, value);
+    _selectedSection = section;
     // The wave runs downwards to a section drawn below the one left, upwards to one above it.
     triggerNavWave(
-      navVisualOrder(value) > navVisualOrder(previous) ? NavWaveDirection.leftToRight : NavWaveDirection.rightToLeft,
+      navVisualOrder(section) > navVisualOrder(previous) ? NavWaveDirection.leftToRight : NavWaveDirection.rightToLeft,
     );
     notifyListeners();
   }
@@ -300,38 +314,79 @@ class MainViewModel extends ChangeNotifier {
 
   static const double tileSizeDefault = 176, tileSizeMin = 128, tileSizeMax = 320;
 
-  /// A tab (a section of the sidebar) as TIDAL's and Spotify's: another one shows as it was left, an album's, an
-  /// artist's or a playlist's page still open; the one on show chosen again goes from such a page back to its list,
-  /// and from the list to its top.
+  /// A tab (a section of the sidebar) as TIDAL's and Spotify's: another one shows as it was left, with the page that was
+  /// open in it and the way back from there; the one on show chosen again goes from any page back to its list, and from
+  /// the list to its top.
   void navigateTo(AppSection section) {
-    if (section == selectedSection && !isSearchOpen && !_closeDetailOf(section)) scrollToTopRequested.emit(null);
-    // A page kept open is its tab's from now on, wherever it was opened from.
-    albums.forgetOrigin();
-    artists.forgetOrigin();
-    playlists.forgetOrigin();
+    final searching = isSearchOpen;
     searchQuery = '';
     isSearchOpen = false;
     // The automatic playlists follow what was played since.
     if (section == AppSection.playlists) playlists.refreshPlaylists();
-    selectedSection = section;
+    if (section != _selectedTab) return _switchTab(section, remember: true);
+    if (searching) return;
+    final atList = _selectedSection == section && _openPageOf(section) == null && (_under[section]?.isEmpty ?? true);
+    if (atList) return scrollToTopRequested.emit(null);
+    _under[section]?.clear();
+    _restore(_Place(section, null));
   }
 
-  /// Closes the page open over [section]'s list; false when none is.
-  bool _closeDetailOf(AppSection section) {
-    switch (section) {
-      case AppSection.albums when albums.isAlbumDetailOpen:
-        albums.forgetOrigin();
-        albums.closeAlbumDetail();
-      case AppSection.artists when artists.isArtistDetailOpen:
-        artists.forgetOrigin();
-        artists.closeArtistDetail();
-      case AppSection.playlists when playlists.isPlaylistDetailOpen:
-        playlists.forgetOrigin();
-        playlists.closePlaylistDetail();
+  /// Shows [tab] as it was left; [remember]ing the tab left, for Back.
+  void _switchTab(AppSection tab, {required bool remember}) {
+    _left[_selectedTab] = _placeNow();
+    final previous = _selectedTab;
+    _selectedTab = tab;
+    if (remember) _rememberTab(previous, tab);
+    _restore(_left.remove(tab) ?? _Place(tab, null), wave: null);
+    notifyListeners();
+  }
+
+  /// The album, artist or playlist open over [section]'s list; null when its list is up.
+  Object? _openPageOf(AppSection section) => switch (section) {
+    AppSection.albums => albums.selectedAlbum,
+    AppSection.artists => artists.selectedArtist,
+    AppSection.playlists => playlists.selectedPlaylist,
+    _ => null,
+  };
+
+  /// Where the user is now in the tab: the section on show and its page; [after] is what comes back over it (the search
+  /// it was left from, a sheet), [title] what Back is called on the way to it.
+  _Place _placeNow({VoidCallback? after, String Function()? title}) =>
+      _Place(_selectedSection, _openPageOf(_selectedSection), after: after, title: title);
+
+  /// Shows [place] of the tab on show: its section, and its page as the library has it now (its list, when the page is
+  /// gone), with Back leading to the place under it. [wave] runs the navigation's wave that way.
+  void _restore(_Place place, {NavWaveDirection? wave = NavWaveDirection.rightToLeft}) {
+    final under = _under[_selectedTab];
+    final back = under == null || under.isEmpty ? null : under.last;
+    final backText = back?.title;
+    final onReturn = back == null ? null : _back;
+    switch (place.section) {
+      case AppSection.albums:
+        final album = place.page is Album ? library.getAlbum((place.page as Album).id) : null;
+        albums.showPage(album, backText, onReturn, wave);
+      case AppSection.artists:
+        final artist = place.page is Artist ? library.getArtist((place.page as Artist).id) : null;
+        artists.showPage(artist, backText, onReturn, wave);
+      case AppSection.playlists:
+        final playlist = place.page is Playlist ? library.getPlaylist((place.page as Playlist).id) : null;
+        playlists.showPage(playlist, backText, onReturn, wave);
       default:
-        return false;
+        break;
     }
-    return true;
+    _showSection(place.section);
+    place.after?.call();
+    notifyListeners();
+  }
+
+  /// Back from the page on show to the place under it in the tab: the page it was opened from, the list, the search.
+  void _back() {
+    final under = _under[_selectedTab];
+    if (under == null || under.isEmpty) return;
+    final place = under.removeLast();
+    // Into another section or the search, as a page opened from there: at once, the cover's flight the way between.
+    if (place.section != _selectedSection || place.after != null) jumps++;
+    _restore(place);
   }
 
   // ── Search ─────────────────────────────────────────────────────────────────────────────────────
@@ -447,6 +502,7 @@ class MainViewModel extends ChangeNotifier {
     if (player.isQueueOpen) return player.closeQueue;
 
     switch (_selectedSection) {
+      // A page closes; Back then goes on to the place it was opened from in the tab, if any.
       case AppSection.albums when albums.isAlbumDetailOpen:
         return albums.closeAlbumDetail;
       case AppSection.artists when artists.isArtistDetailOpen:
@@ -460,122 +516,77 @@ class MainViewModel extends ChangeNotifier {
         break;
     }
 
-    // Back from a tab goes to the tab the user came from, shown as it was left (an open album stays open).
-    if (_tabHistory.isNotEmpty) {
-      return () {
-        final previous = _tabHistory.removeLast();
-        _isRestoringTab = true;
-        try {
-          selectedSection = previous;
-        } finally {
-          _isRestoringTab = false;
-        }
-      };
-    }
+    // A list over places in its tab (the one a page was opened from): back to them.
+    if (_under[_selectedTab]?.isNotEmpty ?? false) return _back;
+
+    // Back from a tab's list goes to the tab the user came from, shown as it was left.
+    if (_tabHistory.isNotEmpty) return () => _switchTab(_tabHistory.removeLast(), remember: false);
     return null;
   }
 
   // ── Opening albums, artists and playlists from anywhere ────────────────────────────────────────
 
-  /// How many times a page was opened from another tab or the search, or back went from it to there. The wide layout
-  /// shows such a jump at once, as a page opened or left within a tab, the cover's flight being the way between the
-  /// two: a cross-fade back would show the tab left, whose page is closed by then, as its list, and send the page's
-  /// cover flying back to that list. (The phone's pages change at once anyway.)
+  /// The listening summary is to open again over Playlists: Back returned from a page opened in it.
+  bool wantsListeningSummary = false;
+
+  /// How many times a page was opened from another section or the search, or back went from it to there. The wide
+  /// layout shows such a jump at once, as a page opened or left within a section, the cover's flight being the way
+  /// between the two: a cross-fade would show the page left as it closes, and send its cover flying back to a list.
+  /// (The phone's pages change at once anyway.)
   int jumps = 0;
 
-  /// A page about to open on [target]'s tab: from another tab or the search, a jump ([jumps]).
-  void _jumpTo(AppSection target) {
-    if (target != _selectedSection || _isSearchOpen || _isSearchActive) jumps++;
-  }
-
-  /// What "back" does on an album, artist or playlist page opened from where the user is now: return to the search
-  /// results, to the detail page the user came from, or to the tab. [target] is the section being opened.
-  (String Function()?, void Function()?) _captureOrigin(AppSection target) {
-    final (backText, onReturn) = _originOf(target);
-    if (onReturn == null) return (backText, null);
-    return (
-      backText,
-      () {
-        jumps++;
-        onReturn();
-      },
+  /// Opens a page of [section] (an album's, an artist's, a playlist's) with [open], over the place the user is at in the
+  /// tab, which Back then leads to: the page or list on show, or the search's results. [reopen] is what comes back
+  /// over that place on the way back (the sheet the page was opened from).
+  void _openPage(
+    AppSection section,
+    void Function(String Function()? backText, void Function()? onReturn) open, {
+    VoidCallback? reopen,
+  }) {
+    final query = _searchQuery;
+    final fromSearch = _isSearchActive;
+    // A search that led somewhere is one to remember.
+    if (fromSearch) search.rememberQuery();
+    final place = _placeNow(
+      after: fromSearch
+          ? () {
+              _searchQuery = '';
+              searchQuery = query;
+              isSearchActive = true;
+            }
+          : reopen,
+      title: fromSearch ? () => Localizer.get('Search') : null,
     );
-  }
-
-  (String Function()?, void Function()?) _originOf(AppSection target) {
-    if (_isSearchActive) {
-      final activeQuery = _searchQuery;
-      return (
-        () => Localizer.get('Search'),
-        () {
-          _searchQuery = '';
-          searchQuery = activeQuery;
-          isSearchActive = true;
-        },
-      );
-    }
-
-    switch (_selectedSection) {
-      case AppSection.albums when target != AppSection.albums && albums.selectedAlbum != null:
-        final returnAlbum = albums.selectedAlbum!;
-        return (
-          () => returnAlbum.title,
-          () {
-            selectedSection = AppSection.albums;
-            albums.openAlbumWithOrigin(returnAlbum, null, null, NavWaveDirection.rightToLeft);
-          },
-        );
-      case AppSection.artists when target != AppSection.artists && artists.selectedArtist != null:
-        final returnArtist = artists.selectedArtist!;
-        return (
-          () => returnArtist.name,
-          () {
-            selectedSection = AppSection.artists;
-            artists.openArtistWithOrigin(returnArtist, null, null, NavWaveDirection.rightToLeft);
-          },
-        );
-      case AppSection.playlists when target != AppSection.playlists && playlists.selectedPlaylist != null:
-        final returnPlaylist = playlists.selectedPlaylist!;
-        return (
-          () => returnPlaylist.name,
-          () {
-            selectedSection = AppSection.playlists;
-            playlists.openPlaylistWithOrigin(returnPlaylist, null, null, NavWaveDirection.rightToLeft);
-          },
-        );
-      case AppSection.favorites:
-        return (() => Localizer.get('NavFavorites'), () => selectedSection = AppSection.favorites);
-      case AppSection.tracks:
-        return (() => Localizer.get('NavTracks'), () => selectedSection = AppSection.tracks);
-      default:
-        return (null, null);
-    }
-  }
-
-  /// Opens a page of [section] (an album's, an artist's, a playlist's) with [open], from wherever the user is: Back
-  /// leads there again.
-  void _openPage(AppSection section, void Function(String Function()? backText, void Function()? onReturn) open) {
-    _jumpTo(section);
-    final (backText, onReturn) = _captureOrigin(section);
-    open(backText, onReturn);
+    (_under[_selectedTab] ??= []).add(place);
+    if (section != _selectedSection || fromSearch) jumps++;
+    open(place.title, _back);
     isNowPlayingOpen = false;
     isSearchActive = false;
-    selectedSection = section;
+    _showSection(section);
     notifyListeners();
   }
 
-  void openAlbum(Album? album) {
+  /// Opens [album]'s page over the place the user is at; [reopen] comes back over that place on the way back.
+  void openAlbum(Album? album, {VoidCallback? reopen}) {
     if (album == null) return;
-    _openPage(AppSection.albums, (backText, onReturn) => albums.openAlbumWithOrigin(album, backText, onReturn));
+    _openPage(
+      AppSection.albums,
+      (backText, onReturn) => albums.openAlbumWithOrigin(album, backText, onReturn),
+      reopen: reopen,
+    );
   }
 
   void openAlbumOfTrack(Track? track) {
     if (track != null) openAlbum(library.getAlbumForTrack(track));
   }
 
-  void openArtist(Artist? artist) {
+  void openArtist(Artist? artist, {VoidCallback? reopen}) {
     if (artist == null) return;
-    _openPage(AppSection.artists, (backText, onReturn) => artists.openArtistWithOrigin(artist, backText, onReturn));
+    _openPage(
+      AppSection.artists,
+      (backText, onReturn) => artists.openArtistWithOrigin(artist, backText, onReturn),
+      reopen: reopen,
+    );
   }
 
   void openPlaylist(Playlist? playlist) {
@@ -586,8 +597,26 @@ class MainViewModel extends ChangeNotifier {
     );
   }
 
-  void openArtistByName(String? artistName) {
-    if (artistName != null && artistName.trim().isNotEmpty) openArtist(library.getArtistByName(artistName));
+  /// Opens what the queue was played from ([PlayerViewModel.playingSource]): its album, artist or playlist, or its page
+  /// of tracks.
+  void openPlayingSource() {
+    switch (player.playingSource) {
+      case final Album album:
+        openAlbum(library.getAlbum(album.id) ?? album);
+      case final Artist artist:
+        openArtistByName(artist.name);
+      case final Playlist playlist:
+        openPlaylist(library.getPlaylist(playlist.id));
+      case final AppSection section:
+        closeNowPlaying();
+        navigateTo(section);
+    }
+  }
+
+  void openArtistByName(String? artistName, {VoidCallback? reopen}) {
+    if (artistName != null && artistName.trim().isNotEmpty) {
+      openArtist(library.getArtistByName(artistName), reopen: reopen);
+    }
   }
 
   /// Puts [tracks] right after the current track ([next]) or at the end of the queue, and says so, naming them by
@@ -762,6 +791,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _equalizerPreference = 'equalizer';
   static const String _equalizerOnPreference = 'equalizer_on';
   static const String _gaplessPreference = 'gapless';
+  static const String _autoplayPreference = 'autoplay';
   static const String _updateCheckPreference = 'update_check';
 
   WiretuneTheme _theme = WiretuneTheme.airy;
@@ -882,6 +912,14 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Autoplay (similar music after the queue's end); on by default.
+  bool get isAutoplayEnabled => player.isAutoplayEnabled;
+  set isAutoplayEnabled(bool value) {
+    player.isAutoplayEnabled = value;
+    _remember(_autoplayPreference, value ? '1' : '0');
+    notifyListeners();
+  }
+
   /// Gapless playback (the next track starts the moment the current one ends); on by default.
   bool get isGaplessEnabled => player.isGaplessEnabled;
   set isGaplessEnabled(bool value) {
@@ -998,6 +1036,7 @@ class MainViewModel extends ChangeNotifier {
     final quality = StreamingQuality.values.asNameMap()[library.getPreference(_streamingQualityPreference)];
     if (quality != null) unawaited(audioEngine.setStreamingQuality(quality));
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
+    player.isAutoplayEnabled = library.getPreference(_autoplayPreference) != '0'; // on unless turned off
 
     // A lasting ID of its own, so the others know it again after a restart; it connects once signed in.
     var id = library.getPreference(_remoteIdPreference);
@@ -1163,4 +1202,29 @@ class MainViewModel extends ChangeNotifier {
     tileSize.dispose();
     super.dispose();
   }
+}
+
+/// A place in a tab: a section, with the album, artist or playlist open over its list ([page]; null for the list); what
+/// comes back over it when Back returns there ([after]: the search it was left from, a sheet); and what Back calls it.
+class _Place {
+  _Place(this.section, this.page, {this.after, String Function()? title}) : title = title ?? _titleOf(section, page);
+
+  final AppSection section;
+  final Object? page;
+  final VoidCallback? after;
+  final String Function() title;
+
+  static String Function() _titleOf(AppSection section, Object? page) => switch (page) {
+    final Album album => () => album.title,
+    final Artist artist => () => artist.name,
+    final Playlist playlist => () => playlist.name,
+    _ => () => Localizer.get(switch (section) {
+      AppSection.artists => 'NavArtists',
+      AppSection.albums => 'NavAlbums',
+      AppSection.tracks => 'NavTracks',
+      AppSection.favorites => 'NavFavorites',
+      AppSection.playlists => 'NavPlaylists',
+      AppSection.settings => 'NavSettings',
+    }),
+  };
 }
