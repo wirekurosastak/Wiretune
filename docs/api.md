@@ -56,12 +56,11 @@ A **track** has:
 - `trackNumber`, `trackCount`, `discNumber`, `releaseYear`, `bpm`, `genre`
 - `durationMs`, `fileSizeBytes`, `fileModifiedAt`, `hasCoverArt`, `addedAt`
 - `format`: `codec`, `sampleRate`, `bitsPerSample` (0 for lossy), `channels`, `bitrateKbps`, `isLossless`
-- `coverVersion`, if it has a cover. It changes when the album's cover changes. Players add it to the cover URL
-  (`?v=`), so a new cover is never mistaken for a cached one.
+- `coverVersion`, if it has a cover: changes with the album's cover. Players add it to the cover URL (`?v=`).
 
-File paths never leave the server. Favorites and play counts are per account and come from `/api/me/data`. Players group
-albums and artists themselves; `album`, `albumArtist`, `trackNumber` and `discNumber` already reflect how the server
-filed a folder of one artist's songs ([user guide](user-guide.md#the-library)).
+File paths never leave the server. Favorites and play counts come from `/api/me/data`. Players group albums and
+artists themselves; `album`, `albumArtist`, `trackNumber` and `discNumber` already say how the server filed a folder of
+one artist's songs ([user guide](user-guide.md#the-library)).
 
 ## Your data
 
@@ -94,8 +93,8 @@ and the other `members`; the owner's own has the `members` who joined and the ac
 there is nobody. A change to a shared playlist sends `dataChanged` to everyone who has it, and an invitation sends
 `playlistInvitesChanged` to the invited account. Blocking ends the sharing between the two accounts, either way.
 
-The server doesn't check that a track ID exists: libraries get rescanned and moved, and old IDs are kept. A scan that
-finds a moved or renamed file moves the data to the new ID and sends `dataChanged`.
+The server doesn't check that a track ID exists (old IDs are kept across rescans). A scan that finds a moved file moves
+its data to the new ID and sends `dataChanged`.
 
 ## Recommendations
 
@@ -126,8 +125,9 @@ Each change sends `blendsChanged` to both accounts' players. Blocking ends a Ble
 an invitation between them waits: its sender sees it as `inviting`, the account that blocks never sees it, and it
 can't be accepted.
 
-An account can block another: a blocked account's recommendations stop reaching it (the ones it sent before are
-deleted) and its invites to listen together never arrive. The blocked account isn't told.
+An account can block another, which isn't told: the blocked account's recommendations (sent ones included) and
+invites to listen together stop reaching it. Blocking also ends their Blend and shared playlists, and hides each
+one's shared players from the other.
 
 | Route | Role | |
 |---|---|---|
@@ -148,9 +148,10 @@ deleted) and its invites to listen together never arrive. The blocked account is
 ## Remote control
 
 `GET /api/remote` upgrades to a WebSocket (user role, sign-in token in the header only: no stream token, no `?token=`).
-Through it the players of one account see each other and send each other commands, and players of different accounts
-[listen together](#listen-together). The server only relays messages, between the players of one account or of one
-group, and stores none.
+Through it the players of one account see each other and send each other commands, a player can play on another
+account's shared player on the same network (the same public address, or both on the server's side: private, loopback,
+link-local, Tailscale), and players of different accounts [listen together](#listen-together). The server relays the
+messages and stores none.
 
 - A plain `GET`: `426`.
 - A request from a web page (with an `Origin` header): `403`.

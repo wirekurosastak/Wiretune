@@ -23,12 +23,12 @@ genres and labels, track credits, and the update check. Each can be turned off (
 - Gapless playback: FLAC, ALAC, WAV, AIFF, APE, WavPack, DSD (as PCM), MP3, AAC, Vorbis, Opus.
 - Synced lyrics, from the file or [LRCLIB](https://lrclib.net).
 - Quality badge on every album and track: hi-res, CD or lossy.
-- One account per listener. Favorites, playlists and play counts are the same on every device.
+- Genres, labels and credits from Deezer and MusicBrainz where the tags lack them; related artists and similar albums.
+- One account per listener: favorites, playlists and plays on every device, and *Your listening* sums them up.
 - Offline downloads that stay in sync with the server.
-- A ten-band equalizer (not in bit-perfect mode).
-- Streaming quality for a slow connection: the server converts to Opus when you ask (with `ffmpeg`).
-- Remote control: control one device from another.
-- Friends on your server: recommend music to each other, and listen together in step.
+- A ten-band equalizer, and a lower streaming quality for a slow connection.
+- Remote control: play on and control your other devices, a friend's TV, or a UPnP/DLNA streamer.
+- Friends on your server: recommendations, listening together, Blends and shared playlists.
 - English, Hungarian, German.
 
 ## Platform support

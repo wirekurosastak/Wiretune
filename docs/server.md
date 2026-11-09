@@ -1,9 +1,7 @@
 # Running the server
 
 The server is one program. It indexes one music folder (read-only), keeps its own SQLite database, and serves the
-players over the [HTTP API](api.md). It speaks plain HTTP unless you give it a certificate
-([HTTPS](#https-without-a-proxy)); for access away from home, use [Tailscale or HTTPS](#away-from-home). Read
-[SECURITY.md](../SECURITY.md) before exposing it to a network you don't fully trust.
+players over the [HTTP API](api.md). For access away from home: [Tailscale or HTTPS](#away-from-home).
 
 ## Start it
 
@@ -13,19 +11,18 @@ Build it ([building.md](building.md#server)), copy `dist/server` to the machine 
 dist/server/bin/wiretune_server --library /srv/music
 ```
 
-It listens on port 5200 on all IPv4 interfaces and scans the folder. Until the first account exists, every start logs a
-setup code:
+It listens on port 5200 and scans the folder. Until the first account exists, every start logs a setup code:
 
 ```
 No administrator account exists yet. Create it in the player with the setup code K7QP-2WXM
 ```
 
-Enter it in the player to create the first account, which becomes the administrator. The code isn't used after that.
+Enter it in the player to create the administrator account.
 
 ## Docker
 
 The image runs the server as an unprivileged user, with the music at `/music` and the data at `/data`. Build it from
-the repository root (it needs the core package too):
+the repository root:
 
 ```bash
 docker build -f server/Dockerfile -t wiretune-server .
@@ -33,28 +30,21 @@ docker run -d --name wiretune -p 5200:5200 -v /srv/music:/music:ro -v wiretune-d
 docker logs wiretune        # the setup code, on the first start
 ```
 
-Once a release is published, the image is also at `ghcr.io/wirekurosastak/wiretune-server`, and as `…:ffmpeg` with
-[ffmpeg](#streaming-on-a-slow-connection) in it. Set other options as `WIRETUNE_*` variables
-(`-e WIRETUNE_SCAN_INTERVAL=0`). Keep `/data` on a volume, or every new container starts with an
-empty database.
+Released images: `ghcr.io/wirekurosastak/wiretune-server`, and `…:ffmpeg` with [ffmpeg](#streaming-on-a-slow-connection).
+Set [options](#options) as `WIRETUNE_*` variables (`-e WIRETUNE_SCAN_INTERVAL=0`). Keep `/data` on a volume, or each new
+container starts with an empty database.
 
-With Docker Compose, [`docker-compose.yml`](../docker-compose.yml) in the repository root does the same, with a restart
-policy and a health check. Change the music folder in it, then `docker compose up -d` (add `--build` to build the image
-from the checkout instead of pulling it) and `docker compose logs` for the setup code.
+Docker Compose: set the music folder in [`docker-compose.yml`](../docker-compose.yml), then `docker compose up -d`
+(`--build` builds from the checkout) and `docker compose logs` for the setup code.
 
 ### Streaming on a slow connection
 
-With `ffmpeg` on the machine (or the `:ffmpeg` image; build one with `--build-arg WITH_FFMPEG=true`, 450 MB bigger), the
-server can convert a track to Opus or MP3 when a player asks, for example `/api/stream/{id}?format=opus&bitrate=96`. The
-players ask for it with their *Streaming quality* setting ([audio.md](audio.md#streaming-quality)).
+With `ffmpeg` on the machine (or the `:ffmpeg` image; build one with `--build-arg WITH_FFMPEG=true`), the server
+converts a track to Opus or MP3 when a player's *Streaming quality* asks for it ([audio.md](audio.md#streaming-quality)).
 
-- **First play waits.** A track is converted whole, then sent like any file (with seeking). A song takes a second or two
-  on a desktop CPU, longer on a NAS. The next play of it is instant.
-- **Kept on disk.** Converted files live in `Transcodes/` in the [data directory](#data-directory), at most 2 GB: the
-  ones played longest ago go first. They are made again if the music file changes. Delete the folder whenever you like.
-- **A few at a time.** Two conversions run at once; the rest wait.
-- **Never a hard failure.** Without `ffmpeg`, with a file it can't read, or when the file is lossy and already at or
-  below the bitrate, the server sends the file itself. The log says which.
+- The first play of a track waits for the conversion: a second or two on a desktop CPU, longer on a NAS.
+- Converted files are kept in `Transcodes/` in the [data directory](#data-directory), up to 2 GB. Safe to delete.
+- Without `ffmpeg`, or when the file is already smaller, the server sends the original.
 
 ## Running it as a service
 
@@ -84,8 +74,8 @@ sudo systemctl enable --now wiretune
 journalctl -u wiretune -f        # the setup code appears here on the first start
 ```
 
-The `wiretune` user only needs read access to the music. systemd keeps the data folder private to it, which matters
-because the database holds the password hashes and the token-signing key.
+The `wiretune` user only needs read access to the music. systemd keeps the data folder (password hashes, signing key)
+private to it.
 
 ## Away from home
 
@@ -121,7 +111,8 @@ For an `https://` address that works on any device without an extra app:
 
 4. Start the server with `--host 127.0.0.1 --trust-proxy`, and connect the players to `https://yourname.ddns.net`.
 
-`--trust-proxy` gives each player its own sign-in rate limit instead of sharing the proxy's. It trusts
+`--trust-proxy` gives each player its own sign-in rate limit instead of sharing the proxy's, and lets the server tell
+which players are on the same network (only those can play on another account's player). It trusts
 `X-Forwarded-For` from anyone who can reach the port, so only use it while `--host 127.0.0.1` keeps the port behind the
 proxy.
 
@@ -131,31 +122,27 @@ its `location` block.
 
 ### HTTPS without a proxy
 
-If you already have a certificate and its key as PEM files (from Let's Encrypt, for example), the server can serve HTTPS
-itself:
+With a certificate and its key as PEM files (from Let's Encrypt, for example), the server serves HTTPS itself:
 
 ```bash
 wiretune_server --library /srv/music --tls-cert /etc/ssl/fullchain.pem --tls-key /etc/ssl/privkey.pem
 ```
 
-Use the full chain, as Let's Encrypt's `fullchain.pem`. The files are read at start, so restart the server after a
-renewal. The players accept only certificates their system trusts: a self-signed one is refused.
+Use the full chain (`fullchain.pem`) and restart the server after a renewal. Self-signed certificates are refused.
 
 ## Accounts
 
-The administrator adds and removes other accounts in *Settings → Account & connection*. Those are regular users and
-can't be promoted. The administrator can't delete their own account. Names: up to 64 characters, unique ignoring case.
-The administrator can rename any account there, and with *Members can change their name* let the others rename
-themselves (*Change name*). A renamed account keeps everything and stays signed in; it signs in with the new name next
-time.
-Passwords: at least 8 characters and at most 72 bytes (bcrypt ignores the rest).
+In *Settings → Account & connection* the administrator:
 
-Each account's favorites, play counts (with a log of its plays, for its listening summary), playlists and hidden items
-are stored on the server, so they're the same on every device, and they're deleted with the account ([limits](api.md#your-data)).
+- adds and removes accounts (regular users; there is one administrator),
+- renames them, and with *Members can change their name* lets them rename themselves,
+- resets a password, which signs that account out everywhere: use it to cut off a lost phone.
 
-Changing your own password doesn't ask for the current one, and it signs out the account's other devices. When the
-administrator resets another account's password (*Settings → Account & connection*), that account is signed out
-everywhere. Use this to cut off a lost phone. Sign-in and token details: [SECURITY.md](../SECURITY.md#server).
+Names: up to 64 characters, unique ignoring case. Passwords: 8 characters to 72 bytes. Changing your own password
+doesn't ask for the current one and signs out your other devices.
+
+Each account's favorites, plays, playlists and hidden items are kept on the server and deleted with the account
+([limits](api.md#your-data)).
 
 **Lost the administrator password?** There's no reset. Stop the server, delete the rows of the `users` table in
 `wiretune-server.db`, and start it again to set it up from scratch:
@@ -177,38 +164,31 @@ used. It contains:
 - `Covers/`: pictures taken from the files. Safe to delete; the next scan recreates them.
 - `wiretune-server.log`, rotated to `.1` at 10 MiB.
 
-Changes are written immediately, so a restart loses nothing. A *different* data folder starts the server from scratch
-and asks for a setup code again. Keep it on persistent storage.
+A different data folder starts the server from scratch, with a new setup code. Keep it on persistent storage.
 
-**Back up the database.** A scan rebuilds the index, but nothing rebuilds the accounts, the signing key or the
-playlists. Stop the server first, or copy the `.db` together with its `-wal` and `-shm` files. A newer server upgrades
-the database on its first start, and older versions can't open it after that, so back up before upgrading. A database
-from a newer version is refused, not misread.
+**Back up the database.** A scan rebuilds the index, but not the accounts, the signing key or the playlists. Stop the
+server first, or copy the `.db` with its `-wal` and `-shm` files. A newer server upgrades the database, after which
+older versions can't open it, so back up before upgrading.
 
 ## Scanning
 
-The server scans the music folder at startup and about ten seconds after files stop changing. Network shares don't
-report changes made from other machines, so it also rescans every `--scan-interval` minutes. Scans are incremental, and
-online players pick up the changes at once.
+The server scans the music folder at startup, about ten seconds after files stop changing, and every
+`--scan-interval` minutes (network shares don't report changes made elsewhere). Players pick up the changes at once.
 
-An administrator can start a scan with **Reindex** in the player (*Settings → Library*), or switch to another folder
-there. That choice is saved and overrides `--library` from then on, even while the folder is missing (such as a share
-that mounts late).
+In *Settings → Library* an administrator can **Reindex**, or switch to another folder; that choice overrides
+`--library` from then on.
 
-After a scan the server looks up the albums it hasn't asked about on Deezer, for the genre and label their files
-don't name ([what is sent](../SECURITY.md#what-leaves-your-network)). The albums' genre filter then works without genre
-tags. A track's *Credits* (in its menu) are asked from MusicBrainz the first time someone opens them. Turn both off in
-*Settings → Library → Look up music online*.
+After a scan the server looks up on Deezer the genre and label of albums whose files don't name them; a track's
+*Credits* come from MusicBrainz when first opened ([what is sent](../SECURITY.md#what-leaves-your-network)). Both are
+off with *Settings → Library → Look up music online*.
 
-Indexed formats: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis, Opus. Whether a file also
-plays depends on the player ([audio.md](audio.md)). Missing tags fall back to the file name, `Unknown artist` and
-`Unknown album`. If the folder suddenly looks empty, the server skips the scan and reports *Library folder is empty
-(unmounted share?)*, so an unmounted NAS doesn't wipe your library.
+Indexed formats: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis, Opus
+([what plays where](audio.md)). Missing tags fall back to the file name, `Unknown artist` and `Unknown album`. A folder
+that suddenly looks empty isn't scanned (*Library folder is empty (unmounted share?)*), so an unmounted NAS doesn't wipe
+the library.
 
-A track's ID comes from its full file path, so a moved or renamed file is a new track to a scan. The scan pairs it with
-the one that went when it is the only file of that size and length, or the only one with that title, artist and album and
-nearly that length, and moves the accounts' favorites, plays, hidden tracks and playlist entries over. Files that can't
-be told apart aren't guessed: their data stays with the old IDs, which no longer match anything.
+A moved or renamed file keeps its favorites, plays and playlist entries when the scan can tell which file it was: the
+only one of that size and length, or of that title, artist, album and length.
 
 ## Options
 

@@ -2,16 +2,15 @@
 
 ## First start
 
-**With a server:** enter its address (`http://<server-ip>:5200`) and press **Connect**. A new server asks you to create
-the administrator account with its setup code ([server.md](server.md#start-it)). Otherwise you sign in. A sign-in lasts
-24 hours, or 90 days with *Keep me signed in*. If the server goes offline, the player reconnects by itself.
+**With a server:** enter its address (`http://<server-ip>:5200`) and press **Connect**. On a new server, create the
+administrator account with the setup code ([server.md](server.md#start-it)); otherwise sign in. A sign-in lasts 24
+hours, or 90 days with *Keep me signed in*.
 
-**With your own files** (computers and Android phones, with or without a server): choose **Continue without a server**
-if you have none, pick your music folder in *Settings → Local folder* and press **Scan**. On Android the first scan asks for
-permission to read your music.
+**With your own files** (computers and Android phones): choose **Continue without a server** if you have none, pick
+your music folder in *Settings → Local folder* and press **Scan**.
 
-The interface starts in English. Hungarian and German are in *Settings → Appearance*, and so is the theme: **Airy**
-(the cover's colors fill the window) or **Dark** (pages on black). An open album or artist is in its cover's colors.
+*Settings → Appearance* has the language (English, Hungarian, German) and the theme: **Airy** (the cover's colors fill
+the window) or **Dark** (pages on black).
 
 ## The library
 
@@ -24,41 +23,46 @@ Your files are never changed.
   a link. Names are never split at `&`, `,` or `/`: *Simon & Garfunkel* stays one artist.
 - **Quality badges:** **gold** for hi-res (lossless above 16 bit or 48 kHz), **silver** for CD-quality lossless,
   **bronze** for lossy. An album or playlist shows its weakest track's badge, or *MIXED* when formats differ.
-- **Covers:** the picture embedded in the file, or a `cover`, `folder` or `front` image (`.jpg`, `.jpeg`, `.png`),
-  `albumart.jpg` or `artwork.jpg` next to it. On Android 13 and later the player can only read audio files in a local
-  folder, so covers there must be embedded.
+- **Covers:** the picture embedded in the file, or a `cover`, `folder`, `front`, `albumart` or `artwork` image
+  (`.jpg`, `.jpeg`, `.png`) next to it. In a local folder on Android 13 and later, only embedded covers work.
 - **Artist pictures** come from the internet ([what's sent](../SECURITY.md#what-leaves-your-network)). To use your own,
-  put an `artist.jpg` (or `.jpeg`, `.png`) in a folder named after the artist, such as `Miles Davis/artist.jpg`. For an
-  artist without a folder, create one at the top of the music folder with just the picture. With a server, it goes in
-  the server's music folder.
+  put an `artist.jpg` (or `.jpeg`, `.png`) in a folder named after the artist, such as `Miles Davis/artist.jpg`, in the
+  server's music folder or your local one. For an artist without a folder, create one with just the picture.
 - **Duplicates:** a song both on the server and in your local folder shows once, and the local copy plays. Two tracks
   are the same song when title and artist match (ignoring case, punctuation and tails such as *(2011 Remaster)*) and
   the lengths are close. *Live*, *Acoustic* and *Demo* versions stay separate. Downloads never count as local music.
-- **New music** appears by itself. A computer watches its local folder while the player runs, a phone checks it when
-  you return to the app, and the server watches its own folder ([server.md](server.md#scanning)). An administrator can
-  force a server rescan with **Reindex** in *Settings → Library*.
+- **New music** appears by itself ([server.md](server.md#scanning)). A phone checks its local folder when you return
+  to the app. **Reindex** in *Settings → Library* rescans the server (administrator).
 - **Genres and labels** come from the tags, or with a server from Deezer for albums whose files don't name them
-  ([what's sent](../SECURITY.md#what-leaves-your-network)). An album's page ends with its label and ℗ line.
-- **Credits** (a track's *⋮ → Credits*): the composer the tags name and, with a server, who MusicBrainz says wrote,
-  produced, played and mixed it.
+  ([what's sent](../SECURITY.md#what-leaves-your-network)). An album's page ends with its label and ℗ line; tap them
+  for the label's other albums.
+- **Credits** (a track's *⋮ → Credits*): the composer from the tags and, with a server, who wrote, produced, played and
+  mixed it, from MusicBrainz.
 - **Related music:** an album's page ends with *More by* its artist and *Similar albums*, an artist's with *Related
-  artists*. They come from who is credited together on a track, then the genre, then the era.
-- **Genre filter:** Albums, Artists, Tracks and Favorites narrow to a genre (on a computer with the genre button, on a
-  phone in the sort's sheet, under *Genre*).
+  artists*: artists credited together first, then the same genre and era. An artist's page starts with what you
+  played most of theirs.
+- **Genre filter:** Albums, Artists, Tracks and Favorites narrow to a genre (the genre button on a computer, the sort
+  sheet on a phone).
 - **Sorting** lasts until the app closes. Press the active sort again to reverse it.
+- **Back** returns to where you opened a page from, however far you went (an artist, its album, a similar album…).
+  Pressing the current tab again goes back to its list.
 - **Hidden** artists, albums and tracks come back from *Settings → Hidden content*.
 
 ## Playing music
 
 Clicking a track plays the list it's in. Every *⋮* menu has **Play next** and **Add to queue**. The queue survives a
-restart. Drag a song in it by its ≡ to move it (on a phone, a long press anywhere on it works too; on a TV, its
-arrows). The sleep timer (the moon) pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
+restart; drag a song by its ≡ to move it (a long press on a phone, its arrows on a TV). **Save as playlist** in the
+queue's header keeps it. When the queue ends, similar music plays on (*Settings → Audio → Autoplay*). The sleep timer
+pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
 
-Lyrics come from the file if it has them. Timed lyrics follow the song: tap a line to jump there. For other tracks the
-player asks [LRCLIB](https://lrclib.net), unless *Settings → Appearance → Lyrics from the internet* is off.
+*Playing from* in the player opens what the music was played from. A click on the quality tag shows the file and its
+way to the speakers (the signal path).
+
+Lyrics come from the file, else from [LRCLIB](https://lrclib.net) (*Settings → Appearance → Lyrics from the
+internet*). Tap a timed line to jump there.
 
 Tracks of the same format play without a gap ([audio.md](audio.md#gapless-playback)). A track that can't play stops the
-queue and shows why, instead of skipping.
+queue and says why.
 
 | Key (⌘ instead of Ctrl on a Mac) | Action |
 |---|---|
@@ -71,74 +75,59 @@ queue and shows why, instead of skipping.
 
 ## Favorites and playlists
 
-For server music, favorites and playlists belong to your account, so every device shows the same ones. They're
-read-only while the player is offline. For local music they're stored on the device, but a playlist created while
-signed in is a server playlist.
+With a server, favorites and playlists belong to your account and are the same on every device (read-only while
+offline). Without one, they're stored on the device. A moved or renamed file keeps its favorites and playlists.
 
-The server identifies a track by its file path. When you move or rename a file, the next scan finds it again and keeps its
-favorites and playlists, unless several files are so alike that it can't tell which is which.
-**Your listening**, at the top of Playlists, sums up your most played artists, albums, tracks and genres, with the minutes:
-this month or this year (with a server; for an account older than that, counted from when the server started keeping
-each play) or all time. **Most played** and **Recently
-played** are built from your plays, and **Recently added** from when music came into the library; each holds 50 tracks. To reorder a playlist, drag
-its tracks (on a phone, long-press first).
+To reorder a playlist, drag its tracks (on a phone, long-press first). **Most played**, **Recently played** and
+**Recently added** fill themselves, 50 tracks each.
 
-**Share…** on a server playlist's page (on a phone, in its ⋮) shares it with the friends you tick. Once they join it
-from the bell, it's in their Playlists too, and they can add, remove and reorder its tracks. Only you rename or delete
-it; untick someone to stop sharing it with them. A playlist shared with you says whose it is, and **Leave playlist**
-takes it off your list. When two people change it at once, the later change wins.
+**Your listening**, at the top of Playlists, shows your most played artists, albums, tracks and genres, and the
+minutes: this month, this year (both need a server) or all time.
+
+**Share…** on a server playlist's page (on a phone, in its ⋮) shares it with the friends you tick. Once they join from
+the bell, they can add, remove and reorder its tracks; only you rename or delete it. **Leave playlist** takes a shared
+one off your list.
 
 ## Downloads
 
-You can download a track, album, artist, playlist or all favorites to play without the server: use the download button
-next to *Play*, or *⋮ → Download to this device*. With *Sync downloads* on (the default), downloads follow changes on
-the server. With it off, each download is fetched once. Files are saved in the [downloads folder](#where-things-are) as
-`Album artist/Album/01 - Title.flac`. Signing out deletes them.
+Download a track, album, artist, playlist or all favorites with the download button next to *Play*, or *⋮ → Download
+to this device*. With *Sync downloads* on (the default), downloads follow changes on the server. Files go to the
+[downloads folder](#where-things-are) as `Album artist/Album/01 - Title.flac`. Signing out deletes them.
 
-Away from the server, turn on *Settings → Account & connection → Offline mode*. The library then shows only downloads
-and local music, and the player stops looking for the server (no banner, no reconnecting). Turn it off, or connect to
-a server, to get everything back.
+*Settings → Account & connection → Offline mode* shows only downloads and local music, and stops looking for the
+server.
 
 ## Friends
 
-Everyone else with an account on your server is a friend. *Recommend…* in the ⋮ menu of a track, an album or an artist
-sends it to the friends you pick, with a note if you like. What friends send you waits under the bell at the top, with
-a count of what's new: tap one to play or open it, or × to remove it. Nothing you've hidden shows up there, whoever
-sends it.
+Everyone else with an account on your server is a friend.
 
-**Blend** on the Playlists page invites friends to a playlist mixed from what you both play and love. It shows on
-Playlists once they accept it from the bell, and changes as you both listen. Nothing either of you hides is in it.
-**Leave Blend** on its page ends it for both of you.
-
-To stop someone's recommendations and invites, **Block** them in *Settings → Friends*. They aren't told, and **Unblock**
-lets them reach you again.
-
-*Listen together…* in the cast menu invites friends to hear what you play. They join from the bell, or from the notice
-the invite brings, and their players play your music in step with yours, each streaming it from the server. They can
-skip, seek and add to the queue; pausing is each one's own, and play catches up again. Playing something else leaves;
-*End listening together* ends it for everyone.
+- **Recommend…** in a track's, album's or artist's ⋮ sends it to the friends you pick, with a note. What friends send
+  you waits under the bell. Nothing you've hidden shows there.
+- **Blend** on the Playlists page invites a friend to a playlist mixed from what you both play and love, without what
+  either of you hides. **Leave Blend** ends it for both.
+- **Listen together…** in the cast menu invites friends to hear what you play, in step. They can skip, seek and add to
+  the queue; pausing is each one's own. Playing something else leaves.
+- **Block** in *Settings → Friends* stops someone's recommendations and invites. They aren't told.
 
 ## Remote control
 
-Players signed in to the same account see each other. Pick a device with the cast button to control it. *This device*
-brings playback back; so does the other device dropping off the network. *Settings → Remote control* turns the feature
-off or renames this device.
+Players signed in to the same account see each other: pick one with the cast button to play there and control it
+(on a computer it's in the player bar, beside the bell while nothing plays). *This device* brings playback back.
+*Settings → Remote control* turns it off or renames this device.
 
-*Others on this server can play here* lets other accounts pick this device too: a TV in the living room, say. *Only
-music I don't hide* leaves out what this account hides; *Any music* plays everything. Their plays count for them, and
-the device says who is playing. Someone you blocked, or who blocked you, never sees the device. By default it's *Only
-music I don't hide*, and *Off* on a phone.
+*Others on this server can play here* lets other accounts play on this device too, such as a living-room TV: *Only
+music I don't hide* or *Any music*. Only players on the same network see it (your own devices see each other from
+anywhere). Their plays count for them. Someone you blocked, or who blocked you, never sees the device. It's *Only music I
+don't hide* by default, *Off* on a phone.
 
-The cast button also lists **streamers** on your network: hi-fi streamers, amplifiers and speakers that play music
-by URL (UPnP/DLNA renderers). They play the server's tracks straight from the server, in the original quality; music
-only on your device can't go there. Wiretune keeps the queue and hands each track over in turn, so there's a short
-gap between tracks. The streamer must reach the server at the address you signed in with: `localhost` won't do. Not
-on iPhone, where Apple doesn't let apps look for them without its permission.
+The cast button also lists **streamers** on your network (UPnP/DLNA renderers: hi-fi streamers, amplifiers, speakers).
+They play server music in its original quality, straight from the server, with a short gap between tracks. The
+streamer must reach the server at the address you signed in with, so not `localhost`. Not on iPhone.
 
 ## Updates
 
 When a new version is out, a banner says so. **Update** downloads and installs it; × hides the banner until the next
-check. Nothing installs unless you press **Update**.
+check.
 
 | Installed from | What **Update** does |
 |---|---|
@@ -150,27 +139,31 @@ check. Nothing installs unless you press **Update**.
 
 Copies on iPhone and iPad, Tizen TVs and the portable Windows folder don't check for updates.
 
-The player checks at start and once a day, never in offline mode. *Settings → About → Look for updates* turns it off
-([what's sent](../SECURITY.md#what-leaves-your-network)). The server doesn't update with the player: update it too and
-keep both on the same version ([back up first](server.md#data-directory)).
+The player checks at start and once a day; *Settings → About → Look for updates* turns it off. Update the server too
+and keep both on the same version ([back up first](server.md#data-directory)).
 
 ## Phones, TVs and the car
 
 Phones stay in portrait; tablets rotate. On a touch screen:
 
+- the full-screen player has the queue at its bottom left, and its ⋮ at the bottom right has the lyrics, the sleep
+  timer and the song's menu; the cast button is at its top right (on the pages too while nothing is loaded)
 - swipe the mini player, or the full-screen player's cover, to skip
-- swipe a song in the full-screen player's queue to the left to take it out (Undo puts it back)
-- on Android, the media notification (and Android Auto) has a heart for the song that plays and a shuffle button
-- on Android, the *Wiretune* widget on the home screen shows what plays, with previous, play or pause and next; made
-  two cells tall, also the heart and shuffle; a tap on it opens the app
-- pull a list down past its top to search
+- swipe a song in the queue to the left to take it out
+- pull a list down past its top to search; the search shows your recent searches, and its results narrow to artists,
+  albums, tracks or playlists
+- a long list has a thumb at its right edge while it scrolls: drag it to jump
+- the top of a ⋮ menu opens what it's for
 - long-press an album, artist or playlist for a preview with its menu
 - pinch to resize tiles (tablets and touchpads)
+
+On Android, the media notification and Android Auto have a heart and a shuffle button, and the home-screen widget shows
+what plays (two cells tall, with the heart and shuffle too).
 
 On a TV (Android TV or Tizen), the arrows move, the center button plays and Back goes back. Some formats may not play on
 Tizen ([audio.md](audio.md#tizen)).
 
-Android Auto shows your albums, artists, playlists and favorites once the phone is signed in, and supports voice search.
+Android Auto shows your albums, artists, playlists and favorites once the phone is signed in, with voice search.
 
 ## Where things are
 

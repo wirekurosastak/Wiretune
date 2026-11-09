@@ -9,40 +9,33 @@ Don't open a public issue. Use private vulnerability reporting (Security tab →
 off, open an issue that only asks for a private contact, and send the details there.
 
 Include the version or commit, what happens and how to reproduce it. We'll agree on the fix with you before anything is
-made public. Fixes go to the latest release, or to the default branch until there is one.
+made public.
 
 ## What leaves your network
 
 The players make three kinds of internet requests, and the server two. Nothing else leaves your network.
 
-- **Artist pictures** from Deezer's public API. Deezer sees the artist names and up to two album titles per artist
-  (to tell apart artists with the same name). Artists with their own `artist.jpg` aren't looked up.
-  Off: `WIRETUNE_NO_ARTIST_PICTURES=1`.
-- **Lyrics** from LRCLIB, for tracks without lyrics, when you open the queue or the lyrics. The player sends title,
-  artist, album and length, with a `Wiretune/<version>` user agent. Off: in Settings, or `WIRETUNE_NO_ONLINE_LYRICS=1`.
-- **Updates**: release builds ask GitHub for the latest release at start and once a day. GitHub sees your IP address
-  and version. Only after you press **Update** does the player download the file for your system and the release's
-  `SHA256SUMS.txt`. A file with a wrong checksum isn't installed. This catches a damaged download, not a release
-  replaced by someone who took over the GitHub account. Android also requires the same signature.
-  Off: *Settings → About*, or `WIRETUNE_NO_UPDATE_CHECK=1`.
+- **Artist pictures** from Deezer: the artist's name and up to two of its album titles. Not for artists with their own
+  `artist.jpg`. Off: `WIRETUNE_NO_ARTIST_PICTURES=1`.
+- **Lyrics** from LRCLIB, for tracks without them: title, artist, album and length. Off: *Settings → Appearance*, or
+  `WIRETUNE_NO_ONLINE_LYRICS=1`.
+- **Updates** from GitHub, at start and once a day: GitHub sees your IP address and version. The file is downloaded
+  only when you press **Update**, and installed only if it matches the release's `SHA256SUMS.txt` (and, on Android,
+  the app's signature). The checksum catches a damaged download, not a release replaced by someone who took over the
+  GitHub account. Off: *Settings → About*, or `WIRETUNE_NO_UPDATE_CHECK=1`.
+- **Album genres and labels** (server), from Deezer, once per album after a scan: the barcode or a track's ISRC, else
+  the album's title and artist.
+- **Track credits** (server), from MusicBrainz, when someone first opens a track's *Credits*: its MusicBrainz recording
+  ID or ISRC.
 
-- **Album genres and labels** (the server): after a scan it looks each album up once on Deezer's public API, for
-  the genre and label its files don't name. Deezer sees the album's barcode or a track's ISRC from the tags, or else
-  its title and artist, with a `Wiretune/<version>` user agent; nothing about the accounts. An album that wasn't found
-  is asked again after 30 days.
-- **Track credits** (the server): when someone opens a track's *Credits*, it asks MusicBrainz once, by the file's
-  MusicBrainz recording ID or its ISRC, with a `Wiretune/<version>` user agent and the project's address. Nothing else
-  about the track or the accounts. A recording MusicBrainz doesn't know is asked again after 30 days.
-
-Both are off with *Settings → Library → Look up music online* (administrator); what was found stays.
-
-Pictures and lyrics are cached in the player's data folder, album genres, labels and credits in the server's database.
+The last two are off with *Settings → Library → Look up music online*. None of these requests says anything about the
+accounts; they carry a `Wiretune/<version>` user agent. Answers are cached: pictures and lyrics in the player, genres,
+labels and credits in the server's database.
 
 ## Server
 
-- **Plain HTTP unless you give the server a certificate** (`--tls-cert`, `--tls-key`). Passwords and tokens are sent
-  unencrypted over HTTP. Keep the port on your LAN. From outside, use Tailscale, HTTPS or an HTTPS proxy
-  ([how](docs/server.md#away-from-home)). Never expose a plain HTTP port to the internet.
+- **Plain HTTP unless you give the server a certificate** (`--tls-cert`, `--tls-key`), so passwords and tokens travel
+  unencrypted. Keep that port on your LAN; from outside, use Tailscale or HTTPS ([how](docs/server.md#away-from-home)).
 - **The database** (`wiretune-server.db`) holds the token-signing key and the password hashes. Whoever can read it can
   create tokens. On Linux, a data folder the server creates itself is private to its user. A folder you created keeps
   your permissions.
@@ -57,8 +50,7 @@ Pictures and lyrics are cached in the player's data folder, album genres, labels
   a proxy's access log, and a streamer (UPnP/DLNA) you play on gets them too. The spectrum analyzer's `ffmpeg` doesn't
   get the URL: the player downloads the track and hands it over on standard input.
 - **The setup code** ([how it's used](docs/server.md#start-it)) stops strangers from creating the first account on a
-  server with an empty data folder, such as after a wrong path or an unmounted disk. It protects the first account
-  only.
+  server with an empty data folder, such as after a wrong path or an unmounted disk.
 - **Roles**: administrator and user. Every user can read the whole library. Favorites, plays (with when, for *Your
   listening*) and playlists are per account. Other accounts see only what the account shares (below). No route, not
   even an administrator's, reads the rest.
@@ -71,7 +63,9 @@ Pictures and lyrics are cached in the player's data folder, album genres, labels
   - A shared playlist: its members see its tracks and can add, remove and reorder them. Only its owner renames or
     deletes it.
   - A player that lets others play on it (*Settings → Remote control*; on by default, off on phones): the other
-    accounts see it and what it plays, and can play on it and control it.
+    accounts' players on the same network see it and what it plays, and can play on it and control it. The server
+    tells the network by the address a player connects from: its own side (LAN, Tailscale) is one network, each public
+    address another.
 
   Blocking an account stops its recommendations and invitations reaching you, and ends the Blend, the shared
   playlists and the shared players between the two of you.
@@ -92,17 +86,15 @@ Pictures and lyrics are cached in the player's data folder, album genres, labels
   account created on a server's first run is always kept signed in). Anyone who can read that file can use the token
   until it expires. Signing out removes it. A token is only sent to the server that issued it.
 - **Downloads** are plain copies of the server's files, readable by anyone who can read their folder
-  ([where](docs/user-guide.md#where-things-are)). On Android 11 and later that's the shared *Music* folder, visible to
-  other apps; before Android 11 it's the app's own folder on shared storage. Neither the server nor a file's tags can
-  put a download outside that folder. Wiretune only overwrites or deletes files it recorded as its own. Signing out
-  deletes them. On iOS they're excluded from iCloud and computer backups. The player needs no storage permission.
+  ([where](docs/user-guide.md#where-things-are)); on Android 11 and later that's the shared *Music* folder. Neither the
+  server nor a file's tags can put a download outside it, and Wiretune only overwrites or deletes files it recorded as
+  its own. Signing out deletes them. On iOS they're left out of backups.
 - **Covers from the server** are cached in the system cache folder, readable by anyone who can read it. They're fetched
   with the token in a header, never in the URL.
-- **Plain HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP, which
-  those platforms' allow-lists can't express. Use an `https://` address on networks that aren't yours.
+- **Plain HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP. Use an
+  `https://` address on networks that aren't yours.
 - **Logs** blank every `token=` value but contain file paths, server addresses and device names. Check `wiretune.log`
   before attaching it to a public issue.
 - **UI automation** is a debug-build-only remote control on `127.0.0.1:5201`, off unless `WIRETUNE_UI_AUTOMATION=1`.
-  It's loopback-only and refuses web pages, but has no authentication, controls the player and takes credentials in
-  the query string. Only turn it on on a machine you fully control
-  ([development.md](docs/development.md#ui-automation)).
+  It refuses web pages but has no authentication and takes credentials in the query string. Only turn it on on a
+  machine you fully control ([development.md](docs/development.md#ui-automation)).

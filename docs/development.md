@@ -59,8 +59,8 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 - **The server is a headless player.** It runs the same `LibraryService`, scanner and database as the players, with
   HTTP on top.
 - **The library** is an immutable `LibrarySnapshot`, rebuilt and swapped whole after each change. A track's ID comes
-  from its full file path. Albums are keyed by title and album artist (`Track.albumId`). A track's tags
-  (`Track.tagged`) never change; how the library files it (`Track.filed`) is recomputed on every rebuild.
+  from its file path; an album's (`Track.albumId`) from its title and album artist. `Track.tagged` holds the tags,
+  `Track.filed` how the library files the track (recomputed on every rebuild).
 - **User data** (favorites, play counts, playlists, hidden items) is stored by track ID in `LibraryService`, never on
   a `Track`. For server tracks it belongs to the account.
 - **The connection** is the `ServerSession` state machine. Connecting, signing in and refreshing never throw. Server
@@ -78,7 +78,7 @@ cd server && dart run bin/wiretune_server.dart --library /path/to/music --data-d
 cd app && WIRETUNE_DATA_DIR=/tmp/wt-dev flutter run -d linux       # another; or -d windows, -d macos, a phone
 ```
 
-`--data-dir` and `WIRETUNE_DATA_DIR` use throw-away data folders, so your real Wiretune data stays untouched.
+The throw-away data folders keep your real Wiretune data untouched.
 
 - **Android:** run `flutter run -d <device>` in `app/`, for a phone with USB debugging, an emulator, or a TV after
   `adb connect <tv-ip>`.
@@ -99,12 +99,12 @@ one file with `dart test test/remote_test.dart`, or filter by name with `--name 
 - Core tests use real SQLite and files encoded with `ffmpeg`.
 - App tests render every section in both layouts, both themes and several sizes.
 
-Tests that need `ffmpeg` or `dbus-daemon` are skipped (not passed) when it's missing: watch the skip count. Nothing
-automated covers the real audio drivers, the media session, Android Auto, audio hardware or the native shells.
+Tests that need `ffmpeg` or `dbus-daemon` are skipped when it's missing: watch the skip count. Nothing automated
+covers the real audio drivers, the media session, Android Auto, audio hardware or the native shells.
 
 ### UI automation
 
-Debug builds include a local HTTP remote control for scripted UI tests. It only starts with `WIRETUNE_UI_AUTOMATION=1`:
+Debug builds have a local HTTP remote control for scripted UI tests, started by `WIRETUNE_UI_AUTOMATION=1`:
 
 ```bash
 cd app && flutter build linux --debug
@@ -115,8 +115,8 @@ curl 'http://127.0.0.1:5201/api/ui/screenshot?name=albums'        # saved to the
 curl 'http://127.0.0.1:5201/api/ui/resize?width=400&height=820'   # phone width
 ```
 
-All routes are in `app/lib/src/debug/ui_automation_server.dart`. There's no authentication: use it only on a
-development machine with a throw-away data folder ([SECURITY.md](../SECURITY.md#players)).
+Routes: `app/lib/src/debug/ui_automation_server.dart`. No authentication: only on a development machine
+([SECURITY.md](../SECURITY.md#players)).
 
 ## Debugging
 
@@ -131,19 +131,15 @@ development machine with a throw-away data folder ([SECURITY.md](../SECURITY.md#
 ## Platform code
 
 - **Android:** `MainActivity.kt` shares its Flutter engine with the media service. `packages/wiretune_platform` has TV
-  detection, the music folder, the audio permission, the CPU and Wi-Fi locks, installing updates, and the home-screen
-  widget (`NowPlayingWidget.kt`: previous, play and next are media-button presses, the heart and shuffle the media
-  session's own actions, sent through a `MediaControllerCompat`). Application ID:
-  `com.wiretune.player`.
+  detection, the music folder, the audio permission, the CPU and Wi-Fi locks, installing updates, the spectrum's
+  decoder (`PcmDecoder.kt`) and the home-screen widget (`NowPlayingWidget.kt`). Application ID: `com.wiretune.player`.
 - **iOS and macOS:** `ios/Runner/Info.plist` declares background audio, local network access and plain HTTP.
-  `ios/Runner/AppDelegate.swift` handles `excludeFromBackup` on the `wiretune/platform` channel (keeps downloads out of
-  iCloud backups), and `ios/Runner/PcmDecoder.swift` decodes a track for the spectrum on `wiretune/pcm`, as Android's
-  `PcmDecoder.kt` does. `macos/Runner/*.entitlements` leaves the app unsandboxed; its comment says why. Every platform's
-  channel methods are listed on `AppPlatform._channel` (`app/lib/src/platform.dart`).
+  `ios/Runner/AppDelegate.swift` keeps downloads out of backups (`excludeFromBackup`), and `ios/Runner/PcmDecoder.swift`
+  decodes for the spectrum. `macos/Runner/*.entitlements` leaves the app unsandboxed; its comment says why. Every
+  platform's channel methods are listed on `AppPlatform._channel` (`app/lib/src/platform.dart`).
 - **Linux and Windows:** `main.dart` hides the system title bar; the header draws its own window buttons.
 - **Tizen:** `tizen/` is the .NET runner. Dart sees Tizen as Linux, so `App.cs` answers the `wiretune/platform` channel
-  to report a TV. The TV can't load the SQLite library the sqlite3 package downloads for Linux on ARM, so
-  `tool/build.dart` switches the Tizen build to the TV's own SQLite and restores `app/pubspec.yaml` afterwards.
+  to report a TV. `tool/build.dart` builds Tizen against the TV's own SQLite and restores `app/pubspec.yaml` afterwards.
 
 ## Common changes
 
@@ -161,8 +157,7 @@ development machine with a throw-away data folder ([SECURITY.md](../SECURITY.md#
 ### A file type
 
 Add the extension to `AudioFileTypes` in `models/audio_format.dart`, teach `metadata/tag_reader.dart` its tags and
-duration, and add it to the list in [server.md](server.md#scanning). Whether it plays depends on libmpv, and on Tizen on
-the TV.
+duration, and add it to the list in [server.md](server.md#scanning).
 
 ### Texts and languages
 
@@ -181,8 +176,8 @@ the case in `Localizer.lookup`, and update the tests.
 
 ### A section or a setting
 
-- A new section starts with an `AppSection` value. The compiler then points to the switches that need its page, icon,
-  accent and place in `navVisualOrder`.
+- A new section starts with an `AppSection` value. The compiler then points to the switches that need its page, icon
+  and place in `navVisualOrder`.
 - Add it by hand to the sidebar in `layouts/wide_layout.dart` and, if it belongs there, the phone's bottom bar in
   `layouts/phone_layout.dart`.
 - A persistent setting is a key in the `settings` table, read and written through `LibraryService`.
