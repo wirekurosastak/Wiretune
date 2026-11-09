@@ -200,8 +200,9 @@ class Peer {
     String id, {
     String name = '',
     String sharing = 'off',
+    String? from,
   }) async {
-    final peer = Peer._(await openSocket(server, token));
+    final peer = Peer._(await openSocket(server, token, from: from));
     peer.send({
       'type': 'hello',
       'device': {'id': id, 'name': name, 'kind': 'phone', 'sharing': sharing},
@@ -222,8 +223,11 @@ class Peer {
   Future<void> close() => socket.close();
 }
 
-Future<WebSocket> openSocket(ServerFixture server, String token) =>
-    WebSocket.connect('ws://127.0.0.1:${server.server.port}/api/remote', headers: {'Authorization': 'Bearer $token'});
+/// [from]: the address it seems to come from, through a proxy the server trusts (`ServerFixture.start(trustProxy:)`).
+Future<WebSocket> openSocket(ServerFixture server, String token, {String? from}) => WebSocket.connect(
+  'ws://127.0.0.1:${server.server.port}/api/remote',
+  headers: {'Authorization': 'Bearer $token', 'X-Forwarded-For': ?from},
+);
 
 /// Waits for the server's close (the socket's stream must be listened to); its code. Watches the state rather than
 /// `done`, which never completes for a socket that sent nothing.

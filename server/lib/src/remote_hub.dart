@@ -40,9 +40,10 @@ class RemoteHub {
   bool canJoin(String userId) => _peers.where((p) => p.userId == userId).length < 2 * RemoteRules.maxDevicesPerAccount;
 
   /// Takes over the WebSocket of a signed-in player; [principal]'s token decides the account, and how long it may stay.
-  void join(WebSocket socket, Principal principal) {
+  /// [network] is the network it connects from ([networkOf]).
+  void join(WebSocket socket, Principal principal, {String network = local}) {
     socket.pingInterval = RemoteRules.pingInterval;
-    final peer = _Peer(socket, principal.userId, principal.username);
+    final peer = _Peer(socket, principal.userId, principal.username, network);
     _peers.add(peer);
     peer.helloTimer = Timer(_helloTimeout, () => _close(peer, 1008, 'No hello.'));
     final expires = principal.expiresAt;
@@ -305,13 +306,42 @@ class RemoteHub {
     peer.sharing != DeviceSharing.off ? _announceDevicesToAll() : _announceDevices(peer.userId);
   }
 
-  /// Whether [viewer] sees [device]: a player of its own account, or another account's that lets others play on it,
-  /// unless either account blocked the other.
+  /// Whether [viewer] sees [device]: a player of its own account (from anywhere), or another account's that lets others
+  /// play on it and is on the same network, so that nobody plays on a television in another home; unless either
+  /// account blocked the other.
   bool _sees(_Peer viewer, _Peer device) =>
       device.userId == viewer.userId ||
       (device.sharing != DeviceSharing.off &&
+          device.network == viewer.network &&
           !blocks(device.userId, viewer.userId) &&
           !blocks(viewer.userId, device.userId));
+
+  /// The network of the players that reach the server from inside the server's own (its LAN, Tailscale, this machine).
+  static const String local = 'local';
+
+  /// The network a player connecting from [address] is on, as the server can tell: [local] for an address of the
+  /// server's side (a private, link-local or loopback one, or Tailscale's); else the public address the home shares
+  /// (an IPv4 address, or an IPv6 one's /64). Behind a reverse proxy, only with `--trust-proxy` (else every player
+  /// comes from the proxy, and so from [local]).
+  static String networkOf(String address) {
+    var ip = InternetAddress.tryParse(address);
+    if (ip == null) return address;
+    // An IPv4 address as an IPv6 socket gives it.
+    if (ip.type == InternetAddressType.IPv6 && address.toLowerCase().startsWith('::ffff:') && address.contains('.')) {
+      ip = InternetAddress.tryParse(address.substring(7)) ?? ip;
+    }
+    final bytes = ip.rawAddress;
+    if (ip.isLoopback || ip.isLinkLocal) return local;
+    if (ip.type == InternetAddressType.IPv4) {
+      final (a, b) = (bytes[0], bytes[1]);
+      final private =
+          a == 10 || (a == 172 && b >= 16 && b < 32) || (a == 192 && b == 168) || (a == 100 && b >= 64 && b < 128);
+      return private ? local : ip.address;
+    }
+    // Unique local addresses (fc00::/7, Tailscale's among them); else the /64 a home's devices share.
+    if (bytes[0] & 0xfe == 0xfc) return local;
+    return [for (var i = 0; i < 8; i += 2) ((bytes[i] << 8) | bytes[i + 1]).toRadixString(16)].join(':');
+  }
 
   /// Tells each player of the account which others it sees are online.
   void _announceDevices(String userId) {
@@ -515,10 +545,13 @@ class _Group {
 }
 
 class _Peer {
-  _Peer(this.socket, this.userId, this.username);
+  _Peer(this.socket, this.userId, this.username, this.network);
 
   final WebSocket socket;
   final String userId;
+
+  /// The network it connects from ([RemoteHub.networkOf]).
+  final String network;
 
   /// The account's name; it changes when the account is renamed ([RemoteHub.renamed]).
   String username;

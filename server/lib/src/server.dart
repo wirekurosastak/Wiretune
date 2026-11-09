@@ -1065,7 +1065,11 @@ class WiretuneServer {
           'Sec-WebSocket-Accept: $accept\r\n\r\n',
         ),
       );
-      remote.join(WebSocket.fromUpgradedSocket(socket, serverSide: true), principal);
+      remote.join(
+        WebSocket.fromUpgradedSocket(socket, serverSide: true),
+        principal,
+        network: RemoteHub.networkOf(_clientAddress(request)),
+      );
     });
   }
 

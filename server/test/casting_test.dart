@@ -3,6 +3,7 @@
 
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
+import 'package:wiretune_server/src/remote_hub.dart';
 
 import 'support.dart';
 
@@ -28,8 +29,8 @@ void main() {
   });
   tearDown(() => server.close());
 
-  Future<Peer> connect(String token, String id, {String sharing = 'off'}) async {
-    final peer = await Peer.connect(server, token, id, name: id, sharing: sharing);
+  Future<Peer> connect(String token, String id, {String sharing = 'off', String? from}) async {
+    final peer = await Peer.connect(server, token, id, name: id, sharing: sharing, from: from);
     addTearDown(peer.close);
     await until(() => peer.ofType('devices').isNotEmpty);
     return peer;
@@ -87,5 +88,51 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect(tv.ofType('command'), isEmpty);
     expect(desk.ofType('state'), isEmpty);
+  });
+
+  test("another account's player is there only on the same network; the account's own are, from anywhere", () async {
+    await server.close();
+    server = await ServerFixture.start(trustProxy: true);
+    final (admin, auth) = await setupAdmin(server);
+    ownerToken = auth.token;
+    await registerGuest(server, admin);
+    guestToken = (await login(server, 'guest', guestPassword)).$2.token;
+
+    // The guest's television at home; the owner's computer in another home, its phone in the guest's.
+    final tv = await connect(guestToken, 'guest-tv', sharing: 'any', from: '203.0.113.5');
+    final desk = await connect(ownerToken, 'owner-desk', from: '198.51.100.7');
+    final phone = await connect(ownerToken, 'owner-phone', from: '203.0.113.5');
+    await until(() => listed(phone).any((d) => d['id'] == 'guest-tv'));
+    expect(listed(desk).map((d) => d['id']), [
+      'owner-phone',
+    ], reason: 'its own phone, but no television of another home');
+    desk.send({'type': 'command', 'to': 'guest-tv', 'command': const RemoteCommand(RemoteAction.pause).toJson()});
+    tv.send({'type': 'state', 'state': const RemotePlayback(playing: true).toJson()});
+    await until(() => phone.ofType('state').any((m) => m['device'] == 'guest-tv'));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(tv.ofType('command'), isEmpty);
+    expect(desk.ofType('state').where((m) => m['device'] == 'guest-tv'), isEmpty);
+  });
+
+  test("a player's network: the server's side is one, a home's public address another", () {
+    for (final address in [
+      '127.0.0.1',
+      '::1',
+      '10.1.2.3',
+      '172.20.0.9',
+      '192.168.1.40',
+      '169.254.3.3',
+      '100.101.102.103',
+      'fd7a:115c:a1e0::5',
+      'fe80::1',
+      '::ffff:192.168.1.7',
+    ]) {
+      expect(RemoteHub.networkOf(address), RemoteHub.local, reason: address);
+    }
+    expect(RemoteHub.networkOf('203.0.113.5'), '203.0.113.5');
+    expect(RemoteHub.networkOf('::ffff:203.0.113.5'), '203.0.113.5');
+    expect(RemoteHub.networkOf('172.32.0.1'), '172.32.0.1', reason: 'past 172.16/12');
+    expect(RemoteHub.networkOf('2001:db8:1:2:aaaa::1'), RemoteHub.networkOf('2001:db8:1:2:bbbb::9'), reason: 'one /64');
+    expect(RemoteHub.networkOf('2001:db8:1:2::1'), isNot(RemoteHub.networkOf('2001:db8:1:3::1')));
   });
 }
