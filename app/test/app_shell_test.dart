@@ -4503,6 +4503,12 @@ void main() {
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
     await tester.pump();
     expect(shown(), isTrue);
+    final bar = tester.getRect(find.descendant(of: thumb, matching: find.byType(Container)));
+    expect(
+      tester.getRect(find.byType(FastScroller)).right - bar.right,
+      lessThan(5),
+      reason: "at the screen's edge, not under the rows' ⋮",
+    );
     final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
     final gesture = await tester.startGesture(tester.getCenter(thumb));
     await gesture.moveBy(const Offset(0, 40));

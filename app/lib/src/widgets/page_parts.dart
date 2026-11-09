@@ -1937,7 +1937,8 @@ class FastScroller extends StatefulWidget {
 }
 
 class _FastScrollerState extends State<FastScroller> {
-  static const double _thumbHeight = 52, _touchWidth = 36, _bubble = 60;
+  /// The bar keeps [_edgeGap] from the screen's edge; the touch reaches [_touchWidth] in, to be easy to catch.
+  static const double _thumbHeight = 52, _touchWidth = 36, _edgeGap = 3, _bubble = 60;
 
   ScrollPosition? _position;
 
@@ -2038,12 +2039,14 @@ class _FastScrollerState extends State<FastScroller> {
                                 onVerticalDragUpdate: (details) => _drag(y + details.localPosition.dy, box.maxHeight),
                                 onVerticalDragEnd: (_) => _release(),
                                 onVerticalDragCancel: _release,
-                                child: Center(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
                                   child: ValueListenableBuilder<String?>(
                                     valueListenable: _bubbleText,
                                     builder: (context, held, _) => Container(
                                       width: 6,
                                       height: _thumbHeight - 8,
+                                      margin: const EdgeInsets.only(right: _edgeGap),
                                       decoration: BoxDecoration(
                                         color: held != null ? colors.accent : colors.textMuted.withValues(alpha: 0.7),
                                         borderRadius: BorderRadius.circular(3),
