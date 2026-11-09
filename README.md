@@ -24,11 +24,16 @@ genres and labels, track credits, and the update check. Each can be turned off (
 - Synced lyrics, from the file or [LRCLIB](https://lrclib.net).
 - Quality badge on every album and track: hi-res, CD or lossy.
 - Genres, labels and credits from Deezer and MusicBrainz where the tags lack them; related artists and similar albums.
-- One account per listener: favorites, playlists and plays on every device, and *Your listening* sums them up.
+- One account per listener: favorites, playlists and plays on every device.
+- *Your listening*: your most played artists, albums, tracks and genres, and the minutes, by month, year or all time.
+- Autoplay: when the queue ends, similar music plays on.
 - Offline downloads that stay in sync with the server.
 - A ten-band equalizer, and a lower streaming quality for a slow connection.
 - Remote control: play on and control your other devices, a friend's TV, or a UPnP/DLNA streamer.
-- Friends on your server: recommendations, listening together, Blends and shared playlists.
+- Friends on your server: recommendations, listening together, shared playlists, and Blends (a playlist mixed from
+  what two friends play and love).
+- Android: a home-screen widget, and a heart and shuffle in the notification and the car.
+- The players offer new releases and install them.
 - English, Hungarian, German.
 
 ## Platform support
@@ -47,7 +52,21 @@ Bit-perfect sets up an untouched path to the DAC and shows the format the player
 DAC receives ([audio.md](docs/audio.md#bit-perfect)). Samsung TVs use their own decoder, so some formats may not play
 ([audio.md](docs/audio.md#tizen)).
 
-## Quick start
+## Download
+
+From the [latest release](https://github.com/wirekurosastak/Wiretune/releases/latest):
+
+| For | Take |
+|---|---|
+| Linux | The `.tar.gz` (run `./install.sh` in it), or the `.deb` or `.rpm` |
+| Windows | The `-setup.exe`. The portable `.zip` doesn't update itself |
+| macOS | The `.dmg`. It isn't notarized: allow it once in *System Settings → Privacy & Security* |
+| Android | The `arm64-v8a` APK (most phones and TVs), or `armeabi-v7a` for older ones |
+| The server | `wiretune-server-…` for your system, or the image `ghcr.io/wirekurosastak/wiretune-server` ([Docker](docs/server.md#docker)) |
+
+iPhone, iPad and Samsung TVs: build the player yourself ([building.md](docs/building.md)).
+
+## Build from source
 
 Install the dependencies ([building.md](docs/building.md)), then on Linux:
 

@@ -1,14 +1,15 @@
 # Releasing
 
-The release workflow hasn't run yet. Its Windows installer and macOS signing, disk image and notarization steps are
-untested (they need Windows and macOS runners). Run it by hand first (*Actions → Release → Run workflow*): it builds
-everything and publishes nothing.
+The first release, `v1.1.2026`, came from this workflow on 2026-11-09. macOS signing and notarization haven't run yet:
+without the certificate the disk image is ad-hoc signed. *Actions → Release → Run workflow* builds everything and
+publishes nothing, as a check before a tag.
 
 ## Steps
 
 1. Raise the version everywhere: `WiretuneInfo.version` (`packages/wiretune_core/lib/src/about.dart`), every
    `pubspec.yaml` (the build number is Android's version code) and `app/tizen/tizen-manifest.xml`. A test fails if
-   they differ.
+   they differ. The players compare the version without the build number, so raise the version itself, and never
+   lower the build number.
 2. Push a tag `v<version>`: the pubspec version without the build number (`v1.0.2026` for `1.0.2026+1`).
 3. `.github/workflows/release.yml` runs the checks (`test.yml`, as CI does), checks that the tag, pubspec and Tizen
    manifest match, then builds:
@@ -16,7 +17,8 @@ everything and publishes nothing.
      (`ghcr.io/<owner>/wiretune-server`)
    - the players for Linux (`.deb`, `.rpm`, and a `.tar.gz` with `install.sh`), Windows (installer and portable zip),
      macOS (disk image) and Android (APKs)
-4. Review the draft release it creates, with a `SHA256SUMS.txt`, and publish it.
+4. Review the draft release it creates, with a `SHA256SUMS.txt`, write a short *What's new* in place of its notes,
+   and publish it as the latest release. The container images are pushed with the tag, before you publish.
 
 iOS and Tizen aren't included.
 

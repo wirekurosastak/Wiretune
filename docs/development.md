@@ -219,7 +219,7 @@ It doesn't build Tizen and runs nothing on a device. Releases: [releasing.md](re
 | macOS | Built by CI only; **never run** |
 | iOS | Sideloaded and run on an iPhone (iOS 27). The spectrum came after that and is **untested** |
 | Tizen | Built on Fedora and tried briefly on a 2024 Samsung TV (Tizen 8.0): signs in, plays, the remote reaches everything, but navigation is slow and **needs more work** |
-| Updates | In the tests: the check, the download and its checksum, and replacing a Linux folder. No release exists yet, so no copy has updated itself for real. The package, Windows, macOS and Android steps are untried |
+| Updates | In the tests: the check, the download and its checksum, and replacing a Linux folder. A Linux folder installed with `install.sh` updated itself from 1.0.2026 to 1.1.2026 on Fedora. The package, Windows, macOS and Android steps are untried |
 | Exclusive, bit-perfect | Tried on Linux and Windows with an SMSL SU-1 DAC; not measured ([audio.md](audio.md#bit-perfect)) |
 
 ## Big libraries
