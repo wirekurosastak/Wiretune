@@ -112,7 +112,8 @@ class Palette {
   }
 }
 
-/// The quality tag's own colours, the same in both themes so the medals keep their contrast.
+/// The quality tiers' colours, the same in both themes: bronze, silver and gold. A quality tag is the metal itself
+/// ([metal], [ink]); a switch or a mode's badge takes the tier's colour on a dark fill ([fg], [bg], [border]).
 abstract final class MedalColors {
   static const List<Color> foreground = [Color(0xFFE39A57), Color(0xFFD3DAE3), Color(0xFFF5C842)];
   static const List<Color> fill = [Color(0xFF33200F), Color(0xFF272C33), Color(0xFF2E250E)];
@@ -121,4 +122,33 @@ abstract final class MedalColors {
   static Color fg(QualityTier tier) => foreground[tier.index];
   static Color bg(QualityTier tier) => fill[tier.index];
   static Color border(QualityTier tier) => outline[tier.index];
+
+  /// Each metal lit from above: a bright top, the metal, its shade below the middle, and light caught again at the
+  /// bottom edge.
+  static const List<List<Color>> _metal = [
+    [Color(0xFFFFE2C4), Color(0xFFEBAA6E), Color(0xFFB4693A), Color(0xFFDE9C66)],
+    [Color(0xFFFFFFFF), Color(0xFFE3E7EC), Color(0xFFA6AFBB), Color(0xFFD6DCE3)],
+    [Color(0xFFFFF6CC), Color(0xFFF8D55C), Color(0xFFC89220), Color(0xFFF1CB60)],
+  ];
+  static const List<Color> _ink = [Color(0xFF3A1D0A), Color(0xFF232931), Color(0xFF3B2701)];
+  static const List<Color> _rim = [Color(0xFF8F5127), Color(0xFF7E8894), Color(0xFF9C7012)];
+
+  /// The text on [tier]'s metal: as if engraved in it.
+  static Color ink(QualityTier tier) => _ink[tier.index];
+
+  /// A quality tag's face: [tier]'s metal with its rim, a shadow under it and a faint glow of its colour.
+  static BoxDecoration metal(QualityTier tier, {required double radius}) => BoxDecoration(
+    gradient: LinearGradient(
+      begin: const Alignment(-0.3, -1),
+      end: const Alignment(0.3, 1),
+      colors: _metal[tier.index],
+      stops: const [0, 0.4, 0.68, 1],
+    ),
+    border: Border.all(color: _rim[tier.index], width: 0.8),
+    borderRadius: BorderRadius.circular(radius),
+    boxShadow: [
+      const BoxShadow(color: Color(0x66000000), blurRadius: 3, offset: Offset(0, 1)),
+      BoxShadow(color: _metal[tier.index][1].withValues(alpha: 0.35), blurRadius: 8, spreadRadius: -2),
+    ],
+  );
 }

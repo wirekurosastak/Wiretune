@@ -8,9 +8,8 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 
-/// The quality tag: a small pill in the colour of the tier the recording is in, reading for example `FLAC 24bit/96kHz`
-/// (gold), `FLAC 16bit/44.1kHz` (silver) or `MP3 320kbps` (bronze); the colour alone names the tier. It has a fill and
-/// an outline of its own, so the three medal colours keep their contrast in both themes. Hovering explains the tier.
+/// The quality tag: a small plate of the tier's metal, reading for example `FLAC 24bit/96kHz` (gold), `FLAC
+/// 16bit/44.1kHz` (silver) or `MP3 320kbps` (bronze); the metal alone names the tier. Hovering explains the tier.
 class QualityTag extends StatelessWidget {
   const QualityTag({super.key, required this.tier, this.spec, this.fontSize = 10, this.padding, this.details});
 
@@ -32,23 +31,18 @@ class QualityTag extends StatelessWidget {
     return Tooltip(
       message: details == null || details!.isEmpty ? hint : '$details\n$hint',
       child: Container(
-        padding: padding ?? const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-        decoration: BoxDecoration(
-          color: MedalColors.bg(tier),
-          border: Border.all(color: MedalColors.border(tier)),
-          borderRadius: BorderRadius.circular(Radii.tag),
-          boxShadow: const [BoxShadow(color: Color(0x55000000), blurRadius: 3, offset: Offset(0, 1))],
-        ),
+        padding: padding ?? const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+        decoration: MedalColors.metal(tier, radius: Radii.tag),
         child: Text(
           text,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: MedalColors.fg(tier),
+            color: MedalColors.ink(tier),
             fontSize: fontSize,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0.2,
-            height: 1.35,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.3,
+            height: 1.3,
           ),
         ),
       ),
@@ -110,7 +104,8 @@ class TagBadge extends StatelessWidget {
   );
 }
 
-/// A compact badge for track metadata (BPM, bitrate) displayed in the players.
+/// A compact badge for what the players say about a track besides its quality (its BPM): smoked glass, as tall as the
+/// quality tag beside it, readable on any cover's wash.
 class PlayerMetaBadge extends StatelessWidget {
   const PlayerMetaBadge({super.key, required this.text, this.fontSize = 10});
 
@@ -118,27 +113,24 @@ class PlayerMetaBadge extends StatelessWidget {
   final double fontSize;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = context.colors;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: colors.surface2,
-        borderRadius: BorderRadius.circular(Radii.tag),
-        border: Border.all(color: colors.glassBorder),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+    decoration: BoxDecoration(
+      color: const Color(0x66000000),
+      borderRadius: BorderRadius.circular(Radii.tag),
+      border: Border.all(color: const Color(0x38FFFFFF), width: 0.8),
+    ),
+    child: Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.3,
+        color: const Color(0xE6FFFFFF),
+        height: 1.3,
       ),
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-          color: colors.textMuted,
-          height: 1.3,
-        ),
-      ),
-    );
-  }
+    ),
+  );
 }
