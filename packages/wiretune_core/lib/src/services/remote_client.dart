@@ -77,6 +77,9 @@ class RemoteClient {
   };
 
   final ServerSession _session;
+
+  /// The ID of the account signed in; null while signed out.
+  String? get accountId => _session.currentUser?.id;
   final RemoteConnector _connector;
   late final void Function() _unsubscribe;
 
@@ -101,7 +104,7 @@ class RemoteClient {
   final Event<void> devicesChanged = Event<void>();
 
   /// A command from another player, for this one.
-  final Event<(String from, RemoteCommand command)> commandReceived = Event();
+  final Event<({String from, AccountInfo? account, RemoteCommand command})> commandReceived = Event();
 
   /// The account's favourites, playlists or hidden items may have changed elsewhere: another player changed them, or
   /// the connection was lost for a while (and with it what was said meanwhile).
@@ -128,6 +131,10 @@ class RemoteClient {
   bool get isEnabled => _enabled;
   bool get isConnected => _channel != null;
 
+  /// Whether the server's other accounts may play on this player, and what ([configure]).
+  DeviceSharing get sharing => _sharing;
+  DeviceSharing _sharing = DeviceSharing.off;
+
   /// The other players of the account that are online.
   List<RemoteDevice> get devices => List.unmodifiable(_devices.values);
 
@@ -143,12 +150,20 @@ class RemoteClient {
     devicesChanged.emit(null);
   }
 
-  /// Who this player is and whether it takes part; connects or disconnects as needed.
-  void configure({required String id, required String name, required DeviceKind kind, required bool enabled}) {
-    final changed = id != _deviceId || name != _deviceName || kind != _deviceKind;
+  /// Who this player is, whether it takes part, and whether the other accounts may play on it ([sharing]); connects or
+  /// disconnects as needed.
+  void configure({
+    required String id,
+    required String name,
+    required DeviceKind kind,
+    required bool enabled,
+    DeviceSharing sharing = DeviceSharing.off,
+  }) {
+    final changed = id != _deviceId || name != _deviceName || kind != _deviceKind || sharing != _sharing;
     _deviceId = id;
     _deviceName = RemoteRules.cleanName(name);
     _deviceKind = kind;
+    _sharing = sharing;
     _enabled = enabled;
     if (changed && _channel != null) _sendHello();
     _update();
@@ -328,7 +343,7 @@ class RemoteClient {
 
   void _sendHello() => _send({
     'type': 'hello',
-    'device': {'id': _deviceId, 'name': _deviceName, 'kind': _deviceKind.name},
+    'device': {'id': _deviceId, 'name': _deviceName, 'kind': _deviceKind.name, 'sharing': _sharing.name},
   });
 
   void _sendState(RemotePlayback playback) {
@@ -364,7 +379,7 @@ class RemoteClient {
       case 'state':
         _onState(message['device'], message['state']);
       case 'command':
-        _onCommand(message['from'], message['command']);
+        _onCommand(message['from'], message['account'], message['command']);
       case 'dataChanged':
         accountDataChanged.emit(null);
       case 'libraryChanged':
@@ -386,7 +401,13 @@ class RemoteClient {
       if (entry is! Map) continue;
       final id = entry['id'];
       if (id is! String || UserDataRules.validateId(id) != null || id == _deviceId) continue;
-      final device = RemoteDevice(id, RemoteRules.cleanName(entry['name']), DeviceKind.parse(entry['kind']));
+      final account = entry['account'];
+      final device = RemoteDevice(
+        id,
+        RemoteRules.cleanName(entry['name']),
+        DeviceKind.parse(entry['kind']),
+        account: account is Map ? AccountInfo.fromJson(account) : null,
+      );
       final known = _devices[id];
       if (known != null) {
         device
@@ -411,10 +432,16 @@ class RemoteClient {
     devicesChanged.emit(null);
   }
 
-  void _onCommand(Object? from, Object? json) {
+  /// A command from another player: one of this account's, or ([account]) another account's, which the server lets
+  /// through only to a player that lets others play on it.
+  void _onCommand(Object? from, Object? account, Object? json) {
     final command = RemoteCommand.fromJson(json);
-    if (from is! String || !_devices.containsKey(from) || command == null) return;
-    commandReceived.emit((from, command));
+    if (from is! String || command == null) return;
+    if (account is Map) {
+      if (_sharing == DeviceSharing.off) return; // stopped sharing meanwhile
+      return commandReceived.emit((from: from, account: AccountInfo.fromJson(account), command: command));
+    }
+    if (_devices.containsKey(from)) commandReceived.emit((from: from, account: null, command: command));
   }
 
   void dispose() {

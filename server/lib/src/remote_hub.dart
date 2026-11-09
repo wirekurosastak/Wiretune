@@ -78,6 +78,8 @@ class RemoteHub {
 
   /// [userId] blocked [otherId]: the invites of [otherId]'s group are gone for it.
   void blocked(String userId, String otherId) {
+    // The blocked account no longer sees this one's shared players.
+    _announceDevices(otherId);
     var changed = false;
     for (final group in _groups.values) {
       if (group.hostKey.$1 == otherId) changed |= group.invited.remove(userId);
@@ -101,6 +103,8 @@ class RemoteHub {
     for (final peer in _accounts[userId]?.values ?? const <_Peer>[]) {
       _send(peer, const {'type': 'accountChanged'});
     }
+    // The others see its shared players by its name.
+    if (peers.any((p) => p.sharing != DeviceSharing.off)) _announceDevicesToAll();
   }
 
   /// Tells every player that the library changed (a scan found music added, changed or removed, or a new cover), so
@@ -156,15 +160,23 @@ class RemoteHub {
         final state = message['state'];
         if (state is! Map) return _close(peer, 1008, 'A state must be a JSON object.');
         peer.state = state;
-        _sendToOthers(peer, {'type': 'state', 'device': peer.id, 'state': state});
+        _sendToViewers(peer, {'type': 'state', 'device': peer.id, 'state': state});
       case 'command':
         final to = message['to'];
         final command = message['command'];
         if (to is! String || command is! Map) return _close(peer, 1008, 'A command needs "to" and "command".');
-        // Only to another player of the same account; one that has just gone is no error.
-        final target = _accounts[peer.userId]?[to];
+        // To another player of the account, or one of another account that lets others play on it (and didn't block
+        // this one's); one that has just gone is no error.
+        final target =
+            _accounts[peer.userId]?[to] ??
+            _peers.where((p) => p.id == to && p.userId != peer.userId && _sees(peer, p)).firstOrNull;
         if (target != null && target != peer) {
-          _send(target, {'type': 'command', 'from': peer.id, 'command': command});
+          _send(target, {
+            'type': 'command',
+            'from': peer.id,
+            if (target.userId != peer.userId) 'account': {'id': peer.userId, 'username': peer.username},
+            'command': command,
+          });
         }
       case 'time':
         // The server's clock, for the players listening together to count on one.
@@ -223,15 +235,20 @@ class RemoteHub {
         ..helloTimer?.cancel();
       _accounts.putIfAbsent(peer.userId, () => {})[id] = peer;
     }
+    final shared = peer.sharing != DeviceSharing.off;
     peer
       ..name = RemoteRules.cleanName(device['name'])
-      ..kind = DeviceKind.parse(device['kind']);
+      ..kind = DeviceKind.parse(device['kind'])
+      ..sharing = DeviceSharing.parse(device['sharing']);
     WiretuneLog.debug('Remote', "Device '${peer.name}' (${peer.kind.name}) is online for account ${peer.userId}.");
 
-    _announceDevices(peer.userId);
-    for (final other in _accounts[peer.userId]!.values) {
+    // A device the other accounts see (or saw) changes their lists too.
+    shared || peer.sharing != DeviceSharing.off ? _announceDevicesToAll() : _announceDevices(peer.userId);
+    for (final other in _peers) {
       final state = other.state;
-      if (other != peer && state != null) _send(peer, {'type': 'state', 'device': other.id, 'state': state});
+      if (other != peer && state != null && _sees(peer, other)) {
+        _send(peer, {'type': 'state', 'device': other.id, 'state': state});
+      }
     }
     // A host that dropped off takes its group back; anyone invited hears of the open invites.
     final hosted = _groups.values.where((g) => g.host == null && g.hostKey == (peer.userId, id)).firstOrNull;
@@ -267,24 +284,54 @@ class RemoteHub {
     final devices = _accounts[peer.userId];
     if (devices == null || devices[peer.id] != peer) return; // never registered, or replaced
     devices.remove(peer.id);
-    if (devices.isEmpty) {
-      _accounts.remove(peer.userId);
-    } else {
-      _announceDevices(peer.userId);
+    if (devices.isEmpty) _accounts.remove(peer.userId);
+    peer.sharing != DeviceSharing.off ? _announceDevicesToAll() : _announceDevices(peer.userId);
+  }
+
+  /// Whether [viewer] sees [device]: a player of its own account, or another account's that lets others play on it,
+  /// unless that account blocked the viewer's.
+  bool _sees(_Peer viewer, _Peer device) =>
+      device.userId == viewer.userId || (device.sharing != DeviceSharing.off && !blocks(device.userId, viewer.userId));
+
+  /// Tells each player of the account which others it sees are online.
+  void _announceDevices(String userId) {
+    for (final peer in _accounts[userId]?.values.toList() ?? const <_Peer>[]) {
+      _sendDevices(peer);
     }
   }
 
-  /// Tells each player of the account which others are online.
-  void _announceDevices(String userId) {
-    final devices = _accounts[userId]?.values.toList() ?? const <_Peer>[];
-    for (final peer in devices) {
-      _send(peer, {
-        'type': 'devices',
-        'devices': [
-          for (final other in devices)
-            if (other != peer) {'id': other.id, 'name': other.name, 'kind': other.kind.name},
-        ],
-      });
+  /// [_announceDevices] for every account: a device that others see came, went or changed.
+  void _announceDevicesToAll() {
+    for (final devices in _accounts.values.toList()) {
+      for (final peer in devices.values.toList()) {
+        _sendDevices(peer);
+      }
+    }
+  }
+
+  /// The players [peer] sees ([_sees]), another account's with whose it is.
+  void _sendDevices(_Peer peer) => _send(peer, {
+    'type': 'devices',
+    'devices': [
+      for (final devices in _accounts.values)
+        for (final other in devices.values)
+          if (other != peer && _sees(peer, other))
+            {
+              'id': other.id,
+              'name': other.name,
+              'kind': other.kind.name,
+              if (other.userId != peer.userId) 'account': {'id': other.userId, 'username': other.username},
+            },
+    ],
+  });
+
+  /// Sends [message] about [from] to every other player that sees it.
+  void _sendToViewers(_Peer from, Map<String, Object?> message) {
+    final text = jsonEncode(message);
+    for (final devices in _accounts.values) {
+      for (final peer in devices.values) {
+        if (peer != from && _sees(peer, from)) _sendText(peer, text);
+      }
     }
   }
 
@@ -410,13 +457,6 @@ class RemoteHub {
     _send(peer, {'type': 'listenInvites', 'invites': invites});
   }
 
-  void _sendToOthers(_Peer from, Map<String, Object?> message) {
-    final text = jsonEncode(message);
-    for (final peer in _accounts[from.userId]?.values ?? const <_Peer>[]) {
-      if (peer != from) _sendText(peer, text);
-    }
-  }
-
   void _send(_Peer peer, Map<String, Object?> message) => _sendText(peer, jsonEncode(message));
 
   void _sendText(_Peer peer, String text) {
@@ -470,6 +510,9 @@ class _Peer {
   String? id;
   String name = '';
   DeviceKind kind = DeviceKind.desktop;
+
+  /// Whether the other accounts may play on it, as its hello said.
+  DeviceSharing sharing = DeviceSharing.off;
 
   /// The last state it sent, passed to players that connect later.
   Map<Object?, Object?>? state;

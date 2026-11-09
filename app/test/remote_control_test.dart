@@ -297,4 +297,65 @@ void main() {
     await vm.logout();
     expect((player.isRemote, vm.remote.isConnected), (false, false));
   });
+
+  group('another account casting', () {
+    const anna = AccountInfo('anna-id', 'anna');
+    const annaPlays = RemoteCommand(RemoteAction.playTracks, trackIds: ['t1', 't2', 't3'], index: 0);
+
+    test('plays here only while this player lets it, without what this account hides, and counts for anna', () async {
+      final notices = <String>[];
+      vm.notices.listen((notice) => notices.add(notice.message));
+      vm.library.setHidden(HiddenKind.track, 't2', true);
+
+      hub.command('anna-desk', annaPlays, account: anna);
+      await pumpEventQueue();
+      expect(driver.playCalls, 0, reason: 'off by default');
+
+      vm.deviceSharing = DeviceSharing.unhidden;
+      expect(vm.library.getPreference('remote_sharing'), 'unhidden');
+      expect((hub.ofType('hello').last['device'] as Map)['sharing'], 'unhidden', reason: 'the server is told');
+      hub.command('anna-desk', annaPlays, account: anna);
+      await until(() => driver.playCalls > 0);
+      expect([for (final t in player.queueTracks) t.id], ['t1', 't3'], reason: 'not what this account hides');
+      expect((player.playingFor?.username, notices.last), ('anna', 'anna is playing here'));
+      expect(vm.library.playCount('t1'), 0, reason: "anna's player counts it");
+      Map<Object?, Object?> lastState() => hub.ofType('state').last['state'] as Map;
+      await until(() => lastState()['playingFor'] == 'anna-id');
+
+      // Any music: the hidden track plays too.
+      vm.deviceSharing = DeviceSharing.any;
+      hub.command('anna-desk', annaPlays, account: anna);
+      await pumpEventQueue();
+      expect([for (final t in player.queueTracks) t.id], ['t1', 't2', 't3']);
+
+      // This account's own music again: its plays count here, and nobody else's music is said to play.
+      player.playQueue(tracks, tracks[3]);
+      await pumpEventQueue();
+      expect((player.playingFor, vm.library.playCount('t4')), (null, 1));
+      await until(() => !lastState().containsKey('playingFor'));
+    });
+
+    test("music cast to another account's player counts here, once per track it starts", () async {
+      hub.devices([('desk', 'Desk', DeviceKind.desktop), ('anna-tv', 'TV', DeviceKind.tv)], others: {'anna-tv': anna});
+      await pumpEventQueue();
+      expect([for (final d in player.otherDevices) (d.id, d.account?.username)], [('desk', null), ('anna-tv', 'anna')]);
+      player.selectDevice('anna-tv');
+
+      RemotePlayback tv(int index, {String? playingFor = 'user-1', bool playing = true}) => RemotePlayback(
+        track: tracks[index],
+        playing: playing,
+        queue: [for (final t in tracks) t.id],
+        queueIndex: index,
+        playingFor: playingFor,
+      );
+      hub.state('anna-tv', tv(0));
+      hub.state('anna-tv', tv(0)); // the same track, told again
+      hub.state('anna-tv', tv(1, playing: false)); // paused before it started: not yet
+      hub.state('anna-tv', tv(1));
+      hub.state('anna-tv', tv(2, playingFor: null)); // anna's own music
+      hub.state('anna-tv', tv(3, playingFor: 'someone-else'));
+      await pumpEventQueue();
+      expect([for (final t in tracks) vm.library.playCount(t.id)], [1, 1, 0, 0]);
+    });
+  });
 }

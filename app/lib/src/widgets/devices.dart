@@ -23,6 +23,14 @@ String deviceLabel(BuildContext context, String name, DeviceKind kind) => name.i
         DeviceKind.tv => 'DeviceKindTv',
       });
 
+/// A [device] in a list: [deviceLabel], and the account's name when it is another account's player (one that lets
+/// others play on it).
+String deviceTitle(BuildContext context, RemoteDevice device) {
+  final label = deviceLabel(context, device.name, device.kind);
+  final account = device.account;
+  return account == null ? label : '$label · ${account.username}';
+}
+
 IconData deviceIcon(DeviceKind kind) => switch (kind) {
   DeviceKind.desktop => Icons.computer_rounded,
   DeviceKind.phone => Icons.smartphone_rounded,
@@ -148,7 +156,7 @@ class DevicesButton extends StatelessWidget {
                     for (final device in player.otherDevices)
                       SheetChoice(
                         device.id,
-                        deviceLabel(context, device.name, device.kind),
+                        deviceTitle(context, device),
                         subtitle: _playing(context, device.playback),
                         icon: deviceIcon(device.kind),
                         selected: player.remoteDeviceId == device.id,
@@ -194,7 +202,7 @@ class DevicesButton extends StatelessWidget {
                   checked: player.remoteDeviceId == device.id,
                   child: entry(
                     deviceIcon(device.kind),
-                    deviceLabel(context, device.name, device.kind),
+                    deviceTitle(context, device),
                     _playing(context, device.playback),
                   ),
                 ),

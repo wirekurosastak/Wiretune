@@ -1132,6 +1132,30 @@ class _RemoteCardState extends State<_RemoteCard> {
               onChanged: (value) => vm.deviceName = value,
             ),
             _StatusLine(vm.remoteStatus, isError: vm.hasRemoteProblem),
+            const SizedBox(height: 14),
+            Text(
+              context.tr('DeviceSharing'),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: context.colors.textMain),
+            ),
+            const SizedBox(height: 2),
+            Text(context.tr('DeviceSharingHint'), style: TextStyle(fontSize: 12, color: context.colors.textMuted)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final (sharing, key) in const [
+                  (DeviceSharing.off, 'DeviceSharingOff'),
+                  (DeviceSharing.unhidden, 'DeviceSharingUnhidden'),
+                  (DeviceSharing.any, 'DeviceSharingAny'),
+                ])
+                  _choice(
+                    context.tr(key),
+                    selected: vm.deviceSharing == sharing,
+                    onPressed: vm.isRemoteEnabled ? () => vm.deviceSharing = sharing : null,
+                  ),
+              ],
+            ),
           ],
         );
       },

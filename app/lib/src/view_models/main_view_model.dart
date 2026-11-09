@@ -165,6 +165,7 @@ class MainViewModel extends ChangeNotifier {
       together.changed.listen((_) => _onListeningChanged()),
       together.ended.listen((_) => showNotice(Localizer.get('ListenEnded'))),
       player.leftForOwnMusic.listen((_) => showNotice(Localizer.get('ListenLeft'))),
+      player.castHere.listen((account) => showNotice(Localizer.format('CastHere', [account.username]))),
       player.listenerQueued.listen((queued) {
         final (from, tracks) = queued;
         final what = tracks.length == 1 ? tracks.single.title : Localizer.format('TrackCount', [tracks.length]);
@@ -741,6 +742,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _remoteIdPreference = 'remote_device_id';
   static const String _remoteNamePreference = 'remote_device_name';
   static const String _remoteEnabledPreference = 'remote_enabled';
+  static const String _remoteSharingPreference = 'remote_sharing';
   static const String _normalizationPreference = 'volume_normalization';
   static const String _streamingQualityPreference = 'streaming_quality';
   static const String _equalizerPreference = 'equalizer';
@@ -883,6 +885,16 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Whether other accounts on the server may play music here (cast to this player), and which: off by default. An
+  /// account that blocks this one, or that this one blocks, never can.
+  DeviceSharing get deviceSharing => remote.sharing;
+  set deviceSharing(DeviceSharing value) {
+    if (value == remote.sharing) return;
+    _configureRemote(sharing: value);
+    _remember(_remoteSharingPreference, value.name);
+    notifyListeners();
+  }
+
   /// The name the other players show for this one.
   String get deviceName => remote.deviceName;
   set deviceName(String value) {
@@ -916,12 +928,13 @@ class MainViewModel extends ChangeNotifier {
   /// Whether [remoteStatus] tells why remote control doesn't work.
   bool get hasRemoteProblem => isRemoteEnabled && remote.problem != null;
 
-  void _configureRemote({String? id, String? name, bool? enabled}) {
+  void _configureRemote({String? id, String? name, bool? enabled, DeviceSharing? sharing}) {
     remote.configure(
       id: id ?? remote.deviceId,
       name: name ?? remote.deviceName,
       kind: capabilities.kind,
       enabled: enabled ?? remote.isEnabled,
+      sharing: sharing ?? remote.sharing,
     );
     session.deviceId = remote.deviceId;
   }
@@ -981,6 +994,7 @@ class MainViewModel extends ChangeNotifier {
       id: id,
       name: library.getPreference(_remoteNamePreference) ?? capabilities.name,
       enabled: library.getPreference(_remoteEnabledPreference) != '0',
+      sharing: DeviceSharing.parse(library.getPreference(_remoteSharingPreference)),
     );
   }
 

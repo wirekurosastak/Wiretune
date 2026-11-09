@@ -134,25 +134,27 @@ Every message is a JSON text object with a `type`, at most 64 K characters.
 
 | Message | Sent by | |
 |---|---|---|
-| `{ "type": "hello", "device": { "id", "name", "kind" } }` | player | First, within 10 seconds. `id`: the player's permanent ID (up to 128 characters). `name`: up to 64, may be empty. `kind`: `desktop`, `phone`, `tablet` or `tv`. Sending hello again renames the device |
+| `{ "type": "hello", "device": { "id", "name", "kind", "sharing" } }` | player | First, within 10 seconds. `id`: the player's permanent ID (up to 128 characters). `name`: up to 64, may be empty. `kind`: `desktop`, `phone`, `tablet` or `tv`. `sharing`: whether other accounts may play here, `off` (the default), `unhidden` (the player leaves out what its account hides) or `any`. Sending hello again renames the device or changes `sharing` |
 | `{ "type": "state", "state" }` | player | What it's playing (below). Sent to the others, including players that connect later |
-| `{ "type": "command", "to", "command" }` | player | For another player of the account, by ID. Ignored if that player is offline |
-| `{ "type": "devices", "devices": [{ "id", "name", "kind" }] }` | server | The account's other online players, whenever that changes |
+| `{ "type": "command", "to", "command" }` | player | For another player of the account, or another account's that `devices` lists, by ID. Ignored if that player is offline |
+| `{ "type": "devices", "devices": [{ "id", "name", "kind", "account" }] }` | server | The account's other online players, and the other accounts' that share (`sharing` not `off`), whenever that changes. `account` (`{ "id", "username" }`) only on another account's. Never one of an account that blocks this one, or that this one blocks |
 | `{ "type": "state", "device", "state" }` | server | Another player's state |
-| `{ "type": "command", "from", "command" }` | server | A command for this player |
+| `{ "type": "command", "from", "command", "account" }` | server | A command for this player. `account` (`{ "id", "username" }`) only when another account sent it |
 | `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change, if it sent its device ID in an `X-Wiretune-Device` header with that request |
 | `{ "type": "libraryChanged" }` | server | A scan changed `/api/tracks` or `/api/artists/pictures` (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
 | `{ "type": "accountChanged" }` | server | The account was renamed: download `/api/auth/me` again |
 | `{ "type": "recommendationsChanged" }` | server | What the account was recommended changed: one came or was taken back, or the bell was opened on another of its players: download `/api/me/recommendations` again. Not sent to the player that made the change, as for `dataChanged` |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",
-"queueIndex" }`:
+"queueIndex", "playingFor" }`:
 
 - `track`: as `/api/tracks` lists it, or `null`
 - `positionMs`: the position when the state was sent (the others count on from there while it plays)
 - `volume`: 0 to 100
 - `repeat`: `off`, `all` or `one`
 - `queue`: up to 1,000 track IDs, with `queueIndex` for the current one (or -1)
+- `playingFor`: the ID of the account whose music plays, when another account started it; left out otherwise. That
+  account's player counts the plays, not this one
 
 Server tracks use the server's IDs, so the other players find them in their own library.
 

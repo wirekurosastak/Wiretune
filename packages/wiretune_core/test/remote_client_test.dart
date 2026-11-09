@@ -41,7 +41,7 @@ void main() {
     await until(() => client.isConnected);
     expect(hub.ofType('hello').single, {
       'type': 'hello',
-      'device': {'id': 'desk', 'name': 'Livingroom', 'kind': 'desktop'},
+      'device': {'id': 'desk', 'name': 'Livingroom', 'kind': 'desktop', 'sharing': 'off'},
     });
 
     // A rename is a second hello on the same connection.
@@ -156,7 +156,7 @@ void main() {
     final client = RemoteClient(session, connector: hub.connect);
     addTearDown(client.dispose);
     final commands = <(String, RemoteCommand)>[];
-    client.commandReceived.listen(commands.add);
+    client.commandReceived.listen((c) => commands.add((c.from, c.command)));
     client.configure(id: 'desk', name: '', kind: DeviceKind.desktop, enabled: true);
     await until(() => client.isConnected);
     hub.devices([('phone', 'Phone', DeviceKind.phone), ('desk', 'Me myself', DeviceKind.desktop)]);

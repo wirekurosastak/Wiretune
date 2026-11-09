@@ -194,11 +194,17 @@ class Peer {
   final WebSocket socket;
   final List<Map<String, Object?>> messages = [];
 
-  static Future<Peer> connect(ServerFixture server, String token, String id, {String name = ''}) async {
+  static Future<Peer> connect(
+    ServerFixture server,
+    String token,
+    String id, {
+    String name = '',
+    String sharing = 'off',
+  }) async {
     final peer = Peer._(await openSocket(server, token));
     peer.send({
       'type': 'hello',
-      'device': {'id': id, 'name': name, 'kind': 'phone'},
+      'device': {'id': id, 'name': name, 'kind': 'phone', 'sharing': sharing},
     });
     return peer;
   }

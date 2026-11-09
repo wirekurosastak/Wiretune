@@ -1025,6 +1025,24 @@ const Map<String, (String, String, String)> allStrings = {
     'Fernsteuerung von Geräten im selben Netzwerk erlauben.',
   ),
   'DeviceNameLabel': ('Az eszköz neve', 'This device’s name', 'Name dieses Geräts'),
+  'DeviceSharing': (
+    'A szerver többi fiókja itt is játszhat',
+    'Others on this server can play here',
+    'Andere auf diesem Server können hier abspielen',
+  ),
+  'DeviceSharingHint': (
+    'Az ő lejátszásaik nekik számítanak. Akit letiltottál, vagy aki letiltott, sosem.',
+    'Their plays count for them. Never someone you blocked or who blocked you.',
+    'Ihre Wiedergaben zählen für sie. Nie, wen du blockiert hast oder wer dich blockiert hat.',
+  ),
+  'DeviceSharingOff': ('Ki', 'Off', 'Aus'),
+  'DeviceSharingUnhidden': (
+    'Csak amit nem rejtettem el',
+    'Only music I don’t hide',
+    'Nur Musik, die ich nicht ausblende',
+  ),
+  'DeviceSharingAny': ('Bármilyen zene', 'Any music', 'Jede Musik'),
+  'CastHere': ('{0} itt játszik', '{0} is playing here', '{0} spielt hier ab'),
   'RemoteStatusConnected': (
     'Kapcsolódva: {0} másik eszköz elérhető.',
     'Connected: {0} other devices online.',

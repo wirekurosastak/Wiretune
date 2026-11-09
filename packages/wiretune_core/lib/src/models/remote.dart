@@ -20,6 +20,17 @@ enum DeviceKind {
 }
 
 /// The limits of remote control, which the server enforces.
+/// Whether a player lets the server's other accounts play on it (casting to it), and what: none ([off]), only music its
+/// own account doesn't hide ([unhidden]), or [any] music. Its own account's players always may.
+enum DeviceSharing {
+  off,
+  unhidden,
+  any;
+
+  /// The sharing [value] names; [off] for anything else.
+  static DeviceSharing parse(Object? value) => values.asNameMap()[value] ?? off;
+}
+
 abstract final class RemoteRules {
   /// The longest message (in characters) either side accepts; a longer one closes the connection.
   static const int maxMessageLength = 64 * 1024;
@@ -59,13 +70,17 @@ abstract final class RemoteRules {
 
 /// Another player of the signed-in account, as the server reports it.
 class RemoteDevice {
-  RemoteDevice(this.id, this.name, this.kind);
+  RemoteDevice(this.id, this.name, this.kind, {this.account});
 
   final String id;
 
   /// The name its user gave it; may be empty.
   final String name;
   final DeviceKind kind;
+
+  /// Whose it is, when it is another account's (one that lets others play on it, [DeviceSharing]); null for this
+  /// account's own.
+  final AccountInfo? account;
 
   /// What it plays, and when that arrived here (the position counts on from then while it plays).
   RemotePlayback? playback;
@@ -85,6 +100,7 @@ class RemotePlayback {
     this.repeat = RepeatMode.off,
     this.queue = const [],
     this.queueIndex = -1,
+    this.playingFor,
   });
 
   final Track? track;
@@ -107,6 +123,10 @@ class RemotePlayback {
   final List<String> queue;
   final int queueIndex;
 
+  /// The ID of the account whose music plays, when another account cast it to the device; null for the device's own.
+  /// That account's player counts its plays.
+  final String? playingFor;
+
   Map<String, Object?> toJson() => {
     'track': track?.toJson(),
     'playing': playing,
@@ -118,6 +138,7 @@ class RemotePlayback {
     'repeat': repeat.name,
     'queue': queue,
     'queueIndex': queueIndex,
+    if (playingFor != null) 'playingFor': playingFor,
   };
 
   /// Null when [json] is not a playback state.
@@ -147,6 +168,7 @@ class RemotePlayback {
       repeat: RepeatMode.values.asNameMap()[json['repeat']] ?? RepeatMode.off,
       queue: queue,
       queueIndex: index >= 0 && index < queue.length ? index : -1,
+      playingFor: json['playingFor'] is String ? json['playingFor'] as String : null,
     );
   }
 }

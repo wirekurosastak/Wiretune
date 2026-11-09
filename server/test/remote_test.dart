@@ -250,7 +250,7 @@ void main() {
     );
 
     final received = <(String, RemoteCommand)>[];
-    desktop.commandReceived.listen(received.add);
+    desktop.commandReceived.listen((c) => received.add((c.from, c.command)));
     expect(phone.send('desktop-id', const RemoteCommand(RemoteAction.seek, position: Duration(seconds: 90))), isTrue);
     await until(() => received.isNotEmpty);
     expect(

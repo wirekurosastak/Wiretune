@@ -449,6 +449,7 @@ class PlayerViewModel extends ChangeNotifier {
   /// names what they are ([playingFrom]).
   void playQueue(Iterable<Track> tracks, [Track? startTrack, String Function()? from]) {
     _leaveForOwnMusic();
+    _playingFor = null; // this account's own music again
     if (isRemote) {
       final list = tracks.toList();
       if (list.isEmpty) return;
@@ -1025,7 +1026,8 @@ class PlayerViewModel extends ChangeNotifier {
     _startAt = Duration.zero;
     currentTrack = track;
     if (!isRemote) _setPosition(_localPosition);
-    if (track != null) {
+    // Music another account cast here counts for that account (its player counts it), not for this one.
+    if (track != null && _playingFor == null) {
       // Bookkeeping only: no error banner when it fails.
       try {
         _library.recordPlay(track.id);
@@ -1103,6 +1105,14 @@ class PlayerViewModel extends ChangeNotifier {
 
   /// The player left listening together to play music of its own.
   final Event<void> leftForOwnMusic = Event<void>();
+
+  /// Another account started music here (casting to this player, [DeviceSharing]).
+  final Event<AccountInfo> castHere = Event<AccountInfo>();
+
+  /// Whose music plays here when another account cast it ([castHere]); null while it is this account's own. Its plays
+  /// count for that account (its player counts them), not for this one.
+  AccountInfo? get playingFor => _playingFor;
+  AccountInfo? _playingFor;
 
   /// Takes part in listening together through [together].
   void attachListenTogether(ListenTogether together) {
@@ -1371,6 +1381,9 @@ class PlayerViewModel extends ChangeNotifier {
   String _remoteName = '';
   DeviceKind _remoteKind = DeviceKind.desktop;
   RemotePlayback? _remoteState;
+
+  /// The track last counted as played on another account's player this one cast to ([_applyRemote]).
+  String? _countedCast;
   (Duration, DateTime)? _remoteBase;
   Track? _remoteTrack;
   List<QueueItem> _remoteQueue = const [];
@@ -1389,7 +1402,7 @@ class PlayerViewModel extends ChangeNotifier {
     _remote = remote;
     _subscriptions.addAll([
       remote.devicesChanged.listen((_) => _onDevicesChanged()),
-      remote.commandReceived.listen((received) => _execute(received.$2)),
+      remote.commandReceived.listen((received) => _execute(received.command, from: received.account)),
     ]);
     _publish();
   }
@@ -1555,6 +1568,25 @@ class PlayerViewModel extends ChangeNotifier {
     // description of it, kept while it stays the same track, with the cover of the album here if there is one.
     final told = playback.track;
     final previous = _remoteTrack;
+    // Music this account cast to another account's player counts here, as that player doesn't count it: once per
+    // track it starts.
+    final account = _remote?.accountId;
+    if (told != null &&
+        account != null &&
+        playback.playingFor == account &&
+        playback.playing &&
+        told.id != _countedCast) {
+      _countedCast = told.id;
+      if (_library.resolveTracks([told.id]).firstOrNull case final track?) {
+        try {
+          _library.recordPlay(track.id);
+        } catch (e) {
+          WiretuneLog.debug('PlayerViewModel', 'Could not count a play cast to another player: $e');
+        }
+      }
+    } else if (told == null || playback.playingFor != account) {
+      _countedCast = null;
+    }
     final Track? shown = told == null
         ? null
         : (_library.resolveTracks([told.id]).firstOrNull ??
@@ -1604,7 +1636,18 @@ class PlayerViewModel extends ChangeNotifier {
   }
 
   /// A command from another device of the account, for this one's own player.
-  void _execute(RemoteCommand command) {
+  /// Carries out a command from another player: this account's own, or ([from]) another account's casting here, whose
+  /// music leaves out what this account hides unless this player shares any music ([RemoteClient.sharing]).
+  void _execute(RemoteCommand command, {AccountInfo? from}) {
+    List<Track> resolve(Iterable<String> ids) {
+      final tracks = _library.resolveTracks(ids);
+      if (from == null || _remote?.sharing == DeviceSharing.any) return tracks;
+      return [
+        for (final track in tracks)
+          if (!_library.isTrackHidden(track)) track,
+      ];
+    }
+
     switch (command.action) {
       case RemoteAction.play:
         unawaited(_playLocal());
@@ -1631,14 +1674,16 @@ class PlayerViewModel extends ChangeNotifier {
       case RemoteAction.playTracks:
         // Music from another device: it plays here now, and this player shows it. The track it was on starts where it
         // was; one this library lacks gives way to the next one it has, from its beginning.
-        final tracks = _library.resolveTracks(command.trackIds);
+        final tracks = resolve(command.trackIds);
         if (tracks.isEmpty) return;
         final index = command.index;
-        final wanted = index < 0 ? null : _library.resolveTracks([command.trackIds[index]]).firstOrNull;
-        final start =
-            wanted ?? (index < 0 ? null : _library.resolveTracks(command.trackIds.skip(index + 1)).firstOrNull);
+        final wanted = index < 0 ? null : resolve([command.trackIds[index]]).firstOrNull;
+        final start = wanted ?? (index < 0 ? null : resolve(command.trackIds.skip(index + 1)).firstOrNull);
         if (isRemote) _leaveRemote();
+        // Set first: the first track's play counts for whoever cast it, not for this account.
+        _playingFor = from;
         _playQueueInternal(tracks, start, start: wanted != null ? command.position : Duration.zero);
+        if (from != null) castHere.emit(from);
         notifyListeners();
       case RemoteAction.playIndex:
         if (command.index < _playbackQueue.length) _playAt(command.index);
@@ -1650,7 +1695,7 @@ class PlayerViewModel extends ChangeNotifier {
         clearQueue();
       case RemoteAction.playNext || RemoteAction.addToQueue:
         // The tracks this library has, in their order; one it lacks is left out.
-        _queueLocal(_library.resolveTracks(command.trackIds), next: command.action == RemoteAction.playNext);
+        _queueLocal(resolve(command.trackIds), next: command.action == RemoteAction.playNext);
     }
   }
 
@@ -1706,6 +1751,7 @@ class PlayerViewModel extends ChangeNotifier {
         repeat: _repeat,
         queue: queue,
         queueIndex: index,
+        playingFor: _playingFor?.id,
       ),
     );
   }

@@ -389,19 +389,26 @@ class FakeRemoteHub {
   /// Hands the player a frame as it is, which a real server would never send.
   void deliverRaw(Object? frame) => _incoming!.add(frame);
 
-  /// The other devices of the account that are online: (id, name, kind).
-  void devices(List<(String, String, DeviceKind)> devices) => deliver({
+  /// The other devices of the account that are online: (id, name, kind); and by their IDs, [others] are other
+  /// accounts' players that let others play on them.
+  void devices(List<(String, String, DeviceKind)> devices, {Map<String, AccountInfo> others = const {}}) => deliver({
     'type': 'devices',
     'devices': [
-      for (final (id, name, kind) in devices) {'id': id, 'name': name, 'kind': kind.name},
+      for (final (id, name, kind) in devices)
+        {'id': id, 'name': name, 'kind': kind.name, if (others[id] case final account?) 'account': account.toJson()},
     ],
   });
 
   void state(String device, RemotePlayback playback) =>
       deliver({'type': 'state', 'device': device, 'state': playback.toJson()});
 
-  void command(String from, RemoteCommand command) =>
-      deliver({'type': 'command', 'from': from, 'command': command.toJson()});
+  /// A command from the device [from]; [account] when that is another account's player, casting here.
+  void command(String from, RemoteCommand command, {AccountInfo? account}) => deliver({
+    'type': 'command',
+    'from': from,
+    'command': command.toJson(),
+    if (account != null) 'account': account.toJson(),
+  });
 
   /// Ends the connection the way a network failure does.
   Future<void> drop() => _incoming!.close();
