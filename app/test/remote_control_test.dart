@@ -298,6 +298,19 @@ void main() {
     expect((player.isRemote, vm.remote.isConnected), (false, false));
   });
 
+  test("a player lets the others play only music its account doesn't hide until another choice is saved", () async {
+    final library = createLibrary();
+    var fresh = createMainViewModel(library);
+    await fresh.start();
+    expect(fresh.deviceSharing, DeviceSharing.unhidden);
+    fresh.deviceSharing = DeviceSharing.off;
+    fresh.dispose();
+    fresh = createMainViewModel(library);
+    await fresh.start();
+    expect(fresh.deviceSharing, DeviceSharing.off, reason: 'kept');
+    fresh.dispose();
+  });
+
   group('another account casting', () {
     const anna = AccountInfo('anna-id', 'anna');
     const annaPlays = RemoteCommand(RemoteAction.playTracks, trackIds: ['t1', 't2', 't3'], index: 0);
@@ -309,7 +322,7 @@ void main() {
 
       hub.command('anna-desk', annaPlays, account: anna);
       await pumpEventQueue();
-      expect(driver.playCalls, 0, reason: 'off by default');
+      expect(driver.playCalls, 0, reason: 'off');
 
       vm.deviceSharing = DeviceSharing.unhidden;
       expect(vm.library.getPreference('remote_sharing'), 'unhidden');

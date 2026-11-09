@@ -899,8 +899,8 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Whether other accounts on the server may play music here (cast to this player), and which: off by default. An
-  /// account that blocks this one, or that this one blocks, never can.
+  /// Whether other accounts on the server may play music here (cast to this player), and which: by default only music
+  /// this account doesn't hide. An account that blocks this one, or that this one blocks, never can.
   DeviceSharing get deviceSharing => remote.sharing;
   set deviceSharing(DeviceSharing value) {
     if (value == remote.sharing) return;
@@ -1008,7 +1008,10 @@ class MainViewModel extends ChangeNotifier {
       id: id,
       name: library.getPreference(_remoteNamePreference) ?? capabilities.name,
       enabled: library.getPreference(_remoteEnabledPreference) != '0',
-      sharing: DeviceSharing.parse(library.getPreference(_remoteSharingPreference)),
+      sharing: switch (library.getPreference(_remoteSharingPreference)) {
+        null => DeviceSharing.unhidden,
+        final saved => DeviceSharing.parse(saved),
+      },
     );
   }
 

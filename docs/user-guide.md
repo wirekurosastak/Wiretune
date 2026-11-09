@@ -126,7 +126,7 @@ off or renames this device.
 
 *Others on this server can play here* lets other accounts pick this device too: a TV in the living room, say. *Only
 music I don't hide* leaves out what this account hides; *Any music* plays everything. Their plays count for them, and
-the device says who is playing. Someone you blocked, or who blocked you, never sees the device. It's off by default.
+the device says who is playing. Someone you blocked, or who blocked you, never sees the device. By default it's *Only music I don't hide*.
 
 The cast button also lists **streamers** on your network: hi-fi streamers, amplifiers and speakers that play music
 by URL (UPnP/DLNA renderers). They play the server's tracks straight from the server, in the original quality; music
