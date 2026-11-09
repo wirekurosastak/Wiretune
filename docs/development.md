@@ -34,6 +34,10 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 | `user_data_service.dart` | Favorites, play counts, playlists, hidden items |
 | `recommendation_service.dart` | What the accounts recommend to each other |
 | `blend_service.dart` | Blends: two accounts' listening mixed into one playlist |
+| `block_service.dart` | Which accounts block which |
+| `album_lookup_service.dart`, `credit_lookup_service.dart` | Album genres and labels from Deezer, track credits from MusicBrainz |
+| `transcoder.dart` | Converting tracks for a lower streaming quality |
+| `http_utils.dart` | JSON answers, errors, ETags |
 | `library_scan_service.dart` | Scanning and watching the music folder |
 | `remote_hub.dart` | Passing remote-control messages between the players of an account, and of a group listening together |
 | `config.dart` | The options |
