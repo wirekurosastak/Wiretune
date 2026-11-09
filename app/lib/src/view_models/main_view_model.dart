@@ -900,7 +900,8 @@ class MainViewModel extends ChangeNotifier {
   }
 
   /// Whether other accounts on the server may play music here (cast to this player), and which: by default only music
-  /// this account doesn't hide. An account that blocks this one, or that this one blocks, never can.
+  /// this account doesn't hide, and none on a phone. An account that blocks this one, or that this one blocks, never
+  /// can.
   DeviceSharing get deviceSharing => remote.sharing;
   set deviceSharing(DeviceSharing value) {
     if (value == remote.sharing) return;
@@ -1009,7 +1010,8 @@ class MainViewModel extends ChangeNotifier {
       name: library.getPreference(_remoteNamePreference) ?? capabilities.name,
       enabled: library.getPreference(_remoteEnabledPreference) != '0',
       sharing: switch (library.getPreference(_remoteSharingPreference)) {
-        null => DeviceSharing.unhidden,
+        // A phone goes everywhere with its owner: nobody else plays on it until they let them.
+        null => capabilities.kind == DeviceKind.phone ? DeviceSharing.off : DeviceSharing.unhidden,
         final saved => DeviceSharing.parse(saved),
       },
     );

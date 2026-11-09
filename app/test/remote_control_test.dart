@@ -311,6 +311,25 @@ void main() {
     fresh.dispose();
   });
 
+  test('a phone lets nobody else play on it until another choice is saved', () async {
+    final library = createLibrary();
+    MainViewModel phone() => MainViewModel(
+      TestSupport.createEngine(),
+      library,
+      ServerSession(library, testRepository()),
+      capabilities: const DeviceCapabilities(kind: DeviceKind.phone),
+    );
+    var fresh = phone();
+    await fresh.start();
+    expect(fresh.deviceSharing, DeviceSharing.off);
+    fresh.deviceSharing = DeviceSharing.unhidden;
+    fresh.dispose();
+    fresh = phone();
+    await fresh.start();
+    expect(fresh.deviceSharing, DeviceSharing.unhidden, reason: 'kept');
+    fresh.dispose();
+  });
+
   group('another account casting', () {
     const anna = AccountInfo('anna-id', 'anna');
     const annaPlays = RemoteCommand(RemoteAction.playTracks, trackIds: ['t1', 't2', 't3'], index: 0);
