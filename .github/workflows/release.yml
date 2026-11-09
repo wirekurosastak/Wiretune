@@ -6,17 +6,27 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # Actions → Release → Run workflow, on any branch: everything is built as for a release, and nothing is published (no
+  # image pushed, no release drafted), so that the first tag isn't the first time this runs.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
+  # Also in ci.yml and test.yml.
   FLUTTER_VERSION: 3.47.6
   DART_VERSION: 3.13.5
 
 jobs:
+  # Nothing is built, let alone published, from code that fails the checks.
+  test:
+    name: Analyse and test
+    uses: ./.github/workflows/test.yml
+
   version:
     name: Tag matches the version
+    needs: test
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.check.outputs.version }}
@@ -26,7 +36,11 @@ jobs:
         run: |
           version=$(sed -nE 's/^version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)\+[0-9]+[[:space:]]*$/\1/p' app/pubspec.yaml)
           tizen=$(sed -nE 's/.*<manifest [^>]* version="([^"]+)".*/\1/p' app/tizen/tizen-manifest.xml)
-          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "The tag $GITHUB_REF_NAME is not v$version (app/pubspec.yaml)."; exit 1; }
+          # A run by hand has no tag to match.
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "The tag $GITHUB_REF_NAME is not v$version (app/pubspec.yaml)."
+            exit 1
+          fi
           [ "$tizen" = "$version" ] || { echo "app/tizen/tizen-manifest.xml says $tizen, app/pubspec.yaml $version."; exit 1; }
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
@@ -72,22 +86,26 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
+      - if: github.event_name == 'push'
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # Two images: the small one, and one with ffmpeg that converts music for slow connections.
+      # Two images: the small one, and one with ffmpeg that converts music for slow connections. Pushed for a tag only.
       - run: |
           image=ghcr.io/${GITHUB_REPOSITORY,,}-server:${{ needs.version.outputs.version }}
           docker build -f server/Dockerfile --build-arg DART_VERSION="$DART_VERSION" -t "$image-${{ matrix.arch }}" .
-          docker push "$image-${{ matrix.arch }}"
           docker build -f server/Dockerfile --build-arg DART_VERSION="$DART_VERSION" --build-arg WITH_FFMPEG=true -t "$image-ffmpeg-${{ matrix.arch }}" .
-          docker push "$image-ffmpeg-${{ matrix.arch }}"
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            docker push "$image-${{ matrix.arch }}"
+            docker push "$image-ffmpeg-${{ matrix.arch }}"
+          fi
 
   docker-manifest:
     name: Server image (both processors)
     needs: [version, docker]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -242,6 +260,7 @@ jobs:
   publish:
     name: Draft release
     needs: [version, server, docker-manifest, linux, windows, macos, android]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write

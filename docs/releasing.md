@@ -1,7 +1,8 @@
 # Releasing
 
 The release workflow hasn't run yet. Its Windows installer and macOS signing, disk image and notarization steps are
-untested (they need Windows and macOS runners).
+untested (they need Windows and macOS runners). Run it by hand first (*Actions → Release → Run workflow*): it builds
+everything and publishes nothing.
 
 ## Steps
 
@@ -9,7 +10,8 @@ untested (they need Windows and macOS runners).
    `pubspec.yaml` (the build number is Android's version code) and `app/tizen/tizen-manifest.xml`. A test fails if
    they differ.
 2. Push a tag `v<version>`: the pubspec version without the build number (`v1.0.2026` for `1.0.2026+1`).
-3. `.github/workflows/release.yml` checks that the tag, pubspec and Tizen manifest match, then builds:
+3. `.github/workflows/release.yml` runs the checks (`test.yml`, as CI does), checks that the tag, pubspec and Tizen
+   manifest match, then builds:
    - the server for Linux (x64, arm64), Windows and macOS, plus a container image for both processors
      (`ghcr.io/<owner>/wiretune-server`)
    - the players for Linux (`.deb`, `.rpm`, and a `.tar.gz` with `install.sh`), Windows (installer and portable zip),

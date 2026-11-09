@@ -1,0 +1,50 @@
+name: Test
+
+# The checks every change passes (CONTRIBUTING.md): CI runs them on every push and pull request, a release before it
+# builds anything.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  # Also in ci.yml and release.yml.
+  FLUTTER_VERSION: 3.47.6
+
+jobs:
+  test:
+    name: Analyse and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      # ffmpeg encodes the tag-reader fixtures; without it those tests are skipped.
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Dependencies
+        run: |
+          (cd packages/wiretune_core && dart pub get)
+          (cd packages/wiretune_platform && flutter pub get)
+          (cd server && dart pub get)
+          (cd app && flutter pub get)
+      - name: Formatting
+        run: dart format --output none --set-exit-if-changed packages server app/lib app/test tool
+      - name: License headers
+        run: |
+          missing=$(git ls-files '*.dart' '*.kt' '*.cs' | xargs grep -L 'SPDX-License-Identifier: AGPL-3.0-only' || true)
+          [ -z "$missing" ] || { echo "These files lack the license header (CONTRIBUTING.md):"; echo "$missing"; exit 1; }
+      - name: Build script
+        run: dart analyze --fatal-infos tool
+      - name: Core
+        working-directory: packages/wiretune_core
+        run: dart analyze --fatal-infos && dart test
+      - name: Server
+        working-directory: server
+        run: dart analyze --fatal-infos && dart test
+      - name: App
+        working-directory: app
+        run: flutter analyze --fatal-infos && flutter test

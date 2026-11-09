@@ -192,9 +192,8 @@ icons are made by hand; the commands are in `app/pubspec.yaml`.
 
 `.github/workflows/ci.yml`:
 
-- checks formatting and the license headers
-- analyzes every package and `tool/` with `--fatal-infos`
-- runs every test, with `ffmpeg` installed
+- runs the checks in `test.yml` (which a release runs too): formatting and the license headers, `--fatal-infos`
+  analysis of every package and `tool/`, and every test, with `ffmpeg` installed
 - builds the server, the APKs, the desktop players, the Linux packages and an unsigned iOS app through
   `tool/build.dart`, and keeps `dist/server`, the APKs and the unsigned iOS app as artifacts
 
