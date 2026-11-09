@@ -151,6 +151,18 @@ Future<void> confirmDeletePlaylist(BuildContext context, Playlist playlist) asyn
   if (confirmed && context.mounted) context.vm.playlists.deletePlaylist(playlist);
 }
 
+/// Asks before the Blend [playlist] shows is left: it ends for the friend too.
+Future<void> confirmLeaveBlend(BuildContext context, Playlist playlist) async {
+  final confirmed = await confirmAction(
+    context,
+    title: context.trf('BlendLeaveConfirm', [playlist.name]),
+    message: context.tr('BlendLeaveHint'),
+    confirmLabel: context.tr('BlendLeave'),
+    destructive: true,
+  );
+  if (confirmed && context.mounted) context.vm.playlists.leaveBlend(playlist);
+}
+
 /// Asks before the queue is cleared.
 Future<void> confirmClearQueue(BuildContext context) async {
   final confirmed = await confirmAction(

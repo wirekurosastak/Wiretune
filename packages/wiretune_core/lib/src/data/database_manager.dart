@@ -35,7 +35,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 17;
+  static const int schemaVersion = 18;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -87,6 +87,8 @@ class DatabaseManager {
     _creditLookupsTable,
     // 16 -> 17: when each account played what, for its listening summary.
     _playLogTable,
+    // 17 -> 18: the Blends, playlists mixed from two accounts' listening.
+    _blendsTable,
   ];
 
   final String databasePath;
@@ -273,6 +275,7 @@ const String _schema =
   $_albumLookupsTable
   $_creditLookupsTable
   $_playLogTable
+  $_blendsTable
 ''';
 
 /// The player's downloaded copies of server tracks: which file (relative to the downloads folder) is the copy of which
@@ -356,4 +359,18 @@ const String _playLogTable = '''
       played_at INTEGER NOT NULL
   );
   CREATE INDEX user_play_log_time ON user_play_log (user_id, played_at);
+''';
+
+/// The Blends: [inviter_id] asked [invitee_id] to mix their listening into a playlist, which both have from when the
+/// invitee accepted (`accepted_at`). One per pair of accounts.
+const String _blendsTable = '''
+  CREATE TABLE blends (
+      id TEXT PRIMARY KEY,
+      inviter_id TEXT NOT NULL,
+      invitee_id TEXT NOT NULL,
+      invited_at INTEGER NOT NULL,
+      accepted_at INTEGER
+  );
+  CREATE INDEX blends_inviter ON blends (inviter_id);
+  CREATE INDEX blends_invitee ON blends (invitee_id);
 ''';

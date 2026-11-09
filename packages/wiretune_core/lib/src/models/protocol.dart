@@ -491,6 +491,11 @@ abstract final class ErrorCodes {
   static const String recommendationRecipientsInvalid = 'recommendationRecipientsInvalid'; // with max
   static const String recommendationNotFound = 'recommendationNotFound';
 
+  // Blends
+  static const String blendAccountInvalid = 'blendAccountInvalid';
+  static const String blendsLimit = 'blendsLimit'; // with limit
+  static const String blendNotFound = 'blendNotFound';
+
   // Remote control
   static const String notWebSocket = 'notWebSocket';
   static const String originRefused = 'originRefused';
@@ -526,6 +531,54 @@ abstract final class UserDataRules {
     if (id!.length > maxIdLength) return 'The ID must be at most $maxIdLength characters.';
     return hasControlCharacters(id) ? 'The ID must not contain control characters.' : null;
   }
+}
+
+/// Where a Blend stands for the account that reads it: the other account invited it, it invited the other, or both
+/// are in and it has its tracks.
+enum BlendState {
+  invited,
+  inviting,
+  active;
+
+  static BlendState? parse(Object? value) => values.asNameMap()[value];
+}
+
+/// A playlist mixed from this account's listening and [other]'s: the tracks both play most, and the ones each of them
+/// does, taking turns; none that either of them hides. Its [trackIds] are there while it is [BlendState.active].
+class Blend {
+  const Blend(this.id, this.other, this.state, [this.trackIds = const []]);
+
+  final String id;
+  final AccountInfo other;
+  final BlendState state;
+  final List<String> trackIds;
+
+  Map<String, Object?> toJson() => {'id': id, 'with': other.toJson(), 'state': state.name, 'trackIds': trackIds};
+
+  static Blend fromJson(Object? json) {
+    final map = _object(json);
+    final state = BlendState.parse(map['state']);
+    if (state == null) throw const FormatException('Unknown state of a Blend.');
+    final ids = map['trackIds'];
+    return Blend(_string(map, 'id'), AccountInfo.fromJson(map['with']), state, [
+      if (ids is List) ...ids.whereType<String>(),
+    ]);
+  }
+}
+
+/// Limits of the Blends.
+abstract final class BlendRules {
+  /// The most Blends an account is in or invited to, both ways.
+  static const int maxBlends = 50;
+
+  /// The tracks of a Blend.
+  static const int maxTracks = 50;
+
+  /// The tracks of each account's listening that a Blend picks from: its most played and favourites.
+  static const int picksPerAccount = 100;
+
+  /// A favourite counts as this many plays.
+  static const int favoriteWeight = 5;
 }
 
 /// Limits the server enforces on recommendations.

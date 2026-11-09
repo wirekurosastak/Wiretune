@@ -6,13 +6,21 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
-/// What the bell holds ("From friends"): invites to listen together and the music the other accounts of the server
-/// recommended; and recommending music to them.
+/// What the bell holds ("From friends"): invites to listen together and to Blends, and the music the other accounts of
+/// the server recommended; and recommending music to them, and inviting them to Blends.
 class FriendsViewModel extends ChangeNotifier {
-  FriendsViewModel(this._session, this._library, this.recommendations, this.together, {required this.notify}) {
+  FriendsViewModel(
+    this._session,
+    this._library,
+    this.recommendations,
+    this.together,
+    this.blends, {
+    required this.notify,
+  }) {
     _unsubscribers.addAll([
       recommendations.changed.listen((_) => notifyListeners()),
       together.changed.listen((_) => notifyListeners()),
+      blends.changed.listen((_) => notifyListeners()),
       _session.stateChanged.listen((_) => notifyListeners()),
     ]);
   }
@@ -21,6 +29,7 @@ class FriendsViewModel extends ChangeNotifier {
   final LibraryService _library;
   final Recommendations recommendations;
   final ListenTogether together;
+  final Blends blends;
 
   /// Shows a notice, with its Undo when given.
   final void Function(String message, {bool isError, VoidCallback? undo}) notify;
@@ -29,8 +38,38 @@ class FriendsViewModel extends ChangeNotifier {
   /// The bell is there while signed in to a server: the friends are its other accounts.
   bool get isAvailable => _session.isLoggedIn;
 
-  /// What the bell's count says: the recommendations that came since it was opened, and the open invites.
-  int get unseenCount => recommendations.unseenCount + invites.length;
+  /// What the bell's count says: the recommendations that came since it was opened, and the open invites (to listen
+  /// together and to Blends).
+  int get unseenCount => recommendations.unseenCount + invites.length + blendInvitations.length;
+
+  /// The invitations to Blends this account got.
+  List<Blend> get blendInvitations => blends.invitations;
+
+  /// Accepts an invitation to a Blend: it is on the Playlists page from now on.
+  Future<void> acceptBlend(Blend blend) async {
+    try {
+      await blends.invite(blend.other);
+      notify(Localizer.format('BlendAccepted', [blend.other.username]));
+    } catch (e) {
+      notify(Localizer.format('ChangeRefused', ['$e']), isError: true);
+    }
+  }
+
+  /// Turns down an invitation to a Blend.
+  void declineBlend(Blend blend) => unawaited(blends.leave(blend));
+
+  /// Invites [to] to Blends, one each: theirs once they accept.
+  Future<void> inviteToBlend(List<AccountInfo> to) async {
+    try {
+      for (final account in to) {
+        await blends.invite(account);
+      }
+      final who = to.length == 1 ? to.single.username : Localizer.format('PeopleCount', [to.length]);
+      notify(Localizer.format('BlendInvited', [who]));
+    } catch (e) {
+      notify(Localizer.format('ChangeRefused', ['$e']), isError: true);
+    }
+  }
 
   List<Recommendation> get items => recommendations.items;
 
@@ -107,8 +146,9 @@ class FriendsViewModel extends ChangeNotifier {
     try {
       await _session.setBlocked(account.id, block);
       friendsError = '';
-      // What it recommended goes with the block.
+      // What it recommended goes with the block, and so does a Blend with it.
       if (block) unawaited(recommendations.refresh());
+      if (block) unawaited(blends.refresh());
     } catch (e) {
       blocked = before;
       friendsError = Localizer.format('ChangeRefused', ['$e']);

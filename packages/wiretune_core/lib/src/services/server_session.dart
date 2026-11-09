@@ -394,6 +394,12 @@ class ServerSession {
 
   Future<void> removeRecommendation(String id) => _client.removeRecommendation(serverUrl, id);
 
+  Future<List<Blend>> getBlends() => _client.getBlends(serverUrl);
+
+  Future<Blend> inviteToBlend(String accountId) => _client.inviteToBlend(serverUrl, accountId);
+
+  Future<void> leaveBlend(String id) => _client.leaveBlend(serverUrl, id);
+
   Future<void> deleteUser(String userId) => _client.deleteUser(serverUrl, userId);
 
   /// Changes the account's password. The server signs out every other session of the account and hands this one a new

@@ -100,6 +100,21 @@ account keeps its newest 200; one more pushes out the oldest.
 
 Each change sends `recommendationsChanged` to the recipient's players.
 
+A **Blend** is a playlist the server mixes from two accounts' listening. One invites, the other accepts by inviting back,
+and either leaves, which ends it for both. The mix takes each account's 100 most played tracks (a favorite counts 5
+plays), then up to 50 in turns: one both have, one of the inviter's, one of the other's. A track either account hides
+is never in it. It's mixed again at every `GET`, so it follows what both play.
+
+| Route | Role | |
+|---|---|---|
+| `GET /api/me/blends` | user | The account's Blends, by the other's name: `[{ "id", "with": { "id", "username" }, "state", "trackIds" }]`. `state`: `invited` (the other asks this one), `inviting` (this one asks) or `active`; `trackIds` are empty until `active` |
+| `POST /api/me/blends` | user | Body `{ "with": accountId }`: invites that account, or accepts its invitation. Inviting again changes nothing. `200` with the Blend, `400` `blendAccountInvalid` (not another account of the server), `409` `blendsLimit` (50 Blends and invitations) |
+| `DELETE /api/me/blends/{id}` | user | Leaves it, or turns down or takes back the invitation. `200 { "deleted": true }`, `404` `blendNotFound` |
+
+Each change sends `blendsChanged` to both accounts' players. Blocking ends a Blend. While one account blocks the other,
+an invitation between them waits: its sender sees it as `inviting`, the account that blocks never sees it, and it
+can't be accepted.
+
 An account can block another: a blocked account's recommendations stop reaching it (the ones it sent before are
 deleted) and its invites to listen together never arrive. The blocked account isn't told.
 
@@ -143,6 +158,7 @@ Every message is a JSON text object with a `type`, at most 64 K characters.
 | `{ "type": "dataChanged" }` | server | The account's favorites, playlists or hidden items changed (play counts aren't announced): download `/api/me/data` again. Not sent to the player that made the change, if it sent its device ID in an `X-Wiretune-Device` header with that request |
 | `{ "type": "libraryChanged" }` | server | A scan changed `/api/tracks` or `/api/artists/pictures` (music added, changed or removed, a new cover or artist picture): download them again. Sent to every player of every account |
 | `{ "type": "accountChanged" }` | server | The account was renamed: download `/api/auth/me` again |
+| `{ "type": "blendsChanged" }` | server | The account's Blends changed: one was asked for, accepted or left: download `/api/me/blends` again. Not sent to the player that made the change, as for `dataChanged` |
 | `{ "type": "recommendationsChanged" }` | server | What the account was recommended changed: one came or was taken back, or the bell was opened on another of its players: download `/api/me/recommendations` again. Not sent to the player that made the change, as for `dataChanged` |
 
 A **state** is `{ "track", "playing", "positionMs", "volume", "muted", "volumeLocked", "shuffle", "repeat", "queue",

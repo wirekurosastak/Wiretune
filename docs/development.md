@@ -33,6 +33,7 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 | `auth_service.dart`, `jwt.dart`, `setup_code.dart` | Accounts, tokens, the setup code |
 | `user_data_service.dart` | Favorites, play counts, playlists, hidden items |
 | `recommendation_service.dart` | What the accounts recommend to each other |
+| `blend_service.dart` | Blends: two accounts' listening mixed into one playlist |
 | `library_scan_service.dart` | Scanning and watching the music folder |
 | `remote_hub.dart` | Passing remote-control messages between the players of an account, and of a group listening together |
 | `config.dart` | The options |

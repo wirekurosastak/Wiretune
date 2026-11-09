@@ -118,6 +118,9 @@ class RemoteClient {
   /// players, or the connection was lost for a while.
   final Event<void> recommendationsChanged = Event<void>();
 
+  /// The account's Blends changed: one was asked for, accepted or left.
+  final Event<void> blendsChanged = Event<void>();
+
   /// The account itself changed (it was renamed): ask the server for it again.
   final Event<void> accountChanged = Event<void>();
 
@@ -260,6 +263,7 @@ class RemoteClient {
       accountDataChanged.emit(null);
       libraryChanged.emit(null);
       recommendationsChanged.emit(null);
+      blendsChanged.emit(null);
     }
     _connectedBefore = true;
   }
@@ -386,6 +390,8 @@ class RemoteClient {
         libraryChanged.emit(null);
       case 'recommendationsChanged':
         recommendationsChanged.emit(null);
+      case 'blendsChanged':
+        blendsChanged.emit(null);
       case 'accountChanged':
         accountChanged.emit(null);
       case 'time' || 'listen' || 'listenInvites' || 'listenState' || 'listenCommand':

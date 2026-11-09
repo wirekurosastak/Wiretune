@@ -14,6 +14,7 @@ import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/downloads.dart';
+import '../widgets/friends.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
 import 'library_pages.dart';
@@ -41,6 +42,13 @@ class PlaylistsPage extends StatelessWidget {
                   child: Text(context.tr('PlaylistNew')),
                 ),
               ),
+              if (context.vm.friends.isAvailable)
+                PressShrink(
+                  child: OutlinedButton(
+                    onPressed: () => showBlendInvite(context),
+                    child: Text(context.tr('BlendNew')),
+                  ),
+                ),
             ],
           );
         }
@@ -61,6 +69,15 @@ class PlaylistsPage extends StatelessWidget {
                     ),
                 ],
               ),
+              // A Blend needs the server's other accounts.
+              if (context.vm.friends.isAvailable)
+                PressShrink(
+                  child: OutlinedButton.icon(
+                    onPressed: () => showBlendInvite(context),
+                    icon: const Icon(Icons.join_inner_rounded, size: 18),
+                    label: Text(context.tr('BlendNew')),
+                  ),
+                ),
               PressShrink(
                 child: FilledButton.icon(
                   onPressed: () => showNewPlaylistDialog(context),
@@ -110,6 +127,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
     final playlist = widget.playlist;
     final colors = context.colors;
     final tracks = playlists.selectedPlaylistTracks;
+    final blend = playlists.blendOf(playlist);
 
     final title = playlist.isAutomatic
         ? null
@@ -202,7 +220,13 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               },
               tags: [
                 TagBadge(
-                  context.tr(playlist.isAutomatic ? 'LabelAutoPlaylist' : 'LabelPlaylist'),
+                  context.tr(
+                    blend != null
+                        ? 'LabelBlend'
+                        : playlist.isAutomatic
+                        ? 'LabelAutoPlaylist'
+                        : 'LabelPlaylist',
+                  ),
                   color: colors.accent,
                 ),
               ],
@@ -235,11 +259,23 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
           ),
           if (tracks.isEmpty)
             SliverToBoxAdapter(
-              child: EmptyState(
-                icon: Icons.playlist_add,
-                title: context.tr('PlaylistEmptyTitle'),
-                hint: context.tr('PlaylistEmptyHint'),
-              ),
+              child: blend == null
+                  ? EmptyState(
+                      icon: Icons.playlist_add,
+                      title: context.tr('PlaylistEmptyTitle'),
+                      hint: context.tr('PlaylistEmptyHint'),
+                    )
+                  : blend.state == BlendState.inviting
+                  ? EmptyState(
+                      icon: Icons.hourglass_empty_rounded,
+                      title: context.trf('BlendWaiting', [blend.other.username]),
+                      hint: context.tr('BlendWaitingHint'),
+                    )
+                  : EmptyState(
+                      icon: Icons.join_inner_rounded,
+                      title: context.tr('BlendEmptyTitle'),
+                      hint: context.tr('BlendEmptyHint'),
+                    ),
             )
           else
             TrackSliver(

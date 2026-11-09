@@ -214,10 +214,17 @@ class ListMenu {
     cover: (context, {required large}) =>
         PlaylistCover(covers: playlistCovers(tracks), radius: large ? Radii.card : Radii.small),
     subtitle: (context) => context.trf('TrackCount', [playlist.trackCount]),
-    removeKey: playlist.isAutomatic ? null : 'PlaylistDeleteAction',
+    removeKey: PlaylistsViewModel.isBlend(playlist)
+        ? 'BlendLeave'
+        : playlist.isAutomatic
+        ? null
+        : 'PlaylistDeleteAction',
+    removeIcon: PlaylistsViewModel.isBlend(playlist) ? Icons.logout_rounded : Icons.delete_outline_rounded,
     removeIsDanger: true,
     // Asked first.
-    onRemove: (context) => confirmDeletePlaylist(context, playlist),
+    onRemove: (context) => PlaylistsViewModel.isBlend(playlist)
+        ? confirmLeaveBlend(context, playlist)
+        : confirmDeletePlaylist(context, playlist),
   );
 
   /// The favourite tracks, as a list: [name] is the page's.

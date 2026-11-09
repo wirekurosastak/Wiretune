@@ -186,6 +186,21 @@ class ServerClient {
   Future<void> removeRecommendation(String baseUrl, String id) =>
       _send('DELETE', baseUrl, '/api/me/recommendations/${Uri.encodeComponent(id)}');
 
+  /// The Blends this account is in or invited to.
+  Future<List<Blend>> getBlends(String baseUrl) async {
+    final list = await _send('GET', baseUrl, '/api/me/blends');
+    if (list is! List) throw ServerRequestException(_notWiretune(), 200);
+    return list.map((b) => _parse(Blend.fromJson, b)).toList();
+  }
+
+  /// Invites [accountId] to a Blend, or accepts its invitation; the Blend as it now stands.
+  Future<Blend> inviteToBlend(String baseUrl, String accountId) async =>
+      _parse(Blend.fromJson, await _send('POST', baseUrl, '/api/me/blends', body: {'with': accountId}));
+
+  /// Leaves a Blend, or turns down or takes back its invitation: it ends for both.
+  Future<void> leaveBlend(String baseUrl, String id) =>
+      _send('DELETE', baseUrl, '/api/me/blends/${Uri.encodeComponent(id)}');
+
   Future<UserInfo> addUser(String baseUrl, String username, String password) async => _parse(
     UserInfo.fromJson,
     await _send('POST', baseUrl, '/api/users', body: {'username': username, 'password': password}),

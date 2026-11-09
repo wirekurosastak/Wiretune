@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
@@ -624,16 +626,20 @@ List<String> playlistCovers(List<Track> tracks) {
 /// playlists starts with the newest; a playlist's tracks in the order they were added to it (Added ↑), the only date a
 /// playlist knows of them being their place in it.
 class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin {
-  PlaylistsViewModel(this._library, this._player) {
+  PlaylistsViewModel(this._library, this._player, {this.blends}) {
     _unsubscribers.addAll([
       _library.playlistsChanged.listen((_) => refreshPlaylists()),
       _library.libraryChanged.listen((_) => refreshPlaylists()),
+      ?blends?.changed.listen((_) => refreshPlaylists()),
     ]);
     refreshPlaylists();
   }
 
   final LibraryService _library;
   final PlayerViewModel _player;
+
+  /// The account's Blends, listed with the automatic playlists; null without a server.
+  final Blends? blends;
   final List<void Function()> _unsubscribers = [];
 
   /// A playlist's own order is the one its tracks were added in: Added ↑.
@@ -710,6 +716,23 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   static const String _mostPlayedId = 'automatic:most-played';
   static const String _recentlyPlayedId = 'automatic:recently-played';
   static const String _recentlyAddedId = 'automatic:recently-added';
+  static const String _blendPrefix = 'blend:';
+
+  /// Whether [playlist] is a Blend's ([blendOf] tells which).
+  static bool isBlend(Playlist playlist) => playlist.id.startsWith(_blendPrefix);
+
+  /// The Blend [playlist] shows; null for any other playlist.
+  Blend? blendOf(Playlist playlist) => !isBlend(playlist)
+      ? null
+      : blends?.items.where((b) => '$_blendPrefix${b.id}' == playlist.id).firstOrNull;
+
+  /// Leaves the Blend [playlist] shows: it ends for both accounts.
+  void leaveBlend(Playlist playlist) {
+    final blend = blendOf(playlist);
+    if (blend == null) return;
+    if (selectedPlaylist?.id == playlist.id) closePlaylistDetail();
+    unawaited(blends?.leave(blend));
+  }
 
   // The newest tracks of the library as it was last looked at: worked out once per library, not at every play.
   List<Track>? _newestOf;
@@ -765,6 +788,15 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
       if (most.isNotEmpty) list(_mostPlayedId, 'AutoMostPlayed', most),
       if (last.isNotEmpty) list(_recentlyPlayedId, 'AutoRecentlyPlayed', last),
       if (added.isNotEmpty) list(_recentlyAddedId, 'AutoRecentlyAdded', added),
+      // The Blends, also the invitations this account sent (empty until the other accepts).
+      for (final blend in blends?.items ?? const <Blend>[])
+        if (blend.state != BlendState.invited)
+          Playlist(
+            id: '$_blendPrefix${blend.id}',
+            name: Localizer.format('BlendName', [blend.other.username]),
+            isAutomatic: true,
+            trackIds: blend.trackIds,
+          ),
     ];
   }
 

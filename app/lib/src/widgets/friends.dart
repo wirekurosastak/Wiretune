@@ -96,7 +96,8 @@ class _FromFriendsList extends StatelessWidget {
       builder: (context, _) {
         final items = friends.items;
         final invites = friends.invites;
-        if (items.isEmpty && invites.isEmpty) {
+        final blends = friends.blendInvitations;
+        if (items.isEmpty && invites.isEmpty && blends.isEmpty) {
           return Padding(
             padding: EdgeInsets.fromLTRB(padding, 8, padding, 8),
             child: Text(context.tr('FromFriendsNone'), style: TextStyle(fontSize: 13, color: colors.textMuted)),
@@ -106,6 +107,7 @@ class _FromFriendsList extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (final invite in invites) _inviteRow(context, invite),
+            for (final blend in blends) _blendRow(context, blend),
             for (final item in items) _recommendationRow(context, item),
           ],
         );
@@ -139,6 +141,32 @@ class _FromFriendsList extends StatelessWidget {
             iconSize: 18,
             icon: Icon(Icons.close_rounded, color: colors.textMuted),
             onPressed: () => friends.dismissInvite(invite),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _blendRow(BuildContext context, Blend blend) {
+    final friends = context.vm.friends;
+    final colors = context.colors;
+    return ListTile(
+      contentPadding: EdgeInsets.only(left: padding, right: padding),
+      leading: CircleAvatar(
+        radius: 22,
+        backgroundColor: colors.accent.withValues(alpha: 0.18),
+        child: Icon(Icons.join_inner_rounded, color: colors.accent),
+      ),
+      title: Text(context.trf('BlendInvitedYou', [blend.other.username]), maxLines: 2),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton(onPressed: () => friends.acceptBlend(blend), child: Text(context.tr('BlendAccept'))),
+          IconButton(
+            tooltip: context.tr('Remove'),
+            iconSize: 18,
+            icon: Icon(Icons.close_rounded, color: colors.textMuted),
+            onPressed: () => friends.declineBlend(blend),
           ),
         ],
       ),
@@ -193,6 +221,19 @@ class _FromFriendsList extends StatelessWidget {
       },
     );
   }
+}
+
+/// Invites the friends the user picks to Blends: a playlist with each, mixed from both one's listening, once they
+/// accept.
+Future<void> showBlendInvite(BuildContext context) async {
+  final picked = await showFriendPicker(
+    context,
+    title: context.tr('BlendNew'),
+    subtitle: context.tr('BlendNewHint'),
+    action: context.tr('BlendInvite'),
+  );
+  if (picked == null || !context.mounted) return;
+  await context.vm.friends.inviteToBlend(picked.$1);
 }
 
 /// Recommends an artist, an album or a track ([label] in the dialog and the notice) to the friends the user picks.

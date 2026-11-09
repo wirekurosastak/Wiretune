@@ -101,6 +101,10 @@ sends it to the friends you pick, with a note if you like. What friends send you
 a count of what's new: tap one to play or open it, or × to remove it. Nothing you've hidden shows up there, whoever
 sends it.
 
+**Blend** on the Playlists page invites friends to a playlist mixed from what you both play and love. It shows on
+Playlists once they accept it from the bell, and changes as you both listen. Nothing either of you hides is in it.
+**Leave Blend** on its page ends it for both of you.
+
 To stop someone's recommendations and invites, **Block** them in *Settings → Friends*. They aren't told, and **Unblock**
 lets them reach you again.
 

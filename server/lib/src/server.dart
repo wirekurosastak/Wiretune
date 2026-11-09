@@ -14,6 +14,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'album_lookup_service.dart';
 import 'auth_service.dart';
+import 'blend_service.dart';
 import 'block_service.dart';
 import 'credit_lookup_service.dart';
 import 'config.dart';
@@ -157,6 +158,9 @@ class WiretuneServer {
   /// What the accounts recommend to each other.
   late final RecommendationService recommendations = RecommendationService(database);
   late final BlockService blocks = BlockService(database);
+
+  /// The playlists mixed from two accounts' listening.
+  late final BlendService blends = BlendService(database, userData, library, blocks.blocks);
   final _RateLimiter _authLimiter = _RateLimiter(10, const Duration(minutes: 1));
   HttpServer? _http;
   late final List<_Route> _routes = _buildRoutes();
@@ -386,8 +390,10 @@ class WiretuneServer {
       if (call.userId == userId) {
         return errorResponse(400, ErrorCodes.cannotDeleteSelf, 'You cannot delete your own account.');
       }
+      final partners = blends.partners(userId);
       if (!auth.deleteUser(userId)) return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
       remote.disconnectAccount(userId, 'The account was removed.');
+      partners.forEach(remote.blendsChanged); // its Blends went
       return Response.ok(null);
     }),
     // Every account by its name, for the others to recommend to and listen together with
@@ -512,11 +518,30 @@ class WiretuneServer {
       if (!blocks.block(call.userId, other)) return errorResponse(404, ErrorCodes.userNotFound, 'User not found.');
       remote.blocked(call.userId, other);
       remote.recommendationsChanged(call.userId); // what it recommended went
+      if (blends.end(call.userId, other)) {
+        remote.blendsChanged(call.userId);
+        remote.blendsChanged(other);
+      }
       return jsonResponse({'userId': other, 'blocked': true});
     }),
     _Route('DELETE', '/api/me/blocked/{userId}', Access.user, (call) {
       blocks.unblock(call.userId, call.params['userId']!);
       return jsonResponse({'userId': call.params['userId'], 'blocked': false});
+    }),
+    // The Blends: playlists mixed from this account's listening and another's
+    _Route(
+      'GET',
+      '/api/me/blends',
+      Access.user,
+      (call) => jsonResponse([for (final blend in blends.of(call.userId)) blend.toJson()]),
+    ),
+    _Route('POST', '/api/me/blends', Access.user, _inviteToBlend),
+    _Route('DELETE', '/api/me/blends/{id}', Access.user, (call) {
+      final other = blends.leave(call.userId, call.params['id']!);
+      if (other == null) return errorResponse(404, ErrorCodes.blendNotFound, 'Blend not found.');
+      remote.blendsChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
+      remote.blendsChanged(other);
+      return jsonResponse({'deleted': true});
     }),
     _Route('POST', '/api/me/recommendations/seen', Access.user, (call) {
       recommendations.markSeen(call.userId);
@@ -592,6 +617,32 @@ class WiretuneServer {
     final ids = open.isEmpty ? const <String>[] : recommendations.send(call.userId, open, kind, itemId, note);
     open.forEach(remote.recommendationsChanged);
     return jsonResponse({'ids': ids});
+  }
+
+  /// Invites another account to a Blend, or accepts its invitation: `{ "with": account ID }`. Answers with the Blend as
+  /// the caller now has it. An account that blocks the caller isn't told; the answer is the same, an invitation that
+  /// waits ([BlendService]).
+  Future<Response> _inviteToBlend(_Call call) async {
+    final other = _text(await call.jsonObject(), 'with');
+    if (other == null || other == call.userId || !auth.getAccounts().any((a) => a.id == other)) {
+      return errorResponse(400, ErrorCodes.blendAccountInvalid, 'Choose another account of this server.');
+    }
+    final id = blends.invite(call.userId, other);
+    if (id == null) {
+      return errorResponse(
+        409,
+        ErrorCodes.blendsLimit,
+        'An account can be in at most ${BlendRules.maxBlends} Blends.',
+        {'limit': BlendRules.maxBlends},
+      );
+    }
+    // An account that blocks the other doesn't hear of it.
+    remote.blendsChanged(call.userId, except: call.request.headers[RemoteRules.deviceHeader]);
+    if (!blocks.blocks(other, call.userId)) remote.blendsChanged(other);
+    final blend = blends.of(call.userId).where((b) => b.id == id).firstOrNull;
+    // One the caller blocks the other in isn't listed: it waits, as the caller sees it.
+    final username = auth.getAccounts().firstWhere((a) => a.id == other).username;
+    return jsonResponse((blend ?? Blend(id, AccountInfo(other, username), BlendState.inviting)).toJson());
   }
 
   /// The text field [key] of a request body; null when it is missing or not text.

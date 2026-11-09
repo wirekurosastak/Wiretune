@@ -98,7 +98,8 @@ class MainViewModel extends ChangeNotifier {
     tracks = TrackListViewModel.allTracks(library, player);
     albums = AlbumsViewModel(library, player)..onNavWave = triggerNavWave;
     artists = ArtistsViewModel(library, player, artistPictures)..onNavWave = triggerNavWave;
-    playlists = PlaylistsViewModel(library, player)..onNavWave = triggerNavWave;
+    blends = Blends(session, this.remote);
+    playlists = PlaylistsViewModel(library, player, blends: blends)..onNavWave = triggerNavWave;
     favorites = TrackListViewModel.favorites(library, player);
     downloads = DownloadsViewModel(this.downloadService);
     audioSettings = AudioSettingsViewModel(audioEngine);
@@ -114,6 +115,7 @@ class MainViewModel extends ChangeNotifier {
       library,
       Recommendations(session, library, this.remote),
       together,
+      blends,
       notify: (message, {isError = false, undo}) => showNotice(message, isError: isError, undo: undo),
     );
     updates = UpdateViewModel(
@@ -203,6 +205,9 @@ class MainViewModel extends ChangeNotifier {
   late final SearchViewModel search;
   late final UpdateViewModel updates;
   late final FriendsViewModel friends;
+
+  /// The account's Blends: playlists the server mixes from its listening and a friend's.
+  late final Blends blends;
 
   /// What the app shows the user for a few seconds ([showNotice]).
   final Event<AppNotice> notices = Event<AppNotice>();
@@ -1132,6 +1137,7 @@ class MainViewModel extends ChangeNotifier {
     friends.dispose();
     unawaited(audioEngine.dispose());
     together.dispose();
+    blends.dispose();
     remote.dispose();
     downloadService.dispose();
     session.dispose();
