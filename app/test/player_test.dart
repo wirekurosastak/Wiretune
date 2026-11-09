@@ -139,6 +139,34 @@ void main() {
       }
     });
 
+    test("a removed track's undo puts it back where it was, unless it played or the queue changed", () {
+      List<String> titles(PlayerViewModel player) => [for (final t in player.queueTracks) t.title];
+      final (player, tracks, _) = createQueue(startAt: 2);
+      player.removeQueueItem(player.queueItems[1])!();
+      expect(titles(player), ['Song 1', 'Song 2', 'Song 3', 'Song 4']);
+      expect(player.currentQueueIndex, 2, reason: 'the track that plays goes on');
+      player.removeQueueItem(player.queueItems[0])!(); // the first goes back before what followed it
+      player.removeQueueItem(player.queueItems[3])!();
+      expect(titles(player), ['Song 1', 'Song 2', 'Song 3', 'Song 4']);
+      expect(player.currentQueueIndex, 2);
+
+      expect(player.removeQueueItem(player.queueItems[2]), isNull, reason: 'it played: the music has moved on');
+      expect(player.currentTrack?.title, 'Song 4');
+      final undo = player.removeQueueItem(player.queueItems[1])!;
+      player.playQueue(tracks.take(2), tracks[0]);
+      undo();
+      expect(titles(player), ['Song 1', 'Song 2'], reason: 'another queue');
+
+      // Shuffled, it goes back into the unshuffled order too.
+      final (shuffled, _, _) = createQueue(startAt: 0);
+      shuffled.setShuffle(true);
+      final last = shuffled.queueTracks.last;
+      shuffled.removeQueueItem(shuffled.queueItems.last)!();
+      expect(shuffled.queueTracks.last, last);
+      shuffled.setShuffle(false);
+      expect(titles(shuffled), ['Song 1', 'Song 2', 'Song 3', 'Song 4']);
+    });
+
     test('a track removed while shuffled does not come back when shuffle is turned off', () {
       final (player, tracks, _) = createQueue(startAt: 0);
       player.setShuffle(true);

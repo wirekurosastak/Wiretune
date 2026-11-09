@@ -369,6 +369,7 @@ const Map<String, (String, String, String)> allStrings = {
   'RemovedFromPlaylist': ('Eltávolítva innen: {0}', 'Removed from {0}', 'Entfernt aus {0}'),
   'QueuedNext': ('Következik: {0}', 'Plays next: {0}', 'Als Nächstes: {0}'),
   'QueuedLast': ('A sorba került: {0}', 'Added to the queue: {0}', 'In der Warteschlange: {0}'),
+  'RemovedFromQueue': ('Kikerült a sorból: {0}', 'Removed from the queue: {0}', 'Aus der Warteschlange entfernt: {0}'),
   'Lyrics': ('DALSZÖVEG', 'LYRICS', 'LIEDTEXT'),
   'TabLyrics': ('Dalszöveg', 'Lyrics', 'Liedtext'),
   'NoLyricsTitle': ('Nincs dalszöveg', 'No lyrics', 'Kein Liedtext'),

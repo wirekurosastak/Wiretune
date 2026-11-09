@@ -3469,6 +3469,73 @@ void main() {
     expect(numberOf('Song 4'), Localizer.get('QueueNextTag'));
   });
 
+  testWidgets("a phone's queue row swiped away ticks where letting go takes it out, and Undo puts it back", (
+    tester,
+  ) async {
+    final haptics = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method.startsWith('HapticFeedback')) haptics.add(call.arguments ?? call.method);
+      return null;
+    });
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    final vm = await pumpApp(tester, const Size(400, 860), () async {
+      final library = createLibrary([for (var i = 1; i <= 4; i++) TestSupport.makeTrack('$i', 'Song $i')]);
+      library.initialize();
+      return createMainViewModel(library);
+    });
+    vm.player.playQueue(vm.library.tracks, vm.library.getTrack('1'));
+    vm.openNowPlaying();
+    vm.nowPlayingTab = NowPlayingTab.queue;
+    await settle(tester);
+    final list = find.byType(QueueList);
+    List<String> titles() => [for (final item in vm.player.queueItems) item.track.title];
+    Color wash() => tester
+        .widgetList<DecoratedBox>(find.descendant(of: list, matching: find.byType(DecoratedBox)))
+        .map((box) => (box.decoration as BoxDecoration).color)
+        .whereType<Color>()
+        .firstWhere((color) => color.r > 0.5 && color.g < 0.5);
+
+    // Held, the row lifts for a move with a tick.
+    haptics.clear(); // the player's, as it opened
+    final hold = await tester.startGesture(tester.getCenter(find.descendant(of: list, matching: find.text('Song 2'))));
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
+    await hold.moveBy(const Offset(0, 5));
+    await tester.pump();
+    await hold.up();
+    await settle(tester);
+    expect(haptics, ['HapticFeedback.vibrate'], reason: 'a long press tick, as on every other row');
+    haptics.clear();
+
+    // A bit: a light wash and no tick; past where letting go takes it out: full, with a tick; back: a tick again.
+    final finger = await tester.startGesture(
+      tester.getCenter(find.descendant(of: list, matching: find.text('Song 3'))),
+    );
+    await finger.moveBy(const Offset(-20, 0)); // the drag starts
+    await finger.moveBy(const Offset(-40, 0));
+    await tester.pump();
+    expect(wash().a, lessThan(0.7));
+    expect(haptics, isEmpty);
+    await finger.moveBy(const Offset(-140, 0));
+    await tester.pump();
+    expect(wash().a, 1);
+    expect(haptics, ['HapticFeedbackType.selectionClick']);
+    await finger.moveBy(const Offset(-50, 0));
+    await tester.pump();
+    expect(haptics, hasLength(1), reason: 'once, where it is reached');
+    await finger.moveBy(const Offset(150, 0));
+    await tester.pump();
+    expect(haptics, hasLength(2), reason: 'and where it is left');
+    await finger.moveBy(const Offset(-150, 0));
+    await finger.up();
+    await settle(tester);
+    expect(titles(), ['Song 1', 'Song 2', 'Song 4']);
+    expect(find.text(Localizer.format('RemovedFromQueue', ['Song 3'])), findsOneWidget);
+
+    await tester.tap(find.text(Localizer.get('Undo')));
+    await settle(tester);
+    expect(titles(), ['Song 1', 'Song 2', 'Song 3', 'Song 4']);
+  });
+
   testWidgets(
     "an album's header puts it into a playlist and the queue beside the download; its menu then leaves those out",
     (tester) async {

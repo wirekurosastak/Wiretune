@@ -78,6 +78,10 @@ class PlayerViewModel extends ChangeNotifier {
   final List<void Function()> _subscriptions = [];
   final List<Track> _originalQueue = [];
   final List<Track> _playbackQueue = [];
+
+  /// Which queue it is: counts up whenever another takes its place (played, cleared, the host's), so that an Undo
+  /// leaves the new one alone even where it holds the same tracks.
+  int _queueRun = 0;
   final math.Random _random = math.Random();
   int _queueIndex = -1;
   bool _isUserSeeking = false;
@@ -316,31 +320,64 @@ class PlayerViewModel extends ChangeNotifier {
     if (at >= 0 && at < queueItems.length - 1) moveQueueTrack(at, at + 1);
   }
 
-  /// Takes [item], the entry itself, out of the queue.
-  void removeQueueItem(QueueItem item) {
+  /// Takes [item], the entry itself, out of the queue. Returns what puts it back where it was, for an entry of this
+  /// device's own queue that wasn't playing, while that queue lasts; null otherwise (the music has moved on, or another
+  /// device's queue).
+  VoidCallback? removeQueueItem(QueueItem item) {
     if (isFollowingHost) {
       if (_isEntry(item)) _askHost(RemoteCommand(RemoteAction.removeTrack, index: _hostIndices[item.index]));
     } else if (isRemote) {
-      if (!_remoteQueue.remove(item)) return;
+      if (!_remoteQueue.remove(item)) return null;
       _shiftRemoteIndices(removed: item.index);
       notifyListeners();
       _sendRemote(RemoteCommand(RemoteAction.removeTrack, index: item.index));
     } else if (_isEntry(item)) {
-      _removeAt(item.index);
+      return _removeAt(item.index);
     }
+    return null;
   }
 
-  void _removeAt(int index) {
+  VoidCallback? _removeAt(int index) {
     final removedCurrent = index == _queueIndex;
     final track = _playbackQueue.removeAt(index);
-    _originalQueue.remove(track); // also while shuffled, or turning shuffle off would bring the track back
+    // Also while shuffled, or turning shuffle off would bring the track back.
+    final original = _originalQueue.indexOf(track);
+    if (original >= 0) _originalQueue.removeAt(original);
 
     if (removedCurrent) {
       _carryOnFrom(index - 1);
-      return;
+      return null;
     }
 
     if (index < _queueIndex) _queueIndex--;
+    _updateQueueState();
+    notifyListeners();
+    // Where it goes back: after the entry it followed, or before the one that followed it.
+    final (anchor, after) = index > 0 ? (_playbackQueue[index - 1], true) : (_playbackQueue.firstOrNull, false);
+    if (anchor == null) return null;
+    final originalAnchor = original > 0 ? _originalQueue[original - 1] : null;
+    final run = _queueRun;
+    return () {
+      if (_queueRun == run) _requeue(track, anchor: anchor, after: after, originalAnchor: originalAnchor);
+    };
+  }
+
+  /// Puts [track] back next to [anchor] (after it, or before it), and in the unshuffled order after [originalAnchor]
+  /// (first when null); when [anchor] is no longer queued, nothing.
+  void _requeue(Track track, {required Track anchor, required bool after, required Track? originalAnchor}) {
+    final place = _playbackQueue.indexWhere((t) => identical(t, anchor));
+    if (place < 0) return;
+    final at = after ? place + 1 : place;
+    _playbackQueue.insert(at, track);
+    final original = switch (originalAnchor) {
+      null => 0,
+      final anchor => switch (_originalQueue.indexWhere((t) => identical(t, anchor))) {
+        -1 => _originalQueue.length,
+        final i => i + 1,
+      },
+    };
+    _originalQueue.insert(original, track);
+    if (at <= _queueIndex) _queueIndex++;
     _updateQueueState();
     notifyListeners();
   }
@@ -378,6 +415,7 @@ class PlayerViewModel extends ChangeNotifier {
     }
     final current =
         _currentTrack ?? (_queueIndex >= 0 && _queueIndex < _playbackQueue.length ? _playbackQueue[_queueIndex] : null);
+    _queueRun++;
     _playbackQueue.clear();
     _originalQueue.clear();
     if (current != null) {
@@ -561,6 +599,7 @@ class PlayerViewModel extends ChangeNotifier {
       ..addAll(list);
 
     final first = startTrack != null && _originalQueue.contains(startTrack) ? startTrack : null;
+    _queueRun++;
     _playbackQueue.clear();
     if (_shuffle) {
       final lead = first ?? _originalQueue[_random.nextInt(_originalQueue.length)];
@@ -1293,6 +1332,7 @@ class PlayerViewModel extends ChangeNotifier {
         [for (var i = 0; i < tracks.length; i++) identical(tracks[i], _playbackQueue[i])].every((same) => same);
     if (!same) {
       // The host's order is the order: not shuffled again here.
+      _queueRun++;
       _originalQueue
         ..clear()
         ..addAll(tracks);

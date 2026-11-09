@@ -57,6 +57,8 @@ class QueueList extends StatelessWidget {
               padding: padding,
               itemCount: items.length,
               onReorderItem: player.moveQueueTrack,
+              // A tick as the row lifts, as a long press on any other row gives.
+              onReorderStart: (_) => unawaited(Feedback.forLongPress(context)),
               proxyDecorator: proxy,
               itemBuilder: (context, index) => _QueueRow(
                 key: ValueKey(items[index]),
@@ -103,6 +105,7 @@ class QueueList extends StatelessWidget {
                     : SliverReorderableList(
                         itemCount: upcoming,
                         onReorderItem: (from, to) => player.moveQueueTrack(first + from, first + to),
+                        onReorderStart: (_) => unawaited(Feedback.forLongPress(context)),
                         proxyDecorator: proxy,
                         itemBuilder: (context, index) => _QueueRow(
                           key: ValueKey(items[first + index]),
@@ -214,6 +217,11 @@ class _QueueRowState extends State<_QueueRow> {
       ),
     );
     final radius = BorderRadius.circular(Radii.medium);
+    void remove() {
+      final undo = player.removeQueueItem(item);
+      if (undo != null) context.vm.showNotice(context.trf('RemovedFromQueue', [track.title]), undo: undo);
+    }
+
     final row = Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: MouseRegion(
@@ -348,13 +356,7 @@ class _QueueRowState extends State<_QueueRow> {
                       const SizedBox(width: 8),
                     ],
                     // A phone's row goes with a swipe to the left.
-                    if (!phone)
-                      small(
-                        Icons.close_rounded,
-                        'TipRemoveFromQueue',
-                        () => player.removeQueueItem(item),
-                        color: colors.danger,
-                      ),
+                    if (!phone) small(Icons.close_rounded, 'TipRemoveFromQueue', remove, color: colors.danger),
                     // The handle at the right end, a finger's width on a phone (where a held finger means a drag, not
                     // a tip). A played row stays in its place.
                     if (!AppPlatform.current.isTv && !widget.played)
@@ -381,30 +383,95 @@ class _QueueRowState extends State<_QueueRow> {
       enabled: !widget.played,
       child: !phone
           ? shown
-          : Dismissible(
+          : _SwipeToRemove(
               key: ObjectKey(item),
               // Listening together the host takes it out, after the swipe: the row would stay where it went.
-              direction: player.isFollowingHost ? DismissDirection.none : DismissDirection.endToStart,
-              onDismissed: (_) {
-                unawaited(HapticFeedback.lightImpact());
-                player.removeQueueItem(item);
-              },
-              // What the swipe does, uncovered as the row goes: the × in the danger colour, on a wash of it.
-              background: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(color: colors.danger.withValues(alpha: 0.18), borderRadius: radius),
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 22),
-                      child: Icon(Icons.close_rounded, color: colors.danger, size: 24),
-                    ),
+              enabled: !player.isFollowingHost,
+              radius: radius,
+              onRemove: remove,
+              child: shown,
+            ),
+    );
+  }
+}
+
+/// A phone's queue row, swiped to the left to take it out. What the swipe does shows as the row goes: the × on a wash
+/// of the danger colour that deepens with the swipe, full where letting go takes the row out; there the × grows and
+/// the phone ticks (again when the finger goes back).
+class _SwipeToRemove extends StatefulWidget {
+  const _SwipeToRemove({
+    super.key,
+    required this.enabled,
+    required this.radius,
+    required this.onRemove,
+    required this.child,
+  });
+
+  final bool enabled;
+  final BorderRadius radius;
+  final VoidCallback onRemove;
+  final Widget child;
+
+  @override
+  State<_SwipeToRemove> createState() => _SwipeToRemoveState();
+}
+
+class _SwipeToRemoveState extends State<_SwipeToRemove> {
+  /// How far (of the row's width) it is swiped before letting go takes it out: [Dismissible]'s own.
+  static const double _threshold = 0.4;
+
+  /// How far it is swiped, up to [_threshold] (0–1), and whether letting go takes it out.
+  final ValueNotifier<(double, bool)> _swipe = ValueNotifier((0, false));
+
+  @override
+  void dispose() {
+    _swipe.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Dismissible(
+      key: const ValueKey('swipe'),
+      direction: widget.enabled ? DismissDirection.endToStart : DismissDirection.none,
+      dismissThresholds: const {DismissDirection.endToStart: _threshold},
+      onUpdate: (details) {
+        if (details.reached != details.previousReached) unawaited(HapticFeedback.selectionClick());
+        _swipe.value = ((details.progress / _threshold).clamp(0, 1), details.reached);
+      },
+      onDismissed: (_) {
+        unawaited(HapticFeedback.lightImpact());
+        widget.onRemove();
+      },
+      background: Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: ValueListenableBuilder<(double, bool)>(
+          valueListenable: _swipe,
+          builder: (context, swipe, _) {
+            final (amount, reached) = swipe;
+            return DecoratedBox(
+              decoration: BoxDecoration(
+                color: colors.danger.withValues(alpha: reached ? 1 : 0.12 + 0.5 * amount),
+                borderRadius: widget.radius,
+              ),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 22),
+                  child: AnimatedScale(
+                    scale: reached ? 1.25 : 1,
+                    duration: const Duration(milliseconds: 120),
+                    curve: Curves.easeOut,
+                    child: Icon(Icons.close_rounded, color: reached ? Colors.white : colors.danger, size: 24),
                   ),
                 ),
               ),
-              child: shown,
-            ),
+            );
+          },
+        ),
+      ),
+      child: widget.child,
     );
   }
 }

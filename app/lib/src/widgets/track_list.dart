@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -295,6 +296,8 @@ class _TrackSliverState extends State<TrackSliver> {
                     itemExtent: extent,
                     itemCount: tracks.length,
                     onReorderItem: reorder,
+                    // A tick as the row lifts, as a long press on any other row gives.
+                    onReorderStart: (_) => unawaited(Feedback.forLongPress(context)),
                     proxyDecorator: liftedRow(context, const EdgeInsets.symmetric(vertical: 2)),
                     itemBuilder: (context, index) => ReorderableDelayedDragStartListener(
                       key: ValueKey(tracks[index].id),
