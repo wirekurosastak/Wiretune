@@ -76,6 +76,7 @@ class MainViewModel extends ChangeNotifier {
     RemoteClient? remote,
     UpdateCheck? updateCheck,
     UpdateInstaller? updateInstaller,
+    UpnpClient? upnp,
     Future<void> Function({String? relaunch})? quit,
   }) : _onlineLyrics = onlineLyrics,
        _artistPictures = artistPictures,
@@ -90,6 +91,7 @@ class MainViewModel extends ChangeNotifier {
     library.downloadFolder = this.downloadService.directory;
 
     together = ListenTogether(this.remote);
+    streamers = upnp == null ? null : Streamers(this.remote, session, library, upnp);
     player = PlayerViewModel(audioEngine, library)
       ..attachRemote(this.remote)
       ..attachListenTogether(together);
@@ -209,6 +211,12 @@ class MainViewModel extends ChangeNotifier {
 
   /// The account's Blends: playlists the server mixes from its listening and a friend's.
   late final Blends blends;
+
+  /// The streamers on the network (UPnP renderers) among the devices to play on; null where they can't be looked for.
+  late final Streamers? streamers;
+
+  /// Looks for streamers on the network again (the devices menu opened).
+  void searchStreamers() => unawaited(streamers?.search());
 
   /// What the app shows the user for a few seconds ([showNotice]).
   final Event<AppNotice> notices = Event<AppNotice>();
@@ -1138,6 +1146,7 @@ class MainViewModel extends ChangeNotifier {
     friends.dispose();
     unawaited(audioEngine.dispose());
     together.dispose();
+    streamers?.dispose();
     blends.dispose();
     remote.dispose();
     downloadService.dispose();

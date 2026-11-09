@@ -52,6 +52,17 @@ enum RemoteProblem {
   ended,
 }
 
+/// A device this player plays on by itself, not through the server: a streamer on the network. It is listed among the
+/// devices ([RemoteClient.addLocal]) and takes the same commands.
+abstract interface class LocalDevice {
+  /// Its name and kind, and what it plays.
+  RemoteDevice get device;
+
+  void execute(RemoteCommand command);
+
+  void dispose();
+}
+
 /// This player's link to the other players of the signed-in account (docs/api.md#remote-control): it tells them what
 /// plays here, learns what plays there, and carries commands both ways. It is connected while it is enabled and the
 /// session is signed in, and reconnects, waiting longer each time, when the connection drops.
@@ -142,9 +153,25 @@ class RemoteClient {
   DeviceSharing _sharing = DeviceSharing.off;
 
   /// The other players of the account that are online.
-  List<RemoteDevice> get devices => List.unmodifiable(_devices.values);
+  List<RemoteDevice> get devices => List.unmodifiable([..._devices.values, for (final l in _local.values) l.device]);
 
-  RemoteDevice? device(String id) => _devices[id];
+  RemoteDevice? device(String id) => _devices[id] ?? _local[id]?.device;
+
+  /// The devices this player reaches itself, not through the server (streamers on the network), by ID.
+  final Map<String, LocalDevice> _local = {};
+
+  /// Lists [device] among [devices] until [removeLocal]; commands for it go to it ([send]).
+  void addLocal(LocalDevice device) {
+    _local[device.device.id] = device;
+    devicesChanged.emit(null);
+  }
+
+  void removeLocal(String id) {
+    if (_local.remove(id) != null) devicesChanged.emit(null);
+  }
+
+  /// What a local device plays changed.
+  void localChanged() => devicesChanged.emit(null);
 
   /// Why it isn't connected although it should be; null while it is, or is trying to be. Told through [devicesChanged].
   RemoteProblem? get problem => _problem;
@@ -201,6 +228,10 @@ class RemoteClient {
 
   /// Sends [command] to the player [deviceId]; false when it is not online.
   bool send(String deviceId, RemoteCommand command) {
+    if (_local[deviceId] case final local?) {
+      local.execute(command);
+      return true;
+    }
     if (_channel == null || !_devices.containsKey(deviceId)) return false;
     _send({'type': 'command', 'to': deviceId, 'command': command.toJson()});
     return true;

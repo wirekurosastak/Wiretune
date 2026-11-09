@@ -179,6 +179,12 @@ abstract final class AudioFileTypes {
 
   static String mimeType(String path) => _types[_extension(path)]?.$3 ?? 'application/octet-stream';
 
+  /// The MIME type a file of [codec] (as [describe] labels it) is streamed with; ALAC is in MP4, as AAC.
+  static String mimeTypeOfCodec(String codec) {
+    final label = codec.toUpperCase() == 'ALAC' ? 'AAC' : codec.toUpperCase();
+    return _types.values.where((type) => type.$1 == label).firstOrNull?.$3 ?? 'application/octet-stream';
+  }
+
   /// Codec label and losslessness for a file. MP4 containers are only known to hold ALAC (lossless) once the stream
   /// description has been read.
   static (String codec, bool isLossless) describe(String path, [String? streamDescription]) {

@@ -13,7 +13,10 @@ enum DeviceKind {
   desktop,
   phone,
   tablet,
-  tv;
+  tv,
+
+  /// A streamer on the network that isn't a Wiretune player (UPnP): it plays the server's tracks it is given.
+  streamer;
 
   /// The kind [value] names; a desktop for anything else.
   static DeviceKind parse(Object? value) => values.asNameMap()[value] ?? desktop;

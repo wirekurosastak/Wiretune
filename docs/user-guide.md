@@ -128,6 +128,12 @@ off or renames this device.
 music I don't hide* leaves out what this account hides; *Any music* plays everything. Their plays count for them, and
 the device says who is playing. Someone you blocked, or who blocked you, never sees the device. It's off by default.
 
+The cast button also lists **streamers** on your network: hi-fi streamers, amplifiers and speakers that play music
+by URL (UPnP/DLNA renderers). They play the server's tracks straight from the server, in the original quality; music
+only on your device can't go there. Wiretune keeps the queue and hands each track over in turn, so there's a short
+gap between tracks. The streamer must reach the server at the address you signed in with: `localhost` won't do. Not
+on iPhone, where Apple doesn't let apps look for them without its permission.
+
 ## Updates
 
 When a new version is out, a banner says so. **Update** downloads and installs it; × hides the banner until the next

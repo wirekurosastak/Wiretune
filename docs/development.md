@@ -19,7 +19,7 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 | `models/` | Formats (`audio_format.dart`), the library's records, the server's records and error codes (`protocol.dart`), remote-control messages (`remote.dart`) |
 | `data/` | SQLite: `DatabaseManager` (schema and upgrades), `LibraryRepository` |
 | `metadata/` | The tag reader (`tag_reader.dart`) for every format |
-| `services/` | `LibraryService` (the library and user data), the scanner, `server_client.dart` and `ServerSession` (connecting, signing in), remote control, listening together, recommendations, downloads, online lyrics, artist pictures, the update check, the log |
+| `services/` | `LibraryService` (the library and user data), the scanner, `server_client.dart` and `ServerSession` (connecting, signing in), remote control, listening together, recommendations, Blends, streamers (`upnp.dart`, `streamers.dart`), downloads, online lyrics, artist pictures, the update check, the log |
 | `audio/` | `WiretuneAudioEngine` (the playback state), the spectrum analyzer |
 | `localization/strings.dart` | Every interface text ([how](#texts-and-languages)) |
 

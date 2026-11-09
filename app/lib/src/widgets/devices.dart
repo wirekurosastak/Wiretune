@@ -21,6 +21,7 @@ String deviceLabel(BuildContext context, String name, DeviceKind kind) => name.i
         DeviceKind.phone => 'DeviceKindPhone',
         DeviceKind.tablet => 'DeviceKindTablet',
         DeviceKind.tv => 'DeviceKindTv',
+        DeviceKind.streamer => 'DeviceKindStreamer',
       });
 
 /// A [device] in a list: [deviceLabel], and the account's name when it is another account's player (one that lets
@@ -36,6 +37,7 @@ IconData deviceIcon(DeviceKind kind) => switch (kind) {
   DeviceKind.phone => Icons.smartphone_rounded,
   DeviceKind.tablet => Icons.tablet_android_rounded,
   DeviceKind.tv => Icons.tv_rounded,
+  DeviceKind.streamer => Icons.speaker_rounded,
 };
 
 // The menu's entries of listening together, which no device ID can be (IDs have no control characters).
@@ -141,32 +143,35 @@ class DevicesButton extends StatelessWidget {
               tooltip: tooltip,
               iconSize: iconSize,
               icon: icon,
-              onPressed: () async => choose(
-                await showChoiceSheet<String>(
-                  context,
-                  title: context.tr('DevicesTitle'),
-                  choices: [
-                    SheetChoice(
-                      '',
-                      here,
-                      subtitle: context.tr('DevicesThisDevice'),
-                      icon: deviceIcon(vm.capabilities.kind),
-                      selected: !remote,
-                    ),
-                    for (final device in player.otherDevices)
+              onPressed: () async {
+                vm.searchStreamers(); // found ones show the next time
+                choose(
+                  await showChoiceSheet<String>(
+                    context,
+                    title: context.tr('DevicesTitle'),
+                    choices: [
                       SheetChoice(
-                        device.id,
-                        deviceTitle(context, device),
-                        subtitle: _playing(context, device.playback),
-                        icon: deviceIcon(device.kind),
-                        selected: player.remoteDeviceId == device.id,
+                        '',
+                        here,
+                        subtitle: context.tr('DevicesThisDevice'),
+                        icon: deviceIcon(vm.capabilities.kind),
+                        selected: !remote,
                       ),
-                    for (final (id, label, subtitle, icon) in listening)
-                      SheetChoice(id, label, subtitle: subtitle, icon: icon),
-                  ],
-                  note: player.otherDevices.isEmpty ? context.tr('DevicesNone') : null,
-                ),
-              ),
+                      for (final device in player.otherDevices)
+                        SheetChoice(
+                          device.id,
+                          deviceTitle(context, device),
+                          subtitle: _playing(context, device.playback),
+                          icon: deviceIcon(device.kind),
+                          selected: player.remoteDeviceId == device.id,
+                        ),
+                      for (final (id, label, subtitle, icon) in listening)
+                        SheetChoice(id, label, subtitle: subtitle, icon: icon),
+                    ],
+                    note: player.otherDevices.isEmpty ? context.tr('DevicesNone') : null,
+                  ),
+                );
+              },
             ),
           );
         }
@@ -176,6 +181,7 @@ class DevicesButton extends StatelessWidget {
             tooltip: tooltip,
             iconSize: iconSize,
             icon: icon,
+            onOpened: vm.searchStreamers, // found ones show the next time
             onSelected: choose,
             itemBuilder: (context) => [
               PopupMenuItem<String>(

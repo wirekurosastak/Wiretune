@@ -90,6 +90,8 @@ Future<void> main() async {
     ),
     updateCheck: updateInstaller == null ? null : UpdateCheck(),
     updateInstaller: updateInstaller,
+    // Streamers on the network: iOS lets an app search them only with a permission from Apple, and a TV is played on.
+    upnp: platform.isIOS || platform.isTizen ? null : UpnpClient(),
     quit: ({relaunch}) async {
       await _shutDown(vm);
       if (relaunch != null) await Process.start(relaunch, const [], mode: ProcessStartMode.detached);

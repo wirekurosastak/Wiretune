@@ -1091,6 +1091,7 @@ const Map<String, (String, String, String)> allStrings = {
   'DeviceKindPhone': ('Telefon', 'Phone', 'Telefon'),
   'DeviceKindTablet': ('Táblagép', 'Tablet', 'Tablet'),
   'DeviceKindTv': ('Tévé', 'TV', 'Fernseher'),
+  'DeviceKindStreamer': ('Streamer', 'Streamer', 'Streamer'),
   'DeviceIdle': ('Nem játszik semmit', 'Not playing', 'Spielt nichts'),
   'DevicePaused': ('Szünetel: {0}', 'Paused: {0}', 'Pausiert: {0}'),
   'PlayingOn': ('Lejátszás itt: {0}', 'Playing on {0}', 'Wiedergabe auf {0}'),

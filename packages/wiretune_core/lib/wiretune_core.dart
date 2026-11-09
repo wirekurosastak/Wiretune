@@ -36,6 +36,8 @@ export 'src/services/related.dart';
 export 'src/services/remote_client.dart';
 export 'src/services/server_client.dart';
 export 'src/services/server_session.dart';
+export 'src/services/streamers.dart';
+export 'src/services/upnp.dart';
 export 'src/services/track_deduplication.dart';
 export 'src/services/track_moves.dart';
 export 'src/services/update_check.dart';

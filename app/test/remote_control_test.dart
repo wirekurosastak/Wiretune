@@ -358,4 +358,52 @@ void main() {
       expect([for (final t in tracks) vm.library.playCount(t.id)], [1, 1, 0, 0]);
     });
   });
+
+  test('a streamer on the network is played on like another device: the music moves there, its state shows', () async {
+    final streamer = _FakeLocalDevice(RemoteDevice('upnp:uuid:1', 'Living room', DeviceKind.streamer));
+    vm.remote.addLocal(streamer);
+    await pumpEventQueue();
+    expect([for (final d in player.otherDevices) d.id], ['desk', 'upnp:uuid:1']);
+
+    player.playQueue(tracks, tracks[1]);
+    await until(() => driver.state == PlaybackState.playing);
+    player.selectDevice('upnp:uuid:1');
+    await pumpEventQueue();
+    expect(streamer.commands.single.action, RemoteAction.playTracks);
+    expect(streamer.commands.single.trackIds, ['t1', 't2', 't3', 't4']);
+    expect(streamer.commands.single.index, 1);
+    expect(driver.state, PlaybackState.paused, reason: 'it plays there now');
+    expect(hub.commandsTo('upnp:uuid:1'), isEmpty, reason: 'not through the server');
+
+    streamer.device
+      ..playback = RemotePlayback(track: tracks[2], playing: true, queue: [for (final t in tracks) t.id], queueIndex: 2)
+      ..playbackReceivedAt = DateTime.now();
+    vm.remote.localChanged();
+    await pumpEventQueue();
+    expect((player.remoteDeviceName, player.isPlaying), ('Living room', true));
+    expect(player.currentTrack, same(tracks[2]));
+    player.nextTrack();
+    expect(streamer.commands.last.action, RemoteAction.next);
+
+    // It goes from the network: control comes back here after the grace.
+    final grace = PlayerViewModel.remoteGrace;
+    PlayerViewModel.remoteGrace = const Duration(milliseconds: 50);
+    addTearDown(() => PlayerViewModel.remoteGrace = grace);
+    vm.remote.removeLocal('upnp:uuid:1');
+    await until(() => !player.isRemote);
+  });
+}
+
+class _FakeLocalDevice implements LocalDevice {
+  _FakeLocalDevice(this.device);
+
+  @override
+  final RemoteDevice device;
+  final List<RemoteCommand> commands = [];
+
+  @override
+  void execute(RemoteCommand command) => commands.add(command);
+
+  @override
+  void dispose() {}
 }
