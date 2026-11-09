@@ -7,8 +7,8 @@ import 'package:wiretune_core/wiretune_core.dart';
 import 'support.dart';
 
 /// Casting to another account's player: one that lets others play on it is seen by the server's other accounts (with
-/// whose it is), gets their commands (with who sent them), and tells them what it plays; one that doesn't, and one
-/// whose account blocked theirs, isn't.
+/// whose it is), gets their commands (with who sent them), and tells them what it plays; one that doesn't isn't, nor
+/// one when either account blocked the other.
 void main() {
   setUpAll(useTempDataDirectory);
 
@@ -72,5 +72,20 @@ void main() {
     desk.send({'type': 'command', 'to': 'guest-tv', 'command': const RemoteCommand(RemoteAction.pause).toJson()});
     await Future<void>.delayed(const Duration(milliseconds: 200));
     expect([...phone.ofType('command'), ...tv.ofType('command')], isEmpty);
+  });
+
+  test("an account that blocked a player's account no longer sees it, plays on it or hears what it plays", () async {
+    final tv = await connect(guestToken, 'guest-tv', sharing: 'unhidden');
+    final desk = await connect(ownerToken, 'owner-desk');
+    await until(() => listed(desk).any((d) => d['id'] == 'guest-tv'));
+    final guestId = UserInfo.fromJson(json(await guest.get('/api/auth/me'))).id;
+    expect((await server.client(ownerToken).put('/api/me/blocked/$guestId')).statusCode, 200);
+    await until(() => listed(desk).isEmpty);
+
+    tv.send({'type': 'state', 'state': const RemotePlayback(playing: true).toJson()});
+    desk.send({'type': 'command', 'to': 'guest-tv', 'command': const RemoteCommand(RemoteAction.pause).toJson()});
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(tv.ofType('command'), isEmpty);
+    expect(desk.ofType('state'), isEmpty);
   });
 }

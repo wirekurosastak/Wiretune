@@ -94,7 +94,8 @@ class RemoteHub {
 
   /// [userId] blocked [otherId]: the invites of [otherId]'s group are gone for it.
   void blocked(String userId, String otherId) {
-    // The blocked account no longer sees this one's shared players.
+    // Neither account sees the other's shared players any more.
+    _announceDevices(userId);
     _announceDevices(otherId);
     var changed = false;
     for (final group in _groups.values) {
@@ -305,9 +306,12 @@ class RemoteHub {
   }
 
   /// Whether [viewer] sees [device]: a player of its own account, or another account's that lets others play on it,
-  /// unless that account blocked the viewer's.
+  /// unless either account blocked the other.
   bool _sees(_Peer viewer, _Peer device) =>
-      device.userId == viewer.userId || (device.sharing != DeviceSharing.off && !blocks(device.userId, viewer.userId));
+      device.userId == viewer.userId ||
+      (device.sharing != DeviceSharing.off &&
+          !blocks(device.userId, viewer.userId) &&
+          !blocks(viewer.userId, device.userId));
 
   /// Tells each player of the account which others it sees are online.
   void _announceDevices(String userId) {
