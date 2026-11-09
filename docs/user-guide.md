@@ -43,7 +43,8 @@ Your files are never changed.
   played most of theirs.
 - **Genre filter:** Albums, Artists, Tracks and Favorites narrow to a genre (the genre button on a computer, the sort
   sheet on a phone).
-- **Sorting** lasts until the app closes. Press the active sort again to reverse it.
+- **Sorting** lasts until the app closes. Press the active sort again to reverse it. *Plays* puts what you played
+  most first.
 - **Back** returns to where you opened a page from, however far you went (an artist, its album, a similar album…).
   Pressing the current tab again goes back to its list.
 - **Hidden** artists, albums and tracks come back from *Settings → Hidden content*.

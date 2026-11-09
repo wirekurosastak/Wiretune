@@ -109,6 +109,7 @@ class _Columns {
       (kind == TrackTableKind.tracks || kind == TrackTableKind.artist || kind == TrackTableKind.playlist) &&
       width >= 720;
   bool get showAdded => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && width >= 880;
+  bool get showPlays => (kind == TrackTableKind.tracks || kind == TrackTableKind.playlist) && width >= 960;
   bool get showQuality => kind != TrackTableKind.search && width >= 1060;
   bool get showBpm => showQuality && width >= 1130;
 
@@ -120,11 +121,12 @@ class _Columns {
       other.showAlbum == showAlbum &&
       other.showReleased == showReleased &&
       other.showAdded == showAdded &&
+      other.showPlays == showPlays &&
       other.showQuality == showQuality &&
       other.showBpm == showBpm;
 
   @override
-  int get hashCode => Object.hash(kind, showAlbum, showReleased, showAdded, showQuality, showBpm);
+  int get hashCode => Object.hash(kind, showAlbum, showReleased, showAdded, showPlays, showQuality, showBpm);
 
   int get titleFlex {
     if (!showArtist && !showAlbum) return 8; // an album's table shows neither
@@ -147,12 +149,13 @@ class _ColumnWidths {
     required this.length,
     required this.released,
     required this.added,
+    required this.plays,
     required this.bpm,
     required this.quality,
     required this.bitrate,
   });
 
-  final double length, released, added, bpm, quality, bitrate;
+  final double length, released, added, plays, bpm, quality, bitrate;
 
   /// A cell's padding at each side, as every cell of the table has it.
   static const double padding = 10;
@@ -192,6 +195,7 @@ class _ColumnWidths {
       length: column(Localizer.get('ColLength'), width('8:88:88', figure)),
       released: column(Localizer.get('ColReleased'), width('8888', figure)),
       added: column(Localizer.get('ColAdded'), width(Localizer.format('DateShort', [DateTime(2088, 8, 28)]), figure)),
+      plays: column(Localizer.get('ColPlays'), width('8888', figure)),
       bpm: column('BPM', width('888', figure)),
       quality: column(Localizer.get('ColQuality'), tagged('FLAC 24bit/192kHz')),
       bitrate: column(Localizer.get('ColBitrate'), tagged(Localizer.format('BitrateKbps', [8888]))),
@@ -441,6 +445,7 @@ class _ColumnHeaders extends StatelessWidget {
           cell(context.tr('ColLength'), TrackSortField.length, width: widths.length),
           if (columns.showReleased) cell(context.tr('ColReleased'), TrackSortField.released, width: widths.released),
           if (columns.showAdded) cell(context.tr('ColAdded'), TrackSortField.added, width: widths.added),
+          if (columns.showPlays) cell(context.tr('ColPlays'), TrackSortField.plays, width: widths.plays),
           // The same in every language.
           if (columns.showBpm) cell('BPM', TrackSortField.bpm, width: widths.bpm),
           if (columns.showQuality) cell(context.tr('ColQuality'), TrackSortField.quality, width: widths.quality),
@@ -600,6 +605,12 @@ class _TableRowState extends State<_TableRow> {
                             },
                       width: widths.added,
                     ),
+                  // How often this account played it.
+                  if (state._columns.showPlays)
+                    _FigureCell(switch (vm.library.playCount(track.id)) {
+                      0 => '—',
+                      final plays => '$plays',
+                    }, width: widths.plays),
                   if (state._columns.showBpm)
                     _FigureCell(switch (track.bpm) {
                       final bpm? when bpm > 0 => '$bpm',

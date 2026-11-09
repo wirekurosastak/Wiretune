@@ -205,26 +205,73 @@ void main() {
     expect(favorites.tracks.first.id, '4');
   });
 
-  test('every list offers ABC first, then its own fields, then the shared year, date added and quality', () {
-    expect(TrackSortField.values, [
-      TrackSortField.title,
-      TrackSortField.artist,
-      TrackSortField.album,
-      TrackSortField.length,
-      TrackSortField.released,
-      TrackSortField.added,
-      TrackSortField.bpm, // a track's, among the figures before the tags
-      TrackSortField.quality,
-      TrackSortField.bitrate, // a track's, beside its quality
+  test(
+    'every list offers ABC first, then the shared added and plays (year and quality where it has them), then its own',
+    () {
+      expect(TrackSortField.values, [
+        TrackSortField.title,
+        TrackSortField.added,
+        TrackSortField.plays,
+        TrackSortField.released,
+        TrackSortField.quality,
+        TrackSortField.artist,
+        TrackSortField.album,
+        TrackSortField.length,
+        TrackSortField.bpm,
+        TrackSortField.bitrate,
+      ]);
+      expect(AlbumSortField.values, [
+        AlbumSortField.title,
+        AlbumSortField.added,
+        AlbumSortField.plays,
+        AlbumSortField.released,
+        AlbumSortField.quality,
+        AlbumSortField.artist,
+        AlbumSortField.tracks,
+        AlbumSortField.length,
+      ]);
+      expect(ArtistSortField.values, [
+        ArtistSortField.name,
+        ArtistSortField.added,
+        ArtistSortField.plays,
+        ArtistSortField.albums,
+        ArtistSortField.tracks,
+      ]);
+      expect(PlaylistSortField.values, [PlaylistSortField.name, PlaylistSortField.added, PlaylistSortField.tracks]);
+    },
+  );
+
+  test("plays, tracks and length put the most first; what was never played goes last either way", () async {
+    final lib = await library([
+      track('1', 'Short', artist: 'Ann')..duration = const Duration(minutes: 3),
+      track('2', 'Long', artist: 'Bob')..duration = const Duration(minutes: 9),
+      track('3', 'Long', artist: 'Bob')..duration = const Duration(minutes: 9),
+      track('4', 'Unplayed', artist: 'Cy')..duration = const Duration(minutes: 4),
     ]);
-    expect(AlbumSortField.values, [
-      AlbumSortField.title,
-      AlbumSortField.artist,
-      AlbumSortField.released,
-      AlbumSortField.added,
-      AlbumSortField.quality,
-    ]);
-    expect(ArtistSortField.values, [ArtistSortField.name, ArtistSortField.albums, ArtistSortField.added]);
+    for (final id in ['1', '1', '1', '2']) {
+      lib.recordPlay(id);
+    }
+    final player = PlayerViewModel(TestSupport.createEngine(), lib);
+    final albums = AlbumsViewModel(lib, player);
+    albums.setSortField(AlbumSortField.plays);
+    expect(titles(albums), ['Short', 'Long', 'Unplayed']);
+    expect(albums.sortLabel(AlbumSortField.plays), 'Plays ↓');
+    albums.setSortField(AlbumSortField.plays);
+    expect(titles(albums), ['Long', 'Short', 'Unplayed'], reason: 'the least played first, the unplayed still last');
+    albums.setSortField(AlbumSortField.tracks);
+    expect(titles(albums).first, 'Long');
+    albums.setSortField(AlbumSortField.length);
+    expect(titles(albums), ['Long', 'Unplayed', 'Short']);
+
+    final artists = ArtistsViewModel(lib, player);
+    artists.setSortField(ArtistSortField.plays);
+    expect([for (final a in artists.displayedArtists) a.name], ['Ann', 'Bob', 'Cy']);
+    artists.setSortField(ArtistSortField.tracks);
+    expect(artists.displayedArtists.first.name, 'Bob');
+
+    final tracks = TrackListViewModel.allTracks(lib, player);
+    tracks.setSortField(TrackSortField.plays);
+    expect([for (final t in tracks.tracks) t.id], ['1', '2', '3', '4']);
   });
 
   test('a track without a year or a date goes last in either direction, and length starts with the shortest', () async {
@@ -337,7 +384,7 @@ void main() {
     expect(names(), ['Alpha', 'Mid', 'Zed']);
     playlists.setListSortField(PlaylistSortField.tracks); // the most first
     expect(names(), ['Zed', 'Mid', 'Alpha']);
-    expect(PlaylistSortField.values, [PlaylistSortField.name, PlaylistSortField.tracks, PlaylistSortField.added]);
+    expect(PlaylistSortField.values, [PlaylistSortField.name, PlaylistSortField.added, PlaylistSortField.tracks]);
     playlists.dispose();
   });
 

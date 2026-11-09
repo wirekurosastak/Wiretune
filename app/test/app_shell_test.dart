@@ -4516,6 +4516,22 @@ void main() {
     expect(shown(), isFalse, reason: 'gone a moment after');
   });
 
+  testWidgets("a computer's track table has a Plays column that sorts the most played first", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.isSidebarPinned = true;
+    vm.library.recordPlay('2');
+    vm.library.recordPlay('2');
+    vm.navigateTo(AppSection.tracks);
+    await settle(tester);
+    final header = find.text(Localizer.get('ColPlays'));
+    expect(header, findsOneWidget);
+    await tester.tap(header);
+    await settle(tester);
+    expect(vm.tracks.sortField, TrackSortField.plays);
+    expect(vm.tracks.tracks.first.title, 'Blue in Green');
+    expect(find.descendant(of: find.byType(TrackSliver), matching: find.text('2')), findsOneWidget);
+  });
+
   testWidgets("Play next wears the queue's list with ▶ first, in an album's header and in a row's sheet", (
     tester,
   ) async {
