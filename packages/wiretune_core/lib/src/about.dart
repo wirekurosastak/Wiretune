@@ -5,7 +5,7 @@
 abstract final class WiretuneInfo {
   /// The version of every part of Wiretune. A pubspec.yaml writes it the way semantic versioning allows, `1.0.2026+1`:
   /// the version name and the build number.
-  static const String version = '1.0.2026.1';
+  static const String version = '1.1.2026.1';
 
   static const String copyright = 'Copyright (C) 2026 wirekurosastak';
 
