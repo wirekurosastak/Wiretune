@@ -280,6 +280,7 @@ const Map<String, (String, String, String)> allStrings = {
   'Browse': ('Tallózás…', 'Browse…', 'Durchsuchen …'),
   // ── Playlists ───────────────────────────────────────────────────────────────────────────────────────
   'PlaylistNew': ('Új lista', 'New playlist', 'Neue Playlist'),
+  'PlaylistNewShort': ('Új', 'New', 'Neu'),
   'PlaylistCount': ('{0} lista', '{0} playlists', '{0} Playlists'),
   'PlaylistCount_One': ('{0} lista', '{0} playlist', '{0} Playlist'),
   'EmptyPlaylistsTitle': ('Még nincs listád', 'You have no playlists yet', 'Du hast noch keine Playlists'),

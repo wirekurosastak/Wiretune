@@ -2978,7 +2978,7 @@ void main() {
           .first;
       final other = switch (section) {
         AppSection.playlists => find.ancestor(
-          of: find.text(Localizer.get('PlaylistNew')),
+          of: find.text(Localizer.get('PlaylistNewShort')),
           matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
         ),
         _ => find.byType(ShuffleSwitch),

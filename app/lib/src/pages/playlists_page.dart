@@ -79,7 +79,8 @@ class PlaylistsPage extends StatelessWidget {
                 child: FilledButton.icon(
                   onPressed: () => showNewPlaylistDialog(context),
                   icon: const Icon(Icons.add_rounded, size: 18),
-                  label: Text(context.tr('PlaylistNew')),
+                  // A phone's header line has little room: the + says what is new.
+                  label: Text(context.tr(PhoneChrome.isPhone(context) ? 'PlaylistNewShort' : 'PlaylistNew')),
                 ),
               ),
             ],
