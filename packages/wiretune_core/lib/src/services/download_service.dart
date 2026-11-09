@@ -527,8 +527,10 @@ class DownloadService {
         await Directory(_coverDirectory).create(recursive: true);
         final target = p.join(_coverDirectory, '${job.id}.${_imageExtension(contentType)}');
         await _move(job.partPath, target);
+        // Its size first: what is recorded and the total change together, never one without the other.
+        final size = await File(target).length();
         _covers[job.id] = target;
-        _bytesOnDisk += await File(target).length();
+        _bytesOnDisk += size;
       } else {
         await _placeCopy(job.partPath, job.track);
         WiretuneLog.info('Downloads', "Downloaded '${job.track.artist} - ${job.track.title}'.");
@@ -646,8 +648,10 @@ class DownloadService {
       }
       rethrow;
     }
+    // Its size first: the copy counts as done and its bytes in the total at once, never one without the other.
+    final size = await File(target).length();
     _record(track.id, _version(track), relative);
-    _bytesOnDisk += await File(target).length() - previousSize;
+    _bytesOnDisk += size - previousSize;
     if (_choices.pending.remove(track.id)) _saveChoices();
   }
 
