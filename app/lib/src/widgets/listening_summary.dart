@@ -7,6 +7,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 import '../app_scope.dart';
 import '../localization.dart';
 import '../theme/app_theme.dart';
+import 'buttons.dart';
 import 'cover_image.dart';
 import 'dialogs.dart';
 import 'page_parts.dart';
@@ -70,7 +71,8 @@ Future<void> showListeningSummary(BuildContext context) async {
       builder: (sheet) => [
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-          child: ListeningSummaryView(close: () => Navigator.pop(sheet)),
+          // A route of its own, outside the phone layout: marked a phone's again, for its title and full-width choices.
+          child: PhoneChrome(child: ListeningSummaryView(close: () => Navigator.pop(sheet))),
         ),
       ],
     );
@@ -143,6 +145,19 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
     });
   }
 
+  Widget _periodButton(BuildContext context, _Period period, String key) {
+    const style = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(0, 32)),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 14)),
+    );
+    final label = Text(context.tr(key), maxLines: 1, overflow: TextOverflow.ellipsis);
+    return period == _period
+        ? PressShrink(
+            child: FilledButton(style: style, onPressed: () => _choose(period), child: label),
+          )
+        : OutlinedButton(style: style, onPressed: () => _choose(period), child: label);
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -159,20 +174,24 @@ class _ListeningSummaryViewState extends State<ListeningSummaryView> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: colors.textMain),
             ),
           ),
+        // The period, as Settings' choices are: the chosen one filled. A phone's span the sheet in equal parts, so the
+        // three fit in any language.
         if (server)
-          Align(
-            child: SegmentedButton<_Period>(
-              showSelectedIcon: false,
-              // A phone's spans the sheet, in equal parts, so the three fit in any language.
-              expandedInsets: PhoneChrome.isPhone(context) ? EdgeInsets.zero : null,
-              segments: [
-                ButtonSegment(value: _Period.month, label: Text(context.tr('SummaryThisMonth'))),
-                ButtonSegment(value: _Period.year, label: Text(context.tr('SummaryThisYear'))),
-                ButtonSegment(value: _Period.allTime, label: Text(context.tr('SummaryAllTime'))),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final (i, (period, key)) in const [
+                (_Period.month, 'SummaryThisMonth'),
+                (_Period.year, 'SummaryThisYear'),
+                (_Period.allTime, 'SummaryAllTime'),
+              ].indexed) ...[
+                if (i > 0) const SizedBox(width: 8),
+                if (PhoneChrome.isPhone(context))
+                  Expanded(child: _periodButton(context, period, key))
+                else
+                  _periodButton(context, period, key),
               ],
-              selected: {_period},
-              onSelectionChanged: (chosen) => _choose(chosen.single),
-            ),
+            ],
           ),
         const SizedBox(height: 16),
         FutureBuilder(
