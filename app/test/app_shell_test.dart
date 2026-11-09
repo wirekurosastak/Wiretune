@@ -1433,8 +1433,31 @@ void main() {
       of: find.ancestor(of: appearance, matching: find.byType(InkWell)).first,
       matching: find.byIcon(Icons.expand_more_rounded),
     );
-    expect(tester.getRect(chevron).right, closeTo(titleOf(appearance).right, 1));
+    final chevronCircle = find.ancestor(of: chevron, matching: find.byType(AnimatedContainer)).first;
+    expect(tester.getRect(chevronCircle).right, closeTo(titleOf(appearance).right, 1));
     expect(theme, findsNothing, reason: 'folded');
+
+    // The server's cards, then this device's, each under its name; the hidden ones are the account's.
+    double topOf(String text) => tester.getRect(find.text(Localizer.get(text).toUpperCase(), skipOffstage: false)).top;
+    double cardTop(String title) => tester.getRect(find.text(Localizer.get(title), skipOffstage: false)).top;
+    expect(topOf('SettingsServerGroup'), lessThan(cardTop('AccountAndConnection')));
+    expect(cardTop('HiddenContent'), lessThan(topOf('SettingsDeviceGroup')));
+    expect(topOf('SettingsDeviceGroup'), lessThan(cardTop('SettingsAppearanceSection')));
+
+    // A finger on the title lights its chevron, not the whole row; anywhere on it folds the card open.
+    await tester.ensureVisible(appearance);
+    await settle(tester);
+    Color? circle() => (tester.widget<AnimatedContainer>(chevronCircle).decoration as BoxDecoration?)?.color;
+    expect(circle(), Colors.transparent);
+    final finger = await tester.startGesture(tester.getCenter(appearance));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(circle(), isNot(Colors.transparent));
+    expect(
+      tester.widget<InkWell>(find.ancestor(of: appearance, matching: find.byType(InkWell)).first).highlightColor,
+      Colors.transparent,
+    );
+    await finger.cancel();
+    await settle(tester);
     await tester.ensureVisible(appearance);
     await settle(tester);
     await tester.tap(appearance);

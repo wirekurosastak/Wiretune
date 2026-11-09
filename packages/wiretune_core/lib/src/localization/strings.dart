@@ -426,6 +426,8 @@ const Map<String, (String, String, String)> allStrings = {
   'SettingsAudioSection': ('Hang', 'Audio', 'Audio'),
   'SettingsAppearanceSection': ('Megjelenés', 'Appearance', 'Darstellung'),
   'SettingsLibrarySection': ('Könyvtár', 'Library', 'Bibliothek'),
+  'SettingsServerGroup': ('Szerver', 'Server', 'Server'),
+  'SettingsDeviceGroup': ('Ez az eszköz', 'This device', 'Dieses Gerät'),
   'SettingsAboutSection': ('Névjegy', 'About', 'Über'),
   'AboutVersion': ('{0} verzió', 'Version {0}', 'Version {0}'),
   'AboutLicense': (

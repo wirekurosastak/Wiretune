@@ -7,7 +7,7 @@ the administrator account with its setup code ([server.md](server.md#start-it)).
 24 hours, or 90 days with *Keep me signed in*. If the server goes offline, the player reconnects by itself.
 
 **With your own files** (computers and Android phones, with or without a server): choose **Continue without a server**
-if you have none, pick your music folder in *Settings → Library* and press **Scan**. On Android the first scan asks for
+if you have none, pick your music folder in *Settings → Local folder* and press **Scan**. On Android the first scan asks for
 permission to read your music.
 
 The interface starts in English. Hungarian and German are in *Settings → Appearance*, and so is the theme: **Airy**

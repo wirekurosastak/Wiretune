@@ -31,24 +31,27 @@ class SettingsPage extends StatelessWidget {
       listenable: Listenable.merge([vm, vm.serverSettings, vm.audioSettings, vm.downloads.states]),
       builder: (context, _) {
         final server = vm.serverSettings;
-        // The music folders: the server's for its administrator, this computer's on a desktop.
-        final library = (server.isLoggedIn && server.isAdmin) || server.supportsLocalFolder;
-        final account = [
+        // What the server keeps for the account (and, for its administrator, the server's music folder), and what is
+        // this device's own: side by side on a wide screen, one after the other on a narrow one, each under its name.
+        final onServer = [
           const _AccountCard(),
           if (server.isLoggedIn) const _FriendsCard(),
-          if (library) const _LibraryCard(),
+          const _HiddenContentCard(),
+          if (server.isLoggedIn && server.isAdmin) const _LibraryCard(onServer: true),
         ];
-        final options = [
+        final onDevice = [
+          if (server.supportsLocalFolder) const _LibraryCard(onServer: false),
           // The Tizen TV's player has neither an output to choose nor gapless playback or normalization.
           if (vm.audioSettings.hasDeviceChoice || !AppPlatform.current.isTizen) const _AudioCard(),
           const _AppearanceCard(),
-          const _HiddenContentCard(),
           if (server.isLoggedIn || vm.downloads.hasAnything) const _DownloadsCard(),
           if (server.isLoggedIn) const _RemoteCard(),
+          const _AboutCard(),
         ];
-        Widget column(List<Widget> cards) => Column(
+        Widget group(String name, List<Widget> cards) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            SectionLabel(context.tr(name), padding: const EdgeInsets.fromLTRB(4, 0, 4, 12)),
             for (final (i, card) in cards.indexed) ...[if (i > 0) const SizedBox(height: 16), card],
           ],
         );
@@ -70,12 +73,19 @@ class SettingsPage extends StatelessWidget {
                         ? Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: column([...account, const _AboutCard()])),
+                              Expanded(child: group('SettingsServerGroup', onServer)),
                               const SizedBox(width: 24),
-                              Expanded(child: column(options)),
+                              Expanded(child: group('SettingsDeviceGroup', onDevice)),
                             ],
                           )
-                        : column([...account, ...options, const _AboutCard()]),
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              group('SettingsServerGroup', onServer),
+                              const SizedBox(height: 28),
+                              group('SettingsDeviceGroup', onDevice),
+                            ],
+                          ),
                   ),
                 ],
               ),
@@ -109,6 +119,9 @@ class _SettingsCard extends StatefulWidget {
 }
 
 class _SettingsCardState extends State<_SettingsCard> {
+  /// Whether a finger is on the title: its chevron lights, rather than the whole row.
+  bool _pressed = false;
+
   @override
   Widget build(BuildContext context) {
     final title = widget.title;
@@ -131,6 +144,9 @@ class _SettingsCardState extends State<_SettingsCard> {
           children: [
             InkWell(
               borderRadius: BorderRadius.circular(Radii.medium),
+              splashFactory: NoSplash.splashFactory,
+              highlightColor: Colors.transparent,
+              onHighlightChanged: (pressed) => setState(() => _pressed = pressed),
               onTap: () => setState(() {
                 if (!_SettingsCard._open.remove(title.icon)) _SettingsCard._open.add(title.icon);
               }),
@@ -144,10 +160,19 @@ class _SettingsCardState extends State<_SettingsCard> {
                   children: [
                     // Cut short (a status badge) rather than pushed off a narrow screen with a large font.
                     if (title.trailing case final trailing?) Flexible(child: trailing),
-                    AnimatedRotation(
-                      turns: open ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 220),
-                      child: Icon(Icons.expand_more_rounded, color: colors.textMuted),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 120),
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _pressed ? colors.surface2 : Colors.transparent,
+                      ),
+                      child: AnimatedRotation(
+                        turns: open ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 220),
+                        child: Icon(Icons.expand_more_rounded, color: colors.textMuted),
+                      ),
                     ),
                   ],
                 ),
@@ -828,8 +853,11 @@ class _AccountCardState extends State<_AccountCard> {
 }
 
 /// Where the music is: the server's folder (for its administrator) and this computer's (on a desktop).
+/// A music folder: the server's ([onServer], for its administrator) or this device's.
 class _LibraryCard extends StatefulWidget {
-  const _LibraryCard();
+  const _LibraryCard({required this.onServer});
+
+  final bool onServer;
 
   @override
   State<_LibraryCard> createState() => _LibraryCardState();
@@ -849,9 +877,11 @@ class _LibraryCardState extends State<_LibraryCard> {
     _lastLoadedServerFolder = server.serverFolder;
     // The folder, and what is wrong with it, as they are now (a drive may have gone since the sign-in); after the
     // frame, as loading tells the listeners at once. It does nothing for anyone but an administrator.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.vm.serverSettings.loadServerFolder();
-    });
+    if (widget.onServer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.vm.serverSettings.loadServerFolder();
+      });
+    }
   }
 
   @override
@@ -899,12 +929,13 @@ class _LibraryCardState extends State<_LibraryCard> {
           _localPath.text = server.localFolder;
         }
 
-        final admin = server.isLoggedIn && server.isAdmin;
         return _SettingsCard(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          title: _CardTitle(icon: Icons.library_music_outlined, title: context.tr('SettingsLibrarySection')),
+          title: widget.onServer
+              ? _CardTitle(icon: Icons.library_music_outlined, title: context.tr('SettingsLibrarySection'))
+              : _CardTitle(icon: Icons.folder_outlined, title: context.tr('LocalFolder')),
           children: [
-            if (admin) ...[
+            if (widget.onServer) ...[
               SectionLabel(context.tr('ServerFolderLabel'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
               _FieldRow(
                 field: TextField(
@@ -959,13 +990,7 @@ class _LibraryCardState extends State<_LibraryCard> {
               ),
             ],
 
-            if (server.supportsLocalFolder) ...[
-              if (admin) ...[
-                const SizedBox(height: 20),
-                Divider(color: colors.glassBorder, height: 1),
-                const SizedBox(height: 12),
-              ],
-              SectionLabel(context.tr('LocalFolder'), padding: const EdgeInsets.fromLTRB(0, 4, 0, 10)),
+            if (!widget.onServer) ...[
               _FieldRow(
                 field: TextField(
                   controller: _localPath,
