@@ -86,11 +86,21 @@ void main() {
   // Covers are read from disk and decoded for real, in steps that each need the real event loop: until [shown] finds
   // the result. Then the transitions run out, and those their ends set off (a control easing into the wash colour as
   // its fade ends).
-  Future<void> loadCovers(WidgetTester tester, Finder shown) async {
-    for (var i = 0; i < 40 && shown.evaluate().isEmpty; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump();
+  /// Lets the real time pass that decoding a cover and reading its colour take (off the test's clock, and slow on a busy
+  /// CI runner), a [frame] at a time, until [done]: at most about 10 s.
+  Future<void> pumpUntil(
+    WidgetTester tester,
+    bool Function() done, {
+    Duration frame = const Duration(milliseconds: 50),
+  }) async {
+    for (var i = 0; i < 200 && !done(); i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(frame);
     }
+  }
+
+  Future<void> loadCovers(WidgetTester tester, Finder shown) async {
+    await pumpUntil(tester, () => shown.evaluate().isNotEmpty, frame: Duration.zero);
     await tester.pump(const Duration(seconds: 2));
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(); // what the ends of the transitions set off
@@ -2575,6 +2585,7 @@ void main() {
     vm.player.playQueue([vm.library.getTrack('1')!]);
     await loadCovers(tester, washOf(find.byType(PhoneLayout)));
     final red = palette.accentOf(const Color(0xFFFF0000));
+    await pumpUntil(tester, () => playColor(find.byType(PhoneLayout)) == red);
     expect(playColor(find.byType(PhoneLayout)), red, reason: "the mini player's");
 
     // An album's page has its own cover's colour, as its wash does; the players around it keep the song's.
@@ -2582,10 +2593,7 @@ void main() {
     vm.openAlbum(vm.library.albums.firstWhere((album) => album.title == 'Blue'));
     await loadCovers(tester, find.byType(ListPlayButton));
     final blue = palette.accentOf(const Color(0xFF0000FF));
-    for (var i = 0; i < 40 && tester.element(pagePlay).colors.accent != blue; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await pumpUntil(tester, () => tester.element(pagePlay).colors.accent == blue);
     expect(tester.element(pagePlay).colors.accent, blue, reason: "the blue album's Play");
     expect(playColor(find.byType(PhoneLayout)), red, reason: 'the mini player, over the blue album');
 
@@ -2622,12 +2630,7 @@ void main() {
       final backdrop = find.byWidgetPredicate((widget) => widget is AmbientBackdrop && !widget.nowPlaying);
       String? washed(Finder area) =>
           tester.widget<AmbientArtwork>(find.descendant(of: area, matching: find.byType(AmbientArtwork)).first).path;
-      Future<void> pageTurns(Color colour) async {
-        for (var i = 0; i < 40 && tester.element(pagePlay).colors.accent != colour; i++) {
-          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-          await tester.pump(const Duration(milliseconds: 50));
-        }
-      }
+      Future<void> pageTurns(Color colour) => pumpUntil(tester, () => tester.element(pagePlay).colors.accent == colour);
 
       vm.player.playQueue([vm.library.getTrack('1')!]);
       await loadCovers(tester, washOf(find.byType(PhoneLayout)));
@@ -2701,16 +2704,13 @@ void main() {
     final other = artist.albums.firstWhere((album) => album != artist.albums.first);
     final albumColour = palette.accentOf(colours[other.title]);
     vm.openArtist(artist);
-    for (var i = 0; i < 40 && tester.element(find.byType(ArtistsPage)).colors.accent != artistColour; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+    await pumpUntil(tester, () => tester.element(find.byType(ArtistsPage)).colors.accent == artistColour);
     expect(tester.element(find.byType(ArtistsPage)).colors.accent, artistColour);
 
     // Its other album, in the Albums section: from the artist's colour to the album's, at every frame.
     vm.openAlbum(other);
     final shown = <Color>[];
-    for (var i = 0; i < 40; i++) {
+    for (var i = 0; i < 200 && shown.lastOrNull != albumColour; i++) {
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
       await tester.pump(const Duration(milliseconds: 16));
       shown.add(tester.element(find.byType(AlbumsPage)).colors.accent);
