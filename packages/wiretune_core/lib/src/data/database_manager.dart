@@ -33,6 +33,9 @@ class DatabaseManager {
     Directory(p.dirname(databasePath)).createSync(recursive: true);
   }
 
+  /// A database in memory only, which goes with the process: for tests, which would otherwise leave a file each.
+  DatabaseManager.inMemory() : databasePath = ':memory:';
+
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
   static const int schemaVersion = 19;

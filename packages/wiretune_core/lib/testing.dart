@@ -40,11 +40,8 @@ Future<void> until(bool Function() condition, {Duration within = const Duration(
   }
 }
 
-/// A repository on a database file of its own in the temporary folder, as the player keeps one.
-LibraryRepository testRepository() {
-  final folder = Directory.systemTemp.createTempSync('wiretune_db_');
-  return LibraryRepository(DatabaseManager(p.join(folder.path, 'wiretune.db')))..initialize();
-}
+/// A repository on a database of its own, in memory: nothing is left in the temporary folder.
+LibraryRepository testRepository() => LibraryRepository(DatabaseManager.inMemory())..initialize();
 
 /// An audio driver that plays nothing, so engine and player tests never touch audio hardware.
 class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
