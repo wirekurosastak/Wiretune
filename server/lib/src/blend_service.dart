@@ -27,7 +27,8 @@ class BlendService {
     UserDataSnapshot? mine;
     return [
       for (final row in rows)
-        if (row['other_id'] as String case final other when _shows(userId, other, sentByMe: row['inviter_id'] == userId))
+        if (row['other_id'] as String case final other
+            when _shows(userId, other, sentByMe: row['inviter_id'] == userId))
           if (row['accepted_at'] != null)
             Blend(
               row['id'] as String,

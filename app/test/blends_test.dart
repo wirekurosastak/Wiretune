@@ -88,7 +88,11 @@ void main() {
   testWidgets('an invitation in the bell is accepted; the mix is on Playlists until it is left', (tester) async {
     final (vm, requests) = await start(tester, [const Blend('b1', anna, BlendState.invited)]);
     final bell = find.byTooltip(Localizer.get('FromFriends'));
-    expect(find.descendant(of: bell, matching: find.text('1')), findsOneWidget, reason: 'the invitation counts');
+    expect(
+      find.descendant(of: bell, matching: find.text('1')),
+      findsOneWidget,
+      reason: 'the invitation counts',
+    );
 
     await tester.tap(bell);
     await settle(tester);

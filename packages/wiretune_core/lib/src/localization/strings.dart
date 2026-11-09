@@ -317,20 +317,12 @@ const Map<String, (String, String, String)> allStrings = {
   'PlaylistSharedTo': ('Megosztva vele: {0}', 'Shared with {0}', 'Geteilt mit {0}'),
   'PlaylistSharedWith': ('Megosztva: {0}', 'Shared with {0}', 'Geteilt mit {0}'),
   'PlaylistBy': ('{0} listája', 'By {0}', 'Von {0}'),
-  'PlaylistInvitedYou': (
-    '{0} megosztja veled: „{1}”',
-    '{0} shares “{1}” with you',
-    '{0} teilt „{1}“ mit dir',
-  ),
+  'PlaylistInvitedYou': ('{0} megosztja veled: „{1}”', '{0} shares “{1}” with you', '{0} teilt „{1}“ mit dir'),
   'PlaylistJoin': ('Csatlakozás', 'Join', 'Beitreten'),
   'PlaylistJoined': ('A(z) „{0}” a Listák között van', '“{0}” is in Playlists', '„{0}“ ist unter Playlists'),
   'PlaylistLeave': ('Kilépés a listából', 'Leave playlist', 'Playlist verlassen'),
   'PlaylistLeaveConfirm': ('Kilépsz ebből: „{0}”?', 'Leave “{0}”?', '„{0}“ verlassen?'),
-  'PlaylistLeaveHint': (
-    'A lista {0} listája marad.',
-    'It stays {0}’s playlist.',
-    'Sie bleibt die Playlist von {0}.',
-  ),
+  'PlaylistLeaveHint': ('A lista {0} listája marad.', 'It stays {0}’s playlist.', 'Sie bleibt die Playlist von {0}.'),
 
   // ── Search ──────────────────────────────────────────────────────────────────────────────────────────
   'NoResultsTitle': ('Nincs találat', 'No results found', 'Keine Treffer'),

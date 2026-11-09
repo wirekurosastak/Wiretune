@@ -722,9 +722,8 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
   static bool isBlend(Playlist playlist) => playlist.id.startsWith(_blendPrefix);
 
   /// The Blend [playlist] shows; null for any other playlist.
-  Blend? blendOf(Playlist playlist) => !isBlend(playlist)
-      ? null
-      : blends?.items.where((b) => '$_blendPrefix${b.id}' == playlist.id).firstOrNull;
+  Blend? blendOf(Playlist playlist) =>
+      !isBlend(playlist) ? null : blends?.items.where((b) => '$_blendPrefix${b.id}' == playlist.id).firstOrNull;
 
   /// Leaves the Blend [playlist] shows: it ends for both accounts.
   void leaveBlend(Playlist playlist) {

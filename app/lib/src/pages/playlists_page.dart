@@ -44,10 +44,7 @@ class PlaylistsPage extends StatelessWidget {
               ),
               if (context.vm.friends.isAvailable)
                 PressShrink(
-                  child: OutlinedButton(
-                    onPressed: () => showBlendInvite(context),
-                    child: Text(context.tr('BlendNew')),
-                  ),
+                  child: OutlinedButton(onPressed: () => showBlendInvite(context), child: Text(context.tr('BlendNew'))),
                 ),
             ],
           );

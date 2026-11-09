@@ -61,7 +61,7 @@ void main() {
       expect(await invitesOf(guest), isEmpty);
       final sharing = (await roadTrip(owner))!.sharing;
       expect(names(sharing.members), ['guest']);
-    expect((sharing.invited.length, sharing.owner), (0, null));
+      expect((sharing.invited.length, sharing.owner), (0, null));
 
       // The guest adds a track; a new name is the owner's to give.
       final saved = await guest.put('/api/me/playlists/p1', {
@@ -71,7 +71,7 @@ void main() {
       expect(saved.statusCode, 200);
       final ownCopy = (await roadTrip(owner))!;
       expect(ownCopy.name, 'Road trip');
-    expect(ownCopy.trackIds, [trackIds[0], trackIds[1]]);
+      expect(ownCopy.trackIds, [trackIds[0], trackIds[1]]);
       expect(server.server.database.connection.select('SELECT COUNT(*) AS n FROM user_playlists').first['n'], 1);
 
       // A third account joins: each member sees the owner and the others.
@@ -91,7 +91,7 @@ void main() {
       await owner.put('/api/me/playlists/p1/members/${guestUser.id}');
       expect((await owner.delete('/api/me/playlists/p1')).statusCode, 200);
       expect((await invitesOf(guest)).length, 0);
-    expect(await roadTrip(owner), isNull);
+      expect(await roadTrip(owner), isNull);
       expect(server.server.database.connection.select('SELECT COUNT(*) AS n FROM playlist_members').first['n'], 0);
     },
   );

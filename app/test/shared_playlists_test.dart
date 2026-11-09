@@ -62,9 +62,7 @@ void main() {
           if (!path.startsWith('/api/me/playlist')) return null;
           requests.add('${request.method} $path');
           if (path == '/api/me/playlist-invites') {
-            return answer([
-              if (!joined) const PlaylistInvite('jazz', 'Jazz nights', anna, 1).toJson(),
-            ]);
+            return answer([if (!joined) const PlaylistInvite('jazz', 'Jazz nights', anna, 1).toJson()]);
           }
           if (request.method == 'POST' && path == '/api/me/playlist-invites/jazz') joined = true;
           if (path == '/api/me/playlists/mine/members/user-2') sharedWithAnna = request.method == 'PUT';

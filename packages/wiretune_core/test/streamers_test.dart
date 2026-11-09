@@ -159,8 +159,7 @@ void main() {
     late int changes;
     var goneCount = 0;
     final tracks = {
-      for (final id in ['a', 'b', 'c'])
-        id: TestSupport.makeServerTrack(id, 'Song $id'),
+      for (final id in ['a', 'b', 'c']) id: TestSupport.makeServerTrack(id, 'Song $id'),
     };
 
     setUp(() async {
