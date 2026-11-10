@@ -51,6 +51,8 @@ labels and credits in the server's database.
   get the URL: the player downloads the track and hands it over on standard input.
 - **The setup code** ([how it's used](docs/server.md#start-it)) stops strangers from creating the first account on a
   server with an empty data folder, such as after a wrong path or an unmounted disk.
+- **Sign-in codes:** *Connect a phone*'s *Sign in as …* QR code signs whoever scans it in to your account, once, within
+  5 minutes, and not after a password change. Don't show it to anyone you wouldn't give your password.
 - **Roles**: administrator and user. Every user can read the whole library. Favorites, plays (with when, for *Your
   listening*) and playlists are per account. Other accounts see only what the account shares (below). No route, not
   even an administrator's, reads the rest.
@@ -89,6 +91,8 @@ labels and credits in the server's database.
   ([where](docs/user-guide.md#where-things-are)); on Android 11 and later that's the shared *Music* folder. Neither the
   server nor a file's tags can put a download outside it, and Wiretune only overwrites or deletes files it recorded as
   its own. Signing out deletes them. On iOS they're left out of backups.
+- **Cached tracks** are plain copies too, in `Music/Wiretune/Cache` (iOS: the app's storage, left out of backups). The
+  player streams through a relay on `127.0.0.1` for them, at an address other programs can't guess.
 - **Covers from the server** are cached in the system cache folder, readable by anyone who can read it. They're fetched
   with the token in a header, never in the URL.
 - **Plain HTTP is allowed to every address** on Android, iOS and macOS, because home servers are reached by IP. Use an

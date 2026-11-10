@@ -102,8 +102,7 @@ to this device*. With *Sync downloads* on (the default), downloads follow change
 server.
 
 Phones and computers also cache the server tracks played to the end, and play them from the
-[cache](#where-things-are) next time. It holds up to 2 GB; the tracks played longest ago go first. Offline mode shows
-downloads only.
+[cache](#where-things-are) next time. It holds up to 2 GB; the tracks played longest ago go first.
 
 ## Friends
 
@@ -120,7 +119,7 @@ Everyone else with an account on your server is a friend.
 ## Remote control
 
 Players signed in to the same account see each other: pick one with the cast button to play there and control it
-(on a computer it's in the player bar, beside the bell while nothing plays). *This device* brings playback back.
+(on a computer it's in the player bar). *This device* brings playback back.
 *Settings → Remote control* turns it off or renames this device.
 
 *Others on this server can play here* lets other accounts play on this device too, such as a living-room TV: *Only

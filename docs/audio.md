@@ -11,7 +11,7 @@ loud recording. It applies to every track, but **not in bit-perfect mode**, and 
 
 ## Streaming quality
 
-*Settings → Audio → Streaming quality*, for a slow connection: **Original** (the default) sends the file; **High**,
+*Settings → Audio → Streaming quality*: **Original** (the default) sends the file; **High**,
 **Normal** and **Data saver** have the server convert it to Opus at 160, 96 or 48 kbit/s
 ([needs `ffmpeg`](server.md#streaming-on-a-slow-connection)). Per device, from the next track. Downloads, local files and
 bit-perfect mode always play the file.
@@ -81,7 +81,7 @@ and ignored in bit-perfect mode.
 ## Spectrum analyzer
 
 64 bands from 20 Hz to 20 kHz, showing the sound before the equalizer. A server track is downloaded a second time for
-it.
+it, unless it's cached.
 
 - Desktop: in the player bar. Needs `ffmpeg` on the `PATH`.
 - Phone: at the bottom of the full-screen player, only while it's on screen (battery). A format the phone can't decode
