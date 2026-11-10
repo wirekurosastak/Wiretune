@@ -112,9 +112,12 @@ Future<void> main() async {
   unawaited(platform.excludeFromBackup(vm.downloadService.directory));
   unawaited(platform.excludeFromBackup(vm.downloadService.workDirectory));
 
-  // Server tracks played once are kept in Cache, next to the data, for the next time; not on a TV, short of space.
+  // Server tracks played whole are kept for the next time in Cache, beside the downloads (Music/Wiretune; an iPhone's in
+  // the app's own storage); not on a TV, short of space.
   if (!platform.isTv) {
-    final cache = StreamCache(p.join(AppPaths.getDataDirectory(), 'Cache'));
+    final cache = StreamCache(
+      platform.isIOS ? p.join(AppPaths.getDataDirectory(), 'Cache') : p.join(vm.downloadService.directory, 'Cache'),
+    );
     vm.audioEngine.setStreamCache(cache);
     unawaited(platform.excludeFromBackup(cache.directory).then((_) => cache.start()));
   }

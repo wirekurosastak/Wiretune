@@ -16,7 +16,9 @@ import 'wiretune_log.dart';
 /// answer on and writes the same bytes into the track's file as they go by: nothing is fetched twice, and a track
 /// skipped after a few seconds costs nothing extra. Once every byte of a track has come by (in one go, or in the pieces
 /// the player's seeks asked for), the file is kept, and the next [sourceFor] gives its path. The oldest files go
-/// once the folder is over [limitBytes]. Pieces of a track not complete yet are kept only until the app closes.
+/// once the folder is over [limitBytes]. Pieces of a track not complete yet are kept only until the app closes. The files
+/// have their audio extension (Android lets an app put only audio files into the music folder), and a `.nomedia` file
+/// keeps them out of other music apps.
 class StreamCache {
   StreamCache(this.directory, {this.limitBytes = defaultLimitBytes, http.Client? client})
     : _client = client ?? http.Client();
@@ -45,8 +47,10 @@ class StreamCache {
   Future<void> start() async {
     try {
       final folder = Directory(directory)..createSync(recursive: true);
+      final hidden = File(p.join(directory, '.nomedia'));
+      if (!hidden.existsSync()) hidden.createSync();
       for (final entry in folder.listSync().whereType<File>()) {
-        if (entry.path.endsWith(_partSuffix)) entry.deleteSync();
+        if (_isPart(entry.path)) entry.deleteSync();
       }
       _trim();
       final server = _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -67,12 +71,11 @@ class StreamCache {
     _client.close();
   }
 
-  static const String _partSuffix = '.part';
-
   /// What the player plays for the server track [key] (which names the track's file and the quality asked of it) at
-  /// [upstream]: the kept file, else the relay's address for it; [upstream] itself while the relay isn't open.
-  String sourceFor(String key, String upstream) {
-    final name = _fileName(key);
+  /// [upstream], an audio file of [extension]: the kept file, else the relay's address for it; [upstream] itself while
+  /// the relay isn't open.
+  String sourceFor(String key, String extension, String upstream) {
+    final name = _fileName(key, extension);
     final file = File(p.join(directory, name));
     if (file.existsSync()) {
       try {
@@ -89,10 +92,18 @@ class StreamCache {
   }
 
   /// Whether the server track [key] is kept.
-  bool has(String key) => File(p.join(directory, _fileName(key))).existsSync();
+  bool has(String key, String extension) => File(p.join(directory, _fileName(key, extension))).existsSync();
 
-  /// Letters, digits, `-` and `_` only: a file name, and a path segment of the relay's address.
-  static String _fileName(String key) => key.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+  /// Letters, digits, `-` and `_` only, and the extension: a file name, and a path segment of the relay's address.
+  static String _fileName(String key, String extension) {
+    String clean(String text) => text.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    return '${clean(key)}.${clean(extension)}';
+  }
+
+  /// A track not complete yet: `<name>.part.<extension>`, an audio file to Android too.
+  static String _partName(String name) => '${p.withoutExtension(name)}.part${p.extension(name)}';
+
+  static bool _isPart(String path) => p.basename(path).contains('.part.');
 
   Future<void> _serve(HttpRequest request) async {
     final response = request.response;
@@ -171,7 +182,7 @@ class StreamCache {
     if (existing != null && existing.total == total) return existing;
     existing?.close();
     try {
-      return _partials[name] = _Partial(File(p.join(directory, '$name$_partSuffix')), total);
+      return _partials[name] = _Partial(File(p.join(directory, _partName(name))), total);
     } on FileSystemException catch (e) {
       WiretuneLog.warn('StreamCache', "A track can't be kept: ${e.message}");
       return null;
@@ -194,7 +205,7 @@ class StreamCache {
   void _trim({String? keep}) {
     final files = [
       for (final entry in Directory(directory).listSync().whereType<File>())
-        if (!entry.path.endsWith(_partSuffix)) (file: entry, stat: entry.statSync()),
+        if (!_isPart(entry.path) && !p.basename(entry.path).startsWith('.')) (file: entry, stat: entry.statSync()),
     ]..sort((a, b) => a.stat.modified.compareTo(b.stat.modified));
     var size = files.fold<int>(0, (sum, entry) => sum + entry.stat.size);
     for (final entry in files) {

@@ -181,7 +181,7 @@ Android Auto shows your albums, artists, playlists and favorites once the phone 
 | Player data: library, settings, sign-in (`wiretune.db`), log (`wiretune.log`), lyrics and artist pictures from the internet | `~/.config/Wiretune` (Linux), `%APPDATA%\Wiretune` (Windows), `~/Library/Application Support/Wiretune` (macOS), the app's private storage (phones, TVs) |
 | Cover cache for server music, up to 300 MB | `ServerCovers` in the system cache folder (`~/.cache/com.wiretune.player` on Linux) |
 | Downloads | `Wiretune` in your music folder (computers, Android), the app's private storage (iOS, Tizen) |
-| Server tracks played whole, up to 2 GB (not on TVs) | `Cache` in the player data folder |
+| Server tracks played whole, up to 2 GB (not on TVs) | `Cache` in the downloads folder (`Music/Wiretune/Cache`), the app's private storage (iOS) |
 
 The server's data: [server.md](server.md#data-directory).
 

@@ -692,7 +692,7 @@ class DownloadService {
         '${number.toString().padLeft(2, '0')} - ',
       ],
     ].join();
-    return (p.join(artist, album), '$prefix$title', _extension(track.format.codec));
+    return (p.join(artist, album), '$prefix$title', extensionOf(track.format.codec));
   }
 
   /// [name] as one part of a path on every system Wiretune runs on: no separators, no characters Windows refuses, no
@@ -813,8 +813,9 @@ class DownloadService {
   /// The partial download of one version of a track: a new version starts afresh.
   static String _partName(Track track) => '${_stem(track.id)}-${_version(track)}.part';
 
-  /// The usual extension of a codec; the decoders look at the content, the extension is for people.
-  static String _extension(String codec) => switch (codec.toUpperCase()) {
+  /// The usual extension of a codec; the decoders look at the content, the extension is for people (and for Android,
+  /// which takes only audio files into the music folder).
+  static String extensionOf(String codec) => switch (codec.toUpperCase()) {
     'FLAC' => 'flac',
     'WAV' => 'wav',
     'AIFF' => 'aiff',

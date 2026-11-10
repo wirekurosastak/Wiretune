@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import '../localization/localizer.dart';
 import '../models/library_models.dart';
+import '../services/download_service.dart';
 import '../services/stream_cache.dart';
 import '../services/wiretune_log.dart';
 import '../util/event.dart';
@@ -221,7 +222,12 @@ class WiretuneAudioEngine {
 
   /// Whether [track] comes over the network now: it [streams], and the [StreamCache] hasn't kept it yet.
   bool fetches(Track track) =>
-      streams(track) && !(_streamCache?.has(cacheKey(track, isConverted(track) ? _streamingQuality : null)) ?? false);
+      streams(track) && !(_streamCache?.has(cacheKey(track, _converted(track)), _cacheExtension(track)) ?? false);
+
+  StreamingQuality? _converted(Track track) => isConverted(track) ? _streamingQuality : null;
+
+  /// The kept file's extension: Opus for a conversion, else the track's own format's.
+  String _cacheExtension(Track track) => isConverted(track) ? 'opus' : DownloadService.extensionOf(track.format.codec);
 
   /// Whether [track] plays over the network: a server track without a downloaded copy.
   bool streams(Track track) => !track.isLocal && _offlineCopy?.call(track) == null;
@@ -512,7 +518,7 @@ class WiretuneAudioEngine {
     final convert = converted ? 'format=opus&bitrate=${_streamingQuality.kbps}' : null;
     final query = [?convert, if (token != null) 'token=${Uri.encodeQueryComponent(token)}'];
     final upstream = query.isEmpty ? url : '$url${url.contains('?') ? '&' : '?'}${query.join('&')}';
-    return _streamCache?.sourceFor(cacheKey(track, converted ? _streamingQuality : null), upstream) ?? upstream;
+    return _streamCache?.sourceFor(cacheKey(track, _converted(track)), _cacheExtension(track), upstream) ?? upstream;
   }
 
   /// What a server track is kept as in the [StreamCache]: the track, its file's size and time (a changed file is

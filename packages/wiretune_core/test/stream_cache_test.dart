@@ -61,7 +61,7 @@ void main() {
   Future<http.Response> get(String url, [String? range]) => http.get(Uri.parse(url), headers: {'range': ?range});
 
   test('a track streamed whole is kept, and played from the disk the next time', () async {
-    final relay = cache.sourceFor('t1-v1', upstream('t1'));
+    final relay = cache.sourceFor('t1-v1', 'flac', upstream('t1'));
     expect(relay, startsWith('http://127.0.0.1:'));
     expect(relay, isNot(contains('token')), reason: "the server's address stays in the app");
 
@@ -70,45 +70,46 @@ void main() {
     expect(answer.bodyBytes, track);
     expect(served, track.length);
 
-    final kept = cache.sourceFor('t1-v1', upstream('t1'));
-    expect(kept, p.join(folder.path, 't1-v1'));
+    final kept = cache.sourceFor('t1-v1', 'flac', upstream('t1'));
+    expect(kept, p.join(folder.path, 't1-v1.flac'), reason: 'an audio file, as Android wants in the music folder');
     expect(File(kept).readAsBytesSync(), track);
-    expect(cache.has('t1-v1'), isTrue);
+    expect(cache.has('t1-v1', 'flac'), isTrue);
   });
 
   test("the pieces a player's seeks ask for add up to the track", () async {
-    final relay = cache.sourceFor('t2', upstream('t2'));
+    final relay = cache.sourceFor('t2', 'flac', upstream('t2'));
     final first = await get(relay, 'bytes=0-99999');
     expect(first.statusCode, 206);
     expect(first.bodyBytes, track.sublist(0, 100000));
-    expect(cache.has('t2'), isFalse);
+    expect(cache.has('t2', 'flac'), isFalse);
 
     expect((await get(relay, 'bytes=200000-')).bodyBytes, track.sublist(200000));
-    expect(cache.has('t2'), isFalse, reason: 'a gap in the middle');
+    expect(cache.has('t2', 'flac'), isFalse, reason: 'a gap in the middle');
     await get(relay, 'bytes=90000-210000');
-    expect(cache.has('t2'), isTrue);
-    expect(File(cache.sourceFor('t2', upstream('t2'))).readAsBytesSync(), track);
+    expect(cache.has('t2', 'flac'), isTrue);
+    expect(File(cache.sourceFor('t2', 'flac', upstream('t2'))).readAsBytesSync(), track);
     expect(served, 100000 + (track.length - 200000) + 120001, reason: 'nothing fetched but what the player asked for');
   });
 
   test('a track only partly played is not kept, nor is a refusal', () async {
-    await get(cache.sourceFor('t3', upstream('t3')), 'bytes=0-999');
-    expect(cache.has('t3'), isFalse);
-    expect(folder.listSync().whereType<File>().map((f) => p.basename(f.path)), ['t3.part']);
+    await get(cache.sourceFor('t3', 'flac', upstream('t3')), 'bytes=0-999');
+    expect(cache.has('t3', 'flac'), isFalse);
+    List<String> files() => [for (final f in folder.listSync()) p.basename(f.path)]..sort();
+    expect(files(), ['.nomedia', 't3.part.flac'], reason: 'other music apps leave the folder alone');
     await cache.close();
 
     // Restarted: what was left unfinished is gone.
     cache = StreamCache(folder.path);
     await cache.start();
-    expect(folder.listSync(), isEmpty);
+    expect(files(), ['.nomedia']);
 
-    final missing = cache.sourceFor('t4', 'http://127.0.0.1:${server.port}/nothing');
+    final missing = cache.sourceFor('t4', 'flac', 'http://127.0.0.1:${server.port}/nothing');
     expect((await get(missing)).statusCode, 404, reason: "the server's answer, passed on");
-    expect(cache.has('t4'), isFalse);
-    final unreachable = cache.sourceFor('t5', upstream('t5'));
+    expect(cache.has('t4', 'flac'), isFalse);
+    final unreachable = cache.sourceFor('t5', 'flac', upstream('t5'));
     await server.close(force: true);
     expect((await get(unreachable)).statusCode, 502, reason: 'the server is gone');
-    expect(cache.has('t5'), isFalse);
+    expect(cache.has('t5', 'flac'), isFalse);
   });
 
   test('the folder keeps to its limit, the tracks played longest ago going first', () async {
@@ -116,15 +117,15 @@ void main() {
     cache = StreamCache(folder.path, limitBytes: track.length * 2);
     await cache.start();
     for (final (i, name) in ['a', 'b', 'c'].indexed) {
-      await get(cache.sourceFor(name, upstream(name)));
-      File(p.join(folder.path, name)).setLastModifiedSync(DateTime(2026, 1, 1 + i));
+      await get(cache.sourceFor(name, 'flac', upstream(name)));
+      File(p.join(folder.path, '$name.flac')).setLastModifiedSync(DateTime(2026, 1, 1 + i));
     }
     final kept = folder.listSync().map((f) => p.basename(f.path)).toList()..sort();
-    expect(kept, ['b', 'c']);
+    expect(kept, ['.nomedia', 'b.flac', 'c.flac']);
   });
 
   test("another program on the device can't use the relay", () async {
-    final relay = Uri.parse(cache.sourceFor('t5', upstream('t5')));
+    final relay = Uri.parse(cache.sourceFor('t5', 'flac', upstream('t5')));
     expect((await http.get(relay.replace(path: '/wrong/t5'))).statusCode, 404);
     expect((await http.get(relay.replace(path: '${relay.path}x'))).statusCode, 404);
     expect((await http.post(relay)).statusCode, 404);
