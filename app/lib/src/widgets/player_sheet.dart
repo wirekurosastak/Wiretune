@@ -235,7 +235,9 @@ class _RisingPlayerState extends State<RisingPlayer> {
       0,
       sheet.travel(height) * (1 - t),
       double.infinity,
-      navigation == null ? height : math.min(height, navigation.top + navigation.height * t),
+      // A pixel into the navigation going down (its empty top, above the icons): its edge and this one fall between
+      // pixels, and meeting there they left a hairline of the page between them.
+      navigation == null ? height : math.min(height, navigation.top + navigation.height * t + 1),
     );
     return Stack(
       fit: StackFit.expand,

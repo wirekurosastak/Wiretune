@@ -1232,7 +1232,8 @@ void main() {
       );
       final window = clip.clipper!.getClip(clip.size);
       expect(window.top, moreOrLessEquals(miniTop * 0.6, epsilon: 1), reason: 'its top 40 % of the way up');
-      expect(window.bottom, moreOrLessEquals(navigation.top + navigation.height * 0.4, epsilon: 1));
+      // Its bottom a pixel into the navigation going down, so no hairline shows between them.
+      expect(window.bottom, moreOrLessEquals(navigation.top + navigation.height * 0.4 + 1, epsilon: 0.01));
       expect(tester.getRect(nav).top, moreOrLessEquals(navAt + navigation.height * 0.4, epsilon: 1));
       FadeTransition controls() => tester.widget<FadeTransition>(
         find.descendant(of: named('_ShownOpen'), matching: find.byType(FadeTransition)).first,
