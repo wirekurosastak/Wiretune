@@ -171,20 +171,32 @@ class _BottomBars extends StatelessWidget {
     final sheet = PlayerSheetScope.maybeOf(context);
     final surface = colors.palette.modal;
     // The navigation fades over the page: dark under the mini player, the page showing more toward the screen's edge
-    // (under the system's buttons too).
-    Widget navigation = DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [surface.withValues(alpha: 0.95), surface.withValues(alpha: 0.7)],
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.only(bottom: inset),
-        child: const _BottomNavigation(),
+    // (under the system's buttons too). While the full-screen player opens or closes it is solid, so that the page
+    // doesn't show through its top as it slides down under the player.
+    BoxDecoration fade({required bool solid}) => BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          surface.withValues(alpha: solid ? 1 : 0.95),
+          surface.withValues(alpha: solid ? 1 : 0.7),
+        ],
       ),
     );
+    Widget navigation = Padding(
+      padding: EdgeInsets.only(bottom: inset),
+      child: const _BottomNavigation(),
+    );
+    navigation = sheet == null
+        ? DecoratedBox(decoration: fade(solid: false), child: navigation)
+        : AnimatedBuilder(
+            animation: sheet.position,
+            builder: (context, child) => DecoratedBox(
+              decoration: fade(solid: sheet.position.value > 0),
+              child: child,
+            ),
+            child: navigation,
+          );
     if (sheet != null) {
       navigation = KeyedSubtree(
         key: sheet.navigation,
