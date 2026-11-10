@@ -21,8 +21,9 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     required this.allowDeviceSelection,
     required this.enableSpectrum,
     this.spectrumOnlyWhenShown = false,
-    Stream<List<int>> Function(String source)? pcmDecoder,
-  }) : _pcm = PcmCache(decoder: pcmDecoder) {
+    Stream<List<int>> Function(String source, Duration from)? pcmDecoder,
+    bool pcmDecoderSeeks = false,
+  }) : _pcm = PcmCache(decoder: pcmDecoder, decoderSeeks: pcmDecoderSeeks) {
     _subscriptions.addAll([
       _player.stream.playing.listen(_onPlaying),
       _player.stream.completed.listen(_onCompleted),

@@ -81,6 +81,24 @@ void main() {
       expect(requests.single.queryParameters['token'], 'secret-stream-token');
     });
 
+    test('a jump far ahead in the track has decoding start again there, not wait until it gets there', () async {
+      // A minute of silence with a tone in its last ten seconds.
+      final late = p.join(folder.path, 'late.wav');
+      final made = await Process.run('ffmpeg', [
+        '-v', 'error', '-y', '-f', 'lavfi', '-i', "aevalsrc='if(gt(t,50),sin(440*2*PI*t),0)':s=44100:d=60", late, //
+      ]);
+      expect(made.exitCode, 0, reason: '${made.stderr}');
+      final cache = PcmCache();
+      addTearDown(cache.dispose);
+      await cache.loadTrack(late);
+      bool soundAt(Duration position) {
+        final window = Float32List(1024);
+        return cache.tryGetWindow(position, window) && window.any((v) => v.abs() > 0.05);
+      }
+
+      await until(() => soundAt(const Duration(seconds: 55)));
+    });
+
     test('a server that refuses leaves the spectrum empty, and a new track starts again', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() => server.close(force: true));
@@ -111,7 +129,7 @@ void main() {
       final bytes = samples.buffer.asUint8List();
       final asked = <String>[];
       final cache = PcmCache(
-        decoder: (source) {
+        decoder: (source, from) {
           asked.add(source);
           // An odd split: the cache has to keep the half sample for the next chunk.
           return Stream.fromIterable([bytes.sublist(0, 30001), bytes.sublist(30001)]);
@@ -126,4 +144,32 @@ void main() {
       expect(window, everyElement(0), reason: 'the silence where it was');
     },
   );
+
+  test("a jump has a platform's decoder start again at it when it can, a while after the last", () async {
+    for (final seeks in [true, false]) {
+      final asked = <Duration>[];
+      final cache = PcmCache(
+        decoderSeeks: seeks,
+        // A decoder that has given ten seconds so far, and goes on slowly.
+        decoder: (source, from) {
+          asked.add(from);
+          return Stream.value(Int16List(44100 * 10).buffer.asUint8List());
+        },
+      );
+      addTearDown(cache.dispose);
+      await cache.loadTrack('/music/track.flac');
+      await pumpEventQueue();
+      final window = Float32List(4);
+      cache.tryGetWindow(const Duration(seconds: 5), window);
+      expect(asked, [Duration.zero], reason: 'decoded there already');
+
+      cache.tryGetWindow(const Duration(minutes: 3), window);
+      cache.tryGetWindow(const Duration(minutes: 3, seconds: 1), window);
+      expect(
+        asked,
+        seeks ? [Duration.zero, const Duration(minutes: 2, seconds: 59, milliseconds: 500)] : [Duration.zero],
+        reason: seeks ? 'once, just before the position' : "a decoder that can't start there isn't asked again",
+      );
+    }
+  });
 }

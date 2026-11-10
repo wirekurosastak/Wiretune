@@ -19,9 +19,13 @@ abstract final class MobileAudio {
   static const double _duckLevel = 0.2;
 
   /// A track ([source]: a file path or a stream URL) decoded by the phone's own decoder for the spectrum, as [PcmCache]
-  /// takes it: 16-bit mono 44.1 kHz, little-endian, in chunks of about a second.
-  static Stream<List<int>> decodeForSpectrum(String source) =>
-      _pcm.receiveBroadcastStream(source).map((chunk) => chunk as Uint8List);
+  /// takes it: 16-bit mono 44.1 kHz, little-endian, in chunks of about a second. Android's starts [from] there; iOS's
+  /// takes the source alone, and starts at the beginning.
+  static Stream<List<int>> decodeForSpectrum(String source, Duration from) => _pcm
+      .receiveBroadcastStream(
+        AppPlatform.current.isAndroid ? {'source': source, 'fromMs': from.inMilliseconds} : source,
+      )
+      .map((chunk) => chunk as Uint8List);
 
   static Future<void> attach(WiretuneAudioEngine engine) async {
     final session = await AudioSession.instance;

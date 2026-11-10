@@ -68,6 +68,8 @@ Future<void> main() async {
       enableSpectrum: platform.isDesktop || phone,
       spectrumOnlyWhenShown: phone,
       pcmDecoder: phone ? MobileAudio.decodeForSpectrum : null,
+      // Android's starts where the track is after a jump; iOS's from the beginning always.
+      pcmDecoderSeeks: platform.isAndroid,
     );
   }
 

@@ -21,19 +21,22 @@ import kotlin.math.floor
  * in chunks of about a second. One track at a time; cancelling stops it.
  *
  * It never touches the audio that plays: a stream is fetched from the server a second time. An error says only what
- * kind it was, never the source, whose URL holds the stream token.
+ * kind it was, never the source, whose URL holds the stream token. Given as `{source, fromMs}`, it starts at that time
+ * in the track (after a jump in it), so the bars don't wait for everything before it to be decoded.
  */
 class PcmDecoder : EventChannel.StreamHandler {
     private var decoding: Decoding? = null
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink) {
         stop()
-        val source = arguments as? String
+        val map = arguments as? Map<*, *>
+        val source = map?.get("source") as? String ?: arguments as? String
         if (source == null) {
             events.endOfStream()
             return
         }
-        decoding = Decoding(source, events).also { it.start() }
+        val fromUs = ((map?.get("fromMs") as? Number)?.toLong() ?: 0L) * 1000
+        decoding = Decoding(source, fromUs, events).also { it.start() }
     }
 
     override fun onCancel(arguments: Any?) = stop()
@@ -43,8 +46,11 @@ class PcmDecoder : EventChannel.StreamHandler {
         decoding = null
     }
 
-    private class Decoding(private val source: String, private val events: EventChannel.EventSink) :
-        Thread("wiretune-pcm") {
+    private class Decoding(
+        private val source: String,
+        private val fromUs: Long,
+        private val events: EventChannel.EventSink,
+    ) : Thread("wiretune-pcm") {
         @Volatile var stopped = false
         private val main = Handler(Looper.getMainLooper())
 
@@ -67,6 +73,8 @@ class PcmDecoder : EventChannel.StreamHandler {
                     return
                 }
                 extractor.selectTrack(track)
+                // To the frame at or before the time; what comes before it is dropped as it is decoded.
+                if (fromUs > 0) extractor.seekTo(fromUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
                 val format = extractor.getTrackFormat(track)
                 codec = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME)!!)
                 codec.configure(format, null, null, 0)
@@ -92,7 +100,8 @@ class PcmDecoder : EventChannel.StreamHandler {
         private fun decode(extractor: MediaExtractor, codec: MediaCodec, format: MediaFormat) {
             val info = MediaCodec.BufferInfo()
             var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            var resampler = Resampler(format.getInteger(MediaFormat.KEY_SAMPLE_RATE))
+            var rate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            var resampler = Resampler(rate)
             var float = false
             var inputDone = false
             while (!stopped) {
@@ -113,7 +122,8 @@ class PcmDecoder : EventChannel.StreamHandler {
                 if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                     val output = codec.outputFormat
                     channels = output.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                    resampler = Resampler(output.getInteger(MediaFormat.KEY_SAMPLE_RATE))
+                    rate = output.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    resampler = Resampler(rate)
                     float = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
                         output.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
                         output.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
@@ -138,7 +148,13 @@ class PcmDecoder : EventChannel.StreamHandler {
                         }
                     }
                     codec.releaseOutputBuffer(index, false)
-                    resampler.feed(mono) { add(it) }
+                    // The frames before the time asked for, from the sync frame the jump landed on.
+                    val early = if (info.presentationTimeUs < fromUs) {
+                        ((fromUs - info.presentationTimeUs) * rate / 1_000_000L).toInt().coerceAtMost(mono.size)
+                    } else {
+                        0
+                    }
+                    resampler.feed(if (early > 0) mono.copyOfRange(early, mono.size) else mono) { add(it) }
                     if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) return
                 }
             }

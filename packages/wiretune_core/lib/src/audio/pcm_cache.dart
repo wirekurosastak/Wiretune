@@ -15,17 +15,34 @@ import '../services/wiretune_log.dart';
 /// requested from the server a second time for this; the player downloads it and hands it to `ffmpeg` on its standard
 /// input, so the address with the stream token never stands in the process list.
 class PcmCache {
-  PcmCache({this.decoder});
+  PcmCache({this.decoder, this.decoderSeeks = false});
 
-  /// Decodes a source (a file path or a stream URL) into that PCM, little-endian, in chunks: a phone's own
-  /// decoder, as a phone has no `ffmpeg`. Null: `ffmpeg`.
-  final Stream<List<int>> Function(String source)? decoder;
+  /// Decodes a source (a file path or a stream URL) into that PCM, little-endian, in chunks, from a time in it: a
+  /// phone's own decoder, as a phone has no `ffmpeg`. Null: `ffmpeg`.
+  final Stream<List<int>> Function(String source, Duration from)? decoder;
+
+  /// Whether [decoder] starts at the time it is given (Android's does); one that doesn't always starts at the
+  /// beginning. `ffmpeg` does.
+  final bool decoderSeeks;
+
+  /// Decoding starts again at the playback position once that is this far past what is decoded (a jump ahead), rather
+  /// than leaving the bars still until it gets there; or before it (a jump back).
+  static const Duration _restartAhead = Duration(seconds: 3);
+
+  /// A little before the position decoding starts again at, for the window around the position.
+  static const Duration _restartLead = Duration(milliseconds: 500);
 
   static const int sampleRate = 44100;
   static const int _maxSamples = sampleRate * 60 * 20;
 
   Int16List _samples = Int16List(0);
   int _sampleCount = 0;
+
+  /// The sample of the track that the first one decoded is: where decoding started.
+  int _first = 0;
+
+  /// When decoding last started again at the position: not again for a moment, while it gets going.
+  final Stopwatch _sinceRestart = Stopwatch();
   Process? _process;
   HttpClient? _download;
   StreamSubscription<List<int>>? _subscription;
@@ -39,6 +56,11 @@ class PcmCache {
   /// Starts decoding [audioSource] in the background (a file path or a stream URL).
   Future<void> loadTrack(String audioSource) async {
     if (_currentSource == audioSource && _sampleCount > 0) return;
+    await _decode(audioSource, Duration.zero);
+  }
+
+  /// Decodes [audioSource] from [from] on, in place of what was decoded.
+  Future<void> _decode(String audioSource, Duration from) async {
     cancelAndReset();
     if (_available == false) return;
 
@@ -46,11 +68,13 @@ class PcmCache {
     final generation = ++_generation;
     _samples = Int16List(sampleRate * 180); // three minutes; grows on demand
     _sampleCount = 0;
+    _first = (from.inMicroseconds * sampleRate) ~/ 1000000;
     _pendingByte = -1;
+    final seconds = (from.inMilliseconds / 1000).toStringAsFixed(3);
 
     final decoder = this.decoder;
     if (decoder != null) {
-      _subscription = decoder(audioSource).listen(
+      _subscription = decoder(audioSource, from).listen(
         (chunk) => _append(chunk, generation),
         onError: (Object e) {
           if (generation == _generation) WiretuneLog.warn('PcmCache', 'PCM decode error: $e');
@@ -67,8 +91,11 @@ class PcmCache {
         '-nostdin',
         '-loglevel',
         'error',
+        // A file is sought in; a stream on the standard input is decoded up to there and dropped.
+        if (from > Duration.zero && !_isUrl(audioSource)) ...['-ss', seconds],
         '-i',
         _isUrl(audioSource) ? 'pipe:0' : audioSource,
+        if (from > Duration.zero && _isUrl(audioSource)) ...['-ss', seconds],
         '-f',
         's16le',
         '-ac',
@@ -160,16 +187,31 @@ class PcmCache {
     return true;
   }
 
-  /// Copies a window of samples (-1..1) centred on [position] into [destination]; false while nothing is decoded.
+  /// Copies a window of samples (-1..1) centred on [position] into [destination]; false while nothing is decoded. A
+  /// position well past what is decoded, or before it (a jump in the track), has decoding start again there.
   bool tryGetWindow(Duration position, Float32List destination) {
-    if (_sampleCount == 0) return false;
     final center = (position.inMicroseconds * sampleRate) ~/ 1000000;
-    final start = center - destination.length ~/ 2;
+    _followJump(position, center);
+    if (_sampleCount == 0) return false;
+    final start = center - destination.length ~/ 2 - _first;
     for (var i = 0; i < destination.length; i++) {
       final index = start + i;
       destination[i] = index >= 0 && index < _sampleCount ? _samples[index] / 32768.0 : 0;
     }
     return true;
+  }
+
+  void _followJump(Duration position, int center) {
+    final source = _currentSource;
+    if (source == null || (decoder != null && !decoderSeeks)) return;
+    final ahead = (_restartAhead.inMicroseconds * sampleRate) ~/ 1000000;
+    final away = center < _first || center > _first + _sampleCount + ahead;
+    if (!away || (_sinceRestart.isRunning && _sinceRestart.elapsed < const Duration(milliseconds: 1500))) return;
+    _sinceRestart
+      ..reset()
+      ..start();
+    final from = position - _restartLead;
+    unawaited(_decode(source, from < Duration.zero ? Duration.zero : from));
   }
 
   void _stopProcess() {
@@ -186,6 +228,7 @@ class PcmCache {
     _stopProcess();
     _currentSource = null;
     _sampleCount = 0;
+    _first = 0;
     _samples = Int16List(0);
   }
 
