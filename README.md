@@ -28,7 +28,7 @@ genres and labels, track credits, and the update check. Each can be turned off (
 - *Your listening*: your most played artists, albums, tracks and genres, and the minutes, by month, year or all time.
 - Autoplay: when the queue ends, similar music plays on.
 - Offline downloads that stay in sync with the server.
-- A ten-band equalizer, and a lower streaming quality for a slow connection.
+- A ten-band equalizer, and a lower streaming quality for a slow connection or for mobile data.
 - Remote control: play on and control your other devices, a friend's TV, or a UPnP/DLNA streamer.
 - Friends on your server: recommendations, listening together, shared playlists, and Blends (a playlist mixed from
   what two friends play and love).

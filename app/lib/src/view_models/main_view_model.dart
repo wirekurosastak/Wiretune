@@ -26,6 +26,7 @@ class DeviceCapabilities {
     this.requestFolderAccess,
     this.kind = DeviceKind.desktop,
     this.name = '',
+    this.mobileData,
   });
 
   /// Scanning a folder of the device's own (desktop, Android phones).
@@ -37,6 +38,9 @@ class DeviceCapabilities {
   /// What the other players of the account see this one as, and the name it has until the user gives it another.
   final DeviceKind kind;
   final String name;
+
+  /// Whether the device is on mobile data, now and whenever that changes (phones and tablets); null where it never is.
+  final Stream<bool>? mobileData;
 }
 
 /// A short message that needs no answer: a change that wasn't made, one the server turned down, something that went
@@ -807,6 +811,9 @@ class MainViewModel extends ChangeNotifier {
   static const String _remoteSharingPreference = 'remote_sharing';
   static const String _normalizationPreference = 'volume_normalization';
   static const String _streamingQualityPreference = 'streaming_quality';
+
+  /// The quality on mobile data: a [StreamingQuality]'s name, or `same` (as on Wi-Fi); none until it was chosen.
+  static const String _mobileQualityPreference = 'mobile_streaming_quality';
   static const String _equalizerPreference = 'equalizer';
   static const String _equalizerOnPreference = 'equalizer_on';
   static const String _gaplessPreference = 'gapless';
@@ -922,12 +929,56 @@ class MainViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// How much of a server track is asked for: the file (the default), or the server's Opus conversion for a slow link.
-  StreamingQuality get streamingQuality => audioEngine.streamingQuality;
+  /// How much of a server track is asked for (on Wi-Fi, where there is mobile data): the file (the default), or the
+  /// server's Opus conversion for a slow link.
+  StreamingQuality get streamingQuality => _streamingQuality;
+  StreamingQuality _streamingQuality = StreamingQuality.original;
   set streamingQuality(StreamingQuality value) {
-    unawaited(audioEngine.setStreamingQuality(value));
-    audioSettings.refreshDeviceList(); // the signal path mentions it
+    _streamingQuality = value;
     _remember(_streamingQualityPreference, value.name);
+    _applyStreamingQuality();
+  }
+
+  /// Whether the device can be on mobile data, and has a quality of its own there ([mobileStreamingQuality]).
+  bool get hasMobileData => capabilities.mobileData != null;
+
+  /// The quality on mobile data; null: the same as on Wi-Fi ([streamingQuality]).
+  StreamingQuality? get mobileStreamingQuality => _mobileQuality;
+  StreamingQuality? _mobileQuality;
+
+  /// Whether the quality on mobile data was chosen (in Settings, or when asked); until it is, the first time the device
+  /// streams over mobile data asks ([asksMobileQuality]).
+  bool _mobileQualityChosen = false;
+  set mobileStreamingQuality(StreamingQuality? value) {
+    _mobileQuality = value;
+    _mobileQualityChosen = true;
+    asksMobileQuality = false;
+    _remember(_mobileQualityPreference, value?.name ?? 'same');
+    _applyStreamingQuality();
+  }
+
+  bool _onMobileData = false;
+  StreamSubscription<bool>? _mobileData;
+
+  /// The device is on mobile data for the first time, with music from a server: the app asks which quality to stream
+  /// there ([mobileStreamingQuality] answers, [skipMobileQuality] asks again at the next start).
+  bool asksMobileQuality = false;
+
+  void skipMobileQuality() {
+    asksMobileQuality = false;
+    notifyListeners();
+  }
+
+  void _followMobileData(bool mobile) {
+    _onMobileData = mobile;
+    if (mobile && !_mobileQualityChosen && session.usesServer && !session.isOfflineMode) asksMobileQuality = true;
+    _applyStreamingQuality();
+  }
+
+  /// The engine streams in the quality of the network the device is on.
+  void _applyStreamingQuality() {
+    unawaited(audioEngine.setStreamingQuality(_onMobileData ? _mobileQuality ?? _streamingQuality : _streamingQuality));
+    audioSettings.refreshDeviceList(); // the signal path mentions it
     notifyListeners();
   }
 
@@ -1052,8 +1103,12 @@ class MainViewModel extends ChangeNotifier {
     _equalizer = Equalizer.fromJson(library.getPreference(_equalizerPreference));
     _isEqualizerOn = library.getPreference(_equalizerOnPreference) == '1';
     audioEngine.setEqualizer(_isEqualizerOn ? _equalizer : Equalizer.flat());
-    final quality = StreamingQuality.values.asNameMap()[library.getPreference(_streamingQualityPreference)];
-    if (quality != null) unawaited(audioEngine.setStreamingQuality(quality));
+    final qualities = StreamingQuality.values.asNameMap();
+    _streamingQuality = qualities[library.getPreference(_streamingQualityPreference)] ?? StreamingQuality.original;
+    final mobile = library.getPreference(_mobileQualityPreference);
+    _mobileQualityChosen = mobile == 'same' || qualities.containsKey(mobile);
+    _mobileQuality = qualities[mobile];
+    unawaited(audioEngine.setStreamingQuality(_streamingQuality));
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
     player.isAutoplayEnabled = library.getPreference(_autoplayPreference) != '0'; // on unless turned off
 
@@ -1172,6 +1227,7 @@ class MainViewModel extends ChangeNotifier {
     updates.start();
 
     if (session.usesServer) await session.connect();
+    _mobileData = capabilities.mobileData?.listen(_followMobileData);
 
     // With nothing to play, or only a server that wants a sign-in, the sign-in screen comes first.
     isLoginViewActive = session.usesLocalFolder
@@ -1191,6 +1247,7 @@ class MainViewModel extends ChangeNotifier {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    unawaited(_mobileData?.cancel());
     for (final unsubscribe in _unsubscribers) {
       unsubscribe();
     }

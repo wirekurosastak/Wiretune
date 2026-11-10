@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -88,6 +89,7 @@ Future<void> main() async {
       kind: _deviceKind(platform),
       // A computer goes by its host name; a phone's is "localhost", so it goes by "Phone" until it is given a name.
       name: platform.isDesktop ? Platform.localHostname : '',
+      mobileData: platform.isAndroid || platform.isIOS ? _onMobileData() : null,
     ),
     updateCheck: updateInstaller == null ? null : UpdateCheck(),
     updateInstaller: updateInstaller,
@@ -152,6 +154,22 @@ Future<void> main() async {
   final link = ConnectLink.parse(PlatformDispatcher.instance.defaultRouteName);
   unawaited(vm.start().then((_) => link == null ? null : vm.openConnectLink(link)));
   if (UiAutomationServer.isEnabled) unawaited(UiAutomationServer(vm).start());
+}
+
+/// Whether the phone is on mobile data: a mobile network, and neither Wi-Fi nor a cable (a VPN rides on one of those).
+Stream<bool> _onMobileData() async* {
+  final connectivity = Connectivity();
+  bool mobile(List<ConnectivityResult> networks) =>
+      networks.contains(ConnectivityResult.mobile) &&
+      !networks.contains(ConnectivityResult.wifi) &&
+      !networks.contains(ConnectivityResult.ethernet);
+  try {
+    yield mobile(await connectivity.checkConnectivity());
+    yield* connectivity.onConnectivityChanged.map(mobile);
+  } catch (e, s) {
+    // Without it the phone streams in its Wi-Fi quality everywhere.
+    WiretuneLog.error('App', "The phone's network can't be told", e, s);
+  }
 }
 
 class _DesktopWindowListener with WindowListener {

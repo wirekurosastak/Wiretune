@@ -1195,6 +1195,14 @@ class _RemoteCardState extends State<_RemoteCard> {
 }
 
 /// The audio settings: output device, audiophile mode switches, and signal path in one unified frame.
+/// The streaming qualities, best first, with their names.
+const _qualities = [
+  (StreamingQuality.original, 'StreamingOriginal'),
+  (StreamingQuality.high, 'StreamingHigh'),
+  (StreamingQuality.normal, 'StreamingNormal'),
+  (StreamingQuality.dataSaver, 'StreamingDataSaver'),
+];
+
 class _AudioCard extends StatelessWidget {
   const _AudioCard();
 
@@ -1369,17 +1377,14 @@ class _AudioCard extends StatelessWidget {
               const SizedBox(height: 14),
               Text(context.tr('SettingsStreamingQuality'), style: heading()),
               Text(context.tr('SettingsStreamingQualityHint'), style: hint()),
+              // A phone has one quality for Wi-Fi and one for mobile data.
+              if (vm.hasMobileData) ...[const SizedBox(height: 10), Text(context.tr('StreamingOnWifi'), style: hint())],
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  for (final (quality, key) in const [
-                    (StreamingQuality.original, 'StreamingOriginal'),
-                    (StreamingQuality.high, 'StreamingHigh'),
-                    (StreamingQuality.normal, 'StreamingNormal'),
-                    (StreamingQuality.dataSaver, 'StreamingDataSaver'),
-                  ])
+                  for (final (quality, key) in _qualities)
                     _choice(
                       context.tr(key),
                       selected: quality == vm.streamingQuality,
@@ -1388,6 +1393,23 @@ class _AudioCard extends StatelessWidget {
                     ),
                 ],
               ),
+              if (vm.hasMobileData) ...[
+                const SizedBox(height: 12),
+                Text(context.tr('StreamingOnMobileData'), style: hint()),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final (quality, key) in [(null, 'StreamingSameAsWifi'), ..._qualities])
+                      _choice(
+                        context.tr(key),
+                        selected: quality == vm.mobileStreamingQuality,
+                        onPressed: () => vm.mobileStreamingQuality = quality,
+                      ),
+                  ],
+                ),
+              ],
             ],
             if (audio.hasDeviceChoice) ...[
               if (!tizen) ...[

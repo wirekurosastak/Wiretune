@@ -18,6 +18,7 @@ import 'theme/app_theme.dart';
 import 'theme/palette.dart';
 import 'view_models/main_view_model.dart';
 import 'widgets/ambient.dart';
+import 'widgets/dialogs.dart';
 import 'widgets/tv_focus.dart';
 
 /// The root widget: theme, language, the keyboard and remote shortcuts, the back button, and the layout for the screen.
@@ -61,14 +62,29 @@ class _WiretuneAppState extends State<WiretuneApp> with WidgetsBindingObserver {
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(widget.vm.resume()));
     widget.vm.player.addListener(_followCover);
     _followCover();
+    widget.vm.addListener(_askMobileQuality);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    widget.vm.removeListener(_askMobileQuality);
     widget.vm.player.removeListener(_followCover);
     _lifecycle.dispose();
     super.dispose();
+  }
+
+  bool _askingMobileQuality = false;
+
+  /// The phone is on mobile data for the first time: asked once which quality to stream there.
+  void _askMobileQuality() {
+    if (!widget.vm.asksMobileQuality || _askingMobileQuality) return;
+    _askingMobileQuality = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final context = AppScope.navigatorKey.currentContext;
+      if (context != null && widget.vm.asksMobileQuality) await askMobileStreamingQuality(context);
+      _askingMobileQuality = false;
+    });
   }
 
   /// A QR code's link opened the app while it ran ([ConnectLink]).
