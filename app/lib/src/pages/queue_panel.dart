@@ -495,6 +495,7 @@ class _LyricsViewState extends State<LyricsView> {
   final ScrollController _scroll = ScrollController();
   final Map<int, GlobalKey> _lineKeys = {};
   int _scrolledTo = -2;
+  int _lineCount = 0;
 
   @override
   void dispose() {
@@ -505,18 +506,27 @@ class _LyricsViewState extends State<LyricsView> {
   void _follow(int index) {
     if (index == _scrolledTo) return;
     _scrolledTo = index;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final key = _lineKeys[index < 0 ? 0 : index];
-      final lineContext = key?.currentContext;
-      if (lineContext != null) {
-        Scrollable.ensureVisible(
-          lineContext,
-          alignment: 0.4,
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOutCubic,
-        );
-      }
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(index, tries: 4));
+  }
+
+  /// Scrolls the line being sung into view. A line far from those on show (after a jump in the song) isn't built yet,
+  /// so the list first jumps near it, by its share of the lines, and tries again once that is built.
+  void _reveal(int index, {required int tries}) {
+    if (!mounted || index != _scrolledTo) return;
+    final lineContext = _lineKeys[index < 0 ? 0 : index]?.currentContext;
+    if (lineContext != null) {
+      Scrollable.ensureVisible(
+        lineContext,
+        alignment: 0.4,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+    if (tries == 0 || !_scroll.hasClients || _lineCount < 2) return;
+    final position = _scroll.position;
+    position.jumpTo(position.maxScrollExtent * (index.clamp(0, _lineCount - 1) / (_lineCount - 1)));
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal(index, tries: tries - 1));
   }
 
   @override
@@ -599,8 +609,9 @@ class _LyricsViewState extends State<LyricsView> {
             child: ValueListenableBuilder<int>(
               valueListenable: lyrics.currentLine,
               builder: (context, current, _) {
-                _follow(current);
                 final lines = lyrics.lines;
+                _lineCount = lines.length;
+                _follow(current);
                 return ListView.builder(
                   controller: _scroll,
                   padding: EdgeInsets.fromLTRB(side, 24, side, 120),

@@ -656,6 +656,42 @@ void main() {
     expect(sung.right, lessThanOrEqualTo(list.right));
   });
 
+  testWidgets("the lyrics follow a jump far ahead in the song to its line, which wasn't built yet", (tester) async {
+    tester.view.physicalSize = const Size(400, 860);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final driver = FakeAudioDriver();
+    final vm = (await tester.runAsync(() async {
+      final library = createLibrary([TestSupport.makeTrack('1', 'Song', minutes: 6)]);
+      library.initialize();
+      return createMainViewModel(library, TestSupport.createEngine(driver));
+    }))!;
+    // A line every five seconds, as far as five minutes.
+    vm.lyrics.own = (_) async => [
+      for (var i = 0; i < 60; i++)
+        '[${(i * 5 ~/ 60).toString().padLeft(2, '0')}:${(i * 5 % 60).toString().padLeft(2, '0')}.00]Line $i',
+    ].join('\n');
+    await tester.pumpWidget(WiretuneApp(vm: vm));
+    vm.player.playQueue(vm.library.tracks);
+    vm.openNowPlaying();
+    vm.nowPlayingTab = NowPlayingTab.lyrics;
+    await tester.runAsync(() async {
+      await until(() => vm.lyrics.isSynced);
+      await driver.seek(const Duration(seconds: 1));
+    });
+    await settle(tester);
+    expect(find.text('Line 55'), findsNothing, reason: 'far down, not built');
+
+    await tester.runAsync(() => driver.seek(const Duration(seconds: 55 * 5 + 1)));
+    await settle(tester);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(vm.lyrics.currentLine.value, 55);
+    final list = tester.getRect(find.descendant(of: find.byType(NowPlayingPage), matching: find.byType(ListView)));
+    final sung = tester.getRect(find.text('Line 55'));
+    expect(sung.top, greaterThanOrEqualTo(list.top));
+    expect(sung.bottom, lessThanOrEqualTo(list.bottom), reason: 'scrolled to it');
+  });
+
   testWidgets("a table row shows the heart and a menu with the rest, which a right click opens with the heart's", (
     tester,
   ) async {
