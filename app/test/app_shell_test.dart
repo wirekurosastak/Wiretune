@@ -275,36 +275,51 @@ void main() {
     expect(vm.selectedSection, AppSection.albums);
   });
 
-  testWidgets('typing in the search shows the results and its clear button; Escape steps out and empties it', (
-    tester,
-  ) async {
-    final vm = await pumpApp(tester, const Size(1400, 900));
-    final clear = find.byTooltip(Localizer.get('TipClearSearch'));
-    Finder field() => find.byType(TextField).first;
-    expect(clear, findsNothing);
+  testWidgets(
+    'typing in the search shows the results and its clear button; Escape steps out, empties it and leaves it',
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(1400, 900));
+      final clear = find.byTooltip(Localizer.get('TipClearSearch'));
+      Finder field() => find.byType(TextField).first;
+      bool focused() => tester.widget<TextField>(field()).focusNode!.hasFocus;
+      expect(clear, findsNothing);
 
-    await tester.enterText(field(), 'daft');
-    await settle(tester);
-    expect(vm.isSearchActive, isTrue);
-    expect(find.text('Random Access Memories'), findsWidgets);
-    expect(clear, findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await settle(tester);
-    expect(vm.isSearchActive, isFalse);
-    expect(clear, findsNothing);
-    expect(tester.widget<TextField>(field()).controller!.text, isEmpty);
+      await tester.enterText(field(), 'daft');
+      await settle(tester);
+      expect(vm.isSearchActive, isTrue);
+      expect(find.text('Random Access Memories'), findsWidgets);
+      expect(clear, findsOneWidget);
+      expect(focused(), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester);
+      expect(vm.isSearchActive, isFalse);
+      expect(clear, findsNothing);
+      expect(tester.widget<TextField>(field()).controller!.text, isEmpty);
+      expect(focused(), isFalse, reason: 'the cursor leaves the field');
 
-    tester.view.physicalSize = const Size(400, 860);
-    vm.openSearch();
-    await settle(tester);
-    await tester.enterText(field(), 'miles');
-    await settle(tester);
-    expect(clear, findsOneWidget);
-    await tester.tap(clear);
-    await settle(tester);
-    expect(clear, findsNothing);
-    expect(vm.searchQuery, isEmpty);
-  });
+      // In the field with nothing typed, Escape leaves the field; the album open under it stays.
+      vm.openAlbum(vm.library.albums.first);
+      await settle(tester);
+      vm.focusSearch();
+      await settle(tester);
+      expect(focused(), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await settle(tester);
+      expect(focused(), isFalse);
+      expect(vm.albums.isAlbumDetailOpen, isTrue);
+
+      tester.view.physicalSize = const Size(400, 860);
+      vm.openSearch();
+      await settle(tester);
+      await tester.enterText(field(), 'miles');
+      await settle(tester);
+      expect(clear, findsOneWidget);
+      await tester.tap(clear);
+      await settle(tester);
+      expect(clear, findsNothing);
+      expect(vm.searchQuery, isEmpty);
+    },
+  );
 
   testWidgets("a search emptied in the header's field is over: the sidebar's section closes the open album again", (
     tester,

@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:wiretune_core/wiretune_core.dart';
@@ -786,8 +787,19 @@ class _SearchField extends StatefulWidget {
 
 class _SearchFieldState extends State<_SearchField> {
   final TextEditingController _controller = TextEditingController();
-  final FocusNode _focus = FocusNode();
+  late final FocusNode _focus = FocusNode(onKeyEvent: _escape);
   bool _hover = false;
+
+  /// Escape in a computer's field ends the search and leaves the field, rather than stepping back past it with the
+  /// cursor still in it (from an album opened before, with nothing typed). A TV's remote keeps its focus to move on.
+  KeyEventResult _escape(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent || event.logicalKey != LogicalKeyboardKey.escape || AppPlatform.current.isTv) {
+      return KeyEventResult.ignored;
+    }
+    context.vm.closeSearch();
+    node.unfocus();
+    return KeyEventResult.handled;
+  }
 
   late final ValueNotifier<int> _focusRequests = context.vm.searchFocusRequests;
 
