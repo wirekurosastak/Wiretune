@@ -7,6 +7,8 @@ import 'package:wiretune_core/wiretune_core.dart';
 import 'support.dart';
 
 void main() {
+  setUpAll(useTempDataDirectory); // the engine logs what it plays
+
   group('the equalizer', () {
     test('is flat to begin with, and a flat one filters nothing', () {
       final flat = Equalizer.flat();
