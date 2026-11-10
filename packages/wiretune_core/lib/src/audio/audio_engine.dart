@@ -26,7 +26,10 @@ class WiretuneAudioEngine {
       _driver.stateChanged.listen(stateChanged.emit),
       _driver.positionChanged.listen(positionChanged.emit),
       _driver.spectrumDataAvailable.listen(spectrumDataAvailable.emit),
-      _driver.trackEnded.listen(trackEnded.emit),
+      _driver.trackEnded.listen((_) {
+        _finishCaching(_currentTrack);
+        trackEnded.emit(null);
+      }),
       _driver.advanced.listen((_) => _onAdvanced()),
       _driver.playbackFailed.listen(playbackFailed.emit),
     ]);
@@ -307,9 +310,17 @@ class WiretuneAudioEngine {
     await _driver.setNext(source);
   }
 
+  /// [track] played to its end: the cache fills in what jumps in it skipped, and keeps it.
+  void _finishCaching(Track? track) {
+    final cache = _streamCache;
+    if (track == null || cache == null || !streams(track)) return;
+    unawaited(cache.finish(cacheKey(track, _converted(track)), _cacheExtension(track)));
+  }
+
   void _onAdvanced() {
     final track = _nextTrack;
     if (track == null) return;
+    _finishCaching(_currentTrack);
     _request++;
     _currentTrack = track;
     _nextTrack = null;

@@ -318,6 +318,27 @@ void main() {
     expect(asked, 1); // only server tracks need a token
   });
 
+  test('a server track that plays to its end, alone or into the next, is handed to the cache to keep', () async {
+    final driver = FakeAudioDriver();
+    final engine = TestSupport.createEngine(driver);
+    final cache = _FinishedTracks();
+    engine.setStreamCache(cache);
+    final first = TestSupport.makeServerTrack('s1', 'One');
+    final second = TestSupport.makeServerTrack('s2', 'Two');
+
+    await engine.playTrack(first);
+    await engine.setNextTrack(second);
+    driver.simulateGaplessEnd();
+    expect(cache.finished, [WiretuneAudioEngine.cacheKey(first, null)]);
+    driver.simulateTrackEnded();
+    expect(cache.finished.last, WiretuneAudioEngine.cacheKey(second, null));
+
+    // A local track is nothing for the cache.
+    await engine.playTrack(TestSupport.makeTrack('l', 'Local'));
+    driver.simulateTrackEnded();
+    expect(cache.finished, hasLength(2));
+  });
+
   test('a fresh stream token is asked for each time a server track starts, and the old one kept on failure', () async {
     final driver = FakeAudioDriver();
     final engine = TestSupport.createEngine(driver);
@@ -473,4 +494,14 @@ void main() {
     expect(engine.isExclusiveMode, isFalse);
     expect(engine.volume, closeTo(0.7, 0.001));
   });
+}
+
+/// A cache that only notes which tracks played to their end.
+class _FinishedTracks extends StreamCache {
+  _FinishedTracks() : super('/nowhere');
+
+  final List<String> finished = [];
+
+  @override
+  Future<void> finish(String key, String extension) async => finished.add(key);
 }

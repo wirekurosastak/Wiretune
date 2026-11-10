@@ -91,6 +91,25 @@ void main() {
     expect(served, 100000 + (track.length - 200000) + 120001, reason: 'nothing fetched but what the player asked for');
   });
 
+  test('a track played to its end after a jump is kept, only the part jumped over fetched for it', () async {
+    final relay = cache.sourceFor('t6', 'flac', upstream('t6'));
+    await get(relay, 'bytes=0-49999');
+    await get(relay, 'bytes=250000-');
+    expect(cache.has('t6', 'flac'), isFalse);
+    served = 0;
+
+    await cache.finish('t6', 'flac');
+    expect(cache.has('t6', 'flac'), isTrue);
+    expect(File(cache.sourceFor('t6', 'flac', upstream('t6'))).readAsBytesSync(), track);
+    expect(served, 200000, reason: 'the gap alone');
+
+    // A track that didn't stream through the cache, or is kept already: nothing to do.
+    served = 0;
+    await cache.finish('t6', 'flac');
+    await cache.finish('never-played', 'flac');
+    expect(served, 0);
+  });
+
   test('a track only partly played is not kept, nor is a refusal', () async {
     await get(cache.sourceFor('t3', 'flac', upstream('t3')), 'bytes=0-999');
     expect(cache.has('t3', 'flac'), isFalse);

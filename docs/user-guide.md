@@ -102,9 +102,10 @@ to this device*. With *Sync downloads* on (the default), downloads follow change
 *Settings → Account & connection → Offline mode* shows only downloads and local music, and stops looking for the
 server.
 
-Apart from downloads, a phone or computer keeps the server tracks it played whole in its [cache](#where-things-are),
-and plays them from there next time. Nothing is fetched twice for it, and a skipped track isn't kept. Above 2 GB the
-tracks played longest ago go first. It isn't offline music: offline mode shows downloads only.
+Apart from downloads, a phone or computer keeps the server tracks it played to their end in its
+[cache](#where-things-are), and plays them from there next time. What played is kept as it streams; only the parts a
+jump skipped are fetched at the end. A track skipped before its end isn't kept. Above 2 GB the tracks played longest ago
+go first. It isn't offline music: offline mode shows downloads only.
 
 ## Friends
 

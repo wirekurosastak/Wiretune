@@ -47,17 +47,57 @@ class StreamCache {
   Future<void> start() async {
     try {
       final folder = Directory(directory)..createSync(recursive: true);
-      final hidden = File(p.join(directory, '.nomedia'));
-      if (!hidden.existsSync()) hidden.createSync();
+      _hideFromMusicApps();
       for (final entry in folder.listSync().whereType<File>()) {
         if (_isPart(entry.path)) entry.deleteSync();
       }
       _trim();
       final server = _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) => unawaited(_serve(request)));
+      WiretuneLog.info('StreamCache', "Played tracks are kept in '$directory'.");
     } catch (e, s) {
       // Without it, tracks stream straight from the server, as before.
       WiretuneLog.error('StreamCache', "The cache in '$directory' can't be used", e, s);
+    }
+  }
+
+  /// A `.nomedia` file, which keeps other music apps from listing the folder. Without it the cache works all the same.
+  void _hideFromMusicApps() {
+    try {
+      final hidden = File(p.join(directory, '.nomedia'));
+      if (!hidden.existsSync()) hidden.createSync();
+    } on FileSystemException catch (e) {
+      WiretuneLog.warn('StreamCache', "No .nomedia in the cache: other music apps may list it (${e.message}).");
+    }
+  }
+
+  /// The track [key] played to its end: the parts of it that never came by (skipped over by jumps in it) are fetched,
+  /// and it is kept. Nothing happens for a track that didn't stream through the relay, or is kept already.
+  Future<void> finish(String key, String extension) async {
+    final name = _fileName(key, extension);
+    final partial = _partials[name];
+    final upstream = _upstreams[name];
+    if (partial == null || upstream == null || partial.isComplete) return;
+    try {
+      for (final (start, end) in partial.gaps) {
+        final request = http.Request('GET', Uri.parse(upstream))
+          ..headers[HttpHeaders.rangeHeader] = 'bytes=$start-${end - 1}';
+        final answer = await _client.send(request);
+        final span = _span(answer);
+        if (span == null || span.start != start || span.total != partial.total) {
+          await answer.stream.drain<void>();
+          WiretuneLog.info('StreamCache', 'The server sent no part of a track, which is not kept.');
+          return;
+        }
+        var offset = start;
+        await for (final chunk in answer.stream) {
+          partial.write(offset, chunk);
+          offset += chunk.length;
+        }
+      }
+      if (partial.isComplete && identical(_partials[name], partial)) _keep(name, partial);
+    } catch (e) {
+      WiretuneLog.info('StreamCache', "The rest of a track couldn't be fetched: ${e.runtimeType}");
     }
   }
 
@@ -236,6 +276,18 @@ class _Partial {
   bool _closed = false;
 
   bool get isComplete => _have.length == 1 && _have.first == (0, total);
+
+  /// The parts not written yet, as [start, end) pairs.
+  List<(int, int)> get gaps {
+    final gaps = <(int, int)>[];
+    var at = 0;
+    for (final (start, end) in _have) {
+      if (start > at) gaps.add((at, start));
+      at = end;
+    }
+    if (at < total) gaps.add((at, total));
+    return gaps;
+  }
 
   void write(int offset, List<int> bytes) {
     if (_closed || bytes.isEmpty || offset + bytes.length > total) return;
