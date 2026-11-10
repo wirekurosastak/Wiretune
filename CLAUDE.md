@@ -10,6 +10,12 @@ Wiretune is a self-hosted music server with its own players. All Dart and Flutte
 The user writes in Hungarian or English; answer in the language of their message. Development happens on Fedora
 Linux: commands and builds must work there.
 
+Answer in plain, everyday language: short sentences, common words, no stiff or invented phrasing. A recommendation
+is one direct line that says the action:
+- Good: "Make bottom nav bar opaque during the animation of opening the maximized player."
+- Bad: "Make the navigation solid while the player moves. It goes from see-through to solid over the first part of
+  the opening, and back as the player closes."
+
 ## Read first
 
 - [CONTRIBUTING.md](CONTRIBUTING.md): the checks to run and the code rules (simple code, actionable errors, safe
