@@ -812,7 +812,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _normalizationPreference = 'volume_normalization';
   static const String _streamingQualityPreference = 'streaming_quality';
 
-  /// The quality on mobile data: a [StreamingQuality]'s name, or `same` (as on Wi-Fi); none until it was chosen.
+  /// The quality on mobile data, a [StreamingQuality]'s name; none until it was chosen.
   static const String _mobileQualityPreference = 'mobile_streaming_quality';
   static const String _equalizerPreference = 'equalizer';
   static const String _equalizerOnPreference = 'equalizer_on';
@@ -942,18 +942,17 @@ class MainViewModel extends ChangeNotifier {
   /// Whether the device can be on mobile data, and has a quality of its own there ([mobileStreamingQuality]).
   bool get hasMobileData => capabilities.mobileData != null;
 
-  /// The quality on mobile data; null: the same as on Wi-Fi ([streamingQuality]).
-  StreamingQuality? get mobileStreamingQuality => _mobileQuality;
+  /// The quality on mobile data; the Wi-Fi one ([streamingQuality]) until it is chosen.
+  StreamingQuality get mobileStreamingQuality => _mobileQuality ?? _streamingQuality;
   StreamingQuality? _mobileQuality;
 
   /// Whether the quality on mobile data was chosen (in Settings, or when asked); until it is, the first time the device
   /// streams over mobile data asks ([asksMobileQuality]).
-  bool _mobileQualityChosen = false;
-  set mobileStreamingQuality(StreamingQuality? value) {
+  bool get _mobileQualityChosen => _mobileQuality != null;
+  set mobileStreamingQuality(StreamingQuality value) {
     _mobileQuality = value;
-    _mobileQualityChosen = true;
     asksMobileQuality = false;
-    _remember(_mobileQualityPreference, value?.name ?? 'same');
+    _remember(_mobileQualityPreference, value.name);
     _applyStreamingQuality();
   }
 
@@ -977,7 +976,7 @@ class MainViewModel extends ChangeNotifier {
 
   /// The engine streams in the quality of the network the device is on.
   void _applyStreamingQuality() {
-    unawaited(audioEngine.setStreamingQuality(_onMobileData ? _mobileQuality ?? _streamingQuality : _streamingQuality));
+    unawaited(audioEngine.setStreamingQuality(_onMobileData ? mobileStreamingQuality : _streamingQuality));
     audioSettings.refreshDeviceList(); // the signal path mentions it
     notifyListeners();
   }
@@ -1105,9 +1104,7 @@ class MainViewModel extends ChangeNotifier {
     audioEngine.setEqualizer(_isEqualizerOn ? _equalizer : Equalizer.flat());
     final qualities = StreamingQuality.values.asNameMap();
     _streamingQuality = qualities[library.getPreference(_streamingQualityPreference)] ?? StreamingQuality.original;
-    final mobile = library.getPreference(_mobileQualityPreference);
-    _mobileQualityChosen = mobile == 'same' || qualities.containsKey(mobile);
-    _mobileQuality = qualities[mobile];
+    _mobileQuality = qualities[library.getPreference(_mobileQualityPreference)];
     unawaited(audioEngine.setStreamingQuality(_streamingQuality));
     player.isGaplessEnabled = library.getPreference(_gaplessPreference) != '0'; // on unless turned off
     player.isAutoplayEnabled = library.getPreference(_autoplayPreference) != '0'; // on unless turned off

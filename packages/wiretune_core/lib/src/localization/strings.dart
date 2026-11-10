@@ -133,7 +133,6 @@ const Map<String, (String, String, String)> allStrings = {
   'StreamingDataSaver': ('Adatspórolás · 48 kbps', 'Data saver · 48 kbps', 'Datensparen · 48 kbit/s'),
   'StreamingOnWifi': ('Wi-Fin', 'On Wi-Fi', 'Im WLAN'),
   'StreamingOnMobileData': ('Mobilneten', 'On mobile data', 'Im Mobilfunknetz'),
-  'StreamingSameAsWifi': ('Mint Wi-Fin', 'Same as Wi-Fi', 'Wie im WLAN'),
   'MobileDataQualityTitle': ('Mobilneten vagy', "You're on mobile data", 'Du bist im Mobilfunknetz'),
   'MobileDataQualityQuestion': (
     'Mobilneten kisebb minőségben szóljon a zene, hogy kevesebb adatot használjon? Később a Beállítások → Hang alatt átállíthatod.',

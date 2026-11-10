@@ -194,26 +194,25 @@ Future<void> toggleFavoriteAsked(BuildContext context, Track track) async {
 
 /// Asks before the queue is cleared.
 /// Asked once, the first time the phone is on mobile data with music from a server: which quality to stream there.
-/// [MainViewModel.mobileStreamingQuality] takes the answer (Keep original: the same as on Wi-Fi); closed without one,
-/// it asks again at the next start.
+/// [MainViewModel.mobileStreamingQuality] takes the answer; closed without one, it asks again at the next start.
 Future<void> askMobileStreamingQuality(BuildContext context) async {
   final vm = context.vm;
-  final answer = await showDialog<({StreamingQuality? quality})>(
+  final answer = await showDialog<StreamingQuality>(
     context: context,
     builder: (dialog) => AppDialog(
       title: dialog.tr('MobileDataQualityTitle'),
       content: Text(dialog.tr('MobileDataQualityQuestion')),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(dialog).pop((quality: null)),
+          onPressed: () => Navigator.of(dialog).pop(StreamingQuality.original),
           child: Text(dialog.tr('MobileDataKeepOriginal')),
         ),
         TextButton(
-          onPressed: () => Navigator.of(dialog).pop((quality: StreamingQuality.dataSaver)),
+          onPressed: () => Navigator.of(dialog).pop(StreamingQuality.dataSaver),
           child: Text(dialog.tr('StreamingDataSaver')),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(dialog).pop((quality: StreamingQuality.normal)),
+          onPressed: () => Navigator.of(dialog).pop(StreamingQuality.normal),
           child: Text(dialog.tr('StreamingNormal')),
         ),
       ],
@@ -222,7 +221,7 @@ Future<void> askMobileStreamingQuality(BuildContext context) async {
   if (answer == null) {
     vm.skipMobileQuality();
   } else {
-    vm.mobileStreamingQuality = answer.quality;
+    vm.mobileStreamingQuality = answer;
   }
 }
 

@@ -1401,7 +1401,7 @@ class _AudioCard extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final (quality, key) in [(null, 'StreamingSameAsWifi'), ..._qualities])
+                    for (final (quality, key) in _qualities)
                       _choice(
                         context.tr(key),
                         selected: quality == vm.mobileStreamingQuality,

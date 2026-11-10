@@ -16,7 +16,7 @@ loud recording. It applies to every track, but **not in bit-perfect mode**, and 
 ([needs `ffmpeg`](server.md#streaming-on-a-slow-connection)). Per device, from the next track. Downloads, local files and
 bit-perfect mode always play the file.
 
-Phones and tablets have two rows: **On Wi-Fi** and **On mobile data** (at first *Same as Wi-Fi*), and switch between
+Phones and tablets have two rows: **On Wi-Fi** and **On mobile data** (at first the Wi-Fi one), and switch between
 them with the network. The first time a phone streams over mobile data, it asks once: Normal, Data saver or Keep
 original.
 

@@ -71,27 +71,33 @@ void main() {
     again.dispose();
   });
 
-  test('"Keep original" streams on mobile data as on Wi-Fi; a closed question asks again at the next start', () async {
-    final library = createLibrary();
-    final vm = await phone(library, Stream.value(true));
-    await pumpEventQueue();
-    expect(vm.asksMobileQuality, isTrue);
-    vm.skipMobileQuality();
-    expect(vm.asksMobileQuality, isFalse);
-    vm.dispose();
+  test(
+    '"Keep original" streams the original on mobile data, whatever Wi-Fi has; a closed question asks again',
+    () async {
+      final library = createLibrary();
+      final vm = await phone(library, Stream.value(true));
+      await pumpEventQueue();
+      expect(vm.asksMobileQuality, isTrue);
+      vm.streamingQuality = StreamingQuality.normal;
+      expect(vm.mobileStreamingQuality, StreamingQuality.normal, reason: "the Wi-Fi one until it's chosen");
+      vm.skipMobileQuality();
+      expect(vm.asksMobileQuality, isFalse);
+      vm.dispose();
 
-    final again = await phone(library, Stream.value(true));
-    await pumpEventQueue();
-    expect(again.asksMobileQuality, isTrue, reason: 'not answered yet');
-    again.mobileStreamingQuality = null;
-    expect(again.audioEngine.streamingQuality, StreamingQuality.original);
-    again.dispose();
+      final again = await phone(library, Stream.value(true));
+      await pumpEventQueue();
+      expect(again.asksMobileQuality, isTrue, reason: 'not answered yet');
+      again.mobileStreamingQuality = StreamingQuality.original;
+      expect(again.audioEngine.streamingQuality, StreamingQuality.original, reason: 'not the Wi-Fi Normal');
+      again.dispose();
 
-    final third = await phone(library, Stream.value(true));
-    await pumpEventQueue();
-    expect(third.asksMobileQuality, isFalse);
-    third.dispose();
-  });
+      final third = await phone(library, Stream.value(true));
+      await pumpEventQueue();
+      expect(third.asksMobileQuality, isFalse);
+      expect(third.mobileStreamingQuality, StreamingQuality.original);
+      third.dispose();
+    },
+  );
 
   testWidgets('the question is a dialog over the app, and its answer is the quality on mobile data', (tester) async {
     final library = createLibrary();
