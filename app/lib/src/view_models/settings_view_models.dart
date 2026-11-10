@@ -195,6 +195,29 @@ class ServerSettingsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Signs in to the server at [serverUrl] with a one-time [code] another device of the account showed (a QR code),
+  /// as whichever account made it, even when signed in already; what went wrong is [authErrorMessage].
+  Future<void> loginWithCode(String code) async {
+    isAuthenticating = true;
+    _showAuthError(null);
+    try {
+      final typed = ServerSession.normalizeServerUrl(serverUrl)?.toLowerCase();
+      if (!_session.isServerReachable || typed != _session.serverUrl.toLowerCase()) await _session.connect(serverUrl);
+      if (_session.state == ServerConnectionState.offline) {
+        _showAuthError(_session.statusMessage);
+        return;
+      }
+      if (_session.state == ServerConnectionState.setupRequired) {
+        _showAuthError(Localizer.get('AuthSetupFirst'));
+        return;
+      }
+      _showAuthError(await _session.loginWithCode(code));
+    } finally {
+      isAuthenticating = false;
+      syncWithSession();
+    }
+  }
+
   /// Creates the server's first account, its administrator; what went wrong is [authErrorMessage].
   Future<void> setupAdmin(String username, String password, String setupCode) async {
     if (username.trim().isEmpty || password.isEmpty) {

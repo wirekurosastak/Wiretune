@@ -368,6 +368,14 @@ class WiretuneServer {
     ),
     _Route('POST', '/api/auth/setup', Access.anonymous, _setup, rateLimited: true),
     _Route('POST', '/api/auth/login', Access.anonymous, _login, rateLimited: true),
+    _Route('POST', '/api/auth/login-with-code', Access.anonymous, (call) async {
+      final code = (await call.jsonObject())?['code'];
+      if (code is! String || code.trim().isEmpty) {
+        return errorResponse(400, ErrorCodes.invalidJson, 'The body is { "code" }.');
+      }
+      final result = auth.signInWithCode(code);
+      return result == null ? unauthorized(ErrorCodes.signInCodeInvalid) : jsonResponse(result.toJson());
+    }, rateLimited: true),
 
     // Authentication (signed in)
     _Route(
@@ -375,6 +383,12 @@ class WiretuneServer {
       '/api/auth/stream-token',
       Access.user,
       (call) => jsonResponse(auth.createStreamToken(call.principal!).toJson()),
+    ),
+    _Route(
+      'POST',
+      '/api/auth/sign-in-code',
+      Access.user,
+      (call) => jsonResponse(auth.createSignInCode(call.principal!).toJson()),
     ),
     _Route('POST', '/api/auth/change-password', Access.user, _changePassword, rateLimited: true),
     _Route('POST', '/api/auth/change-username', Access.user, _changeUsername, rateLimited: true),

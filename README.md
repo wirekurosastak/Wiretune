@@ -24,7 +24,7 @@ genres and labels, track credits, and the update check. Each can be turned off (
 - Synced lyrics, from the file or [LRCLIB](https://lrclib.net).
 - Quality badge on every album and track: hi-res, CD or lossy.
 - Genres, labels and credits from Deezer and MusicBrainz where the tags lack them; related artists and similar albums.
-- One account per listener: favorites, playlists and plays on every device.
+- One account per listener: favorites, playlists and plays on every device. A phone joins by scanning a QR code.
 - *Your listening*: your most played artists, albums, tracks and genres, and the minutes, by month, year or all time.
 - Autoplay: when the queue ends, similar music plays on.
 - Offline downloads that stay in sync with the server.

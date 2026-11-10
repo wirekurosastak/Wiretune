@@ -10,6 +10,24 @@
 const Map<String, (String, String, String)> allStrings = {
   // ── Common ──────────────────────────────────────────────────────────────────────────────────────────
   'Close': ('Bezárás', 'Close', 'Schließen'),
+  'ConnectPhone': ('Telefon csatlakoztatása', 'Connect a phone', 'Handy verbinden'),
+  'ConnectPhoneHint': (
+    'Olvasd be a telefon kamerájával.',
+    "Scan with the phone's camera.",
+    'Mit der Kamera des Handys scannen.',
+  ),
+  'ConnectPhoneServer': ('Csak a szerver', 'Server only', 'Nur der Server'),
+  'ConnectPhoneSignIn': ('Bejelentkezés: {0}', 'Sign in as {0}', 'Anmelden als {0}'),
+  'ConnectPhoneOnce': (
+    'Egyszer használható, 5 percig.',
+    'Works once, for 5 minutes.',
+    'Einmal nutzbar, 5 Minuten lang.',
+  ),
+  'ConnectPhoneNoCode': (
+    'Nem sikerült bejelentkezőkódot kérni: {0}',
+    "Couldn't get a sign-in code: {0}",
+    'Kein Anmeldecode erhalten: {0}',
+  ),
   'Cancel': ('Mégse', 'Cancel', 'Abbrechen'),
   'Save': ('Mentés', 'Save', 'Speichern'),
   'Delete': ('Törlés', 'Delete', 'Löschen'),
@@ -1320,6 +1338,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Ez a felhasználónév már foglalt.',
     'That user name is already taken.',
     'Dieser Benutzername ist bereits vergeben.',
+  ),
+  'ErrorSignInCodeInvalid': (
+    'A bejelentkezőkód hibás, már felhasználták vagy lejárt. Kérj újat.',
+    'The sign-in code is wrong, used or expired. Show a new one.',
+    'Der Anmeldecode ist falsch, schon benutzt oder abgelaufen. Zeig einen neuen an.',
   ),
   'ErrorUserNotFound': (
     'Ez a felhasználó már nem létezik.',

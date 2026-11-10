@@ -20,6 +20,8 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
 | `GET /api/auth/setup-required` | anonymous | `{ "setupRequired": true }` while the server has no accounts |
 | `POST /api/auth/setup` | anonymous | Creates the first account (administrator). Body `{ "username", "password", "setupCode" }`, with the code from the server log. `200` with an `AuthResponse`, `400` rule violation, `403` missing or wrong code, `409` already set up. Rate limited |
 | `POST /api/auth/login` | anonymous | Body `{ "username", "password", "rememberMe" }`. `200` with an `AuthResponse`, `400` missing field, `401` wrong credentials. Rate limited |
+| `POST /api/auth/login-with-code` | anonymous | Body `{ "code" }`: a sign-in code from `sign-in-code`. `200` with an `AuthResponse` that lasts 90 days, `400` no code, `401` `signInCodeInvalid` (wrong, used, expired, or made before the password changed). The code is used up. Rate limited |
+| `POST /api/auth/sign-in-code` | user | No body. `200` with a `SignInCode`: a code that signs another device in to the caller's account once, within 5 minutes (a player shows it as a QR code). It replaces the account's earlier code. Kept in memory: a restart ends it |
 | `POST /api/auth/stream-token` | user | No body. `200` with a `StreamTokenResponse`, valid 8 hours. A stream token can't request another |
 | `POST /api/auth/change-password` | user | Body `{ "newPassword" }` (the current password isn't required). `200` with an `AuthResponse` and `"changed": true`: a new token for the caller, expiring when the old one would have. `400` invalid password. Rate limited. All earlier tokens (the caller's, other devices', stream tokens) stop working, and the account's remote-control connections close with `4401` |
 | `POST /api/auth/change-username` | user | Body `{ "username" }`. Renames the caller: an administrator always, another account when the administrator lets members (`membersCanRename`). `200` with the `UserInfo`, `400` invalid name, `403` `renameNotAllowed`, `409` name taken. Rate limited. Sessions stay signed in; the next sign-in uses the new name |
@@ -34,6 +36,7 @@ The JSON API under `/api` used by the players. It isn't versioned: if you build 
 `AuthResponse`: `{ "token", "user": UserInfo, "expiresAt" }`.
 `UserInfo`: `{ "id", "username", "isAdmin", "createdAt", "lastLoginAt" }`.
 `StreamTokenResponse`: `{ "token", "expiresAt" }`.
+`SignInCode`: `{ "code", "expiresAt" }`.
 
 ## Library
 
@@ -232,6 +235,7 @@ the host plays, and seek when they are more than 150 ms off.
 |---|---|---|
 | `signInRequired`, `tokenInvalid`, `sessionExpired`, `passwordChanged`, `accountRemoved` | 401 | No token; a token this server didn't sign or that doesn't belong here; expired; issued before the password changed; a deleted account |
 | `wrongCredentials` | 401 | Wrong user name or password |
+| `signInCodeInvalid` | 401 | A sign-in code that is wrong, used, expired, or older than the password |
 | `adminOnly` | 403 | An administrator's route |
 | `rateLimited` | 429 | With `retryAfter` (seconds), also as the `Retry-After` header |
 | `credentialsRequired`, `usernameInvalid` (`max`), `passwordTooShort` (`min`), `passwordTooLong` (`max`, in bytes) | 400 | Account rules |

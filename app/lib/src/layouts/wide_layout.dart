@@ -82,7 +82,7 @@ class WideLayout extends StatelessWidget {
                   ],
                 ),
               ),
-              if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
+              if (vm.isLoginViewActive) Positioned.fill(child: LoginPage(key: ValueKey(vm.connectLinks))),
             ],
           ),
         ),

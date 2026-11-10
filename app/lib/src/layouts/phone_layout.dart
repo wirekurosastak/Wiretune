@@ -102,7 +102,7 @@ class _PhoneLayoutState extends State<PhoneLayout> with SingleTickerProviderStat
               Positioned.fill(
                 child: _NowPlayingOverlay(sheet: _sheet, isOpen: vm.isNowPlayingOpen),
               ),
-              if (vm.isLoginViewActive) const Positioned.fill(child: LoginPage()),
+              if (vm.isLoginViewActive) Positioned.fill(child: LoginPage(key: ValueKey(vm.connectLinks))),
             ],
           ),
         ),

@@ -205,6 +205,22 @@ class StreamTokenResponse {
   }
 }
 
+/// A one-time code that signs another device in to the caller's account: it works once, until [expiresAt]. A player
+/// shows it in a QR code, for a phone to sign in without typing the password.
+class SignInCode {
+  const SignInCode(this.code, this.expiresAt);
+
+  final String code;
+  final DateTime expiresAt;
+
+  Map<String, Object?> toJson() => {'code': code, 'expiresAt': formatIsoUtc(expiresAt)};
+
+  static SignInCode fromJson(Object? json) {
+    final map = _object(json);
+    return SignInCode(_string(map, 'code'), parseIsoUtc(map['expiresAt']) ?? DateTime.now().toUtc());
+  }
+}
+
 class ServerLibraryStatus {
   const ServerLibraryStatus(
     this.trackCount,
@@ -535,6 +551,7 @@ abstract final class ErrorCodes {
   static const String cannotDeleteSelf = 'cannotDeleteSelf';
   static const String cannotResetOwnPassword = 'cannotResetOwnPassword';
   static const String renameNotAllowed = 'renameNotAllowed';
+  static const String signInCodeInvalid = 'signInCodeInvalid';
 
   // The music folder (with path where there is one)
   static const String folderRequired = 'folderRequired';

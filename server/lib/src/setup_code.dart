@@ -15,8 +15,8 @@ class SetupCode {
     _normalized = utf8.encode(_normalize(value));
   }
 
-  // No 0/O, 1/I/L: the code is read from a log and typed by hand.
-  static const String _alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  /// No 0/O, 1/I/L: the code is read from a log and typed by hand.
+  static const String alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
   final String value;
   late final List<int> _normalized;
@@ -36,7 +36,7 @@ class SetupCode {
 
   static String _generate() {
     final random = Random.secure();
-    final chars = List.generate(8, (_) => _alphabet[random.nextInt(_alphabet.length)]).join();
+    final chars = List.generate(8, (_) => alphabet[random.nextInt(alphabet.length)]).join();
     return '${chars.substring(0, 4)}-${chars.substring(4)}';
   }
 }

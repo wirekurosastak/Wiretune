@@ -53,6 +53,14 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
+            <!-- A QR code that connects a phone (Settings → Account & connection on another device): the camera opens
+                 the app with its link, wiretune://connect?server=…, which Flutter hands to the app as a route. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="wiretune" android:host="connect" />
+            </intent-filter>
         </activity>
 
         <!-- The media session: notification, lock screen, Bluetooth and headset buttons, and the library that Android Auto

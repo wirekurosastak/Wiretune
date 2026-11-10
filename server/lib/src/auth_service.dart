@@ -9,6 +9,7 @@ import 'package:bcrypt/bcrypt.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'jwt.dart';
+import 'setup_code.dart';
 
 /// Who a request comes from: the account as the database has it now, and the kind of token it came with.
 class Principal {
@@ -56,6 +57,13 @@ class AuthService {
   final DatabaseManager _db;
   final Jwt _jwt;
   Future<String>? _dummyHash;
+
+  /// How long a sign-in code works ([createSignInCode]). Settable for the tests.
+  Duration signInCodeLifetime = const Duration(minutes: 5);
+
+  /// The sign-in codes not used yet, by code: one per account at most (a new one replaces the account's last), kept in
+  /// memory only, as they last minutes.
+  final Map<String, ({String userId, int version, DateTime expires})> _signInCodes = {};
 
   /// 64 random bytes, Base64: the key tokens are signed with (kept in the server's database).
   static String generateSecret() {
@@ -179,6 +187,32 @@ class AuthService {
     final user = _toUserInfo(row).copyWith(lastLoginAt: now);
     final expires = now.add(rememberMe ? _rememberedLifetime : _sessionLifetime);
     return AuthResponse(_signInToken(user, row['token_version'] as int, expires), user, expires);
+  }
+
+  /// A code that signs another device in to [caller]'s account once, within [signInCodeLifetime]; it replaces the
+  /// account's earlier one, and stops working when the password changes. About 100 random bits: it is read from a QR
+  /// code, never typed, and the route that takes it is rate limited.
+  SignInCode createSignInCode(Principal caller) {
+    final now = DateTime.now().toUtc();
+    _signInCodes.removeWhere((_, entry) => entry.userId == caller.userId || !entry.expires.isAfter(now));
+    final random = Random.secure();
+    final code = List.generate(20, (_) => SetupCode.alphabet[random.nextInt(SetupCode.alphabet.length)]).join();
+    final expires = now.add(signInCodeLifetime);
+    _signInCodes[code] = (userId: caller.userId, version: _tokenVersion(caller.userId) ?? 0, expires: expires);
+    return SignInCode(code, expires);
+  }
+
+  /// Signs in with a code from [createSignInCode], which is used up by it, as a sign-in that stays (a device of the
+  /// account's owner). Null for an unknown, used or expired code, or one made before the password changed.
+  AuthResponse? signInWithCode(String code) {
+    final entry = _signInCodes.remove(code.trim().toUpperCase());
+    final now = DateTime.now().toUtc();
+    if (entry == null || !entry.expires.isAfter(now) || _tokenVersion(entry.userId) != entry.version) return null;
+    _db.connection.execute('UPDATE users SET last_login_at = ? WHERE id = ?', [toDbTime(now), entry.userId]);
+    final user = getUser(entry.userId);
+    if (user == null) return null;
+    final expires = now.add(_rememberedLifetime);
+    return AuthResponse(_signInToken(user, entry.version, expires), user, expires);
   }
 
   /// Creates the first administrator. Null if any account already exists (checked atomically).

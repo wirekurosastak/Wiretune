@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'app_scope.dart';
+import 'connect_link.dart';
 import 'debug/ui_automation_server.dart';
 import 'layouts/phone_layout.dart';
 import 'layouts/wide_layout.dart';
@@ -35,7 +36,7 @@ class WiretuneApp extends StatefulWidget {
   State<WiretuneApp> createState() => _WiretuneAppState();
 }
 
-class _WiretuneAppState extends State<WiretuneApp> {
+class _WiretuneAppState extends State<WiretuneApp> with WidgetsBindingObserver {
   late final AppLifecycleListener _lifecycle;
 
   /// The colour of the cover of the song that plays, which the accent is made of (`Palette.accentOf`): null for none,
@@ -55,6 +56,8 @@ class _WiretuneAppState extends State<WiretuneApp> {
   @override
   void initState() {
     super.initState();
+    // Before the MaterialApp's own: a link from a QR code is this app's to take, not a route for its navigator.
+    WidgetsBinding.instance.addObserver(this);
     _lifecycle = AppLifecycleListener(onResume: () => unawaited(widget.vm.resume()));
     widget.vm.player.addListener(_followCover);
     _followCover();
@@ -62,9 +65,19 @@ class _WiretuneAppState extends State<WiretuneApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.vm.player.removeListener(_followCover);
     _lifecycle.dispose();
     super.dispose();
+  }
+
+  /// A QR code's link opened the app while it ran ([ConnectLink]).
+  @override
+  Future<bool> didPushRouteInformation(RouteInformation routeInformation) async {
+    final link = ConnectLink.parse('${routeInformation.uri}');
+    if (link == null) return false;
+    unawaited(widget.vm.openConnectLink(link));
+    return true;
   }
 
   void _followCover() {

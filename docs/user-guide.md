@@ -6,6 +6,11 @@
 administrator account with the setup code ([server.md](server.md#start-it)); otherwise sign in. A sign-in lasts 24
 hours, or 90 days with *Keep me signed in*.
 
+**Adding a phone:** on a device that is signed in, open *Settings → Account & connection → Connect a phone* and scan
+one of the two QR codes with the phone's camera; it opens Wiretune. *Server only* fills in the address, for someone who
+signs in with their own account. *Sign in as …* signs the phone in to your account: it works once, for 5 minutes, and
+holds no password. A computer connected to the server as `localhost` puts its home network address in the codes.
+
 **With your own files** (computers and Android phones): choose **Continue without a server** if you have none, pick
 your music folder in *Settings → Local folder* and press **Scan**.
 

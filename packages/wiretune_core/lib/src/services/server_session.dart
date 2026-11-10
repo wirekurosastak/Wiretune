@@ -258,6 +258,14 @@ class ServerSession {
     'ErrorWrongCredentials',
   );
 
+  /// Signs in with a one-time code from another device of the account (a QR code), staying signed in. Returns null on
+  /// success, otherwise a user-facing error message.
+  Future<String?> loginWithCode(String code) =>
+      _authenticate(() => _client.loginWithCode(serverUrl, code), true, 'ErrorSignInCodeInvalid');
+
+  /// A one-time code that signs another device in to this account ([loginWithCode]).
+  Future<SignInCode> createSignInCode() => _client.createSignInCode(serverUrl);
+
   /// Creates the first (administrator) account. Returns null on success, otherwise a user-facing error message.
   Future<String?> setupAdmin(String username, String password, [String? setupCode]) =>
       _authenticate(() => _client.setupAdmin(serverUrl, username.trim(), password, setupCode), true, 'SessionRejected');

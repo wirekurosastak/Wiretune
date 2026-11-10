@@ -88,6 +88,7 @@ Response unauthorized(String code) => errorResponse(401, code, switch (code) {
   ErrorCodes.passwordChanged => 'The password was changed since this sign-in.',
   ErrorCodes.accountRemoved => 'The account no longer exists.',
   ErrorCodes.wrongCredentials => 'The user name or the password is wrong.',
+  ErrorCodes.signInCodeInvalid => 'The sign-in code is wrong, used or expired.',
   ErrorCodes.tokenInvalid => 'The token is not valid here.',
   _ => 'Sign in first.',
 }).change(headers: {'www-authenticate': 'Bearer'});

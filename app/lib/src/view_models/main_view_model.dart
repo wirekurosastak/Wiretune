@@ -13,6 +13,7 @@ import 'friends_view_model.dart';
 import 'library_view_models.dart';
 import 'lyrics_view_model.dart';
 import 'player_view_model.dart';
+import '../connect_link.dart';
 import '../update_installer.dart';
 import 'search_view_model.dart';
 import 'settings_view_models.dart';
@@ -698,6 +699,24 @@ class MainViewModel extends ChangeNotifier {
   void continueOffline() => isLoginViewActive = false;
 
   void showLoginScreen() => isLoginViewActive = true;
+
+  /// Counts the links from a QR code that opened the app ([openConnectLink]): the sign-in screen is built anew for each,
+  /// with the address it brought.
+  int connectLinks = 0;
+
+  /// A QR code's link opened the app ([ConnectLink]): the sign-in screen with the [link]'s server in it, connecting; with
+  /// a one-time code, signed in to the account that showed it, which closes the screen.
+  Future<void> openConnectLink(({String server, String? code}) link) async {
+    final server = serverSettings;
+    final same = ServerSession.normalizeServerUrl(link.server)?.toLowerCase() == session.serverUrl.toLowerCase();
+    if (link.code == null && same && session.isLoggedIn) return;
+    server.serverUrl = link.server;
+    connectLinks++;
+    _isLoginViewActive = true;
+    notifyListeners();
+    final code = link.code;
+    await (code == null ? server.connectServer() : server.loginWithCode(code));
+  }
 
   /// Signs out, and removes the downloads: they are copies of the account's server.
   Future<void> logout() async {

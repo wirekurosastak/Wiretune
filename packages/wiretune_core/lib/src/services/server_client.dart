@@ -109,6 +109,16 @@ class ServerClient {
     ),
   );
 
+  /// Signs in with a one-time code another device of the account showed ([createSignInCode]).
+  Future<AuthResponse> loginWithCode(String baseUrl, String code) async => _parse(
+    AuthResponse.fromJson,
+    await _send('POST', baseUrl, '/api/auth/login-with-code', body: {'code': code}, authorize: false),
+  );
+
+  /// A one-time code that signs another device in to this account, for a few minutes.
+  Future<SignInCode> createSignInCode(String baseUrl) async =>
+      _parse(SignInCode.fromJson, await _send('POST', baseUrl, '/api/auth/sign-in-code'));
+
   /// A short-lived token that opens only the audio and cover routes, for use in stream URLs.
   Future<StreamTokenResponse> getStreamToken(String baseUrl) async =>
       _parse(StreamTokenResponse.fromJson, await _send('POST', baseUrl, '/api/auth/stream-token'));

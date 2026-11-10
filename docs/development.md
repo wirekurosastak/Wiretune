@@ -55,6 +55,7 @@ For contributors. Pull request rules and the pre-push checks: [CONTRIBUTING.md](
 | `audio/` | `MediaKitAudioDriver` (libmpv), `TizenAudioDriver`, the media session |
 | `theme/` | Colors |
 | `debug/` | [UI automation](#ui-automation) |
+| `connect_link.dart` | The link in the QR codes that connect a phone, and the address they give |
 | `update_installer.dart` | Installing an update on each platform |
 | `platform.dart` | The [platform channels](#platform-code) |
 

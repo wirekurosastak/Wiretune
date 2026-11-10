@@ -16,6 +16,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 
 import 'src/app.dart';
 import 'src/audio/media_kit_driver.dart';
+import 'src/connect_link.dart';
 import 'src/audio/media_session.dart';
 import 'src/audio/mobile_audio.dart';
 import 'src/audio/tizen_driver.dart';
@@ -147,7 +148,9 @@ Future<void> main() async {
   }
 
   runApp(WiretuneApp(vm: vm));
-  unawaited(vm.start());
+  // Opened by a QR code's link: Android and iOS hand it over as the first route.
+  final link = ConnectLink.parse(PlatformDispatcher.instance.defaultRouteName);
+  unawaited(vm.start().then((_) => link == null ? null : vm.openConnectLink(link)));
   if (UiAutomationServer.isEnabled) unawaited(UiAutomationServer(vm).start());
 }
 

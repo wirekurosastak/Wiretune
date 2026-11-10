@@ -13,6 +13,7 @@ import '../theme/palette.dart';
 import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
 import '../view_models/settings_view_models.dart';
+import '../widgets/connect_phone.dart';
 import '../widgets/devices.dart';
 import '../widgets/dialogs.dart';
 import '../widgets/page_parts.dart';
@@ -680,6 +681,11 @@ class _AccountCardState extends State<_AccountCard> {
                     ),
                     icon: const Icon(Icons.key_rounded, size: 16),
                     label: Text(context.tr('ChangePassword')),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => showConnectPhoneDialog(context),
+                    icon: const Icon(Icons.qr_code_2_rounded, size: 16),
+                    label: Text(context.tr('ConnectPhone')),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => confirmAndSignOut(context),

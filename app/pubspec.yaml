@@ -24,6 +24,8 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   path_provider_tizen: ^2.3.3
+  # The QR codes that connect a phone (Settings → Account & connection).
+  qr_flutter: ^4.1.0
   rxdart: ^0.28.0
   window_manager: ^0.5.2
   wiretune_core:

@@ -292,6 +292,61 @@ void main() {
       );
       expect(ServerLibraryStatus.fromJson(json(await guest.get('/api/library/status'))).lastScanError, isNull);
     });
+
+    test('a sign-in code signs another device in to the account once, while it lasts', () async {
+      final (admin, _) = await setupAdmin(server);
+      final (guest, guestInfo) = await registerGuest(server, admin);
+      Future<SignInCode> newCode(Api account) async {
+        final response = await account.post('/api/auth/sign-in-code');
+        expect(response.statusCode, 200);
+        return SignInCode.fromJson(json(response));
+      }
+
+      Future<http.Response> signIn(String code) => server.client().post('/api/auth/login-with-code', {'code': code});
+
+      // Only a signed-in account makes one, never with a stream token.
+      expect((await server.client().post('/api/auth/sign-in-code')).statusCode, 401);
+      final stream = StreamTokenResponse.fromJson(json(await guest.post('/api/auth/stream-token'))).token;
+      expect((await server.client(stream).post('/api/auth/sign-in-code')).statusCode, 401);
+
+      final issued = await newCode(guest);
+      expect(issued.code, hasLength(20));
+      expect(issued.expiresAt.isAfter(DateTime.now().toUtc().add(const Duration(minutes: 4))), isTrue);
+      final signedIn = await signIn(issued.code.toLowerCase());
+      expect(signedIn.statusCode, 200);
+      final auth = AuthResponse.fromJson(json(signedIn));
+      expect(auth.user.id, guestInfo.id);
+      expect(auth.expiresAt.isAfter(DateTime.now().toUtc().add(const Duration(days: 30))), isTrue, reason: 'stays');
+      expect((await server.client(auth.token).get('/api/auth/me')).statusCode, 200);
+
+      // Once only; a wrong one, an empty one.
+      expect(json(await signIn(issued.code))['code'], ErrorCodes.signInCodeInvalid);
+      expect((await signIn('ABCDEFGHJKMNPQRSTUVW')).statusCode, 401);
+      expect((await signIn(' ')).statusCode, 400);
+
+      // A new code replaces the account's last.
+      final first = await newCode(guest);
+      final second = await newCode(guest);
+      expect((await signIn(first.code)).statusCode, 401);
+      expect((await signIn(second.code)).statusCode, 200);
+    });
+
+    test('a sign-in code stops working when the password changes, and when it runs out', () async {
+      final (admin, _) = await setupAdmin(server);
+      final (guest, _) = await registerGuest(server, admin);
+      Future<SignInCode> newCode(Api account) async =>
+          SignInCode.fromJson(json(await account.post('/api/auth/sign-in-code')));
+      Future<http.Response> signIn(String code) => server.client().post('/api/auth/login-with-code', {'code': code});
+
+      final before = await newCode(guest);
+      expect((await guest.post('/api/auth/change-password', {'newPassword': 'another password'})).statusCode, 200);
+      expect((await signIn(before.code)).statusCode, 401);
+
+      // It runs out.
+      server.server.auth.signInCodeLifetime = Duration.zero;
+      final expired = await newCode(admin);
+      expect((await signIn(expired.code)).statusCode, 401);
+    });
   });
 
   test('the setup code is generated when not configured, and compared leniently', () {
