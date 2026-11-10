@@ -6,10 +6,9 @@
 administrator account with the setup code ([server.md](server.md#start-it)); otherwise sign in. A sign-in lasts 24
 hours, or 90 days with *Keep me signed in*.
 
-**Adding a phone:** on a device that is signed in, open *Settings → Account & connection → Connect a phone* and scan
-one of the two QR codes with the phone's camera; it opens Wiretune. *Server only* fills in the address, for someone who
-signs in with their own account. *Sign in as …* signs the phone in to your account: it works once, for 5 minutes, and
-holds no password. A computer connected to the server as `localhost` puts its home network address in the codes.
+**Adding a phone:** on a signed-in device, open *Settings → Account & connection → Connect a phone* and scan a QR code
+with the phone's camera. *Server only* fills in the address; *Sign in as …* also signs the phone in to your account (it
+works once, for 5 minutes).
 
 **With your own files** (computers and Android phones): choose **Continue without a server** if you have none, pick
 your music folder in *Settings → Local folder* and press **Scan**.
@@ -102,10 +101,9 @@ to this device*. With *Sync downloads* on (the default), downloads follow change
 *Settings → Account & connection → Offline mode* shows only downloads and local music, and stops looking for the
 server.
 
-Apart from downloads, a phone or computer keeps the server tracks it played to their end in its
-[cache](#where-things-are), and plays them from there next time. What played is kept as it streams; only the parts a
-jump skipped are fetched at the end. A track skipped before its end isn't kept. Above 2 GB the tracks played longest ago
-go first. It isn't offline music: offline mode shows downloads only.
+Phones and computers also cache the server tracks played to the end, and play them from the
+[cache](#where-things-are) next time. It holds up to 2 GB; the tracks played longest ago go first. Offline mode shows
+downloads only.
 
 ## Friends
 
@@ -182,7 +180,7 @@ Android Auto shows your albums, artists, playlists and favorites once the phone 
 | Player data: library, settings, sign-in (`wiretune.db`), log (`wiretune.log`), lyrics and artist pictures from the internet | `~/.config/Wiretune` (Linux), `%APPDATA%\Wiretune` (Windows), `~/Library/Application Support/Wiretune` (macOS), the app's private storage (phones, TVs) |
 | Cover cache for server music, up to 300 MB | `ServerCovers` in the system cache folder (`~/.cache/com.wiretune.player` on Linux) |
 | Downloads | `Wiretune` in your music folder (computers, Android), the app's private storage (iOS, Tizen) |
-| Server tracks played whole, up to 2 GB (not on TVs) | `Cache` in the downloads folder (`Music/Wiretune/Cache`), the app's private storage (iOS) |
+| Cached tracks, up to 2 GB (not on TVs) | `Music/Wiretune/Cache`, the app's private storage (iOS) |
 
 The server's data: [server.md](server.md#data-directory).
 
