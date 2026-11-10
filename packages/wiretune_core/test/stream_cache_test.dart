@@ -1,6 +1,7 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -19,9 +20,15 @@ void main() {
   final track = Uint8List.fromList(List.generate(300 * 1024, (i) => Random(i).nextInt(256)));
   var served = 0;
 
+  /// While set, the server sends the first half of its next answer and the rest once this completes.
+  Completer<void>? hold;
+
+  setUpAll(useTempDataDirectory);
+
   setUp(() async {
     folder = Directory.systemTemp.createTempSync('wiretune_stream_cache_');
     served = 0;
+    hold = null;
     // A server that sends the track, or the range asked for, as Wiretune's does.
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
@@ -43,7 +50,17 @@ void main() {
           ..headers.set('content-range', 'bytes $start-$end/${track.length}');
       }
       served += end - start + 1;
-      response.add(track.sublist(start, end + 1));
+      final held = hold;
+      hold = null;
+      if (held == null) {
+        response.add(track.sublist(start, end + 1));
+      } else {
+        final middle = (start + end) ~/ 2;
+        response.add(track.sublist(start, middle));
+        await response.flush();
+        await held.future;
+        response.add(track.sublist(middle, end + 1));
+      }
       await response.close();
     });
     cache = StreamCache(folder.path);
@@ -74,6 +91,47 @@ void main() {
     expect(kept, p.join(folder.path, 't1-v1.flac'), reason: 'an audio file, as Android wants in the music folder');
     expect(File(kept).readAsBytesSync(), track);
     expect(cache.has('t1-v1', 'flac'), isTrue);
+  });
+
+  test('a track kept meanwhile answers from the disk at its relay address, without the server', () async {
+    final relay = cache.sourceFor('t7', 'flac', upstream('t7'));
+    await get(relay);
+    expect(cache.has('t7', 'flac'), isTrue);
+    served = 0;
+
+    // The player still holds the relay's address: a jump in the track, the spectrum decoding it.
+    final whole = await get(relay);
+    expect(whole.statusCode, 200);
+    expect(whole.bodyBytes, track);
+    final piece = await get(relay, 'bytes=1000-1999');
+    expect((piece.statusCode, piece.headers['content-range']), (206, 'bytes 1000-1999/${track.length}'));
+    expect(piece.bodyBytes, track.sublist(1000, 2000));
+    expect((await get(relay, 'bytes=250000-')).bodyBytes, track.sublist(250000));
+    expect(served, 0, reason: 'the server is not asked for a track that is here');
+    expect((await get(relay, 'bytes=${track.length}-')).statusCode, 416);
+
+    // Nothing is left to fill in or to fetch at the track's end.
+    await cache.finish('t7', 'flac');
+    expect(served, 0);
+    expect([for (final f in folder.listSync()) p.basename(f.path)]..sort(), ['.nomedia', 't7.flac']);
+  });
+
+  test('two streams of a track ending one after the other keep it once', () async {
+    final relay = cache.sourceFor('t8', 'flac', upstream('t8'));
+    // The player's and the spectrum's: the first is still half way when the second has brought the whole track.
+    final release = hold = Completer<void>();
+    final slow = get(relay);
+    await until(() => hold == null);
+    await get(relay);
+    expect(cache.has('t8', 'flac'), isTrue);
+
+    final log = File(WiretuneLog.logPath!);
+    final before = log.lengthSync();
+    release.complete();
+    expect((await slow).bodyBytes, track);
+    await Future<void>.delayed(const Duration(milliseconds: 50)); // the relay ends its side of it
+    expect(log.readAsStringSync().substring(before), isNot(contains("couldn't be kept")));
+    expect(File(p.join(folder.path, 't8.flac')).readAsBytesSync(), track);
   });
 
   test("the pieces a player's seeks ask for add up to the track", () async {

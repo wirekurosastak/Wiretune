@@ -95,7 +95,7 @@ class StreamCache {
           offset += chunk.length;
         }
       }
-      if (partial.isComplete && identical(_partials[name], partial)) _keep(name, partial);
+      if (partial.isComplete) _keep(name, partial);
     } catch (e) {
       WiretuneLog.info('StreamCache', "The rest of a track couldn't be fetched: ${e.runtimeType}");
     }
@@ -155,6 +155,8 @@ class StreamCache {
       return;
     }
     final name = segments[1];
+    final kept = File(p.join(directory, name));
+    if (kept.existsSync()) return _serveKept(request, kept);
     final forward = http.Request(request.method, Uri.parse(upstream));
     final range = request.headers.value(HttpHeaders.rangeHeader);
     if (range != null) forward.headers[HttpHeaders.rangeHeader] = range;
@@ -203,6 +205,40 @@ class StreamCache {
     }
   }
 
+  /// A track kept since the player was given the relay's address for it (a jump in it, the spectrum decoding it): the
+  /// file answers, all of it or the range asked for, and the server isn't asked again.
+  Future<void> _serveKept(HttpRequest request, File file) async {
+    final response = request.response;
+    try {
+      final length = file.lengthSync();
+      final range = RegExp(r'^bytes=(\d+)-(\d*)$').firstMatch(request.headers.value(HttpHeaders.rangeHeader) ?? '');
+      final start = range == null ? 0 : int.parse(range[1]!);
+      final end = range == null || range[2]!.isEmpty ? length - 1 : min(int.parse(range[2]!), length - 1);
+      if (start > end) {
+        response.statusCode = HttpStatus.requestedRangeNotSatisfiable;
+        response.headers.set(HttpHeaders.contentRangeHeader, 'bytes */$length');
+        await response.close();
+        return;
+      }
+      response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+      response.contentLength = end - start + 1;
+      if (range != null) {
+        response.statusCode = HttpStatus.partialContent;
+        response.headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-$end/$length');
+      }
+      if (request.method == 'GET') await response.addStream(file.openRead(start, end + 1));
+      await response.close();
+    } catch (e) {
+      // The player went on, or the file went (the cache trimmed): the player asks again for what it wants.
+      WiretuneLog.info('StreamCache', 'A stream from the cache ended early: ${e.runtimeType}');
+      try {
+        await response.close();
+      } catch (_) {
+        // Already closed by the player.
+      }
+    }
+  }
+
   /// Where the server's answer starts in the file and how long the whole file is; null when it doesn't say.
   static ({int start, int total})? _span(http.StreamedResponse answer) {
     if (answer.statusCode == HttpStatus.ok) {
@@ -229,8 +265,10 @@ class StreamCache {
     }
   }
 
-  /// Every byte of the track came by: it is kept, and the oldest go while the folder is too big.
+  /// Every byte of the track came by: it is kept, and the oldest go while the folder is too big. Once: another stream
+  /// of the same track that ends after it finds it kept.
   void _keep(String name, _Partial partial) {
+    if (!identical(_partials[name], partial)) return;
     _partials.remove(name);
     partial.close();
     try {
