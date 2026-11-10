@@ -37,7 +37,7 @@ abstract final class MobileAudio {
       try {
         await _power.invokeMethod<void>('setPlaying', {
           'playing': playing,
-          'streaming': playing && track != null && engine.streams(track),
+          'streaming': playing && track != null && engine.fetches(track),
         });
       } on MissingPluginException {
         // Not registered (tests): nothing to hold.

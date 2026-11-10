@@ -1,0 +1,258 @@
+// Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
+// SPDX-License-Identifier: AGPL-3.0-only
+
+import 'dart:async';
+import 'dart:io';
+import 'dart:math';
+
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
+
+import 'wiretune_log.dart';
+
+/// Keeps the server tracks that were streamed, so that playing one again reads it from the disk instead of the server.
+///
+/// The player streams a track through a relay on this device ([sourceFor] gives its address), which passes the server's
+/// answer on and writes the same bytes into the track's file as they go by: nothing is fetched twice, and a track
+/// skipped after a few seconds costs nothing extra. Once every byte of a track has come by (in one go, or in the pieces
+/// the player's seeks asked for), the file is kept, and the next [sourceFor] gives its path. The oldest files go
+/// once the folder is over [limitBytes]. Pieces of a track not complete yet are kept only until the app closes.
+class StreamCache {
+  StreamCache(this.directory, {this.limitBytes = defaultLimitBytes, http.Client? client})
+    : _client = client ?? http.Client();
+
+  static const int defaultLimitBytes = 2 * 1024 * 1024 * 1024;
+
+  final String directory;
+  final int limitBytes;
+  final http.Client _client;
+
+  HttpServer? _server;
+
+  /// In the relay's addresses, so that another program on this device can't use it to reach the server.
+  final String _secret = List.generate(
+    16,
+    (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+
+  /// Where each track the relay serves comes from on the server, by its key.
+  final Map<String, String> _upstreams = {};
+
+  /// The tracks being filled in, by key.
+  final Map<String, _Partial> _partials = {};
+
+  /// Opens the relay, and clears what an earlier run left unfinished.
+  Future<void> start() async {
+    try {
+      final folder = Directory(directory)..createSync(recursive: true);
+      for (final entry in folder.listSync().whereType<File>()) {
+        if (entry.path.endsWith(_partSuffix)) entry.deleteSync();
+      }
+      _trim();
+      final server = _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) => unawaited(_serve(request)));
+    } catch (e, s) {
+      // Without it, tracks stream straight from the server, as before.
+      WiretuneLog.error('StreamCache', "The cache in '$directory' can't be used", e, s);
+    }
+  }
+
+  Future<void> close() async {
+    await _server?.close(force: true);
+    _server = null;
+    for (final partial in _partials.values) {
+      partial.close();
+    }
+    _partials.clear();
+    _client.close();
+  }
+
+  static const String _partSuffix = '.part';
+
+  /// What the player plays for the server track [key] (which names the track's file and the quality asked of it) at
+  /// [upstream]: the kept file, else the relay's address for it; [upstream] itself while the relay isn't open.
+  String sourceFor(String key, String upstream) {
+    final name = _fileName(key);
+    final file = File(p.join(directory, name));
+    if (file.existsSync()) {
+      try {
+        file.setLastModifiedSync(DateTime.now()); // the last to go
+      } catch (_) {
+        // Only its place in the order of removal: the file still plays.
+      }
+      return file.path;
+    }
+    final server = _server;
+    if (server == null) return upstream;
+    _upstreams[name] = upstream;
+    return 'http://127.0.0.1:${server.port}/$_secret/$name';
+  }
+
+  /// Whether the server track [key] is kept.
+  bool has(String key) => File(p.join(directory, _fileName(key))).existsSync();
+
+  /// Letters, digits, `-` and `_` only: a file name, and a path segment of the relay's address.
+  static String _fileName(String key) => key.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+
+  Future<void> _serve(HttpRequest request) async {
+    final response = request.response;
+    final segments = request.uri.pathSegments;
+    final upstream = segments.length == 2 && segments[0] == _secret ? _upstreams[segments[1]] : null;
+    if (upstream == null || (request.method != 'GET' && request.method != 'HEAD')) {
+      response.statusCode = HttpStatus.notFound;
+      await response.close();
+      return;
+    }
+    final name = segments[1];
+    final forward = http.Request(request.method, Uri.parse(upstream));
+    final range = request.headers.value(HttpHeaders.rangeHeader);
+    if (range != null) forward.headers[HttpHeaders.rangeHeader] = range;
+    http.StreamedResponse answer;
+    try {
+      answer = await _client.send(forward);
+    } catch (e) {
+      // The player reports it as the server being out of reach, as it would without the cache.
+      WiretuneLog.warn('StreamCache', "The server can't be reached for a stream: ${e.runtimeType}");
+      response.statusCode = HttpStatus.badGateway;
+      await response.close();
+      return;
+    }
+    try {
+      response.statusCode = answer.statusCode;
+      for (final header in const [
+        HttpHeaders.contentTypeHeader,
+        HttpHeaders.contentLengthHeader,
+        HttpHeaders.contentRangeHeader,
+        HttpHeaders.acceptRangesHeader,
+      ]) {
+        final value = answer.headers[header];
+        if (value != null) response.headers.set(header, value);
+      }
+      final span = request.method == 'GET' ? _span(answer) : null;
+      final partial = span == null ? null : _partial(name, span.total);
+      var offset = span?.start ?? 0;
+      await response.addStream(
+        answer.stream.map((chunk) {
+          partial?.write(offset, chunk);
+          offset += chunk.length;
+          return chunk;
+        }),
+      );
+      await response.close();
+      if (partial != null && partial.isComplete) _keep(name, partial);
+    } catch (e) {
+      // The player went on (a skip, a seek, the app closing) or the server went away: what came by stays in the
+      // track's pieces, and the player asks again for what it wants.
+      WiretuneLog.info('StreamCache', 'A stream through the cache ended early: ${e.runtimeType}');
+      try {
+        await response.close();
+      } catch (_) {
+        // Already closed by the player.
+      }
+    }
+  }
+
+  /// Where the server's answer starts in the file and how long the whole file is; null when it doesn't say.
+  static ({int start, int total})? _span(http.StreamedResponse answer) {
+    if (answer.statusCode == HttpStatus.ok) {
+      final length = answer.contentLength;
+      return length == null || length <= 0 ? null : (start: 0, total: length);
+    }
+    if (answer.statusCode == HttpStatus.partialContent) {
+      final match = RegExp(r'^bytes (\d+)-\d+/(\d+)$').firstMatch(answer.headers[HttpHeaders.contentRangeHeader] ?? '');
+      if (match == null) return null;
+      return (start: int.parse(match[1]!), total: int.parse(match[2]!));
+    }
+    return null;
+  }
+
+  _Partial? _partial(String name, int total) {
+    final existing = _partials[name];
+    if (existing != null && existing.total == total) return existing;
+    existing?.close();
+    try {
+      return _partials[name] = _Partial(File(p.join(directory, '$name$_partSuffix')), total);
+    } on FileSystemException catch (e) {
+      WiretuneLog.warn('StreamCache', "A track can't be kept: ${e.message}");
+      return null;
+    }
+  }
+
+  /// Every byte of the track came by: it is kept, and the oldest go while the folder is too big.
+  void _keep(String name, _Partial partial) {
+    _partials.remove(name);
+    partial.close();
+    try {
+      partial.file.renameSync(p.join(directory, name));
+      _trim(keep: name);
+    } on FileSystemException catch (e) {
+      WiretuneLog.warn('StreamCache', "A streamed track couldn't be kept: ${e.message}");
+    }
+  }
+
+  /// Removes the files used longest ago until the kept ones fit in [limitBytes]; never [keep].
+  void _trim({String? keep}) {
+    final files = [
+      for (final entry in Directory(directory).listSync().whereType<File>())
+        if (!entry.path.endsWith(_partSuffix)) (file: entry, stat: entry.statSync()),
+    ]..sort((a, b) => a.stat.modified.compareTo(b.stat.modified));
+    var size = files.fold<int>(0, (sum, entry) => sum + entry.stat.size);
+    for (final entry in files) {
+      if (size <= limitBytes) break;
+      if (p.basename(entry.file.path) == keep) continue;
+      try {
+        entry.file.deleteSync();
+        size -= entry.stat.size;
+      } on FileSystemException catch (e) {
+        WiretuneLog.warn('StreamCache', "An old cached track couldn't be removed: ${e.message}");
+      }
+    }
+  }
+}
+
+/// A track being filled in: its file, written where each piece belongs, and which parts of it are there.
+class _Partial {
+  _Partial(this.file, this.total) : _raf = file.openSync(mode: FileMode.write);
+
+  final File file;
+  final int total;
+  final RandomAccessFile _raf;
+
+  /// The parts written, as [start, end) pairs, sorted and apart.
+  final List<(int, int)> _have = [];
+
+  /// Kept or given up: another stream of the same track still going by writes nothing more.
+  bool _closed = false;
+
+  bool get isComplete => _have.length == 1 && _have.first == (0, total);
+
+  void write(int offset, List<int> bytes) {
+    if (_closed || bytes.isEmpty || offset + bytes.length > total) return;
+    _raf
+      ..setPositionSync(offset)
+      ..writeFromSync(bytes);
+    var (start, end) = (offset, offset + bytes.length);
+    final kept = <(int, int)>[];
+    for (final (s, e) in _have) {
+      if (e < start || s > end) {
+        kept.add((s, e));
+      } else {
+        start = min(start, s);
+        end = max(end, e);
+      }
+    }
+    _have
+      ..clear()
+      ..addAll([...kept, (start, end)]..sort((a, b) => a.$1.compareTo(b.$1)));
+  }
+
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    try {
+      _raf.closeSync();
+    } catch (_) {
+      // Closed already.
+    }
+  }
+}

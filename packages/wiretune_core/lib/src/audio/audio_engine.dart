@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import '../localization/localizer.dart';
 import '../models/library_models.dart';
+import '../services/stream_cache.dart';
 import '../services/wiretune_log.dart';
 import '../util/event.dart';
 import '../util/text.dart';
@@ -51,6 +52,7 @@ class WiretuneAudioEngine {
   String? _streamToken;
   Future<String?> Function()? _streamTokenProvider;
   String? Function(Track track)? _offlineCopy;
+  StreamCache? _streamCache;
   bool _disposed = false;
 
   // Counts the requests to play or stop: a track whose start waited for a stream token is not started once another
@@ -213,6 +215,13 @@ class WiretuneAudioEngine {
 
   /// Supplies the path of a downloaded copy of a server track: a track that has one plays from it, without the server.
   void setOfflineCopyProvider(String? Function(Track track)? provider) => _offlineCopy = provider;
+
+  /// Server tracks stream through [cache], which keeps them for the next time.
+  void setStreamCache(StreamCache? cache) => _streamCache = cache;
+
+  /// Whether [track] comes over the network now: it [streams], and the [StreamCache] hasn't kept it yet.
+  bool fetches(Track track) =>
+      streams(track) && !(_streamCache?.has(cacheKey(track, isConverted(track) ? _streamingQuality : null)) ?? false);
 
   /// Whether [track] plays over the network: a server track without a downloaded copy.
   bool streams(Track track) => !track.isLocal && _offlineCopy?.call(track) == null;
@@ -492,18 +501,28 @@ class WiretuneAudioEngine {
   }
 
   /// The file path of a local track; for a server track the downloaded copy, or else the stream URL with the stream
-  /// token appended.
+  /// token appended (through the [StreamCache], which gives its kept copy once it has one).
   String? _resolveSource(Track track) {
     final url = track.streamUrl;
     if (url == null || url.isEmpty) return track.filePath.isEmpty ? null : track.filePath;
     final copy = _offlineCopy?.call(track);
     if (copy != null) return copy;
     final token = _streamToken;
-    final convert = isConverted(track) ? 'format=opus&bitrate=${_streamingQuality.kbps}' : null;
+    final converted = isConverted(track);
+    final convert = converted ? 'format=opus&bitrate=${_streamingQuality.kbps}' : null;
     final query = [?convert, if (token != null) 'token=${Uri.encodeQueryComponent(token)}'];
-    if (query.isEmpty) return url;
-    return '$url${url.contains('?') ? '&' : '?'}${query.join('&')}';
+    final upstream = query.isEmpty ? url : '$url${url.contains('?') ? '&' : '?'}${query.join('&')}';
+    return _streamCache?.sourceFor(cacheKey(track, converted ? _streamingQuality : null), upstream) ?? upstream;
   }
+
+  /// What a server track is kept as in the [StreamCache]: the track, its file's size and time (a changed file is
+  /// another), and the quality it was converted to, if it was.
+  static String cacheKey(Track track, StreamingQuality? converted) => [
+    track.id,
+    track.fileSizeBytes,
+    track.fileModifiedAt?.millisecondsSinceEpoch ?? 0,
+    if (converted != null) 'opus${converted.kbps}',
+  ].join('-');
 
   Future<void> dispose() async {
     if (_disposed) return;

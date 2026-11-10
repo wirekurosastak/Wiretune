@@ -110,6 +110,13 @@ Future<void> main() async {
   unawaited(platform.excludeFromBackup(vm.downloadService.directory));
   unawaited(platform.excludeFromBackup(vm.downloadService.workDirectory));
 
+  // Server tracks played once are kept in Cache, next to the data, for the next time; not on a TV, short of space.
+  if (!platform.isTv) {
+    final cache = StreamCache(p.join(AppPaths.getDataDirectory(), 'Cache'));
+    vm.audioEngine.setStreamCache(cache);
+    unawaited(platform.excludeFromBackup(cache.directory).then((_) => cache.start()));
+  }
+
   // A failed command (locked database, full disk, ...) must not take the whole player down: log it with its stack
   // trace and show it as an error notice instead, over either layout (a phone's player line is gone without a track).
   // The notice is shown after the frame that is being built, never in the middle of it.

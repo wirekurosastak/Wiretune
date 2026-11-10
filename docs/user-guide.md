@@ -102,6 +102,10 @@ to this device*. With *Sync downloads* on (the default), downloads follow change
 *Settings → Account & connection → Offline mode* shows only downloads and local music, and stops looking for the
 server.
 
+Apart from downloads, a phone or computer keeps the server tracks it played whole in its [cache](#where-things-are),
+and plays them from there next time. Nothing is fetched twice for it, and a skipped track isn't kept. Above 2 GB the
+tracks played longest ago go first. It isn't offline music: offline mode shows downloads only.
+
 ## Friends
 
 Everyone else with an account on your server is a friend.
@@ -177,6 +181,7 @@ Android Auto shows your albums, artists, playlists and favorites once the phone 
 | Player data: library, settings, sign-in (`wiretune.db`), log (`wiretune.log`), lyrics and artist pictures from the internet | `~/.config/Wiretune` (Linux), `%APPDATA%\Wiretune` (Windows), `~/Library/Application Support/Wiretune` (macOS), the app's private storage (phones, TVs) |
 | Cover cache for server music, up to 300 MB | `ServerCovers` in the system cache folder (`~/.cache/com.wiretune.player` on Linux) |
 | Downloads | `Wiretune` in your music folder (computers, Android), the app's private storage (iOS, Tizen) |
+| Server tracks played whole, up to 2 GB (not on TVs) | `Cache` in the player data folder |
 
 The server's data: [server.md](server.md#data-directory).
 
