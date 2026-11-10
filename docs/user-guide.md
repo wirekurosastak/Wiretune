@@ -39,8 +39,7 @@ Your files are never changed.
 - **Credits** (a track's *⋮ → Credits*): the composer from the tags and, with a server, who wrote, produced, played and
   mixed it, from MusicBrainz.
 - **Related music:** an album's page ends with *More by* its artist and *Similar albums*, an artist's with *Related
-  artists*: artists credited together first, then the same genre and era. An artist's page starts with what you
-  played most of theirs.
+  artists*: artists credited together first, then the same genre and era.
 - **Genre filter:** Albums, Artists, Tracks and Favorites narrow to a genre (the genre button on a computer, the sort
   sheet on a phone).
 - **Sorting** lasts until the app closes. Press the active sort again to reverse it. *Plays* puts what you played

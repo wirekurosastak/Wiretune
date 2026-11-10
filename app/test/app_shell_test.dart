@@ -4459,47 +4459,52 @@ void main() {
     expect(find.text(Localizer.get('PlaylistNew')), findsOneWidget, reason: "the playlist dialog's way to a new one");
   });
 
-  testWidgets("an album's label lists the label's albums; an artist's page starts with what was played most", (
-    tester,
-  ) async {
-    Track labelled(String id, String title, String album, String label) => Track(
-      id: id,
-      title: title,
-      artist: 'Miles Davis',
-      album: album,
-      filePath: '/music/$id.flac',
-      duration: const Duration(minutes: 4),
-      details: TrackDetails(label: label),
-    );
-    final vm = await pumpApp(tester, const Size(400, 860), () async {
-      final library = createLibrary([
-        labelled('1', 'So What', 'Kind of Blue', 'Columbia'),
-        labelled('2', 'Milestones', 'Milestones', 'Columbia'),
-        labelled('3', 'Tutu', 'Tutu', 'Warner'),
-      ]);
-      library.initialize();
-      library.recordPlay('3');
-      return createMainViewModel(library);
-    });
-    vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
-    await settle(tester);
-    await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -600));
-    await settle(tester);
-    await tester.tap(find.text('Columbia'));
-    await settle(tester);
-    final sheet = find.byType(BottomSheet);
-    expect(find.descendant(of: sheet, matching: find.text('Milestones')), findsOneWidget);
-    expect(find.descendant(of: sheet, matching: find.text('Tutu')), findsNothing);
-    await tester.tap(find.descendant(of: sheet, matching: find.text('Milestones')));
-    await settle(tester);
-    expect(vm.albums.selectedAlbum?.title, 'Milestones');
+  testWidgets(
+    "an album's label lists the label's albums; an artist's page starts with its albums, however much was played",
+    (tester) async {
+      Track labelled(String id, String title, String album, String label) => Track(
+        id: id,
+        title: title,
+        artist: 'Miles Davis',
+        album: album,
+        filePath: '/music/$id.flac',
+        duration: const Duration(minutes: 4),
+        details: TrackDetails(label: label),
+      );
+      final vm = await pumpApp(tester, const Size(400, 860), () async {
+        final library = createLibrary([
+          labelled('1', 'So What', 'Kind of Blue', 'Columbia'),
+          labelled('2', 'Milestones', 'Milestones', 'Columbia'),
+          labelled('3', 'Tutu', 'Tutu', 'Warner'),
+        ]);
+        library.initialize();
+        library.recordPlay('3');
+        return createMainViewModel(library);
+      });
+      vm.openAlbum(vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue'));
+      await settle(tester);
+      await tester.drag(find.byType(CustomScrollView).first, const Offset(0, -600));
+      await settle(tester);
+      await tester.tap(find.text('Columbia'));
+      await settle(tester);
+      final sheet = find.byType(BottomSheet);
+      expect(find.descendant(of: sheet, matching: find.text('Milestones')), findsOneWidget);
+      expect(find.descendant(of: sheet, matching: find.text('Tutu')), findsNothing);
+      await tester.tap(find.descendant(of: sheet, matching: find.text('Milestones')));
+      await settle(tester);
+      expect(vm.albums.selectedAlbum?.title, 'Milestones');
 
-    vm.openArtistByName('Miles Davis');
-    await settle(tester);
-    final most = find.text(Localizer.get('LabelYourMostPlayed'));
-    expect(most, findsOneWidget);
-    expect(tester.getTopLeft(find.text('Tutu').first).dy, greaterThan(tester.getTopLeft(most).dy));
-  });
+      vm.openArtistByName('Miles Davis');
+      await settle(tester);
+      final albums = find.text(Localizer.get('LabelAlbums'));
+      expect(albums, findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text(Localizer.get('LabelAllTracks'))).dy,
+        greaterThan(tester.getTopLeft(albums).dy),
+        reason: 'the albums right under the header, the played track only in All tracks',
+      );
+    },
+  );
 
   testWidgets("a phone's long list has a thumb while it scrolls, which takes it along and names where it is", (
     tester,

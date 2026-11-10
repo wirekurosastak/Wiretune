@@ -1170,12 +1170,6 @@ class ArtistDetail extends StatelessWidget {
     final narrow = DetailHeader.isNarrow(context);
     final albumTracks = [for (final album in albums) ...album.tracks];
     final menu = ListMenu.artist(artist, onPlay: artists.playArtist);
-    // The artist's tracks this account played most, as Spotify puts its popular ones first: from its own plays.
-    final mostPlayed =
-        (artist.tracks.where((t) => vm.library.playCount(t.id) > 0).toList()
-              ..sort((a, b) => vm.library.playCount(b.id).compareTo(vm.library.playCount(a.id))))
-            .take(5)
-            .toList();
     return PinnedTitleBar(
       title: artist.name,
       onBack: artists.closeArtistDetail,
@@ -1216,29 +1210,11 @@ class ArtistDetail extends StatelessWidget {
               ],
             ),
           ),
-          if (mostPlayed.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
-                child: SectionLabel(context.tr('LabelYourMostPlayed'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 8)),
-              ),
-            ),
-            TrackSliver(
-              tracks: mostPlayed,
-              kind: TrackTableKind.artist,
-              columnHeaders: false,
-              playingFrom: () => artist.name,
-              playingSource: artist,
-            ),
-          ],
           if (albums.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 26),
-                child: SectionLabel(
-                  context.tr('LabelAlbums'),
-                  padding: EdgeInsets.fromLTRB(4, mostPlayed.isEmpty ? 4 : 24, 4, 10),
-                ),
+                child: SectionLabel(context.tr('LabelAlbums'), padding: const EdgeInsets.fromLTRB(4, 4, 4, 10)),
               ),
             ),
             AlbumsSliver(albums: albums, onOpen: vm.openAlbum, onPlay: vm.albums.playAlbum, withArtist: false),
