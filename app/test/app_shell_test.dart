@@ -4532,11 +4532,29 @@ void main() {
     );
     final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
     final gesture = await tester.startGesture(tester.getCenter(thumb));
-    await gesture.moveBy(const Offset(0, 40));
+    final grabbed = tester.getTopLeft(thumb).dy;
+    // It follows the finger, step by step, rather than running ahead of it.
+    for (var step = 1; step <= 4; step++) {
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump();
+      expect(tester.getTopLeft(thumb).dy, moreOrLessEquals(grabbed + 20.0 * step, epsilon: 1), reason: 'step $step');
+    }
     await gesture.moveBy(const Offset(0, 400));
     await tester.pump();
     expect(scroll.pixels, greaterThan(scroll.maxScrollExtent * 0.5));
     expect(find.text('T'), findsOneWidget, reason: "the bubble: the titles' letter there");
+    // At either end the bubble stays whole inside the thumb's area (whose edge the thumb is at then), rather than cut
+    // off there.
+    // The circle: the letter's box and the 10 px around it.
+    Rect bubble() => tester
+        .getRect(find.descendant(of: find.byType(FastScroller), matching: find.byType(FittedBox)).first)
+        .inflate(10);
+    await gesture.moveBy(const Offset(0, 2000));
+    await tester.pump();
+    expect(bubble().bottom, lessThanOrEqualTo(tester.getRect(thumb).bottom), reason: 'at the bottom');
+    await gesture.moveBy(const Offset(0, -4000));
+    await tester.pump();
+    expect(bubble().top, greaterThanOrEqualTo(tester.getRect(thumb).top), reason: 'at the top');
     await gesture.up();
     await tester.pump(const Duration(seconds: 2));
     await tester.pump(const Duration(milliseconds: 300));

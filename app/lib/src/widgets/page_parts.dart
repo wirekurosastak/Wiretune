@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -1983,10 +1984,20 @@ class _FastScrollerState extends State<FastScroller> {
     });
   }
 
-  void _drag(double y, double track) {
+  /// Where the thumb's top was when the finger took it, and where the finger was then (on the screen).
+  double _grabTop = 0, _grabY = 0;
+
+  void _grab(double top, double fingerY) {
+    _grabTop = top;
+    _grabY = fingerY;
+  }
+
+  /// The finger is at [fingerY] on the screen: the thumb follows it 1:1 from where it was taken, along [track].
+  void _drag(double fingerY, double track) {
     final position = _position;
     if (position == null || !position.hasContentDimensions) return;
-    final fraction = ((y - _thumbHeight / 2) / math.max(1, track - _thumbHeight)).clamp(0.0, 1.0);
+    final top = _grabTop + fingerY - _grabY;
+    final fraction = (top / math.max(1, track - _thumbHeight)).clamp(0.0, 1.0);
     position.jumpTo(fraction * position.maxScrollExtent);
     final text = widget.label(fraction);
     if (text != _bubbleText.value && _bubbleText.value != null) unawaited(HapticFeedback.selectionClick());
@@ -2035,8 +2046,13 @@ class _FastScrollerState extends State<FastScroller> {
                               height: _thumbHeight,
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onVerticalDragStart: (details) => _drag(y + details.localPosition.dy, box.maxHeight),
-                                onVerticalDragUpdate: (details) => _drag(y + details.localPosition.dy, box.maxHeight),
+                                // From where the finger came down, so the thumb keeps under it from the first move.
+                                dragStartBehavior: DragStartBehavior.down,
+                                onVerticalDragStart: (details) {
+                                  _grab(y, details.globalPosition.dy);
+                                  _drag(details.globalPosition.dy, box.maxHeight);
+                                },
+                                onVerticalDragUpdate: (details) => _drag(details.globalPosition.dy, box.maxHeight),
                                 onVerticalDragEnd: (_) => _release(),
                                 onVerticalDragCancel: _release,
                                 child: Align(
@@ -2062,7 +2078,11 @@ class _FastScrollerState extends State<FastScroller> {
                                   ? const SizedBox.shrink()
                                   : Positioned(
                                       right: _touchWidth + 8,
-                                      top: y + _thumbHeight / 2 - _bubble / 2,
+                                      // Beside the thumb, but kept inside the area at the ends, where it would be cut.
+                                      top: (y + _thumbHeight / 2 - _bubble / 2).clamp(
+                                        0.0,
+                                        math.max(0.0, box.maxHeight - _bubble),
+                                      ),
                                       width: _bubble,
                                       height: _bubble,
                                       child: DecoratedBox(
