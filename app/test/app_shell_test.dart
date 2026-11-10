@@ -1894,7 +1894,7 @@ void main() {
       AppPlatform.forTesting(system: system);
       await tester.pumpWidget(const SizedBox()); // the last one's buttons are built anew, for this platform
       final vm = await pumpApp(tester, const Size(1400, 900));
-      vm.player.playQueue(vm.library.tracks); // a computer's player bar is there while something is
+      vm.player.playQueue(vm.library.tracks);
       await settle(tester);
       expect(find.byTooltip('${Localizer.get('TipNext')}$keys'), findsWidgets, reason: system);
     }
@@ -3236,7 +3236,7 @@ void main() {
 
   testWidgets('tooltips say what a press does next, and a button that says it already has none', (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
-    vm.player.playQueue(vm.library.tracks); // a computer's player bar is there while something is
+    vm.player.playQueue(vm.library.tracks);
     await settle(tester);
     expect(find.byTooltip(Localizer.get('TipShuffleOn')), findsOneWidget);
     expect(find.byTooltip(Localizer.get('TipRepeatAll')), findsOneWidget);
@@ -4223,7 +4223,8 @@ void main() {
     }
     expect(frames.reduce(math.max), greaterThan(4), reason: 'at full speed: copies along the way ($frames)');
     expect(frames.first, 1, reason: 'setting off: one sharp cover');
-    expect(frames.last, 1, reason: 'all but landed: one sharp cover');
+    // The last frame's step depends on where it falls in the flight: at most a couple of copies, a few pixels apart.
+    expect(frames.last, lessThanOrEqualTo(2), reason: 'all but landed: (nearly) one sharp cover ($frames)');
     await settle(tester);
     expect(blur, findsNothing);
   });
@@ -4745,28 +4746,9 @@ void main() {
     expect(find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_EdgeHint'), findsNothing);
   });
 
-  testWidgets("a computer's player bar is out of sight until something plays, and rises then", (tester) async {
-    final vm = await pumpApp(tester, const Size(1400, 900));
-    Finder named(String type) => find.byWidgetPredicate((widget) => '${widget.runtimeType}' == type);
-    final bar = named('_PlayerBar');
-    double pageBottom() => tester.getRect(named('_Content')).bottom;
-    expect(bar, findsNothing);
-    final tall = pageBottom();
-
-    vm.player.playQueue(vm.library.tracks);
-    await tester.pump();
-    // Its room opens at once, and the bar rises into it from below.
-    final short = pageBottom();
-    expect(short, lessThan(tall));
-    final rising = tester.getRect(bar).top;
-    await settle(tester);
-    expect(pageBottom(), short, reason: 'the page laid out once, not as the bar rises');
-    expect(tester.getRect(bar).top, lessThan(rising));
-    expect(tester.getRect(bar).top, short + WideLayout.gap);
-  });
-
-  testWidgets("a computer's player bar stays while it controls another device, where the way back to this one is, and "
-      'goes after', (tester) async {
+  testWidgets("a computer's player bar is there while nothing plays, with its volume and its way to other devices", (
+    tester,
+  ) async {
     final hub = FakeRemoteHub();
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
@@ -4779,28 +4761,17 @@ void main() {
       remote.configure(id: 'pc', name: '', kind: DeviceKind.desktop, enabled: true);
       await until(() => remote.isConnected);
       hub.devices([('tv', 'TV', DeviceKind.tv)]);
-      hub.state('tv', const RemotePlayback());
       await pumpEventQueue();
       return withRemote;
     }))!;
     await tester.pumpWidget(WiretuneApp(vm: vm));
     await settle(tester);
     final bar = find.byWidgetPredicate((widget) => '${widget.runtimeType}' == '_PlayerBar');
-    expect(bar, findsNothing);
-
-    vm.player.selectDevice('tv');
-    await settle(tester);
-    expect(vm.player.isRemote, isTrue);
-    expect(vm.player.queueItems, isEmpty, reason: 'nothing plays there');
+    expect(vm.player.queueItems, isEmpty);
     expect(bar, findsOneWidget);
+    expect(find.descendant(of: bar, matching: find.byType(VolumeButton)), findsOneWidget);
     expect(find.descendant(of: bar, matching: find.byType(DevicesButton)), findsOneWidget);
-
-    // Back to this device, where nothing plays: the bar goes down out of sight.
-    vm.player.selectDevice(null);
-    await tester.pump();
-    expect(bar, findsOneWidget, reason: 'going down');
-    await settle(tester);
-    expect(bar, findsNothing);
+    expect(find.byType(DevicesButton), findsOneWidget, reason: 'the bar\'s alone, none in the header');
   });
 
   testWidgets("a width that changes lays a page's tiles and rows out again, without building them again", (

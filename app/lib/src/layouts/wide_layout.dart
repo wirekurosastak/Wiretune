@@ -23,7 +23,6 @@ import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 import '../view_models/app_section.dart';
 import '../view_models/main_view_model.dart';
-import '../view_models/player_view_model.dart';
 import '../widgets/ambient.dart';
 import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
@@ -77,7 +76,8 @@ class WideLayout extends StatelessWidget {
                       margin: EdgeInsets.fromLTRB(WideLayout.gap, 0, WideLayout.gap, WideLayout.gap),
                     ),
                     Expanded(child: _Body(vm: vm)),
-                    const _RisingPlayerBar(),
+                    const SizedBox(height: gap),
+                    const TvFocusArea(area: TvArea.player, child: _PlayerBar()),
                     const _Footer(),
                   ],
                 ),
@@ -391,88 +391,6 @@ class _PinButtonState extends State<_PinButton> {
   }
 }
 
-/// The player bar under the page. On a computer it is out of sight while nothing plays, the queue is empty and no other
-/// device is being controlled (whose way back to this one is in the bar): when a song starts, its room opens at once
-/// and the bar rises into it, so the page is laid out again once, not at every frame.
-class _RisingPlayerBar extends StatefulWidget {
-  const _RisingPlayerBar();
-
-  @override
-  State<_RisingPlayerBar> createState() => _RisingPlayerBarState();
-}
-
-class _RisingPlayerBarState extends State<_RisingPlayerBar> with SingleTickerProviderStateMixin {
-  late final PlayerViewModel _player = context.vm.player;
-  late final AnimationController _rise = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 380),
-    reverseDuration: const Duration(milliseconds: 280),
-  );
-  late final Animation<Offset> _slide = Tween(
-    begin: const Offset(0, 1.2),
-    end: Offset.zero,
-  ).animate(CurvedAnimation(parent: _rise, curve: Curves.easeOut, reverseCurve: Curves.easeIn));
-  bool _room = false;
-
-  bool get _wanted => _player.currentTrack != null || _player.queueItems.isNotEmpty || _player.isRemote;
-
-  @override
-  void initState() {
-    super.initState();
-    _room = _wanted;
-    _rise.value = _room ? 1 : 0;
-    _player.addListener(_follow);
-    _rise.addStatusListener((status) {
-      if (status == AnimationStatus.dismissed && _room) setState(() => _room = false);
-    });
-  }
-
-  void _follow() {
-    final wanted = _wanted;
-    if (wanted && (!_room || _rise.status == AnimationStatus.reverse)) {
-      setState(() => _room = true);
-      _rise.forward();
-    } else if (!wanted && _room && _rise.status != AnimationStatus.reverse) {
-      _rise.reverse();
-    }
-  }
-
-  @override
-  void dispose() {
-    _player.removeListener(_follow);
-    _rise.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const bar = TvFocusArea(area: TvArea.player, child: _PlayerBar());
-    if (!AppPlatform.current.isDesktop) {
-      return const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(height: WideLayout.gap),
-          bar,
-        ],
-      );
-    }
-    if (!_room) return const SizedBox.shrink();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(height: WideLayout.gap),
-        SlideTransition(
-          position: _slide,
-          child: FadeTransition(
-            opacity: _rise,
-            child: const RepaintBoundary(child: bar),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 /// A floating panel: rounded, solid, with a hairline edge.
 class _Panel extends StatelessWidget {
   const _Panel({required this.child});
@@ -713,13 +631,6 @@ class _Header extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const FriendsButton(iconSize: 21, dimension: 40),
-                // The way to another device while the player bar, which has it otherwise, is out of sight.
-                ListenableBuilder(
-                  listenable: context.vm.player,
-                  builder: (context, _) => context.vm.player.isRemote
-                      ? const SizedBox.shrink()
-                      : const DevicesButton(iconSize: 20, dimension: 40, whileNothingLoaded: true),
-                ),
                 const SizedBox(width: 8),
                 _HeaderModes(compact: compact),
                 if (frameless) const _WindowButtons(),
