@@ -4655,12 +4655,13 @@ void main() {
     vm.openNowPlaying();
     await settle(tester);
     final title = find.descendant(of: find.byType(NowPlayingPage), matching: find.byType(ScrollingText));
-    final moving = find.descendant(of: title, matching: find.byType(Transform));
-    double shift() => tester.widget<Transform>(moving.first).transform.getTranslation().x;
+    final moving = find.descendant(of: title, matching: find.byType(CustomPaint));
+    // How far the line has slid, as its painter draws it.
+    double shift() => (tester.widget<CustomPaint>(moving.first).painter! as dynamic).shift as double;
     expect(shift(), 0, reason: 'it waits first');
     await tester.pump(ScrollingText.pause);
     await tester.pump(const Duration(milliseconds: 500));
-    expect(shift(), lessThan(0), reason: 'on its way');
+    expect(shift(), greaterThan(0), reason: 'on its way');
 
     vm.player.nextTrack();
     await settle(tester);

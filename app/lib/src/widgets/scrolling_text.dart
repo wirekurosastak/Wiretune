@@ -31,10 +31,14 @@ class _ScrollingTextState extends State<ScrollingText> with SingleTickerProvider
   double _distance = 0;
   String? _text;
 
+  /// The line as it is painted while it scrolls.
+  TextPainter? _line;
+
   @override
   void dispose() {
     _wait?.cancel();
     _slide.dispose();
+    _line?.dispose();
     super.dispose();
   }
 
@@ -62,16 +66,13 @@ class _ScrollingTextState extends State<ScrollingText> with SingleTickerProvider
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       // Measured as it is drawn: in the text style around it, with this one's over it.
-      final painter = TextPainter(
+      final line = TextPainter(
         text: TextSpan(text: widget.text, style: DefaultTextStyle.of(context).style.merge(widget.style)),
         textDirection: Directionality.of(context),
         textScaler: MediaQuery.textScalerOf(context),
         maxLines: 1,
       )..layout();
-      final width = painter.width;
-      final height = painter.height;
-      painter.dispose();
-      final distance = width > constraints.maxWidth ? width + ScrollingText.gap : 0.0;
+      final distance = line.width > constraints.maxWidth ? line.width + ScrollingText.gap : 0.0;
       if (distance != _distance || widget.text != _text) {
         // Started after this frame: a build must not start or stop what it shows.
         _distance = distance;
@@ -81,49 +82,67 @@ class _ScrollingTextState extends State<ScrollingText> with SingleTickerProvider
           if (mounted && _distance == distance && _text == text) _restart(distance);
         });
       }
-      final line = Text(widget.text, maxLines: 1, softWrap: false, style: widget.style);
-      if (distance == 0) return Text(widget.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: widget.style);
-      // As wide as a letter or two, so the ends fade rather than cut a letter through.
-      const fade = 36.0;
-      return SizedBox(
-        height: height,
-        child: AnimatedBuilder(
-          animation: _slide,
-          builder: (context, child) {
-            final shift = _slide.value * distance;
-            // The start fades only while it is moving away; the end, while there is more to come.
-            final start = (shift / fade).clamp(0.0, 1.0);
-            return ShaderMask(
-              blendMode: BlendMode.dstIn,
-              shaderCallback: (rect) => LinearGradient(
-                colors: [
-                  Colors.white.withValues(alpha: 1 - start),
-                  Colors.white,
-                  Colors.white,
-                  Colors.transparent,
-                ],
-                stops: [0, fade / rect.width, 1 - fade / rect.width, 1],
-              ).createShader(rect),
-              child: ClipRect(
-                child: OverflowBox(
-                  alignment: AlignmentDirectional.centerStart,
-                  minWidth: 0,
-                  maxWidth: double.infinity,
-                  child: Transform.translate(offset: Offset(-shift, 0), child: child),
-                ),
-              ),
-            );
-          },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              line,
-              const SizedBox(width: ScrollingText.gap),
-              line,
-            ],
-          ),
-        ),
+      _line?.dispose();
+      if (distance == 0) {
+        line.dispose();
+        _line = null;
+        return Text(widget.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: widget.style);
+      }
+      _line = line;
+      // The line and its fading ends are drawn in one go, on every platform alike: a ShaderMask over sliding text
+      // measured its fade against the wrong box on Android, which left the end's fade a sliver.
+      return Semantics(
+        label: widget.text,
+        child: CustomPaint(size: Size(constraints.maxWidth, line.height), painter: _Marquee(line, distance, _slide)),
       );
     },
   );
+}
+
+/// [line] slid [slide] of the way along [distance] (its width and the gap), followed by itself coming round, the ends
+/// fading: the start only while it moves away, the end while there is more to come.
+class _Marquee extends CustomPainter {
+  _Marquee(this.line, this.distance, this.slide) : super(repaint: slide);
+
+  final TextPainter line;
+  final double distance;
+  final Animation<double> slide;
+
+  /// As wide as a letter or two, so the ends fade rather than cut a letter through.
+  static const double _fade = 36;
+
+  /// How far the line has slid now.
+  double get shift => slide.value * distance;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final shift = this.shift;
+    final bounds = Offset.zero & size;
+    final start = (shift / _fade).clamp(0.0, 1.0);
+    final fade = _fade / size.width;
+    final faded = Colors.white.withValues(alpha: 1 - start);
+    canvas
+      ..saveLayer(bounds.inflate(2), Paint())
+      ..save()
+      ..clipRect(bounds);
+    line
+      ..paint(canvas, Offset(-shift, 0))
+      ..paint(canvas, Offset(distance - shift, 0));
+    canvas.restore();
+    // The fade reaches past the box, unclipped: the box's edge falls between pixels, and a fade cut there faded the
+    // last column only partly, which left a sliver of the letters at the ends.
+    canvas.drawRect(
+      bounds.inflate(2),
+      Paint()
+        ..blendMode = BlendMode.dstIn
+        ..shader = LinearGradient(
+          colors: [faded, Colors.white, Colors.white, Colors.transparent],
+          stops: [0, fade, 1 - fade, 1],
+        ).createShader(bounds),
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_Marquee oldDelegate) => line != oldDelegate.line || distance != oldDelegate.distance;
 }
