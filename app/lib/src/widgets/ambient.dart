@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -422,9 +423,9 @@ class _FrameWashScopeState extends State<FrameWashScope> {
 
 /// The Albums or the Artists page, in the accent of the album or the artist it has open (the cover that washes it,
 /// in either theme): its Play button, its slider, the song that plays in its list. The players around it keep the
-/// colour of the song that plays, and the page takes it back when the album or the artist closes. The accent and its
-/// blend are the [ViewedAccentScope]'s, above the pages: an album opened from its artist's page (another section's)
-/// blends on from the artist's accent, not from the song's.
+/// colour of the song that plays, and the page takes it back when the album or the artist closes. The accent is the
+/// [ViewedAccentScope]'s, above the pages: an album opened from its artist's page (another section's) goes from the
+/// artist's accent to its own, not through the song's.
 class ViewedAccent extends StatelessWidget {
   const ViewedAccent({super.key, required this.child});
 
@@ -434,14 +435,15 @@ class ViewedAccent extends StatelessWidget {
   Widget build(BuildContext context) {
     Theme.of(context); // rebuilt with the app's theme
     final viewed = context.dependOnInheritedWidgetOfExactType<_ViewedTheme>()?.data;
-    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
+    // The app's theme as given, not localized as Theme.of gives it, as the one built for the page isn't.
     return Theme(data: viewed ?? context.findAncestorWidgetOfExactType<Theme>()!.data, child: child);
   }
 }
 
-/// Where the open album's or artist's accent is kept, and blended over as it changes, for the [ViewedAccent] pages
-/// under it: above them, so that one page giving way to another (an artist's to its album's, a section to another)
-/// blends from the accent that was on show, and keeps it while the next cover's colour is read.
+/// Where the open album's or artist's accent is kept for the [ViewedAccent] pages under it: above them, so that one page
+/// giving way to another (an artist's to its album's, a section to another) keeps the accent that was on show while
+/// the next cover's colour is read. It changes at once, with the page: a blend rebuilt the whole page every frame of it,
+/// while the opened page's cover was flying in.
 class ViewedAccentScope extends StatefulWidget {
   const ViewedAccentScope({super.key, required this.child});
 
@@ -457,9 +459,6 @@ class _ViewedAccentScopeState extends State<ViewedAccentScope> {
 
   /// The open album's or artist's cover colour; null: the page has the app's accent (the song's).
   ({Color? colour})? _viewed;
-
-  /// Whether the pages have the app's own theme as it is: no album or artist open, and the blend back from one over.
-  bool _plain = true;
 
   @override
   void initState() {
@@ -490,36 +489,22 @@ class _ViewedAccentScopeState extends State<ViewedAccentScope> {
 
   void _show(({Color? colour})? viewed) {
     if (viewed == _viewed) return;
-    setState(() {
-      _viewed = viewed;
-      if (viewed != null) _plain = false;
-    });
+    setState(() => _viewed = viewed);
   }
 
   @override
   Widget build(BuildContext context) {
-    Theme.of(context); // rebuilt with the app's theme
-    // The app's theme as given, not localized as Theme.of gives it, so that it blends with one built here.
-    final inherited = context.findAncestorWidgetOfExactType<Theme>()!.data;
     final viewed = _viewed;
     final platform = AppPlatform.current;
-    final target = viewed == null
-        ? inherited
-        : cachedTheme(
-            accent: context.colors.palette.accentOf(viewed.colour),
-            isTv: platform.isTv,
-            desktopFonts: platform.isDesktop,
-          );
-    // From the theme on show to the new one, as the app's own theme blends (`MaterialApp.themeAnimationDuration`); the
-    // first one at once.
-    return TweenAnimationBuilder<ThemeData>(
-      tween: ThemeDataTween(end: target),
-      duration: const Duration(milliseconds: 350),
-      onEnd: () {
-        if (_viewed == null && !_plain) setState(() => _plain = true);
-      },
+    return _ViewedTheme(
       // Null while the pages have the app's own theme.
-      builder: (context, data, child) => _ViewedTheme(data: _plain ? null : data, child: child!),
+      data: viewed == null
+          ? null
+          : cachedTheme(
+              accent: context.colors.palette.accentOf(viewed.colour),
+              isTv: platform.isTv,
+              desktopFonts: platform.isDesktop,
+            ),
       child: widget.child,
     );
   }
@@ -560,7 +545,7 @@ abstract final class CoverColor {
             if (done.isCompleted) return info.dispose();
             info.image
                 .toByteData()
-                .then((rgba) async => done.complete(rgba == null ? null : await of(rgba)))
+                .then((rgba) async => done.complete(rgba == null ? null : await _apart(rgba)))
                 .catchError((Object _) => done.complete(null))
                 .whenComplete(info.dispose);
           },
@@ -579,6 +564,10 @@ abstract final class CoverColor {
       return colour;
     }();
   }
+
+  /// [of], away from the frames: it takes tens of milliseconds, which made a cover flying into its page the first time
+  /// it opened skip frames. Here, so that the work sent takes nothing but [rgba] with it.
+  static Future<Color?> _apart(ByteData rgba) => Isolate.run(() => of(rgba));
 
   /// The colour of a cover from its pixels ([rgba], four bytes each), as Android takes a wallpaper's (Material You):
   /// its colours grouped, those near black left out (their tint is the file's noise or a vignette), and of the rest
