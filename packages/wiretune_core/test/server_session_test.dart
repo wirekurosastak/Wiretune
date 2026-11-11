@@ -194,6 +194,36 @@ void main() {
     expect(library.serverConnected, isTrue);
   });
 
+  test('a server older than this player is known as such, and what it lacks is said so', () async {
+    http.Response notFound() => http.Response(jsonEncode({'error': 'Not found.', 'code': 'notFound'}), 404);
+    // The first release: it has neither the route that tells its version nor the sign-in codes.
+    final first = await signedInSession(
+      library,
+      respond: (request) =>
+          const {'/api/server', '/api/auth/sign-in-code'}.contains(request.url.path) ? notFound() : null,
+    );
+    addTearDown(first.dispose);
+    expect((first.isServerOlder, first.serverConverts), (true, true));
+    await expectLater(
+      first.createSignInCode(),
+      throwsA(isA<ServerRequestException>().having((e) => e.message, 'message', Localizer.get('ErrorUnknownRoute'))),
+    );
+
+    Future<ServerSession> serverOf(ServerInfo info) async {
+      final session = await signedInSession(
+        library,
+        respond: (request) => request.url.path == '/api/server' ? http.Response(jsonEncode(info.toJson()), 200) : null,
+      );
+      addTearDown(session.dispose);
+      return session;
+    }
+
+    expect((await serverOf(const ServerInfo('1.0.2020'))).isServerOlder, isTrue);
+    final same = await serverOf(ServerInfo(UpdateCheck.currentVersion, converts: false));
+    expect((same.isServerOlder, same.serverConverts), (false, false));
+    expect((await serverOf(const ServerInfo('99.0.2026'))).isServerOlder, isFalse);
+  });
+
   test('a favourite the server refuses is shown as what it really is', () async {
     final requests = <String>[];
     final session = await signedInSession(

@@ -59,6 +59,10 @@ class ServerClient {
 
   String? authToken;
 
+  /// The server is an older version than this player: what it doesn't find may be a route it lacks, and the error says
+  /// so.
+  bool isServerOlder = false;
+
   /// This player's remote-control device ID, sent with each request ([RemoteRules.deviceHeader]): the server then tells
   /// the account's other players of the changes it makes, and not this one.
   String? deviceId;
@@ -110,10 +114,17 @@ class ServerClient {
   );
 
   /// Signs in with a one-time code another device of the account showed ([createSignInCode]).
-  Future<AuthResponse> loginWithCode(String baseUrl, String code) async => _parse(
-    AuthResponse.fromJson,
-    await _send('POST', baseUrl, '/api/auth/login-with-code', body: {'code': code}, authorize: false),
-  );
+  Future<AuthResponse> loginWithCode(String baseUrl, String code) async {
+    final Object? answer;
+    try {
+      answer = await _send('POST', baseUrl, '/api/auth/login-with-code', body: {'code': code}, authorize: false);
+    } on ServerRequestException catch (e) {
+      // Before a sign-in nothing tells the server's version: one without this route is older than the codes.
+      if (e.statusCode != 404) rethrow;
+      throw ServerRequestException(Localizer.get('ErrorUnknownRoute'), 404, ErrorCodes.unknownRoute);
+    }
+    return _parse(AuthResponse.fromJson, answer);
+  }
 
   /// A one-time code that signs another device in to this account, for a few minutes.
   Future<SignInCode> createSignInCode(String baseUrl) async =>
@@ -148,6 +159,18 @@ class ServerClient {
 
   Future<UserInfo> getCurrentUser(String baseUrl) async =>
       _parse(UserInfo.fromJson, await _send('GET', baseUrl, '/api/auth/me'));
+
+  /// What the server says of itself; null from a server too old to have the route.
+  Future<ServerInfo?> getServerInfo(String baseUrl) async {
+    final Object? answer;
+    try {
+      answer = await _send('GET', baseUrl, '/api/server');
+    } on ServerRequestException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+    return _parse(ServerInfo.fromJson, answer);
+  }
 
   Future<ServerLibraryStatus> getLibraryStatus(String baseUrl) async =>
       _parse(ServerLibraryStatus.fromJson, await _send('GET', baseUrl, '/api/library/status'));
@@ -494,6 +517,10 @@ class ServerClient {
     if (status == 304 && ifNoneMatch != null) return (status: status, etag: etag, json: null);
     if (status < 200 || status > 299) {
       final (message, code) = _error(response, bytes);
+      // A server from before it named its unknown routes answers them "not found".
+      if (status == 404 && code == ErrorCodes.notFound && isServerOlder) {
+        throw ServerRequestException(Localizer.get('ErrorUnknownRoute'), status, ErrorCodes.unknownRoute);
+      }
       throw ServerRequestException(message, status, code);
     }
 

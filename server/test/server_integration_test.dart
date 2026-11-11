@@ -331,9 +331,18 @@ void main() {
     expect((await server.client().get('/api/cover/artist/$id')).statusCode, 401);
   });
 
+  test('the server tells a signed-in player its version and whether it converts', () async {
+    final (client, _) = await setupAdmin(server);
+    expect((await server.client().get('/api/server')).statusCode, 401);
+    final info = ServerInfo.fromJson(json(await client.get('/api/server')));
+    expect(info.version, UpdateCheck.currentVersion);
+    expect(info.converts, hasTool('ffmpeg'), reason: 'this machine has ffmpeg with the encoders, or none');
+  });
+
   test('unknown routes are 404, known routes with another method 405', () async {
     final (client, _) = await setupAdmin(server);
-    expect((await client.get('/api/nothing-here')).statusCode, 404);
+    final unknown = await client.get('/api/nothing-here');
+    expect((unknown.statusCode, json(unknown)['code']), (404, ErrorCodes.unknownRoute));
     expect((await client.delete('/api/tracks')).statusCode, 405);
     // The address alone, as a browser asks for it, says what answers there.
     final root = await server.client().get('/');

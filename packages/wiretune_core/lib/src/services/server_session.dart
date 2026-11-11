@@ -12,6 +12,7 @@ import '../util/async_lock.dart';
 import '../util/event.dart';
 import 'library_service.dart';
 import 'server_client.dart';
+import 'update_check.dart';
 import 'wiretune_log.dart';
 
 enum ServerConnectionState { notConfigured, connecting, offline, setupRequired, loginRequired, connected }
@@ -83,6 +84,16 @@ class ServerSession {
   String serverUrl = defaultServerUrl;
   ServerConnectionState state = ServerConnectionState.notConfigured;
   UserInfo? currentUser;
+
+  /// What the server said of itself when this device last signed in or connected; null before that, and from a server
+  /// too old to say.
+  ServerInfo? serverInfo;
+
+  /// Whether the server is an older version than this player, and so may lack what the player asks for.
+  bool get isServerOlder => _client.isServerOlder;
+
+  /// Whether the server converts tracks for a lower streaming quality; one that can't sends the files as they are.
+  bool get serverConverts => serverInfo?.converts ?? true;
 
   /// Whether this device plays from a server: it keeps a sign-in for one, or still has its tracks from the last time.
   bool get usesServer => (_client.authToken ?? '').isNotEmpty || _library.rawTracks.any((t) => !t.isLocal);
@@ -495,6 +506,8 @@ class ServerSession {
 
   Future<void> _refreshLibraryCore() async {
     _setState(ServerConnectionState.connecting, 'SessionDownloading');
+    final info = serverInfo = await _client.getServerInfo(serverUrl);
+    _client.isServerOlder = info == null || UpdateCheck.compareVersions(info.version, UpdateCheck.currentVersion) < 0;
     await _downloadLibrary(always: true);
     _setState(ServerConnectionState.connected, null);
   }
@@ -557,6 +570,8 @@ class ServerSession {
     _userData = null;
     _userDataVersion = null;
     _client.authToken = null;
+    _client.isServerOlder = false;
+    serverInfo = null;
     currentUser = null;
     _library.setCurrentUser(null);
     _settings.setSetting('auth_token', '');

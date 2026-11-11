@@ -55,7 +55,8 @@ converts a track to Opus or MP3 when a player's *Streaming quality* asks for it 
 
 - The first play of a track waits for the conversion: a second or two on a desktop CPU, longer on a NAS.
 - Converted files are kept in `Transcodes/` in the [data directory](#data-directory), up to 2 GB. Safe to delete.
-- Without `ffmpeg`, or when the file is already smaller, the server sends the original.
+- Without `ffmpeg`, or when the file is already smaller, the server sends the original. The players' *Streaming
+  quality* setting says when the server has no `ffmpeg`.
 
 ## Running it as a service
 
@@ -91,6 +92,13 @@ private to it.
 Windows and macOS (neither tried): on Windows, a Task Scheduler task with the trigger *At log on* that starts
 `bin\wiretune_server.exe --library D:\Music`; on macOS, a launchd agent in `~/Library/LaunchAgents` whose
 `ProgramArguments` are the same command, with `RunAtLoad` and `KeepAlive`.
+
+## Updating
+
+Back up the database ([Data directory](#data-directory)), stop the server, put the new download in place of the old
+folder (with Docker: pull the image and start a new container on the same `/data` volume), and start it. The data
+folder stays, and the server upgrades its database. Keep the players on the same version: a player says in *Settings →
+About* when the server is older than it.
 
 ## Away from home
 

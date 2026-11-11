@@ -100,11 +100,23 @@ class WiretuneAudioEngine {
     await _offerNext(); // the next track is handed over again, as the new quality
   }
 
+  /// Whether the server converts at all ([ServerInfo.converts]); one that can't is asked for the files, whatever the
+  /// quality chosen. From the next track on, as with the quality.
+  bool get serverConverts => _serverConverts;
+  bool _serverConverts = true;
+  Future<void> setServerConverts(bool converts) async {
+    if (converts == _serverConverts) return;
+    _serverConverts = converts;
+    _nextSource = null;
+    await _offerNext();
+  }
+
   /// Whether the server is asked to convert [track]: not for a download, a local file, bit-perfect output or a lossy
-  /// file that is at or below the bitrate already (the server sends such a file as it is).
+  /// file that is at or below the bitrate already (the server sends such a file as it is), and not when the server
+  /// can't convert.
   bool isConverted(Track track) {
     final kbps = _streamingQuality.kbps;
-    if (kbps == 0 || _isBitPerfect || !streams(track)) return false;
+    if (kbps == 0 || _isBitPerfect || !_serverConverts || !streams(track)) return false;
     return track.format.isLossless || track.format.bitrateKbps > kbps;
   }
 

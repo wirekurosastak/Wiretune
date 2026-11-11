@@ -436,6 +436,21 @@ void main() {
       expect(driver.lastSource, 'http://server/api/stream/big?format=opus&bitrate=96&token=tok');
     });
 
+    test("is not asked of a server that can't convert, and the signal path says what arrives", () async {
+      final (driver, engine) = engineWithToken();
+      await engine.setStreamingQuality(StreamingQuality.dataSaver);
+      final track = TestSupport.makeServerTrack('s', 'Server');
+      await engine.setNextTrack(track);
+      expect(driver.nextSource, contains('format=opus'));
+
+      await engine.setServerConverts(false);
+      expect(driver.nextSource, 'http://server/api/stream/s?token=tok', reason: 'the next track is offered again');
+      await engine.playTrack(track);
+      expect(driver.lastSource, 'http://server/api/stream/s?token=tok');
+      expect(engine.isConverted(track), isFalse);
+      expect(engine.signalPathDescription, isNot(contains('48')));
+    });
+
     test('changes the next track at once, and not the one that plays', () async {
       final (driver, engine) = engineWithToken();
       await engine.playTrack(TestSupport.makeServerTrack('a', 'A'));

@@ -744,6 +744,10 @@ class MainViewModel extends ChangeNotifier {
 
   void _onSessionStateChanged() {
     _followOfflineMode();
+    if (audioEngine.serverConverts != session.serverConverts) {
+      unawaited(audioEngine.setServerConverts(session.serverConverts));
+      audioSettings.refreshDeviceList(); // the signal path mentions it
+    }
     final offline = session.state == ServerConnectionState.offline;
     serverBannerNeedsSignIn = session.state == ServerConnectionState.loginRequired && session.authToken == null;
     isServerOfflineBannerVisible = session.usesServer && !session.isOfflineMode && (offline || serverBannerNeedsSignIn);

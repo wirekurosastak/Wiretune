@@ -221,6 +221,24 @@ class SignInCode {
   }
 }
 
+/// What a server says of itself to a signed-in player.
+class ServerInfo {
+  const ServerInfo(this.version, {this.converts = true});
+
+  /// Its version as a release is tagged, without the build number (`1.1.2026`).
+  final String version;
+
+  /// Whether it converts tracks for a lower streaming quality (it has `ffmpeg`); else it sends the files as they are.
+  final bool converts;
+
+  Map<String, Object?> toJson() => {'version': version, 'converts': converts};
+
+  static ServerInfo fromJson(Object? json) {
+    final map = _object(json);
+    return ServerInfo(_string(map, 'version'), converts: jsonField<bool>(map, 'converts') ?? true);
+  }
+}
+
 class ServerLibraryStatus {
   const ServerLibraryStatus(
     this.trackCount,
@@ -529,6 +547,7 @@ abstract final class ErrorCodes {
   static const String invalidJson = 'invalidJson';
   static const String bodyTooLarge = 'bodyTooLarge';
   static const String notFound = 'notFound';
+  static const String unknownRoute = 'unknownRoute'; // the server has no such route: it is older than the player
   static const String internalError = 'internalError';
   static const String rateLimited = 'rateLimited'; // with retryAfter (seconds)
 

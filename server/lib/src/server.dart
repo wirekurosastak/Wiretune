@@ -335,7 +335,9 @@ class WiretuneServer {
         break;
       }
     }
-    if (route == null) return pathMatched ? Response(405) : notFound();
+    if (route == null) {
+      return pathMatched ? Response(405) : errorResponse(404, ErrorCodes.unknownRoute, 'Not found.');
+    }
     if (request.method == 'HEAD' && route.access != Access.media) return Response(405);
 
     Principal? principal;
@@ -472,6 +474,16 @@ class WiretuneServer {
       auth.membersCanRename = allowed;
       return jsonResponse(_config.toJson());
     }),
+
+    // What a player needs to know of this server: an older one than the player lacks routes, and one without ffmpeg
+    // sends every track as its file.
+    _Route(
+      'GET',
+      '/api/server',
+      Access.user,
+      (call) async =>
+          jsonResponse(ServerInfo(UpdateCheck.currentVersion, converts: await transcoder.isAvailable).toJson()),
+    ),
 
     // Library
     _Route(

@@ -1377,6 +1377,8 @@ class _AudioCard extends StatelessWidget {
               const SizedBox(height: 14),
               Text(context.tr('SettingsStreamingQuality'), style: heading()),
               Text(context.tr('SettingsStreamingQualityHint'), style: hint()),
+              if (!vm.session.serverConverts)
+                Text(context.tr('StreamingNoConversion'), style: hint().copyWith(color: colors.palette.warning)),
               // A phone has one quality for Wi-Fi and one for mobile data.
               if (vm.hasMobileData) ...[const SizedBox(height: 10), Text(context.tr('StreamingOnWifi'), style: hint())],
               const SizedBox(height: 10),
@@ -1652,6 +1654,10 @@ class _AboutCard extends StatelessWidget {
         subtitle: 'Wiretune • ${context.trf('AboutVersion', [WiretuneInfo.version])}',
       ),
       children: [
+        if (vm.session.isServerOlder) ...[
+          Text(context.tr('ErrorUnknownRoute'), style: text.copyWith(color: colors.palette.warning)),
+          const SizedBox(height: 4),
+        ],
         Text(WiretuneInfo.copyright, style: text),
         const SizedBox(height: 4),
         Text(context.tr('AboutLicense'), style: text),

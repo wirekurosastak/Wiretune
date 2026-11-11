@@ -127,6 +127,11 @@ const Map<String, (String, String, String)> allStrings = {
     'On a slow connection the server converts music to use less data. Downloads and bit-perfect stay original. Needs ffmpeg on the server.',
     'Bei langsamer Verbindung wandelt der Server die Musik um, damit sie weniger Daten braucht. Downloads und Bit-Perfect bleiben im Original. Der Server braucht dafür ffmpeg.',
   ),
+  'StreamingNoConversion': (
+    'Ezen a szerveren nincs ffmpeg: a fájlokat eredetiben küldi.',
+    'This server has no ffmpeg: it sends the files as they are.',
+    'Dieser Server hat kein ffmpeg: Er sendet die Dateien unverändert.',
+  ),
   'StreamingOriginal': ('Eredeti', 'Original', 'Original'),
   'StreamingHigh': ('Magas · 160 kbps', 'High · 160 kbps', 'Hoch · 160 kbit/s'),
   'StreamingNormal': ('Normál · 96 kbps', 'Normal · 96 kbps', 'Normal · 96 kbit/s'),
@@ -1261,6 +1266,11 @@ const Map<String, (String, String, String)> allStrings = {
     'Ez túl nagy ahhoz, hogy a szerverre kerüljön.',
     'This is too large to send to the server.',
     'Das ist zu groß, um es an den Server zu senden.',
+  ),
+  'ErrorUnknownRoute': (
+    'A szerver régebbi, mint ez a lejátszó. Frissítsd a szervert.',
+    'The server is older than this player. Update the server.',
+    'Der Server ist älter als dieser Player. Aktualisiere den Server.',
   ),
   'ErrorNotFound': (
     'A szerveren ez nem található.',

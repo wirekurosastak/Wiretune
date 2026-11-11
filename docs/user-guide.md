@@ -149,7 +149,8 @@ check.
 Copies on iPhone and iPad, Tizen TVs and the portable Windows folder don't check for updates.
 
 The player checks at start and once a day; *Settings → About → Look for updates* turns it off. Update the server too
-and keep both on the same version ([back up first](server.md#data-directory)).
+and keep both on the same version ([how](server.md#updating)): *Settings → About* says when the server is older than
+the player.
 
 ## Phones, TVs and the car
 

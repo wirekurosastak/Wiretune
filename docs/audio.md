@@ -14,7 +14,7 @@ loud recording. It applies to every track, but **not in bit-perfect mode**, and 
 *Settings → Audio → Streaming quality*: **Original** (the default) sends the file; **High**,
 **Normal** and **Data saver** have the server convert it to Opus at 160, 96 or 48 kbit/s
 ([needs `ffmpeg`](server.md#streaming-on-a-slow-connection)). Per device, from the next track. Downloads, local files and
-bit-perfect mode always play the file.
+bit-perfect mode always play the file. A server without `ffmpeg` sends every file as it is, and the setting says so.
 
 Phones have a second row, **On mobile data**, and switch with the network. The first time a phone streams over mobile
 data, it asks which quality to use.

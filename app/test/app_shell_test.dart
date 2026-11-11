@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -11,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:wiretune/src/app.dart';
 import 'package:wiretune/src/layouts/phone_layout.dart';
 import 'package:wiretune/src/layouts/wide_layout.dart';
@@ -1720,6 +1722,37 @@ void main() {
     await tester.tap(original);
     await settle(tester);
     expect(vm.streamingQuality, StreamingQuality.original);
+  });
+
+  testWidgets("Settings say when the server is older than the player, and when it can't convert", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    await tester.pumpWidget(const SizedBox());
+    Future<void> showSettingsOf(ServerInfo? info) async {
+      final session = (await tester.runAsync(
+        () => signedInSession(
+          vm.library,
+          respond: (request) => request.url.path != '/api/server'
+              ? null
+              : (info == null ? http.Response('', 404) : http.Response(jsonEncode(info.toJson()), 200)),
+        ),
+      ))!;
+      final signedIn = createMainViewModel(vm.library, null, session)..navigateTo(AppSection.settings);
+      addTearDown(signedIn.dispose);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(WiretuneApp(vm: signedIn));
+      await settle(tester);
+    }
+
+    await showSettingsOf(ServerInfo(UpdateCheck.currentVersion));
+    expect(find.text(Localizer.get('ErrorUnknownRoute')), findsNothing);
+    expect(find.text(Localizer.get('StreamingNoConversion')), findsNothing);
+
+    // The first release has no such route; a server without ffmpeg says so.
+    await showSettingsOf(null);
+    expect(find.text(Localizer.get('ErrorUnknownRoute')), findsOneWidget);
+    await showSettingsOf(ServerInfo(UpdateCheck.currentVersion, converts: false));
+    expect(find.text(Localizer.get('ErrorUnknownRoute')), findsNothing);
+    expect(find.text(Localizer.get('StreamingNoConversion')), findsOneWidget);
   });
 
   testWidgets('the password dialog starts in its first field; Enter goes on to the second, and there saves', (

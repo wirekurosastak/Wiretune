@@ -43,6 +43,7 @@ answers a line of text that says it's a Wiretune server, for a browser.
 
 | Route | Role | |
 |---|---|---|
+| `GET /api/server` | user | `{ "version", "converts" }`: the server's version without the build number (`1.1.2026`), and whether it converts tracks for a lower streaming quality (it has `ffmpeg`). A player that gets `404` here knows the server is older than this route |
 | `GET /api/library/status` | user | `{ "trackCount", "albumCount", "artistCount", "isScanning", "lastScanAt", "lastScanError", "lastScanProblem" }`. The last two say why the last scan didn't run or failed, in English and as a code (`folderMissing`, `folderLooksUnmounted`, `scanFailed`). Both are `null` when it went well, and for non-administrators (they name server folders) |
 | `POST /api/library/scan` | admin | Requests a scan: `202 { "message": "Scan requested." }`. Poll the status route |
 | `GET /api/tracks` | user | All tracks, with an `ETag`. Send it as `If-None-Match`: an unchanged list returns `304` with no body. A track's `details` (when its tags give any) hold `isrc`, `barcode`, `musicBrainzTrackId`, `label`, `copyright` (the ℗ line) and `composer`. A track whose file names no genre or label has its album's, when the server looked the album up |
@@ -246,6 +247,7 @@ the host plays, and seek when they are more than 150 ms off.
 | `favoritesLimit`, `playCountsLimit`, `playlistsLimit`, `hiddenLimit` (all with `limit`) | 409 | The account's limits |
 | `recommendationNoteTooLong` (`max`), `recommendationRecipientsInvalid` (`max`) | 400 | Recommendations |
 | `playlistNotFound`, `recommendationNotFound`, `notFound` | 404 | |
+| `unknownRoute` | 404 | The server has no such route: it's older than the player that asked. The players say so |
 | `invalidPeriod` | 400 | `from` and `to` missing, unreadable, or in the wrong order |
 | `invalidJson` (400), `bodyTooLarge` (413), `internalError` (500) | | Any route |
 | `notWebSocket` (400, 426), `originRefused` (403), `tooManyConnections` (429) | | `/api/remote` |

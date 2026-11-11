@@ -344,6 +344,7 @@ Future<ServerSession> signedInSession(
       '/api/auth/setup-required' => {'setupRequired': false},
       '/api/auth/login' => AuthResponse('sign-in-token', user, DateTime.utc(2099)).toJson(),
       '/api/auth/me' => user.toJson(),
+      '/api/server' => ServerInfo(UpdateCheck.currentVersion).toJson(),
       '/api/tracks' => [for (final t in tracks) t.toJson()],
       '/api/me/data' => const UserDataSnapshot([], [], []).toJson(),
       '/api/artists/pictures' => <String, Object?>{},
