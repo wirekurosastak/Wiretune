@@ -92,7 +92,8 @@ labels and credits in the server's database.
   ([where](docs/user-guide.md#where-things-are)); on Android 11 and later that's the shared *Music* folder. Neither the
   server nor a file's tags can put a download outside it, and Wiretune only overwrites or deletes files it recorded as
   its own. Signing out deletes them. On iOS they're left out of backups.
-- **Cached tracks** are plain copies too, in `Music/Wiretune/Cache` (iOS: the app's storage, left out of backups). The
+- **Cached tracks** are plain copies too: in `Music/Wiretune/Cache` on a computer, in the app's own storage on a phone
+  (left out of backups, and not readable by other apps on Android 11 and later). The
   player streams through a relay on `127.0.0.1` for them, at an address other programs can't guess.
 - **Covers from the server** are cached in the system cache folder, readable by anyone who can read it. They're fetched
   with the token in a header, never in the URL.

@@ -76,6 +76,30 @@ class StreamCache {
     }
   }
 
+  /// Deletes the cache [folder] of an earlier place, with what is in it: best effort, as a file an earlier install left
+  /// on an Android phone can't be deleted by this one.
+  static Future<void> removeFolder(String folder) async {
+    final old = Directory(folder);
+    if (!old.existsSync()) return;
+    var left = 0;
+    await for (final entry in old.list()) {
+      try {
+        await entry.delete(recursive: true);
+      } on FileSystemException {
+        left++;
+      }
+    }
+    try {
+      if (left == 0) await old.delete();
+    } on FileSystemException {
+      left++;
+    }
+    WiretuneLog.info(
+      'StreamCache',
+      "The cache's earlier folder '$folder' was cleared${left == 0 ? '' : ', but for $left'}.",
+    );
+  }
+
   /// A `.nomedia` file, which keeps other music apps from listing the folder. Without it the cache works all the same.
   void _hideFromMusicApps() {
     try {

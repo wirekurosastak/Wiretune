@@ -226,6 +226,15 @@ void main() {
     expect(kept, ['.nomedia', 'b.flac', 'c.flac']);
   });
 
+  test("the cache's earlier folder is cleared and removed", () async {
+    final old = Directory(p.join(folder.path, 'Earlier'))..createSync();
+    File(p.join(old.path, 't1.flac')).writeAsBytesSync([1]);
+    File(p.join(old.path, '.nomedia')).createSync();
+    await StreamCache.removeFolder(old.path);
+    expect(old.existsSync(), isFalse);
+    await StreamCache.removeFolder(old.path); // gone already: nothing to do
+  });
+
   test("another program on the device can't use the relay", () async {
     final relay = Uri.parse(cache.sourceFor('t5', 'flac', upstream('t5')));
     expect((await http.get(relay.replace(path: '/wrong/t5'))).statusCode, 404);

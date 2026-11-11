@@ -112,15 +112,25 @@ Future<void> main() async {
   unawaited(platform.excludeFromBackup(vm.downloadService.directory));
   unawaited(platform.excludeFromBackup(vm.downloadService.workDirectory));
 
-  // Server tracks played whole are kept for the next time in Cache, beside the downloads (Music/Wiretune; an iPhone's in
-  // the app's own storage); not on a TV, short of space.
+  // Server tracks played whole are kept for the next time; not on a TV, short of space. On a computer in Cache, beside
+  // the downloads (Music/Wiretune). On a phone in the app's own storage, which goes with the app when it is uninstalled
+  // (Android leaves what is in Music/, and a Wiretune installed again could neither play nor delete it) and which other
+  // music apps don't list: Android's on the shared storage, with the tracks still arriving beside it, so that keeping
+  // one is a rename.
   if (!platform.isTv) {
-    final cache = StreamCache(
-      platform.isIOS ? p.join(AppPaths.getDataDirectory(), 'Cache') : p.join(vm.downloadService.directory, 'Cache'),
-    );
+    final own = platform.isAndroid ? (await getExternalStorageDirectory())?.path : null;
+    final cache = own != null
+        ? StreamCache(p.join(own, 'Cache'), workDirectory: p.join(own, 'CacheParts'))
+        : StreamCache(
+            platform.isMobile
+                ? p.join(AppPaths.getDataDirectory(), 'Cache')
+                : p.join(vm.downloadService.directory, 'Cache'),
+          );
     vm.audioEngine.setStreamCache(cache);
     unawaited(platform.excludeFromBackup(cache.workDirectory));
     unawaited(platform.excludeFromBackup(cache.directory).then((_) => cache.start()));
+    // Where a phone's cache was until it moved into the app's storage.
+    if (platform.isAndroid) unawaited(StreamCache.removeFolder(p.join(vm.downloadService.directory, 'Cache')));
   }
 
   // A failed command (locked database, full disk, ...) must not take the whole player down: log it with its stack
