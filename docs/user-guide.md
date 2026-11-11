@@ -101,8 +101,9 @@ to this device*. With *Sync downloads* on (the default), downloads follow change
 *Settings → Account & connection → Offline mode* shows only downloads and local music, and stops looking for the
 server.
 
-Phones and computers also cache the server tracks played to the end, and play them from the
-[cache](#where-things-are) next time. It holds up to 2 GB; the tracks played longest ago go first.
+Phones and computers also cache the server tracks they play, each once all of it has arrived (usually a moment after
+it starts), and play them from the [cache](#where-things-are) next time. It holds up to 2 GB; the tracks played longest
+ago go first.
 
 ## Friends
 
