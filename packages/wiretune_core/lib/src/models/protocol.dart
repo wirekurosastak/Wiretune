@@ -221,6 +221,65 @@ class SignInCode {
   }
 }
 
+/// A weight for each name: how alike two artists are (0 to 1), or how strongly a style is said of one.
+typedef Weights = Map<String, double>;
+
+/// What the server learned online about how the library's music is alike, for Related artists, Similar albums and
+/// Autoplay: for each artist (by its name in lower case) the artists of the library Deezer's listeners relate to it
+/// ([similarArtists], 0 to 1, the closest highest) and its styles from MusicBrainz ([artistStyles], each with how many
+/// editors gave it); for each album (by its ID) its styles ([albumStyles]). Empty where nothing was learned.
+class RelatedMusicFacts {
+  const RelatedMusicFacts({this.similarArtists = const {}, this.artistStyles = const {}, this.albumStyles = const {}});
+
+  static const RelatedMusicFacts none = RelatedMusicFacts();
+
+  final Map<String, Weights> similarArtists;
+  final Map<String, Weights> artistStyles;
+  final Map<String, Weights> albumStyles;
+
+  bool get isEmpty => similarArtists.isEmpty && artistStyles.isEmpty && albumStyles.isEmpty;
+
+  Map<String, Object?> toJson() => {
+    'similarArtists': similarArtists,
+    'artistStyles': artistStyles,
+    'albumStyles': albumStyles,
+  };
+
+  static RelatedMusicFacts fromJson(Object? json) {
+    final map = _object(json);
+    return RelatedMusicFacts(
+      similarArtists: weightsByName(map['similarArtists']),
+      artistStyles: weightsByName(map['artistStyles']),
+      albumStyles: weightsByName(map['albumStyles']),
+    );
+  }
+}
+
+/// Which artists an account plays in the same sitting: for each artist (by its name in lower case), the others and how
+/// much they go together (0 to 1). Made by the server from the account's play log.
+class ListeningPairs {
+  const ListeningPairs(this.artists);
+
+  static const ListeningPairs none = ListeningPairs({});
+
+  final Map<String, Weights> artists;
+
+  Map<String, Object?> toJson() => {'artists': artists};
+
+  static ListeningPairs fromJson(Object? json) => ListeningPairs(weightsByName(_object(json)['artists']));
+}
+
+/// `{ name: { other: weight } }` as JSON gives it; what isn't a name and a number is left out.
+Map<String, Weights> weightsByName(Object? json) => {
+  if (json is Map)
+    for (final MapEntry(:key, :value) in json.entries)
+      if (key is String && value is Map)
+        key: {
+          for (final MapEntry(key: name, value: weight) in value.entries)
+            if (name is String && weight is num && weight.isFinite) name: weight.toDouble(),
+        },
+};
+
 /// What a server says of itself to a signed-in player.
 class ServerInfo {
   const ServerInfo(this.version, {this.converts = true});

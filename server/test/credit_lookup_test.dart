@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 import 'package:wiretune_server/src/credit_lookup_service.dart';
+import 'package:wiretune_server/src/online.dart';
 
 import 'support.dart';
 
@@ -76,21 +77,23 @@ void main() {
 
   CreditLookupService service() => CreditLookupService(
     db,
+    MusicBrainz(
+      MockClient((request) async {
+        asked.add(request.url.path);
+        final body = switch (request.url.path) {
+          '/ws/2/isrc/USMC10201424' => {
+            'recordings': [
+              {'id': 'rec-1'},
+            ],
+          },
+          '/ws/2/recording/rec-1' => recording,
+          _ => null,
+        };
+        return http.Response(jsonEncode(body ?? {'error': 'Not Found'}), body == null ? 404 : 200);
+      }),
+      pause: Duration.zero,
+    ),
     enabled: () => enabled,
-    pause: Duration.zero,
-    client: MockClient((request) async {
-      asked.add(request.url.path);
-      final body = switch (request.url.path) {
-        '/ws/2/isrc/USMC10201424' => {
-          'recordings': [
-            {'id': 'rec-1'},
-          ],
-        },
-        '/ws/2/recording/rec-1' => recording,
-        _ => null,
-      };
-      return http.Response(jsonEncode(body ?? {'error': 'Not Found'}), body == null ? 404 : 200);
-    }),
   );
 
   test('found by ISRC: who wrote it, then who made the recording, with the instrument; asked only once', () async {

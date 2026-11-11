@@ -4,33 +4,22 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 import 'package:wiretune_core/wiretune_core.dart';
+
+import 'online.dart';
 
 /// Who did what on a track: the composer its tags name, and what MusicBrainz knows (producers, mixing, the players and
 /// their instruments, the writers of the song). Looked up only when a player asks (someone opened the track's credits),
 /// by the file's MusicBrainz recording ID, else by its ISRC, and kept in the database; one MusicBrainz didn't know is
 /// asked again after [retryAfter]. Only those codes go out. [enabled] is the administrator's switch for the lookups.
 class CreditLookupService {
-  CreditLookupService(
-    this._db, {
-    required this.enabled,
-    http.Client? client,
-    this.pause = const Duration(milliseconds: 1100),
-  }) : _client = client ?? http.Client();
+  CreditLookupService(this._db, this._musicBrainz, {required this.enabled});
 
   final DatabaseManager _db;
-  final http.Client _client;
+  final MusicBrainz _musicBrainz;
   final bool Function() enabled;
 
-  /// Between two requests: MusicBrainz allows one a second.
-  final Duration pause;
-
   static const Duration retryAfter = Duration(days: 30);
-  static const String _api = 'https://musicbrainz.org/ws/2';
-
-  /// The requests in flight, one after another.
-  Future<void> _queue = Future.value();
 
   /// [track]'s credits: its tags' composer, and what MusicBrainz knows when it may be asked; in [CreditRoles] order.
   Future<List<Credit>> creditsOf(Track track) async {
@@ -82,14 +71,16 @@ class CreditLookupService {
   Future<List<Credit>?> _lookUp(TrackDetails details) async {
     var id = details.musicBrainzTrackId;
     if (id == null) {
-      final found = await _get('/isrc/${Uri.encodeComponent(details.isrc!)}');
+      final found = await _musicBrainz.get('/isrc/${Uri.encodeComponent(details.isrc!)}');
       id = switch (found?['recordings']) {
         [{'id': final String first}, ...] => first,
         _ => null,
       };
       if (id == null) return null;
     }
-    final recording = await _get('/recording/${Uri.encodeComponent(id)}?inc=artist-rels+work-rels+work-level-rels');
+    final recording = await _musicBrainz.get(
+      '/recording/${Uri.encodeComponent(id)}?inc=artist-rels+work-rels+work-level-rels',
+    );
     if (recording == null) return null;
     final credits = parse(recording);
     return credits.isEmpty ? null : credits;
@@ -140,29 +131,4 @@ class CreditLookupService {
   }
 
   static String _capitalized(String text) => text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
-
-  /// MusicBrainz's answer at [path], or null when it has nothing there; one request at a time, [pause] apart. Throws
-  /// when it can't be reached or answers something else.
-  Future<Map<String, Object?>?> _get(String path) {
-    final answer = _queue.then((_) async {
-      await Future<void>.delayed(pause);
-      final separator = path.contains('?') ? '&' : '?';
-      final response = await _client
-          .get(
-            Uri.parse('$_api$path${separator}fmt=json'),
-            // MusicBrainz asks every client to say what it is and where to find it.
-            headers: {'user-agent': 'Wiretune/${WiretuneInfo.version} ( ${WiretuneInfo.sourceUrl} )'},
-          )
-          .timeout(const Duration(seconds: 20));
-      if (response.statusCode == 404 || response.statusCode == 400) return null;
-      if (response.statusCode != 200) throw http.ClientException('MusicBrainz answered ${response.statusCode}');
-      final body = jsonDecode(utf8.decode(response.bodyBytes));
-      if (body is! Map<String, Object?>) throw const FormatException('MusicBrainz answered something else.');
-      return body;
-    });
-    _queue = answer.then((_) {}, onError: (Object _) {});
-    return answer;
-  }
-
-  void close() => _client.close();
 }

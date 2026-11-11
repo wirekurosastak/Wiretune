@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
-import 'package:wiretune_server/src/album_lookup_service.dart';
+import 'package:wiretune_server/src/online.dart';
 
 import 'support.dart';
 
@@ -88,15 +88,15 @@ void main() {
   );
 
   test("a barcode is tried as tagged and as Deezer's 13- and 12-digit forms", () {
-    expect(AlbumLookupService.barcodeForms('00602478496134'), ['00602478496134', '0602478496134', '602478496134']);
-    expect(AlbumLookupService.barcodeForms('00044003362253'), ['00044003362253', '0044003362253', '044003362253']);
-    expect(AlbumLookupService.barcodeForms('3617383692257'), ['3617383692257'], reason: 'a 13-digit EAN as it is');
-    expect(AlbumLookupService.barcodeForms('n/a'), isEmpty);
+    expect(Deezer.barcodeForms('00602478496134'), ['00602478496134', '0602478496134', '602478496134']);
+    expect(Deezer.barcodeForms('00044003362253'), ['00044003362253', '0044003362253', '044003362253']);
+    expect(Deezer.barcodeForms('3617383692257'), ['3617383692257'], reason: 'a 13-digit EAN as it is');
+    expect(Deezer.barcodeForms('n/a'), isEmpty);
   });
 
   test('names are the same but for case, accents and punctuation', () {
-    expect(AlbumLookupService.sameName('Beyoncé', 'BEYONCE'), isTrue);
-    expect(AlbumLookupService.sameName('AC/DC', 'ACDC'), isTrue);
-    expect(AlbumLookupService.sameName('Album 1', 'Album 2'), isFalse);
+    expect(sameName('Beyoncé', 'BEYONCE'), isTrue);
+    expect(sameName('AC/DC', 'ACDC'), isTrue);
+    expect(sameName('Album 1', 'Album 2'), isFalse);
   });
 }

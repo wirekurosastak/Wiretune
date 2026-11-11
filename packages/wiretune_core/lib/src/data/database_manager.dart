@@ -38,7 +38,7 @@ class DatabaseManager {
 
   /// The schema this build creates and reads. A change to the tables raises it, together with a step in [_upgrades]
   /// that upgrades a database of the previous version in place.
-  static const int schemaVersion = 19;
+  static const int schemaVersion = 20;
 
   /// The step from version `i + 1` to `i + 2` is `_upgrades[i]`; a database of any older version runs every step after
   /// its own, in one transaction.
@@ -94,6 +94,8 @@ class DatabaseManager {
     _blendsTable,
     // 18 -> 19: shared playlists: who an account shares each with (the server), and a player's copy of that.
     'ALTER TABLE playlists ADD COLUMN sharing TEXT; $_playlistMembersTable',
+    // 19 -> 20: the server's artist lookups (the artists alike) and style lookups (genres).
+    '$_artistLookupsTable $_styleLookupsTable',
   ];
 
   final String databasePath;
@@ -280,6 +282,8 @@ const String _schema =
   $_userBlocksTable
   $_albumLookupsTable
   $_creditLookupsTable
+  $_artistLookupsTable
+  $_styleLookupsTable
   $_playLogTable
   $_blendsTable
   $_playlistMembersTable
@@ -354,6 +358,30 @@ const String _creditLookupsTable = '''
       looked_up_at INTEGER NOT NULL,
       found INTEGER NOT NULL,
       credits TEXT
+  );
+''';
+
+/// What the server looked up online about each artist of the library (by `artist_key`, its name in lower case): the
+/// artists Deezer's listeners also play (`related`, their names as JSON, the closest first), when found (`found`), and
+/// when it looked (`looked_up_at`).
+const String _artistLookupsTable = '''
+  CREATE TABLE artist_lookups (
+      artist_key TEXT PRIMARY KEY,
+      looked_up_at INTEGER NOT NULL,
+      found INTEGER NOT NULL,
+      related TEXT
+  );
+''';
+
+/// What the server looked up online about the styles of an album (`subject` `album:<album ID>`) or an artist
+/// (`artist:<name in lower case>`): MusicBrainz's genres with their weight (`styles`, as JSON), when found (`found`), and
+/// when it looked (`looked_up_at`).
+const String _styleLookupsTable = '''
+  CREATE TABLE style_lookups (
+      subject TEXT PRIMARY KEY,
+      looked_up_at INTEGER NOT NULL,
+      found INTEGER NOT NULL,
+      styles TEXT
   );
 ''';
 

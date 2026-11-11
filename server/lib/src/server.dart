@@ -13,6 +13,7 @@ import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:wiretune_core/wiretune_core.dart';
 
 import 'album_lookup_service.dart';
+import 'artist_lookup_service.dart';
 import 'auth_service.dart';
 import 'blend_service.dart';
 import 'block_service.dart';
@@ -20,9 +21,12 @@ import 'credit_lookup_service.dart';
 import 'config.dart';
 import 'http_utils.dart';
 import 'library_scan_service.dart';
+import 'online.dart';
 import 'recommendation_service.dart';
+import 'related_music_service.dart';
 import 'remote_hub.dart';
 import 'setup_code.dart';
+import 'style_lookup_service.dart';
 import 'transcoder.dart';
 import 'user_data_service.dart';
 
@@ -127,6 +131,9 @@ class WiretuneServer {
     this.scanner,
     this.albumLookups,
     this.creditLookups,
+    this.artistLookups,
+    this.styleLookups,
+    this._online,
   );
 
   static const int _defaultBodyLimit = 64 * 1024;
@@ -150,6 +157,17 @@ class WiretuneServer {
 
   /// A track's credits, looked up online when a player asks.
   final CreditLookupService creditLookups;
+
+  /// The artists Deezer's listeners relate to each artist of the library, and the styles MusicBrainz gives the albums
+  /// and artists: what tells the players which music is alike ([related]).
+  final ArtistLookupService artistLookups;
+  final StyleLookupService styleLookups;
+
+  /// What reaches the internet, closed with the server.
+  final http.Client _online;
+
+  /// What the players get to tell which music is alike: online facts for all, listening pairs for each account.
+  late final RelatedMusicService related = RelatedMusicService(database, library, artistLookups, styleLookups);
   late final RemoteHub remote = RemoteHub()..blocks = blocks.blocks;
 
   /// Converts tracks for players that asked for less than the original (`?format=opus&bitrate=96`).
@@ -171,6 +189,9 @@ class WiretuneServer {
 
   /// The artists' own pictures as `/api/artists/pictures` serves them (encoded): each one's version by artist ID.
   JsonDocument? _artistPictureList;
+
+  /// What is known of which music is alike, as `/api/library/related` serves it (encoded).
+  JsonDocument? _relatedList;
 
   /// The version of the lists the players were last told about.
   String? _announcedLibrary;
@@ -216,7 +237,11 @@ class WiretuneServer {
       interval: options.scanIntervalMinutes > 0 ? Duration(minutes: options.scanIntervalMinutes) : null,
     );
 
-    final albums = AlbumLookupService(database, client: online);
+    final client = online ?? http.Client();
+    final deezer = Deezer(client);
+    final musicBrainz = MusicBrainz(client);
+    final albums = AlbumLookupService(database, deezer);
+    bool enabled() => albums.enabled;
     final server = WiretuneServer._(
       options,
       paths,
@@ -228,7 +253,10 @@ class WiretuneServer {
       SetupCode(options.setupCode),
       scanner,
       albums,
-      CreditLookupService(database, enabled: () => albums.enabled, client: online),
+      CreditLookupService(database, musicBrainz, enabled: enabled),
+      ArtistLookupService(database, deezer, enabled: enabled),
+      StyleLookupService(database, musicBrainz, enabled: enabled),
+      client,
     );
 
     if (!auth.hasAnyUsers()) {
@@ -243,11 +271,16 @@ class WiretuneServer {
     library.onTracksMoved = server._tracksMoved;
     server.userData.blocks = server.blocks.blocks;
 
-    final http = server._http = await shelf_io.serve(server.handler, options.host, options.port, securityContext: tls);
-    http.autoCompress = false; // JSON is compressed by the handler, audio never
-    http.idleTimeout = const Duration(seconds: 120);
+    final listening = server._http = await shelf_io.serve(
+      server.handler,
+      options.host,
+      options.port,
+      securityContext: tls,
+    );
+    listening.autoCompress = false; // JSON is compressed by the handler, audio never
+    listening.idleTimeout = const Duration(seconds: 120);
     final host = options.host.contains(':') ? '[${options.host}]' : options.host;
-    WiretuneLog.info('Server', 'Listening on http${tls == null ? '' : 's'}://$host:${http.port}');
+    WiretuneLog.info('Server', 'Listening on http${tls == null ? '' : 's'}://$host:${listening.port}');
     scanner.start();
     return server;
   }
@@ -285,11 +318,13 @@ class WiretuneServer {
 
   Future<void> close() async {
     albumLookups.close();
-    creditLookups.close();
+    artistLookups.close();
+    styleLookups.close();
     await scanner.stop();
     await remote.close(); // their sockets left the HTTP server when they were upgraded
     await _http?.close(force: true);
     _http = null;
+    _online.close();
     database.close();
   }
 
@@ -513,6 +548,15 @@ class WiretuneServer {
     }),
     _Route('GET', '/api/tracks', Access.user, (call) => versionedJson(call.request, _tracks)),
     _Route('GET', '/api/artists/pictures', Access.user, (call) => versionedJson(call.request, _artistPictures)),
+    // Which music of the library is alike, from what the server looked up online; and for the caller, from its plays.
+    _Route('GET', '/api/library/related', Access.user, (call) => versionedJson(call.request, _related)),
+    _Route(
+      'GET',
+      '/api/me/listening',
+      Access.user,
+      (call) =>
+          versionedJson(call.request, JsonDocument(utf8.encode(jsonEncode(related.pairsOf(call.userId).toJson())))),
+    ),
 
     // Media
     _Route('GET', '/api/stream/{trackId}', Access.media, _stream),
@@ -1026,8 +1070,10 @@ class WiretuneServer {
     ),
   );
 
-  /// The version of both lists the players download, which a scan may change.
-  Future<String> _libraryVersion() async => '${await _tracks.etag}${await _artistPictures.etag}';
+  JsonDocument get _related => _relatedList ??= JsonDocument(utf8.encode(jsonEncode(related.facts().toJson())));
+
+  /// The version of the lists the players download, which a scan or a lookup may change.
+  Future<String> _libraryVersion() async => '${await _tracks.etag}${await _artistPictures.etag}${await _related.etag}';
 
   /// The track whose picture is the album's cover.
   Track? _coverTrack(String albumId) => library.getAlbum(albumId)?.tracks.where((t) => t.hasCoverArt).firstOrNull;
@@ -1054,12 +1100,22 @@ class WiretuneServer {
     _lookUpAlbums();
   }
 
-  /// Looks up the albums not looked up yet, in the background.
-  void _lookUpAlbums() => unawaited(albumLookups.run(library.albums, onLearned: () => unawaited(_tracksChanged())));
+  /// Looks up online what isn't known yet, in the background: the albums, then the artists on Deezer (one after the
+  /// other, as Deezer allows so many requests together), and meanwhile the styles on MusicBrainz.
+  void _lookUpAlbums() {
+    void learned() => unawaited(_tracksChanged());
+    unawaited(
+      albumLookups
+          .run(library.albums, onLearned: learned)
+          .then((_) => artistLookups.run(library.artists, onLearned: learned)),
+    );
+    unawaited(styleLookups.run(library.albums, onLearned: learned));
+  }
 
   /// The track list is made again; when it changed, the players are told.
   Future<void> _tracksChanged() async {
     _trackList = null;
+    _relatedList = null;
     final version = await _libraryVersion();
     if (version == _announcedLibrary) return;
     _announcedLibrary = version;

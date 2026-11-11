@@ -13,7 +13,7 @@ made public.
 
 ## What leaves your network
 
-The players make three kinds of internet requests, and the server two. Nothing else leaves your network.
+The players make three kinds of internet requests, and the server four. Nothing else leaves your network.
 
 - **Artist pictures** from Deezer: the artist's name and up to two of its album titles. Not for artists with their own
   `artist.jpg`. Off: `WIRETUNE_NO_ARTIST_PICTURES=1`.
@@ -27,10 +27,16 @@ The players make three kinds of internet requests, and the server two. Nothing e
   the album's title and artist.
 - **Track credits** (server), from MusicBrainz, when someone first opens a track's *Credits*: its MusicBrainz recording
   ID or ISRC.
+- **Related artists** (server), from Deezer, once per artist after the album lookups: an album's barcode or a track's
+  ISRC, else the artist's name; then the artists Deezer relates to it.
+- **Styles** (server), from MusicBrainz, once per album after a scan, about one request a second: the album's barcode,
+  else a track's MusicBrainz recording ID or ISRC, else the album's title and artist; then the genres of the album and
+  its artists.
 
-The last two are off with *Settings → Library → Look up music online*. None of these requests says anything about the
+The last four are off with *Settings → Library → Look up music online*. Which artists an account plays together is
+worked out by the server from its own play log, and never leaves it. None of these requests says anything about the
 accounts; they carry a `Wiretune/<version>` user agent. Answers are cached: pictures and lyrics in the player, genres,
-labels and credits in the server's database.
+labels, credits, related artists and styles in the server's database.
 
 ## Server
 

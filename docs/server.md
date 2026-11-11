@@ -201,9 +201,11 @@ The server scans the music folder at startup, about ten seconds after files stop
 In *Settings → Library* an administrator can **Reindex**, or switch to another folder; that choice overrides
 `--library` from then on.
 
-After a scan the server looks up on Deezer the genre and label of albums whose files don't name them; a track's
-*Credits* come from MusicBrainz when first opened ([what is sent](../SECURITY.md#what-leaves-your-network)). Both are
-off with *Settings → Library → Look up music online*.
+After a scan the server looks up on Deezer the genre and label of albums whose files don't name them, then each
+artist's related artists, and on MusicBrainz the styles of the albums and their artists; a track's *Credits* come from
+MusicBrainz when first opened ([what is sent](../SECURITY.md#what-leaves-your-network)). The players use the related
+artists and styles for *Related artists*, *Similar albums* and Autoplay. A big library's styles take a while:
+MusicBrainz allows a request a second. All of it is off with *Settings → Library → Look up music online*.
 
 Indexed formats: FLAC, WAV, AIFF, WavPack, APE, DSF, M4A (ALAC or AAC), AAC, MP3, Ogg Vorbis, Opus
 ([what plays where](audio.md)). Missing tags fall back to the file name, `Unknown artist` and `Unknown album`. A folder
