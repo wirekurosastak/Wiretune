@@ -308,6 +308,33 @@ void main() {
     },
   );
 
+  test('a sign-in that stays is renewed when the device connects, and the new token kept', () async {
+    final repo = testRepository()
+      ..setSetting('server_url', 'http://wiretune.test')
+      ..setSetting('auth_token', 'stored');
+    final user = UserInfo('u1', 'owner', true, DateTime.utc(2026), null);
+    final tokens = <String?>[];
+    final client = MockClient((request) async {
+      tokens.add(request.headers['authorization']);
+      final body = switch (request.url.path) {
+        '/api/auth/setup-required' => {'setupRequired': false},
+        '/api/auth/me' => user.toJson(),
+        '/api/auth/renew' => AuthResponse('renewed', user, DateTime.utc(2099)).toJson(),
+        '/api/server' => ServerInfo(UpdateCheck.currentVersion).toJson(),
+        '/api/tracks' => <Object?>[],
+        '/api/me/data' => const UserDataSnapshot([], [], []).toJson(),
+        _ => <String, Object?>{},
+      };
+      return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+    });
+    final session = ServerSession(library, repo, ServerClient(client))..initialize();
+    addTearDown(session.dispose);
+    await session.connect();
+    expect(session.state, ServerConnectionState.connected);
+    expect((session.authToken, repo.getSetting('auth_token')), ('renewed', 'renewed'));
+    expect(tokens.last, 'Bearer renewed', reason: 'what follows carries the new one');
+  });
+
   test('plays the server has not got yet wait across a restart of the player', () async {
     final repo = testRepository()
       ..replaceAllTracks([TestSupport.makeServerTrack('s1', 'Server song')])
@@ -327,7 +354,7 @@ void main() {
     final user = UserInfo('u1', 'owner', true, DateTime.utc(2026), null);
     final again = start(
       MockClient((request) async {
-        if (request.method == 'POST') sent.add(request.url.path);
+        if (request.url.path.startsWith('/api/me/plays/')) sent.add(request.url.path);
         final body = switch (request.url.path) {
           '/api/auth/setup-required' => {'setupRequired': false},
           '/api/auth/me' => user.toJson(),

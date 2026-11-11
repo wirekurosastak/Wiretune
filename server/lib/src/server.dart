@@ -429,6 +429,10 @@ class WiretuneServer {
       Access.user,
       (call) => jsonResponse(auth.createSignInCode(call.principal!).toJson()),
     ),
+    _Route('POST', '/api/auth/renew', Access.user, (call) {
+      final renewed = auth.renew(call.principal!);
+      return renewed == null ? unauthorized(ErrorCodes.accountRemoved) : jsonResponse(renewed.toJson());
+    }),
     _Route('POST', '/api/auth/change-password', Access.user, _changePassword, rateLimited: true),
     _Route('POST', '/api/auth/change-username', Access.user, _changeUsername, rateLimited: true),
     _Route('GET', '/api/auth/me', Access.user, (call) {

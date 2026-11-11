@@ -238,6 +238,7 @@ class ServerSession {
 
       final user = currentUser = await _client.getCurrentUser(serverUrl);
       _library.setCurrentUser(user.id);
+      await _renewSignIn();
       await _refreshLibraryCore();
     }),
   );
@@ -266,6 +267,19 @@ class ServerSession {
     } catch (e, s) {
       WiretuneLog.error('ServerSession', "Unexpected failure talking to '$serverUrl'", e, s);
       _setState(ServerConnectionState.offline, 'SessionUnexpected', ['$e']);
+    }
+  }
+
+  /// A sign-in that stays is renewed each time the device connects, so one that is used never runs out. A server from
+  /// before it could renew answers "not found", and the sign-in lasts its 90 days.
+  Future<void> _renewSignIn() async {
+    if ((_settings.getSetting('auth_token') ?? '').isEmpty) return;
+    try {
+      final auth = await _client.renewSignIn(serverUrl);
+      _client.authToken = auth.token;
+      _settings.setSetting('auth_token', auth.token);
+    } on ServerRequestException catch (e) {
+      WiretuneLog.debug('ServerSession', 'The sign-in was not renewed: ${e.message}');
     }
   }
 

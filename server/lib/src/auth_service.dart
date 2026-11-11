@@ -149,6 +149,19 @@ class AuthService {
     return AuthResponse(_signInToken(user, version!, expires), user, expires);
   }
 
+  /// A new token for [caller] in exchange for theirs. A sign-in that stays (one with more than a day left) lasts 90 days
+  /// from now, so a device that is used never has to sign in again; a short one keeps its end. Null when the account
+  /// is gone.
+  AuthResponse? renew(Principal caller) {
+    final user = getUser(caller.userId);
+    final version = _tokenVersion(caller.userId);
+    if (user == null || version == null) return null;
+    final now = DateTime.now().toUtc();
+    final ends = caller.expiresAt ?? now;
+    final expires = ends.difference(now) > _sessionLifetime ? now.add(_rememberedLifetime) : ends;
+    return AuthResponse(_signInToken(user, version, expires), user, expires);
+  }
+
   /// Sets a new password for [userId] (an administrator's reset) and ends every session of the account. False when
   /// there is no such account.
   Future<bool> resetPassword(String userId, String replacement) async {

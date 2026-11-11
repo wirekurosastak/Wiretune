@@ -42,8 +42,9 @@ labels and credits in the server's database.
 - **Passwords** are bcrypt hashes (cost 12). Setup, sign-in and password changes are limited to 10 requests a minute
   per client address. No lockout, no two-factor authentication. A signed-in account can change its password without
   the current one, so anyone holding a signed-in device can too ([what a change does](docs/server.md#accounts)).
-- **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. Every request checks the token
-  against the account: a deleted user is locked out at once. A password change or an administrator's reset ends every
+- **Tokens** are HMAC-SHA256 JWTs, valid 24 hours, or 90 days with *Keep me signed in*. A player that keeps its
+  sign-in gets a new 90-day token each time it connects, so only a device left unused that long has to sign in again.
+  Every request checks the token against the account: a deleted user is locked out at once. A password change or an administrator's reset ends every
   earlier session, stream tokens included.
 - **Tokens in URLs.** libmpv and the TV player can't send headers, so audio and cover URLs carry `?token=`. Only a
   **stream token** is accepted there: valid 8 hours, audio and covers only, never logged. These URLs can still end up in

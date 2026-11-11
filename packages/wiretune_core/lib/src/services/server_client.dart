@@ -130,6 +130,10 @@ class ServerClient {
   Future<SignInCode> createSignInCode(String baseUrl) async =>
       _parse(SignInCode.fromJson, await _send('POST', baseUrl, '/api/auth/sign-in-code'));
 
+  /// A new sign-in token in exchange for this one: a sign-in that stays lasts its whole time again.
+  Future<AuthResponse> renewSignIn(String baseUrl) async =>
+      _parse(AuthResponse.fromJson, await _send('POST', baseUrl, '/api/auth/renew'));
+
   /// A short-lived token that opens only the audio and cover routes, for use in stream URLs.
   Future<StreamTokenResponse> getStreamToken(String baseUrl) async =>
       _parse(StreamTokenResponse.fromJson, await _send('POST', baseUrl, '/api/auth/stream-token'));

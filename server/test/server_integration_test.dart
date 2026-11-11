@@ -60,6 +60,30 @@ void main() {
     expect(tracks.first['durationMs'], 1000);
   });
 
+  test('a sign-in that stays is renewed for its whole time; a short one keeps its end', () async {
+    final (owner, _) = await setupAdmin(server);
+    Future<AuthResponse> signIn(bool stay) async => AuthResponse.fromJson(
+      json(await owner.post('/api/auth/login', {'username': 'owner', 'password': adminPassword, 'rememberMe': stay})),
+    );
+    Future<AuthResponse> renew(AuthResponse auth) async =>
+        AuthResponse.fromJson(json(await server.client(auth.token).post('/api/auth/renew')));
+
+    final short = await signIn(false);
+    expect((await renew(short)).expiresAt.difference(short.expiresAt).inSeconds, 0, reason: 'to the second');
+
+    final staying = await signIn(true);
+    await Future<void>.delayed(const Duration(milliseconds: 1100)); // a token's end is told to the second
+    final renewed = await renew(staying);
+    expect(renewed.expiresAt.isAfter(staying.expiresAt), isTrue);
+    expect(renewed.expiresAt.difference(DateTime.now().toUtc()).inDays, 89);
+    expect((await server.client(renewed.token).get('/api/auth/me')).statusCode, 200);
+
+    // Not without a sign-in, and not with a token for stream addresses.
+    expect((await server.client().post('/api/auth/renew')).statusCode, 401);
+    final stream = json(await owner.post('/api/auth/stream-token'))['token'] as String;
+    expect((await server.client(stream).post('/api/auth/renew')).statusCode, isNot(200));
+  });
+
   test('streaming supports ranges, the header and the query token', () async {
     final (client, _) = await setupAdmin(server);
     final track = (await server.waitForTracks(client, 3)).first;

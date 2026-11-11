@@ -4,7 +4,7 @@
 
 **With a server:** enter its address (`http://<server-ip>:5200`) and press **Connect**. On a new server, create the
 administrator account with the setup code ([server.md](server.md#start-it)); otherwise sign in. A sign-in lasts 24
-hours, or 90 days with *Keep me signed in*.
+hours; with *Keep me signed in*, until the device has gone unused for 90 days.
 
 **Adding a phone:** on a signed-in device, open *Settings → Account & connection → Connect a phone* and scan a QR code
 with the phone's camera. *Server only* fills in the address; *Sign in as …* also signs the phone in to your account (it
