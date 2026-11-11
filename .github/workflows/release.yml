@@ -102,9 +102,10 @@ jobs:
             docker push "$image-ffmpeg-${{ matrix.arch }}"
           fi
 
+  # After every build: `latest` never names a version whose release failed.
   docker-manifest:
     name: Server image (both processors)
-    needs: [version, docker]
+    needs: [version, docker, server, linux, windows, macos, android]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
