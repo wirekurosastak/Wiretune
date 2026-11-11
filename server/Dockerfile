@@ -18,6 +18,9 @@ RUN dart pub get --enforce-lockfile && dart build cli --output build
 # The executable needs nothing but the C library; SQLite comes in the bundle's lib/. The same Debian as the build stage,
 # so that the C library is the one it was built against.
 FROM debian:trixie-slim
+LABEL org.opencontainers.image.source=https://github.com/wirekurosastak/Wiretune \
+      org.opencontainers.image.description="Wiretune server" \
+      org.opencontainers.image.licenses=AGPL-3.0-only
 # ffmpeg (about 450 MB more) lets the server convert music to Opus or MP3 for players on a slow connection
 # (docs/server.md#streaming-on-a-slow-connection): --build-arg WITH_FFMPEG=true. Without it the server sends the original
 # files.
