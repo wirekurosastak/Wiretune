@@ -57,8 +57,9 @@ void main() {
       );
       addTearDown(server.close);
       final (admin, _) = await setupAdmin(server);
-      final before = await server.waitForTracks(admin, 4);
-      expect(before.every((t) => t['genre'] == null), isTrue, reason: 'the files name no genre');
+      await server.waitForTracks(admin, 4);
+      // As the library read them: the list the players get may have the looked-up genre by now.
+      expect(server.server.library.tracks.every((t) => t.genre == null), isTrue, reason: 'the files name no genre');
 
       // The lookups run after the scan, in the background.
       late List<Track> tracks;
