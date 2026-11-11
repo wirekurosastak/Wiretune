@@ -252,6 +252,37 @@ class WiretuneServer {
     return server;
   }
 
+  /// Gives the account named [username] (ignoring case) a new random password and ends its sessions, without the server
+  /// running: `wiretune_server --reset-password <name>`, for an administrator who lost theirs. Returns the password;
+  /// throws [FormatException] when the data folder has no database or no such account.
+  static Future<String> resetPassword(ServerOptions options, String username) async {
+    final dataDirectory = AppPaths.getDataDirectory(overridePath: options.dataDirectory, subdirectory: 'Server');
+    final file = p.join(dataDirectory, 'wiretune-server.db');
+    if (!File(file).existsSync()) {
+      throw FormatException("There is no server database in '$dataDirectory'. Give the server's --data-dir.");
+    }
+    final database = DatabaseManager(file);
+    try {
+      database.initializeSchema();
+      final auth = AuthService(
+        database,
+        LibraryRepository(database).getOrAddSetting('jwt_secret', AuthService.generateSecret),
+      );
+      final users = auth.getAllUsers();
+      final user = users.where((u) => u.username.toLowerCase() == username.trim().toLowerCase()).firstOrNull;
+      if (user == null) {
+        throw FormatException(
+          'There is no account named "$username". Accounts: ${users.map((u) => u.username).join(', ')}',
+        );
+      }
+      final password = SetupCode.random(3);
+      await auth.resetPassword(user.id, password);
+      return password;
+    } finally {
+      database.close();
+    }
+  }
+
   Future<void> close() async {
     albumLookups.close();
     creditLookups.close();

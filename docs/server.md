@@ -159,14 +159,14 @@ doesn't ask for the current one and signs out your other devices.
 Each account's favorites, plays, playlists and hidden items are kept on the server and deleted with the account
 ([limits](api.md#your-data)).
 
-**Lost the administrator password?** There's no reset. Stop the server, delete the rows of the `users` table in
-`wiretune-server.db`, and start it again to set it up from scratch:
+**Lost the administrator password?** Stop the server and run it once with `--reset-password` and the account's name
+(and the `--data-dir` it runs with). It prints a new password and signs the account's devices out; change it in the
+player afterwards.
 
 ```bash
-sqlite3 wiretune-server.db 'DELETE FROM users;'     # with Docker: on the /data volume (the image has no sqlite3)
+wiretune_server --reset-password owner --data-dir /var/lib/wiretune
+docker run --rm -v wiretune-data:/data ghcr.io/wirekurosastak/wiretune-server --reset-password owner
 ```
-
-Everyone starts over, and the old accounts' favorites and playlists are lost.
 
 ## Data directory
 
@@ -221,6 +221,7 @@ only one of that size and length, or of that title, artist, album and length.
 | `--trust-proxy` | off | Take the client address from `X-Forwarded-For`. Only behind a reverse proxy ([above](#https-with-no-ip-and-caddy)). |
 | `--tls-cert <file>`, `--tls-key <file>` | off | Serve HTTPS with this certificate chain and private key (PEM). Both or neither ([HTTPS](#https-without-a-proxy)). |
 | `--log-level <level>` | `info` | `debug`, `info`, `warn` or `error`. |
+| `--reset-password <account>` | | Gives the account a new random password, prints it, and exits ([Accounts](#accounts)). Command line only. |
 
 ## Troubleshooting
 

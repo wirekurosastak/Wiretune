@@ -31,6 +31,19 @@ Future<void> main(List<String> args) async {
       return;
     }
     options = ServerOptions.fromArgs(results);
+    final account = results.option('reset-password');
+    if (account != null) {
+      final password = await WiretuneServer.resetPassword(options, account);
+      stdout.writeln(
+        'The new password of $account: $password\n'
+        'Its devices are signed out. Sign in with it, then change it in Settings → Account & connection.',
+      );
+      return;
+    }
+  } on IncompatibleDatabaseException catch (e) {
+    stderr.writeln(e.message);
+    exitCode = 1;
+    return;
   } on FormatException catch (e) {
     final hint = e is ArgParserException ? '\n\n${ServerOptions.parser.usage}' : '';
     stderr.writeln('${e.message}$hint');

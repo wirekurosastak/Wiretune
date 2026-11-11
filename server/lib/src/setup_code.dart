@@ -11,7 +11,7 @@ import 'package:wiretune_core/wiretune_core.dart';
 /// The operator reads it from the server's log, or chooses one with `--setup-code`.
 class SetupCode {
   /// [configured] is the operator's own code; null or blank makes the server create a random one.
-  SetupCode(String? configured) : value = _normalize(configured?.trim()).isEmpty ? _generate() : configured!.trim() {
+  SetupCode(String? configured) : value = _normalize(configured?.trim()).isEmpty ? random() : configured!.trim() {
     _normalized = utf8.encode(_normalize(value));
   }
 
@@ -34,9 +34,11 @@ class SetupCode {
 
   static String _normalize(String? value) => value == null ? '' : lettersAndDigits(value).toUpperCase();
 
-  static String _generate() {
+  /// [groups] times four random characters of the [alphabet], with dashes between: `K7QP-2WXM`.
+  static String random([int groups = 2]) {
     final random = Random.secure();
-    final chars = List.generate(8, (_) => alphabet[random.nextInt(alphabet.length)]).join();
-    return '${chars.substring(0, 4)}-${chars.substring(4)}';
+    return [
+      for (var i = 0; i < groups; i++) List.generate(4, (_) => alphabet[random.nextInt(alphabet.length)]).join(),
+    ].join('-');
   }
 }

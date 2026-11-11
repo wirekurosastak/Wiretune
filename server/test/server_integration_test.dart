@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:test/test.dart';
 import 'package:wiretune_core/wiretune_core.dart';
+import 'package:wiretune_server/wiretune_server.dart';
 
 import 'support.dart';
 
@@ -142,6 +143,34 @@ void main() {
     expect((await admin.delete('/api/users/nobody')).statusCode, 404);
     final users = json(await admin.get('/api/users')) as List;
     expect(users.single['username'], 'owner');
+  });
+
+  test('--reset-password gives a named account a new password and signs its devices out', () async {
+    final (owner, _) = await setupAdmin(server);
+    final options = ServerOptions(dataDirectory: server.dataPath);
+    late String password;
+    server = await server.restart(() async {
+      password = await WiretuneServer.resetPassword(options, 'OWNER');
+      // A name nobody has: the accounts there are, for whoever forgot the name too.
+      await expectLater(
+        WiretuneServer.resetPassword(options, 'nobody'),
+        throwsA(isA<FormatException>().having((e) => e.message, 'message', contains('Accounts: owner'))),
+      );
+    });
+
+    final client = server.client();
+    expect((await client.post('/api/auth/login', {'username': 'owner', 'password': adminPassword})).statusCode, 401);
+    expect((await client.post('/api/auth/login', {'username': 'owner', 'password': password})).statusCode, 200);
+    expect((await server.client(owner.token).get('/api/auth/me')).statusCode, 401, reason: 'signed in before');
+
+    // A folder without a database is refused, and no empty one is made there.
+    final empty = Directory.systemTemp.createTempSync('wiretune_reset_');
+    addTearDown(() => empty.deleteSync(recursive: true));
+    await expectLater(
+      WiretuneServer.resetPassword(ServerOptions(dataDirectory: empty.path), 'owner'),
+      throwsFormatException,
+    );
+    expect(empty.listSync(), isEmpty);
   });
 
   test('sign-in is rate limited with a readable error', () async {

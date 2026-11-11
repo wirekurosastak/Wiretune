@@ -74,6 +74,11 @@ class ServerOptions {
     )
     ..addOption('tls-key', valueHelp: 'file', help: 'The private key (PEM) of the certificate.')
     ..addOption('log-level', valueHelp: 'level', defaultsTo: 'info', help: 'debug, info, warn or error.')
+    ..addOption(
+      'reset-password',
+      valueHelp: 'account',
+      help: 'Give this account a new random password, print it, and exit. With the server stopped.',
+    )
     ..addFlag('version', negatable: false, help: 'Show the version.')
     ..addFlag('help', abbr: 'h', negatable: false, help: 'Show this help.');
 
