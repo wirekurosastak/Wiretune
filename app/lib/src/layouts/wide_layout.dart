@@ -1682,8 +1682,8 @@ class _QueueCover extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 CoverImage(path: player.currentTrack?.coverArtPath, radius: 0),
-                // A small chevron stays at the cover's foot, so the queue and the lyrics are found without the mouse
-                // over it; the veil with the larger one comes under the mouse.
+                // At rest a shade at the cover's foot, under the arrow there; under the mouse, and while the queue is
+                // open, a veil over all of it.
                 AnimatedOpacity(
                   opacity: lit || open ? 0 : 1,
                   duration: const Duration(milliseconds: 180),
@@ -1696,22 +1696,28 @@ class _QueueCover extends StatelessWidget {
                         stops: [0.45, 1],
                       ),
                     ),
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: Colors.white),
-                    ),
                   ),
                 ),
                 AnimatedOpacity(
                   opacity: lit ? 1 : (open ? 0.85 : 0),
                   duration: const Duration(milliseconds: 180),
-                  child: ColoredBox(
-                    color: const Color(0x8C000000),
-                    child: AnimatedRotation(
+                  child: const ColoredBox(color: Color(0x8C000000)),
+                ),
+                // One arrow, so the queue and the lyrics are found without the mouse: small at the foot, it slides up to
+                // the middle and grows under the mouse, and turns down while they are open.
+                AnimatedAlign(
+                  alignment: lit || open ? Alignment.center : Alignment.bottomCenter,
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(end: lit || open ? 26 : 18),
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, size, _) => AnimatedRotation(
                       turns: open ? 0.5 : 0,
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutCubic,
-                      child: Icon(Icons.keyboard_arrow_up_rounded, size: 26, color: Colors.white),
+                      child: Icon(Icons.keyboard_arrow_up_rounded, size: size, color: Colors.white),
                     ),
                   ),
                 ),

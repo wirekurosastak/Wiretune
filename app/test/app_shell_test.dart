@@ -192,22 +192,19 @@ void main() {
     expect(vm.selectedSection, AppSection.tracks);
     expect(tester.widget<AnimatedScale>(scale.first).scale, greaterThan(1), reason: 'no jump on the click');
 
-    // The arrow at the cover's foot, without the mouse over it.
+    // The arrow at the cover's foot without the mouse over it; in the middle (as under the mouse) once the queue is open.
     await mouse.moveTo(const Offset(700, 300));
     await settle(tester);
-    final arrow = find.descendant(
-      of: find.byTooltip(Localizer.get('TipQueueToggle')),
-      matching: find.byIcon(Icons.keyboard_arrow_up_rounded),
-    );
-    final shown = [
-      for (final element in arrow.evaluate())
-        tester
-            .widget<AnimatedOpacity>(
-              find.ancestor(of: find.byWidget(element.widget), matching: find.byType(AnimatedOpacity)).first,
-            )
-            .opacity,
-    ];
-    expect(shown, contains(1.0));
+    final cover = find.byTooltip(Localizer.get('TipQueueToggle'));
+    final arrow = find.descendant(of: cover, matching: find.byIcon(Icons.keyboard_arrow_up_rounded));
+    expect(arrow, findsOneWidget);
+    Alignment place() =>
+        tester.widget<AnimatedAlign>(find.descendant(of: cover, matching: find.byType(AnimatedAlign))).alignment
+            as Alignment;
+    expect(place(), Alignment.bottomCenter);
+    vm.player.isQueueOpen = true;
+    await settle(tester);
+    expect(place(), Alignment.center);
   });
 
   testWidgets("the favorites' header has a list's queue buttons on a wide screen, not on a phone, and no playlist's", (
