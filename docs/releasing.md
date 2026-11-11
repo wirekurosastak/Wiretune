@@ -8,8 +8,9 @@ publishes nothing, as a check before a tag.
 
 1. Raise the version everywhere: `WiretuneInfo.version` (`packages/wiretune_core/lib/src/about.dart`), every
    `pubspec.yaml` (the build number is Android's version code) and `app/tizen/tizen-manifest.xml`. A test fails if
-   they differ. The players compare the version without the build number, so raise the version itself, and never
-   lower the build number.
+   they differ. The players compare the version without the build number, part by part from the left, so raise the
+   version itself, and never lower the build number. The year comes last: `1.0.2027` is older than `1.1.2026`, so
+   the first two parts keep rising across years.
 2. Push a tag `v<version>`: the pubspec version without the build number (`v1.0.2026` for `1.0.2026+1`).
 3. `.github/workflows/release.yml` runs the checks (`test.yml`, as CI does), checks that the tag, pubspec and Tizen
    manifest match, then builds:
