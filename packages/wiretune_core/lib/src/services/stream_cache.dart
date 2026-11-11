@@ -8,6 +8,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 
+import 'app_paths.dart';
 import 'wiretune_log.dart';
 
 /// Keeps the server tracks that were streamed, so that playing one again reads it from the disk instead of the server.
@@ -16,16 +17,22 @@ import 'wiretune_log.dart';
 /// answer on and writes the same bytes into the track's file as they go by: nothing is fetched twice, and a track
 /// skipped after a few seconds costs nothing extra. Once every byte of a track has come by (in one go, or in the pieces
 /// the player's seeks asked for), the file is kept, and the next [sourceFor] gives its path. The oldest files go
-/// once the folder is over [limitBytes]. Pieces of a track not complete yet are kept only until the app closes. The files
-/// have their audio extension (Android lets an app put only audio files into the music folder), and a `.nomedia` file
-/// keeps them out of other music apps.
+/// once the folder is over [limitBytes]. A track not complete yet is written in [workDirectory] (private to the app),
+/// until the app closes, and moved into [directory] once it is whole, so only whole tracks are ever seen there. The
+/// files have their audio extension (Android lets an app put only audio files into the music folder), and a `.nomedia`
+/// file keeps them out of other music apps.
 class StreamCache {
-  StreamCache(this.directory, {this.limitBytes = defaultLimitBytes, http.Client? client})
-    : _client = client ?? http.Client();
+  StreamCache(this.directory, {String? workDirectory, this.limitBytes = defaultLimitBytes, http.Client? client})
+    : workDirectory = workDirectory ?? p.join(AppPaths.getDataDirectory(), 'StreamCache'),
+      _client = client ?? http.Client();
 
   static const int defaultLimitBytes = 2 * 1024 * 1024 * 1024;
 
+  /// The folder of the kept tracks, where people find them.
   final String directory;
+
+  /// The app's own folder for the tracks still being filled in.
+  final String workDirectory;
   final int limitBytes;
   final http.Client _client;
 
@@ -47,9 +54,17 @@ class StreamCache {
   Future<void> start() async {
     try {
       final folder = Directory(directory)..createSync(recursive: true);
+      final work = Directory(workDirectory)..createSync(recursive: true);
       _hideFromMusicApps();
-      for (final entry in folder.listSync().whereType<File>()) {
-        if (_isPart(entry.path)) entry.deleteSync();
+      // Also in the folder of the kept tracks, where earlier versions wrote them and a move may have been cut short.
+      for (final entry in [...work.listSync(), ...folder.listSync()].whereType<File>()) {
+        if (!_isPart(entry.path)) continue;
+        try {
+          entry.deleteSync();
+        } on FileSystemException catch (e) {
+          // On Android a file an earlier install of Wiretune left can't be deleted by this one.
+          WiretuneLog.warn('StreamCache', "An unfinished track couldn't be removed: ${e.message}");
+        }
       }
       _trim();
       final server = _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -95,7 +110,7 @@ class StreamCache {
           offset += chunk.length;
         }
       }
-      if (partial.isComplete) _keep(name, partial);
+      if (partial.isComplete) await _keep(name, partial);
     } catch (e) {
       WiretuneLog.info('StreamCache', "The rest of a track couldn't be fetched: ${e.runtimeType}");
     }
@@ -192,7 +207,7 @@ class StreamCache {
         }),
       );
       await response.close();
-      if (partial != null && partial.isComplete) _keep(name, partial);
+      if (partial != null && partial.isComplete) await _keep(name, partial);
     } catch (e) {
       // The player went on (a skip, a seek, the app closing) or the server went away: what came by stays in the
       // track's pieces, and the player asks again for what it wants.
@@ -258,24 +273,35 @@ class StreamCache {
     if (existing != null && existing.total == total) return existing;
     existing?.close();
     try {
-      return _partials[name] = _Partial(File(p.join(directory, _partName(name))), total);
+      return _partials[name] = _Partial(File(p.join(workDirectory, _partName(name))), total);
     } on FileSystemException catch (e) {
       WiretuneLog.warn('StreamCache', "A track can't be kept: ${e.message}");
       return null;
     }
   }
 
-  /// Every byte of the track came by: it is kept, and the oldest go while the folder is too big. Once: another stream
-  /// of the same track that ends after it finds it kept.
-  void _keep(String name, _Partial partial) {
-    if (!identical(_partials[name], partial)) return;
-    _partials.remove(name);
+  /// Every byte of the track came by: it is moved into [directory], and the oldest go while the folder is too big.
+  /// Once: another stream of the same track that ends meanwhile, or after it, finds it kept or on its way.
+  Future<void> _keep(String name, _Partial partial) async {
+    if (!identical(_partials[name], partial) || partial.isClosed) return;
     partial.close();
+    final target = p.join(directory, name);
     try {
-      partial.file.renameSync(p.join(directory, name));
+      try {
+        partial.file.renameSync(target);
+      } on FileSystemException {
+        // Another file system (a phone's music folder): copied there under the name of an unfinished track first, so
+        // that a half-copied file is never taken for the track.
+        final arriving = File(p.join(directory, _partName(name)));
+        await partial.file.copy(arriving.path);
+        arriving.renameSync(target);
+        partial.file.deleteSync();
+      }
       _trim(keep: name);
     } on FileSystemException catch (e) {
       WiretuneLog.warn('StreamCache', "A streamed track couldn't be kept: ${e.message}");
+    } finally {
+      _partials.remove(name);
     }
   }
 
@@ -312,6 +338,8 @@ class _Partial {
 
   /// Kept or given up: another stream of the same track still going by writes nothing more.
   bool _closed = false;
+
+  bool get isClosed => _closed;
 
   bool get isComplete => _have.length == 1 && _have.first == (0, total);
 

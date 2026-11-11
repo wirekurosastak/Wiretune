@@ -119,6 +119,7 @@ Future<void> main() async {
       platform.isIOS ? p.join(AppPaths.getDataDirectory(), 'Cache') : p.join(vm.downloadService.directory, 'Cache'),
     );
     vm.audioEngine.setStreamCache(cache);
+    unawaited(platform.excludeFromBackup(cache.workDirectory));
     unawaited(platform.excludeFromBackup(cache.directory).then((_) => cache.start()));
   }
 

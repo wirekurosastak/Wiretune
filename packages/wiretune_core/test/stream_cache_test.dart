@@ -171,14 +171,19 @@ void main() {
   test('a track only partly played is not kept, nor is a refusal', () async {
     await get(cache.sourceFor('t3', 'flac', upstream('t3')), 'bytes=0-999');
     expect(cache.has('t3', 'flac'), isFalse);
-    List<String> files() => [for (final f in folder.listSync()) p.basename(f.path)]..sort();
-    expect(files(), ['.nomedia', 't3.part.flac'], reason: 'other music apps leave the folder alone');
+    List<String> files([Directory? of]) => [for (final f in (of ?? folder).listSync()) p.basename(f.path)]..sort();
+    final work = Directory(cache.workDirectory);
+    expect(files(), ['.nomedia'], reason: 'only whole tracks are seen there, and other music apps leave it alone');
+    expect(files(work), ['t3.part.flac'], reason: "in the app's own folder");
     await cache.close();
+    // What an earlier version left in the folder of the kept tracks.
+    File(p.join(folder.path, 'old.part.flac')).writeAsBytesSync([1, 2, 3]);
 
     // Restarted: what was left unfinished is gone.
     cache = StreamCache(folder.path);
     await cache.start();
     expect(files(), ['.nomedia']);
+    expect(files(work), isEmpty);
 
     final missing = cache.sourceFor('t4', 'flac', 'http://127.0.0.1:${server.port}/nothing');
     expect((await get(missing)).statusCode, 404, reason: "the server's answer, passed on");
@@ -188,6 +193,26 @@ void main() {
     expect((await get(unreachable)).statusCode, 502, reason: 'the server is gone');
     expect(cache.has('t5', 'flac'), isFalse);
   });
+
+  test(
+    'a track is kept also where the folder is on another file system than the app (a phone), and no piece stays',
+    () async {
+      // /dev/shm and the temporary folder are two file systems on Linux: a rename between them is refused.
+      final shared = Directory('/dev/shm').createTempSync('wiretune_stream_cache_');
+      addTearDown(() => shared.deleteSync(recursive: true));
+      await cache.close();
+      cache = StreamCache(shared.path, workDirectory: p.join(folder.path, 'work'));
+      await cache.start();
+
+      final relay = cache.sourceFor('t9', 'flac', upstream('t9'));
+      expect((await get(relay)).bodyBytes, track);
+      await until(() => cache.has('t9', 'flac'));
+      expect(File(p.join(shared.path, 't9.flac')).readAsBytesSync(), track);
+      expect([for (final f in shared.listSync()) p.basename(f.path)]..sort(), ['.nomedia', 't9.flac']);
+      expect(Directory(cache.workDirectory).listSync(), isEmpty);
+    },
+    skip: Directory('/dev/shm').existsSync() ? false : 'no second file system to try it on',
+  );
 
   test('the folder keeps to its limit, the tracks played longest ago going first', () async {
     await cache.close();
