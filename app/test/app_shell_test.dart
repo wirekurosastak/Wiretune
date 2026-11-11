@@ -19,6 +19,7 @@ import 'package:wiretune/src/layouts/wide_layout.dart';
 import 'package:wiretune/src/pages/library_pages.dart';
 import 'package:wiretune/src/pages/now_playing_page.dart';
 import 'package:wiretune/src/pages/queue_panel.dart';
+import 'package:wiretune/src/pages/section_page.dart';
 import 'package:wiretune/src/platform.dart';
 import 'package:wiretune/src/theme/app_theme.dart';
 import 'package:wiretune/src/theme/palette.dart';
@@ -159,6 +160,55 @@ void main() {
       expect(vm.albums.selectedAlbum, isNull);
     },
   );
+
+  testWidgets("a computer's sidebar keeps its section lit under the queue, a click doesn't move its icon, and the "
+      "playing song shows its arrow to the queue", (tester) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    vm.isSidebarPinned = true;
+    vm.navigateTo(AppSection.albums);
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    final label = find.text(Localizer.get('NavAlbums')).first;
+    FontWeight? weight() => tester.widget<Text>(label).style?.fontWeight;
+    expect(weight(), FontWeight.w700, reason: 'lit');
+    vm.player.isQueueOpen = true;
+    await settle(tester);
+    expect(weight(), FontWeight.w700, reason: 'still lit under the queue');
+    vm.player.isQueueOpen = false;
+    await settle(tester);
+
+    // Under the mouse the icon grows; a click leaves it so.
+    final scale = find.ancestor(
+      of: find.byIcon(sectionIcon(AppSection.tracks)).first,
+      matching: find.byType(AnimatedScale),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(find.text(Localizer.get('NavTracks')).first));
+    addTearDown(mouse.removePointer);
+    await settle(tester);
+    expect(tester.widget<AnimatedScale>(scale.first).scale, greaterThan(1));
+    await tester.tap(find.text(Localizer.get('NavTracks')).first, kind: PointerDeviceKind.mouse);
+    await settle(tester);
+    expect(vm.selectedSection, AppSection.tracks);
+    expect(tester.widget<AnimatedScale>(scale.first).scale, greaterThan(1), reason: 'no jump on the click');
+
+    // The arrow at the cover's foot, without the mouse over it.
+    await mouse.moveTo(const Offset(700, 300));
+    await settle(tester);
+    final arrow = find.descendant(
+      of: find.byTooltip(Localizer.get('TipQueueToggle')),
+      matching: find.byIcon(Icons.keyboard_arrow_up_rounded),
+    );
+    final shown = [
+      for (final element in arrow.evaluate())
+        tester
+            .widget<AnimatedOpacity>(
+              find.ancestor(of: find.byWidget(element.widget), matching: find.byType(AnimatedOpacity)).first,
+            )
+            .opacity,
+    ];
+    expect(shown, contains(1.0));
+  });
 
   testWidgets("the favorites' header has a list's queue buttons on a wide screen, not on a phone, and no playlist's", (
     tester,

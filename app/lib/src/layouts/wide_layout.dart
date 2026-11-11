@@ -1137,7 +1137,8 @@ class _Sidebar extends StatelessWidget {
           builder: (context, _) {
             final library = vm.library;
             Widget item(AppSection section, String label, int? count, {bool autofocus = false}) => _SidebarItem(
-              selected: vm.selectedTab == section && !vm.isSearchActive && !vm.player.isQueueOpen,
+              // Lit under the queue and the lyrics too: they lie over its page, and its button goes back to it.
+              selected: vm.selectedTab == section && !vm.isSearchActive,
               icon: sectionIcon(section),
               label: label,
               count: count,
@@ -1243,9 +1244,10 @@ class _SidebarItemState extends State<_SidebarItem> {
     final selected = widget.selected;
     final color = selected ? colors.accent : colors.neutral;
     const duration = Duration(milliseconds: 260);
-    // The tile pops under the mouse: quick, with a small overshoot, rather than the slower fade of the rest.
+    // The tile pops under the mouse: quick, with a small overshoot, rather than the slower fade of the rest. Under the
+    // mouse only: a click doesn't move it again.
     final tile = AnimatedScale(
-      scale: _hover && !selected ? 1.08 : 1,
+      scale: _hover ? 1.08 : 1,
       duration: const Duration(milliseconds: 170),
       curve: Curves.easeOutBack,
       child: AnimatedContainer(
@@ -1680,26 +1682,26 @@ class _QueueCover extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 CoverImage(path: player.currentTrack?.coverArtPath, radius: 0),
-                // A touch screen has no mouse to bring the veil: there a small chevron stays at the cover's foot.
-                if (AppPlatform.current.isMobile)
-                  AnimatedOpacity(
-                    opacity: lit || open ? 0 : 1,
-                    duration: const Duration(milliseconds: 180),
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0x00000000), Color(0x8C000000)],
-                          stops: [0.45, 1],
-                        ),
-                      ),
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: Colors.white),
+                // A small chevron stays at the cover's foot, so the queue and the lyrics are found without the mouse
+                // over it; the veil with the larger one comes under the mouse.
+                AnimatedOpacity(
+                  opacity: lit || open ? 0 : 1,
+                  duration: const Duration(milliseconds: 180),
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00000000), Color(0x8C000000)],
+                        stops: [0.45, 1],
                       ),
                     ),
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Icon(Icons.keyboard_arrow_up_rounded, size: 18, color: Colors.white),
+                    ),
                   ),
+                ),
                 AnimatedOpacity(
                   opacity: lit ? 1 : (open ? 0.85 : 0),
                   duration: const Duration(milliseconds: 180),
