@@ -146,7 +146,8 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> {
     return AnimatedBuilder(
       animation: position,
       builder: (context, _) {
-        if (position.isDismissed && !widget.isOpen) return const SizedBox.shrink();
+        // Down: gone in the frame it gets there (the status says so only a frame later, a frame with no cover).
+        if (position.value == 0 && !widget.isOpen) return const SizedBox.shrink();
         // Open, it covers the page and the bars: a screen reader finds only the player.
         return BlockSemantics(
           blocking: widget.isOpen,
@@ -160,6 +161,88 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> {
       },
     );
   }
+}
+
+/// The mini player as the full-screen player lands in it, as in YouTube Music: the player comes down solid, and once it
+/// has closed, the colours of its cover stay behind the mini player and fade away. Drawn only while they fade.
+class _LandingWash extends StatefulWidget {
+  const _LandingWash({required this.sheet, required this.child});
+
+  final PlayerSheet sheet;
+  final Widget child;
+
+  @override
+  State<_LandingWash> createState() => _LandingWashState();
+}
+
+class _LandingWashState extends State<_LandingWash> with SingleTickerProviderStateMixin {
+  late final AnimationController _wash = AnimationController(vsync: this, duration: const Duration(milliseconds: 450));
+
+  /// Where the sheet was at the last frame.
+  late double _last = widget.sheet.position.value;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.sheet.position.addListener(_follow);
+  }
+
+  @override
+  void dispose() {
+    widget.sheet.position.removeListener(_follow);
+    _wash.dispose();
+    super.dispose();
+  }
+
+  void _follow() {
+    final now = widget.sheet.position.value;
+    if (now == 0 && _last > 0) {
+      // Closed, in the frame the player goes: its colours where it was, then the mini player's own.
+      _wash.value = 1;
+      unawaited(_wash.animateTo(0, curve: Curves.easeOut));
+    } else if (now > 0 && _wash.value > 0) {
+      _wash.value = 0; // opening again: the player's window covers it
+    }
+    _last = now;
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _wash,
+    child: widget.child,
+    builder: (context, child) {
+      if (_wash.value == 0) return child!;
+      final height = MediaQuery.sizeOf(context).height;
+      // The player's backdrop, as far down as the bar is: the part of it the player showed here as it landed.
+      final top = widget.sheet.travel(height);
+      return Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Opacity(
+                opacity: _wash.value,
+                child: ClipRect(
+                  child: OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minHeight: height,
+                    maxHeight: height,
+                    child: Transform.translate(
+                      offset: Offset(0, -top),
+                      child: ColoredBox(
+                        color: context.colors.palette.background,
+                        child: const AmbientBackdrop(colour: 1, nowPlaying: true),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          child!,
+        ],
+      );
+    },
+  );
 }
 
 /// The bars at the bottom, across the whole width as in YouTube Music: the mini player while a track is loaded, rising
@@ -220,7 +303,10 @@ class _BottomBars extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ColoredBox(color: surface, child: const _MiniPlayer()),
+              ColoredBox(
+                color: surface,
+                child: sheet == null ? const _MiniPlayer() : _LandingWash(sheet: sheet, child: const _MiniPlayer()),
+              ),
               navigation,
             ],
           ),

@@ -947,7 +947,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets("a phone's full-screen player fades into the mini player as it lands on it, and is solid above", (
+  testWidgets("a phone's full-screen player comes down solid, and its colours stay behind the mini player, fading", (
     tester,
   ) async {
     final vm = await pumpApp(tester, const Size(400, 860));
@@ -955,22 +955,22 @@ void main() {
     await settle(tester);
     vm.openNowPlaying();
     await settle(tester);
-    double solid() => tester
-        .widget<FadeTransition>(
-          find.ancestor(of: find.byType(NowPlayingPage), matching: find.byType(FadeTransition)).first,
-        )
-        .opacity
-        .value;
-    expect(solid(), 1);
+    final wash = find.byWidgetPredicate((w) => w is AmbientBackdrop && w.nowPlaying && w.colour == 1);
+    final player = find.byType(NowPlayingPage);
 
     vm.closeNowPlaying();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
-    expect(solid(), 1, reason: 'still high above the mini player');
-    await tester.pump(const Duration(milliseconds: 200));
-    expect(solid(), inExclusiveRange(0, 1), reason: 'the mini player shows through');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(player, findsOneWidget, reason: 'on its way down');
+    expect(wash, findsOneWidget, reason: "the player's own");
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(player, findsNothing, reason: 'landed');
+    expect(wash, findsOneWidget, reason: 'behind the mini player');
+    await tester.pump(const Duration(milliseconds: 150));
+    final fading = tester.widget<Opacity>(find.ancestor(of: wash, matching: find.byType(Opacity)).first).opacity;
+    expect(fading, inExclusiveRange(0, 1));
     await settle(tester);
-    expect(find.byType(NowPlayingPage), findsNothing);
+    expect(wash, findsNothing, reason: 'faded, and no longer drawn');
   });
 
   testWidgets("a screen reader finds only the full-screen player while it is open, not the page under it", (
