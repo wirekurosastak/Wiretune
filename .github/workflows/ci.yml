@@ -33,14 +33,14 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
       - run: dart tool/build.dart server
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wiretune-server-${{ runner.os }}
           path: dist/server
@@ -50,7 +50,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -f server/Dockerfile -t wiretune-server .
       # Starts the image on an empty library and asks the one anonymous route that needs no account.
       - name: Start and ask
@@ -75,8 +75,8 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
@@ -87,7 +87,7 @@ jobs:
           cache: true
       # Signed with the debug key: there is no key.properties in CI.
       - run: dart tool/build.dart android
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wiretune-android
           path: dist/android/*.apk
@@ -109,7 +109,7 @@ jobs:
             os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -129,7 +129,7 @@ jobs:
           cp -R build/ios/iphoneos/Runner.app Payload/
           zip -qr wiretune-unsigned.ipa Payload
       - if: matrix.target == 'ios'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wiretune-ios-unsigned
           path: app/wiretune-unsigned.ipa
