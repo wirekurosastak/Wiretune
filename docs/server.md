@@ -5,11 +5,22 @@ players over the [HTTP API](api.md). For access away from home: [Tailscale or HT
 
 ## Start it
 
-Build it ([building.md](building.md#server)), copy `dist/server` to the machine that will run it, and start it:
+Download `wiretune-server-…` for your system from the
+[latest release](https://github.com/wirekurosastak/Wiretune/releases/latest), unpack it, and start it with your music
+folder:
 
 ```bash
-dist/server/bin/wiretune_server --library /srv/music
+tar -xzf wiretune-server-*-linux-x64.tar.gz
+wiretune-server-*/bin/wiretune_server --library /srv/music
 ```
+
+- Keep `bin/` and `lib/` together: the program loads SQLite from `lib/`.
+- Linux: needs glibc 2.34 or later (Debian 12, Ubuntu 22.04, Fedora 35).
+- Windows: `bin\wiretune_server.exe --library D:\Music`.
+- macOS: Apple silicon only. A download from a browser is quarantined; `xattr -dr com.apple.quarantine <folder>` lifts
+  that (untried).
+
+Or [build it](building.md#server) and start `dist/server/bin/wiretune_server`.
 
 It listens on port 5200 and scans the folder. Until the first account exists, every start logs a setup code:
 
@@ -76,6 +87,10 @@ journalctl -u wiretune -f        # the setup code appears here on the first star
 
 The `wiretune` user only needs read access to the music. systemd keeps the data folder (password hashes, signing key)
 private to it.
+
+Windows and macOS (neither tried): on Windows, a Task Scheduler task with the trigger *At log on* that starts
+`bin\wiretune_server.exe --library D:\Music`; on macOS, a launchd agent in `~/Library/LaunchAgents` whose
+`ProgramArguments` are the same command, with `RunAtLoad` and `KeepAlive`.
 
 ## Away from home
 
