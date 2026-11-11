@@ -238,6 +238,31 @@ void main() {
     await until(() => filesIn(downloads.directory).isEmpty);
   });
 
+  test('on mobile data a download chosen by hand is fetched, and what the choices bring on their own waits', () async {
+    server
+      ..add(serverTrack('a1', 'One', 'Album A'), audio(1))
+      ..add(serverTrack('b1', 'Two', 'Album B'), audio(2));
+    final player = await signedIn();
+    final downloads = player.downloads;
+    final artist = player.library.getArtistByName('Artist')!;
+    downloads.isOnMobileData = true;
+
+    downloads.setArtistDownloaded(artist.id, true);
+    await until(() => downloads.doneCount == 2);
+    expect(downloads.isWaitingForWifi, isFalse);
+
+    // A new album of the artist: nobody asked for it here and now.
+    server.add(serverTrack('c1', 'Three', 'Album C'), audio(4));
+    await player.session.refreshLibrary();
+    await settle();
+    expect((downloads.doneCount, downloads.wantedCount), (2, 3));
+    expect(downloads.isWaitingForWifi, isTrue);
+
+    downloads.isOnMobileData = false;
+    await until(() => downloads.doneCount == 3);
+    expect(downloads.isWaitingForWifi, isFalse);
+  });
+
   test('a playlist and the favourites keep their copies in step; unmarking deletes them', () async {
     for (final (id, number) in [('t1', 1), ('t2', 2), ('t3', 3)]) {
       server.add(serverTrack(id, 'Song $id', 'Album', number: number), audio(number));

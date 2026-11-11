@@ -37,7 +37,8 @@ enum DownloadState {
 /// default) the copies follow it whenever the library changes: a playlist that grows gets the new track, a copy deleted
 /// outside Wiretune comes back. With sync off, a download gets what it covers then, and nothing more is fetched on its
 /// own. Copies are downloaded again when the server's file changes, and deleted as soon as nothing wants them any more.
-/// One file is downloaded at a time, and only while signed in.
+/// One file is downloaded at a time, and only while signed in. On mobile data only what a choice covered when it was
+/// made is fetched ([isOnMobileData]).
 ///
 /// A copy is a readable file in [directory], `Album artist/Album/01 - Title.flac`, its name made of the tags with
 /// anything a file system or another device could trip on taken out, so no ID or tag a server sends can lead outside
@@ -175,10 +176,12 @@ class DownloadService {
   void setSyncModeEnabled(bool enabled) {
     if (_syncModeEnabled == enabled) return;
     _syncModeEnabled = enabled;
-    // From now on only what is still to come for the present choices is fetched; with sync on, the choices decide.
-    _choices.pending
-      ..clear()
-      ..addAll(enabled ? const [] : _covered().keys.where((id) => !_hasCurrentCopy(id)));
+    // Off: from now on only what is still to come for the present choices is fetched. On: the choices decide.
+    if (!enabled) {
+      _choices.pending
+        ..clear()
+        ..addAll(_covered().keys.where((id) => !_hasCurrentCopy(id)));
+    }
     _library.setPreference(_syncModePreference, enabled ? '1' : '0');
     _saveChoices();
     _refreshWanted();
@@ -202,13 +205,12 @@ class DownloadService {
     change(_choices);
     final covered = _covered();
     _choices.pending.removeWhere((id) => !covered.containsKey(id));
-    // Without sync, a new choice still downloads what it covers now: that is the point of making it.
-    if (!_syncModeEnabled) {
-      _choices.pending.addAll([
-        for (final track in chosen)
-          if (!track.isLocal && !_hasCurrentCopy(track.id, track)) track.id,
-      ]);
-    }
+    // What a new choice covers now was asked for by hand: without sync nothing else is fetched, and on mobile data
+    // nothing else either.
+    _choices.pending.addAll([
+      for (final track in chosen)
+        if (!track.isLocal && !_hasCurrentCopy(track.id, track)) track.id,
+    ]);
     _saveChoices();
     _refreshWanted();
     changed.emit(null);
@@ -272,6 +274,20 @@ class DownloadService {
 
   /// Downloads are waiting because the server cannot be reached or nobody is signed in.
   bool get isWaitingForServer => doneCount < wantedCount && !_session.isLoggedIn;
+
+  /// Whether the device is on mobile data. There only what was chosen by hand is fetched: what the choices bring on
+  /// their own (a new album of a downloaded artist, a file that changed on the server) waits for Wi-Fi.
+  bool get isOnMobileData => _onMobileData;
+  bool _onMobileData = false;
+  set isOnMobileData(bool value) {
+    if (_onMobileData == value) return;
+    _onMobileData = value;
+    changed.emit(null);
+    _schedule();
+  }
+
+  /// Downloads are waiting for Wi-Fi.
+  bool get isWaitingForWifi => _onMobileData && !_running && doneCount < wantedCount;
 
   /// Why the last download failed, in the active language; null while nothing failed.
   String? get errorMessage => _errorKey == null ? null : Localizer.format(_errorKey!, _errorArgs);
@@ -475,6 +491,7 @@ class DownloadService {
   /// copy instead of being downloaded again.
   Future<_Job?> _nextJob() async {
     for (final track in _wanted.values) {
+      if (_onMobileData && !_choices.pending.contains(track.id)) continue;
       final cover = track.coverArtPath;
       if (_isServerUrl(cover)) {
         final coverStem = _coverStem(cover!);
@@ -857,7 +874,7 @@ class _Copy {
   bool get isMoving => version.isEmpty;
 }
 
-/// What the user chose to download, and (with sync off) the tracks the choices still have to fetch.
+/// What the user chose to download, and the tracks still to fetch that a choice covered when it was made.
 class _Choices {
   final Set<String> tracks = {};
   final Set<String> albums = {};

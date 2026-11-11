@@ -95,8 +95,9 @@ one off your list.
 ## Downloads
 
 Download a track, album, artist, playlist or all favorites with the download button next to *Play*, or *⋮ → Download
-to this device*. With *Sync downloads* on (the default), downloads follow changes on the server. Files go to the
-[downloads folder](#where-things-are) as `Album artist/Album/01 - Title.flac`. Signing out deletes them.
+to this device*. With *Sync downloads* on (the default), downloads follow changes on the server; on mobile data those
+wait for Wi-Fi, and only what you chose yourself downloads. Files go to the [downloads folder](#where-things-are) as
+`Album artist/Album/01 - Title.flac`. Signing out deletes them.
 
 *Settings → Account & connection → Offline mode* shows only downloads and local music, and stops looking for the
 server.

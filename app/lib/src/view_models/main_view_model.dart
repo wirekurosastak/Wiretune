@@ -970,6 +970,7 @@ class MainViewModel extends ChangeNotifier {
 
   void _followMobileData(bool mobile) {
     _onMobileData = mobile;
+    downloadService.isOnMobileData = mobile;
     if (mobile && !_mobileQualityChosen && session.usesServer && !session.isOfflineMode) asksMobileQuality = true;
     _applyStreamingQuality();
   }

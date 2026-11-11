@@ -109,6 +109,9 @@ class DownloadsViewModel extends ChangeNotifier {
       return Localizer.format('DownloadsProgress', [current.title, percent, downloadedCount + 1, wantedCount]);
     }
     if (_downloads.isWaitingForServer) return Localizer.format('DownloadsWaiting', [wantedCount - downloadedCount]);
+    if (_downloads.isWaitingForWifi) {
+      return Localizer.format('DownloadsWaitingForWifi', [wantedCount - downloadedCount]);
+    }
     if (wantedCount == 0) return Localizer.get('DownloadsNone');
     return Localizer.format('DownloadsUpToDate', [downloadedCount]);
   }

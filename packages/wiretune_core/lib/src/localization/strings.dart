@@ -1016,6 +1016,16 @@ const Map<String, (String, String, String)> allStrings = {
     '{0} track is waiting for the server.',
     '{0} Titel wartet auf den Server.',
   ),
+  'DownloadsWaitingForWifi': (
+    '{0} szám vár a Wi-Fire.',
+    '{0} tracks are waiting for Wi-Fi.',
+    '{0} Titel warten auf WLAN.',
+  ),
+  'DownloadsWaitingForWifi_One': (
+    '{0} szám vár a Wi-Fire.',
+    '{0} track is waiting for Wi-Fi.',
+    '{0} Titel wartet auf WLAN.',
+  ),
   'DownloadsUpToDate': (
     'Mind a(z) {0} szám letöltve, naprakészen.',
     'All {0} tracks are downloaded and up to date.',
