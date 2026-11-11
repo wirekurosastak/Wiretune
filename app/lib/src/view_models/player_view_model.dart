@@ -52,6 +52,7 @@ class PlayerViewModel extends ChangeNotifier {
       _engine.positionChanged.listen((position) {
         _localPosition = position;
         _localPositionAt = DateTime.now();
+        _countWhenPlayed(position);
         if (!_isUserSeeking && !isRemote) _setPosition(position);
         _publishIfDrifted(position);
         _publishGroupIfDrifted(position);
@@ -1075,15 +1076,34 @@ class PlayerViewModel extends ChangeNotifier {
     currentTrack = track;
     if (!isRemote) _setPosition(_localPosition);
     // Music another account cast here counts for that account (its player counts it), not for this one.
-    if (track != null && _playingFor == null) {
-      // Bookkeeping only: no error banner when it fails.
-      try {
-        _library.recordPlay(track.id);
-      } catch (e) {
-        WiretuneLog.debug('PlayerViewModel', 'Recording a play failed: $e');
-      }
-    }
+    _uncounted = _playingFor == null ? track : null;
+    _listenedFor = Duration.zero;
+    _listenedFrom = _localPosition;
+    _countWhenPlayed(_localPosition);
     notifyListeners();
+  }
+
+  /// The track that plays here and hasn't counted as played yet, how much of it was heard, and where it stood last.
+  Track? _uncounted;
+  Duration _listenedFor = Duration.zero;
+  Duration _listenedFrom = Duration.zero;
+
+  /// The track now stands at [position]: once enough of it was heard ([Track.countsAfter]) it counts as played. A jump
+  /// in it isn't listening.
+  void _countWhenPlayed(Duration position) {
+    final track = _uncounted;
+    if (track == null) return;
+    final step = position - _listenedFrom;
+    _listenedFrom = position;
+    if (step > Duration.zero && step < const Duration(seconds: 3)) _listenedFor += step;
+    if (_listenedFor < track.countsAfter) return;
+    _uncounted = null;
+    // Bookkeeping only: no error banner when it fails.
+    try {
+      _library.recordPlay(track.id);
+    } catch (e) {
+      WiretuneLog.debug('PlayerViewModel', 'Recording a play failed: $e');
+    }
   }
 
   void _onTrackEnded() {
@@ -1492,8 +1512,10 @@ class PlayerViewModel extends ChangeNotifier {
   DeviceKind _remoteKind = DeviceKind.desktop;
   RemotePlayback? _remoteState;
 
-  /// The track last counted as played on another account's player this one cast to ([_applyRemote]).
-  String? _countedCast;
+  /// The track that plays on another account's player this one cast to ([_applyRemote]), and whether it has counted
+  /// as played.
+  String? _castTrack;
+  bool _castCounted = false;
   (Duration, DateTime)? _remoteBase;
   Track? _remoteTrack;
   List<QueueItem> _remoteQueue = const [];
@@ -1679,23 +1701,16 @@ class PlayerViewModel extends ChangeNotifier {
     final told = playback.track;
     final previous = _remoteTrack;
     // Music this account cast to another account's player counts here, as that player doesn't count it: once per
-    // track it starts.
+    // track it starts, when enough of it has played.
     final account = _remote?.accountId;
-    if (told != null &&
-        account != null &&
-        playback.playingFor == account &&
-        playback.playing &&
-        told.id != _countedCast) {
-      _countedCast = told.id;
-      if (_library.resolveTracks([told.id]).firstOrNull case final track?) {
-        try {
-          _library.recordPlay(track.id);
-        } catch (e) {
-          WiretuneLog.debug('PlayerViewModel', 'Could not count a play cast to another player: $e');
-        }
+    if (told != null && account != null && playback.playingFor == account) {
+      if (told.id != _castTrack) {
+        _castTrack = told.id;
+        _castCounted = false;
       }
-    } else if (told == null || playback.playingFor != account) {
-      _countedCast = null;
+      _countCastWhenPlayed();
+    } else {
+      _castTrack = null;
     }
     final Track? shown = told == null
         ? null
@@ -1717,9 +1732,23 @@ class PlayerViewModel extends ChangeNotifier {
     _remoteTicker = playback.playing
         ? Timer.periodic(const Duration(seconds: 1), (_) {
             if (!_isUserSeeking) _setPosition(_remotePosition());
+            _countCastWhenPlayed();
           })
         : null;
     notifyListeners();
+  }
+
+  void _countCastWhenPlayed() {
+    final id = _castTrack;
+    if (id == null || _castCounted) return;
+    final track = _library.resolveTracks([id]).firstOrNull;
+    if (track == null || _remotePosition() < track.countsAfter) return;
+    _castCounted = true;
+    try {
+      _library.recordPlay(track.id);
+    } catch (e) {
+      WiretuneLog.debug('PlayerViewModel', 'Could not count a play cast to another player: $e');
+    }
   }
 
   /// The position of the device being controlled: the one it told, counted on since while it plays.

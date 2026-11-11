@@ -189,7 +189,7 @@ void main() {
           fake.actions.lastIndexWhere((a) => a.$1 == 'Play'),
     );
 
-    test('plays the queue a track at a time, moves on when one ends, and counts each', () async {
+    test('plays the queue a track at a time, moves on when one ends, and counts each once 30 seconds played', () async {
       expect((state().volume, state().track), (30.0, null), reason: 'its volume, nothing of ours playing');
       streamer.execute(
         const RemoteCommand(
@@ -207,12 +207,15 @@ void main() {
       expect(state().queue, ['a', 'b']);
       expect((state().queueIndex, state().track?.id), (0, 'a'));
       await until(() => state().playing && state().position == const Duration(seconds: 20));
+      expect(played, isEmpty, reason: 'not before 30 seconds of it');
+      fake.position = const Duration(seconds: 31);
+      await until(() => played.length == 1);
 
       // The streamer ends the track: the next one is handed over.
       await looked();
       fake.state = 'STOPPED';
       await until(() => state().track?.id == 'b' && state().playing);
-      expect(played, ['a', 'b']);
+      expect(played, ['a'], reason: 'the next one has only begun');
 
       streamer.execute(const RemoteCommand(RemoteAction.pause));
       streamer.execute(const RemoteCommand(RemoteAction.volume, volume: 55));
@@ -247,8 +250,12 @@ void main() {
       expect(state().queueIndex, 0);
 
       streamer.execute(const RemoteCommand(RemoteAction.repeat, repeat: RepeatMode.one));
+      fake.position = const Duration(seconds: 31);
+      await until(() => played.length == 1);
       await looked();
       fake.state = 'STOPPED';
+      await until(() => fake.position == Duration.zero && state().playing);
+      fake.position = const Duration(seconds: 31);
       await until(() => played.length == 2);
       expect(played, ['a', 'a']);
       expect(state().track?.id, 'a');

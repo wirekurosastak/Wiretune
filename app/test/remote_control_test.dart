@@ -350,6 +350,7 @@ void main() {
       await until(() => driver.playCalls > 0);
       expect([for (final t in player.queueTracks) t.id], ['t1', 't3'], reason: 'not what this account hides');
       expect((player.playingFor?.username, notices.last), ('anna', 'anna is playing here'));
+      driver.simulatePlaying(const Duration(seconds: 30));
       expect(vm.library.playCount('t1'), 0, reason: "anna's player counts it");
       Map<Object?, Object?> lastState() => hub.ofType('state').last['state'] as Map;
       await until(() => lastState()['playingFor'] == 'anna-id');
@@ -363,26 +364,31 @@ void main() {
       // This account's own music again: its plays count here, and nobody else's music is said to play.
       player.playQueue(tracks, tracks[3]);
       await pumpEventQueue();
+      driver.simulatePlaying(const Duration(seconds: 30));
       expect((player.playingFor, vm.library.playCount('t4')), (null, 1));
       await until(() => !lastState().containsKey('playingFor'));
     });
 
-    test("music cast to another account's player counts here, once per track it starts", () async {
+    test("music cast to another account's player counts here, once per track that played for 30 seconds", () async {
       hub.devices([('desk', 'Desk', DeviceKind.desktop), ('anna-tv', 'TV', DeviceKind.tv)], others: {'anna-tv': anna});
       await pumpEventQueue();
       expect([for (final d in player.otherDevices) (d.id, d.account?.username)], [('desk', null), ('anna-tv', 'anna')]);
       player.selectDevice('anna-tv');
 
-      RemotePlayback tv(int index, {String? playingFor = 'user-1', bool playing = true}) => RemotePlayback(
+      RemotePlayback tv(int index, {String? playingFor = 'user-1', bool playing = true, int at = 31}) => RemotePlayback(
         track: tracks[index],
         playing: playing,
+        position: Duration(seconds: at),
         queue: [for (final t in tracks) t.id],
         queueIndex: index,
         playingFor: playingFor,
       );
+      hub.state('anna-tv', tv(0, at: 0)); // only begun: not yet
+      await pumpEventQueue();
+      expect(vm.library.playCount(tracks[0].id), 0);
       hub.state('anna-tv', tv(0));
       hub.state('anna-tv', tv(0)); // the same track, told again
-      hub.state('anna-tv', tv(1, playing: false)); // paused before it started: not yet
+      hub.state('anna-tv', tv(1, playing: false, at: 0)); // paused before it started: not yet
       hub.state('anna-tv', tv(1));
       hub.state('anna-tv', tv(2, playingFor: null)); // anna's own music
       hub.state('anna-tv', tv(3, playingFor: 'someone-else'));

@@ -136,6 +136,14 @@ class FakeAudioDriver with AudioDriverEvents implements AudioDriver {
   @override
   Future<void> setNext(String? audioSource) async => nextSource = audioSource;
 
+  /// The track plays on for [time], telling where it stands every second, as a real driver does.
+  void simulatePlaying(Duration time) {
+    for (var second = 0; second < time.inSeconds; second++) {
+      currentPosition += const Duration(seconds: 1);
+      positionChanged.emit(currentPosition);
+    }
+  }
+
   /// The track ends and the next one given takes over without a gap, as mpv does; without one it just ends.
   void simulateGaplessEnd() {
     final next = nextSource;

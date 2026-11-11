@@ -215,6 +215,9 @@ class Track {
 
   String get formattedDuration => formatClock(duration);
 
+  /// How much of the track has to play before it counts as played: 30 seconds, or half of a track shorter than a minute.
+  Duration get countsAfter => duration < const Duration(minutes: 1) ? duration ~/ 2 : const Duration(seconds: 30);
+
   String get displayTrackNumber => trackNumber == null ? '--' : trackNumber.toString().padLeft(2, '0');
 
   bool get isLocal => streamUrl == null || streamUrl!.isEmpty;

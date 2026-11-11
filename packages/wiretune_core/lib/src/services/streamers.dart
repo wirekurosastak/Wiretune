@@ -134,7 +134,7 @@ class StreamerDevice implements LocalDevice {
   final Track? Function(String id) trackOf;
   final Future<({String url, String? cover})> Function(Track track) sourceOf;
 
-  /// A track began: it counts as played.
+  /// Enough of a track has played for it to count as played ([Track.countsAfter]).
   final void Function(Track track) played;
 
   /// What it plays changed.
@@ -163,6 +163,9 @@ class StreamerDevice implements LocalDevice {
   bool _muted = false;
   bool _shuffle = false;
   RepeatMode _repeat = RepeatMode.off;
+
+  /// The track that plays and hasn't counted as played yet.
+  Track? _uncounted;
 
   /// A track was handed over and hasn't started yet (it is loading): a stop meanwhile isn't its end.
   DateTime? _starting;
@@ -365,7 +368,7 @@ class StreamerDevice implements LocalDevice {
     _position = Duration.zero;
     _starting = DateTime.now();
     _startAt = at > Duration.zero ? at : null;
-    played(track);
+    _uncounted = track;
     _startPolling();
     _tell();
   }
@@ -424,6 +427,10 @@ class StreamerDevice implements LocalDevice {
       }
     }
     _position = at.position;
+    if (_uncounted case final track? when _position >= track.countsAfter) {
+      _uncounted = null;
+      played(track);
+    }
     switch (state) {
       case UpnpTransport.playing:
         _playing = true;

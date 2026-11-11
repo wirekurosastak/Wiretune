@@ -86,7 +86,8 @@ To reorder a playlist, drag its tracks (on a phone, long-press first). **Most pl
 **Recently added** fill themselves, 50 tracks each.
 
 **Your listening**, at the top of Playlists, shows your most played artists, albums, tracks and genres, and the
-minutes: this month, this year (both need a server) or all time.
+minutes: this month, this year (both need a server) or all time. A track counts as played once 30 seconds of it have
+played, or half of a track shorter than a minute.
 
 **Share…** on a server playlist's page (on a phone, in its ⋮) shares it with the friends you tick. Once they join from
 the bell, they can add, remove and reorder its tracks; only you rename or delete it. **Leave playlist** takes a shared

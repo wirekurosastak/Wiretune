@@ -20,6 +20,40 @@ void main() {
     return (player, tracks, driver);
   }
 
+  test('a track counts as played once 30 seconds of it were heard, or half of a shorter one', () async {
+    final driver = FakeAudioDriver();
+    final library = createLibrary([
+      TestSupport.makeTrack('t1', 'Song 1'),
+      TestSupport.makeTrack('t2', 'Song 2'),
+      TestSupport.makeTrack('t3', 'Interlude', minutes: 0.5),
+    ])..initialize();
+    final player = PlayerViewModel(TestSupport.createEngine(driver), library);
+    List<int> plays() => [
+      for (final id in ['t1', 't2', 't3']) library.playCount(id),
+    ];
+
+    player.playQueue([
+      for (final id in ['t1', 't2', 't3']) library.getTrack(id)!,
+    ]);
+    await pumpEventQueue();
+    driver.simulatePlaying(const Duration(seconds: 29));
+    player.nextTrack();
+    await pumpEventQueue();
+    expect(plays(), [0, 0, 0], reason: 'skipped before 30 seconds');
+
+    // A jump far into the track is not listening to it.
+    await driver.seek(const Duration(minutes: 2));
+    driver.simulatePlaying(const Duration(seconds: 29));
+    expect(plays(), [0, 0, 0]);
+    driver.simulatePlaying(const Duration(seconds: 60));
+    expect(plays(), [0, 1, 0], reason: 'once, however long it plays on');
+
+    player.nextTrack();
+    await pumpEventQueue();
+    driver.simulatePlaying(const Duration(seconds: 15));
+    expect(plays(), [0, 1, 1], reason: 'half of a track of 30 seconds');
+  });
+
   group('queue', () {
     test('playing a list starts the chosen track', () {
       final (player, tracks, driver) = createQueue(startAt: 2);
