@@ -1,7 +1,7 @@
 name: wiretune
 description: "Wiretune: your lossless collection, on your own hardware, played properly."
 publish_to: 'none'
-version: 1.1.2026+1
+version: 1.2.2026+2
 
 environment:
   sdk: ^3.10.0

@@ -1,5 +1,5 @@
 group = "com.wiretune.platform"
-version = "1.1.2026.1"
+version = "1.2.2026.2"
 
 buildscript {
     val kotlinVersion = "2.4.0"
