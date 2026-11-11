@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import '../data/library_repository.dart';
 import '../localization/localizer.dart';
@@ -10,6 +11,7 @@ import '../models/library_models.dart';
 import '../models/protocol.dart';
 import '../util/async_lock.dart';
 import '../util/event.dart';
+import '../util/time.dart';
 import 'library_service.dart';
 import 'server_client.dart';
 import 'update_check.dart';
@@ -26,7 +28,11 @@ class ServerSession {
     _unsubscribers.addAll([
       Localizer.instance.languageChanged.listen((_) => stateChanged.emit(null)),
       _library.favoriteToggled.listen((track) => _change(() => _pushFavorite(track))),
-      _library.playRecorded.listen((track) => _change(() => _pushPlay(track))),
+      _library.playRecorded.listen((track) {
+        _unsentPlays.add((track.id, DateTime.now().toUtc()));
+        _saveUnsentPlays();
+        _change(_pushPlays);
+      }),
       _library.playlistEdited.listen((playlist) => _change(() => _pushPlaylist(playlist.id))),
       _library.playlistRemoved.listen((id) => _change(() => _pushPlaylistRemoved(id))),
       _library.hiddenToggled.listen((change) => _change(() => _pushHidden(change.kind, change.id, change.hidden))),
@@ -144,6 +150,7 @@ class ServerSession {
     // Until the server confirms the account, what the device kept of it (its hidden items) applies, also offline.
     if (_client.authToken != null) _library.setCurrentUser(_settings.getSetting(_userIdSetting));
     _offlineMode = _settings.getSetting(_offlineModeSetting) == '1';
+    _loadUnsentPlays();
     _setState(usesServer ? ServerConnectionState.offline : ServerConnectionState.notConfigured, null);
   }
 
@@ -506,6 +513,11 @@ class ServerSession {
 
   Future<void> _refreshLibraryCore() async {
     _setState(ServerConnectionState.connecting, 'SessionDownloading');
+    // What was played while the server was away is counted before its counts are downloaded.
+    if (_unsentPlays.isNotEmpty) {
+      _enqueue(_pushPlays);
+      await flushUserData(const Duration(seconds: 10));
+    }
     final info = serverInfo = await _client.getServerInfo(serverUrl);
     _client.isServerOlder = info == null || UpdateCheck.compareVersions(info.version, UpdateCheck.currentVersion) < 0;
     await _downloadLibrary(always: true);
@@ -571,6 +583,8 @@ class ServerSession {
     _userDataVersion = null;
     _client.authToken = null;
     _client.isServerOlder = false;
+    _unsentPlays.clear(); // they were that account's
+    _saveUnsentPlays();
     serverInfo = null;
     currentUser = null;
     _library.setCurrentUser(null);
@@ -696,9 +710,49 @@ class ServerSession {
     if (!sent) _library.setFavorite(track.id, !favorite);
   }
 
-  Future<void> _pushPlay(Track track) async {
-    if (!_canPush) return;
-    await _sendChange(() => _client.recordPlay(serverUrl, track.id));
+  /// The plays of server tracks the server hasn't been told of yet, each with its time: the ones made while it was out
+  /// of reach wait here, across restarts, until it answers.
+  final Queue<(String, DateTime)> _unsentPlays = Queue();
+  static const String _unsentPlaysSetting = 'unsent_plays';
+
+  void _loadUnsentPlays() {
+    try {
+      final saved = jsonDecode(_settings.getSetting(_unsentPlaysSetting) ?? '[]');
+      for (final play in saved as List) {
+        final at = parseIsoUtc((play as List)[1]);
+        if (at != null) _unsentPlays.add((play[0] as String, at));
+      }
+    } catch (e) {
+      WiretuneLog.warn('ServerSession', 'The plays kept for the server could not be read: $e');
+    }
+  }
+
+  void _saveUnsentPlays() => _settings.setSetting(
+    _unsentPlaysSetting,
+    jsonEncode([
+      for (final (id, at) in _unsentPlays) [id, formatIsoUtc(at)],
+    ]),
+  );
+
+  /// Sends the plays the server hasn't got, oldest first. One it refuses (a track it no longer has, the account's limit)
+  /// is dropped; when it can't be reached the rest wait.
+  Future<void> _pushPlays() async {
+    while (_canPush && _unsentPlays.isNotEmpty) {
+      final (trackId, at) = _unsentPlays.first;
+      var answered = false;
+      await _guarded(() async {
+        try {
+          await _client.recordPlay(serverUrl, trackId, at);
+        } on ServerRequestException catch (e) {
+          if (e.statusCode == null || e.statusCode! >= 500) rethrow;
+          WiretuneLog.warn('ServerSession', 'The server did not count a play: ${e.message}');
+        }
+        answered = true;
+      });
+      if (!answered) return;
+      _unsentPlays.removeFirst();
+      _saveUnsentPlays();
+    }
   }
 
   Future<void> _pushPlaylist(String playlistId) async {

@@ -542,11 +542,12 @@ class WiretuneServer {
     _Route('DELETE', '/api/me/favorites/{trackId}', Access.user, (call) => _favorite(call, false)),
     _Route('PUT', '/api/me/hidden/{type}/{itemId}', Access.user, (call) => _setHidden(call, true)),
     _Route('DELETE', '/api/me/hidden/{type}/{itemId}', Access.user, (call) => _setHidden(call, false)),
-    _Route('POST', '/api/me/plays/{trackId}', Access.user, (call) {
+    _Route('POST', '/api/me/plays/{trackId}', Access.user, (call) async {
       final trackId = call.params['trackId']!;
       final error = UserDataRules.validateId(trackId);
       if (error != null) return errorResponse(400, ErrorCodes.invalidId, error);
-      final stats = userData.recordPlay(call.userId, trackId);
+      // When it was played, from a player that tells of it later; a body without one means now.
+      final stats = userData.recordPlay(call.userId, trackId, parseIsoUtc((await call.jsonObject())?['at']));
       return stats == null
           ? errorResponse(
               409,

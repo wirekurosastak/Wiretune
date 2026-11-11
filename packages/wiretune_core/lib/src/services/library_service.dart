@@ -572,9 +572,11 @@ class LibraryService {
     favoriteChanged.emit(track);
   }
 
+  /// Counts a play. A server track's is the account's: with the server out of reach it is counted here all the same,
+  /// and the session sends it once the server answers. Without an account on this device it isn't counted.
   void recordPlay(String trackId) {
     final track = getTrack(trackId);
-    if (track == null || !_canChangeUserData(track)) return;
+    if (track == null || (!track.isLocal && !serverConnected && _currentUserId == _noAccount)) return;
 
     _plays[trackId] = (count: playCount(trackId) + 1, lastPlayedAt: DateTime.now().toUtc());
     _repository.saveUserData([trackId], _favorites, _plays);

@@ -100,7 +100,7 @@ wait for Wi-Fi, and only what you chose yourself downloads. Files go to the [dow
 `Album artist/Album/01 - Title.flac`. Signing out deletes them.
 
 *Settings → Account & connection → Offline mode* shows only downloads and local music, and stops looking for the
-server.
+server. What you play while the server is out of reach is counted when it's back.
 
 Phones and computers also cache the server tracks they play, each once all of it has arrived (usually a moment after
 it starts), and play them from the [cache](#where-things-are) next time. It holds up to 2 GB; the tracks played longest

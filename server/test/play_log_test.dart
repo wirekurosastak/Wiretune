@@ -35,4 +35,27 @@ void main() {
     final bad = await admin.get('/api/me/plays?from=${formatIsoUtc(after)}&to=${formatIsoUtc(before)}');
     expect((bad.statusCode, json(bad)['code']), (400, ErrorCodes.invalidPeriod));
   });
+
+  test('a play told of later is logged at the time it was made, and never moves the last play back', () async {
+    final server = await ServerFixture.start();
+    addTearDown(server.close);
+    final (admin, _) = await setupAdmin(server);
+    final now = DateTime.now().toUtc();
+    final yesterday = now.subtract(const Duration(days: 1));
+
+    final today = json(await admin.post('/api/me/plays/track-a'));
+    final late = json(await admin.post('/api/me/plays/track-a', {'at': formatIsoUtc(yesterday)}));
+    expect(late['playCount'], 2);
+    expect(late['lastPlayedAt'], today['lastPlayedAt'], reason: 'the newer play stays the last one');
+
+    Future<Object?> plays(DateTime from, DateTime to) async =>
+        json(await admin.get('/api/me/plays?from=${formatIsoUtc(from)}&to=${formatIsoUtc(to)}'))['plays'];
+    const hour = Duration(hours: 1);
+    expect(await plays(yesterday.subtract(hour), yesterday.add(hour)), {'track-a': 1});
+    expect(await plays(now.subtract(hour), now.add(hour)), {'track-a': 1});
+
+    // A time still to come is taken for now.
+    await admin.post('/api/me/plays/track-b', {'at': formatIsoUtc(now.add(const Duration(days: 30)))});
+    expect(await plays(now.subtract(hour), now.add(hour)), {'track-a': 1, 'track-b': 1});
+  });
 }

@@ -267,6 +267,83 @@ void main() {
     expect(session.statusMessage, contains('connection was lost'));
   });
 
+  test(
+    'a play made while the server is out of reach is counted here, and sent with its time when it answers',
+    () async {
+      var down = false;
+      final sent = <DateTime?>[];
+      http.Response? respond(http.Request request) {
+        if (down) throw const SocketException('Connection refused');
+        if (request.url.path == '/api/me/plays/s1') sent.add(parseIsoUtc((jsonDecode(request.body) as Map)['at']));
+        return null;
+      }
+
+      final session = await signedInSession(
+        library,
+        tracks: [TestSupport.makeServerTrack('s1', 'Server song')],
+        respond: respond,
+      );
+      addTearDown(session.dispose);
+      down = true;
+      await session.refreshLibrary();
+      expect(session.state, ServerConnectionState.offline);
+
+      final played = DateTime.now().toUtc();
+      library.recordPlay('s1');
+      await session.flushUserData();
+      expect(library.playCount('s1'), 1);
+      expect(sent, isEmpty);
+
+      // The server is back, a while later: the play arrives as made then.
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+      down = false;
+      await session.connect();
+      expect(session.state, ServerConnectionState.connected);
+      expect(sent, hasLength(1));
+      expect(sent.single!.difference(played).inMilliseconds.abs(), lessThan(20));
+
+      // Nothing is sent twice.
+      await session.connect();
+      expect(sent, hasLength(1));
+    },
+  );
+
+  test('plays the server has not got yet wait across a restart of the player', () async {
+    final repo = testRepository()
+      ..replaceAllTracks([TestSupport.makeServerTrack('s1', 'Server song')])
+      ..setSetting('server_url', 'http://wiretune.test')
+      ..setSetting('auth_token', 'stored')
+      ..setSetting('auth_user_id', 'u1');
+    ServerSession start(http.Client client) {
+      final offline = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent')..initialize();
+      final session = ServerSession(offline, repo, ServerClient(client))..initialize();
+      addTearDown(session.dispose);
+      offline.recordPlay('s1');
+      return session;
+    }
+
+    start(MockClient((_) => throw const SocketException('Connection refused')));
+    final sent = <String>[];
+    final user = UserInfo('u1', 'owner', true, DateTime.utc(2026), null);
+    final again = start(
+      MockClient((request) async {
+        if (request.method == 'POST') sent.add(request.url.path);
+        final body = switch (request.url.path) {
+          '/api/auth/setup-required' => {'setupRequired': false},
+          '/api/auth/me' => user.toJson(),
+          '/api/server' => ServerInfo(UpdateCheck.currentVersion).toJson(),
+          '/api/tracks' => [TestSupport.makeServerTrack('s1', 'Server song').toJson()],
+          '/api/me/data' => const UserDataSnapshot([], [], []).toJson(),
+          _ => <String, Object?>{},
+        };
+        return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+      }),
+    );
+    await again.connect();
+    expect(again.state, ServerConnectionState.connected);
+    expect(sent, ['/api/me/plays/s1', '/api/me/plays/s1'], reason: 'the play before the restart, and the one after');
+  });
+
   test('while the server cannot be reached its tracks cannot be changed, but local ones can', () async {
     final repo = testRepository()
       ..replaceAllTracks([TestSupport.makeServerTrack('s1', 'Server song'), TestSupport.makeTrack('l1', 'Local song')]);

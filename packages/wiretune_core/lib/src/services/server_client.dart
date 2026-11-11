@@ -332,8 +332,11 @@ class ServerClient {
   Future<void> setHidden(String baseUrl, HiddenKind kind, String id, bool hidden) =>
       _send(hidden ? 'PUT' : 'DELETE', baseUrl, '/api/me/hidden/${kind.name}/${Uri.encodeComponent(id)}');
 
-  Future<TrackPlayStats> recordPlay(String baseUrl, String trackId) async =>
-      _parse(TrackPlayStats.fromJson, await _send('POST', baseUrl, '/api/me/plays/${Uri.encodeComponent(trackId)}'));
+  /// Counts a play of the track, made [at] that time.
+  Future<TrackPlayStats> recordPlay(String baseUrl, String trackId, DateTime at) async => _parse(
+    TrackPlayStats.fromJson,
+    await _send('POST', baseUrl, '/api/me/plays/${Uri.encodeComponent(trackId)}', body: {'at': formatIsoUtc(at)}),
+  );
 
   /// Creates or replaces a playlist of the account with the given one.
   Future<void> savePlaylist(String baseUrl, Playlist playlist) => _send(

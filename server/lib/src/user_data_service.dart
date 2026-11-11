@@ -25,7 +25,8 @@ class UserDataService {
 
   static const String _playUpdateSql = '''
     UPDATE user_plays
-    SET play_count = CASE WHEN play_count < 2147483647 THEN play_count + 1 ELSE play_count END, last_played_at = ?3
+    SET play_count = CASE WHEN play_count < 2147483647 THEN play_count + 1 ELSE play_count END,
+        last_played_at = MAX(COALESCE(last_played_at, ?3), ?3)
     WHERE user_id = ?1 AND track_id = ?2''';
 
   static const String _playlistUpdateSql = '''
@@ -99,10 +100,11 @@ class UserDataService {
     ]).isNotEmpty;
   }
 
-  /// Counts one more play of a track. Null when the account is at its statistics limit.
-  TrackPlayStats? recordPlay(String userId, String trackId) {
+  /// Counts one more play of a track, made [at] that time (a player tells of a play later when it couldn't reach the
+  /// server): now without it, or when it lies in the future. Null when the account is at its statistics limit.
+  TrackPlayStats? recordPlay(String userId, String trackId, [DateTime? at]) {
     final db = _db.connection;
-    final now = toDbTime(DateTime.now());
+    final now = toDbTime(at != null && at.isBefore(DateTime.now()) ? at : DateTime.now());
 
     // Update first: the common case is a track that already has a row, and it needs no count.
     db.execute(_playUpdateSql, [userId, trackId, now]);
