@@ -672,7 +672,7 @@ List<Widget> _trailing(BuildContext context, TrackTableKind kind, Track track, {
       icon: HeartIcon(filled: favorite, color: favorite ? colors.palette.favorite : colors.textMuted, size: 18),
       onPressed: () => toggleFavoriteAsked(context, track),
     ),
-    TrackMenu(track: track, kind: kind, width: 44),
+    TrackMenu(track: track, kind: kind, width: 44, buttonSize: 34),
   ];
 }
 
@@ -768,6 +768,7 @@ class TrackMenu extends StatelessWidget {
     this.color,
     this.iconSize = 22,
     this.withFavorite = false,
+    this.buttonSize,
   });
 
   final Track track;
@@ -783,6 +784,9 @@ class TrackMenu extends StatelessWidget {
 
   /// Whether the menu has the favourite too: where no heart is beside it (a phone's row).
   final bool withFavorite;
+
+  /// The round highlight under the mouse, as large as the heart's beside it; null: a compact button's.
+  final double? buttonSize;
 
   /// [withFavorite]: a menu without a heart beside it (the right click's, a phone row's) has the favourite too. What
   /// removes something is red, as in every menu; hiding isn't, a tap on its Undo away.
@@ -948,19 +952,18 @@ class TrackMenu extends StatelessWidget {
                 icon: icon,
                 onPressed: () => showSheet(context, track, kind, withFavorite: withFavorite),
               )
-            // Under the mouse it pops as the other icons do, without a disc behind it; the keyboard's focus still shows.
-            : PopEffect(
-                child: PopupMenuButton<TrackAction>(
-                  tooltip: context.tr('TipMore'),
-                  icon: icon,
-                  style: ButtonStyle(
-                    overlayColor: WidgetStateProperty.resolveWith(
-                      (states) => states.contains(WidgetState.focused) ? null : Colors.transparent,
-                    ),
-                  ),
-                  onSelected: (action) => handleAction(context, action, track),
-                  itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
+            // Under the mouse a round highlight, as the heart beside it has; it doesn't move.
+            : PopupMenuButton<TrackAction>(
+                tooltip: context.tr('TipMore'),
+                icon: icon,
+                style: IconButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  minimumSize: buttonSize == null ? null : Size.square(buttonSize!),
+                  fixedSize: buttonSize == null ? null : Size.square(buttonSize!),
+                  padding: buttonSize == null ? null : EdgeInsets.zero,
                 ),
+                onSelected: (action) => handleAction(context, action, track),
+                itemBuilder: (context) => buildMenuItems(context, track, kind, withFavorite: withFavorite),
               ),
       ),
     );
