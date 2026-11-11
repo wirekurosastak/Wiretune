@@ -423,6 +423,30 @@ class ServerClient {
     );
   }
 
+  /// Which music of the library is alike, from what the server looked up online, with the list's version (its ETag);
+  /// null when it is still the list of [version], or the server is too old to have it.
+  Future<({RelatedMusicFacts facts, String? version})?> fetchRelatedMusic(String baseUrl, [String? version]) async {
+    final answer = await _optional('/api/library/related', baseUrl, version);
+    return answer == null ? null : (facts: RelatedMusicFacts.fromJson(answer.json), version: answer.etag);
+  }
+
+  /// Which artists the signed-in account plays together, with the list's version; null as [fetchRelatedMusic].
+  Future<({ListeningPairs pairs, String? version})?> fetchListeningPairs(String baseUrl, [String? version]) async {
+    final answer = await _optional('/api/me/listening', baseUrl, version);
+    return answer == null ? null : (pairs: ListeningPairs.fromJson(answer.json), version: answer.etag);
+  }
+
+  /// A list at [path] the player can do without: null when it is still that of [version], or the server lacks it.
+  Future<({Object? json, String? etag})?> _optional(String path, String baseUrl, String? version) async {
+    try {
+      final answer = await _exchange('GET', baseUrl, path, ifNoneMatch: version);
+      return answer.status == 304 ? null : (json: answer.json, etag: answer.etag);
+    } on ServerRequestException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
   /// A track of the server's listing ([Track.toJson]'s form, and its album cover's `coverVersion`), with its stream and
   /// cover URLs.
   static Track _serverTrack(String baseUrl, Object? json) {

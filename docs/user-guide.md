@@ -43,7 +43,9 @@ Your files are never changed.
 - **Credits** (a track's *⋮ → Credits*): the composer from the tags and, with a server, who wrote, produced, played and
   mixed it, from MusicBrainz.
 - **Related music:** an album's page ends with *More by* its artist and *Similar albums*, an artist's with *Related
-  artists*: artists credited together first, then the same genre and era.
+  artists*. They're found by what Deezer's listeners play together and the styles MusicBrainz gives (with a server),
+  the artists you play in the same sitting, the artists credited together, and the genre, era and tempo of the tags.
+  A style few of your artists have counts for more than one most have.
 - **Genre filter:** Albums, Artists, Tracks and Favorites narrow to a genre (the genre button on a computer, the sort
   sheet on a phone).
 - **Sorting** lasts until the app closes. Press the active sort again to reverse it. *Plays* puts what you played
@@ -56,7 +58,8 @@ Your files are never changed.
 
 Clicking a track plays the list it's in. Every *⋮* menu has **Play next** and **Add to queue**. The queue survives a
 restart; drag a song by its ≡ to move it (a long press on a phone, its arrows on a TV). **Save as playlist** in the
-queue's header keeps it. When the queue ends, similar music plays on (*Settings → Audio → Autoplay*). The sleep timer
+queue's header keeps it. When the queue ends, similar music plays on (*Settings → Audio → Autoplay*): more of what you love, less of what you
+played in the last days, now and then something you never played, and less of an artist you skip. The sleep timer
 pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
 
 *Playing from* in the player opens what the music was played from. A click on the quality tag shows the file and its

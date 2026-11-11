@@ -500,6 +500,9 @@ class PlayerViewModel extends ChangeNotifier {
   void playQueue(Iterable<Track> tracks, [Track? startTrack, String Function()? from, Object? source]) {
     _leaveForOwnMusic();
     _playingFor = null; // this account's own music again
+    // Music of the listener's choosing: what they skipped of Autoplay's no longer counts against it.
+    _autoplayed.clear();
+    _skippedArtists.clear();
     if (isRemote) {
       final list = tracks.toList();
       if (list.isEmpty) return;
@@ -1075,6 +1078,13 @@ class PlayerViewModel extends ChangeNotifier {
     _startAt = Duration.zero;
     currentTrack = track;
     if (!isRemote) _setPosition(_localPosition);
+    // An Autoplay track left before it counted: a skip, which steers Autoplay away from its artists.
+    final left = _uncounted;
+    if (left != null && _autoplayed.contains(left.id)) {
+      _skippedArtists.addAll([
+        for (final name in [...left.artistNames, ...left.albumArtistNames]) RelatedMusic.key(name),
+      ]);
+    }
     // Music another account cast here counts for that account (its player counts it), not for this one.
     _uncounted = _playingFor == null ? track : null;
     _listenedFor = Duration.zero;
@@ -1138,6 +1148,7 @@ class PlayerViewModel extends ChangeNotifier {
     if (tracks.isEmpty) return false;
     _playbackQueue.addAll(tracks);
     _originalQueue.addAll(tracks);
+    _autoplayed.addAll([for (final track in tracks) track.id]);
     _updateQueueState();
     _playingFrom = () => Localizer.get('Autoplay');
     _playingSource = null;
@@ -1148,47 +1159,26 @@ class PlayerViewModel extends ChangeNotifier {
   /// that another player leads, nor another account's playing here).
   bool get _autoplays => isAutoplayEnabled && _hostState == null && _playingFor == null;
 
-  /// Tracks like the last ones of [queue] to go on with, up to [autoplayCount]: from their artists' other albums, the
-  /// albums like theirs and the artists like theirs ([Related]), a few of each album, none already in [queue] or
-  /// hidden; in a random order.
-  List<Track> autoplayTracks(List<Track> queue, {math.Random? random}) {
-    final seeds = queue.reversed.take(5).toList();
-    final queued = {for (final track in queue) track.id};
-    final albums = _library.albums;
-    final candidates = <Track>[];
-    void add(Iterable<Track> tracks) {
-      for (final track in tracks) {
-        if (!queued.contains(track.id) && !_library.isTrackHidden(track)) candidates.add(track);
-      }
-    }
+  /// Tracks like the last ones of [queue] to go on with, up to [autoplayCount], as the library's [RelatedMusic] picks
+  /// them for this account: leaning towards what it loves and plays, away from what it played lately and the artists it
+  /// skipped since the music went on by itself.
+  List<Track> autoplayTracks(List<Track> queue, {math.Random? random}) => _library.related.autoplay(
+    queue,
+    random: random,
+    count: autoplayCount,
+    taste: Taste(
+      isFavorite: (track) => _library.isFavorite(track.id),
+      playCount: (track) => _library.playCount(track.id),
+      lastPlayedAt: (track) => _library.lastPlayedAt(track.id),
+      isHidden: _library.isTrackHidden,
+      skippedArtists: _skippedArtists,
+    ),
+  );
 
-    for (final seed in seeds) {
-      final album = _library.getAlbumForTrack(seed);
-      if (album != null) {
-        for (final other in [...Related.moreByOf(album, albums), ...Related.albumsOf(album, albums)]) {
-          add(other.tracks);
-        }
-      }
-      final artist = _library.getArtistByName(seed.primaryArtist);
-      if (artist != null) {
-        for (final other in Related.artistsOf(artist, _library.artists, _library.tracks)) {
-          add(other.tracks);
-        }
-      }
-    }
-    final rng = random ?? math.Random();
-    candidates.shuffle(rng);
-    final perAlbum = <String, int>{};
-    final picked = <String>{};
-    return [
-      for (final track in candidates)
-        if (picked.length < autoplayCount &&
-            !picked.contains(track.id) &&
-            (perAlbum[track.albumId] = (perAlbum[track.albumId] ?? 0) + 1) <= 3 &&
-            picked.add(track.id))
-          track,
-    ];
-  }
+  /// The tracks Autoplay added, and the artists of those skipped before they counted as played: Autoplay keeps away
+  /// from them until the listener plays music of their own choosing.
+  final Set<String> _autoplayed = {};
+  final Set<String> _skippedArtists = {};
 
   void _setPosition(Duration value) {
     position.value = value;

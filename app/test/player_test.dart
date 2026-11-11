@@ -1,6 +1,8 @@
 // Copyright (C) 2026 wirekurosastak. Licensed under the GNU AGPL v3 with the additional terms in NOTICE.md.
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import 'dart:math' as math;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/view_models/player_view_model.dart';
 import 'package:wiretune/src/view_models/settings_view_models.dart';
@@ -303,6 +305,58 @@ void main() {
         player.playQueue([kind.tracks.single]);
         driver.simulateTrackEnded();
         expect((player.queueTracks.length, player.isPlaying), (1, false), reason: 'off: it stops');
+      },
+    );
+
+    test(
+      "a track Autoplay chose and the listener skipped steers it away from that artist, until they choose again",
+      () async {
+        Track track(String id, String artist, String album) => TestSupport.makeTrack(
+          id,
+          'Song $id',
+          artist: artist,
+          album: album,
+          trackNumber: int.parse(id.substring(1)),
+        );
+        final library = createLibrary([
+          track('s1', 'Seed', 'Seed album'),
+          for (final artist in ['B', 'C']) ...[
+            track('${artist.toLowerCase()}1', artist, '$artist album'),
+            track('${artist.toLowerCase()}2', artist, '$artist album'),
+          ],
+        ]);
+        library.initialize();
+        library.setRelatedMusic(
+          facts: const RelatedMusicFacts(
+            similarArtists: {
+              'seed': {'b': 1, 'c': 0.5},
+            },
+          ),
+        );
+        final driver = FakeAudioDriver();
+        final player = PlayerViewModel(TestSupport.createEngine(driver), library);
+        final seed = library.getTrack('s1')!;
+        int firstB() => [
+          for (var i = 0; i < 30; i++) player.autoplayTracks([seed], random: math.Random(i)).first.artist,
+        ].where((artist) => artist == 'B').length;
+        expect(firstB(), greaterThan(20), reason: 'B is the closest');
+
+        player.playQueue([seed]);
+        driver.simulateTrackEnded(); // Autoplay goes on
+        await pumpEventQueue();
+        final chosen = player.currentTrack!;
+        expect(player.playingFrom, Localizer.get('Autoplay'));
+        driver.simulatePlaying(const Duration(seconds: 10));
+        player.nextTrack(); // skipped before it counted
+        await pumpEventQueue();
+        final skipped = chosen.artist;
+        final firstSkipped = [
+          for (var i = 0; i < 30; i++) player.autoplayTracks([seed], random: math.Random(i)).first.artist,
+        ].where((artist) => artist == skipped).length;
+        expect(firstSkipped, lessThan(5), reason: '$skipped was skipped');
+
+        player.playQueue([seed]); // the listener's own choice
+        expect(firstB(), greaterThan(20));
       },
     );
 

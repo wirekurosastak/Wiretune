@@ -955,8 +955,8 @@ class AlbumDetail extends StatelessWidget {
             playingSource: album,
           ),
           _AlbumFooter(album: album),
-          _albumShelf(context, context.trf('LabelMoreBy', [album.artist]), Related.moreByOf(album, vm.library.albums)),
-          _albumShelf(context, context.tr('LabelSimilarAlbums'), Related.albumsOf(album, vm.library.albums)),
+          _albumShelf(context, context.trf('LabelMoreBy', [album.artist]), vm.library.related.moreBy(album)),
+          _albumShelf(context, context.tr('LabelSimilarAlbums'), vm.library.related.albumsLike(album)),
           const PageEndSpace(),
         ],
       ),
@@ -1233,7 +1233,7 @@ class ArtistDetail extends StatelessWidget {
           ),
           Builder(
             builder: (context) {
-              final related = Related.artistsOf(artist, vm.library.artists, vm.library.tracks);
+              final related = vm.library.related.artistsLike(artist);
               return TileShelf(
                 title: context.tr('LabelRelatedArtists'),
                 kind: TileKind.twoLines,

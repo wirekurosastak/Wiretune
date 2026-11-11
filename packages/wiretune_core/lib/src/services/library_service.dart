@@ -18,6 +18,7 @@ import '../util/sorting.dart';
 import '../util/text.dart';
 import 'app_paths.dart';
 import 'metadata_scanner.dart';
+import 'related.dart';
 import 'track_deduplication.dart';
 import 'track_moves.dart';
 import 'wiretune_log.dart';
@@ -92,6 +93,7 @@ class LibraryService {
     if (id == _currentUserId) return; // every reconnect names the account again: its hidden items are loaded already
     _currentUserId = id;
     _loadHidden();
+    _loadListeningPairs();
     _rebuildSnapshot();
     libraryChanged.emit(null);
   }
@@ -141,6 +143,68 @@ class LibraryService {
 
   /// Every track that isn't hidden, also the ones [showOnly] leaves out: what the downloads follow.
   LibrarySnapshot get whole => _whole;
+
+  // ── Which music is alike ──
+
+  static const String _relatedMusicSetting = 'related_music';
+  static const String _listeningPairsSetting = 'listening_pairs';
+  RelatedMusicFacts _relatedFacts = RelatedMusicFacts.none;
+  ListeningPairs _listeningPairs = ListeningPairs.none;
+  RelatedMusic? _related;
+  LibrarySnapshot? _relatedFor;
+
+  /// Which music of the library (as shown) is alike: Related artists, Similar albums and what Autoplay goes on with.
+  /// Worked out anew when the library changes, or what the server learned of it.
+  RelatedMusic get related {
+    if (_related == null || !identical(_relatedFor, _snapshot)) {
+      _related = RelatedMusic(artists, albums, facts: _relatedFacts, pairs: _listeningPairs);
+      _relatedFor = _snapshot;
+    }
+    return _related!;
+  }
+
+  /// What the server learned online of which music is alike, and which artists the signed-in account plays together;
+  /// null keeps what there was. Kept on the device, so Autoplay has them offline too.
+  void setRelatedMusic({RelatedMusicFacts? facts, ListeningPairs? pairs}) {
+    if (facts != null) {
+      _relatedFacts = facts;
+      _repository.setSetting(_relatedMusicSetting, jsonEncode(facts.toJson()));
+    }
+    if (pairs != null) {
+      _listeningPairs = pairs;
+      _repository.setSetting(_listeningPairsSetting, jsonEncode({'account': _currentUserId, ...pairs.toJson()}));
+    }
+    if (facts != null || pairs != null) _related = null;
+  }
+
+  void _loadRelatedMusic() {
+    Object? stored(String setting) {
+      try {
+        return jsonDecode(_repository.getSetting(setting, '') ?? '');
+      } on FormatException {
+        return null;
+      }
+    }
+
+    final facts = stored(_relatedMusicSetting);
+    _relatedFacts = facts == null ? RelatedMusicFacts.none : RelatedMusicFacts.fromJson(facts);
+    _loadListeningPairs(stored(_listeningPairsSetting));
+  }
+
+  /// The pairs kept for the account now signed in; none for another one.
+  void _loadListeningPairs([Object? stored]) {
+    stored ??= () {
+      try {
+        return jsonDecode(_repository.getSetting(_listeningPairsSetting, '') ?? '');
+      } on FormatException {
+        return null;
+      }
+    }();
+    _listeningPairs = stored is Map && stored['account'] == _currentUserId
+        ? ListeningPairs.fromJson(stored)
+        : ListeningPairs.none;
+    _related = null;
+  }
 
   // The artists' own pictures (`artist.jpg`) by artist ID: the files of the local folder's, the addresses of the
   // server's (kept, so they show offline too). A local one wins.
@@ -221,6 +285,7 @@ class LibraryService {
     _loadHidden();
     _findArtistPictures(storedTracks);
     _serverArtistPictures = _storedServerArtistPictures();
+    _loadRelatedMusic();
 
     _rebuildSnapshot();
     _playlists = _sortedPlaylists(storedPlaylists);

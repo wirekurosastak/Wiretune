@@ -74,6 +74,8 @@ class ServerSession {
   String? _serverTracksVersion;
   Map<String, String>? _artistPictures;
   String? _artistPicturesVersion;
+  String? _relatedMusicVersion;
+  String? _listeningPairsVersion;
   UserDataSnapshot? _userData;
   String? _userDataVersion;
   Timer? _retry;
@@ -557,12 +559,34 @@ class ServerSession {
       _artistPictures = pictures.pictures;
       _artistPicturesVersion = pictures.version;
     }
+    await _fetchRelatedMusic();
     if (!await _fetchUserData() && list == null && !picturesChanged && !always) return;
     _library.mergeServerTracks(_serverTracks, _userData!, artistPictures: _artistPictures);
     WiretuneLog.info(
       'ServerSession',
       "Loaded ${_serverTracks.length} tracks from '$serverUrl'. Total library: ${_library.tracks.length} tracks.",
     );
+  }
+
+  /// What the server knows of which music is alike, and which artists the account plays together, each unless it is the
+  /// one downloaded last. They only make Autoplay and the related rows better, so a server that fails to give them
+  /// (rather than can't be reached) doesn't stop the library.
+  Future<void> _fetchRelatedMusic() async {
+    try {
+      final related = await _client.fetchRelatedMusic(serverUrl, _relatedMusicVersion);
+      if (related != null) {
+        _relatedMusicVersion = related.version;
+        _library.setRelatedMusic(facts: related.facts);
+      }
+      final pairs = await _client.fetchListeningPairs(serverUrl, _listeningPairsVersion);
+      if (pairs != null) {
+        _listeningPairsVersion = pairs.version;
+        _library.setRelatedMusic(pairs: pairs.pairs);
+      }
+    } on ServerRequestException catch (e) {
+      if (e.statusCode == null || e is ServerUnauthorizedException) rethrow;
+      WiretuneLog.warn('ServerSession', 'Which music is alike could not be downloaded: ${e.message}');
+    }
   }
 
   /// The token for stream URLs: a short-lived one that opens only the audio and cover routes, so that the URL (which
@@ -593,6 +617,8 @@ class ServerSession {
     _serverTracksVersion = null;
     _artistPictures = null;
     _artistPicturesVersion = null;
+    _relatedMusicVersion = null;
+    _listeningPairsVersion = null;
     _userData = null;
     _userDataVersion = null;
     _client.authToken = null;

@@ -335,6 +335,64 @@ void main() {
     expect(tokens.last, 'Bearer renewed', reason: 'what follows carries the new one');
   });
 
+  test(
+    "what the server knows of which music is alike is downloaded, kept on the device, and asked again only when it changed",
+    () async {
+      final repo = testRepository()
+        ..replaceAllTracks([
+          for (final name in ['A', 'B']) TestSupport.makeServerTrack(name, name, artist: name, album: name),
+        ]);
+      final shared = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent')..initialize();
+      final asked = <String>[];
+      var etag = '"1"';
+      final session = await signedInSession(
+        shared,
+        tracks: [
+          for (final name in ['A', 'B']) TestSupport.makeServerTrack(name, name, artist: name, album: name),
+        ],
+        respond: (request) {
+          if (request.url.path == '/api/library/related') {
+            asked.add(request.headers['if-none-match'] ?? 'new');
+            if (request.headers['if-none-match'] == etag) return http.Response('', 304);
+            final facts = const RelatedMusicFacts(
+              similarArtists: {
+                'a': {'b': 0.9},
+              },
+            );
+            return http.Response(jsonEncode(facts.toJson()), 200, headers: {'etag': etag});
+          }
+          if (request.url.path == '/api/me/listening') {
+            return http.Response(
+              jsonEncode(
+                const ListeningPairs({
+                  'b': {'a': 0.5},
+                }).toJson(),
+              ),
+              200,
+            );
+          }
+          return null;
+        },
+      );
+      addTearDown(session.dispose);
+      expect(shared.related.artistSimilarity('a', 'b'), greaterThan(0.8));
+      await session.refreshLibrary();
+      expect(asked, ['new', '"1"'], reason: 'unchanged: not downloaded again');
+
+      // The player starts again offline: what it learned is still there.
+      final again = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent')..initialize();
+      again.setCurrentUser('user-1');
+      expect(again.related.artistSimilarity('a', 'b'), greaterThan(0.8));
+    },
+  );
+
+  test('a server too old to know which music is alike leaves the player as it was', () async {
+    final session = await signedInSession(library);
+    addTearDown(session.dispose);
+    expect(session.state, ServerConnectionState.connected, reason: 'its 404 is no failure');
+    expect(library.related.facts.isEmpty, isTrue);
+  });
+
   test('plays the server has not got yet wait across a restart of the player', () async {
     final repo = testRepository()
       ..replaceAllTracks([TestSupport.makeServerTrack('s1', 'Server song')])
