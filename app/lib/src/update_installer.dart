@@ -107,7 +107,8 @@ class UpdateInstaller {
         await _run('pkexec', ['/usr/bin/dnf', 'install', '-y', file.path]);
         await quit(relaunch: _executable);
       case InstallKind.windowsSetup:
-        // The installer closes nothing and asks nothing; it starts the new player when it is done (wiretune.iss).
+        // The installer asks nothing, closes a player still running (CloseApplications) and starts the new one when it
+        // is done (wiretune.iss).
         await Process.start(file.path, const [
           '/SILENT',
           '/SUPPRESSMSGBOXES',
@@ -135,7 +136,14 @@ class UpdateInstaller {
     final prefix = p.dirname(p.dirname(app));
     final menuEntry = File(p.join(prefix, 'share', 'applications', 'com.wiretune.player.desktop'));
     if (p.basename(app) == 'wiretune' && p.basename(p.dirname(app)) == 'lib' && menuEntry.existsSync()) {
-      await _run('sh', [p.join(bundle, 'install.sh')], environment: {'PREFIX': prefix});
+      final script = p.join(bundle, 'install.sh');
+      if (_writable(app)) {
+        await _run('sh', [script], environment: {'PREFIX': prefix});
+      } else {
+        // A copy for all users (sudo PREFIX=/usr/local ./install.sh) is root's: the system asks for the password, as
+        // it does for a package.
+        await _run('pkexec', ['/usr/bin/env', 'PREFIX=$prefix', '/bin/sh', script]);
+      }
     } else {
       for (final name in ['wiretune', 'lib', 'data']) {
         final old = p.join(app, name);
@@ -148,6 +156,18 @@ class UpdateInstaller {
       await _run('cp', ['-a', p.join(bundle, 'wiretune'), p.join(bundle, 'lib'), p.join(bundle, 'data'), app]);
     }
     work.deleteSync(recursive: true);
+  }
+
+  /// Whether this user may change the files in [folder].
+  static bool _writable(String folder) {
+    try {
+      File(p.join(folder, '.wiretune-update'))
+        ..createSync()
+        ..deleteSync();
+      return true;
+    } on FileSystemException {
+      return false;
+    }
   }
 
   /// Runs a step of the update; one that fails, or that the user stops at the password prompt, throws.
