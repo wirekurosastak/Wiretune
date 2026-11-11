@@ -1,6 +1,7 @@
 # HTTP API
 
-The JSON API under `/api` used by the players. It isn't versioned: if you build on it, pin a server version.
+The JSON API under `/api` used by the players. It isn't versioned: if you build on it, pin a server version. `GET /`
+answers a line of text that says it's a Wiretune server, for a browser.
 
 - camelCase JSON, ISO 8601 dates (UTC), durations in milliseconds.
 - Errors: `{ "error": "message", "code": "code" }`, plus the number or path the message refers to (`limit`, `max`,

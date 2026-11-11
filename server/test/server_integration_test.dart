@@ -335,6 +335,10 @@ void main() {
     final (client, _) = await setupAdmin(server);
     expect((await client.get('/api/nothing-here')).statusCode, 404);
     expect((await client.delete('/api/tracks')).statusCode, 405);
+    // The address alone, as a browser asks for it, says what answers there.
+    final root = await server.client().get('/');
+    expect(root.statusCode, 200);
+    expect(root.body, contains('Wiretune server'));
   });
 
   test('bodies over the limit are refused', () async {

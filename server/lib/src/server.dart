@@ -315,6 +315,12 @@ class WiretuneServer {
     // decode before the request gets here.
     final path = request.url.pathSegments;
     final method = request.method == 'HEAD' ? 'GET' : request.method;
+    // The address in a browser: whoever tries it sees that the server runs, and what to open it with.
+    if (path.isEmpty && method == 'GET') {
+      return Response.ok(
+        'Wiretune server. It has no web page: connect with a Wiretune player.\n${WiretuneInfo.sourceUrl}\n',
+      );
+    }
 
     _Route? route;
     Map<String, String>? params;
