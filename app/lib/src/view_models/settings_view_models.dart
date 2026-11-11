@@ -115,7 +115,7 @@ class ServerSettingsViewModel extends ChangeNotifier {
 
   /// Whether connecting to [address] means leaving the server this device is signed in to.
   bool wouldSwitchServer(String address) {
-    if (!_session.isLoggedIn) return false;
+    if ((_session.authToken ?? '').isEmpty) return false;
     final target = ServerSession.normalizeServerUrl(address);
     return target != null && target.toLowerCase() != _session.serverUrl.toLowerCase();
   }

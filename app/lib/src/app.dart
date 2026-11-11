@@ -63,12 +63,14 @@ class _WiretuneAppState extends State<WiretuneApp> with WidgetsBindingObserver {
     widget.vm.player.addListener(_followCover);
     _followCover();
     widget.vm.addListener(_askMobileQuality);
+    widget.vm.addListener(_askConnectLink);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.vm.removeListener(_askMobileQuality);
+    widget.vm.removeListener(_askConnectLink);
     widget.vm.player.removeListener(_followCover);
     _lifecycle.dispose();
     super.dispose();
@@ -84,6 +86,34 @@ class _WiretuneAppState extends State<WiretuneApp> with WidgetsBindingObserver {
       final context = AppScope.navigatorKey.currentContext;
       if (context != null && widget.vm.asksMobileQuality) await askMobileStreamingQuality(context);
       _askingMobileQuality = false;
+    });
+  }
+
+  bool _askingConnectLink = false;
+
+  /// A link leads to another server than the one this device is signed in to: asked first, as Settings does.
+  void _askConnectLink() {
+    final vm = widget.vm;
+    if (vm.connectLinkToConfirm == null || _askingConnectLink) return;
+    _askingConnectLink = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final context = AppScope.navigatorKey.currentContext;
+      final link = vm.connectLinkToConfirm;
+      if (context != null && link != null) {
+        final confirmed = await confirmAction(
+          context,
+          title: context.tr('SwitchServerConfirm'),
+          message: context.trf('SwitchServerConfirmHint', [vm.serverSettings.connectedServerUrl]),
+          confirmLabel: context.tr('Connect'),
+          destructive: true,
+        );
+        if (confirmed) {
+          unawaited(vm.openConnectLink(link, confirmed: true));
+        } else {
+          vm.dropConnectLink();
+        }
+      }
+      _askingConnectLink = false;
     });
   }
 

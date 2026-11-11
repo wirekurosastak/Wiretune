@@ -138,4 +138,30 @@ void main() {
     expect(vm.session.serverUrl, 'http://server:5200');
     expect(find.byType(LoginPage), findsNothing);
   });
+
+  testWidgets('a link to another server asks before it signs this device out', (tester) async {
+    final library = createLibrary();
+    library.initialize();
+    final session = (await tester.runAsync(() => signedInSession(library)))!;
+    final vm = createMainViewModel(library, null, session);
+    addTearDown(vm.dispose);
+    await showApp(tester, vm, const Size(400, 860));
+    const link = (server: 'http://192.168.1.20:5200', code: 'CODE2345');
+
+    await tester.runAsync(() => vm.openConnectLink(link));
+    await settle(tester);
+    expect(find.text(Localizer.get('SwitchServerConfirm')), findsOneWidget);
+    await tester.tap(find.text(Localizer.get('Cancel')));
+    await settle(tester);
+    expect((session.serverUrl, session.isLoggedIn), ('http://server:5200', true), reason: 'nothing changed');
+    expect(find.byType(LoginPage), findsNothing);
+
+    await tester.runAsync(() => vm.openConnectLink(link));
+    await settle(tester);
+    await tester.tap(find.text(Localizer.get('Connect')));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await settle(tester);
+    expect(session.serverUrl, 'http://192.168.1.20:5200');
+    expect(session.authToken, isNull, reason: 'a sign-in is never carried to another server');
+  });
 }

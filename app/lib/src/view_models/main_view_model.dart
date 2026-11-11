@@ -708,12 +708,23 @@ class MainViewModel extends ChangeNotifier {
   /// with the address it brought.
   int connectLinks = 0;
 
+  /// A link that would leave the server this device is signed in to: the app asks first, and [openConnectLink] with
+  /// `confirmed` or [dropConnectLink] answers.
+  ({String server, String? code})? connectLinkToConfirm;
+
+  void dropConnectLink() {
+    connectLinkToConfirm = null;
+    notifyListeners();
+  }
+
   /// A QR code's link opened the app ([ConnectLink]): the sign-in screen with the [link]'s server in it, connecting; with
   /// a one-time code, signed in to the account that showed it, which closes the screen.
-  Future<void> openConnectLink(({String server, String? code}) link) async {
+  Future<void> openConnectLink(({String server, String? code}) link, {bool confirmed = false}) async {
     final server = serverSettings;
     final same = ServerSession.normalizeServerUrl(link.server)?.toLowerCase() == session.serverUrl.toLowerCase();
     if (link.code == null && same && session.isLoggedIn) return;
+    connectLinkToConfirm = confirmed || !server.wouldSwitchServer(link.server) ? null : link;
+    if (connectLinkToConfirm != null) return notifyListeners();
     server.serverUrl = link.server;
     connectLinks++;
     _isLoginViewActive = true;
