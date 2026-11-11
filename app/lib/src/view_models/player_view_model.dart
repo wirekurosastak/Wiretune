@@ -778,12 +778,6 @@ class PlayerViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleFavoriteCurrent() async {
-    final current = currentTrack;
-    if (current == null) return;
-    _library.toggleFavorite(current.id);
-  }
-
   Future<void> toggleBitPerfect() => _engine.setBitPerfectMode(!isBitPerfect);
 
   Future<void> toggleExclusiveMode() => _engine.setExclusiveMode(!isExclusiveMode);

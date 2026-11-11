@@ -10,8 +10,6 @@ class EqualizerBand {
   final double frequency;
   final double gainDb;
   final double q;
-
-  EqualizerBand withGain(double gain) => EqualizerBand(frequency, gain, q);
 }
 
 /// A graphic equalizer: a gain at each of ten frequencies, an octave apart. The player turns it into a filter chain for
