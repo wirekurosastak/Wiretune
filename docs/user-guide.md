@@ -143,7 +143,7 @@ check.
 | The Linux folder, or its `install.sh` | Replaces the folder and starts the new version |
 | The `.deb` or `.rpm` | Asks for your password, installs the new package with apt or dnf, and starts it |
 | The Windows installer | Closes the player, runs the new installer silently, and starts it again |
-| The macOS disk image | Opens the new disk image: drag Wiretune into *Applications* over the old one |
+| The macOS disk image | Opens the new disk image: drag Wiretune into *Applications* over the old one (untried) |
 | An Android APK | Hands the new APK to Android, which asks before installing |
 
 Copies on iPhone and iPad, Tizen TVs and the portable Windows folder don't check for updates.

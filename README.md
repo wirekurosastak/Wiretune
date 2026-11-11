@@ -60,7 +60,7 @@ From the [latest release](https://github.com/wirekurosastak/Wiretune/releases/la
 |---|---|
 | Linux | The `.tar.gz` (run `./install.sh` in it), or the `.deb` or `.rpm` |
 | Windows | The `-setup.exe`. It isn't signed: on the SmartScreen warning choose *More info → Run anyway*. The portable `.zip` doesn't update itself |
-| macOS | The `.dmg`. It isn't notarized: allow it once in *System Settings → Privacy & Security* |
+| macOS | The `.dmg`. Nobody has run it on a Mac yet. It isn't notarized: allow it once in *System Settings → Privacy & Security* |
 | Android | The `arm64-v8a` APK (most phones and TVs), or `armeabi-v7a` for older ones and most Fire TV sticks (untested). Android asks once to let your browser or file manager install apps, and Play Protect may offer to scan the file |
 | The server | `wiretune-server-…` for your system, or the image `ghcr.io/wirekurosastak/wiretune-server` ([Docker](docs/server.md#docker)) |
 
