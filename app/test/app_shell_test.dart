@@ -945,6 +945,24 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets("a screen reader finds only the full-screen player while it is open, not the page under it", (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final vm = await pumpApp(tester, const Size(400, 860));
+    final tab = find.semantics.byLabel(Localizer.get('NavAlbums'));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    expect(tab, findsOne);
+    vm.openNowPlaying();
+    await settle(tester);
+    expect(tab, findsNothing);
+    vm.closeNowPlaying();
+    await settle(tester);
+    expect(tab, findsOne);
+    semantics.dispose();
+  });
+
   testWidgets('a small phone with a large font, and a 1080p TV, render every section without overflow', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 1.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);

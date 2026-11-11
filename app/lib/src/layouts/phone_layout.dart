@@ -147,11 +147,15 @@ class _NowPlayingOverlayState extends State<_NowPlayingOverlay> {
       animation: position,
       builder: (context, _) {
         if (position.isDismissed && !widget.isOpen) return const SizedBox.shrink();
-        return RisingPlayer(
-          sheet: widget.sheet,
-          // The player's own cover's picture, as it is decoded already.
-          cover: CoverArt.provider(context.vm.player.currentTrack?.coverArtPath, decodeWidth: 900),
-          child: IgnorePointer(ignoring: !widget.isOpen, child: const NowPlayingPage()),
+        // Open, it covers the page and the bars: a screen reader finds only the player.
+        return BlockSemantics(
+          blocking: widget.isOpen,
+          child: RisingPlayer(
+            sheet: widget.sheet,
+            // The player's own cover's picture, as it is decoded already.
+            cover: CoverArt.provider(context.vm.player.currentTrack?.coverArtPath, decodeWidth: 900),
+            child: IgnorePointer(ignoring: !widget.isOpen, child: const NowPlayingPage()),
+          ),
         );
       },
     );
