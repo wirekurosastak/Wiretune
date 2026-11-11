@@ -191,9 +191,10 @@ class _PlayerSheetDragState extends State<PlayerSheetDrag> {
 
 /// The full-screen player as it opens and closes, as YouTube Music's does: it grows out of the mini player as far as the
 /// [sheet] is open (under a finger, as far as the finger has taken it), its top rising to the screen's while its bottom
-/// goes down with the navigation; solid from the first frame, as YouTube Music's, its controls coming on only on the
-/// last part of the way ([NowPlayingPage]'s). Its cover flies out of the mini player's into its place inside it, and back into it as the
-/// player goes down ([CoverFlightBetween]).
+/// goes down with the navigation. Near the mini player it is see-through, the more the nearer ([_landing]): going down
+/// it fades into the mini player instead of giving way to it in one frame, and it comes out of it the same way. Its
+/// controls come on only on the last part of the way up ([NowPlayingPage]'s). Its cover flies out of the mini player's
+/// into its place inside it, and back into it as the player goes down ([CoverFlightBetween]).
 class RisingPlayer extends StatefulWidget {
   const RisingPlayer({super.key, required this.sheet, required this.cover, required this.child});
 
@@ -210,6 +211,13 @@ class RisingPlayer extends StatefulWidget {
 class _RisingPlayerState extends State<RisingPlayer> {
   /// The player itself, unmoved: where its cover's place is measured in.
   final GlobalKey _player = GlobalKey();
+
+  /// The part of the way, from closed, over which the player fades into the mini player and out of it.
+  static const double _landing = 0.15;
+
+  late final Animation<double> _solid = widget.sheet.position.drive(
+    CurveTween(curve: const Interval(0, _landing, curve: Curves.easeOut)),
+  );
 
   /// Where [context]'s box is in [within]'s, as drawn (smaller, for a paused track's cover); null while it isn't laid
   /// out.
@@ -246,7 +254,10 @@ class _RisingPlayerState extends State<RisingPlayer> {
           // Always there (the player under it stays as it is), clipping only while it isn't the whole screen.
           clipper: _Window(window),
           clipBehavior: t < 1 ? Clip.hardEdge : Clip.none,
-          child: RepaintBoundary(key: _player, child: widget.child),
+          child: FadeTransition(
+            opacity: _solid,
+            child: RepaintBoundary(key: _player, child: widget.child),
+          ),
         ),
         if (from != null && to != null)
           CoverFlightBetween(

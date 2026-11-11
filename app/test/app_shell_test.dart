@@ -947,6 +947,32 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets("a phone's full-screen player fades into the mini player as it lands on it, and is solid above", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.player.playQueue(vm.library.tracks);
+    await settle(tester);
+    vm.openNowPlaying();
+    await settle(tester);
+    double solid() => tester
+        .widget<FadeTransition>(
+          find.ancestor(of: find.byType(NowPlayingPage), matching: find.byType(FadeTransition)).first,
+        )
+        .opacity
+        .value;
+    expect(solid(), 1);
+
+    vm.closeNowPlaying();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(solid(), 1, reason: 'still high above the mini player');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(solid(), inExclusiveRange(0, 1), reason: 'the mini player shows through');
+    await settle(tester);
+    expect(find.byType(NowPlayingPage), findsNothing);
+  });
+
   testWidgets("a screen reader finds only the full-screen player while it is open, not the page under it", (
     tester,
   ) async {
