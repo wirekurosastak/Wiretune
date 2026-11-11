@@ -347,7 +347,13 @@ class ListPlayButton extends StatelessWidget {
         child: phone
             ? Tooltip(
                 message: label,
-                child: FilledButton(style: style, onPressed: onPressed, child: icon),
+                // The tooltip names the node around the button; a screen reader reads the button's own.
+                excludeFromSemantics: true,
+                child: FilledButton(
+                  style: style,
+                  onPressed: onPressed,
+                  child: Semantics(label: label, child: icon),
+                ),
               )
             : FilledButton.icon(
                 style: style,

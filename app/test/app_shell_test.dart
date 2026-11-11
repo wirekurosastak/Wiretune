@@ -932,6 +932,19 @@ void main() {
     expect(vm.player.queueTracks.map((t) => t.id), contains('1'));
   });
 
+  testWidgets("a phone's round Play button says to a screen reader what it does", (tester) async {
+    final semantics = tester.ensureSemantics();
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.openAlbum(vm.library.albums.first);
+    await settle(tester);
+    final button = find.descendant(of: find.byType(ListPlayButton), matching: find.byType(FilledButton));
+    expect(tester.getSemantics(button), isSemantics(label: Localizer.get('Play'), hasTapAction: true));
+    await tester.tap(button);
+    await settle(tester);
+    expect(tester.getSemantics(button), isSemantics(label: Localizer.get('Pause'), hasTapAction: true));
+    semantics.dispose();
+  });
+
   testWidgets('a small phone with a large font, and a 1080p TV, render every section without overflow', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 1.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
