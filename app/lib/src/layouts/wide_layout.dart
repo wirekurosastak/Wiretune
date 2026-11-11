@@ -105,18 +105,11 @@ class _Body extends StatefulWidget {
 }
 
 class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
-  late final AnimationController _out = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 240),
-    reverseDuration: const Duration(milliseconds: 260),
-  );
+  late final AnimationController _out = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
 
-  // Gentle curves: at 60 frames a second a steep start shows as steps.
-  late final Animation<double> _curve = CurvedAnimation(
-    parent: _out,
-    curve: Curves.easeOut,
-    reverseCurve: Curves.easeIn,
-  );
+  // Setting off and arriving gently, over a little longer: at the 60 frames a second Linux draws at, a quick start
+  // moved it 30 px a frame, which shows as steps on a fast screen (no frame was late: it is the motion).
+  late final Animation<double> _curve = CurvedAnimation(parent: _out, curve: Curves.easeInOut);
   late final Animation<Offset> _slide = Tween(begin: const Offset(-1, 0), end: Offset.zero).animate(_curve);
   Timer? _closing;
   bool _wasPinned = false;
