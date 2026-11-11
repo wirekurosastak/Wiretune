@@ -46,7 +46,7 @@ class AppPlatform {
   bool get supportsMediaSession => isAndroid || isIOS || isMacOS || isLinuxDesktop;
 
   /// Who answers what on it: the Android plugin (packages/wiretune_platform) `isTelevision`, `musicDirectory`,
-  /// `requestAudioAccess` and `installUpdate`; the Tizen runner (tizen/App.cs) `isTizen` and
+  /// `requestAudioAccess`, `installUpdate` and `shareLog`; the Tizen runner (tizen/App.cs) `isTizen` and
   /// `isTelevision`; the iOS runner (ios/Runner/AppDelegate.swift) `excludeFromBackup`. Elsewhere a call finds no
   /// handler.
   static const MethodChannel _channel = MethodChannel('wiretune/platform');
@@ -94,6 +94,12 @@ class AppPlatform {
 
   /// Hands the APK at [path] to Android's installer, which asks the user before it installs it over this app.
   Future<void> installAndroidUpdate(String path) => _channel.invokeMethod<void>('installUpdate', path);
+
+  /// Whether the log can be shared from Settings ([shareLog]): on Android, whose log is out of the user's reach.
+  bool get canShareLog => isAndroid;
+
+  /// Opens Android's share sheet with a copy of the player's log, to send it to whoever helps.
+  Future<void> shareLog() => _channel.invokeMethod<void>('shareLog', WiretuneLog.logPath);
 
   static String get _hostSystem => Platform.operatingSystem;
 

@@ -19,6 +19,7 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
+import androidx.core.content.FileProvider
 import java.io.File
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -58,6 +59,7 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                     "musicDirectory" -> result.success(musicDirectory(context))
                     "requestAudioAccess" -> requestAudioAccess(context, result)
                     "installUpdate" -> installUpdate(context, call.arguments as? String, result)
+                    "shareLog" -> shareLog(context, call.arguments as? String, result)
                     else -> result.notImplemented()
                 }
             }
@@ -196,6 +198,39 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                 val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                     (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
                 session.commit(PendingIntent.getBroadcast(context, sessionId, status, flags).intentSender)
+            }
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("failed", e.message, null)
+        }
+    }
+
+    /**
+     * Opens Android's share sheet with a copy of the log at [path], for sending it to whoever helps: the log itself is in
+     * the app's private storage, out of the user's reach. The copy goes in the cache's shared/ folder, the only one
+     * [WiretuneFileProvider] hands out, and the app picked may read it for this share only.
+     */
+    private fun shareLog(context: Context, path: String?, result: MethodChannel.Result) {
+        val log = path?.let(::File)
+        if (log == null || !log.isFile) {
+            result.error("missing", "No log at $path", null)
+            return
+        }
+        try {
+            val shared = File(context.cacheDir, "shared").apply { mkdirs() }
+            val copy = log.copyTo(File(shared, "wiretune.log"), overwrite = true)
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.wiretune.shared", copy)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .putExtra(Intent.EXTRA_SUBJECT, "wiretune.log")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            val chooser = Intent.createChooser(send, null)
+            val activity = activityBinding?.activity
+            if (activity != null) {
+                activity.startActivity(chooser)
+            } else {
+                context.startActivity(chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
             result.success(true)
         } catch (e: Exception) {

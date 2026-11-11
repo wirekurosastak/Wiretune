@@ -55,4 +55,6 @@ kotlin {
 dependencies {
     // The media session's controller, which the widget's heart and shuffle send their actions through.
     implementation("androidx.media:media:1.7.0")
+    // FileProvider, which hands a shared file (the log) to another app.
+    implementation("androidx.core:core:1.13.1")
 }

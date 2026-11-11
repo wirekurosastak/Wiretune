@@ -208,4 +208,4 @@ The server's data: [server.md](server.md#data-directory).
 | Favorites or playlists are empty after signing in | Check it's the same account as before. If it is, the server may have started with a fresh data folder ([server.md](server.md#troubleshooting)). |
 | An iPhone can't reach a server on the LAN | Allow *Local Network* for Wiretune in *Settings → Privacy & Security*. |
 | No cast button | *Settings → Remote control* says why. If it keeps connecting, the proxy may not pass WebSockets ([server.md](server.md#away-from-home)). |
-| Nothing plays, and no error | Read `wiretune.log` in the player's data folder ([above](#where-things-are)). |
+| Nothing plays, and no error | Read `wiretune.log` in the player's data folder ([above](#where-things-are)). On Android, *Settings → About → Share log* sends a copy to the app you pick. |

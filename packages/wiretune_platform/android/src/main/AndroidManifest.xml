@@ -3,6 +3,16 @@
   <!-- Updating itself from a release (installUpdate): the system asks the user before it installs anything. -->
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
   <application>
+    <!-- Hands a shared file (the log) to the app the user picks: from the cache's shared/ folder only. -->
+    <provider
+        android:name="com.wiretune.platform.WiretuneFileProvider"
+        android:authorities="${applicationId}.wiretune.shared"
+        android:exported="false"
+        android:grantUriPermissions="true">
+      <meta-data
+          android:name="android.support.FILE_PROVIDER_PATHS"
+          android:resource="@xml/wiretune_shared" />
+    </provider>
     <!-- The home-screen widget: what plays, with previous, play or pause, next. -->
     <receiver
         android:name="com.wiretune.platform.NowPlayingWidget"

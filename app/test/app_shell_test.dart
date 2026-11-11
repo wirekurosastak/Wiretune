@@ -1757,6 +1757,50 @@ void main() {
     expect(vm.streamingQuality, StreamingQuality.original);
   });
 
+  testWidgets("an Android phone's About card shares the log; a computer's has no such button", (tester) async {
+    final calls = <MethodCall>[];
+    Object? refusal;
+    const channel = MethodChannel('wiretune/platform');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (refusal != null) throw PlatformException(code: 'failed', message: '$refusal');
+      return null;
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
+    );
+    final share = find.text(Localizer.get('ShareLog'));
+
+    var vm = await pumpApp(tester, const Size(1400, 900));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    expect(share, findsNothing);
+
+    AppPlatform.forTesting(system: 'android');
+    await tester.pumpWidget(const SizedBox());
+    vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.settings);
+    await settle(tester);
+    // A phone's Settings cards fold: About opens with a tap on its title.
+    final about = find.text(Localizer.get('SettingsAboutSection'));
+    await tester.ensureVisible(about);
+    await settle(tester);
+    if (share.evaluate().isEmpty) {
+      await tester.tap(about);
+      await settle(tester);
+    }
+    await tester.ensureVisible(share);
+    await settle(tester);
+    await tester.tap(share);
+    await settle(tester);
+    expect([for (final c in calls.where((c) => c.method == 'shareLog')) c.arguments], [WiretuneLog.logPath]);
+
+    refusal = 'No activity found';
+    await tester.tap(share);
+    await settle(tester);
+    expect(find.textContaining("The log can't be shared: No activity found"), findsOneWidget);
+  });
+
   testWidgets("Settings say when the server is older than the player, and when it can't convert", (tester) async {
     final vm = await pumpApp(tester, const Size(1400, 900));
     await tester.pumpWidget(const SizedBox());

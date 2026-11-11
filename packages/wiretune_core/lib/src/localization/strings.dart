@@ -492,6 +492,12 @@ const Map<String, (String, String, String)> allStrings = {
   ),
   'AboutSource': ('Forráskód', 'Source code', 'Quellcode'),
   'AboutLicenses': ('Licencek', 'Licenses', 'Lizenzen'),
+  'ShareLog': ('Napló megosztása', 'Share log', 'Protokoll teilen'),
+  'ShareLogFailed': (
+    'A napló nem osztható meg: {0}',
+    "The log can't be shared: {0}",
+    'Das Protokoll lässt sich nicht teilen: {0}',
+  ),
   'SettingsUpdateCheck': ('Frissítések keresése', 'Look for updates', 'Nach Updates suchen'),
   'SettingsUpdateCheckHint': (
     'Induláskor és naponta egyszer, a GitHubon.',

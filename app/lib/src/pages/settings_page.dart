@@ -3,6 +3,7 @@
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:wiretune_core/wiretune_core.dart';
 
 import '../app_scope.dart';
@@ -1729,6 +1730,21 @@ class _AboutCard extends StatelessWidget {
           icon: Icon(Icons.description_outlined, size: 18, color: colors.accent),
           label: Text(context.tr('AboutLicenses')),
         ),
+        // A phone's log is in the app's private storage: this hands a copy to the app the user picks.
+        if (AppPlatform.current.canShareLog) ...[
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              try {
+                await AppPlatform.current.shareLog();
+              } on PlatformException catch (e) {
+                vm.showNotice(Localizer.format('ShareLogFailed', [e.message ?? e.code]), isError: true);
+              }
+            },
+            icon: Icon(Icons.share_outlined, size: 18, color: colors.accent),
+            label: Text(context.tr('ShareLog')),
+          ),
+        ],
       ],
     );
   }

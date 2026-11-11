@@ -136,7 +136,8 @@ Routes: `app/lib/src/debug/ui_automation_server.dart`. No authentication: only o
 ## Platform code
 
 - **Android:** `MainActivity.kt` shares its Flutter engine with the media service. `packages/wiretune_platform` has TV
-  detection, the music folder, the audio permission, the CPU and Wi-Fi locks, installing updates, the spectrum's
+  detection, the music folder, the audio permission, the CPU and Wi-Fi locks, installing updates, sharing the log
+  (`WiretuneFileProvider.kt`), the spectrum's
   decoder (`PcmDecoder.kt`) and the home-screen widget (`NowPlayingWidget.kt`). Application ID: `com.wiretune.player`.
 - **iOS and macOS:** `ios/Runner/Info.plist` declares background audio, local network access and plain HTTP.
   `ios/Runner/AppDelegate.swift` keeps downloads out of backups (`excludeFromBackup`), and `ios/Runner/PcmDecoder.swift`
