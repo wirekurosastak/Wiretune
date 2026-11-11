@@ -99,6 +99,11 @@ class TrackSliver extends StatefulWidget {
 class _Columns {
   const _Columns(this.kind, this.width);
 
+  /// The columns for a table [width] wide at the text size on show: with a larger font the columns of figures are
+  /// wider, so the table counts as that much narrower.
+  _Columns.fitting(BuildContext context, this.kind, double width)
+    : width = width / math.max(1, MediaQuery.textScalerOf(context).scale(1));
+
   final TrackTableKind kind;
   final double width;
 
@@ -238,7 +243,7 @@ class _TrackSliverState extends State<TrackSliver> {
   }
 
   TrackTableKind get kind => widget.kind;
-  _Columns get _columns => _Columns(kind, _tableWidth);
+  _Columns get _columns => _Columns.fitting(context, kind, _tableWidth);
 
   /// The tracks in the order shown: the page sorts its own, this table those of a list without a page's sort.
   List<Track> get _tracks {
@@ -273,7 +278,7 @@ class _TrackSliverState extends State<TrackSliver> {
     final sidePadding = widget.horizontalPadding ?? (phone ? 8.0 : TrackSliver.tablePadding);
     return SliverWidthBuilder(
       // The rows are built again when a column comes or goes; between, a width that changes only lays them out.
-      keyOf: (width) => (phone, phone ? null : _Columns(kind, width - 2 * sidePadding)),
+      keyOf: (width) => (phone, phone ? null : _Columns.fitting(context, kind, width - 2 * sidePadding)),
       builder: (context, width) {
         // The desktop layout always draws the table; the phone layout draws rows.
         final table = !PhoneChrome.isPhone(context);
@@ -370,7 +375,8 @@ class TrackColumnHeaders extends StatelessWidget {
   Widget build(BuildContext context) {
     // Built again when a column comes or goes; between, a width that changes only lays the headers out.
     return KeyedLayoutBuilder<_Columns>(
-      keyOf: (constraints) => _Columns(TrackTableKind.tracks, constraints.maxWidth - 2 * TrackSliver.tablePadding),
+      keyOf: (constraints) =>
+          _Columns.fitting(context, TrackTableKind.tracks, constraints.maxWidth - 2 * TrackSliver.tablePadding),
       builder: (context, columns) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: TrackSliver.tablePadding),
         child: _ColumnHeaders(

@@ -905,34 +905,50 @@ class _QueueTab extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(PhoneChrome.edge, 0, 8, 4),
-          child: Row(
-            children: [
-              // How many are still to come, as the list below holds: the tab above already says it is the queue.
-              Expanded(
-                child: Text(
-                  context.trf('TrackCount', [player.queueItems.length - player.upcomingQueueStart]),
-                  style: TextStyle(fontSize: 13, color: colors.textMuted),
-                ),
-              ),
-              const SaveQueueButton(),
-              PopEffect(
-                enabled: player.queueItems.isNotEmpty,
-                glowColor: colors.danger,
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    foregroundColor: colors.danger,
-                    minimumSize: const Size(0, 40),
-                    overlayColor: Colors.transparent,
-                  ),
-                  onPressed: player.queueItems.isEmpty ? null : () => confirmClearQueue(context),
-                  icon: const Icon(Icons.clear_all_rounded, size: 20),
-                  label: Text(
-                    context.tr('ClearQueue'),
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          child: LayoutBuilder(
+            builder: (context, row) => Row(
+              children: [
+                // How many are still to come, as the list below holds: the tab above already says it is the queue.
+                Expanded(
+                  child: Text(
+                    context.trf('TrackCount', [player.queueItems.length - player.upcomingQueueStart]),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, color: colors.textMuted),
                   ),
                 ),
-              ),
-            ],
+                // With a large font and long words the two buttons shrink to the row's width.
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: row.maxWidth),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SaveQueueButton(),
+                        PopEffect(
+                          enabled: player.queueItems.isNotEmpty,
+                          glowColor: colors.danger,
+                          child: TextButton.icon(
+                            style: TextButton.styleFrom(
+                              foregroundColor: colors.danger,
+                              minimumSize: const Size(0, 40),
+                              overlayColor: Colors.transparent,
+                            ),
+                            onPressed: player.queueItems.isEmpty ? null : () => confirmClearQueue(context),
+                            icon: const Icon(Icons.clear_all_rounded, size: 20),
+                            label: Text(
+                              context.tr('ClearQueue'),
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         // The rows' covers under the playing track's, 16 from the edge (a row keeps 10 inside it).

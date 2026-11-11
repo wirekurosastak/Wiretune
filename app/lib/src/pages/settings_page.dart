@@ -1243,19 +1243,32 @@ class _AudioCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: MedalColors.bg(tier),
-                        border: Border.all(color: MedalColors.border(tier)),
-                        borderRadius: BorderRadius.circular(Radii.tag),
-                      ),
-                      child: Text(
-                        badgeText,
-                        style: TextStyle(color: fg, fontSize: 10.5, fontWeight: FontWeight.w900, letterSpacing: 0.6),
+                    // In a narrow card with a large font the tag shrinks to the room beside the switch.
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: MedalColors.bg(tier),
+                              border: Border.all(color: MedalColors.border(tier)),
+                              borderRadius: BorderRadius.circular(Radii.tag),
+                            ),
+                            child: Text(
+                              badgeText,
+                              style: TextStyle(
+                                color: fg,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     Switch(value: value, activeTrackColor: fg, onChanged: available ? onChanged : null),
                   ],
                 ),

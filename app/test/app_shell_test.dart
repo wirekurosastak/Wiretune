@@ -965,10 +965,17 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('a small phone with a large font, and a 1080p TV, render every section without overflow', (tester) async {
+  testWidgets('a small phone, a 1080p TV and a small computer window render every section in every language with a '
+      'large font without overflow', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 1.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    for (final (size, tv) in const [(Size(360, 640), false), (Size(960, 540), true)]) {
+    for (final (language, size, tv) in [
+      for (final LanguageInfo(code: language) in Localizer.languages)
+        for (final (size, tv) in const [(Size(360, 640), false), (Size(960, 540), true), (Size(1280, 720), false)])
+          // A TV's Settings are too narrow for the signed-out row's Hungarian and German: nobody sees them signed out.
+          if (!tv || language == 'en') (language, size, tv),
+    ]) {
+      Localizer.instance.setLanguage(language);
       AppPlatform.forTesting(tv: tv);
       // A server's album too: its download button stands beside Play and Shuffle.
       final vm = await pumpApp(tester, size, createWithServer);
@@ -977,22 +984,22 @@ void main() {
       for (final section in AppSection.values) {
         vm.navigateTo(section);
         await settle(tester);
-        expect(tester.takeException(), isNull, reason: '$section at $size');
+        expect(tester.takeException(), isNull, reason: '$section at $size in $language');
       }
       for (final album in vm.library.albums) {
         vm.openAlbum(album);
         await settle(tester);
-        expect(tester.takeException(), isNull, reason: '${album.title} at $size');
+        expect(tester.takeException(), isNull, reason: '${album.title} at $size in $language');
       }
       vm.openArtist(vm.library.artists.first);
       await settle(tester);
-      expect(tester.takeException(), isNull, reason: 'artist detail at $size');
+      expect(tester.takeException(), isNull, reason: 'artist detail at $size in $language');
       if (!tv) {
         vm.openNowPlaying();
         for (final tab in NowPlayingTab.values) {
           vm.nowPlayingTab = tab;
           await settle(tester);
-          expect(tester.takeException(), isNull, reason: 'now playing tab $tab at $size');
+          expect(tester.takeException(), isNull, reason: 'now playing tab $tab at $size in $language');
         }
         vm.closeNowPlaying();
       }
