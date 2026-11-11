@@ -132,6 +132,34 @@ void main() {
     expect(find.text('Blue in Green'), findsOneWidget);
   });
 
+  testWidgets(
+    "the queue or the lyrics over a section's page close with that section's own button, the page as it was",
+    (tester) async {
+      final vm = await pumpApp(tester, const Size(1400, 900));
+      vm.isSidebarPinned = true;
+      final album = vm.library.albums.firstWhere((a) => a.title == 'Kind of Blue');
+      vm.navigateTo(AppSection.albums);
+      vm.openAlbum(album);
+      vm.player.playQueue(album.tracks);
+      await settle(tester);
+      expect((vm.selectedTab, vm.selectedSection), (AppSection.albums, AppSection.albums));
+
+      for (final tab in [NowPlayingTab.queue, NowPlayingTab.lyrics]) {
+        vm.nowPlayingTab = tab;
+        await settle(tester);
+        expect(find.byType(QueueLyricsPanel), findsOneWidget, reason: '$tab');
+        await tester.tap(find.text(Localizer.get('NavAlbums')).first);
+        await settle(tester);
+        expect(find.byType(QueueLyricsPanel), findsNothing, reason: '$tab closed');
+        expect(vm.albums.selectedAlbum, album, reason: 'the album still open, not back at the list');
+      }
+      // With nothing over it, the button goes back to the list, as before.
+      await tester.tap(find.text(Localizer.get('NavAlbums')).first);
+      await settle(tester);
+      expect(vm.albums.selectedAlbum, isNull);
+    },
+  );
+
   testWidgets("the favorites' header has a list's queue buttons on a wide screen, not on a phone, and no playlist's", (
     tester,
   ) async {

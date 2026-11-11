@@ -326,10 +326,13 @@ class MainViewModel extends ChangeNotifier {
     final searching = isSearchOpen;
     searchQuery = '';
     isSearchOpen = false;
+    // The queue or the lyrics over the page (a computer's): the section's button closes them, as it does the search.
+    final overQueue = player.isQueueOpen;
+    player.closeQueue();
     // The automatic playlists follow what was played since.
     if (section == AppSection.playlists) playlists.refreshPlaylists();
     if (section != _selectedTab) return _switchTab(section, remember: true);
-    if (searching) return;
+    if (searching || overQueue) return;
     final atList = _selectedSection == section && _openPageOf(section) == null && (_under[section]?.isEmpty ?? true);
     if (atList) return scrollToTopRequested.emit(null);
     _under[section]?.clear();
