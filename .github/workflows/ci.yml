@@ -99,8 +99,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # The Ubuntu the release builds the packages on (release.yml): they need at least its GLib.
           - target: linux-deb linux-rpm
-            os: ubuntu-latest
+            os: ubuntu-24.04
           - target: windows
             os: windows-latest
           - target: macos
