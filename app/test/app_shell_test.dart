@@ -5683,6 +5683,25 @@ void main() {
     expect(vm.player.currentTrack?.title, 'So What');
   });
 
+  testWidgets("the best match's cover flies into the page it opens, as a card's under it does", (tester) async {
+    final flying = find.byWidgetPredicate((w) => '${w.runtimeType}' == '_MotionBlur', skipOffstage: false);
+    final vm = await pumpApp(tester, const Size(400, 860));
+    for (final query in ['miles', 'kind']) {
+      vm
+        ..openSearch()
+        ..searchQuery = query;
+      await settle(tester);
+      final card = find.ancestor(
+        of: find.text(Localizer.get('BestMatch').toUpperCase()),
+        matching: find.byType(Column),
+      );
+      await tester.tap(find.descendant(of: card.first, matching: find.byType(CoverImage)).first);
+      await tester.pump();
+      expect(flying, findsOneWidget, reason: '$query: flying in from the first frame');
+      await settle(tester);
+    }
+  });
+
   testWidgets("the best match has its ⋮, the menu its row or tile has", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     vm.openSearch();

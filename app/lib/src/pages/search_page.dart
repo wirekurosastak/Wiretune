@@ -14,6 +14,7 @@ import '../view_models/search_view_model.dart';
 import '../widgets/badges.dart';
 import '../widgets/buttons.dart';
 import '../widgets/cards.dart';
+import '../widgets/cover_flight.dart';
 import '../widgets/cover_image.dart';
 import '../widgets/page_parts.dart';
 import '../widgets/track_list.dart';
@@ -350,6 +351,33 @@ class _BestMatchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final picture = CoverImage(
+      path: match.coverPath,
+      size: 116,
+      radius: Radii.card,
+      circle: match.kind == BestMatchKind.artist,
+      placeholderIcon: switch (match.kind) {
+        BestMatchKind.artist => Icons.person,
+        BestMatchKind.album => Icons.album,
+        BestMatchKind.track => Icons.music_note,
+      },
+    );
+    // An artist's or an album's picture flies into its page, as from the cards under it.
+    final tag = switch (match.item) {
+      final Artist artist => 'artist:${artist.id}',
+      final Album album => 'album:${album.id}',
+      _ => null,
+    };
+    if (tag == null) return _card(context, colors, picture);
+    return CoverFlightSource(
+      tag: tag,
+      radius: match.kind == BestMatchKind.artist ? null : Radii.card,
+      cover: picture,
+      builder: (context, cover) => _card(context, colors, cover),
+    );
+  }
+
+  Widget _card(BuildContext context, WiretuneColors colors, Widget picture) {
     return SizedBox(
       width: fill ? double.infinity : width,
       child: _MetricCard(
@@ -364,17 +392,7 @@ class _BestMatchCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CoverImage(
-              path: match.coverPath,
-              size: 116,
-              radius: Radii.card,
-              circle: match.kind == BestMatchKind.artist,
-              placeholderIcon: switch (match.kind) {
-                BestMatchKind.artist => Icons.person,
-                BestMatchKind.album => Icons.album,
-                BestMatchKind.track => Icons.music_note,
-              },
-            ),
+            picture,
             const SizedBox(height: 14),
             TagBadge(match.typeLabel, color: colors.accent),
             const SizedBox(height: 4),
