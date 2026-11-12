@@ -26,7 +26,7 @@ Your files are never changed.
 - **Several artists:** if a file has one `ARTIST` field per artist, or an `ARTISTS` field, every artist is listed with
   a link. Names are never split at `&`, `,` or `/`: *Simon & Garfunkel* stays one artist.
 - **Quality badges:** **gold** for hi-res (lossless above 16 bit or 48 kHz), **silver** for CD-quality lossless,
-  **bronze** for lossy. An album or playlist shows its weakest track's badge, or *MIXED* when formats differ.
+  **bronze** for lossy. An album shows what most of its tracks are; on a tie, the weaker.
 - **Covers:** the picture embedded in the file, or a `cover`, `folder`, `front`, `albumart` or `artwork` image
   (`.jpg`, `.jpeg`, `.png`) next to it. In a local folder on Android 13 and later, only embedded covers work.
 - **Artist pictures** come from the internet ([what's sent](../SECURITY.md#what-leaves-your-network)). To use your own,

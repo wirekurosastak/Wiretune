@@ -893,7 +893,7 @@ void main() {
     expect(vm.artists.selectedArtist?.name, 'Miles Davis');
   });
 
-  testWidgets('the quality tag sits on the cover: an album, a playlist', (tester) async {
+  testWidgets("the quality tag sits on an album's cover; a playlist has none", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     void expectOnCover(Finder page, Finder cover) {
       final tag = find.descendant(of: page, matching: find.byType(QualityTag));
@@ -913,9 +913,12 @@ void main() {
       return vm.library.getPlaylist(created.id);
     }))!;
     vm.navigateTo(AppSection.playlists);
+    await settle(tester);
+    expect(find.text('Mix'), findsOneWidget);
+    expect(find.byType(QualityTag), findsNothing); // nor in the list of playlists
     vm.playlists.openPlaylist(playlist);
     await settle(tester);
-    expectOnCover(header, find.descendant(of: header, matching: find.byType(CoverImage)));
+    expect(find.descendant(of: header, matching: find.byType(QualityTag)), findsNothing);
   });
 
   testWidgets('a phone shows quality tags in its album rows and leaves them out of its queue', (tester) async {

@@ -286,9 +286,6 @@ class Track {
   String toString() => 'Track($artist - $title)';
 }
 
-/// The quality tag of [tracks] (an album's, a playlist's): their lowest tier and their format, or `MIXED`; null for none.
-QualitySummary? qualityOf(Iterable<Track> tracks) => QualitySummary.of(tracks.map((t) => t.format));
-
 class Album {
   Album({
     String? id,
@@ -320,7 +317,7 @@ class Album {
   final String? coverArtPath;
   final Duration totalDuration;
 
-  /// The album's quality tag: the lowest tier of its tracks, and their format or `MIXED`.
+  /// The album's quality tag: what most of its tracks are.
   final QualitySummary quality;
 
   final List<Track> tracks;

@@ -103,10 +103,6 @@ int sumPlays(LibraryService library, Iterable<Track> tracks) =>
 DateTime latestAdded(Iterable<Track> tracks) =>
     tracks.map((t) => t.addedAt).fold(DateTime.fromMillisecondsSinceEpoch(0), (a, b) => b.isAfter(a) ? b : a);
 
-/// The weakest format of [tracks]: an album is as good as its weakest track (the tier on its tag says the same).
-AudioFormat weakestFormat(Iterable<Track> tracks) =>
-    tracks.map((t) => t.format).reduce((w, f) => compareFormatQuality(f, w) < 0 ? f : w);
-
 /// The order of a page of tracks and the labels of its sort buttons, which the wide table's column headers share. As
 /// on the albums page, the active field flips its direction and another one starts in its natural one
 /// ([startsDescending]).
@@ -284,17 +280,6 @@ List<String> genresOf(Iterable<Track> tracks) {
 /// Whether any of [tracks] is tagged with [genre], in any capitalisation.
 bool hasGenre(Iterable<Track> tracks, String genre) => tracks.any((t) => equalsIgnoreCase(t.genre, genre));
 
-/// Orders formats from the weakest to the best: by tier, then by bit depth and sample rate (lossless) or bitrate and
-/// sample rate (lossy).
-int compareFormatQuality(AudioFormat a, AudioFormat b) {
-  final byTier = a.tier.index.compareTo(b.tier.index);
-  if (byTier != 0) return byTier;
-  final byDepth = a.isLossless && b.isLossless
-      ? a.bitsPerSample.compareTo(b.bitsPerSample)
-      : a.bitrateKbps.compareTo(b.bitrateKbps);
-  return byDepth != 0 ? byDepth : a.sampleRate.compareTo(b.sampleRate);
-}
-
 /// A detail page that remembers where "back" leads.
 mixin DetailOrigin on ChangeNotifier {
   void Function(NavWaveDirection direction)? onNavWave;
@@ -448,10 +433,6 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
       if (sortField == AlbumSortField.added)
         for (final a in albums) a: latestAdded(a.tracks),
     };
-    final weakest = {
-      if (sortField == AlbumSortField.quality)
-        for (final a in albums) a: weakestFormat(a.tracks),
-    };
     final plays = {
       if (sortField == AlbumSortField.plays)
         for (final a in albums) a: sumPlays(_library, a.tracks),
@@ -467,7 +448,7 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
         AlbumSortField.added => (a, b) => added[a]!.compareTo(added[b]!),
         AlbumSortField.plays => (a, b) => plays[a]!.compareTo(plays[b]!),
         AlbumSortField.released => (a, b) => a.releaseYear!.compareTo(b.releaseYear!),
-        AlbumSortField.quality => (a, b) => compareFormatQuality(weakest[a]!, weakest[b]!),
+        AlbumSortField.quality => (a, b) => compareFormatQuality(a.quality.format, b.quality.format), // as its tag says
         AlbumSortField.artist => (a, b) => compareText(a.artist, b.artist),
         AlbumSortField.tracks => (a, b) => a.tracks.length.compareTo(b.tracks.length),
         AlbumSortField.length => (a, b) => length[a]!.compareTo(length[b]!),

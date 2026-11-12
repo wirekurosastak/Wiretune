@@ -20,6 +20,7 @@ void main() {
 
   const hiRes = AudioFormat(codec: 'FLAC', sampleRate: 96000, bitsPerSample: 24, isLossless: true);
   const hiResLow = AudioFormat(codec: 'FLAC', sampleRate: 48000, bitsPerSample: 24, isLossless: true);
+  const hiRes88 = AudioFormat(codec: 'FLAC', sampleRate: 88200, bitsPerSample: 24, isLossless: true);
   const mp3 = AudioFormat(codec: 'MP3', sampleRate: 44100, bitrateKbps: 320, isLossless: false);
 
   Future<LibraryService> library(
@@ -34,25 +35,26 @@ void main() {
 
   List<String> titles(AlbumsViewModel albums) => [for (final a in albums.displayedAlbums) a.title];
 
-  test('sorting by quality puts the best albums first, an album counting as its weakest track', () async {
+  test('sorting by quality puts the best albums first, an album counting as most of its tracks', () async {
     final lib = await library([
       track('1', 'Lossy', format: mp3),
       track('2', 'Studio 96', format: hiRes),
       track('3', 'Studio 48', format: hiResLow),
       track('4', 'CD'),
-      // A hi-res track beside a CD one: the album is only as good as the CD one.
-      track('5', 'Mixed', format: hiRes),
+      // Two 24/88.2 tracks beside a CD one: the album counts as 24/88.2, between the 96 and the 48 kHz ones.
+      track('5', 'Mixed', format: hiRes88),
       track('6', 'Mixed'),
+      track('7', 'Mixed', format: hiRes88),
     ]);
     final albums = AlbumsViewModel(lib, PlayerViewModel(TestSupport.createEngine(), lib));
 
     albums.setSortField(AlbumSortField.quality);
     expect(albums.isSortDescending, isTrue);
-    expect(titles(albums), ['Studio 96', 'Studio 48', 'CD', 'Mixed', 'Lossy']);
+    expect(titles(albums), ['Studio 96', 'Mixed', 'Studio 48', 'CD', 'Lossy']);
     expect(albums.sortLabel(AlbumSortField.quality), 'Quality ↓');
 
     albums.setSortField(AlbumSortField.quality);
-    expect(titles(albums), ['Lossy', 'CD', 'Mixed', 'Studio 48', 'Studio 96']);
+    expect(titles(albums), ['Lossy', 'CD', 'Studio 48', 'Mixed', 'Studio 96']);
   });
 
   test('sorting albums by artist sorts alphabetically by artist name', () async {

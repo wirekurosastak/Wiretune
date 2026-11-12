@@ -15,7 +15,7 @@ class QualityTag extends StatelessWidget {
 
   final QualityTier tier;
 
-  /// The format, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty shows the tier word alone.
+  /// The format, e.g. "FLAC 24bit/96kHz"; empty shows the tier word alone.
   final String? spec;
   final double fontSize;
   final EdgeInsetsGeometry? padding;

@@ -63,7 +63,7 @@ class AudioFormat {
       ? '${codec.toUpperCase()} ${bitrateKbps}kbps'
       : '${codec.toUpperCase()} ${bitsPerSample}bit/${_khz(sampleRate)}kHz';
 
-  /// The tag of a small cover: the format alone (`FLAC`, `MP3`, `MIXED`), in every tier; the tag's colour says the
+  /// The tag of a small cover: the format alone (`FLAC`, `MP3`), in every tier; the tag's colour says the
   /// tier, so a hi-res FLAC reads `FLAC` in gold.
   static String compactSpec(QualityTier tier, String spec) {
     final trimmed = spec.trim();
@@ -113,46 +113,61 @@ class AudioFormat {
   int get hashCode => Object.hash(codec, sampleRate, bitsPerSample, channels, bitrateKbps, isLossless);
 }
 
-/// The quality tag of a group of tracks (an album or a playlist): the tier the group is shown in and the short text
-/// that follows the tier word, for example `FLAC 24bit/96kHz` or `MIXED`.
+/// Orders formats from the weakest to the best: by tier, then by bit depth and sample rate (lossless) or bitrate and
+/// sample rate (lossy).
+int compareFormatQuality(AudioFormat a, AudioFormat b) {
+  final byTier = a.tier.index.compareTo(b.tier.index);
+  if (byTier != 0) return byTier;
+  final byDepth = a.isLossless && b.isLossless
+      ? a.bitsPerSample.compareTo(b.bitsPerSample)
+      : a.bitrateKbps.compareTo(b.bitrateKbps);
+  return byDepth != 0 ? byDepth : a.sampleRate.compareTo(b.sampleRate);
+}
+
+/// The quality tag of an album: what most of its tracks are. The tier most tracks
+/// have, and within it the format most tracks have; a tie goes to the weaker one, so the tag never claims more than
+/// half the tracks have.
 class QualitySummary {
-  const QualitySummary(this.tier, this.spec);
+  const QualitySummary(this.format);
 
-  /// What the tag says when the tracks are in different formats.
-  static const String mixedSpec = 'MIXED';
+  /// The format the tag stands for: one of the tracks'.
+  final AudioFormat format;
 
-  /// The lowest tier among the tracks: "every track here is at least this good".
-  final QualityTier tier;
+  QualityTier get tier => format.tier;
 
-  /// The format of the tracks when they all share one, [mixedSpec] otherwise.
-  final String spec;
+  /// The format as the tag says it, for example `FLAC 24bit/96kHz`.
+  String get spec => format.tagSpec;
 
   /// What the tag of a small cover says: the format alone ([AudioFormat.compactSpec]).
   String get compactSpec => AudioFormat.compactSpec(tier, spec);
 
-  /// Summarises [formats], or returns null when there are none (an empty playlist has no tag). Two lossy files count
-  /// as the same format only when their bitrate matches too.
+  /// Summarises [formats], or returns null when there are none (an album always has one).
   static QualitySummary? of(Iterable<AudioFormat> formats) {
-    AudioFormat? first;
-    var lowest = QualityTier.gold;
-    var mixed = false;
-    for (final format in formats) {
-      if (format.tier.index < lowest.index) lowest = format.tier;
-      if (first == null) {
-        first = format;
-      } else if (!_sameSpec(first, format)) {
-        mixed = true;
-      }
+    // Weakest first, so that on a tie the weaker one, counted first, wins.
+    final sorted = formats.toList()..sort(compareFormatQuality);
+    if (sorted.isEmpty) return null;
+    final tiers = <QualityTier, int>{};
+    for (final format in sorted) {
+      tiers[format.tier] = (tiers[format.tier] ?? 0) + 1;
     }
-    if (first == null) return null;
-    return QualitySummary(lowest, mixed ? mixedSpec : first.tagSpec);
+    final tier = _mostCommon(tiers);
+    final specs = <String, int>{};
+    final formatOf = <String, AudioFormat>{};
+    for (final format in sorted.where((f) => f.tier == tier)) {
+      specs[format.tagSpec] = (specs[format.tagSpec] ?? 0) + 1;
+      formatOf.putIfAbsent(format.tagSpec, () => format);
+    }
+    return QualitySummary(formatOf[_mostCommon(specs)]!);
   }
 
-  static bool _sameSpec(AudioFormat a, AudioFormat b) =>
-      a.isLossless == b.isLossless &&
-      a.codec.toLowerCase() == b.codec.toLowerCase() &&
-      a.sampleRate == b.sampleRate &&
-      (a.isLossless ? a.bitsPerSample == b.bitsPerSample : a.bitrateKbps == b.bitrateKbps);
+  /// The key counted most often; on a tie the first one.
+  static K _mostCommon<K>(Map<K, int> counts) {
+    MapEntry<K, int>? best;
+    for (final entry in counts.entries) {
+      if (best == null || entry.value > best.value) best = entry;
+    }
+    return best!.key;
+  }
 }
 
 /// Single source of truth for which audio files Wiretune indexes, how they are labelled and which MIME type the server

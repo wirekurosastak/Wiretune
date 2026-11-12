@@ -9,6 +9,7 @@ import 'package:path/path.dart' as p;
 
 import '../data/library_repository.dart';
 import '../localization/localizer.dart';
+import '../models/audio_format.dart';
 import '../models/library_models.dart';
 import '../models/protocol.dart';
 import '../util/async_lock.dart';
@@ -987,7 +988,7 @@ class LibrarySnapshot {
           releaseYear: folderAlbum && years.isNotEmpty ? years.reduce(math.max) : years.firstOrNull,
           coverArtPath: ordered.where((t) => !isBlank(t.coverArtPath)).firstOrNull?.coverArtPath,
           totalDuration: ordered.fold(Duration.zero, (sum, t) => sum + t.duration),
-          quality: qualityOf(ordered)!, // an album always has a track
+          quality: QualitySummary.of(ordered.map((t) => t.format))!, // an album always has a track
           tracks: ordered,
         ),
       );

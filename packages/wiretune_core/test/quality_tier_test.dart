@@ -46,22 +46,18 @@ void main() {
   test('tag text is the whole spec: format and resolution', () {
     expect(QualityTier.gold.tagText('FLAC 24bit/96kHz'), 'FLAC 24bit/96kHz');
     expect(QualityTier.bronze.tagText('MP3 320kbps'), 'MP3 320kbps');
-    expect(QualityTier.silver.tagText(QualitySummary.mixedSpec), 'MIXED');
   });
 
   test('a compact tag is the format alone in every tier, its colour telling the tier', () {
     expect(AudioFormat.compactSpec(QualityTier.gold, 'FLAC 24bit/96kHz'), 'FLAC');
     expect(AudioFormat.compactSpec(QualityTier.gold, 'ALAC 24bit/192kHz'), 'ALAC');
-    expect(AudioFormat.compactSpec(QualityTier.gold, 'MIXED'), 'MIXED');
     expect(AudioFormat.compactSpec(QualityTier.silver, 'FLAC 16bit/44.1kHz'), 'FLAC');
     expect(AudioFormat.compactSpec(QualityTier.silver, 'ALAC 16bit/44.1kHz'), 'ALAC');
     expect(AudioFormat.compactSpec(QualityTier.silver, 'WAV 16bit/44.1kHz'), 'WAV');
-    expect(AudioFormat.compactSpec(QualityTier.silver, 'MIXED'), 'MIXED');
     expect(AudioFormat.compactSpec(QualityTier.silver, ''), 'FLAC');
     expect(AudioFormat.compactSpec(QualityTier.bronze, 'MP3 320kbps'), 'MP3');
     expect(AudioFormat.compactSpec(QualityTier.bronze, 'AAC 256kbps'), 'AAC');
     expect(AudioFormat.compactSpec(QualityTier.bronze, 'OGG 192kbps'), 'OGG');
-    expect(AudioFormat.compactSpec(QualityTier.bronze, 'MIXED'), 'MIXED');
     expect(AudioFormat.compactSpec(QualityTier.bronze, ''), 'MP3');
 
     // As a list's tag says it: a hi-res FLAC reads FLAC too, in gold.
@@ -90,20 +86,32 @@ void main() {
     expect(QualityTier.silver.word, 'SILBER');
   });
 
-  test('summaries', () {
+  test('a summary is what most tracks are: their tier, then their format in it; a tie goes to the weaker', () {
     expect(QualitySummary.of(const []), isNull);
+    String tag(List<AudioFormat> formats) {
+      final summary = QualitySummary.of(formats)!;
+      return '${summary.tier.name} ${summary.spec}';
+    }
 
-    final one = QualitySummary.of([_lossless(96000, 24), _lossless(96000, 24)])!;
-    expect((one.tier, one.spec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
+    final hiRes = _lossless(96000, 24);
+    final cd = _lossless(44100, 16);
+    expect(tag([hiRes, hiRes]), 'gold FLAC 24bit/96kHz');
+    expect(tag([hiRes, hiRes, cd]), 'gold FLAC 24bit/96kHz'); // one bonus CD track doesn't pull an album down
+    expect(tag([hiRes, cd, cd]), 'silver FLAC 16bit/44.1kHz');
+    expect(tag([hiRes, cd]), 'silver FLAC 16bit/44.1kHz');
+    expect(tag([cd, _lossy(320)]), 'bronze MP3 320kbps');
 
-    final sameTier = QualitySummary.of([_lossless(96000, 24), _lossless(192000, 24)])!;
-    expect((sameTier.tier, sameTier.spec), (QualityTier.gold, QualitySummary.mixedSpec));
-    expect(QualitySummary.of([_lossless(96000, 24), _lossless(44100, 16)])!.tier, QualityTier.silver);
-    expect(QualitySummary.of([_lossless(96000, 24), _lossy(320)])!.tier, QualityTier.bronze);
+    // The tier first: four hi-res tracks in four formats outnumber three CD ones.
+    expect(
+      tag([cd, cd, cd, hiRes, _lossless(88200, 24), _lossless(192000, 24), _lossless(48000, 24)]),
+      'gold FLAC 24bit/48kHz',
+    );
+    // Lossy files of every bitrate (VBR): the tier is bronze however their bitrates differ.
+    expect(tag([cd, cd, _lossy(245), _lossy(251), _lossy(263)]), 'bronze MP3 245kbps');
 
-    expect(QualitySummary.of([_lossy(128), _lossy(320)])!.spec, QualitySummary.mixedSpec);
-    expect(QualitySummary.of([_lossy(320), _lossy(320)])!.spec, 'MP3 320kbps');
-    expect(QualitySummary.of([_lossless(44100, 16, 'FLAC'), _lossless(44100, 16, 'flac')])!.spec, 'FLAC 16bit/44.1kHz');
+    expect(tag([_lossless(192000, 24), hiRes]), 'gold FLAC 24bit/96kHz');
+    expect(tag([_lossless(192000, 24), _lossless(192000, 24), hiRes]), 'gold FLAC 24bit/192kHz');
+    expect(tag([_lossless(44100, 16, 'FLAC'), _lossless(44100, 16, 'flac')]), 'silver FLAC 16bit/44.1kHz');
   });
 
   test('albums carry their tier and tag spec', () async {
@@ -125,6 +133,7 @@ void main() {
       make('b1', 'Bronze album', _lossy(320)),
       make('m1', 'Mixed album', _lossless(96000, 24)),
       make('m2', 'Mixed album', _lossy(256)),
+      make('m3', 'Mixed album', _lossless(96000, 24)),
     ]);
     service.initialize();
 
@@ -136,22 +145,6 @@ void main() {
     expect(tag('Gold album'), (QualityTier.gold, 'FLAC 24bit/96kHz'));
     expect(tag('Silver album'), (QualityTier.silver, 'FLAC 16bit/44.1kHz'));
     expect(tag('Bronze album'), (QualityTier.bronze, 'MP3 320kbps'));
-    expect(tag('Mixed album'), (QualityTier.bronze, 'MIXED'));
-  });
-
-  test("a playlist's tag is its tracks', and an empty playlist has none", () {
-    final hiRes = qualityOf([
-      TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
-      TestSupport.makeTrack('b', 'B', sampleRate: 96000, bits: 24),
-    ])!;
-    expect((hiRes.tier, hiRes.spec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
-
-    final mixed = qualityOf([
-      TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
-      TestSupport.makeTrack('c', 'C', sampleRate: 44100, bits: 16),
-    ])!;
-    expect((mixed.tier, mixed.spec), (QualityTier.silver, 'MIXED'));
-
-    expect(qualityOf(const []), isNull);
+    expect(tag('Mixed album'), (QualityTier.gold, 'FLAC 24bit/96kHz'));
   });
 }
