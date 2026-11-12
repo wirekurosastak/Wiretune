@@ -450,7 +450,10 @@ class DetailHeader extends StatelessWidget {
             children: [
               _flight(Container(width: 210, height: 210, decoration: frame, child: framed)),
               const SizedBox(width: 30),
-              Expanded(child: text),
+              // The cover flying in from a tile may go past them: they come on as it lands, as on a phone.
+              Expanded(
+                child: CoverFlightAfter(tag: artworkFlight, child: text),
+              ),
             ],
           ),
         ),
