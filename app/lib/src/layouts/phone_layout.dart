@@ -963,6 +963,8 @@ class _SkipSwipeState extends State<_SkipSwipe> with SingleTickerProviderStateMi
       final track = _player.currentTrack;
       if (track == null) return const SizedBox.shrink();
       final gestures = GestureDetector(
+        // Over the whole bar up to Play, not only over the cover and the letters: a short title leaves room beside it.
+        behavior: HitTestBehavior.opaque,
         onHorizontalDragStart: (_) => _offset.stop(),
         onHorizontalDragUpdate: (details) => _drag(details.primaryDelta ?? 0),
         onHorizontalDragEnd: (details) => unawaited(_release(details.primaryVelocity ?? 0)),

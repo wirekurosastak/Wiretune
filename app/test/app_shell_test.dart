@@ -665,6 +665,27 @@ void main() {
     expect((flying.evaluate().isEmpty, shown(own: false)), (true, 1), reason: 'home');
   });
 
+  testWidgets("a phone's mini player skips by a swipe anywhere over it up to Play, beside a short title too", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    final tracks = vm.library.tracks.take(2).toList();
+    vm.player.playQueue(tracks, tracks.first);
+    await settle(tester);
+    final sheet = tester.widget<PlayerSheetScope>(find.byType(PlayerSheetScope)).sheet;
+    final title = tester.getRect(
+      find.descendant(of: find.byKey(sheet.miniBar), matching: find.text(tracks.first.title)),
+    );
+    final play = tester.getRect(find.descendant(of: find.byKey(sheet.miniBar), matching: find.byType(PlayButton)));
+    // In the empty room between the title's end and Play.
+    final empty = Offset((title.right + play.left) / 2, title.center.dy);
+    expect(empty.dx, greaterThan(title.right + 10));
+
+    await tester.flingFrom(empty, const Offset(-200, 0), 1000);
+    await settle(tester);
+    expect(vm.player.currentTrack, same(tracks.last));
+  });
+
   testWidgets("a phone's mini player slides the next track in on the first skip by a button too", (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     final tracks = vm.library.tracks.take(2).toList();
