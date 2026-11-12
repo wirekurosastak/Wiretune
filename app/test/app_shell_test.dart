@@ -4548,6 +4548,33 @@ void main() {
     }
   });
 
+  testWidgets("on a phone an album's title and buttons come on as the cover flying up into its artwork lands", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    vm.navigateTo(AppSection.albums);
+    await settle(tester);
+    double shown() => tester
+        .widget<AnimatedOpacity>(
+          find.descendant(of: find.byType(CoverFlightAfter), matching: find.byType(AnimatedOpacity)).first,
+        )
+        .opacity;
+
+    await tester.tap(find.byWidgetPredicate((w) => w is CoverFlightSource && w.tag.startsWith('album:')).first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(shown(), 0, reason: 'out of sight while the cover flies past');
+    await settle(tester);
+    expect(shown(), 1);
+
+    // Back and in again without a flight (from the search, a link): there at once.
+    expect(vm.tryNavigateBack(), isTrue);
+    await settle(tester);
+    vm.openAlbum(vm.library.albums.first);
+    await tester.pump();
+    expect(shown(), 1);
+  });
+
   testWidgets("an album opened on its artist's page keeps the artist's picture in its place until its cover lands", (
     tester,
   ) async {

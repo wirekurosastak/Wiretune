@@ -392,8 +392,16 @@ class DetailHeader extends StatelessWidget {
                     child: _flight(Container(width: 230, height: 230, decoration: frame, child: framed)),
                   ),
                   const SizedBox(height: 20),
-                  if (actions.isEmpty) PinnedTitleBar.anchor(context, narrowTitle) else narrowTitle,
-                  if (detailContent != null) ...[const SizedBox(height: 6), detailContent],
+                  // The cover flying up into the artwork goes past them: they come on as it lands.
+                  CoverFlightAfter(
+                    tag: artworkFlight,
+                    child: Column(
+                      children: [
+                        if (actions.isEmpty) PinnedTitleBar.anchor(context, narrowTitle) else narrowTitle,
+                        if (detailContent != null) ...[const SizedBox(height: 6), detailContent],
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -402,9 +410,12 @@ class DetailHeader extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, PhoneChrome.playEndPadding, 0),
                 child: PinnedTitleBar.anchor(
                   context,
-                  SizedBox(
-                    height: PhoneChrome.playSize,
-                    child: Row(children: [for (final action in actions) Expanded(child: action)]),
+                  CoverFlightAfter(
+                    tag: artworkFlight,
+                    child: SizedBox(
+                      height: PhoneChrome.playSize,
+                      child: Row(children: [for (final action in actions) Expanded(child: action)]),
+                    ),
                   ),
                 ),
               ),

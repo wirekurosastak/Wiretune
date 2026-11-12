@@ -323,6 +323,10 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   /// The pressed cover flying in, while it does: what it shows, where from, its corners.
   ({Widget cover, Rect from, double? radius})? _arriving;
 
+  /// How far through its flight the cover flying in is: 1 once it has landed, or when none flies in
+  /// ([CoverFlightAfter]).
+  final ValueNotifier<double> _flown = ValueNotifier(1);
+
   /// The artwork of the page this one replaced ([CoverFlight._leftBehind]), in this one's place while the pressed cover
   /// flies in over it.
   ({Rect rect, Widget artwork})? _standIn;
@@ -360,6 +364,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
         radius: pressed.radius,
       );
       _standIn = CoverFlight._leftBehind;
+      _flown.value = 0;
       _flight.show();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -371,6 +376,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
     if (!mounted) return;
     _measure();
     _flight.hide();
+    _flown.value = 1;
     setState(() {
       _waiting = false;
       _arriving = null;
@@ -415,6 +421,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
   void dispose() {
     _position?.removeListener(_measure);
     if (CoverFlight._artworks[widget.tag] == this) CoverFlight._artworks.remove(widget.tag);
+    _flown.dispose();
     super.dispose();
   }
 
@@ -476,6 +483,7 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
         to: () => mounted ? CoverFlight._rectOf(this.context) ?? _rect : _rect,
         fromRadius: arriving.radius,
         toRadius: widget.radius,
+        onProgress: (progress) => _flown.value = progress,
         onLanded: _arrived,
       );
     },
@@ -495,6 +503,37 @@ class _CoverFlightTargetState extends State<CoverFlightTarget> {
       ],
     ),
   );
+}
+
+/// [child], under the artwork that shows [tag] on a page, kept out of sight while the pressed cover flies into that
+/// artwork over it, as in YouTube Music's player: it comes on as the cover lands, once it has gone past. Just [child]
+/// when no cover flies in.
+class CoverFlightAfter extends StatelessWidget {
+  const CoverFlightAfter({super.key, required this.tag, required this.child});
+
+  /// The artwork's, as its [CoverFlightTarget] has it; null: none flies.
+  final String? tag;
+  final Widget child;
+
+  /// How far through its flight it comes on: the cover, flying in from below, is about to land and past it.
+  static const double _from = 0.8;
+
+  @override
+  Widget build(BuildContext context) {
+    // Built after the artwork above it, which took the flight on in that frame.
+    final flown = CoverFlight._artworks[tag]?._flown;
+    if (flown == null) return child;
+    return ValueListenableBuilder<double>(
+      valueListenable: flown,
+      builder: (context, progress, child) => AnimatedOpacity(
+        opacity: progress >= _from ? 1 : 0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        child: child,
+      ),
+      child: child,
+    );
+  }
 }
 
 /// The player's cover (the mini player's, the player bar's), where the cover of queued music lands
@@ -745,6 +784,7 @@ class _Flight extends StatefulWidget {
     required this.fromRadius,
     required this.toRadius,
     required this.onLanded,
+    this.onProgress,
     this.duration,
     this.arc = 0,
   });
@@ -755,6 +795,9 @@ class _Flight extends StatefulWidget {
   final double? fromRadius;
   final double? toRadius;
   final VoidCallback onLanded;
+
+  /// How far through it is, each frame it moves.
+  final ValueChanged<double>? onProgress;
   final Duration? duration;
   final double arc;
 
@@ -807,6 +850,7 @@ class _FlightState extends State<_Flight> with SingleTickerProviderStateMixin {
     _lastAt = elapsed;
     _lastProgress = progress;
     setState(() => _progress = progress);
+    widget.onProgress?.call(progress);
     if (progress == 1) {
       _clock.stop();
       widget.onLanded();

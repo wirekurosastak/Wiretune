@@ -339,9 +339,10 @@ class _PlayerBodyState extends State<_PlayerBody> with SingleTickerProviderState
         final showsPage = track || t < 1 || _open.isAnimating;
         final showsList = !track || t > 0 || _open.isAnimating;
         final flying = _flying;
-        // The track's page goes over the first half, the list comes over the second, rising a little.
+        // The track's page goes over the first half; the list comes over the last part, rising a little, once the cover
+        // flying up into the row over it is past its top.
         final pageShown = 1 - const Interval(0, 0.55, curve: Curves.easeOut).transform(t);
-        final listShown = const Interval(0.35, 1, curve: Curves.easeOut).transform(t);
+        final listShown = const Interval(0.6, 1, curve: Curves.easeOut).transform(t);
         return _BodyDrag(
           drag: _drag,
           child: Stack(
