@@ -665,6 +665,23 @@ void main() {
     expect((flying.evaluate().isEmpty, shown(own: false)), (true, 1), reason: 'home');
   });
 
+  testWidgets("a phone's mini player slides the next track in on the first skip by a button too", (tester) async {
+    final vm = await pumpApp(tester, const Size(400, 860));
+    final tracks = vm.library.tracks.take(2).toList();
+    vm.player.playQueue(tracks, tracks.first);
+    await settle(tester);
+    final sheet = tester.widget<PlayerSheetScope>(find.byType(PlayerSheetScope)).sheet;
+    Finder inBar(String text) => find.descendant(of: find.byKey(sheet.miniBar), matching: find.text(text));
+
+    vm.player.nextTrack();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(inBar(tracks.first.title), findsOneWidget, reason: 'going out');
+    expect(tester.getCenter(inBar(tracks.last.title)).dx, greaterThan(tester.getCenter(inBar(tracks.first.title)).dx));
+    await settle(tester);
+    expect(inBar(tracks.first.title), findsNothing);
+  });
+
   testWidgets('a skip in the full-screen player shows the next track\'s title and cover', (tester) async {
     final vm = await pumpApp(tester, const Size(400, 860));
     final tracks = vm.library.tracks.take(2).toList();
@@ -682,6 +699,15 @@ void main() {
     expect(coverOnPage(), tracks.first.coverArtPath);
 
     vm.player.nextTrack();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    // A button's skip slides as a swipe does: the next track's page comes in from the right, the old one going out.
+    expect(onPage(find.text(tracks.first.title)), findsOneWidget, reason: 'going out');
+    expect(
+      tester.getCenter(onPage(find.text(tracks.last.title))).dx,
+      greaterThan(tester.getCenter(onPage(find.text(tracks.first.title))).dx),
+      reason: 'coming in from the right',
+    );
     await settle(tester);
 
     expect(onPage(find.text(tracks.last.title)), findsOneWidget);

@@ -547,18 +547,53 @@ class _TrackSwipeState extends State<_TrackSwipe> with SingleTickerProviderState
 
   late final PlayerViewModel _player = context.vm.player;
 
+  /// The track last shown as playing, and whether a swipe here changed it (it is in place already).
+  Track? _shown;
+  bool _swiped = false;
+
+  /// The track that played before, going out beside the new one as that comes in, after a change made elsewhere.
+  Track? _leaving;
+
   @override
   void initState() {
     super.initState();
+    _shown = _player.currentTrack;
     _player.addListener(_readAhead);
+    _player.addListener(_followTrack);
     WidgetsBinding.instance.addPostFrameCallback((_) => _readAhead());
   }
 
   @override
   void dispose() {
     _player.removeListener(_readAhead);
+    _player.removeListener(_followTrack);
     _offset.dispose();
     super.dispose();
+  }
+
+  /// The track changed by a button, by running out, or on another device: as after a swipe, the new one comes in from
+  /// the side it lies on in the queue (the right unless it is the one before), the old one going out the other way, as
+  /// the mini player's does.
+  void _followTrack() {
+    final track = _player.currentTrack;
+    final previous = _shown;
+    if (track == null || identical(track, previous)) return;
+    _shown = track;
+    if (_swiped || previous == null || track.id == previous.id) {
+      _swiped = false;
+      return;
+    }
+    final back =
+        identical(_besideOf(track, next: true), previous) && !identical(_besideOf(track, next: false), previous);
+    _finger = 0;
+    _past = false;
+    _leaving = previous;
+    _offset.value = back ? -_width : _width;
+    unawaited(
+      _offset.animateTo(0, duration: const Duration(milliseconds: 260), curve: Curves.easeOutCubic).whenComplete(() {
+        if (mounted && _offset.value == 0) setState(() => _leaving = null);
+      }),
+    );
   }
 
   /// The covers of the tracks beside the playing one, decoded ahead at the size their pages show them, so that one
@@ -573,9 +608,10 @@ class _TrackSwipeState extends State<_TrackSwipe> with SingleTickerProviderState
 
   /// The track after the playing one in the queue, or ([next] false) the one before; none at an end the queue doesn't
   /// go round.
-  Track? _beside({required bool next}) {
+  Track? _beside({required bool next}) => _besideOf(_player.currentTrack, next: next);
+
+  Track? _besideOf(Track? current, {required bool next}) {
     final queue = _player.queueTracks;
-    final current = _player.currentTrack;
     final index = current == null ? -1 : queue.indexWhere((t) => identical(t, current));
     if (index < 0) return null;
     final at = index + (next ? 1 : -1);
@@ -584,6 +620,7 @@ class _TrackSwipeState extends State<_TrackSwipe> with SingleTickerProviderState
   }
 
   void _drag(double delta) {
+    if (_leaving != null) setState(() => _leaving = null);
     _finger += delta;
     final next = _finger < 0;
     final goes = _beside(next: next) != null;
@@ -615,6 +652,7 @@ class _TrackSwipeState extends State<_TrackSwipe> with SingleTickerProviderState
     );
     if (!mounted) return;
     unawaited(HapticFeedback.lightImpact());
+    _swiped = true;
     next ? _player.nextTrack() : _player.previousTrack(restart: false);
     _finger = 0;
     _past = false;
@@ -641,7 +679,8 @@ class _TrackSwipeState extends State<_TrackSwipe> with SingleTickerProviderState
             builder: (context, _) {
               final offset = _offset.value;
               final next = offset < 0;
-              final coming = offset == 0 ? null : _beside(next: next);
+              // Beside it: the track that played before while the new one comes in, else the one a swipe brings in.
+              final coming = offset == 0 ? null : _leaving ?? _beside(next: next);
               Widget at(double x, Widget child) => Opacity(
                 opacity: (1 - x.abs() / _width).clamp(0.0, 1.0),
                 child: Transform.translate(offset: Offset(x, 0), child: child),

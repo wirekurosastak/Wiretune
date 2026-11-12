@@ -869,10 +869,17 @@ class _SkipSwipeState extends State<_SkipSwipe> with SingleTickerProviderStateMi
   Track? _beside;
 
   /// The track last shown as playing, and whether the swipe itself changed it (it is in place already).
-  late Track? _shown = widget.player.currentTrack;
+  Track? _shown;
   bool _swiped = false;
 
   PlayerViewModel get _player => widget.player;
+
+  @override
+  void initState() {
+    super.initState();
+    // Now, not on its first read: that comes once the track has changed, which would then not slide.
+    _shown = _player.currentTrack;
+  }
 
   @override
   void didUpdateWidget(_SkipSwipe oldWidget) {
