@@ -549,6 +549,7 @@ class CoverFlightBetween extends StatefulWidget {
     required this.progress,
     required this.from,
     required this.to,
+    this.rise = 0,
     required this.fromRadius,
     required this.toRadius,
     required this.image,
@@ -557,6 +558,10 @@ class CoverFlightBetween extends StatefulWidget {
   final double progress;
   final Rect from;
   final Rect to;
+
+  /// How far down [from] and [to] lie at the start, rising with the flight to where they are at its end: the place of
+  /// both in a phone's player rising as it opens.
+  final double rise;
   final double fromRadius;
   final double toRadius;
   final ImageProvider? image;
@@ -631,7 +636,11 @@ class _CoverFlightBetweenState extends State<CoverFlightBetween> {
       _lastAt = now;
       _last = progress;
     }
-    Rect at(double progress) => Rect.lerp(widget.from, widget.to, progress.clamp(0.0, 1.0))!;
+    Rect at(double progress) {
+      final p = progress.clamp(0.0, 1.0);
+      return Rect.lerp(widget.from, widget.to, p)!.shift(Offset(0, widget.rise * (1 - p)));
+    }
+
     final rect = at(progress);
     return Positioned.fromRect(
       rect: rect,

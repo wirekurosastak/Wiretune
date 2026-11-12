@@ -1356,7 +1356,7 @@ void main() {
   });
 
   testWidgets(
-    "a phone's full-screen player grows out of the mini player as the navigation goes down, its controls coming on last",
+    "a phone's full-screen player rises out of the mini player as the navigation goes down, its controls coming on last",
     (tester) async {
       final vm = await pumpApp(tester, const Size(400, 860));
       vm.player.playQueue(vm.library.tracks);
@@ -1376,6 +1376,8 @@ void main() {
       );
       final window = clip.clipper!.getClip(clip.size);
       expect(window.top, moreOrLessEquals(miniTop * 0.6, epsilon: 1), reason: 'its top 40 % of the way up');
+      // All of it rides up with its top, as YouTube Music's: its top row as well, not waiting at the screen's top.
+      expect(tester.getRect(find.byType(NowPlayingPage)).top, moreOrLessEquals(window.top, epsilon: 1));
       // Its bottom a pixel into the navigation going down, so no hairline shows between them.
       expect(window.bottom, moreOrLessEquals(navigation.top + navigation.height * 0.4 + 1, epsilon: 0.01));
       expect(tester.getRect(nav).top, moreOrLessEquals(navAt + navigation.height * 0.4, epsilon: 1));

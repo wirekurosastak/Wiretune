@@ -68,9 +68,7 @@ class NowPlayingPage extends StatelessWidget {
               SafeArea(
                 child: Column(
                   children: [
-                    // Not uncovered by the opening player's rising edge: once the edge is past them, they fade in.
                     _ShownOpen(
-                      past: _topRowHeight,
                       child: PlayerSheetDrag(
                         child: SizedBox(
                           height: _topRowHeight,
@@ -171,26 +169,21 @@ class NowPlayingPage extends StatelessWidget {
 /// The height of the player's top row: the way down, what it plays from, the sleep timer and the devices.
 const double _topRowHeight = 60;
 
-/// [child] as the player opens: unseen until it is half way open, then coming on; or, [past] that far under the
-/// screen's top, unseen until the player's rising edge is past it, then coming on over the rest of the way.
+/// [child] as the player opens, as in YouTube Music: unseen over the first [_shownFrom] of the way, then coming on as it
+/// rises the rest. The texts under the cover so wait until the cover flying up into its place has gone past them.
 class _ShownOpen extends StatelessWidget {
-  const _ShownOpen({this.past, required this.child});
+  const _ShownOpen({required this.child});
 
-  final double? past;
+  static const double _shownFrom = 0.6;
+
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final sheet = PlayerSheetScope.maybeOf(context);
     if (sheet == null) return child;
-    final past = this.past;
-    var from = 0.5;
-    if (past != null) {
-      final travel = sheet.travel(MediaQuery.sizeOf(context).height);
-      from = (1 - (MediaQuery.paddingOf(context).top + past) / travel).clamp(0.5, 0.95);
-    }
     return FadeTransition(
-      opacity: sheet.position.drive(CurveTween(curve: Interval(from, 1, curve: Curves.easeOut))),
+      opacity: sheet.position.drive(CurveTween(curve: const Interval(_shownFrom, 1, curve: Curves.easeOut))),
       child: child,
     );
   }
