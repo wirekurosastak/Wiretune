@@ -325,7 +325,7 @@ class _QueueRowState extends State<_QueueRow> {
                     // A narrow row (a phone's, a narrow window's) leaves the tag out: the title keeps the room.
                     if (tags) ...[
                       const SizedBox(width: 12),
-                      QualityTag(tier: track.format.tier, spec: track.format.tagSpec),
+                      QualityTag(tier: track.format.tier, text: track.format.badge),
                     ],
                     // A phone's row leaves the length out: the title keeps the room.
                     if (!phone) ...[

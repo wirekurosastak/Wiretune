@@ -2636,7 +2636,7 @@ void main() {
       ); // unscaled
       final bpm = tester.getCenter(find.text('136 BPM'));
       // Under the cover, not on it: the cover is all picture.
-      final quality = tester.getCenter(find.text('FLAC 16bit/44.1kHz'));
+      final quality = tester.getCenter(find.text('CD · FLAC 16bit/44.1kHz'));
       final bitrate = tester.getCenter(find.text(Localizer.format('BitrateKbps', [912])));
       final title = tester.getRect(find.descendant(of: page, matching: find.text('So What')));
       expect(bpm.dy, moreOrLessEquals((cover.bottom + title.top) / 2, epsilon: 0.5), reason: 'playing: $playing');
@@ -2670,7 +2670,7 @@ void main() {
     // nor by the title.
     final bar = find.ancestor(of: find.byType(VolumeButton), matching: find.byType(Row)).first;
     final tag = find.descendant(of: bar, matching: find.byType(QualityTag));
-    expect(tester.widget<QualityTag>(tag).spec, 'FLAC 16bit/44.1kHz');
+    expect(tester.widget<QualityTag>(tag).text, 'CD · FLAC 16bit/44.1kHz');
     expect(find.descendant(of: bar, matching: find.text(Localizer.format('BitrateKbps', [912]))), findsNothing);
     expect(find.text('136 BPM'), findsNothing);
     final rect = tester.getRect(tag);

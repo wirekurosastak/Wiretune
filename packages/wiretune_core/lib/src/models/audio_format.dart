@@ -6,7 +6,7 @@ import 'package:path/path.dart' as p;
 import '../localization/localizer.dart';
 import 'protocol.dart';
 
-/// How good a recording is, as a three-step medal the whole interface uses for its quality tags: [gold] is hi-res
+/// How good a recording is, as a three-step medal the whole interface colours its quality tags with: [gold] is hi-res
 /// (24 bit, or a sample rate above 48 kHz), [silver] is lossless at CD resolution (16 bit), [bronze] is everything that
 /// is not lossless (MP3, AAC, Ogg Vorbis, ...). The index order is the quality order, so the lowest tier of a set of
 /// tracks is simply the minimum.
@@ -15,23 +15,12 @@ enum QualityTier {
   silver,
   gold;
 
-  /// The tier's name as the tag shows it: GOLD, SILVER, BRONZE (ARANY, EZÜST, BRONZ / GOLD, SILBER, BRONZE).
-  String get word => Localizer.get(switch (this) {
-    QualityTier.gold => 'QualityGold',
-    QualityTier.silver => 'QualitySilver',
-    QualityTier.bronze => 'QualityBronze',
-  });
-
   /// One sentence saying what the tier stands for.
   String get hint => Localizer.get(switch (this) {
     QualityTier.gold => 'QualityGoldHint',
     QualityTier.silver => 'QualitySilverHint',
     QualityTier.bronze => 'QualityBronzeHint',
   });
-
-  /// The text of the tag: just [spec] (`FLAC 24bit/96kHz`); the tier itself is told by the colour of the tag. Without a
-  /// spec the tier word stands alone rather than leaving an empty pill.
-  String tagText(String? spec) => spec == null || spec.trim().isEmpty ? word : spec.trim();
 }
 
 /// The technical description of one recording.
@@ -63,14 +52,16 @@ class AudioFormat {
       ? '${codec.toUpperCase()} ${bitrateKbps}kbps'
       : '${codec.toUpperCase()} ${bitsPerSample}bit/${_khz(sampleRate)}kHz';
 
-  /// The tag of a small cover: the format alone (`FLAC`, `MP3`, `MIXED`), in every tier; the tag's colour says the
-  /// tier, so a hi-res FLAC reads `FLAC` in gold.
-  static String compactSpec(QualityTier tier, String spec) {
-    final trimmed = spec.trim();
-    if (trimmed.isEmpty) return tier == QualityTier.bronze ? 'MP3' : 'FLAC';
-    final space = trimmed.indexOf(' ');
-    return space > 0 ? trimmed.substring(0, space) : trimmed;
-  }
+  /// The short tag of lists and covers: `HI-RES`, `CD`, or a lossy file's codec (`MP3`).
+  String get badge => switch (tier) {
+    QualityTier.gold => 'HI-RES',
+    QualityTier.silver => 'CD',
+    QualityTier.bronze => codec.toUpperCase(),
+  };
+
+  /// The player's tag: the short tag and the format (`HI-RES · FLAC 24bit/96kHz`), or a lossy file's format alone
+  /// (`MP3 320kbps`), which starts with its short tag already.
+  String get playerTag => isLossless ? '$badge · $tagSpec' : tagSpec;
 
   /// A sample rate in kHz with at most one decimal: `44.1`, `96`, `2822.4`.
   static String _khz(int sampleRate) {
@@ -113,46 +104,45 @@ class AudioFormat {
   int get hashCode => Object.hash(codec, sampleRate, bitsPerSample, channels, bitrateKbps, isLossless);
 }
 
-/// The quality tag of a group of tracks (an album or a playlist): the tier the group is shown in and the short text
-/// that follows the tier word, for example `FLAC 24bit/96kHz` or `MIXED`.
+/// The quality tag of a group of tracks (an album or a playlist): the weakest track's tier.
 class QualitySummary {
-  const QualitySummary(this.tier, this.spec);
-
-  /// What the tag says when the tracks are in different formats.
-  static const String mixedSpec = 'MIXED';
+  const QualitySummary(this.tier, this._lossyCodec);
 
   /// The lowest tier among the tracks: "every track here is at least this good".
   final QualityTier tier;
 
-  /// The format of the tracks when they all share one, [mixedSpec] otherwise.
-  final String spec;
+  /// The codec of the lossy tracks when they share one, null otherwise.
+  final String? _lossyCodec;
 
-  /// What the tag of a small cover says: the format alone ([AudioFormat.compactSpec]).
-  String get compactSpec => AudioFormat.compactSpec(tier, spec);
+  /// The tag: `HI-RES` or `CD`; with a lossy track, the lossy tracks' codec (`MP3`), or the word for lossy when their
+  /// codecs differ.
+  String get badge => switch (tier) {
+    QualityTier.gold => 'HI-RES',
+    QualityTier.silver => 'CD',
+    QualityTier.bronze => _lossyCodec ?? Localizer.get('QualityLossy'),
+  };
 
-  /// Summarises [formats], or returns null when there are none (an empty playlist has no tag). Two lossy files count
-  /// as the same format only when their bitrate matches too.
+  /// Summarises [formats], or returns null when there are none (an empty playlist has no tag).
   static QualitySummary? of(Iterable<AudioFormat> formats) {
-    AudioFormat? first;
+    var any = false;
     var lowest = QualityTier.gold;
-    var mixed = false;
+    String? lossyCodec;
+    var lossyMixed = false;
     for (final format in formats) {
+      any = true;
       if (format.tier.index < lowest.index) lowest = format.tier;
-      if (first == null) {
-        first = format;
-      } else if (!_sameSpec(first, format)) {
-        mixed = true;
+      if (!format.isLossless) {
+        final codec = format.codec.toUpperCase();
+        if (lossyCodec == null) {
+          lossyCodec = codec;
+        } else if (lossyCodec != codec) {
+          lossyMixed = true;
+        }
       }
     }
-    if (first == null) return null;
-    return QualitySummary(lowest, mixed ? mixedSpec : first.tagSpec);
+    if (!any) return null;
+    return QualitySummary(lowest, lossyMixed ? null : lossyCodec);
   }
-
-  static bool _sameSpec(AudioFormat a, AudioFormat b) =>
-      a.isLossless == b.isLossless &&
-      a.codec.toLowerCase() == b.codec.toLowerCase() &&
-      a.sampleRate == b.sampleRate &&
-      (a.isLossless ? a.bitsPerSample == b.bitsPerSample : a.bitrateKbps == b.bitrateKbps);
 }
 
 /// Single source of truth for which audio files Wiretune indexes, how they are labelled and which MIME type the server

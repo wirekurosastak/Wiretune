@@ -202,7 +202,7 @@ class _ColumnWidths {
       added: column(Localizer.get('ColAdded'), width(Localizer.format('DateShort', [DateTime(2088, 8, 28)]), figure)),
       plays: column(Localizer.get('ColPlays'), width('8888', figure)),
       bpm: column('BPM', width('888', figure)),
-      quality: column(Localizer.get('ColQuality'), tagged('FLAC 24bit/192kHz')),
+      quality: column(Localizer.get('ColQuality'), math.max(tagged('HI-RES'), tagged('VORBIS'))),
       bitrate: column(Localizer.get('ColBitrate'), tagged(Localizer.format('BitrateKbps', [8888]))),
     );
   }
@@ -629,7 +629,7 @@ class _TableRowState extends State<_TableRow> {
                         padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: QualityTag(tier: track.format.tier, spec: track.format.tagSpec),
+                          child: QualityTag(tier: track.format.tier, text: track.format.badge),
                         ),
                       ),
                     ),
@@ -643,7 +643,7 @@ class _TableRowState extends State<_TableRow> {
                           alignment: Alignment.centerLeft,
                           child: QualityTag(
                             tier: track.format.tier,
-                            spec: context.trf('BitrateKbps', [track.format.bitrateKbps]),
+                            text: context.trf('BitrateKbps', [track.format.bitrateKbps]),
                           ),
                         ),
                       ),

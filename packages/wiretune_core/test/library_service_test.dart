@@ -456,7 +456,7 @@ void main() {
     expect(service.albums, hasLength(2));
   });
 
-  test('an album of hi-res and CD tracks is tagged MIXED, at the tier of its weakest track', () async {
+  test('an album of hi-res and CD tracks is tagged CD, the tier of its weakest track', () async {
     final repo = testRepository();
     final service = _service(repo);
     repo.replaceAllTracks([
@@ -481,7 +481,7 @@ void main() {
     ]);
     service.initialize();
     final album = service.albums.single;
-    expect((album.quality.tier, album.quality.spec), (QualityTier.silver, QualitySummary.mixedSpec));
+    expect((album.quality.tier, album.quality.badge), (QualityTier.silver, 'CD'));
   });
 
   test('sorting ignores accents and case', () async {

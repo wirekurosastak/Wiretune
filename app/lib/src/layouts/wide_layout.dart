@@ -1533,7 +1533,7 @@ class _PlayerBar extends StatelessWidget {
                                 onTap: () => showTrackInfo(context),
                                 child: QualityTag(
                                   tier: track.format.tier,
-                                  spec: track.format.tagSpec,
+                                  text: track.format.playerTag,
                                   details: [
                                     if (PlayerTags.bitrateShown(track.format))
                                       context.trf('BitrateKbps', [track.format.bitrateKbps]),

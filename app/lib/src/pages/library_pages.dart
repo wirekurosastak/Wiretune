@@ -915,7 +915,7 @@ class AlbumDetail extends StatelessWidget {
                 placeholderIcon: Icons.album,
               ),
               artworkFlight: 'album:${album.id}',
-              artworkBadge: QualityTag(tier: album.quality.tier, spec: album.quality.spec, fontSize: 11),
+              artworkBadge: QualityTag(tier: album.quality.tier, text: album.quality.badge, fontSize: 11),
               tags: [TagBadge(context.tr('ColAlbum'), color: colors.accent)],
               title: album.title,
               details: [

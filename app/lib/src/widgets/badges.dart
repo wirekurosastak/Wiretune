@@ -8,15 +8,15 @@ import '../localization.dart';
 import '../theme/app_theme.dart';
 import '../theme/palette.dart';
 
-/// The quality tag: a small plate of the tier's metal, reading for example `FLAC 24bit/96kHz` (gold), `FLAC
-/// 16bit/44.1kHz` (silver) or `MP3 320kbps` (bronze); the metal alone names the tier. Hovering explains the tier.
+/// The quality tag: a small plate of the tier's metal, reading for example `HI-RES` (gold), `CD` (silver) or `MP3`
+/// (bronze), or in the player the format too. Hovering explains the tier.
 class QualityTag extends StatelessWidget {
-  const QualityTag({super.key, required this.tier, this.spec, this.fontSize = 10, this.padding, this.details});
+  const QualityTag({super.key, required this.tier, required this.text, this.fontSize = 10, this.padding, this.details});
 
   final QualityTier tier;
 
-  /// The format, e.g. "FLAC 24bit/96kHz" or "MIXED"; empty shows the tier word alone.
-  final String? spec;
+  /// What the tag says, e.g. "HI-RES" or "HI-RES · FLAC 24bit/96kHz".
+  final String text;
   final double fontSize;
   final EdgeInsetsGeometry? padding;
 
@@ -25,8 +25,7 @@ class QualityTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    context.tr('QualityGold'); // rebuild when the language changes
-    final text = tier.tagText(spec);
+    context.tr('QualityLossy'); // rebuild when the language changes
     final hint = tier.hint;
     return Tooltip(
       message: details == null || details!.isEmpty ? hint : '$details\n$hint',
@@ -50,7 +49,7 @@ class QualityTag extends StatelessWidget {
   }
 }
 
-/// The playing track's tags under the phone's full-screen cover: its BPM, its quality, and its bitrate in the quality's
+/// The playing track's tags under the phone's full-screen cover: its BPM, its quality and format, and its bitrate in the quality's
 /// colours where the quality's tag doesn't say it already (a lossy file's does: "MP3 320kbps"). Where room is short the
 /// quality's tag ends in an ellipsis.
 class PlayerTags extends StatelessWidget {
@@ -69,10 +68,10 @@ class PlayerTags extends StatelessWidget {
       children: [
         if (bpm != null && bpm > 0) PlayerMetaBadge(text: '$bpm BPM', fontSize: fontSize),
         Flexible(
-          child: QualityTag(tier: format.tier, spec: format.tagSpec, fontSize: fontSize),
+          child: QualityTag(tier: format.tier, text: format.playerTag, fontSize: fontSize),
         ),
         if (bitrateShown(format))
-          QualityTag(tier: format.tier, spec: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: fontSize),
+          QualityTag(tier: format.tier, text: context.trf('BitrateKbps', [format.bitrateKbps]), fontSize: fontSize),
       ],
     );
   }

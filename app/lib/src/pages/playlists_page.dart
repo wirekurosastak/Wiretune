@@ -213,7 +213,7 @@ class _PlaylistDetailState extends State<PlaylistDetail> {
               artwork: PlaylistCover(covers: playlistCovers(tracks), radius: Radii.card),
               artworkFlight: 'playlist:${playlist.id}',
               artworkBadge: switch (qualityOf(tracks)) {
-                final quality? => QualityTag(tier: quality.tier, spec: quality.spec, fontSize: 11),
+                final quality? => QualityTag(tier: quality.tier, text: quality.badge, fontSize: 11),
                 null => null,
               },
               tags: [

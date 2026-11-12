@@ -209,9 +209,7 @@ const Map<String, (String, String, String)> allStrings = {
   'ColQuality': ('MINŐSÉG', 'QUALITY', 'QUALITÄT'),
   'ColBitrate': ('BITRÁTA', 'BITRATE', 'BITRATE'),
   'BitrateKbps': ('{0} kbps', '{0} kbps', '{0} kbps'),
-  'QualityGold': ('ARANY', 'GOLD', 'GOLD'),
-  'QualitySilver': ('EZÜST', 'SILVER', 'SILBER'),
-  'QualityBronze': ('BRONZ', 'BRONZE', 'BRONZE'),
+  'QualityLossy': ('VESZTESÉGES', 'LOSSY', 'VERLUSTBEHAFTET'),
   'QualityGoldHint': (
     'Hi-res: 24 bites, vagy 48 kHz feletti mintavétel',
     'Hi-res: 24-bit, or a sample rate above 48 kHz',

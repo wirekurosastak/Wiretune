@@ -43,70 +43,44 @@ void main() {
     expect(_lossy(320).tagSpec, 'MP3 320kbps');
   });
 
-  test('tag text is the whole spec: format and resolution', () {
-    expect(QualityTier.gold.tagText('FLAC 24bit/96kHz'), 'FLAC 24bit/96kHz');
-    expect(QualityTier.bronze.tagText('MP3 320kbps'), 'MP3 320kbps');
-    expect(QualityTier.silver.tagText(QualitySummary.mixedSpec), 'MIXED');
+  test('a short tag says the tier, or a lossy file its codec', () {
+    expect(_lossless(96000, 24).badge, 'HI-RES');
+    expect(_lossless(44100, 16, 'ALAC').badge, 'CD');
+    expect(_lossy(320).badge, 'MP3');
+    expect(_lossy(256, 'aac').badge, 'AAC');
   });
 
-  test('a compact tag is the format alone in every tier, its colour telling the tier', () {
-    expect(AudioFormat.compactSpec(QualityTier.gold, 'FLAC 24bit/96kHz'), 'FLAC');
-    expect(AudioFormat.compactSpec(QualityTier.gold, 'ALAC 24bit/192kHz'), 'ALAC');
-    expect(AudioFormat.compactSpec(QualityTier.gold, 'MIXED'), 'MIXED');
-    expect(AudioFormat.compactSpec(QualityTier.silver, 'FLAC 16bit/44.1kHz'), 'FLAC');
-    expect(AudioFormat.compactSpec(QualityTier.silver, 'ALAC 16bit/44.1kHz'), 'ALAC');
-    expect(AudioFormat.compactSpec(QualityTier.silver, 'WAV 16bit/44.1kHz'), 'WAV');
-    expect(AudioFormat.compactSpec(QualityTier.silver, 'MIXED'), 'MIXED');
-    expect(AudioFormat.compactSpec(QualityTier.silver, ''), 'FLAC');
-    expect(AudioFormat.compactSpec(QualityTier.bronze, 'MP3 320kbps'), 'MP3');
-    expect(AudioFormat.compactSpec(QualityTier.bronze, 'AAC 256kbps'), 'AAC');
-    expect(AudioFormat.compactSpec(QualityTier.bronze, 'OGG 192kbps'), 'OGG');
-    expect(AudioFormat.compactSpec(QualityTier.bronze, 'MIXED'), 'MIXED');
-    expect(AudioFormat.compactSpec(QualityTier.bronze, ''), 'MP3');
-
-    // As a list's tag says it: a hi-res FLAC reads FLAC too, in gold.
-    expect(QualitySummary.of([_lossless(96000, 24)])!.compactSpec, 'FLAC');
-    expect(QualitySummary.of([_lossless(44100, 16)])!.compactSpec, 'FLAC');
-    expect(QualitySummary.of([_lossy(320)])!.compactSpec, 'MP3');
+  test("the player's tag adds the format; a lossy one's format starts with its codec already", () {
+    expect(_lossless(96000, 24).playerTag, 'HI-RES · FLAC 24bit/96kHz');
+    expect(_lossless(44100, 16).playerTag, 'CD · FLAC 16bit/44.1kHz');
+    expect(_lossy(320).playerTag, 'MP3 320kbps');
   });
 
-  test('without a spec the tag is the tier word', () {
-    for (final spec in [null, '', '   ']) {
-      expect(QualityTier.gold.tagText(spec), 'GOLD');
-    }
-  });
-
-  test('every tier has a word and a hint', () {
-    expect(QualityTier.gold.word, 'GOLD');
-    expect(QualityTier.silver.word, 'SILVER');
-    expect(QualityTier.bronze.word, 'BRONZE');
+  test('every tier has a hint', () {
     for (final tier in QualityTier.values) {
-      expect(tier.hint, isNot(contains('['))); // an unknown key renders as "[Key]"
       expect(tier.hint.trim(), isNotEmpty);
     }
-    Localizer.instance.setLanguage('hu');
-    expect(QualityTier.gold.word, 'ARANY');
-    Localizer.instance.setLanguage('de');
-    expect(QualityTier.silver.word, 'SILBER');
   });
 
-  test('summaries', () {
+  test('summaries: the weakest tier, never a word for mixed formats', () {
     expect(QualitySummary.of(const []), isNull);
 
-    final one = QualitySummary.of([_lossless(96000, 24), _lossless(96000, 24)])!;
-    expect((one.tier, one.spec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
-
     final sameTier = QualitySummary.of([_lossless(96000, 24), _lossless(192000, 24)])!;
-    expect((sameTier.tier, sameTier.spec), (QualityTier.gold, QualitySummary.mixedSpec));
-    expect(QualitySummary.of([_lossless(96000, 24), _lossless(44100, 16)])!.tier, QualityTier.silver);
-    expect(QualitySummary.of([_lossless(96000, 24), _lossy(320)])!.tier, QualityTier.bronze);
+    expect((sameTier.tier, sameTier.badge), (QualityTier.gold, 'HI-RES'));
+    final withCd = QualitySummary.of([_lossless(96000, 24), _lossless(44100, 16)])!;
+    expect((withCd.tier, withCd.badge), (QualityTier.silver, 'CD'));
+    final withMp3 = QualitySummary.of([_lossless(96000, 24), _lossy(320)])!;
+    expect((withMp3.tier, withMp3.badge), (QualityTier.bronze, 'MP3'));
+    expect(QualitySummary.of([_lossy(128), _lossy(320)])!.badge, 'MP3');
 
-    expect(QualitySummary.of([_lossy(128), _lossy(320)])!.spec, QualitySummary.mixedSpec);
-    expect(QualitySummary.of([_lossy(320), _lossy(320)])!.spec, 'MP3 320kbps');
-    expect(QualitySummary.of([_lossless(44100, 16, 'FLAC'), _lossless(44100, 16, 'flac')])!.spec, 'FLAC 16bit/44.1kHz');
+    // Lossy codecs that differ: the word for lossy, in the interface's language.
+    final codecs = QualitySummary.of([_lossy(320), _lossy(256, 'AAC')])!;
+    expect(codecs.badge, 'LOSSY');
+    Localizer.instance.setLanguage('hu');
+    expect(codecs.badge, 'VESZTESÉGES');
   });
 
-  test('albums carry their tier and tag spec', () async {
+  test('albums carry their tier and tags', () async {
     final repo = testRepository();
     final service = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
     Track make(String id, String album, AudioFormat format) => Track(
@@ -130,13 +104,13 @@ void main() {
 
     (QualityTier, String) tag(String title) {
       final quality = service.albums.singleWhere((a) => a.title == title).quality;
-      return (quality.tier, quality.spec);
+      return (quality.tier, quality.badge);
     }
 
-    expect(tag('Gold album'), (QualityTier.gold, 'FLAC 24bit/96kHz'));
-    expect(tag('Silver album'), (QualityTier.silver, 'FLAC 16bit/44.1kHz'));
-    expect(tag('Bronze album'), (QualityTier.bronze, 'MP3 320kbps'));
-    expect(tag('Mixed album'), (QualityTier.bronze, 'MIXED'));
+    expect(tag('Gold album'), (QualityTier.gold, 'HI-RES'));
+    expect(tag('Silver album'), (QualityTier.silver, 'CD'));
+    expect(tag('Bronze album'), (QualityTier.bronze, 'MP3'));
+    expect(tag('Mixed album'), (QualityTier.bronze, 'MP3'));
   });
 
   test("a playlist's tag is its tracks', and an empty playlist has none", () {
@@ -144,13 +118,13 @@ void main() {
       TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
       TestSupport.makeTrack('b', 'B', sampleRate: 96000, bits: 24),
     ])!;
-    expect((hiRes.tier, hiRes.spec), (QualityTier.gold, 'FLAC 24bit/96kHz'));
+    expect((hiRes.tier, hiRes.badge), (QualityTier.gold, 'HI-RES'));
 
     final mixed = qualityOf([
       TestSupport.makeTrack('a', 'A', sampleRate: 96000, bits: 24),
       TestSupport.makeTrack('c', 'C', sampleRate: 44100, bits: 16),
     ])!;
-    expect((mixed.tier, mixed.spec), (QualityTier.silver, 'MIXED'));
+    expect((mixed.tier, mixed.badge), (QualityTier.silver, 'CD'));
 
     expect(qualityOf(const []), isNull);
   });
