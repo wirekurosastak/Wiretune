@@ -93,6 +93,11 @@ In the player, connect to the server and create the first account with the setup
 | Change the code | [Development](docs/development.md), [Contributing](CONTRIBUTING.md), [HTTP API](docs/api.md) |
 | Publish a release | [Releasing](docs/releasing.md) |
 
+## Support
+
+Wiretune is free. To support its development: [GitHub Sponsors](https://github.com/sponsors/wirekurosastak) or
+[Ko-fi](https://ko-fi.com/wirekurosastak).
+
 ## Credits
 
 Playback: [media_kit](https://github.com/media-kit/media-kit) (libmpv and FFmpeg). System media controls:
