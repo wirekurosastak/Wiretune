@@ -58,9 +58,9 @@ Your files are never changed.
 
 Clicking a track plays the list it's in. Every *⋮* menu has **Play next** and **Add to queue**. The queue survives a
 restart; drag a song by its ≡ to move it (a long press on a phone, its arrows on a TV). **Save as playlist** in the
-queue's header keeps it. When the queue ends, similar music plays on (*Settings → Audio → Autoplay*): more of what you love, less of what you
-played in the last days, now and then something you never played, and less of an artist you skip. The sleep timer
-pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
+queue's header keeps it. When the queue ends, similar music plays on (*Settings → Audio → Autoplay*): more of what you
+love, less of what you played in the last days, now and then something you never played, and less of an artist you
+skip. The sleep timer pauses after 15, 30, 45 or 60 minutes, or at the end of the track.
 
 *Playing from* in the player opens what the music was played from. A click on the quality tag shows the file and its
 way to the speakers (the signal path).
