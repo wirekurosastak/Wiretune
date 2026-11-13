@@ -152,6 +152,38 @@ class UiAutomationServer {
         case '/api/ui/logout':
           await _vm.logout();
           return await _json(request, 200, {'success': true, 'state': _vm.session.state.name});
+        case '/api/ui/scan-folder': // reads ?path= as the local music folder
+          final folder = query['path'];
+          if (folder == null || folder.isEmpty) break;
+          _vm.serverSettings.localFolder = folder;
+          await _vm.serverSettings.scanLocalFolder();
+          return await _json(request, 200, {'success': true, 'tracks': _vm.library.tracks.length});
+        case '/api/ui/audio': // ?device=<id or part of its name>&exclusive=1&bitPerfect=1
+          final engine = _vm.audioEngine;
+          await engine.refreshDevices();
+          final wanted = query['device']?.toLowerCase();
+          if (wanted != null && wanted.isNotEmpty) {
+            final device = engine.availableDevices
+                .where((d) => d.id.toLowerCase() == wanted || d.name.toLowerCase().contains(wanted))
+                .firstOrNull;
+            if (device == null) {
+              return await _json(request, 404, {
+                'error': 'Device not found',
+                'devices': [for (final d in engine.availableDevices) d.id],
+              });
+            }
+            await engine.setOutputDevice(device);
+          }
+          if (query['exclusive'] != null) await engine.setExclusiveMode(query['exclusive'] == '1');
+          if (query['bitPerfect'] != null) await engine.setBitPerfectMode(query['bitPerfect'] == '1');
+          return await _json(request, 200, {
+            'device': engine.currentDevice?.id,
+            'exclusive': engine.isExclusiveMode,
+            'bitPerfect': engine.isBitPerfect,
+          });
+        case '/api/ui/close-window': // as the window's close button: the app shuts down and goes
+          unawaited(windowManager.close());
+          return await _json(request, 200, {'success': true});
         case '/api/ui/continue-offline':
           _vm.continueOffline();
           return await _json(request, 200, {'success': true});

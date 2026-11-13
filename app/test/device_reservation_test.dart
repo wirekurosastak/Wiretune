@@ -157,6 +157,23 @@ void main() {
       expect(cards.card, isNull);
     });
 
+    test("the card goes back only once the player's device on it is closed, so the sound server can open it", () async {
+      var open = true;
+      final cards = ExclusiveCardHolder(
+        settle: Duration.zero,
+        cardOpen: (card) => open,
+        claim: (card) async =>
+            () async => log.add('release $card'),
+      );
+      await cards.hold(2);
+      final released = cards.release();
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(log, isEmpty, reason: 'mpv still has it open');
+      open = false;
+      await released;
+      expect(log, ['release 2']);
+    });
+
     test('a card that cannot be had leaves nothing held, and the one before is given back', () async {
       final cards = holder();
       refused.add(2);

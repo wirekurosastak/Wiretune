@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dbus/dbus.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -105,10 +106,17 @@ typedef CardClaimer = Future<Future<void> Function()?> Function(int card);
 /// mode changes) can never leave a claim behind that nobody gives back: whatever is held when a request runs is
 /// released before another card is claimed.
 class ExclusiveCardHolder {
-  ExclusiveCardHolder({CardClaimer? claim, this.settle = const Duration(milliseconds: 300)})
-    : _claim = claim ?? _reserve;
+  ExclusiveCardHolder({
+    CardClaimer? claim,
+    this.settle = const Duration(milliseconds: 300),
+    bool Function(int card)? cardOpen,
+  }) : _claim = claim ?? _reserve,
+       _cardOpen = cardOpen ?? _openHere;
 
   final CardClaimer _claim;
+
+  /// Whether this process still has one of [card]'s playback devices open.
+  final bool Function(int card) _cardOpen;
 
   /// How long the sound server gets to close the card after letting go of it, before the player opens it.
   final Duration settle;
@@ -122,6 +130,23 @@ class ExclusiveCardHolder {
 
   static Future<Future<void> Function()?> _reserve(int card) async =>
       (await AlsaCardReservation.acquire(card))?.release;
+
+  /// Whether one of this process's open files is a playback device of [card] (`/dev/snd/pcmC<card>D<n>p`).
+  static bool _openHere(int card) {
+    try {
+      for (final entry in Directory('/proc/self/fd').listSync()) {
+        try {
+          final target = Link(entry.path).targetSync();
+          if (target.startsWith('/dev/snd/pcmC${card}D') && target.endsWith('p')) return true;
+        } catch (_) {
+          // Closed while being looked at.
+        }
+      }
+    } catch (_) {
+      // No /proc to look in: as if closed.
+    }
+    return false;
+  }
 
   /// Holds [card], giving back the one held before (if another). False when the card could not be claimed.
   Future<bool> hold(int card) => _lock.synchronized(() async {
@@ -140,9 +165,15 @@ class ExclusiveCardHolder {
 
   Future<void> _giveBack() async {
     final release = _release;
+    final card = _card;
     _card = null;
     _release = null;
     if (release == null) return;
+    // mpv closes the device a moment after it is told to stop. A card handed back while it is still open is busy for
+    // the sound server, which then leaves it silent until it is set up again (even after Wiretune has closed).
+    for (var i = 0; card != null && i < 60 && _cardOpen(card); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
     try {
       await release();
     } catch (e) {

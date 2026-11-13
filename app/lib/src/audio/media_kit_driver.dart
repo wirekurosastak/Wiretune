@@ -519,9 +519,14 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
     _generation++;
     _setState(PlaybackState.stopped);
     _releaseTimer?.cancel();
-    // The next track usually starts at once and keeps the card; when none does, the sound server gets it back.
-    _releaseTimer = Timer(const Duration(milliseconds: 1500), () {
-      if (_state != PlaybackState.playing) unawaited(_card.release());
+    // The next track usually starts at once and keeps the card; when none does, the sound server gets it back. mpv
+    // keeps the finished track open, and with it the card's device: it lets go of both first. A card handed back while
+    // mpv still has it open is busy for the sound server, which then leaves it silent, even once Wiretune has closed.
+    final generation = _generation;
+    _releaseTimer = Timer(const Duration(milliseconds: 1500), () async {
+      if (generation != _generation || _state == PlaybackState.playing) return;
+      await _player.stop();
+      if (generation == _generation && _state != PlaybackState.playing) await _card.release();
     });
     trackEnded.emit(null);
   }

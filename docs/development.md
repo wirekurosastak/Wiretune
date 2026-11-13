@@ -118,7 +118,13 @@ curl http://127.0.0.1:5201/api/ui/state
 curl 'http://127.0.0.1:5201/api/ui/navigate?section=Albums'
 curl 'http://127.0.0.1:5201/api/ui/screenshot?name=albums'        # saved to the temp folder
 curl 'http://127.0.0.1:5201/api/ui/resize?width=400&height=820'   # phone width
+curl 'http://127.0.0.1:5201/api/ui/scan-folder?path=/tmp/music'    # a local folder, read
+curl 'http://127.0.0.1:5201/api/ui/audio?device=alsa/hw:2,0&exclusive=1'  # the output; a wrong one lists them
+curl 'http://127.0.0.1:5201/api/ui/close-window'                   # as the window's close button
 ```
+
+On Linux, `busctl --user list | grep ReserveDevice` shows who holds each card and `fuser -v /dev/snd/pcmC*` who has
+it open; after exclusive playback both must be back with WirePlumber (`pactl list short sinks` lists the card again).
 
 Routes: `app/lib/src/debug/ui_automation_server.dart`. No authentication: only on a development machine
 ([SECURITY.md](../SECURITY.md#players)).
