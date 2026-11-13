@@ -46,7 +46,7 @@ class AppPlatform {
   bool get supportsMediaSession => isAndroid || isIOS || isMacOS || isLinuxDesktop;
 
   /// Who answers what on it: the Android plugin (packages/wiretune_platform) `isTelevision`, `musicDirectory`,
-  /// `requestAudioAccess`, `installUpdate` and `shareLog`; the Tizen runner (tizen/App.cs) `isTizen` and
+  /// `requestAudioAccess`, `installUpdate`, `shareLog` and `bluetoothOutputLatency`; the Tizen runner (tizen/App.cs) `isTizen` and
   /// `isTelevision`; the iOS runner (ios/Runner/AppDelegate.swift) `excludeFromBackup`. Elsewhere a call finds no
   /// handler.
   static const MethodChannel _channel = MethodChannel('wiretune/platform');
@@ -94,6 +94,19 @@ class AppPlatform {
 
   /// Hands the APK at [path] to Android's installer, which asks the user before it installs it over this app.
   Future<void> installAndroidUpdate(String path) => _channel.invokeMethod<void>('installUpdate', path);
+
+  /// How long sound takes to reach the ears on a Bluetooth device the media goes to, on Android (the Android plugin
+  /// answers); zero elsewhere, or for any other output.
+  Future<Duration> bluetoothOutputDelay() async {
+    if (!isAndroid) return Duration.zero;
+    try {
+      return Duration(milliseconds: await _channel.invokeMethod<int>('bluetoothOutputLatency') ?? 0);
+    } on PlatformException {
+      return Duration.zero;
+    } on MissingPluginException {
+      return Duration.zero;
+    }
+  }
 
   /// Whether the log can be shared from Settings ([shareLog]): on Android, whose log is out of the user's reach.
   bool get canShareLog => isAndroid;

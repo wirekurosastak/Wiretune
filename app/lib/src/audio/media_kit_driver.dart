@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart' hide Track;
 import 'package:wiretune_core/wiretune_core.dart' hide Playlist;
 
+import '../platform.dart';
 import 'device_reservation.dart';
 
 /// Plays through libmpv (media_kit), which decodes with FFmpeg: FLAC, ALAC, APE, WavPack, DSD, Opus and the rest play
@@ -92,6 +93,12 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
 
   /// Since mpv last told the position, which a phone's does only about four times a second.
   final Stopwatch _sincePosition = Stopwatch()..start();
+
+  /// How far behind mpv's position the sound is heard: on a phone's Bluetooth device the codec and the radio add 150 to
+  /// 300 ms that mpv doesn't count, and the bars ran that far ahead. Asked again every few seconds while they show, as
+  /// the output can change under them.
+  Duration _outputDelay = Duration.zero;
+  final Stopwatch _sinceDelayAsked = Stopwatch();
 
   @override
   PlaybackState get state => _state;
@@ -617,6 +624,13 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   void _startSpectrum() {
     _spectrumTimer?.cancel();
     _spectrumTimer = Timer.periodic(const Duration(milliseconds: 33), (_) {
+      if (Platform.isAndroid &&
+          (!_sinceDelayAsked.isRunning || _sinceDelayAsked.elapsed > const Duration(seconds: 3))) {
+        _sinceDelayAsked
+          ..reset()
+          ..start();
+        unawaited(AppPlatform.current.bluetoothOutputDelay().then((delay) => _outputDelay = delay));
+      }
       // Without decoded audio for the position the bars fall, as they do when playback stops.
       final live =
           _state == PlaybackState.playing && _player.state.playing && _pcm.tryGetWindow(_spectrumPosition, _window);
@@ -629,7 +643,8 @@ class MediaKitAudioDriver with AudioDriverEvents implements AudioDriver {
   Duration get _spectrumPosition {
     const step = Duration(milliseconds: 300);
     final since = _sincePosition.elapsed;
-    return _player.state.position + (since < step ? since : step);
+    final played = _player.state.position + (since < step ? since : step);
+    return played > _outputDelay ? played - _outputDelay : Duration.zero;
   }
 
   void _stopSpectrumSoon() {

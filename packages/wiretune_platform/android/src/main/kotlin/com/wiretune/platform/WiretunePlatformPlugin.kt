@@ -15,6 +15,9 @@ import android.content.IntentFilter
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.content.res.Configuration
+import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Environment
@@ -60,6 +63,7 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
                     "requestAudioAccess" -> requestAudioAccess(context, result)
                     "installUpdate" -> installUpdate(context, call.arguments as? String, result)
                     "shareLog" -> shareLog(context, call.arguments as? String, result)
+                    "bluetoothOutputLatency" -> result.success(bluetoothOutputLatency(context))
                     else -> result.notImplemented()
                 }
             }
@@ -148,6 +152,35 @@ class WiretunePlatformPlugin : FlutterPlugin, ActivityAware, PluginRegistry.Requ
         pendingAccess?.success(grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED)
         pendingAccess = null
         return true
+    }
+
+    /**
+     * How long, in milliseconds, sound takes from the player to the ears when media goes to a Bluetooth device (its codec
+     * and radio, often 150 to 300 ms); 0 for anything else, where it is too short to see. Android tells it only through
+     * a hidden method, which ExoPlayer uses for its timing too; 0 when that isn't there.
+     */
+    private fun bluetoothOutputLatency(context: Context): Int {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return 0
+        val bluetooth = setOf(
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+            AudioDeviceInfo.TYPE_BLE_HEADSET,
+            AudioDeviceInfo.TYPE_BLE_SPEAKER,
+            AudioDeviceInfo.TYPE_HEARING_AID,
+        )
+        val toBluetooth = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val media = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()
+            audio.getAudioDevicesForAttributes(media).any { it.type in bluetooth }
+        } else {
+            @Suppress("DEPRECATION")
+            audio.isBluetoothA2dpOn
+        }
+        if (!toBluetooth) return 0
+        return try {
+            val method = AudioManager::class.java.getMethod("getOutputLatency", Int::class.javaPrimitiveType)
+            (method.invoke(audio, AudioManager.STREAM_MUSIC) as? Int)?.coerceIn(0, 1000) ?: 0
+        } catch (e: Exception) {
+            0
+        }
     }
 
     private fun isTelevision(context: Context): Boolean {
