@@ -108,6 +108,12 @@ class MainViewModel extends ChangeNotifier {
     blends = Blends(session, this.remote);
     playlists = PlaylistsViewModel(library, player, blends: blends)..onNavWave = triggerNavWave;
     favorites = TrackListViewModel.favorites(library, player);
+    // Each list's sort is kept on the device ([_applyPreferences] brings it back); its genre filter is for the moment.
+    tracks.onSortChanged = () => _remember(_sortPreference('tracks'), tracks.savedSort);
+    favorites.onSortChanged = () => _remember(_sortPreference('favorites'), favorites.savedSort);
+    albums.onSortChanged = () => _remember(_sortPreference('albums'), albums.savedSort);
+    artists.onSortChanged = () => _remember(_sortPreference('artists'), artists.savedSort);
+    playlists.onListSortChanged = () => _remember(_sortPreference('playlists'), playlists.savedListSort);
     downloads = DownloadsViewModel(this.downloadService);
     audioSettings = AudioSettingsViewModel(audioEngine);
     serverSettings = ServerSettingsViewModel(
@@ -820,6 +826,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _languagePreference = 'language';
   static const String _themePreference = 'theme';
   static const String _sidebarPinnedPreference = 'sidebar_pinned';
+  static String _sortPreference(String list) => 'sort_$list';
   static const String _sidebarOpenedPreference = 'sidebar_opened';
   static const String _performanceStatsPreference = 'show_performance_stats';
   static const String _onlineLyricsPreference = 'online_lyrics';
@@ -1112,6 +1119,11 @@ class MainViewModel extends ChangeNotifier {
     _theme = WiretuneTheme.values.asNameMap()[library.getPreference(_themePreference)] ?? WiretuneTheme.airy;
 
     _showPerformanceStats = library.getPreference(_performanceStatsPreference) == '1';
+    tracks.restoreSort(library.getPreference(_sortPreference('tracks')));
+    favorites.restoreSort(library.getPreference(_sortPreference('favorites')));
+    albums.restoreSort(library.getPreference(_sortPreference('albums')));
+    artists.restoreSort(library.getPreference(_sortPreference('artists')));
+    playlists.restoreListSort(library.getPreference(_sortPreference('playlists')));
     _isSidebarPinned = library.getPreference(_sidebarPinnedPreference) == '1';
     _hasOpenedSidebar = library.getPreference(_sidebarOpenedPreference) == '1';
     lyrics.isOnlineEnabled = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off

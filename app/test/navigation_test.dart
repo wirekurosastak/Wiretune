@@ -3,6 +3,7 @@
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wiretune/src/view_models/app_section.dart';
+import 'package:wiretune/src/view_models/library_view_models.dart';
 import 'package:wiretune/src/view_models/main_view_model.dart';
 import 'package:wiretune/src/view_models/search_view_model.dart';
 import 'package:wiretune_core/wiretune_core.dart';
@@ -422,6 +423,28 @@ void main() {
     expect(repo.getSetting('preference.show_performance_stats'), '1');
     expect(repo.getSetting('preference.sidebar_pinned'), '0');
     Localizer.instance.setLanguage('en');
+  });
+
+  test("each list's sort is kept on the device and back at the next start; the genre filter is not", () async {
+    final repo = testRepository()
+      ..setSetting('preference.sort_albums', 'added:desc')
+      ..setSetting('preference.sort_playlists', 'name:asc')
+      ..setSetting('preference.sort_artists', 'gone:asc'); // a field since removed: the default stays
+    final library = LibraryService(repo, MetadataScanner(), coverCacheDirectory: '/nonexistent');
+    final vm = MainViewModel(TestSupport.createEngine(), library, ServerSession(library, repo));
+    await vm.start();
+    expect((vm.albums.sortField, vm.albums.isSortDescending), (AlbumSortField.added, true));
+    expect((vm.playlists.listSortField, vm.playlists.isListSortDescending), (PlaylistSortField.name, false));
+    expect((vm.artists.sortField, vm.artists.isSortDescending), (ArtistSortField.name, false));
+    expect((vm.tracks.sortField, vm.tracks.isSortDescending), (TrackSortField.title, false), reason: 'none kept');
+
+    vm.tracks.setSortField(TrackSortField.plays);
+    vm.favorites.setSortField(TrackSortField.added); // Added ↓ is its own start: again, Added ↑
+    vm.artists.setGenre('Jazz');
+    expect(repo.getSetting('preference.sort_tracks'), 'plays:desc');
+    expect(repo.getSetting('preference.sort_favorites'), 'added:asc');
+    expect(repo.getSetting('preference.genre_artists'), isNull);
+    expect(repo.getSetting('preference.sort_artists'), 'gone:asc', reason: 'the genre is not a sort');
   });
 
   test('the streaming quality is remembered, and applied at the next start', () async {

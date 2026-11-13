@@ -55,6 +55,18 @@ class SortOrder<F extends Enum> {
 
   /// The label of [field]'s sort button: its [name], and while it is the active one the direction.
   String label(F field, String name) => field == _field ? '$name ${_descending ? '↓' : '↑'}' : name;
+
+  /// How the device keeps it: `title:asc`, `added:desc`.
+  String get saved => '${_field.name}:${_descending ? 'desc' : 'asc'}';
+
+  /// Back to what [saved] kept, when it names one of [values] (a field since removed leaves it as it is).
+  void restore(String? saved, List<F> values) {
+    final parts = saved?.split(':');
+    final field = parts == null || parts.length != 2 ? null : values.asNameMap()[parts[0]];
+    if (field == null) return;
+    _field = field;
+    _descending = parts![1] == 'desc';
+  }
 }
 
 /// [tracks] ordered by [field]; tracks that tie keep their order in [tracks], and one without a release year, a date
@@ -124,6 +136,18 @@ mixin TrackSorting on ChangeNotifier {
 
   void setSortField(TrackSortField field) {
     _order.select(field);
+    _applySort();
+    onSortChanged?.call();
+    notifyListeners();
+  }
+
+  /// Told when the user picks another sort, which the device then keeps ([savedSort], [restoreSort]).
+  VoidCallback? onSortChanged;
+
+  String get savedSort => _order.saved;
+
+  void restoreSort(String? saved) {
+    _order.restore(saved, TrackSortField.values);
     _applySort();
     notifyListeners();
   }
@@ -391,6 +415,18 @@ class AlbumsViewModel extends ChangeNotifier with DetailOrigin {
   void setSortField(AlbumSortField field) {
     _order.select(field);
     _applySort();
+    onSortChanged?.call();
+    notifyListeners();
+  }
+
+  /// Told when the user picks another sort, which the device then keeps ([savedSort], [restoreSort]).
+  VoidCallback? onSortChanged;
+
+  String get savedSort => _order.saved;
+
+  void restoreSort(String? saved) {
+    _order.restore(saved, AlbumSortField.values);
+    _applySort();
     notifyListeners();
   }
 
@@ -550,6 +586,18 @@ class ArtistsViewModel extends ChangeNotifier with DetailOrigin {
 
   void setSortField(ArtistSortField field) {
     _order.select(field);
+    _applySort();
+    onSortChanged?.call();
+    notifyListeners();
+  }
+
+  /// Told when the user picks another sort, which the device then keeps ([savedSort], [restoreSort]).
+  VoidCallback? onSortChanged;
+
+  String get savedSort => _order.saved;
+
+  void restoreSort(String? saved) {
+    _order.restore(saved, ArtistSortField.values);
     _applySort();
     notifyListeners();
   }
@@ -751,6 +799,19 @@ class PlaylistsViewModel extends ChangeNotifier with TrackSorting, DetailOrigin 
 
   void setListSortField(PlaylistSortField field) {
     _listOrder.select(field);
+    playlists = _inSortOrder(_library.playlists);
+    onListSortChanged?.call();
+    notifyListeners();
+  }
+
+  /// Told when the user picks another order for the playlists, which the device then keeps. (A playlist's own tracks,
+  /// sorted by a table's headers, go back to its order: that is the playlist.)
+  VoidCallback? onListSortChanged;
+
+  String get savedListSort => _listOrder.saved;
+
+  void restoreListSort(String? saved) {
+    _listOrder.restore(saved, PlaylistSortField.values);
     playlists = _inSortOrder(_library.playlists);
     notifyListeners();
   }
