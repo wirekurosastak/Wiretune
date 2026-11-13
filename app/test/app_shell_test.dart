@@ -4993,6 +4993,40 @@ void main() {
     }
   });
 
+  testWidgets("a computer's pinned sidebar collapses to its icons beside the pin, the page following, and back", (
+    tester,
+  ) async {
+    final vm = await pumpApp(tester, const Size(1400, 900));
+    final collapse = find.byTooltip(Localizer.get('CollapseSidebar'));
+    expect(collapse, findsNothing, reason: 'not while unpinned');
+    vm.isSidebarPinned = true;
+    await settle(tester);
+    final sidebar = find.byWidgetPredicate((w) => '${w.runtimeType}' == '_Sidebar');
+    final label = find.descendant(of: sidebar, matching: find.text(Localizer.get('NavAlbums')));
+    expect(label, findsOneWidget);
+    final pageAt = tester.getTopLeft(find.byType(TabPageList)).dx;
+
+    await tester.tap(collapse);
+    await settle(tester);
+    expect(vm.isSidebarCollapsed, isTrue);
+    expect(label, findsNothing, reason: 'icons alone, the names in their tooltips');
+    expect(find.descendant(of: sidebar, matching: find.byTooltip(Localizer.get('NavAlbums'))), findsOneWidget);
+    expect(tester.getTopLeft(find.byType(TabPageList)).dx, moreOrLessEquals(pageAt - (232 - 68), epsilon: 1));
+    expect(vm.library.getPreference('sidebar_collapsed'), '1');
+
+    await tester.tap(find.byTooltip(Localizer.get('ExpandSidebar')));
+    await settle(tester);
+    expect(label, findsOneWidget);
+    expect(tester.getTopLeft(find.byType(TabPageList)).dx, moreOrLessEquals(pageAt, epsilon: 1));
+
+    // Unpinned it comes out whole, whatever was chosen; and without the button.
+    vm.isSidebarCollapsed = true;
+    vm.isSidebarPinned = false;
+    await settle(tester);
+    expect(collapse, findsNothing);
+    expect(find.byTooltip(Localizer.get('ExpandSidebar')), findsNothing);
+  });
+
   testWidgets(
     "a computer's sidebar is out of sight until the mouse comes to the window's left edge; the page follows it "
     'out and back',

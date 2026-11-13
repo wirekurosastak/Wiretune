@@ -826,6 +826,7 @@ class MainViewModel extends ChangeNotifier {
   static const String _languagePreference = 'language';
   static const String _themePreference = 'theme';
   static const String _sidebarPinnedPreference = 'sidebar_pinned';
+  static const String _sidebarCollapsedPreference = 'sidebar_collapsed';
   static String _sortPreference(String list) => 'sort_$list';
   static const String _sidebarOpenedPreference = 'sidebar_opened';
   static const String _performanceStatsPreference = 'show_performance_stats';
@@ -857,6 +858,7 @@ class MainViewModel extends ChangeNotifier {
   }
 
   bool _isSidebarPinned = false;
+  bool _isSidebarCollapsed = false;
   bool _hasOpenedSidebar = false;
 
   /// A computer's hidden sidebar has been out once: the chevron at the window's edge has done its job and keeps still,
@@ -875,6 +877,15 @@ class MainViewModel extends ChangeNotifier {
   set isSidebarPinned(bool value) {
     _isSidebarPinned = value;
     _remember(_sidebarPinnedPreference, value ? '1' : '0');
+    notifyListeners();
+  }
+
+  /// A computer's pinned sidebar shows its icons alone, for more room for the page (on a laptop at 125 or 150 %, a
+  /// window of 1,280 to 1,536 points); out of its pin it comes out whole.
+  bool get isSidebarCollapsed => _isSidebarCollapsed;
+  set isSidebarCollapsed(bool value) {
+    _isSidebarCollapsed = value;
+    _remember(_sidebarCollapsedPreference, value ? '1' : '0');
     notifyListeners();
   }
 
@@ -1125,6 +1136,7 @@ class MainViewModel extends ChangeNotifier {
     artists.restoreSort(library.getPreference(_sortPreference('artists')));
     playlists.restoreListSort(library.getPreference(_sortPreference('playlists')));
     _isSidebarPinned = library.getPreference(_sidebarPinnedPreference) == '1';
+    _isSidebarCollapsed = library.getPreference(_sidebarCollapsedPreference) == '1';
     _hasOpenedSidebar = library.getPreference(_sidebarOpenedPreference) == '1';
     lyrics.isOnlineEnabled = library.getPreference(_onlineLyricsPreference) != '0'; // on unless turned off
     updates.isEnabled = library.getPreference(_updateCheckPreference) != '0'; // on unless turned off

@@ -166,79 +166,82 @@ class _BodyState extends State<_Body> with SingleTickerProviderStateMixin {
         ),
       );
     }
-    final compact = MediaQuery.sizeOf(context).width < WideLayout.compactWidth;
-    // The sidebar with the gaps at its sides: what the mouse may be over while it is out.
-    final region = (compact ? 68.0 : 232.0) + 2 * gap;
     final pinned = widget.vm.isSidebarPinned;
     // Unpinned under the mouse: it stays out until the mouse leaves.
     if (_wasPinned && !pinned) _out.value = 1;
     _wasPinned = pinned;
-    return Stack(
-      children: [
-        Positioned(
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: region,
-          child: SlideTransition(
-            position: pinned ? const AlwaysStoppedAnimation(Offset.zero) : _slide,
-            child: RepaintBoundary(
-              child: MouseRegion(
-                onEnter: (_) => _hold(sidebar: true),
-                onExit: (_) => _hold(sidebar: false),
-                child: Focus(
-                  canRequestFocus: false,
-                  skipTraversal: true,
-                  onFocusChange: (focused) => _hold(focus: focused),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: gap),
-                    child: sidebar,
+    // As wide as the sidebar, with the gaps at its sides; the page follows it as it collapses or comes back.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: _Sidebar.widthOf(context, widget.vm) + 2 * gap),
+      duration: _Sidebar.collapse,
+      curve: Curves.easeInOutCubic,
+      builder: (context, region, _) => Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: region,
+            child: SlideTransition(
+              position: pinned ? const AlwaysStoppedAnimation(Offset.zero) : _slide,
+              child: RepaintBoundary(
+                child: MouseRegion(
+                  onEnter: (_) => _hold(sidebar: true),
+                  onExit: (_) => _hold(sidebar: false),
+                  child: Focus(
+                    canRequestFocus: false,
+                    skipTraversal: true,
+                    onFocusChange: (focused) => _hold(focus: focused),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: gap),
+                      child: sidebar,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        // The page follows the sidebar's edge, a gap from it, as the sidebar pushes it aside.
-        AnimatedBuilder(
-          animation: _curve,
-          child: content,
-          builder: (context, content) => Positioned(
-            left: pinned ? region : math.max(gap, _curve.value * region),
-            right: gap,
-            top: 0,
-            bottom: 0,
-            child: content!,
+          // The page follows the sidebar's edge, a gap from it, as the sidebar pushes it aside.
+          AnimatedBuilder(
+            animation: _curve,
+            child: content,
+            builder: (context, content) => Positioned(
+              left: pinned ? region : math.max(gap, _curve.value * region),
+              right: gap,
+              top: 0,
+              bottom: 0,
+              child: content!,
+            ),
           ),
-        ),
-        if (!pinned)
+          if (!pinned)
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 28,
+              child: IgnorePointer(
+                child: FadeTransition(
+                  opacity: ReverseAnimation(_out),
+                  child: _EdgeHint(quiet: widget.vm.hasOpenedSidebar),
+                ),
+              ),
+            ),
+          // The window's left edge: the mouse there brings the sidebar out. There pinned too: a region taken away under
+          // the mouse never hears it leave.
           Positioned(
             left: 0,
             top: 0,
             bottom: 0,
-            width: 28,
-            child: IgnorePointer(
-              child: FadeTransition(
-                opacity: ReverseAnimation(_out),
-                child: _EdgeHint(quiet: widget.vm.hasOpenedSidebar),
-              ),
+            width: gap + 4,
+            child: MouseRegion(
+              opaque: false,
+              onEnter: (_) => _hold(edge: true),
+              onExit: (_) => _hold(edge: false),
+              child: const SizedBox.expand(),
             ),
           ),
-        // The window's left edge: the mouse there brings the sidebar out. There pinned too: a region taken away under
-        // the mouse never hears it leave.
-        Positioned(
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: gap + 4,
-          child: MouseRegion(
-            opaque: false,
-            onEnter: (_) => _hold(edge: true),
-            onExit: (_) => _hold(edge: false),
-            child: const SizedBox.expand(),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -334,6 +337,68 @@ class _ChevronPainter extends CustomPainter {
 }
 
 /// A computer's sidebar pin, at its top right: pinned, the sidebar stays out beside the page.
+/// Collapses the pinned sidebar to its icons, or brings the whole of it back, as Claude's sidebar button does: a panel
+/// with its left part marked.
+class _CollapseButton extends StatefulWidget {
+  const _CollapseButton();
+
+  @override
+  State<_CollapseButton> createState() => _CollapseButtonState();
+}
+
+class _CollapseButtonState extends State<_CollapseButton> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.vm;
+    final colors = context.colors;
+    final collapsed = vm.isSidebarCollapsed;
+    final color = _hover ? colors.textMain : colors.textMuted;
+    return PopEffect(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: SizedBox.square(
+          dimension: 30,
+          child: IconButton(
+            tooltip: context.tr(collapsed ? 'ExpandSidebar' : 'CollapseSidebar'),
+            padding: EdgeInsets.zero,
+            style: IconButton.styleFrom(overlayColor: Colors.transparent, splashFactory: NoSplash.splashFactory),
+            onPressed: () => vm.isSidebarCollapsed = !collapsed,
+            icon: CustomPaint(
+              size: const Size(17, 15),
+              painter: _PanelIcon(color: color),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A panel's outline with its left third marked off.
+class _PanelIcon extends CustomPainter {
+  const _PanelIcon({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final pen = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+    final frame = (Offset.zero & size).deflate(0.8);
+    canvas.drawRRect(RRect.fromRectAndRadius(frame, const Radius.circular(3)), pen);
+    final x = frame.left + frame.width / 3;
+    canvas.drawLine(Offset(x, frame.top), Offset(x, frame.bottom), pen);
+  }
+
+  @override
+  bool shouldRepaint(_PanelIcon oldDelegate) => oldDelegate.color != color;
+}
+
 class _PinButton extends StatefulWidget {
   const _PinButton();
 
@@ -1124,70 +1189,108 @@ class _OfflineBanner extends StatelessWidget {
 class _Sidebar extends StatelessWidget {
   const _Sidebar();
 
+  /// Its icons alone: in a narrow window, or pinned and collapsed ([MainViewModel.isSidebarCollapsed]).
+  static bool iconsOnly(BuildContext context, MainViewModel vm) =>
+      MediaQuery.sizeOf(context).width < WideLayout.compactWidth ||
+      (AppPlatform.current.isDesktop && vm.isSidebarPinned && vm.isSidebarCollapsed);
+
+  static double widthOf(BuildContext context, MainViewModel vm) => iconsOnly(context, vm) ? 68 : 232;
+
+  // Built again as the pin or the collapse changes, as well as with the window.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      ListenableBuilder(listenable: context.vm, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
     final vm = context.vm;
-    final compact = MediaQuery.sizeOf(context).width < WideLayout.compactWidth;
-    return SizedBox(
-      width: compact ? 68 : 232,
+    final compact = iconsOnly(context, vm);
+    final width = widthOf(context, vm);
+    // Laid out at its new width at once, the panel around it growing or shrinking to it.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: width),
+      duration: collapse,
+      curve: Curves.easeInOutCubic,
+      builder: (context, shown, child) => SizedBox(width: shown, child: child),
       child: _Panel(
-        child: ListenableBuilder(
-          // The counts follow the library (the view model tells of its changes), the favourites and the playlists.
-          listenable: Listenable.merge([vm, vm.player, vm.favorites, vm.playlists]),
-          builder: (context, _) {
-            final library = vm.library;
-            Widget item(AppSection section, String label, int? count, {bool autofocus = false}) => _SidebarItem(
-              // Lit under the queue and the lyrics too: they lie over its page, and its button goes back to it.
-              selected: vm.selectedTab == section && !vm.isSearchActive,
-              icon: sectionIcon(section),
-              label: label,
-              count: count,
-              compact: compact,
-              autofocus: autofocus,
-              onTap: () => vm.navigateTo(section),
-            );
-            final pin = AppPlatform.current.isDesktop;
-            final list = FocusTraversalGroup(
-              child: ListView(
-                // Icons alone: the pin above them, in the middle.
-                padding: EdgeInsets.fromLTRB(compact ? 10 : 12, pin && compact ? 50 : 18, compact ? 10 : 12, 18),
-                children: [
-                  if (!compact) _GroupTitle(context.tr('SectionLibrary')),
-                  item(
-                    AppSection.artists,
-                    context.tr('NavArtists'),
-                    library.artists.length,
-                    autofocus: AppPlatform.current.isTv,
+        child: OverflowBox(
+          alignment: Alignment.topLeft,
+          minWidth: width,
+          maxWidth: width,
+          child: ListenableBuilder(
+            // The counts follow the library (the view model tells of its changes), the favourites and the playlists.
+            listenable: Listenable.merge([vm, vm.player, vm.favorites, vm.playlists]),
+            builder: (context, _) {
+              final library = vm.library;
+              Widget item(AppSection section, String label, int? count, {bool autofocus = false}) => _SidebarItem(
+                // Lit under the queue and the lyrics too: they lie over its page, and its button goes back to it.
+                selected: vm.selectedTab == section && !vm.isSearchActive,
+                icon: sectionIcon(section),
+                label: label,
+                count: count,
+                compact: compact,
+                autofocus: autofocus,
+                onTap: () => vm.navigateTo(section),
+              );
+              final pin = AppPlatform.current.isDesktop;
+              final list = FocusTraversalGroup(
+                child: ListView(
+                  // Icons alone: the pin above them, in the middle (and the way back to the whole sidebar under it).
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 10 : 12,
+                    !pin || !compact ? 18 : (vm.isSidebarPinned && vm.isSidebarCollapsed ? 84 : 50),
+                    compact ? 10 : 12,
+                    18,
                   ),
-                  item(AppSection.albums, context.tr('NavAlbums'), library.albums.length),
-                  item(AppSection.tracks, context.tr('NavTracks'), library.tracks.length),
-                  const SizedBox(height: 22),
-                  if (!compact) _GroupTitle(context.tr('SectionCollection')),
-                  item(AppSection.favorites, context.tr('NavFavorites'), vm.favorites.tracks.length),
-                  item(AppSection.playlists, context.tr('NavPlaylists'), vm.playlists.allPlaylists.length),
-                  // Settings alone needs no heading: the gap sets it apart.
-                  const SizedBox(height: 22),
-                  item(AppSection.settings, context.tr('NavSettings'), null),
-                ],
-              ),
-            );
-            if (!pin) return list;
-            return Stack(
-              children: [
-                list,
-                Positioned(
-                  top: 10,
-                  right: compact ? 0 : 10,
-                  left: compact ? 0 : null,
-                  child: const Center(child: _PinButton()),
+                  children: [
+                    if (!compact) _GroupTitle(context.tr('SectionLibrary')),
+                    item(
+                      AppSection.artists,
+                      context.tr('NavArtists'),
+                      library.artists.length,
+                      autofocus: AppPlatform.current.isTv,
+                    ),
+                    item(AppSection.albums, context.tr('NavAlbums'), library.albums.length),
+                    item(AppSection.tracks, context.tr('NavTracks'), library.tracks.length),
+                    const SizedBox(height: 22),
+                    if (!compact) _GroupTitle(context.tr('SectionCollection')),
+                    item(AppSection.favorites, context.tr('NavFavorites'), vm.favorites.tracks.length),
+                    item(AppSection.playlists, context.tr('NavPlaylists'), vm.playlists.allPlaylists.length),
+                    // Settings alone needs no heading: the gap sets it apart.
+                    const SizedBox(height: 22),
+                    item(AppSection.settings, context.tr('NavSettings'), null),
+                  ],
                 ),
-              ],
-            );
-          },
+              );
+              if (!pin) return list;
+              // Beside the pin, the way to icons alone and back: while pinned, and where the window leaves a choice.
+              final collapse = vm.isSidebarPinned && MediaQuery.sizeOf(context).width >= WideLayout.compactWidth;
+              const buttons = [_CollapseButton(), _PinButton()];
+              return Stack(
+                children: [
+                  list,
+                  Positioned(
+                    top: 10,
+                    right: compact ? 0 : 10,
+                    left: compact ? 0 : null,
+                    child: Center(
+                      child: !collapse
+                          ? const _PinButton()
+                          : compact
+                          ? const Column(mainAxisSize: MainAxisSize.min, spacing: 4, children: buttons)
+                          : const Row(mainAxisSize: MainAxisSize.min, spacing: 2, children: buttons),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
+
+  /// How long the sidebar takes to collapse or come back, the page following it.
+  static const Duration collapse = Duration(milliseconds: 200);
 }
 
 class _GroupTitle extends StatelessWidget {

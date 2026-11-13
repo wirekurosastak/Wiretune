@@ -49,6 +49,8 @@ const Map<String, (String, String, String)> allStrings = {
 
   // ── Navigation and shell ────────────────────────────────────────────────────────────────────────────
   'NavArtists': ('Előadók', 'Artists', 'Künstler'),
+  'CollapseSidebar': ('Oldalsáv összecsukása', 'Collapse sidebar', 'Seitenleiste einklappen'),
+  'ExpandSidebar': ('Oldalsáv kinyitása', 'Expand sidebar', 'Seitenleiste ausklappen'),
   'NavAlbums': ('Albumok', 'Albums', 'Alben'),
   'NavTracks': ('Számok', 'Tracks', 'Titel'),
   'NavFavorites': ('Kedvencek', 'Favorites', 'Favoriten'),
