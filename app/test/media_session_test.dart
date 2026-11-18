@@ -31,7 +31,9 @@ void main() {
       await pumpEventQueue();
       expect(icons().first, 'drawable/ic_favorite_border');
       expect(icons().last, 'drawable/ic_shuffle');
-      expect(session.playbackState.value.androidCompactActionIndices, [1, 2, 3], reason: 'folded: the transport');
+      // The custom heart and shuffle aren't among the notification's buttons, so the transport is 0-2; 1-3 crashed
+      // Android 12 and earlier.
+      expect(session.playbackState.value.androidCompactActionIndices, [0, 1, 2], reason: 'folded: the transport');
 
       await session.customAction(WiretuneMediaSession.favoriteAction);
       await pumpEventQueue();

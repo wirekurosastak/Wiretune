@@ -175,8 +175,10 @@ class WiretuneMediaSession extends BaseAudioHandler {
         ),
       ],
       systemActions: const {MediaAction.seek, MediaAction.seekForward, MediaAction.seekBackward},
-      // Folded, the notification shows the transport alone.
-      androidCompactActionIndices: track != null ? const [1, 2, 3] : const [0, 1, 2],
+      // Folded, the notification shows the transport alone. The indices count only the notification's own buttons: the
+      // custom heart and shuffle go to the media session instead, so the transport is always 0-2. Past them, Android 12
+      // and earlier crash the app when they draw the notification.
+      androidCompactActionIndices: const [0, 1, 2],
       processingState: switch (player.playbackState) {
         core.PlaybackState.error => AudioProcessingState.error,
         core.PlaybackState.stopped =>
